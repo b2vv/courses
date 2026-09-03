@@ -43,6 +43,6 @@ generate:
 	$(GO_RUN) go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
 	cd frontend && npm run generate
 check-generated: generate
-	git diff --exit-code -- backend/internal/course/adapters/postgres/generated frontend/src/adapters/api/generated
-	@test -z "$$(git ls-files --others --exclude-standard -- backend/internal/course/adapters/postgres/generated frontend/src/adapters/api/generated)"
+	git diff --exit-code -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated
+	@test -z "$$(git ls-files --others --exclude-standard -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated)"
 check: format-check lint typecheck test integration build e2e

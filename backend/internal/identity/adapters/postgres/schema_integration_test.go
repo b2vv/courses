@@ -1,20 +1,30 @@
 //go:build integration
 
-package postgres_test
+package postgres
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	passwords "courses/internal/identity/adapters/argon2id"
+	"courses/internal/identity/domain"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"golang.org/x/crypto/argon2"
 )
 
 func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
@@ -52,10 +62,231 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	if _, err := database.ExecContext(ctx, insertUser, "40000000-0000-4000-8000-000000000001", "student@courseforge.local", "Студентка Курсу", "student"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at)
-		VALUES('50000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',decode(repeat('ab',32),'hex'),'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z')`); err != nil {
+	if _, err := database.ExecContext(ctx, insertUser, "40000000-0000-4000-8000-000000000002", "instructor@courseforge.local", "Викладач Курсу", "instructor"); err != nil {
 		t.Fatal(err)
 	}
+	collisionRaw := bytes.Repeat([]byte{0x11}, 32)
+	collisionToken := base64.RawURLEncoding.EncodeToString(collisionRaw)
+	collisionDigest := sha256.Sum256(collisionRaw)
+	previousRaw := bytes.Repeat([]byte{0x22}, 32)
+	previousToken := base64.RawURLEncoding.EncodeToString(previousRaw)
+	previousDigest := sha256.Sum256(previousRaw)
+	if _, err := database.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES
+		('50000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',$1,'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z'),
+		('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',$2,'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z')`, collisionDigest[:], previousDigest[:]); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.New(ctx, connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	t.Run("credential verification hides unknown and disabled users", func(t *testing.T) {
+		passwords := &passwordVerifier{matched: true}
+		repository := NewRepository(pool, passwords)
+		user, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "demo-password")
+		if err != nil || user.Email != "student@courseforge.local" || passwords.verifyCalls != 1 || passwords.dummyCalls != 0 {
+			t.Fatalf("user=%+v err=%v verifier=%+v", user, err, passwords)
+		}
+		if _, err := repository.VerifyCredentials(ctx, "missing@courseforge.local", "demo-password"); !errors.Is(err, domain.ErrInvalidCredentials) || passwords.dummyCalls != 1 {
+			t.Fatalf("unknown err=%v verifier=%+v", err, passwords)
+		}
+		passwords.matched = false
+		if _, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "wrong"); !errors.Is(err, domain.ErrInvalidCredentials) {
+			t.Fatalf("wrong password: %v", err)
+		}
+		passwords.matched = true
+		if _, err := pool.Exec(ctx, `UPDATE users SET updated_at='2026-09-03T12:00:01Z', disabled_at='2026-09-03T12:00:01Z' WHERE email='student@courseforge.local'`); err != nil {
+			t.Fatal(err)
+		}
+		before := passwords.verifyCalls
+		if _, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "demo-password"); !errors.Is(err, domain.ErrInvalidCredentials) || passwords.verifyCalls != before+1 {
+			t.Fatalf("disabled err=%v verifier=%+v", err, passwords)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE users SET updated_at='2026-09-03T12:00:00Z', disabled_at=NULL WHERE email='student@courseforge.local'`); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("PostgreSQL credential adapter uses the real Argon2id verifier", func(t *testing.T) {
+		hash := encodePassword("courseforge-student-demo", []byte("student-seed-slt"))
+		if _, err := pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE email='student@courseforge.local'`, hash); err != nil {
+			t.Fatal(err)
+		}
+		repository := NewRepository(pool, passwords.NewVerifier())
+		if user, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "courseforge-student-demo"); err != nil || user.Role != domain.Student {
+			t.Fatalf("user=%+v err=%v", user, err)
+		}
+		for _, email := range []string{"student@courseforge.local", "unknown@courseforge.local"} {
+			if _, err := repository.VerifyCredentials(ctx, email, "wrong-password"); !errors.Is(err, domain.ErrInvalidCredentials) {
+				t.Fatalf("%s: %v", email, err)
+			}
+		}
+	})
+
+	t.Run("rotation is atomic and retries a digest collision", func(t *testing.T) {
+		freshRaw := bytes.Repeat([]byte{0x33}, 32)
+		freshToken := base64.RawURLEncoding.EncodeToString(freshRaw)
+		random := bytes.NewReader(bytes.Join([][]byte{collisionRaw, bytes.Repeat([]byte{0x44}, 16), freshRaw, bytes.Repeat([]byte{0x55}, 16)}, nil))
+		repository := newRepository(pool, &passwordVerifier{matched: true}, random)
+		now := time.Date(2026, 9, 3, 13, 0, 0, 0, time.UTC)
+		issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", previousToken, now, now.Add(12*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if issued.Token != freshToken || issued.Session.UserID != "40000000-0000-4000-8000-000000000001" {
+			t.Fatalf("issued=%+v", issued)
+		}
+		if _, err := repository.Resolve(ctx, previousToken, now); !errors.Is(err, domain.ErrAuthenticationRequired) {
+			t.Fatalf("previous token: %v", err)
+		}
+		if _, err := repository.Resolve(ctx, collisionToken, now); err != nil {
+			t.Fatalf("collision row was lost: %v", err)
+		}
+		if user, err := repository.Resolve(ctx, freshToken, now); err != nil || user.Email != "student@courseforge.local" {
+			t.Fatalf("fresh token user=%+v err=%v", user, err)
+		}
+		freshDigest := sha256.Sum256(freshRaw)
+		var storedDigest []byte
+		if err := pool.QueryRow(ctx, `SELECT token_digest FROM user_sessions WHERE id=$1::text::uuid`, issued.Session.ID).Scan(&storedDigest); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(storedDigest, freshDigest[:]) || bytes.Equal(storedDigest, []byte(freshToken)) {
+			t.Fatal("persistence did not store only the SHA-256 token digest")
+		}
+		if err := repository.Revoke(ctx, freshToken); err != nil {
+			t.Fatal(err)
+		}
+		if err := repository.Revoke(ctx, freshToken); err != nil {
+			t.Fatalf("repeat revoke: %v", err)
+		}
+	})
+
+	t.Run("collision exhaustion retains the presented session", func(t *testing.T) {
+		presentedRaw := bytes.Repeat([]byte{0x77}, 32)
+		presentedToken := base64.RawURLEncoding.EncodeToString(presentedRaw)
+		presentedDigest := sha256.Sum256(presentedRaw)
+		now := time.Date(2026, 9, 3, 13, 30, 0, 0, time.UTC)
+		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000007','40000000-0000-4000-8000-000000000001',$1,$2,$3)`, presentedDigest[:], now.Add(-time.Hour), now.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		material := make([][]byte, 0, rotationAttempts*2)
+		for attempt := range rotationAttempts {
+			material = append(material, collisionRaw, bytes.Repeat([]byte{byte(0x80 + attempt)}, 16))
+		}
+		repository := newRepository(pool, &passwordVerifier{matched: true}, bytes.NewReader(bytes.Join(material, nil)))
+		if _, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", presentedToken, now, now.Add(12*time.Hour)); !errors.Is(err, domain.ErrDependencyUnavailable) {
+			t.Fatalf("rotation exhaustion: %v", err)
+		}
+		if _, err := repository.Resolve(ctx, presentedToken, now); err != nil {
+			t.Fatalf("presented session was partially revoked: %v", err)
+		}
+	})
+
+	t.Run("cross-account browser session is rotated", func(t *testing.T) {
+		otherRaw := bytes.Repeat([]byte{0x88}, 32)
+		otherToken := base64.RawURLEncoding.EncodeToString(otherRaw)
+		otherDigest := sha256.Sum256(otherRaw)
+		now := time.Date(2026, 9, 3, 13, 45, 0, 0, time.UTC)
+		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000008','40000000-0000-4000-8000-000000000002',$1,$2,$3)`, otherDigest[:], now.Add(-time.Hour), now.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", otherToken, now, now.Add(12*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.Resolve(ctx, otherToken, now); !errors.Is(err, domain.ErrAuthenticationRequired) {
+			t.Fatalf("cross-account token remains active: %v", err)
+		}
+		if user, err := repository.Resolve(ctx, issued.Token, now); err != nil || user.ID != "40000000-0000-4000-8000-000000000001" {
+			t.Fatalf("new session user=%+v err=%v", user, err)
+		}
+	})
+
+	t.Run("concurrent rotations issue distinct sessions", func(t *testing.T) {
+		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		now := time.Date(2026, 9, 3, 14, 0, 0, 0, time.UTC)
+		const count = 6
+		results := make(chan string, count)
+		errors := make(chan error, count)
+		var group sync.WaitGroup
+		for range count {
+			group.Add(1)
+			go func() {
+				defer group.Done()
+				issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", "", now, now.Add(12*time.Hour))
+				if err != nil {
+					errors <- err
+					return
+				}
+				results <- issued.Token
+			}()
+		}
+		group.Wait()
+		close(results)
+		close(errors)
+		for err := range errors {
+			t.Error(err)
+		}
+		seen := make(map[string]struct{}, count)
+		for token := range results {
+			seen[token] = struct{}{}
+		}
+		if len(seen) != count {
+			t.Fatalf("got %d distinct tokens", len(seen))
+		}
+	})
+
+	t.Run("expiry boundary cleans the matching row", func(t *testing.T) {
+		raw := bytes.Repeat([]byte{0x66}, 32)
+		token := base64.RawURLEncoding.EncodeToString(raw)
+		digest := sha256.Sum256(raw)
+		now := time.Date(2026, 9, 3, 15, 0, 0, 0, time.UTC)
+		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000006','40000000-0000-4000-8000-000000000001',$1,$2,$3)`, digest[:], now.Add(-time.Hour), now); err != nil {
+			t.Fatal(err)
+		}
+		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		if _, err := repository.Resolve(ctx, token, now); !errors.Is(err, domain.ErrAuthenticationRequired) {
+			t.Fatalf("resolve at expiry: %v", err)
+		}
+		var count int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_sessions WHERE token_digest=$1`, digest[:]).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("expired count=%d err=%v", count, err)
+		}
+	})
+
+	t.Run("cancelled rotation rolls back and the repository recovers", func(t *testing.T) {
+		lock, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer lock.Rollback(context.Background())
+		if _, err := lock.Exec(ctx, `SELECT id FROM users WHERE id='40000000-0000-4000-8000-000000000001' FOR UPDATE`); err != nil {
+			t.Fatal(err)
+		}
+		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.UTC)
+		request, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+		started := time.Now()
+		if _, err := repository.Rotate(request, "40000000-0000-4000-8000-000000000001", collisionToken, now, now.Add(12*time.Hour)); !errors.Is(err, domain.ErrDependencyUnavailable) {
+			t.Fatalf("cancelled rotation: %v", err)
+		}
+		if time.Since(started) > time.Second {
+			t.Fatal("rotation ignored context cancellation")
+		}
+		if err := lock.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.Resolve(ctx, collisionToken, now); err != nil {
+			t.Fatalf("presented token changed during cancelled rotation: %v", err)
+		}
+		if _, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", "", now, now.Add(12*time.Hour)); err != nil {
+			t.Fatalf("repository did not recover: %v", err)
+		}
+	})
 
 	t.Run("constraints reject invalid persistence records", func(t *testing.T) {
 		statements := []string{
@@ -69,7 +300,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			`UPDATE users SET disabled_at='2026-09-03T12:00:01Z' WHERE email='student@courseforge.local'`,
 			`UPDATE user_sessions SET token_digest=decode('ab','hex')`,
 			`UPDATE user_sessions SET expires_at=created_at`,
-			`INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',decode(repeat('ab',32),'hex'),'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z')`,
+			`UPDATE user_sessions SET token_digest=(SELECT min(token_digest) FROM user_sessions)`,
 		}
 		for _, statement := range statements {
 			if _, err := database.ExecContext(ctx, statement); err == nil {
@@ -108,4 +339,26 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+type passwordVerifier struct {
+	matched     bool
+	err         error
+	verifyCalls int
+	dummyCalls  int
+}
+
+func (verifier *passwordVerifier) Verify(_ string, _ string) (bool, error) {
+	verifier.verifyCalls++
+	return verifier.matched, verifier.err
+}
+
+func (verifier *passwordVerifier) VerifyDummy(_ string) error {
+	verifier.dummyCalls++
+	return verifier.err
+}
+
+func encodePassword(password string, salt []byte) string {
+	hash := argon2.IDKey([]byte(password), salt, 3, 64*1024, 2, 32)
+	return fmt.Sprintf("$argon2id$v=19$m=65536,t=3,p=2$%s$%s", base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash))
 }

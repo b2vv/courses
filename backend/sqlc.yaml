@@ -1,7 +1,7 @@
 version: '2'
 sql:
   - engine: postgresql
-    queries: sql/queries
+    queries: sql/queries/courses.sql
     schema: migrations
     gen:
       go:
@@ -10,3 +10,15 @@ sql:
         sql_package: pgx/v5
         emit_empty_slices: true
         emit_json_tags: false
+        omit_unused_structs: true
+  - engine: postgresql
+    queries: sql/queries/identity.sql
+    schema: migrations
+    gen:
+      go:
+        package: generated
+        out: internal/identity/adapters/postgres/generated
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        emit_json_tags: false
+        omit_unused_structs: true
