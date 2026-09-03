@@ -1,0 +1,16 @@
+services:
+  postgres:
+    ports: ['127.0.0.1:5432:5432']
+  redis:
+    ports: ['127.0.0.1:6379:6379']
+  api:
+    ports: ['127.0.0.1:8082:8080']
+  frontend:
+    build: { target: development }
+    read_only: false
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/rsbuild.config.ts:/app/rsbuild.config.ts:ro
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    ports: ['127.0.0.1:3000:3000']

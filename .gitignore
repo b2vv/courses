@@ -13,3 +13,4 @@ playwright-report/
 media/
 *.log
 .DS_Store
+.idea/

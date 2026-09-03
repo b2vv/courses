@@ -1,0 +1,10 @@
+{
+  "singleQuote": true,
+  "ignorePatterns": [
+    "src/routeTree.gen.ts",
+    "src/adapters/api/generated/**",
+    "dist/**",
+    "playwright-report/**",
+    "test-results/**"
+  ]
+}

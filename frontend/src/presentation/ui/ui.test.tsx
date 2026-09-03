@@ -1,0 +1,226 @@
+import { afterEach, describe, expect, it } from '@rstest/core';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {
+  Button,
+  Checkbox,
+  ComboBox,
+  Dialog,
+  ErrorState,
+  Menu,
+  Pagination,
+  ProgressBar,
+  Select,
+  Switch,
+  Tabs,
+  TextField,
+  Toast,
+} from './index';
+
+afterEach(cleanup);
+
+describe('accessible UI primitives', () => {
+  it('labels a text field and reaches the action with the keyboard', async () => {
+    const user = userEvent.setup();
+    let submitted = false;
+    render(
+      <>
+        <TextField label="Назва курсу" description="Наприклад, Архітектура Go" />
+        <Button
+          onPress={() => {
+            submitted = true;
+          }}
+        >
+          Зберегти зміни
+        </Button>
+      </>,
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Назва курсу' }));
+    await user.keyboard('Основи Go');
+    expect(screen.getByRole('textbox').getAttribute('aria-describedby')).toBeTruthy();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Зберегти зміни' }));
+    await user.keyboard('{Enter}');
+    expect(submitted).toBe(true);
+  });
+
+  it('names a modal, closes it with Escape, and restores focus to its trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog triggerLabel="Редагувати назву" title="Назва курсу">
+        <TextField label="Нова назва" />
+      </Dialog>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Редагувати назву' });
+    await user.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Назва курсу' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.tab();
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('opens a labelled select and chooses a named option', async () => {
+    const user = userEvent.setup();
+    render(
+      <Select
+        label="Порядок курсів"
+        options={[
+          { id: 'recent', label: 'Нові спочатку' },
+          { id: 'title', label: 'За назвою' },
+        ]}
+      />,
+    );
+    await user.tab();
+    await user.keyboard('{Enter}');
+    const listbox = await screen.findByRole('listbox', { name: 'Порядок курсів' });
+    await user.click(within(listbox).getByRole('option', { name: 'За назвою' }));
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    expect(screen.getByRole('button').textContent).toContain('За назвою');
+    expect(document.activeElement).toBe(screen.getByRole('button'));
+  });
+
+  it('toggles checkbox and switch with Space without depending on pointer input', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Checkbox>Показувати завершені</Checkbox>
+        <Switch>Темна тема</Switch>
+      </>,
+    );
+    await user.tab();
+    await user.keyboard(' ');
+    expect(
+      screen.getByRole('checkbox', { name: 'Показувати завершені', checked: true }),
+    ).toBeTruthy();
+    await user.tab();
+    await user.keyboard(' ');
+    expect(screen.getByRole('switch', { name: 'Темна тема', checked: true })).toBeTruthy();
+  });
+
+  it('disables pagination beyond the last page and still allows going back', async () => {
+    const user = userEvent.setup();
+    let requestedPage = 3;
+    render(
+      <Pagination
+        page={3}
+        totalPages={3}
+        onPageChange={(page) => {
+          requestedPage = page;
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Далі' }).hasAttribute('disabled')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Назад' }));
+    expect(requestedPage).toBe(2);
+    expect(screen.getByRole('navigation', { name: 'Сторінки результатів' }).textContent).toContain(
+      'Сторінка 3 з 3',
+    );
+  });
+
+  it('filters combobox options while typing', async () => {
+    const user = userEvent.setup();
+    render(
+      <ComboBox
+        label="Мова курсу"
+        options={[
+          { id: 'uk', label: 'Українська' },
+          { id: 'en', label: 'Англійська' },
+        ]}
+      />,
+    );
+    await user.type(screen.getByRole('combobox', { name: 'Мова курсу' }), 'Укра');
+    const list = await screen.findByRole('listbox');
+    expect(within(list).getByRole('option', { name: 'Українська' })).toBeTruthy();
+    expect(within(list).queryByRole('option', { name: 'Англійська' })).toBeNull();
+  });
+
+  it('switches labelled tab panels with the keyboard', async () => {
+    const user = userEvent.setup();
+    render(
+      <Tabs
+        label="Розділи курсу"
+        items={[
+          { id: 'overview', label: 'Опис', content: 'Про курс' },
+          { id: 'content', label: 'Програма', content: 'Теми занять' },
+        ]}
+      />,
+    );
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Програма', selected: true })).toBe(
+      document.activeElement,
+    );
+    expect(screen.getByRole('tabpanel', { name: 'Програма' }).textContent).toBe('Теми занять');
+  });
+
+  it('keeps unavailable menu actions disabled and dispatches the chosen action', async () => {
+    const user = userEvent.setup();
+    let action = '';
+    render(
+      <Menu
+        label="Дії курсу"
+        items={[
+          { id: 'edit', label: 'Редагувати' },
+          { id: 'publish', label: 'Опублікувати', isDisabled: true },
+        ]}
+        onAction={(key) => {
+          action = String(key);
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Дії курсу' }));
+    expect(
+      screen.getByRole('menuitem', { name: 'Опублікувати' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+    await user.click(screen.getByRole('menuitem', { name: 'Редагувати' }));
+    expect(action).toBe('edit');
+  });
+
+  it('associates validation errors with their field and preserves the retry URL', () => {
+    render(
+      <>
+        <TextField label="Назва" isInvalid errorMessage="Вкажіть назву курсу" />
+        <ErrorState
+          title="Каталог тимчасово недоступний"
+          retryHref="/courses?q=Go&sort=title&offset=20"
+        >
+          Перезавантажте сторінку.
+        </ErrorState>
+        <ProgressBar label="Обробка файлу" value={35} />
+      </>,
+    );
+    const field = screen.getByRole('textbox', { name: 'Назва' });
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    const errorId = field.getAttribute('aria-describedby');
+    expect(errorId).toBeTruthy();
+    expect(errorId && document.getElementById(errorId)?.textContent).toBe('Вкажіть назву курсу');
+    expect(screen.getByRole('link', { name: 'Спробувати ще раз' }).getAttribute('href')).toBe(
+      '/courses?q=Go&sort=title&offset=20',
+    );
+    expect(
+      screen.getByRole('progressbar', { name: 'Обробка файлу' }).getAttribute('aria-valuenow'),
+    ).toBe('35');
+  });
+
+  it('announces a toast without stealing focus and lets users dismiss it', async () => {
+    const user = userEvent.setup();
+    let dismissed = false;
+    render(
+      <Toast
+        message="Зміни збережено"
+        onDismiss={() => {
+          dismissed = true;
+        }}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toBe('Зміни збережено');
+    await user.tab();
+    await user.keyboard('{Enter}');
+    expect(dismissed).toBe(true);
+  });
+});

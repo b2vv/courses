@@ -1,0 +1,104 @@
+package httpserver_test
+
+import (
+	"bytes"
+	"context"
+	"courses/platform/observability"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"courses/platform/httpserver"
+)
+
+func TestHealthAndReadiness(t *testing.T) {
+	handler := httpserver.NewHandler(httpserver.Options{
+		Service: "api",
+		Ready:   func(context.Context) error { return nil },
+	})
+	for _, path := range []string{"/healthz", "/readyz"} {
+		t.Run(path, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("got %d: %s", response.Code, response.Body.String())
+			}
+			if response.Header().Get("X-Request-ID") == "" {
+				t.Fatal("missing request ID")
+			}
+		})
+	}
+}
+
+func TestRequestObservabilityExcludesSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	metrics := observability.NewMetrics()
+	tracing, err := observability.NewTracing(context.Background(), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tracing.Shutdown(context.Background())
+	handler := httpserver.NewHandler(httpserver.Options{
+		Logger: slog.New(slog.NewJSONHandler(&logs, nil)), Metrics: metrics, Tracer: tracing.Tracer("http"),
+		Ready: func(context.Context) error { return nil },
+	})
+	r := httptest.NewRequest("GET", "/unknown-secret?token=query-secret", nil)
+	r.Header.Set("Cookie", "session=cookie-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	for _, secret := range []string{"unknown-secret", "query-secret", "cookie-secret"} {
+		if strings.Contains(logs.String(), secret) {
+			t.Fatalf("secret in logs: %s", logs.String())
+		}
+	}
+	var entry map[string]interface{}
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["requestId"] != w.Header().Get("X-Request-ID") || entry["traceId"] == "" || entry["status"] != float64(404) {
+		t.Fatalf("missing correlation: %+v", entry)
+	}
+	metricsResponse := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(metricsResponse, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(metricsResponse.Body.String(), `courses_http_requests_total{method="GET",route="unmatched",status="404"} 1`) {
+		t.Fatal("request counter absent")
+	}
+}
+
+func TestSafeErrorsAndCorrelation(t *testing.T) {
+	handler := httpserver.NewHandler(httpserver.Options{
+		Service: "api", Ready: func(context.Context) error { return errors.New("password=private") },
+	})
+	for _, tc := range []struct {
+		name, method, path, code string
+		status                   int
+	}{
+		{"dependency", "GET", "/readyz", "dependency_unavailable", 503},
+		{"unknown route", "GET", "/secret?token=private", "not_found", 404},
+		{"wrong method", "POST", "/healthz", "method_not_allowed", 405},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.path, nil)
+			r.Header.Set("X-Request-ID", "external-untrusted-value")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("got %d: %s", w.Code, w.Body.String())
+			}
+			var body httpserver.ErrorResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Error.Code != tc.code || body.Error.RequestID == "" || body.Error.RequestID != w.Header().Get("X-Request-ID") {
+				t.Fatalf("invalid envelope: %+v", body)
+			}
+			if body.Error.RequestID == "external-untrusted-value" {
+				t.Fatal("untrusted ID accepted")
+			}
+		})
+	}
+}

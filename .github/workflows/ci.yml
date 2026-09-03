@@ -1,0 +1,37 @@
+name: foundation
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24', cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Install
+        run: cd frontend && npm ci
+      - name: Format
+        run: make format-check
+      - name: Lint
+        run: make lint
+      - name: Typecheck
+        run: make typecheck
+      - name: Unit tests
+        run: make test
+      - name: Integration tests
+        run: make integration
+      - name: Production build
+        run: make env build
+      - name: Start
+        run: make up
+      - name: Seed and smoke
+        run: make seed smoke
+      - name: Browser tests
+        run: cd frontend && npx playwright install --with-deps chromium && npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-traces, path: frontend/test-results, retention-days: 7 }
+      - name: Shutdown
+        if: always()
+        run: docker compose down

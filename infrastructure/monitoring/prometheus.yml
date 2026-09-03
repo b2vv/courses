@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: courses-api
+    static_configs: [{ targets: ['api:8080'] }]
+  - job_name: courses-worker
+    static_configs: [{ targets: ['media-worker:8081'] }]

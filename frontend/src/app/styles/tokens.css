@@ -1,0 +1,488 @@
+:root {
+  color-scheme: light;
+  --color-background: #ffffff;
+  --color-surface: #f4f6f9;
+  --color-text: #152336;
+  --color-muted: #516177;
+  --color-border: #9ba9ba;
+  --color-primary: #1746a2;
+  --color-primary-hover: #12387f;
+  --color-on-primary: #ffffff;
+  --color-focus: #1746a2;
+  --color-danger: #ae2637;
+  --color-success: #146844;
+  --color-warning: #865000;
+  --color-info: #1746a2;
+  --color-overlay: #15233699;
+  --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-utility: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --radius-control: 0.375rem;
+  --radius-panel: 0.75rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --control-min-size: 2.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --color-background: #111c2c;
+    --color-surface: #1c2b3f;
+    --color-text: #f0f4fa;
+    --color-muted: #b1bfd1;
+    --color-border: #6f839e;
+    --color-primary: #a6c7ff;
+    --color-primary-hover: #c5dcff;
+    --color-on-primary: #102648;
+    --color-focus: #a6c7ff;
+    --color-danger: #ffacb5;
+    --color-success: #7edeaf;
+    --color-warning: #f6c983;
+    --color-info: #a6c7ff;
+    --color-overlay: #060e19bb;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-background: #111c2c;
+  --color-surface: #1c2b3f;
+  --color-text: #f0f4fa;
+  --color-muted: #b1bfd1;
+  --color-border: #6f839e;
+  --color-primary: #a6c7ff;
+  --color-primary-hover: #c5dcff;
+  --color-on-primary: #102648;
+  --color-focus: #a6c7ff;
+  --color-danger: #ffacb5;
+  --color-success: #7edeaf;
+  --color-warning: #f6c983;
+  --color-info: #a6c7ff;
+  --color-overlay: #060e19bb;
+}
+
+.ui-button,
+.ui-input,
+.ui-link,
+.ui-tab,
+.ui-option,
+.ui-choice {
+  min-block-size: var(--control-min-size);
+  font: inherit;
+}
+
+.ui-button,
+.ui-input,
+.ui-tab,
+.ui-option {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-inline-size: var(--control-min-size);
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-weight: 650;
+}
+
+.ui-button--primary {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.ui-button--primary[data-hovered] {
+  background: var(--color-primary-hover);
+}
+.ui-button--secondary {
+  color: var(--color-text);
+  background: var(--color-background);
+}
+.ui-button--secondary[data-hovered] {
+  background: var(--color-surface);
+}
+.ui-button--danger {
+  color: var(--color-background);
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.ui-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+  text-underline-offset: 0.18em;
+  text-decoration: underline;
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+
+:is(
+  .ui-button,
+  .ui-input,
+  .ui-link,
+  .ui-choice,
+  .ui-tab,
+  .ui-option,
+  .ui-dialog,
+  .ui-listbox
+)[data-focus-visible],
+:is(.ui-button, .ui-input, .ui-link, .ui-tab, .ui-option):focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+[data-disabled].ui-button,
+[data-disabled].ui-choice,
+[data-disabled].ui-option,
+.ui-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-field {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.ui-field > label {
+  font-weight: 650;
+}
+.ui-input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+.ui-input::placeholder {
+  color: var(--color-muted);
+}
+.ui-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+.ui-textarea {
+  resize: vertical;
+  min-block-size: 8rem;
+}
+.ui-description {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+.ui-field-error {
+  color: var(--color-danger);
+}
+.ui-field-error:empty {
+  display: none;
+}
+.ui-select-button {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: center;
+  text-align: start;
+}
+.ui-combobox-input {
+  display: flex;
+  gap: var(--space-1);
+}
+.ui-combobox-input > .ui-input {
+  flex: 1;
+}
+
+.ui-popover {
+  max-inline-size: min(28rem, calc(100vw - 2rem));
+  min-inline-size: var(--trigger-width);
+  overflow: auto;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: var(--space-2);
+}
+
+.ui-listbox {
+  outline: none;
+}
+.ui-option {
+  border-color: transparent;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.ui-option[data-focused],
+.ui-option[data-selected] {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+.ui-option[data-selected] {
+  font-weight: 700;
+}
+.ui-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+.ui-checkbox-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  flex: none;
+  color: transparent;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.ui-choice[data-selected] .ui-checkbox-mark {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+.ui-switch-track {
+  display: flex;
+  align-items: center;
+  inline-size: 2.75rem;
+  block-size: 1.5rem;
+  padding: 2px;
+  flex: none;
+  background: var(--color-muted);
+  border-radius: 2rem;
+}
+.ui-switch-track > span {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 50%;
+  background: var(--color-background);
+}
+.ui-choice[data-selected] .ui-switch-track {
+  justify-content: end;
+  background: var(--color-primary);
+}
+.ui-choice[data-selected] .ui-switch-track > span {
+  background: var(--color-on-primary);
+}
+
+.ui-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: var(--space-4);
+  background: var(--color-overlay);
+}
+.ui-modal {
+  inline-size: min(100%, 36rem);
+  max-block-size: calc(100dvh - 2rem);
+  overflow: auto;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+.ui-dialog {
+  padding: var(--space-6);
+}
+.ui-dialog h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin-block: 0 var(--space-4);
+}
+.ui-dialog-actions {
+  display: flex;
+  justify-content: end;
+  flex-wrap: wrap;
+  margin-block-start: var(--space-6);
+}
+.ui-tooltip {
+  max-inline-size: min(22rem, calc(100vw - 2rem));
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-text);
+  color: var(--color-background);
+  border-radius: var(--radius-control);
+}
+.ui-tabs {
+  display: grid;
+  gap: var(--space-4);
+}
+.ui-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+  padding-block-end: var(--space-2);
+}
+.ui-tab {
+  cursor: pointer;
+  background: var(--color-background);
+  color: var(--color-muted);
+  border-color: transparent;
+}
+.ui-tab[data-selected] {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  font-weight: 650;
+}
+.ui-tab-panel:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.ui-progress {
+  display: grid;
+  gap: var(--space-2);
+}
+.ui-progress-label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ui-progress-track {
+  block-size: 0.625rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+.ui-progress-fill {
+  block-size: 100%;
+  background: var(--color-primary);
+}
+.ui-progress:not([aria-valuenow]) .ui-progress-fill {
+  inline-size: 35%;
+}
+.ui-table-scroll {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+.ui-table-scroll:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.ui-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  text-align: start;
+}
+.ui-table caption {
+  text-align: start;
+  font-weight: 650;
+  padding-block: var(--space-3);
+}
+.ui-table th,
+.ui-table td {
+  text-align: start;
+  padding: var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+.ui-table th {
+  background: var(--color-surface);
+}
+.ui-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.ui-pagination-label {
+  color: var(--color-muted);
+}
+.ui-toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-inline-start: 4px solid var(--color-success);
+  border-radius: var(--radius-control);
+}
+.ui-toast > output {
+  margin: 0;
+  flex: 1;
+}
+.ui-state {
+  padding-block: var(--space-6);
+  border-block-start: 2px solid var(--color-border);
+}
+.ui-state h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin: 0 0 var(--space-3);
+}
+.ui-state p {
+  color: var(--color-muted);
+  max-inline-size: 65ch;
+}
+.ui-state--error {
+  border-color: var(--color-danger);
+}
+.ui-skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+.ui-skeleton-line {
+  display: block;
+  block-size: 1.2em;
+  background: var(--color-surface);
+  border-radius: var(--radius-control);
+}
+.ui-skeleton-line:last-child {
+  inline-size: 70%;
+}
+.ui-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui-skeleton-line {
+    animation: ui-loading 1.5s ease-in-out infinite alternate;
+  }
+  @keyframes ui-loading {
+    to {
+      opacity: 0.4;
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  .ui-checkbox-mark,
+  .ui-switch-track {
+    border-color: ButtonText;
+  }
+  .ui-choice[data-selected] .ui-checkbox-mark,
+  .ui-choice[data-selected] .ui-switch-track {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .ui-progress-fill,
+  .ui-skeleton-line {
+    background: Highlight;
+  }
+}
