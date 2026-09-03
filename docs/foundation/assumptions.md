@@ -35,4 +35,6 @@
 
 ## Зміни припущень
 
-Поки немає. Після перевірки версій або незалежного review основний агент дописує тут факт, причину, ADR/файл і перевірку; початкові рішення не стираються.
+- Публічний UI використовує наданий CourseForge mockup як parity-напрямок: темний технічний фон, purple surfaces, lime emphasis і code-cover картки. Ціни, рейтинги та прогрес не перенесено, бо відповідних domain-даних немає. Перевірка: Playwright screenshots.
+- За уточненням користувача localization реалізована через request-scoped `i18next`: `uk`/`en`, cookie → Accept-Language → Ukrainian fallback. Контент курсу залишається авторськими даними й автоматично не перекладається.
+- Незалежний code review виявив несанацізований Nginx error log; raw sink вимкнено, а безпечний structured access log залишено. Recovery test підтвердив відсутність marker з query/Referer у logs.

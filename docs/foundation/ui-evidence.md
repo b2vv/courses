@@ -4,7 +4,7 @@
 
 Artifact: a system for students finding a course and, later, instructors maintaining its material. This delivery provides reusable controls and public catalog states; it does not implement instructor actions.
 
-The repository had no existing UI inventory or tokens when this task started. `frontend/src/app/styles/tokens.css` is the single token source. The agreed palette is white/slate with blue actions; typography combines system sans-serif body text and restrained Georgia headings. Repeated labelled controls, generous reading space and clear state messages provide continuity. There is no decorative imagery or external design parity source. Components use semantic CSS classes, React Aria data attributes, and tokens; feature components should not introduce literal colors.
+The repository had no existing UI inventory or tokens when this task started. `frontend/src/app/styles/tokens.css` is the single token source. The final palette follows the user-provided CourseForge reference: white/dark slate canvases, purple actions and covers, lime hero emphasis, bold system headings and utility monospace. Card cover imagery is CSS/code typography; it makes no product claim. Components use semantic CSS classes, React Aria data attributes, and tokens; feature components do not introduce literal colors.
 
 Light/dark uses `prefers-color-scheme`, overridden by `data-theme="light"` or `data-theme="dark"` on the root element. `--font-body`, `--font-display`, `--font-utility`, semantic `--color-*`, spacing/radius tokens and `--control-min-size` are shared. Controls have a minimum 2.75rem target, visible focus, wrapping labels, no fixed text heights, reduced-motion treatment and forced-color fallbacks. Wide tables scroll in a keyboard-focusable named section; a targeted lint exception documents why that section is focusable.
 
@@ -54,10 +54,10 @@ The user specified the testing seams: React component behavior, keyboard navigat
 
 `npm run typecheck` passed. Targeted Oxlint passed with zero warnings. Final formatting and combined gates are recorded in the parent foundation report.
 
-Happy DOM has no layout geometry; Select arrow-key focus was not represented as a passing DOM test. Real browser keyboard behavior, responsive rendering, themes, 200% text zoom, screenshots and contrast belong to the parent Playwright/visual gate. No screenshot was taken within this isolated UI subtask; that visual gate remains unverified here.
+Happy DOM has no layout geometry, so responsive behavior remained a browser gate. The final Playwright run passed keyboard behavior, axe WCAG A/AA, dark/mobile, 200% text zoom without horizontal overflow, and `uk/en` switching; screenshots are linked from `report.md`.
 
 ## Limits
 
 Table is a semantic read-only table, without sorting/virtualization/editing. FileUpload selects files but does not upload them. Toast is controlled by its caller, without automatic dismissal or an application queue. Dialog is a basic modal with an included trigger and close action. Transcoding, actual progress, authentication and administration workflows are later phases. No unused TanStack Table/Virtual, upload store, form library or business interface was added for those future features.
 
-Next smallest task: run browser accessibility/visual checks against the composed SSR shell, then record F04/F06 results. No user decision is required.
+Next smallest task: specify Phase 3 Identity and session behavior. No user decision is required.

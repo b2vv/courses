@@ -2,7 +2,7 @@
 
 Self-hosted online-course platform foundation. Current scope: a public catalog vertical slice, with infrastructure for later identity, administration, private HLS and transcripts. No payment provider or automatic transcription is connected.
 
-Stack: React 19, strict TypeScript, TanStack Start/Router/Query, Rsbuild/Rspack, Tailwind 4, React Aria; Go 1.27.1 modular monolith, pgx/sqlc/Goose, PostgreSQL 17, Redis/Asynq, FFmpeg worker image and Nginx. Rstest, Testing Library, MSW, Playwright, Oxlint/Oxfmt and Go/Testcontainers supply checks.
+Stack: React 19, strict TypeScript, TanStack Start/Router/Query, Rsbuild/Rspack, Tailwind 4, React Aria and request-scoped i18next; Go 1.27.1 modular monolith, pgx/sqlc/Goose, PostgreSQL 17, Redis/Asynq, FFmpeg worker image and Nginx. Rstest, Testing Library, MSW, Playwright, Oxlint/Oxfmt and Go/Testcontainers supply checks.
 
 ## Start
 
@@ -32,7 +32,7 @@ make seed
 make e2e
 ```
 
-`make migrate` applies Goose migrations. `make generate` regenerates sqlc and Orval; generated code belongs to adapters, never domain. `make format` formats code. CI uses format → lint → typecheck → unit → integration → build → E2E. See [testing](docs/development/testing.md) and the factual [report](docs/foundation/report.md).
+`make migrate` applies Goose migrations. `make generate` regenerates sqlc and Orval; `make check-generated` rejects contract drift. Generated code belongs to adapters, never domain. `make format` formats code. CI uses format → lint → typecheck → unit → integration → generated drift → build → E2E. See [testing](docs/development/testing.md) and the factual [report](docs/foundation/report.md).
 
 ## Repository
 
