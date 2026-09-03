@@ -22,7 +22,7 @@ Phases 1–2 завершено. Phase 3 розпочато зі специфі�
 
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
 |---|---|---:|---|---|---|
-| I01 | Identity users/sessions migration and domain | 1.5h | green Identity plan gates | planned | — |
+| I01 | Identity users/sessions migration and domain | 1.5h | green Identity plan gates | done | `docs/identity/report.md`; migration/domain tests pass |
 | I02 | Login/session use cases and adapters | 2h | I01 | planned | — |
 | I03 | HTTP middleware, cookies and typed runtime config | 2h | I02 | planned | — |
 | I04 | OpenAPI/Orval, Compose and Nginx auth edge | 1h | I03 | planned | — |

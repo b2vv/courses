@@ -5,7 +5,7 @@
 - Phases 4–8 remain roadmap work; do not claim working admin CRUD, playback, uploads or payments.
 - Read `docs/identity/plan.md` and `work/tasks.md`; execute one logical slice at a time.
 - Preserve existing work. Never commit secrets, `.env`, media bytes or dependency caches.
-- Use small logical commits and record verification, limitations and next task in `docs/foundation/report.md`.
+- Use small logical commits and record current-phase verification, limitations and next task in `docs/identity/report.md`.
 
 ## Architecture
 - Backend modular monolith with a separate media-worker executable. No Rust, ORM or service locator.

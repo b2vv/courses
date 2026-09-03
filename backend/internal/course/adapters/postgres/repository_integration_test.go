@@ -84,8 +84,9 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		files := fstest.MapFS{
-			"00001_courses.sql": &fstest.MapFile{Data: initial},
-			"00002_failure.sql": &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
+			"00001_courses.sql":  &fstest.MapFile{Data: initial},
+			"00002_identity.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
+			"00003_failure.sql":  &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
 		}
 		failure, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithDisableGlobalRegistry(true))
 		if err != nil {
@@ -220,4 +221,13 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("connection failed after cancellation: %v", err)
 		}
 	})
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return content
 }
