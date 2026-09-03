@@ -161,6 +161,45 @@ func TestAuthenticateAndLogoutUseOneTimestampAndPropagateStoreErrors(t *testing.
 	}
 }
 
+type truncatingSessions struct {
+	token string
+}
+
+func (store *truncatingSessions) Rotate(_ context.Context, userID, _ string, createdAt, expiresAt time.Time) (ports.IssuedSession, error) {
+	session := domain.Session{ID: "50000000-0000-4000-8000-000000000009", UserID: userID, CreatedAt: createdAt.Truncate(time.Microsecond), ExpiresAt: expiresAt.Truncate(time.Microsecond)}
+	return ports.IssuedSession{Session: session, Token: store.token}, nil
+}
+
+func (store *truncatingSessions) Resolve(_ context.Context, _ string, _ time.Time) (domain.User, error) {
+	return domain.User{}, domain.ErrAuthenticationRequired
+}
+
+func (store *truncatingSessions) Revoke(_ context.Context, _ string) error {
+	return nil
+}
+
+func TestLoginIssuesASessionWhenTheClockCarriesSubMicrosecondPrecision(t *testing.T) {
+	t.Parallel()
+	reading := time.Date(2026, 9, 3, 12, 0, 0, 123456789, time.UTC)
+	user := validUser(reading.Truncate(time.Microsecond))
+	store := &truncatingSessions{token: validToken('A')}
+	identity := application.NewIdentity(&credentials{user: user}, store, func() time.Time { return reading })
+	result, err := identity.Login(context.Background(), loginInput())
+	if err != nil {
+		t.Fatalf("sub-microsecond clock rejected a committed session: %v", err)
+	}
+	if result.Session.CreatedAt.Nanosecond()%int(time.Microsecond) != 0 {
+		t.Fatalf("session timestamp keeps unstorable precision: %v", result.Session.CreatedAt)
+	}
+	if !result.Session.ExpiresAt.Equal(result.Session.CreatedAt.Add(12 * time.Hour)) {
+		t.Fatalf("lifetime=%v", result.Session.ExpiresAt.Sub(result.Session.CreatedAt))
+	}
+}
+
+func loginInput() application.LoginInput {
+	return application.LoginInput{Email: "student@courseforge.local", Password: "local-development-password"}
+}
+
 func validUser(now time.Time) domain.User {
 	return domain.User{ID: "40000000-0000-4000-8000-000000000001", Email: "student@courseforge.local", DisplayName: "Студентка Курсу", Role: domain.Student, CreatedAt: now, UpdatedAt: now}
 }

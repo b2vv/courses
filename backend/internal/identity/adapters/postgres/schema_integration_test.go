@@ -5,6 +5,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -285,6 +286,32 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		}
 		if _, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", "", now, now.Add(12*time.Hour)); err != nil {
 			t.Fatalf("repository did not recover: %v", err)
+		}
+	})
+
+	t.Run("session timestamps round trip at microsecond resolution", func(t *testing.T) {
+		repository := newRepository(pool, &passwordVerifier{matched: true}, cryptorand.Reader)
+		wall := time.Now().UTC()
+		if wall.Nanosecond()%int(time.Microsecond) == 0 {
+			wall = wall.Add(321 * time.Nanosecond)
+		}
+		stored := wall.Truncate(time.Microsecond)
+		issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", "", stored, stored.Add(12*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !issued.Session.CreatedAt.Equal(stored) || !issued.Session.ExpiresAt.Equal(stored.Add(12*time.Hour)) {
+			t.Fatalf("microsecond timestamps did not survive the round trip: %+v", issued.Session)
+		}
+		if _, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", issued.Token, wall, wall.Add(12*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		var remainder int64
+		if err := database.QueryRowContext(ctx, `SELECT (EXTRACT(microseconds FROM created_at)::bigint) FROM user_sessions ORDER BY created_at DESC LIMIT 1`).Scan(&remainder); err != nil {
+			t.Fatal(err)
+		}
+		if time.Duration(wall.Nanosecond()) == time.Duration(remainder)*time.Microsecond {
+			t.Fatalf("PostgreSQL preserved sub-microsecond precision; the application clock need not be normalized")
 		}
 	})
 

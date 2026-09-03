@@ -12,6 +12,10 @@ import (
 const (
 	sessionLifetime  = 12 * time.Hour
 	operationTimeout = 3 * time.Second
+	// Session timestamps are written to the session store and read back before
+	// they are trusted. Stores persist them at microsecond resolution, so a
+	// clock reading is normalized before it becomes part of that round trip.
+	storeResolution = time.Microsecond
 )
 
 type Clock func() time.Time
@@ -52,7 +56,7 @@ func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginRes
 	if _, err := domain.NewUser(user); err != nil || !user.Active() {
 		return LoginResult{}, domain.ErrInvalidCredentials
 	}
-	now := identity.now()
+	now := identity.timestamp()
 	issued, err := identity.sessions.Rotate(ctx, user.ID, input.PresentedToken, now, now.Add(sessionLifetime))
 	if err != nil {
 		return LoginResult{}, err
@@ -70,7 +74,7 @@ func (identity *Identity) Authenticate(ctx context.Context, token string) (domai
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
-	user, err := identity.sessions.Resolve(ctx, token, identity.now())
+	user, err := identity.sessions.Resolve(ctx, token, identity.timestamp())
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -90,6 +94,10 @@ func (identity *Identity) Logout(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	return identity.sessions.Revoke(ctx, token)
+}
+
+func (identity *Identity) timestamp() time.Time {
+	return identity.now().UTC().Truncate(storeResolution)
 }
 
 func validToken(token string) bool {
