@@ -9,7 +9,7 @@
 | 2026-09-03 | F01 / foundation_plan | Scope limited to Phase 1 → Phase 2. User supplied explicit decisions; no additional product confirmation required | Foundation DoD includes Course slice; Phase 3–8 deferred |
 | 2026-09-03 | F01 / foundation_plan | Plan self-defense has five covered rows; independent verdict pending | Fresh reviewer must run plan-critique + plan-defense before implementation; no claim of green gate |
 
-## Pending gates
+## Pending gates (historical snapshot before execution)
 
 - F01 independent plan-critique: pending.
 - F01 independent plan-defense: pending.
