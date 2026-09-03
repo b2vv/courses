@@ -16,4 +16,15 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phase 3–8 не починалися. Наступна найменша задача — специфікація Identity Phase 3. Рішення користувача наразі не потрібне.
+Phases 1–2 завершено. Phase 3 розпочато зі специфікації Identity; Phases 4–8 не починалися.
+
+## Phase 3 — Identity
+
+| ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
+|---|---|---:|---|---|---|
+| I01 | Identity users/sessions migration and domain | 1.5h | green Identity plan gates | planned | — |
+| I02 | Login/session use cases and adapters | 2h | I01 | planned | — |
+| I03 | HTTP middleware, cookies and typed runtime config | 2h | I02 | planned | — |
+| I04 | OpenAPI/Orval, Compose and Nginx auth edge | 1h | I03 | planned | — |
+| I05 | Frontend session adapter and localized login | 2h | I04 | planned | — |
+| I06 | Client route guards and completion gate | 1.5h | I05 | planned | — |

@@ -1,9 +1,9 @@
 # Working in courses
 
 ## Scope and delivery
-- Current delivery: foundation (Phase 1) and public catalog vertical slice (Phase 2).
-- Phases 3–8 are roadmap work; do not claim working authentication, playback, uploads or payments.
-- Read `docs/foundation/plan.md` and `work/tasks.md`; execute one logical slice at a time.
+- Foundation and public catalog (Phases 1–2) are complete. Current delivery: Identity (Phase 3).
+- Phases 4–8 remain roadmap work; do not claim working admin CRUD, playback, uploads or payments.
+- Read `docs/identity/plan.md` and `work/tasks.md`; execute one logical slice at a time.
 - Preserve existing work. Never commit secrets, `.env`, media bytes or dependency caches.
 - Use small logical commits and record verification, limitations and next task in `docs/foundation/report.md`.
 
