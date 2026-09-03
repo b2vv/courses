@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: Courses API
+  version: 1.0.0
+  description: Public catalog foundation. Authentication, purchases and media playback are not implemented.
+servers:
+  - url: /
+paths:
+  /api/v1/courses:
+    get:
+      operationId: listPublishedCourses
+      summary: List published courses
+      description: >-
+        Only published courses are visible. Search is a case-insensitive literal substring
+        of title or summary; percent and underscore are literal characters.
+        Query parameters must occur at most once; unknown parameters are rejected.
+        Limit and offset accept decimal digits only. Search is trimmed before validating
+        a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        - name: q
+          in: query
+          description: Search text, maximum 100 Unicode code points after trimming whitespace.
+          schema: { type: string, default: '' }
+        - name: sort
+          in: query
+          description: Recent orders by publishedAt descending then ID ascending; title uses PostgreSQL C collation then ID ascending.
+          schema: { type: string, enum: [recent, title], default: recent }
+      responses:
+        '200':
+          description: Published courses and pagination, including an empty items array when beyond the final page.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CoursePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/courses/{slug}:
+    get:
+      operationId: getPublishedCourse
+      summary: Get a published course
+      description: Draft, archived and unknown courses all return the same 404 response. Query parameters are not supported.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+            pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      responses:
+        '200':
+          description: Published course
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Course' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: Reserved for future payment mutations. No foundation endpoint consumes this header or promises idempotent payment processing.
+      schema: { type: string, minLength: 1, maxLength: 128 }
+  headers:
+    RequestID:
+      description: Server-generated correlation identifier.
+      required: true
+      schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+  schemas:
+    Course:
+      type: object
+      additionalProperties: false
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        status:
+          type: string
+          enum: [draft, published, archived]
+          description: Foundation public operations only return published.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [limit, offset, total]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 50 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        total: { type: integer, format: int64, minimum: 0 }
+    CoursePage:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/Course' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+              enum: [invalid_query, invalid_slug, course_not_found, dependency_unavailable, internal_error, not_found, method_not_allowed]
+            message: { type: string }
+            requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
+  responses:
+    BadRequest:
+      description: Invalid query parameters or slug.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Published course was not found.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: Unexpected error; internal details are never returned.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unavailable:
+      description: A dependency was unavailable or the bounded read timed out.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

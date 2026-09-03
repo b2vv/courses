@@ -1,0 +1,12 @@
+version: '2'
+sql:
+  - engine: postgresql
+    queries: sql/queries
+    schema: migrations
+    gen:
+      go:
+        package: generated
+        out: internal/course/adapters/postgres/generated
+        sql_package: pgx/v5
+        emit_empty_slices: true
+        emit_json_tags: false

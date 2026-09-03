@@ -6,6 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	coursehttp "courses/internal/course/adapters/http"
+	coursepostgres "courses/internal/course/adapters/postgres"
+	"courses/internal/course/application"
+
 	"courses/platform/httpserver"
 	"courses/platform/observability"
 	"courses/platform/runtime"
@@ -22,9 +26,12 @@ func main() {
 	}
 	err = func() error {
 		defer dependencies.Close()
+		catalog := application.NewCatalog(coursepostgres.NewRepository(dependencies.Database))
+		courseHandler := coursehttp.NewHandler(catalog)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
-			Tracer: dependencies.Tracing.Tracer("http"),
+			Tracer:   dependencies.Tracing.Tracer("http"),
+			Register: courseHandler.Register,
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))
 		return httpserver.Run(ctx, runtime.Address(":8080"), handler)
