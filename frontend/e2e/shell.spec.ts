@@ -7,7 +7,7 @@ test('SSR shell renders without JavaScript', async ({ browser, baseURL }) => {
   });
   const page = await context.newPage();
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Розібратись.');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Навички, які');
   await page.getByRole('link', { name: 'Переглянути курси' }).click();
   await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
   await context.close();

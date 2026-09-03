@@ -6,6 +6,8 @@ Dependency rules: domain → language only; ports → domain; application → do
 
 SSR routes: `/`, `/courses`, `/courses/$slug`, `/login`. `/learn`, `/admin` and descendants render client-only locked placeholders until identity is implemented. No auth success is simulated. API calls have bounded deadlines and cancellation.
 
-The UI is a Ukrainian technical course library: compact chapter-like labels, blue navigation and a calm white/slate surface. Repeated course metadata rows provide identity without decorative dashboard metrics. Design tokens define light/dark themes, focus and all colors. System body typography and a restrained Georgia display heading avoid external font requests. Minimum controls are 44px; layout wraps at zoom and small widths.
+The UI follows the CourseForge reference: a dark technical canvas, purple brand surfaces, lime emphasis, bold system typography and code-cover course cards. No price, rating or progress appears without domain data. Design tokens define light/dark themes, focus and all colors. Minimum controls are 44px; layout wraps at zoom and small widths.
+
+`i18next` and `react-i18next` own visible application copy. Each SSR request creates an independent instance, selecting `uk` or `en` from the `courseforge_locale` cookie and then `Accept-Language`; Ukrainian is the fallback. The browser switch updates the document language and a SameSite cookie, so a later SSR navigation uses the same locale. Course content remains author data and is not passed through UI translation resources.
 
 UI kit wraps React Aria primitives. Advanced React Hook Form, Zustand, hls.js, TanStack Table/Virtual, TipTap and ECharts dependencies arrive with their consuming phases. Foundation uses native semantic tables where virtualization/sorting is not needed. This follows the rule against unused libraries.

@@ -5,16 +5,22 @@ import {
   Scripts,
   Link,
 } from '@tanstack/react-router';
+import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import '../app/styles/main.css';
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient;
+  catalog: ReturnType<typeof createCatalogDependencies>;
+}>()({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Courses — навчання через практику' },
+      { title: 'CourseForge — навчання через практику' },
       {
         name: 'description',
         content: 'Курси для розробників: архітектура, інструменти й практика.',
@@ -23,26 +29,36 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   }),
   shellComponent: Document,
   component: Layout,
-  notFoundComponent: () => (
-    <section className="notice">
-      <h1>Сторінку не знайдено</h1>
-      <a href="/courses">Перейти до каталогу</a>
-    </section>
-  ),
-  errorComponent: () => (
-    <section className="notice" role="alert">
-      <h1>Не вдалося відкрити сторінку</h1>
-      <p>Оновіть сторінку, щоб спробувати ще раз.</p>
-      <form method="get">
-        <button type="submit">Спробувати ще раз</button>
-      </form>
-    </section>
-  ),
+  notFoundComponent: NotFound,
+  errorComponent: PageError,
 });
 
-function Document({ children }: { children: ReactNode }) {
+function NotFound() {
+  const { t } = useTranslation();
   return (
-    <html lang="uk">
+    <section className="notice">
+      <h1>{t('page.notFound')}</h1>
+      <a href="/courses">{t('catalog.goToCatalog')}</a>
+    </section>
+  );
+}
+function PageError() {
+  const { t } = useTranslation();
+  return (
+    <section className="notice" role="alert">
+      <h1>{t('page.failure')}</h1>
+      <p>{t('page.failureHint')}</p>
+      <form method="get">
+        <button type="submit">{t('common.retry')}</button>
+      </form>
+    </section>
+  );
+}
+
+function Document({ children }: { children: ReactNode }) {
+  const { i18n } = useTranslation();
+  return (
+    <html lang={i18n.resolvedLanguage === 'en' ? 'en' : 'uk'}>
       <head>
         <HeadContent />
       </head>
@@ -55,19 +71,21 @@ function Document({ children }: { children: ReactNode }) {
 }
 
 function Layout() {
+  const { t } = useTranslation();
   return (
     <>
       <a className="skip-link" href="#main">
-        До основного вмісту
+        {t('common.skip')}
       </a>
       <header className="site-header">
         <div className="shell header-inner">
-          <Link to="/" className="wordmark" aria-label="Courses — головна">
-            courses<span aria-hidden="true"> / </span>
+          <Link to="/" className="wordmark" aria-label={t('common.homeLabel')}>
+            <span aria-hidden="true">{'</>'}</span>CourseForge
           </Link>
-          <nav aria-label="Основна навігація">
-            <Link to="/courses">Каталог</Link>
-            <Link to="/login">Увійти</Link>
+          <nav aria-label={t('common.mainNavigation')}>
+            <Link to="/courses">{t('common.catalog')}</Link>
+            <Link to="/login">{t('common.login')}</Link>
+            <LanguageSwitcher />
           </nav>
         </div>
       </header>
@@ -75,8 +93,8 @@ function Layout() {
         <Outlet />
       </main>
       <footer className="shell site-footer">
-        <span>Courses</span>
-        <span>Знання, які стають практикою.</span>
+        <span>CourseForge</span>
+        <span>{t('common.tagline')}</span>
       </footer>
     </>
   );

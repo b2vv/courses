@@ -9,7 +9,7 @@
     "start": "node server.mjs",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint --deny-warnings",
+    "lint": "oxlint --deny-warnings && node scripts/check-architecture.mjs",
     "typecheck": "tsc --noEmit",
     "test": "rstest run",
     "e2e": "playwright test",

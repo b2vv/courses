@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed format format-check lint typecheck test integration build e2e smoke generate check
+.PHONY: env up down dev logs migrate seed format format-check lint typecheck test integration build e2e smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -32,7 +32,7 @@ test:
 	cd frontend && npm test
 	$(GO_RUN) go test -race ./...
 integration:
-	$(GO_RUN) go test -tags=integration ./...
+	sh infrastructure/tests/integration.sh
 build:
 	docker compose build
 e2e:
@@ -42,4 +42,7 @@ smoke:
 generate:
 	$(GO_RUN) go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
 	cd frontend && npm run generate
+check-generated: generate
+	git diff --exit-code -- backend/internal/course/adapters/postgres/generated frontend/src/adapters/api/generated
+	@test -z "$$(git ls-files --others --exclude-standard -- backend/internal/course/adapters/postgres/generated frontend/src/adapters/api/generated)"
 check: format-check lint typecheck test integration build e2e

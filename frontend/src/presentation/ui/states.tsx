@@ -12,14 +12,19 @@ export function EmptyState({ title, children }: StateProps) {
   );
 }
 
-type ErrorStateProps = StateProps & { retryHref?: string };
+type ErrorStateProps = StateProps & { retryHref?: string; retryLabel?: string };
 
-export function ErrorState({ title, children, retryHref }: ErrorStateProps) {
+export function ErrorState({
+  title,
+  children,
+  retryHref,
+  retryLabel = 'Спробувати ще раз',
+}: ErrorStateProps) {
   return (
     <section className="ui-state ui-state--error" role="alert">
       <h2>{title}</h2>
       {children}
-      {retryHref && <Link href={retryHref}>Спробувати ще раз</Link>}
+      {retryHref && <Link href={retryHref}>{retryLabel}</Link>}
     </section>
   );
 }

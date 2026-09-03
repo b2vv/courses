@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next';
 export function LockedArea() {
+  const { t } = useTranslation();
   return (
     <section className="notice">
-      <h1>Розділ поки недоступний</h1>
-      <p>Кабінет та керування курсами ще готуються до відкриття.</p>
-      <a href="/login">Перейти до входу</a>
+      <h1>{t('locked.title')}</h1>
+      <p>{t('locked.text')}</p>
+      <a href="/login">{t('locked.action')}</a>
     </section>
   );
 }

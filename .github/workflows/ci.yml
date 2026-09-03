@@ -21,6 +21,8 @@ jobs:
         run: make test
       - name: Integration tests
         run: make integration
+      - name: Generated contract drift
+        run: make check-generated
       - name: Production build
         run: make env build
       - name: Start
