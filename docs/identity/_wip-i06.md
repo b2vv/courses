@@ -12,9 +12,11 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 1 setup | branch `feat/identity-foundation`; artifacts `docs/identity/i06/`; living note here | — |
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
-| 4 plan (2nd) | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
-| 5 GATE 2 (1st) | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed. Tasks are not cut | fresh delegates |
-| 6 tasks | — | — |
+| 4 plan (3rd) | `i06/plan.md` rewritten twice. Edition 3 rests on the measured router spike; acceptance table rebuilt to 47 rows | — |
+| 5 GATE 2 (1st) | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed | fresh delegates |
+| 5 GATE 2 (2nd) | **RED.** `plan-critique`: 10 blocking, 17 non-blocking. `plan-defense`: 2 covered, 3 holes. Decision taken: spike the router before drafting again | fresh delegates + user |
+| 5 GATE 2 (3rd) | **RED.** Four lenses, `4 запущено / 4 повернулось`; deduplicated to 8 blocking themes. Constitution inline: 1 blocking. `plan-defense` **not run** — it would judge a text that is about to change. Two forks put to the user | fresh delegates |
+| 6 tasks | cut into I06a–I06h at edition 3; the cut itself is now a blocking finding (evidence per task) and is recut with edition 4 | — |
 | 7 implement | — | — |
 | 8 verify | — | — |
 | 9 wrap | — | — |
@@ -227,3 +229,142 @@ the design needs, from exactly the place the design needs them.
 navigation. With `staleTime: 0` that is an identity revalidation per navigation, not per
 document load. The third draft states this instead of the two different wrong numbers the
 second draft gave.
+
+## GATE 2, third round — red again
+
+`4 запущено / 4 повернулось`; no lens went missing. Every load-bearing finding was
+re-verified against the code before being accepted, and two lenses verified against running
+systems rather than reading: one measured `\if` on the live Compose container, the other
+reproduced the seed collision on Postgres 17 in a temp table under `ROLLBACK`.
+
+Counts by lens: AI-slop 3/4, overcomplexity 4/3, logic gaps 7/5, edge cases 5/6
+(blocking/non-blocking). Deduplicated to **eight blocking themes**. Constitution check ran
+inline: 1 blocking, 4 non-blocking.
+
+### The fourth instance of the named pattern
+
+`_wip-i06.md` §"The pattern, named" predicted that a third draft written the same way would
+fail on the fourth framework assumption. It did, and **all four lenses found the same one
+independently**:
+
+`ensureQueryData` does not revalidate. `query-core/build/modern/queryClient.js:78-81`:
+
+```
+const cachedData = query.state.data;
+if (cachedData === void 0) return this.fetchQuery(options);
+if (options.revalidateIfStale && …) this.prefetchQuery(defaultedOptions);
+return Promise.resolve(cachedData);
+```
+
+`staleTime` is consulted only under `revalidateIfStale`, and even then the stale value is
+returned while the refetch runs in the background. The plan's "`staleTime: 0` forbids a
+stale answer" is false at this call site — the constant is real (`identity-queries.ts:32`),
+the call simply never asks it. The method is additionally marked `@deprecated` in the
+installed version.
+
+**Why the spike did not catch it.** Q2 measured whether the root's `beforeLoad` *re-runs*
+across a client navigation. It does. What was never measured is whether the *fetch* re-runs
+inside it — a different question, answered by Query rather than by the router. The spike
+was right and the conclusion drawn from it was wider than the measurement.
+
+**Narrower diagnosis than the lenses stated.** Three of them wrote that the sign-in scenario
+breaks. It does not: `login.tsx:53-56` already writes the cache with `setQueryData`, so the
+guard reads a signed-in viewer straight after login. What breaks is *staleness detection* —
+a revoked or expired session (G11, G12, G22a), and G08, whose precondition leaves the cache
+populated so the deferred handler is never called and the row tests nothing.
+
+### The other seven blocking themes
+
+1. **"`frontend/src` has no route-level test at all" is false**, and the 12h estimate rests
+   on it. `catalog-queries.test.tsx:40-68` already builds
+   `createRootRoute`/`createRoute`/`createRouter`/`createMemoryHistory`, runs `router.load()`,
+   navigates and asserts `router.state.location.pathname`; `CatalogView.test.tsx:172-184`
+   renders `RouterProvider`; `e2e/shell.spec.ts` asserts SSR output with JavaScript disabled;
+   `recovery.spec.ts:46` already uses the `request` fixture; `schema_integration_test.go:30-53`
+   is a working Testcontainers+goose harness. What is missing is test *files*, not test
+   *surfaces*. "twelve and not twenty" cites a figure that was never measured.
+2. **I06g holds every proof, so I06a–I06f produce none.** `docs/identity/plan.md:3` requires
+   each task to produce its own verification evidence. Six consecutive tasks without it
+   breaks the phase rule and makes the "closes Gxx" column unverifiable until the end.
+3. **The `safeReturnTo` allowlist contradicts its own acceptance row.**
+   `^/(learn|admin)(/[A-Za-z0-9._~-]+)*$` cannot match `/admin/` — the group requires at
+   least one character after each slash — so it falls back to `/learn`, which is exactly what
+   G15b forbids. Plan and table disagree inside one line, with no router involved.
+4. **"A primary-key collision cannot arise from a differing email" is backwards.**
+   `00002_identity.sql:3-4`: `id` is the primary key, `email` is unique. With fixed ids and
+   `ON CONFLICT (email)`, editing a fixture's address in the file produces `{id: X, email:
+   new}` against `{id: X, email: old}`: no email conflict, a primary-key violation instead.
+   Reproduced on Postgres 17 — `duplicate key value violates unique constraint`, psql exit 3
+   under `ON_ERROR_STOP=1`, which aborts the whole seed including courses. Fixed ids are what
+   makes this collision possible, not what prevents it. The amended B09 ("a changed fixture is
+   applied rather than ignored") therefore does not hold for `email`.
+5. **The seed recipe expands the gate variable in the wrong place.** `Makefile:23` keeps the
+   whole `psql` call inside single quotes within `sh -c`, deliberately expanding
+   `$$POSTGRES_USER` *in the container*. Appending `-v identities="$$SEED_IDENTITIES"` to the
+   same line expands it there too, where `docker compose exec` never forwarded it —
+   reproducing, one level down, the exact failure the third edition diagnosed in the second.
+   Measured live: the branch is skipped with `unrecognized value "" for "\if expression"`,
+   exit 0. CI would seed zero identities: G32 red, G36 **falsely green**.
+6. **`make check` does not carry the variable**, so C03's "one command" is false: `check`
+   runs `seed` without `SEED_IDENTITIES`, no fixtures exist, and every sign-in row in `e2e`
+   fails. G41's "each step exit 0 on a clean checkout" is unreachable as written.
+7. **G07 is unwritable as specified.** The header reads `['session']` through `useQuery` with
+   `staleTime: 0`; dehydrated data is immediately stale, so `shouldFetchOnMount`
+   (`queryObserver.js:319-321`) fires one client `/auth/me` per document load. A network
+   counter asserting "no request at all after hydration" will see it, even though the guard
+   itself asked for nothing.
+8. **G12 has no mechanism and no owner.** The guard lives only in `beforeLoad`, which does
+   not re-run when the cache changes. A mounted `/admin` whose identity turns `null` on
+   window focus stays on screen. No plan step subscribes to `['session']` and navigates, and
+   no task in `work/tasks.md` is assigned the row.
+
+### Constitution check — inline, against AGENTS.md
+
+**Blocking.** The single squashed commit (§Rollback) was justified by "this slice is one
+logical change". That was true when I06 was one tracker row; it is not true across eight
+tasks, two of which (`I06c`, `I06f`) declare no dependencies at all. `AGENTS.md:9` asks for
+small logical commits, and the plan overrides it on a premise its own task cut retired.
+
+**Non-blocking.** The cookie-by-name check has no owning module named, and
+`courseforge_session` appears in `frontend/src` only inside tests — the constant lives in
+`backend/internal/identity/adapters/http/config.go:11`. (The edge-cases lens supplied the
+answer: `getCookie` is already exported from `@tanstack/react-start/server`,
+`start-server-core/dist/esm/request-response.js:150`, so this is reuse, not new code.)
+`make check` silently becomes a Compose-dependent target. The `append`-not-`set` reasoning for
+`Vary` defends a case that does not exist — `server.mjs:23` sets `Cache-Control` and no `Vary`
+header is present at all. `AGENTS.md:9` also requires a `docs/identity/report.md` entry;
+`acceptance.md` G41 carries it, `work/tasks.md` I06h does not.
+
+**Verified clean:** the domain stays import-free (`domain/identity/identity.ts:1`, with
+`safeReturnTo` at `:66`); the Query cache is request-scoped — `QueryClient` is constructed
+inside `getRouter()` (`router.tsx:12`), so `AGENTS.md:18` holds and G23 is writable.
+
+### What the round also settled, so it is not reopened
+
+The **router half of the design is sound**. The logic-gaps lens traced the full chain: the
+root's `beforeLoad` runs on the server (`load-server.js:159` skips only the `ssr:false`
+child), `__beforeLoadContext` is dehydrated as `b` (`ssr-server.js:25`), the client rebuilds
+the root context from it (`load-client.js:1200-1204`), and the handoff load starts past the
+root. `redirect()` and `notFound()` from a child `beforeLoad` behave as the design needs.
+The failure this round is entirely in the **Query layer**, not the router layer — which is
+why moving identity into the root `beforeLoad` stays correct.
+
+The edge-cases lens separately cleared the "never throws" property end to end: empty body,
+unknown role, missing `displayName`, 401, 500, timeout and client abort all surface as
+`SessionQueryError` through `unwrap`, with `retry: false` (`router.tsx:14`).
+
+### Two forks that need the user before a fourth edition
+
+1. **`fetchQuery` costs a blocking round trip per client navigation.** It is the mechanism
+   that makes G11/G12/G22a true, but the root's `beforeLoad` runs first and serially, so
+   every in-app navigation waits on `/auth/me` — for anonymous visitors too, since the cookie
+   is `HttpOnly` and the client can never rule itself out. The alternative is to keep the
+   cheap read and drop the staleness rows. This is the third time the mechanism has moved,
+   so it is put to the user rather than chosen quietly.
+2. **The seed gate mechanism, for the third time.** `APP_ENV` failed, `SEED_IDENTITIES`
+   through `\if` fails at the quoting boundary. The overcomplexity lens proposes a second
+   file (`backend/sql/seed-identities.sql`) plus a second make target: no variable, no `-v`,
+   no `\if`, no stderr noise; G36 holds by construction; the existing Go harness can apply it
+   through `pool.Exec`, which it cannot do with a psql metacommand. Decision 6's "explicit
+   confirmation" becomes a target name instead of an environment variable — the user's intent
+   is unchanged, the mechanism is not.
