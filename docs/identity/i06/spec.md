@@ -77,18 +77,24 @@ Added by this slice, not yet in the phase table:
 - Real learning content behind `/learn`. There are no lessons yet, so the area shows an
   honest empty state.
 
-## Відкриті питання
+## Рішення GATE 1
 
-1. **What does `/learn` show a signed-in student in Phase 3?** There is no enrollment and
-   no lesson. An empty state that says so is honest; anything richer would claim a
-   capability that does not exist.
-2. **How is a role refusal presented?** Sending a signed-in student to the login screen
-   would be wrong and confusing. A dedicated "not permitted" screen is the alternative.
-3. **Where does sign-out live?** A plain control in the header, or behind a menu opened
-   from the user's name.
-4. **Are the demo credentials written into the README?** They are local-only placeholders,
-   like the existing database passwords in `.env.example`, but they authenticate a role
-   that will later be able to change content.
-5. **Does the header render during SSR for anonymous visitors too?** A04 demands no
-   identity flash for a signed-in visitor; the anonymous case has the same requirement in
-   reverse.
+Taken with the user through `grilling`; the reasoning lives in
+[../_wip-i06.md](../_wip-i06.md).
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | When does SSR resolve identity? | Only when the request carries a session cookie. No cookie means anonymous by definition, so public storefront traffic pays nothing. This also settles the anonymous header: it is what the root already renders |
+| 2 | How is a role refusal presented? | As a 404. Not a security claim — the aim is to keep the administration area out of sight of casual probing, so a wrong path looks like a wrong path. `notFound()` is already this repository's answer for an unusable address |
+| 3 | What does an anonymous visitor get? | `/learn` sends them to login with `returnTo`; a member area is not a secret and the header already offers "sign in". `/admin` answers 404 for everyone not permitted, anonymous included, so an administrator signs in first and navigates afterwards |
+| 4 | What does `/learn` show a student? | An honest empty state with a way into the catalog, built on the existing `EmptyState` |
+| 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
+| 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
+
+### Derived without asking
+
+**Two fixtures, not three.** A01 needs a student and A02 an admin. B01 also names an
+instructor, but its evidence column is "policy + Playwright": the capability matrix is
+already expressed and unit-tested in the domain, so the browser suite proves
+student-refused and admin-allowed while the instructor row stays covered by the policy
+test. A third seeded identity would add a credential without adding evidence.

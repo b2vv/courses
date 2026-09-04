@@ -11,7 +11,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | threshold | **not crossed** — I06 changes one backend layer (seed) only, so "more than one layer of both" fails. Full cycle runs on the user's explicit invocation, which the constitution allows to override ceremony | user |
 | 1 setup | branch `feat/identity-foundation`; artifacts `docs/identity/i06/`; living note here | — |
 | 2 specify | `i06/spec.md` written | — |
-| 3 GATE 1 | `grilling` in progress; 3 of 5 open questions closed | user |
+| 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
 | 4 plan | — | — |
 | 5 GATE 2 | — | — |
 | 6 tasks | — | — |
@@ -41,6 +41,18 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
    "sign in". `/admin` answers 404 for everyone who is not permitted, anonymous included,
    so an administrator signs in first and navigates afterwards. A06 is therefore exercised
    on `/learn`.
+
+4. **`/learn` shows an honest empty state**, reusing `EmptyState` from the UI kit.
+5. **Header carries the name as text, a sign-out control, and an administration link only
+   for permitted roles.** A menu was rejected: two items do not justify a popover and its
+   focus management, and `Menu` already exists in the kit for when Phase 4 adds entries.
+6. **`make seed` refuses unless `APP_ENV` is `development`**, and the credentials go into
+   the README. A machine guard rather than an understanding, because the fixture creates an
+   administrator with a known password.
+
+Derived without asking, flagged for objection: two fixtures rather than three. B01's
+instructor row is covered by the domain policy test, so a third seeded credential would add
+no evidence.
 
 ## Delegation failures
 
