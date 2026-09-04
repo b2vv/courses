@@ -12,7 +12,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 1 setup | branch `feat/identity-foundation`; artifacts `docs/identity/i06/`; living note here | — |
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
-| 4 plan | — | — |
+| 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec`, pending | — |
 | 5 GATE 2 | — | — |
 | 6 tasks | — | — |
 | 7 implement | — | — |
@@ -63,5 +63,10 @@ no evidence.
 
 ## Delegation failures
 
-None yet. Any role executed inline instead of delegated is recorded here, because a silent
+**Code graph consulted by index, not by tool.** `.claude/standards.md` §Розміщення carries a
+reuse index and the graph itself is built (672 nodes, 6911 edges), but the
+`code-review-graph` MCP tools are not live in this session — the server was registered
+today and Claude Code reads MCP configuration at startup. The reuse survey was therefore
+made against the manifest index and the code. Recorded because a later run with the tools
+live may find reuse this pass missed. Any role executed inline instead of delegated is recorded here, because a silent
 substitution makes the cycle unrepeatable.
