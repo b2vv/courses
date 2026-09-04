@@ -135,3 +135,25 @@ Three decisions were taken with the user to unblock it:
    both breaks CI and defaults to `development` in Compose.
 
 Estimate corrected in the phase task row: 1.5h → 4h.
+
+## Found by the author while the second GATE 2 ran
+
+**The second draft's guard cannot work as written.** It resolves identity in the root
+*loader* and guards in each protected route's `beforeLoad`. In `router-core`,
+`executeServerLane` (`load-server.js:415`) runs `contextualize` — the whole `beforeLoad`
+lane, top-down across every match — to completion first, and only then the loader phase. A
+child's `beforeLoad` therefore cannot see the root loader's data.
+
+Correct shape: resolve identity in the root's **`beforeLoad`** and return it as context.
+`load-server.js:187-190` sets `match.context = {...context, ...beforeLoadContext}` and
+passes it down, which is exactly what context is for.
+
+**Second consequence, from `load-server.js:159`:** `if (match.ssr === false || !route.options.beforeLoad) continue;`
+— on the server, `beforeLoad` is skipped for `ssr: false` routes. `/learn` and `/admin` are
+both `ssr: false`, so their guard runs on the client only. Identity is still resolved and
+dehydrated server-side by the root, so there is no fetch to wait for, but the guard's
+decision happens after hydration. G07's wording overstates this and needs correcting.
+
+Not patched immediately: the critique and defence agents were reading the document at the
+time, and editing under them would produce a verdict on a version that no longer exists.
+Folded into one revision once they return.
