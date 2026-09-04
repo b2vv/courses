@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 import { createI18n, I18nProvider } from './app/providers/i18n';
 import { createCatalogDependencies } from './app/composition/catalog';
+import { createIdentityDependencies } from './app/composition/identity';
 import { detectLocale } from './app/composition/locale';
 import { parseUrlSearch, stringifyUrlSearch } from './app/router/url-search';
 import { routeTree } from './routeTree.gen';
@@ -14,7 +15,11 @@ export function getRouter() {
   });
   const router = createRouter({
     routeTree,
-    context: { queryClient, catalog: createCatalogDependencies() },
+    context: {
+      queryClient,
+      catalog: createCatalogDependencies(),
+      identity: createIdentityDependencies(),
+    },
     defaultPreload: 'intent',
     parseSearch: parseUrlSearch,
     stringifySearch: stringifyUrlSearch,

@@ -6,6 +6,7 @@ import {
   Link,
 } from '@tanstack/react-router';
 import type { createCatalogDependencies } from '../app/composition/catalog';
+import type { createIdentityDependencies } from '../app/composition/identity';
 import type { QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,7 @@ import '../app/styles/main.css';
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
   catalog: ReturnType<typeof createCatalogDependencies>;
+  identity: ReturnType<typeof createIdentityDependencies>;
 }>()({
   head: () => ({
     meta: [

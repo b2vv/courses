@@ -1,14 +1,69 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-export const Route = createFileRoute('/login')({ component: Login });
-function Login() {
+import { sessionQueryKey, SessionQueryError } from '../app/composition/identity-queries';
+import { parseLoginSearch } from '../app/router/login-search';
+import { LoginView } from '../presentation/identity/LoginView';
+import { safeReturnTo } from '../domain/identity/identity';
+import type { AuthenticatedUser, CredentialsInput } from '../domain/identity/identity';
+
+export const Route = createFileRoute('/login')({
+  validateSearch: parseLoginSearch,
+  loader: ({ context }) => context.queryClient.ensureQueryData(context.identity.current()),
+  head: () => ({ meta: [{ title: 'Вхід — CourseForge' }] }),
+  component: LoginRoute,
+  pendingComponent: LoginPending,
+  errorComponent: LoginFailure,
+});
+
+function LoginPending() {
   const { t } = useTranslation();
   return (
-    <section className="notice">
-      <p className="eyebrow">{t('login.label')}</p>
-      <h1>{t('login.title')}</h1>
-      <p>{t('login.text')}</p>
-      <a href="/courses">{t('login.action')}</a>
+    <section className="notice" aria-busy="true">
+      <p>{t('login.checking')}</p>
     </section>
+  );
+}
+
+function LoginFailure() {
+  const { t } = useTranslation();
+  return (
+    <section className="notice" role="alert">
+      <h1>{t('login.failure')}</h1>
+      <p>{t('login.failureHint')}</p>
+      <form method="get">
+        <button type="submit">{t('common.retry')}</button>
+      </form>
+    </section>
+  );
+}
+
+function LoginRoute() {
+  const { returnTo } = Route.useSearch();
+  const destination = safeReturnTo(returnTo);
+  const { identity } = Route.useRouteContext();
+  const client = useQueryClient();
+  const navigate = useNavigate();
+  const { data: user } = useSuspenseQuery(identity.current());
+  const goToReturnTo = () => void navigate({ href: destination });
+  const logIn = useMutation({
+    mutationFn: (input: CredentialsInput) =>
+      identity.session.logIn(input).then((result) => identity.unwrap(result)),
+    onSuccess: (signedIn: AuthenticatedUser) => {
+      // Replace the identity outright rather than refetching: the answer is
+      // already authoritative and a refetch would race the navigation.
+      client.setQueryData(sessionQueryKey, signedIn);
+      goToReturnTo();
+    },
+  });
+  const failure = logIn.error;
+  return (
+    <LoginView
+      user={user}
+      isPending={logIn.isPending}
+      errorCode={failure instanceof SessionQueryError ? failure.code : undefined}
+      onSubmit={(input) => logIn.mutate(input)}
+      onContinue={goToReturnTo}
+    />
   );
 }

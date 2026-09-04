@@ -3,6 +3,7 @@ import { makePublishedCourse } from '../../domain/course/course';
 import type { CatalogError, CoursePage, Result } from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 import { getPublishedCourse, listPublishedCourses } from './generated/courses';
+import { apiRequestHeaders } from './request-headers';
 import { courseSchema, errorSchema, pageSchema } from './course-schema';
 
 type Options = {
@@ -50,8 +51,7 @@ export function createApiCourseRepository(options: Options = {}): CourseReposito
       (signal): signal is AbortSignal => signal !== undefined,
     );
     const signal = AbortSignal.any([...controls, deadline]);
-    const headers = new Headers({ Accept: 'application/json' });
-    if (options.cookie) headers.set('Cookie', options.cookie);
+    const headers = apiRequestHeaders(options.cookie);
     return tracer.startActiveSpan(
       operation,
       {},
