@@ -91,6 +91,28 @@ Taken with the user through `grilling`; the reasoning lives in
 | 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
 | 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
 
+### What decision 2 and 3 do and do not mean
+
+Reading the two together is easy to get wrong, so the full matrix is written out:
+
+| Visitor | `/learn` | `/admin` |
+|---|---|---|
+| Anonymous | sent to login with `returnTo`, and returned after signing in | 404 |
+| Signed in, student | opens | 404 |
+| Signed in, instructor or admin | opens | **opens** |
+
+A permitted role reaches `/admin` by any means — a header link or a typed address. The
+only thing hiding costs is the deep link *from a signed-out state*: a bookmark to `/admin`
+opened before signing in answers 404 and carries no `returnTo`, so the sequence is sign in,
+then navigate. `/learn` keeps the bookmark working, which is why the two addresses are
+treated differently.
+
+**A typed address is a full page load, so the guard runs before identity is known.** A
+guard that reads "not yet resolved" as "anonymous" would answer 404 to an administrator on
+their own administration area, briefly or permanently. The guard must wait for the identity
+to resolve rather than defaulting to anonymous — the same requirement as A04's no-flash
+rule, seen from the other side, and the easiest thing in this slice to get wrong.
+
 ### Withdrawn derivation
 
 An earlier draft derived **two fixtures instead of three**, on the grounds that B01's
