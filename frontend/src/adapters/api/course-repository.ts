@@ -1,17 +1,11 @@
-import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { makePublishedCourse } from '../../domain/course/course';
 import type { CatalogError, CoursePage, Result } from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 import { getPublishedCourse, listPublishedCourses } from './generated/courses';
-import { apiRequestHeaders } from './request-headers';
 import { courseSchema, errorSchema, pageSchema } from './course-schema';
+import { createApiTransport, unnamedStatusCode } from './transport';
+import type { TransportOptions, WireResponse } from './transport';
 
-type Options = {
-  readonly cookie?: string;
-  readonly requestSignal?: AbortSignal;
-  readonly timeoutMs?: number;
-};
-type WireResponse = { readonly data: unknown; readonly status: number };
 const invalid = { ok: false, error: { code: 'invalid_response' } } satisfies Result<never>;
 
 function wireError(response: WireResponse): CatalogError {
@@ -29,60 +23,22 @@ function wireError(response: WireResponse): CatalogError {
         break;
     }
   }
-  return {
-    code:
-      response.status >= 500 || response.status === 429
-        ? 'dependency_unavailable'
-        : 'invalid_response',
-  };
+  return { code: unnamedStatusCode(response.status) };
 }
 
 /** One repository per SSR request; no cookie-bearing singleton or HTTP data cache. */
-export function createApiCourseRepository(options: Options = {}): CourseRepository {
-  const tracer = trace.getTracer('courses.frontend.api');
+export function createApiCourseRepository(options: TransportOptions = {}): CourseRepository {
+  const send = createApiTransport(options);
   async function request<T>(
     operation: string,
     execute: (init: RequestInit) => Promise<WireResponse>,
     map: (data: unknown) => Result<T>,
     caller?: AbortSignal,
   ): Promise<Result<T>> {
-    const deadline = AbortSignal.timeout(options.timeoutMs ?? 5000);
-    const controls = [caller, options.requestSignal].filter(
-      (signal): signal is AbortSignal => signal !== undefined,
-    );
-    const signal = AbortSignal.any([...controls, deadline]);
-    const headers = apiRequestHeaders(options.cookie);
-    return tracer.startActiveSpan(
-      operation,
-      {},
-      context.active(),
-      async (span): Promise<Result<T>> => {
-        try {
-          const response = await execute({
-            headers,
-            signal,
-            credentials: 'same-origin',
-            redirect: 'error',
-            cache: 'no-store',
-          });
-          if (response.status !== 200) {
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            return { ok: false, error: wireError(response) };
-          }
-          return map(response.data);
-        } catch (error) {
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          // Control signals remain distinct from malformed JSON and network errors.
-          if (controls.some((control) => control.aborted))
-            return { ok: false, error: { code: 'request_cancelled' } };
-          if (deadline.aborted) return { ok: false, error: { code: 'request_timeout' } };
-          if (error instanceof SyntaxError) return invalid;
-          return { ok: false, error: { code: 'dependency_unavailable' } };
-        } finally {
-          span.end();
-        }
-      },
-    );
+    const outcome = await send(operation, execute, 200, caller);
+    if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+    if (outcome.status !== 200) return { ok: false, error: wireError(outcome) };
+    return map(outcome.data);
   }
   return {
     listPublished(query, signal) {

@@ -1,4 +1,3 @@
-import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import type {
   AuthenticatedUser,
   SessionError,
@@ -6,16 +5,11 @@ import type {
 } from '../../domain/identity/identity';
 import type { SessionRepository } from '../../ports/SessionRepository';
 import { getCurrentUser, login, logout } from './generated/courses';
-import { apiRequestHeaders } from './request-headers';
 import { errorSchema } from './course-schema';
 import { authenticatedUserSchema } from './session-schema';
+import { createApiTransport, unnamedStatusCode } from './transport';
+import type { TransportOptions, WireResponse } from './transport';
 
-type Options = {
-  readonly cookie?: string;
-  readonly requestSignal?: AbortSignal;
-  readonly timeoutMs?: number;
-};
-type WireResponse = { readonly data: unknown; readonly status: number };
 const invalid = { ok: false, error: { code: 'invalid_response' } } satisfies SessionResult<never>;
 
 /**
@@ -41,17 +35,17 @@ function wireError(response: WireResponse): SessionError {
         break;
     }
   }
-  return {
-    code:
-      response.status >= 500 || response.status === 429
-        ? 'dependency_unavailable'
-        : 'invalid_response',
-  };
+  return { code: unnamedStatusCode(response.status) };
+}
+
+function user(raw: unknown): SessionResult<AuthenticatedUser> {
+  const parsed = authenticatedUserSchema.safeParse(raw);
+  return parsed.success ? { ok: true, value: parsed.data } : invalid;
 }
 
 /** One repository per SSR request; no cookie-bearing singleton or shared session cache. */
-export function createApiSessionRepository(options: Options = {}): SessionRepository {
-  const tracer = trace.getTracer('courses.frontend.api');
+export function createApiSessionRepository(options: TransportOptions = {}): SessionRepository {
+  const send = createApiTransport(options);
   async function request<T>(
     operation: string,
     execute: (init: RequestInit) => Promise<WireResponse>,
@@ -60,50 +54,11 @@ export function createApiSessionRepository(options: Options = {}): SessionReposi
     caller?: AbortSignal,
     recover?: (error: SessionError) => SessionResult<T> | undefined,
   ): Promise<SessionResult<T>> {
-    const deadline = AbortSignal.timeout(options.timeoutMs ?? 5000);
-    const controls = [caller, options.requestSignal].filter(
-      (signal): signal is AbortSignal => signal !== undefined,
-    );
-    const signal = AbortSignal.any([...controls, deadline]);
-    const headers = apiRequestHeaders(options.cookie);
-    return tracer.startActiveSpan(
-      operation,
-      {},
-      context.active(),
-      async (span): Promise<SessionResult<T>> => {
-        try {
-          const response = await execute({
-            headers,
-            signal,
-            credentials: 'same-origin',
-            redirect: 'error',
-            cache: 'no-store',
-          });
-          if (response.status !== expected) {
-            const error = wireError(response);
-            const recovered = recover?.(error);
-            if (recovered) return recovered;
-            span.setStatus({ code: SpanStatusCode.ERROR });
-            return { ok: false, error };
-          }
-          return map(response.data);
-        } catch (error) {
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          // Control signals remain distinct from malformed JSON and network errors.
-          if (controls.some((control) => control.aborted))
-            return { ok: false, error: { code: 'request_cancelled' } };
-          if (deadline.aborted) return { ok: false, error: { code: 'request_timeout' } };
-          if (error instanceof SyntaxError) return invalid;
-          return { ok: false, error: { code: 'dependency_unavailable' } };
-        } finally {
-          span.end();
-        }
-      },
-    );
-  }
-  function user(raw: unknown): SessionResult<AuthenticatedUser> {
-    const parsed = authenticatedUserSchema.safeParse(raw);
-    return parsed.success ? { ok: true, value: parsed.data } : invalid;
+    const outcome = await send(operation, execute, expected, caller);
+    if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+    if (outcome.status === expected) return map(outcome.data);
+    const error = wireError(outcome);
+    return recover?.(error) ?? { ok: false, error };
   }
   return {
     logIn(credentials, signal) {
