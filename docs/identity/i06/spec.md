@@ -89,7 +89,7 @@ Taken with the user through `grilling`; the reasoning lives in
 | 3 | What does an anonymous visitor get? | Both addresses send them to login with `returnTo`. The role is checked **after** signing in: a permitted role lands on the address they asked for, a student gets 404. Revised from an earlier answer — see below |
 | 4 | What does `/learn` show? | An honest empty state with a way into the catalog, built on the existing `EmptyState`. It is shown to every signed-in visitor, whatever their role — see below |
 | 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
-| 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
+| 6 | How are demo identities kept out of a shared environment? | The seed's identity section runs only on an explicit confirmation variable; the credentials are documented in the README beside it. **Mechanism amended during planning:** `APP_ENV` cannot carry it — the `Makefile` never loads `.env`, `docker-compose.yml:61` defaults it to `development`, and CI runs `make seed` with it unset, so a guard on it would break CI and fail to defend its own case. The intent the user fixed is unchanged |
 
 ### `/learn` is about enrolment, not role
 

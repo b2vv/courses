@@ -1,178 +1,184 @@
 # I06 — plan
 
-Second draft. The first was refused at GATE 2 — 11 blocking findings, 5 defence holes out of
-5, and one constitution violation; [../_wip-i06.md](../_wip-i06.md) records what was wrong.
-Placement follows `.claude/standards.md` §Розміщення.
+Third edition. Two earlier ones were refused at GATE 2; [../_wip-i06.md](../_wip-i06.md)
+holds the verdicts and the router spike whose measurements this design rests on. Placement
+follows `.claude/standards.md` §Розміщення.
+
+## Measured facts this design rests on
+
+Run against `@tanstack/react-router` 1.170.32 in this repository, not reasoned about:
+
+| Fact | Consequence |
+|---|---|
+| A child's `beforeLoad` receives the root's `beforeLoad` context, root first | Identity resolves in the root's `beforeLoad` and the guard reads it from context |
+| The root's `beforeLoad` re-runs on every client navigation; its **loader does not** | Identity must live in `beforeLoad`. In the loader it would freeze at document load and bounce a just-signed-in visitor back to `/login` |
+| `redirect()` from a child `beforeLoad` lands on the target with `search` preserved | The `returnTo` round trip works from the guard |
+| `notFound()` from a child `beforeLoad` sets `status="notFound"` | The 404 answer works from the guard |
+| `beforeLoad` is skipped on the server for `ssr: false` matches (`load-server.js:159`) | `/learn` and `/admin` decide client-side. The server still resolves identity in the root and dehydrates it, so nothing waits on a fetch |
 
 ## Reuse
 
 **Reused unchanged:** `identity-queries.current()` and `sessionQueryKey`; `session.logOut`
 (written in I05, still without a consumer); `canAccessAdministration`; `EmptyState`,
-`Button` and `Link` from `presentation/ui`; the shared API transport; `notFound()` and
-`redirect()` as `app/router/catalog-search.ts` already uses them.
+`Button` and `Link` from `presentation/ui`; the shared API transport; `notFound()`, already
+used by `app/router/catalog-search.ts`; `createIsomorphicFn` request options from
+`app/composition/identity.ts`.
 
-**Changed:** `safeReturnTo` narrowed; `__root.tsx` gains a loader and its `Layout` the
-signed-in header; four route files get a guard; `Makefile` `seed` gains a confirmation gate;
-`frontend/server.mjs` adds `Vary: Cookie`.
+**New to this slice:** `redirect()` — the second edition claimed it as reused; `grep` finds
+no router `redirect()` anywhere in `frontend/src`.
 
-**Deleted:** `presentation/LockedArea.tsx` and the `locked.*` resources. It has **four**
-call sites — `routes/{learn,learn.$,admin,admin.$}.tsx` — all replaced here. The first draft
-said three and never mentioned the splat routes, which G25 depends on.
+**Changed:** `safeReturnTo`; `__root.tsx` gains a `beforeLoad` and its `Layout` the
+signed-in header; two layout routes gain guards; `Makefile` `seed`; `frontend/server.mjs`
+gains `Vary`; `.github/workflows/ci.yml` sets `SEED_IDENTITIES=1`; `Makefile` `check`.
 
-**Added:** `app/router/guards.ts`; `presentation/identity/SessionMenu.tsx`; an identity
-section in `backend/sql/seed.sql`.
+**Deleted:** `presentation/LockedArea.tsx` and the `locked.*` resources — **four** call
+sites: `routes/{learn,learn.$,admin,admin.$}.tsx`.
 
 ## Design
 
-### Identity at the root — server-side only, never throwing
+### Identity
 
-`__root.tsx` gains a loader returning a discriminated value:
+`__root.tsx` gains a `beforeLoad` that returns `{ identity }` into context, where
 
-`{ status: 'anonymous' } | { status: 'signed-in', user } | { status: 'unavailable' }`
+`identity: { status: 'anonymous' } | { status: 'signed-in', user } | { status: 'unavailable' }`
 
-Throwing was the first draft's worst error. `__root.tsx:35` carries `errorComponent`, so an
-identity outage would have replaced every public page — `/`, `/courses`, `/courses/$slug` —
-with a failure screen. Catching at the root keeps a `/auth/me` fault out of the storefront.
+It never throws: `__root.tsx:35` carries `errorComponent`, so a thrown identity fault would
+replace every public page with a failure screen. It resolves through
+`context.queryClient.ensureQueryData(context.identity.current())` so the Query cache is the
+single store — the header, the guard and `login.tsx` all read `['session']` rather than
+three different values.
 
-**Decision 1 applies to SSR only.** The cookie is `HttpOnly`
-(`identity/adapters/http/handler.go:130`), so `document.cookie` cannot see it and the first
-draft's "isomorphic" check was unimplementable. On the server the loader reads the request
-header and skips the call when absent. In the browser there is nothing to inspect, so it
-asks.
+It calls the API only when the request carries the **session** cookie by name. Checking for
+a `Cookie` header would be useless: `LanguageSwitcher.tsx:8` writes `courseforge_locale`
+with a year's `Max-Age`, so any visitor who once switched language carries one forever. On
+the client there is nothing to inspect — the cookie is `HttpOnly`
+(`identity/adapters/http/handler.go:130`) — so the client always asks.
+
+`login.tsx:12` already resolves identity in its own loader. It drops that loader and reads
+the root's value, or the route resolves identity twice per SSR render.
 
 ### Guard
 
-`app/router/guards.ts`, called from `beforeLoad` in all four protected routes, which keep
-`ssr: false`:
+`/learn` and `/admin` each become a **layout route** carrying the guard, the
+`errorComponent` and the `pendingComponent`, with the existing leaf and splat routes as
+children. Two files instead of four copies of the same three lines, and G06's nested
+addresses then hold by construction.
 
-| Root loader said | Guard does |
+| Context identity | Guard |
 |---|---|
-| `signed-in`, capability allowed | returns; the route renders |
+| `signed-in`, capability allowed | returns |
 | `signed-in`, capability denied | `throw notFound()` |
 | `anonymous` | `throw redirect({ to: '/login', search: { returnTo } })` |
-| `unavailable` | throws a typed failure caught by the **route's own** `errorComponent`, rendering the localized retryable state that `docs/identity/spec.md:50` requires |
+| `unavailable` | throws a typed failure into the layout's own `errorComponent`, which renders the localized retryable state `docs/identity/spec.md:50` requires |
 
-The capability is a predicate the caller passes, so the guard knows nothing about roles:
-`/learn` passes "is signed in", `/admin` passes `canAccessAdministration`. There is no
-"pending" outcome — `beforeLoad` runs after the loader resolves, so that state is
-unreachable. The first draft invented it and cited a "decision 7" that does not exist.
+Two named guards — `requireSignedIn` and `requireAdministration` — not one taking a
+predicate. Two call sites do not justify a parameter.
 
-### `safeReturnTo`, narrowed
+`returnTo` is the current path **including its search string**; a deep link to
+`/learn/go/intro?lesson=3` must survive, which the second edition's design silently dropped.
 
-`docs/identity/spec.md:52` requires only **normalized internal protected** paths. The
-shipped version accepts `/login`, `/courses`, percent-encoded control characters and dot
-segments. Replaced by one strict allowlist:
+### `safeReturnTo`
 
-`/^\/(learn|admin)(?:\/[A-Za-z0-9._~-]+)*$/`, plus a rejection of any segment that is `.`
-or `..`.
-
-No percent sign can appear, so encoded slashes and encoded CRLF cannot; `/login` and
-`/courses` are not in the allowlist. Everything else falls back to `/learn`.
+`docs/identity/spec.md:52` requires only normalized internal protected paths. The shipped
+version accepts `/login`, `/courses`, `%0d%0a` forms and dot segments. Replaced by:
+an allowlist `^/(learn|admin)(/[A-Za-z0-9._~-]+)*$` on the **path**, an explicit rejection of
+any `.` or `..` segment, and a separately validated optional search string. No `%` can occur
+in the path, so encoded slashes and encoded CRLF cannot.
 
 ### Header
 
-`Layout` reads the root loader's value and passes props to `SessionMenu`, which stays
-prop-driven like every other presentation component here (`LoginView` takes `user`). It
-renders the display name as text, a sign-out `Button`, and a `Link` to `/admin` only when
-`canAccessAdministration`. Sign-out calls the reused use case, sets the session query to
-`null`, and navigates to the catalog.
+`Layout` reads `['session']` through `useQuery` and passes props to `SessionMenu`, which
+stays prop-driven like `LoginView`. Name as text, a sign-out `Button`, and a `Link` to
+`/admin` only when `canAccessAdministration`. Sign-out calls the reused use case, sets the
+query to `null`, and navigates to the catalog.
 
-Accessibility — the rule the first draft failed: the sign-out control is a real button in
-tab order with the kit's visible focus ring and a ≥44px target; the administration link sits
-in the existing `<nav>` landmark; the display name is text, not a control; both locales
-carry every string; no colour is hardcoded.
+Accessibility, which the first edition omitted entirely: the sign-out control is a real
+button in tab order with the kit's visible focus ring and a ≥44px target; the administration
+link sits in the existing `<nav>`; the name is text; both locales carry every string; no
+colour is hardcoded.
 
 ### Screens
 
-`/learn` and `/admin` compose `EmptyState` directly in their route files, as
-`courses.index.tsx` composes `CatalogView`. The first draft proposed two wrapper components
-holding one JSX element each.
+`/learn` and `/admin` compose `EmptyState` in their route files, as `courses.index.tsx`
+composes `CatalogView`.
 
 ### Fixtures
 
-Three identities appended to `backend/sql/seed.sql` — one file, not two: that file already
-carries `draft-course` and `archived-course`, which have no more business outside
-development than the fixtures do.
+Three identities appended to `backend/sql/seed.sql`.
 
-`ON CONFLICT (email) DO UPDATE` sets role, display name and hash from the file, so the seed
-is the source of truth. `DO NOTHING` would keep an old credential while reporting success,
-and the README would then document a password that returns 401. `docs/identity/plan.md` B09
-was amended to match.
+`ON CONFLICT (email) DO UPDATE` sets role, display name and hash from the file, so editing a
+fixture password takes effect. Fixture **ids are fixed constants**, so a primary-key
+collision cannot arise from a differing email; `ON_ERROR_STOP=1` would otherwise abort the
+whole seed including courses.
 
-The identity section runs only when `SEED_IDENTITIES=1`. `APP_ENV` cannot carry this: the
-`Makefile` never loads `.env`, `docker-compose.yml:61` defaults the variable to
-`development`, and `.github/workflows/ci.yml:31` runs `make seed` with it unset — a guard on
-it would both break CI and fail to defend the case it exists for. CI sets `SEED_IDENTITIES=1`
+The identity section is gated on a psql variable, not on a shell variable inside the
+container: `docker compose exec` does not forward host environment, so the second edition's
+`SEED_IDENTITIES=1 make seed` would have reached nothing. The `seed` recipe passes
+`-v identities="$$SEED_IDENTITIES"` and the SQL branches with `\if`. CI sets the variable
 explicitly.
 
-## Verification of the resolve race
+`APP_ENV` cannot carry this gate: the `Makefile` never loads `.env`,
+`docker-compose.yml:61` defaults it to `development`, and `.github/workflows/ci.yml:31` runs
+`make seed` with it unset. The slice specification's decision 6 is amended accordingly — the
+user's intent, keeping fixtures out of a shared environment, is unchanged; only the
+mechanism is.
 
-The first draft's G09–G11 delayed `/auth/me` with Playwright and watched a full page load.
-That call goes SSR-container-to-API over the internal network; `page.route` sees browser
-traffic only, so those rows were unwritable.
+### `Vary` and `check`
 
-With a root loader the race mostly dissolves: on a full page load identity is decided
-**before** the HTML is sent, so there is no anonymous frame to observe. What remains is
-verified where it happens:
+`server.mjs` **appends** `Vary: Cookie` rather than setting it, so a later locale variation
+is not clobbered. `docs/identity/spec.md:41` also expects variation on the locale inputs,
+which today is undeclared; declaring it is out of this slice and recorded as such.
 
-- **Full page load** — assert the served HTML already carries the right answer. Raw-HTML
-  test, no timing.
-- **Client-side navigation** — a route test with a deferred MSW handler, which is where a
-  browser-side wait is real.
-- **Outage** — Playwright with the API container stopped, as `recovery.spec.ts` already
-  does, needing no request interception.
+`check` becomes the manifest's ordered sequence — `format-check lint typecheck test
+integration check-generated build up seed smoke e2e` — so C03 is one command rather than a
+prose list.
 
 ## Сайд-ефекти
 
 | Effect | Assessment |
 |---|---|
-| One `/auth/me` per SSR render for viewers carrying a cookie | Internal call. No repository-recorded latency exists; the first draft cited a figure that had never been written down. This slice measures it and records the number in the phase report |
-| One `/auth/me` per page load from the browser, **including anonymous viewers** | Consequence of `staleTime: 0` and the `HttpOnly` cookie. Accepted: identity must revalidate, and the alternative is a stale header. Decision 1's "public traffic pays nothing" holds for SSR only |
-| SSR HTML becomes viewer-specific | `server.mjs` keeps `Cache-Control: private, no-store` **and** gains `Vary: Cookie`, required by `docs/identity/spec.md:41` and `:49`. The first draft struck it citing a document that says nothing of the kind |
-| A mounted protected route whose identity flips to `null` on refocus | `refetchOnWindowFocus` is at its default. The guard runs at navigation; a mounted route re-reads the query and redirects when it becomes anonymous |
-| `route-guards.spec.ts` asserts behaviour this slice removes | Rewritten in the same task that deletes `LockedArea` |
-| Seeded credentials live in the repository | Local-only, gated behind `SEED_IDENTITIES=1` |
+| One `/auth/me` per SSR render for a viewer carrying the session cookie | Internal call. This slice measures it and records the number; no repository-recorded figure exists, and the first edition cited one that had never been written down |
+| One identity revalidation **per client navigation**, not per document load | Measured: root `beforeLoad` re-runs on every navigation and `staleTime: 0` forbids a stale answer. Query deduplicates concurrent reads |
+| A hung API stalls SSR for the transport deadline before `unavailable` is returned | `transport.ts:26` is 5000 ms, which is too long to block a storefront render. The root resolve passes a shorter deadline; the number is set in the task and recorded |
+| SSR HTML becomes viewer-specific | `private, no-store` already; `Vary: Cookie` appended |
+| Seeded credentials in the repository | Local-only, behind the psql gate |
 
 ## План міграції
 
-`make seed` applies one file whose identity section is gated by `SEED_IDENTITIES=1`. No
-schema change. Re-running reconciles fixtures to the file.
+`make seed` applies one file whose identity section is gated. No schema change. Re-running
+reconciles fixtures to the file.
 
 ## Rollback
 
-The slice lands as **one squashed commit**: `LockedArea` is deleted in it and four routes
-point at the replacement, so a partial revert leaves dangling imports. The first draft said
-"revert the slice commit" without reconciling that against `AGENTS.md:9`, which asks for
-small logical commits — the reconciliation is that this slice is one logical change.
+The slice lands as one squashed commit — `LockedArea` is deleted in it and the routes point
+at replacements, so a partial revert dangles imports. `AGENTS.md:9` asks for small logical
+commits; this slice is one logical change.
 
 | Change | Undo | Lost |
 |---|---|---|
-| Routes, header, root loader, `Vary`, `check` target | `git revert` of the squashed commit | nothing |
-| `safeReturnTo` narrowing | same commit; reverting widens it back to the I05 behaviour, which is the pre-existing contract violation | nothing |
-| Seeded rows | `DELETE FROM users WHERE email IN (…the three fixture addresses…)`; `user_sessions` cascades (`migrations/00002_identity.sql:29`) | the fixtures only |
-
-The fixture addresses are fixed in `backend/sql/seed.sql` and repeated in the README, so the
-delete predicate is checkable rather than guessed.
+| Routes, header, root `beforeLoad`, `safeReturnTo`, `Vary`, `check`, `ci.yml` | `git revert` of the squashed commit | nothing |
+| Seeded rows | `DELETE FROM users WHERE email IN (…the three fixture addresses…)`; sessions cascade (`migrations/00002_identity.sql:29`) | the fixtures |
+| Contract amendments (`b5a0cd7` and decision 6) | **Not reverted by the above** — they are separate commits | Reverting the code leaves a contract describing a 404 answer and a reconciling seed that no longer exist. Either revert those commits too, or accept the contract running ahead of the code and say so |
 
 ## Конституція
 
-Walked rule by rule against AGENTS.md. Domain keeps no framework or transport dependency —
-the narrowed `safeReturnTo` stays import-free. Application untouched. Policy stays inward:
-routes pass a domain predicate. No `any`; the loader's value is a discriminated union. No
-`fetch` in presentation or routes. No dependency added. Accessibility addressed above, which
-is the rule the first draft failed.
+Domain stays import-free; `safeReturnTo` remains so. Application untouched. Policy inward:
+the guards call a domain predicate. No `any`; identity is a discriminated union. No `fetch`
+in presentation or routes — the root `beforeLoad` calls the composition layer, and request
+options come from `app/composition/identity.ts` rather than being recomputed in a route file
+(`AGENTS.md:15`). No dependency added. Accessibility addressed above.
 
 ## Оцінка
 
-`docs/identity/plan.md` budgets I06 at 1.5h. That predates the narrowed `safeReturnTo` and
-its tests, a rewritten Playwright spec, a raw-HTML test, four route rewrites and the seed
-reconciliation. **Revised to 4h**, and the phase task row is updated rather than left
-looking on schedule.
+`docs/identity/plan.md:3` caps a task at 2h, so a realistic I06 is not one row. Sized
+honestly at **≈12h across eight tasks**, cut in the task tracker rather than hidden in one
+number. The dominant cost is that `frontend/src` has **no route-level test at all**, no SSR
+assertion and no seed integration test, and the acceptance table needs all three. Playwright's
+`request` API covers the raw-HTML and parallel-SSR rows without a new harness, which is why
+the figure is twelve and not twenty.
 
 ## Приймальні сценарії
 
-Rebuilt in [acceptance.md](acceptance.md): G09–G11 replaced per the section above, G19
-restored to require `Vary: Cookie`, G29–G31 rewritten for `DO UPDATE` and `SEED_IDENTITIES`,
-G37–G39 kept from the constitution fix, and rows added for a garbage cookie, duplicate
-cookies, an unrecognised role, display-name bounds, repeated sign-out and dot-segment
-`returnTo` values — every hole the defence named.
+[acceptance.md](acceptance.md), amended for this edition: the no-flash row lost in the second
+rebuild is restored, G07/G08 corrected for `ssr: false`, G10 made writable, and rows added
+for a deep link carrying a search string and for the identity revalidation cadence.
