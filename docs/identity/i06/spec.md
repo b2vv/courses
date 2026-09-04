@@ -86,7 +86,7 @@ Taken with the user through `grilling`; the reasoning lives in
 |---|---|---|
 | 1 | When does SSR resolve identity? | Only when the request carries a session cookie. No cookie means anonymous by definition, so public storefront traffic pays nothing. This also settles the anonymous header: it is what the root already renders |
 | 2 | How is a role refusal presented? | As a 404. Not a security claim — the aim is to keep the administration area out of sight of casual probing, so a wrong path looks like a wrong path. `notFound()` is already this repository's answer for an unusable address |
-| 3 | What does an anonymous visitor get? | `/learn` sends them to login with `returnTo`; a member area is not a secret and the header already offers "sign in". `/admin` answers 404 for everyone not permitted, anonymous included, so an administrator signs in first and navigates afterwards |
+| 3 | What does an anonymous visitor get? | Both addresses send them to login with `returnTo`. The role is checked **after** signing in: a permitted role lands on the address they asked for, a student gets 404. Revised from an earlier answer — see below |
 | 4 | What does `/learn` show a student? | An honest empty state with a way into the catalog, built on the existing `EmptyState` |
 | 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
 | 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
@@ -97,15 +97,23 @@ Reading the two together is easy to get wrong, so the full matrix is written out
 
 | Visitor | `/learn` | `/admin` |
 |---|---|---|
-| Anonymous | sent to login with `returnTo`, and returned after signing in | 404 |
+| Anonymous | login with `returnTo`, returned after signing in | login with `returnTo`, then the role decides |
 | Signed in, student | opens | 404 |
-| Signed in, instructor or admin | opens | **opens** |
+| Signed in, instructor or admin | opens | opens |
 
-A permitted role reaches `/admin` by any means — a header link or a typed address. The
-only thing hiding costs is the deep link *from a signed-out state*: a bookmark to `/admin`
-opened before signing in answers 404 and carries no `returnTo`, so the sequence is sign in,
-then navigate. `/learn` keeps the bookmark working, which is why the two addresses are
-treated differently.
+**Why this changed.** The first answer gave anonymous visitors a 404 on `/admin` too, so
+that the address looked like it did not exist. That cost the deep link: a bookmark opened
+from a signed-out state answered 404 and carried no `returnTo`.
+
+It was withdrawn once the hiding was measured rather than assumed. `/admin` is present
+verbatim in the built client bundle — `grep -r /admin frontend/dist/client` finds it — so
+the route was never concealed from anyone willing to open developer tools. Hiding only ever
+worked against casual address guessing, and a login screen instead of a 404 tells such a
+visitor almost nothing the bundle does not already say.
+
+What the decision protects is unchanged and is the case the user described: a **signed-in**
+student probing addresses still gets 404, learning nothing about an administration area
+existing.
 
 **A typed address is a full page load, so the guard runs before identity is known.** A
 guard that reads "not yet resolved" as "anonymous" would answer 404 to an administrator on

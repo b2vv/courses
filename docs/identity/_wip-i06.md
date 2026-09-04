@@ -36,11 +36,18 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
    wrong path looks like a wrong path. `notFound()` is already this repository's answer for
    an unusable address, so the mechanism is reused rather than invented. The real boundary
    stays server-side in Phase 4.
-3. **Anonymous visitors are treated differently per route.** `/learn` sends them to login
+3. **REVISED.** Both protected addresses send an anonymous visitor to login with
+   `returnTo`, and the role is checked after signing in. Superseded the answer below once
+   the hiding was measured: `/admin` appears verbatim in the built client bundle, so it was
+   never concealed from anyone with developer tools, and a login screen leaks nothing the
+   bundle does not. A signed-in student still gets 404, which is the case the decision was
+   actually protecting. Original answer kept for the record:
+
+   ~~**Anonymous visitors are treated differently per route.** `/learn` sends them to login
    with `returnTo`, because a member area is not a secret and the header already offers
    "sign in". `/admin` answers 404 for everyone who is not permitted, anonymous included,
    so an administrator signs in first and navigates afterwards. A06 is therefore exercised
-   on `/learn`.
+   on `/learn`.~~
 
 4. **`/learn` shows an honest empty state**, reusing `EmptyState` from the UI kit.
 5. **Header carries the name as text, a sign-out control, and an administration link only
