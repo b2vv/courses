@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Дата | 2026-09-04 |
-| Базовий коміт | `fd83598` |
-| Всього комітів у репо | 15 (`git rev-list --count HEAD`) |
-| Гейт свіжості цього прогону | **порівняти не було з чим** — брифінгу в репо не існувало, шапки не було. Зібрано як новий; з наступного разу гейт працює від цієї шапки. |
+| Базовий коміт | `eada97b` |
+| Всього комітів у репо | 19 (`git rev-list --count HEAD`) |
+| Гейт свіжості цього прогону | 4 коміти від `fd83598`; два з них чіпають області брифінгу (фронтові API-адаптери, контракт URL каталогу), тож §3 і §6 перезібрано. Перший прогін 2026-09-04 порівнювати не мав із чим. |
 
 Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело.
 
@@ -60,9 +60,10 @@
 | domain ↔ решта (фронт) | TS: файли в `domain/` не мають **жодного** імпорту; `application/` і `ports/` — лише inward | `frontend/scripts/check-architecture.mjs:44,48` |
 | presentation ↔ мережа | `fetch` у `routes/` і `presentation/` заборонений статично | `frontend/scripts/check-architecture.mjs:63` |
 | Generated ↔ домен | sqlc/Orval живуть тільки в адаптерах і мапляться явно | `AGENTS.md:16`, `Makefile:49` |
+| Транспорт ↔ домен (фронт) | один `createApiTransport` віддає transport outcome; кожен домен мапить його у власний union помилок, вокабуляри не змішуються | `frontend/src/adapters/api/transport.ts` |
 | Nginx ↔ медіа | Nginx віддає байти; Go і SSR їх не проксюють. Зараз `/media/*` → 403 | `AGENTS.md:19`, `nginx.conf:44-45` |
 
-**Що варто знати про request-scope.** QueryClient та i18next створюються на кожен SSR-запит (`frontend/src/router.tsx:11-14`); глобальних мутабельних клієнтів немає. Кука форвардиться явно, бо на сервері немає браузерного cookie-jar (`frontend/src/adapters/api/request-headers.ts`).
+**Що варто знати про request-scope.** QueryClient та i18next створюються на кожен SSR-запит (`frontend/src/router.tsx:11-14`); глобальних мутабельних клієнтів немає. Кука форвардиться явно, бо на сервері немає браузерного cookie-jar (`frontend/src/adapters/api/request-headers.ts`), і обидва API-адаптери ходять через спільний транспорт (`frontend/src/adapters/api/transport.ts`).
 
 ---
 
@@ -132,6 +133,8 @@ MEDIUM-1, MEDIUM-2, LOW-1..LOW-4 закриті (`docs/security/audit-2026-09-03
 | Edge-конфіг | Правки `nginx.conf` невидимі без релоаду — один замір уже дав хибний результат | `docs/identity/report.md` I04 п.6 |
 | MSW як інструмент | У цій зв'язці **не віддає заголовки запиту** хендлеру, тож форвардинг куки через нього не перевіряється | `docs/identity/report.md` I05 п.8 |
 | Вартість логіну | Argon2id `m=64MiB, t=3, p=2`, і `VerifyDummy` платить ту саму ціну за неіснуючі акаунти — тому логін має окрему жорстку зону, а не загальну API | `nginx.conf:29`, `backend/internal/identity/adapters/argon2id/verifier.go:14-16` |
+| Контракт URL сторінки | `validateSearch`, що емітить дефолт, змушує роутер переписати адресу й віддати 307: правило `next.publicHref !== canonical.publicHref` у `router-core` `load-server.js:530`. Цей дефект був і в `/login`, і в `/courses` | `docs/identity/report.md` §Catalog URL contract |
+| Статуси помилок SSR | лейн маршруту віддає захардкоджений 500 на будь-який throw (`load-server.js:303`); гачка відсутня, `setResponseStatus` не діє. Досяжні лише 200, 404 через `notFound()`, 3xx через `redirect()` і 500 | `docs/identity/report.md` §Catalog URL contract |
 | Перед публічним bind | Потрібні TLS, керовані секрети, бекапи, квоти сховища | `README.md:51` |
 
 **⚠️ Неперевірені тези: 0.** Кожна теза вище має посилання на код, документ або файл конфігурації.
