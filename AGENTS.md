@@ -3,7 +3,7 @@
 ## Scope and delivery
 - Read the repository briefing first: [work/CTO-RESEARCH.md](work/CTO-RESEARCH.md). It caches primary sources; where it disagrees with the code, the code wins and the briefing is rewritten.
 - Foundation and public catalog (Phases 1–2) are complete. Current delivery: Identity (Phase 3).
-- Phases 4–8 remain roadmap work; do not claim working admin CRUD, playback, uploads or payments.
+- Phase 4 and later remain roadmap work; do not claim working admin CRUD, playback, uploads, payments, comment threads, student progress or an instructor workspace. The current phase list lives in `work/AGENDA.md`.
 - Read `docs/identity/plan.md` and `work/tasks.md`; execute one logical slice at a time.
 - Preserve existing work. Never commit secrets, `.env`, media bytes or dependency caches.
 - Use small logical commits and record current-phase verification, limitations and next task in `docs/identity/report.md`.
