@@ -7,10 +7,14 @@ env:
 	@test -f .env || cp .env.example .env
 up: env
 	docker compose up -d --build --wait --wait-timeout 180
+	@# nginx.conf is a bind mount, so an unchanged nginx container keeps serving
+	@# the configuration it loaded at start. Reload it or edits are invisible.
+	docker compose exec -T nginx nginx -s reload
 down:
 	docker compose down
 dev: env
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait --wait-timeout 180
+	docker compose exec -T nginx nginx -s reload
 logs:
 	docker compose logs -f --tail=100
 migrate: env

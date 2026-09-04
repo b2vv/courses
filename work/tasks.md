@@ -25,7 +25,7 @@ Phases 1–2 завершено. Phase 3 розпочато зі специфі�
 | I01 | Identity users/sessions migration and domain | 1.5h | green Identity plan gates | done | `docs/identity/report.md`; migration/domain tests pass |
 | I02 | Login/session use cases and adapters | 2h | I01 | done | `docs/identity/report.md`; application/Argon2id/PostgreSQL tests pass |
 | I03 | HTTP middleware, cookies and typed runtime config | 2h | I02 | done | `docs/identity/report.md` I03; full gate sequence + live curl evidence; microsecond-clock defect fixed |
-| I04 | OpenAPI/Orval, Compose and Nginx auth edge | 1.5h | I03 | planned | Scope now also covers audit MEDIUM-1: rate limit on `location /` and a strict zone for `POST /api/v1/auth/login` — see [security audit](../docs/security/audit-2026-09-03.md) |
+| I04 | OpenAPI/Orval, Compose and Nginx auth edge | 1.5h | I03 | done | `docs/identity/report.md` I04; 12-case OpenAPI contract test; audit MEDIUM-1 closed with the `web` zone and a strict `login` zone |
 | I05 | Frontend session adapter and localized login | 2h | I04 | planned | — |
 | I06 | Client route guards and completion gate | 1.5h | I05 | planned | — |
 

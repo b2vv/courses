@@ -1,9 +1,14 @@
 package http_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +17,9 @@ import (
 	"courses/internal/identity/application"
 	"courses/internal/identity/domain"
 	"courses/platform/httpserver"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers/legacy"
 )
 
 type identityService struct {
@@ -178,4 +186,90 @@ func requestWithOrigin(method, path, body string) *http.Request {
 	request.Header.Set("Origin", "http://localhost:8080")
 	request.Header.Set("Content-Type", "application/json")
 	return request
+}
+
+func TestIdentityHTTPMatchesOpenAPI(t *testing.T) {
+	document, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "..", "..", "openapi", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := document.Validate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	router, err := legacy.NewRouter(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	user := domain.User{ID: "40000000-0000-4000-8000-000000000001", Email: "student@courseforge.local", DisplayName: "Студентка", Role: domain.Student, CreatedAt: now, UpdatedAt: now}
+	success := application.LoginResult{User: user, Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: user.ID, CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: strings.Repeat("A", 43)}
+	for _, tc := range []struct {
+		name, method, path, body, code string
+		status                         int
+		origin, cookie                 bool
+		failure                        error
+		validRequest                   bool
+	}{
+		{name: "login succeeds", method: "POST", path: "/api/v1/auth/login", body: `{"email":"student@courseforge.local","password":"demo"}`, status: 200, origin: true, validRequest: true},
+		{name: "login without origin", method: "POST", path: "/api/v1/auth/login", body: `{"email":"student@courseforge.local","password":"demo"}`, code: "origin_forbidden", status: 403, validRequest: true},
+		{name: "login with malformed body", method: "POST", path: "/api/v1/auth/login", body: `{"email":"a@b","password":"x","role":"admin"}`, code: "invalid_request", status: 400, origin: true},
+		{name: "login with wrong credentials", method: "POST", path: "/api/v1/auth/login", body: `{"email":"student@courseforge.local","password":"wrong"}`, code: "invalid_credentials", status: 401, origin: true, failure: domain.ErrInvalidCredentials, validRequest: true},
+		{name: "login while identity is unavailable", method: "POST", path: "/api/v1/auth/login", body: `{"email":"student@courseforge.local","password":"demo"}`, code: "dependency_unavailable", status: 503, origin: true, failure: domain.ErrDependencyUnavailable, validRequest: true},
+		{name: "login with an unexpected failure", method: "POST", path: "/api/v1/auth/login", body: `{"email":"student@courseforge.local","password":"demo"}`, code: "internal_error", status: 500, origin: true, failure: errors.New("password=private argon secret"), validRequest: true},
+		{name: "me with a session", method: "GET", path: "/api/v1/auth/me", status: 200, cookie: true, validRequest: true},
+		{name: "me without a session", method: "GET", path: "/api/v1/auth/me", code: "authentication_required", status: 401, validRequest: true},
+		{name: "me with a revoked session", method: "GET", path: "/api/v1/auth/me", code: "authentication_required", status: 401, cookie: true, failure: domain.ErrAuthenticationRequired, validRequest: true},
+		{name: "logout revokes", method: "POST", path: "/api/v1/auth/logout", status: 204, origin: true, cookie: true, validRequest: true},
+		{name: "logout without a session", method: "POST", path: "/api/v1/auth/logout", status: 204, origin: true, validRequest: true},
+		{name: "logout without origin", method: "POST", path: "/api/v1/auth/logout", code: "origin_forbidden", status: 403, cookie: true, validRequest: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &identityService{loginResult: success, user: user, err: tc.failure}
+			request := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			if tc.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			if tc.origin {
+				request.Header.Set("Origin", "http://localhost:8080")
+			}
+			if tc.cookie {
+				request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+			}
+			route, parameters, err := router.FindRoute(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := &openapi3filter.RequestValidationInput{Request: request, PathParams: parameters, Route: route}
+			if tc.validRequest {
+				if err := openapi3filter.ValidateRequest(context.Background(), input); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Request validation drains the body, so the handler gets a fresh reader.
+			request.Body = io.NopCloser(strings.NewReader(tc.body))
+			response := httptest.NewRecorder()
+			testHandler(t, service).ServeHTTP(response, request)
+			if response.Code != tc.status {
+				t.Fatalf("status %d body=%s", response.Code, response.Body.String())
+			}
+			if response.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("identity response is cacheable: %v", response.Header())
+			}
+			if strings.Contains(response.Body.String(), "password=private") || strings.Contains(response.Body.String(), "argon secret") {
+				t.Fatal("error details leaked")
+			}
+			if tc.code != "" {
+				var envelope httpserver.ErrorResponse
+				if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+					t.Fatal(err)
+				}
+				if envelope.Error.Code != tc.code || envelope.Error.RequestID != response.Header().Get("X-Request-ID") {
+					t.Fatalf("bad envelope: %+v", envelope)
+				}
+			}
+			if err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Body: io.NopCloser(bytes.NewReader(response.Body.Bytes()))}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }

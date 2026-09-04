@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Courses API
   version: 1.0.0
-  description: Public catalog foundation. Authentication, purchases and media playback are not implemented.
+  description: Public catalog and session authentication. Purchases and media playback are not implemented.
 servers:
   - url: /
 paths:
@@ -68,6 +68,74 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Exchange credentials for a session
+      description: >-
+        Requires exactly one Origin header equal to the configured public origin; a missing,
+        repeated, null or foreign origin is rejected. The body accepts only email and password,
+        and rejects duplicate keys, unknown members, trailing content and bodies over 8 KiB.
+        Unknown accounts and wrong passwords are indistinguishable. A success sets an HttpOnly,
+        SameSite=Lax session cookie and revokes any session the request already presented.
+        Responses are never cached.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: The authenticated user; the session token is returned only in the cookie.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+            Set-Cookie: { $ref: '#/components/headers/SessionCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticatedUser' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Read the authenticated user
+      description: >-
+        Resolves the session cookie. A missing, malformed, repeated, expired or revoked
+        cookie returns the same 401, and a disabled account is treated as unauthenticated.
+      responses:
+        '200':
+          description: The authenticated user.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticatedUser' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session
+      description: >-
+        Requires the same single matching Origin header as login. Revocation is idempotent:
+        an absent, malformed or already revoked session still returns 204 and still clears
+        the cookie, so the response reveals nothing about session existence.
+      responses:
+        '204':
+          description: The session is revoked and the cookie is cleared.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+            Set-Cookie: { $ref: '#/components/headers/SessionCookie' }
+        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
 components:
   parameters:
     IdempotencyKey:
@@ -80,6 +148,14 @@ components:
       description: Server-generated correlation identifier.
       required: true
       schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+    NoStore:
+      description: Identity responses are never stored by caches or shared proxies.
+      required: true
+      schema: { type: string, enum: [no-store] }
+    SessionCookie:
+      description: Opaque session cookie; HttpOnly and SameSite=Lax, Secure when configured.
+      required: true
+      schema: { type: string }
   schemas:
     Course:
       type: object
@@ -116,6 +192,25 @@ components:
           maxItems: 50
           items: { $ref: '#/components/schemas/Course' }
         pagination: { $ref: '#/components/schemas/Pagination' }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 1024 }
+    AuthenticatedUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, displayName, role]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, minLength: 3, maxLength: 254 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        role:
+          type: string
+          enum: [student, instructor, admin]
+          description: student may learn; instructor and admin may enter the administration shell.
     ErrorResponse:
       type: object
       additionalProperties: false
@@ -128,10 +223,34 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    InvalidRequest:
+      description: The request body is missing, malformed, oversized or carries unexpected members.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthenticated:
+      description: Credentials were rejected or no usable session was presented.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    OriginForbidden:
+      description: The request origin is missing, repeated or does not match the public origin.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     BadRequest:
       description: Invalid query parameters or slug.
       headers:
