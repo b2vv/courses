@@ -91,10 +91,21 @@ Taken with the user through `grilling`; the reasoning lives in
 | 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
 | 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
 
-### Derived without asking
+### Withdrawn derivation
 
-**Two fixtures, not three.** A01 needs a student and A02 an admin. B01 also names an
-instructor, but its evidence column is "policy + Playwright": the capability matrix is
-already expressed and unit-tested in the domain, so the browser suite proves
-student-refused and admin-allowed while the instructor row stays covered by the policy
-test. A third seeded identity would add a credential without adding evidence.
+An earlier draft derived **two fixtures instead of three**, on the grounds that B01's
+instructor row was covered by the domain policy test. The user then stated that an
+instructor is not "an administrator with the same shell": an instructor reaches the
+administration area scoped to their own data — their students, their videos, the comment
+threads on those videos, and their students' progress.
+
+That makes instructor a distinct behaviour rather than a row in a matrix, so the slice
+seeds **three** fixtures — student, instructor, admin — and B01 is exercised in full.
+
+### What this slice must not imply
+
+None of the instructor scoping can be built here, and the shell must not pretend
+otherwise. Courses have no owner (`backend/migrations/00001_courses.sql` carries no
+instructor, author or owner column), there is no enrollment, no video, no progress and no
+comment thread anywhere in the codebase. `/admin` in I06 is the smallest shell that proves
+the role check and says plainly that management arrives in Phase 4.
