@@ -13,7 +13,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
 | 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
-| 5 GATE 2 | — | — |
+| 5 GATE 2 | constitution run inline: **one violation found and closed** (accessibility unaddressed for three new components); `plan-critique` and `plan-defense` delegated to fresh agents, pending | author + delegates |
 | 6 tasks | — | — |
 | 7 implement | — | — |
 | 8 verify | — | — |

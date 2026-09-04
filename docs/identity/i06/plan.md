@@ -114,6 +114,29 @@ a user could lose.
 | Add dependencies only when used | None added |
 | Client guards are not the security boundary | Stated in the spec's Out of scope, and the administration shell exposes no data |
 | Do not claim unimplemented capability | The administration shell says management arrives in a later phase; `/learn` shows an empty state rather than a fabricated list |
+| Semantic tokens, keyboard navigation, visible focus, >=44px controls, light and dark, 200% text zoom | **Initially violated — the first draft of this plan and its acceptance table said nothing about any of it for three new components.** Closed by the section below and by rows G37–G39 |
+
+### Accessibility, added after the constitution check failed
+
+The first pass through the manifest's constitution found this rule unaddressed. Three new
+surfaces — the signed-in header with its sign-out control, the learning empty state and the
+administration shell — had no accessibility requirement in the plan and no row in the
+acceptance table, while `frontend/e2e/accessibility.spec.ts` already holds the rest of the
+product to keyboard navigation, dark theme and 200% zoom.
+
+What the slice must therefore satisfy:
+
+- The sign-out control is a real button reachable in tab order, with the visible focus ring
+  the UI kit already provides, and a target of at least 44px. It reuses `Button` from
+  `presentation/ui`, which is React Aria and gives focus behaviour for free.
+- The administration link is a `Link` from the same kit, in the same navigation landmark as
+  the existing catalog link, so it inherits that landmark's semantics.
+- The display name is text inside the existing `<nav>`, not a control, and is not
+  announced as interactive.
+- Every new string carries both locales, and no new colour is hardcoded: the components use
+  the existing semantic tokens, so light and dark follow without per-component work.
+- The header must survive 200% text zoom without the navigation overlapping, which is the
+  bar `accessibility.spec.ts` already applies to the catalog.
 
 ## Приймальні сценарії
 
@@ -161,6 +184,9 @@ The 36 rows collapse onto a small number of surfaces: a rewritten
 | G33 | Сід не ламає інфраструктурні пороги | Compose піднято, сід виконано | `make smoke` | Пороги API/логіну/SSR лишаються; бурст із 30 спроб логіну все одно дає 429 | `make smoke` |
 | G34 | Плейсхолдер Phase 1 більше недосяжний | Будь-який відвідувач | Пройти шість клітин матриці й вкладені адреси | «Розділ поки недоступний» і «Перейти до входу» не рендеряться ніде; переписаний spec не містить цього твердження | Playwright; grep по `LockedArea` |
 | G35 | Оболонка `/admin` нічого не вигадує (межа слайсу) | Сесія `admin` | Відкрити `/admin` | Немає списків курсів, студентів, відео, прогресу чи коментарів; є явне повідомлення про пізнішу фазу | Компонентний тест; Playwright |
+| G37 | Клавіатурна досяжність контролів шапки (конституція AGENTS.md) | Сесія `student` | Пройти табом від початку сторінки | Контроль «Вийти» отримує фокус із видимим кільцем і активується з клавіатури; порядок табуляції не стрибає через імʼя користувача | Rstest із `user-event`; Playwright `accessibility.spec.ts` |
+| G38 | Шапка витримує 200% зуму й темну тему | Сесія `admin`, темна тема, зум 200% | Відкрити `/` | Навігація не накладається, імʼя не обрізає контроли, посилання адміністрування лишається доступним; жодного захардкодженого кольору | Playwright `accessibility.spec.ts` (той самий кейс, що для каталогу) |
+| G39 | Розмір цілі контролів не менший за 44px | Будь-яка сесія | Виміряти «Вийти» й посилання адміністрування | Обидва не менші за 44px за меншим виміром | Playwright `accessibility.spec.ts` |
 | G36 | Впорядкований гейт завершення фази (розряджає C03) | Чистий checkout, підняте Compose | Виконати всю послідовність гейтів | Кожен крок — код 0 у порядку; жоден не потребує ручного створення користувача; звіт фази посилається на цей прогін | Прогін гейта; журнал у `docs/identity/report.md` |
 
 ### Author's corrections to the delegated table
