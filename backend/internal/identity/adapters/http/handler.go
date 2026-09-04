@@ -93,15 +93,13 @@ func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, domain.ErrForbidden, "origin_forbidden")
 		return
 	}
-	token, duplicate := sessionCookie(r)
+	tokens := sessionCookies(r)
 	http.SetCookie(w, handler.expiredCookie())
-	if duplicate {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if err := handler.identity.Logout(r.Context(), token); err != nil {
-		writeError(w, r, err, "")
-		return
+	for _, token := range tokens {
+		if err := handler.identity.Logout(r.Context(), token); err != nil {
+			writeError(w, r, err, "")
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -136,16 +134,26 @@ func (handler *Handler) expiredCookie() *http.Cookie {
 	return handler.sessionCookie("", time.Unix(1, 0).UTC(), -1)
 }
 
-func sessionCookie(r *http.Request) (string, bool) {
-	value := ""
-	count := 0
+// Every session cookie the request carried. Callers decide what more than one
+// means: login and authentication refuse the request untouched, while logout
+// revokes all of them, because leaving a live session behind would make a
+// successful logout a lie.
+func sessionCookies(r *http.Request) []string {
+	var values []string
 	for _, cookie := range r.Cookies() {
 		if cookie.Name == SessionCookieName {
-			value = cookie.Value
-			count++
+			values = append(values, cookie.Value)
 		}
 	}
-	return value, count > 1
+	return values
+}
+
+func sessionCookie(r *http.Request) (string, bool) {
+	values := sessionCookies(r)
+	if len(values) != 1 {
+		return "", len(values) > 1
+	}
+	return values[0], false
 }
 
 func decodeLogin(w http.ResponseWriter, r *http.Request) (loginRequest, error) {

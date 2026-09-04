@@ -24,6 +24,7 @@ import (
 
 type identityService struct {
 	loginCalls, authenticateCalls, logoutCalls int
+	logoutTokens                               []string
 	loginResult                                application.LoginResult
 	user                                       domain.User
 	err                                        error
@@ -37,8 +38,9 @@ func (service *identityService) Authenticate(context.Context, string) (domain.Us
 	service.authenticateCalls++
 	return service.user, service.err
 }
-func (service *identityService) Logout(context.Context, string) error {
+func (service *identityService) Logout(_ context.Context, token string) error {
 	service.logoutCalls++
+	service.logoutTokens = append(service.logoutTokens, token)
 	return service.err
 }
 
@@ -271,5 +273,44 @@ func TestIdentityHTTPMatchesOpenAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// A logout that answers 204 while a presented session stays alive on the server
+// is a lie the browser cannot detect. Login and authentication refuse a
+// duplicated cookie untouched; logout cannot, because refusing would leave the
+// session live, so it revokes every token the request carried.
+func TestLogoutRevokesEverySessionCookieTheRequestCarried(t *testing.T) {
+	service := &identityService{}
+	request := requestWithOrigin("POST", "/api/v1/auth/logout", "")
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("B", 43)})
+	response := httptest.NewRecorder()
+	testHandler(t, service).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(service.logoutTokens) != 2 ||
+		service.logoutTokens[0] != strings.Repeat("A", 43) ||
+		service.logoutTokens[1] != strings.Repeat("B", 43) {
+		t.Fatalf("a presented session survived logout: %v", service.logoutTokens)
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Value != "" || cookies[0].MaxAge >= 0 {
+		t.Fatalf("browser cookie not cleared: %+v", cookies)
+	}
+}
+
+func TestLogoutReportsAFailureToRevokeAnyPresentedSession(t *testing.T) {
+	service := &identityService{err: domain.ErrDependencyUnavailable}
+	request := requestWithOrigin("POST", "/api/v1/auth/logout", "")
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("B", 43)})
+	response := httptest.NewRecorder()
+	testHandler(t, service).ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a failed revocation claimed success: status=%d", response.Code)
 	}
 }

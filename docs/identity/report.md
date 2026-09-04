@@ -102,3 +102,39 @@ not-found screen.
 and the catalog renders, where it was previously refused. The backend contract still
 rejects unknown query parameters, so the API surface is unchanged; only the page URL is
 now tolerant, which keeps shared links carrying tracking parameters working.
+
+## Security review finding — logout failed open on a duplicated session cookie
+
+An adversarial review of the branch found no HIGH or MEDIUM issues, and one
+sub-threshold divergence between the specification and the code, fixed here.
+
+`handler.go` treated a duplicated `courseforge_session` cookie the same way in all
+three handlers, but the consequence differed. Login and authentication refuse the
+request without touching anything, which is fail-closed. Logout expired the browser
+cookie, answered `204` and returned **without revoking**, leaving the presented session
+valid on the server for up to twelve hours while telling the browser it had signed out.
+The specification claims duplicate session cookies "fail closed before mutation"; here
+they failed open, and the response could not be distinguished from a real logout.
+
+Exploitation needs an attacker who can already set a second cookie of that name, which
+nothing on this branch enables, so severity is low. The divergence is the defect: a
+document that promises a guarantee the code does not keep is worse than an absent
+guarantee.
+
+**Fix.** `sessionCookies` returns every session cookie the request carried and each
+handler states its own policy. Login and authentication keep refusing more than one.
+Logout revokes all of them, because refusing would leave the session live and that is
+the outcome the endpoint exists to prevent. A failure to revoke any one of them still
+reports `503` rather than claiming success. The contract is unchanged: logout still
+answers `204` and remains idempotent, so no OpenAPI or client regeneration was needed.
+
+**Guards.** Two tests: one asserts both presented tokens reach revocation and the
+browser cookie is cleared, the other asserts that a store failure during a multi-token
+logout reports `503` instead of `204`.
+
+**Not affected: multiple devices.** Rotation deletes only the token the request
+presented (`repository.go:86`, `DeleteIdentitySession` matches a single digest), never
+every session of the user. Verified live with two independent cookie jars: both sign in
+and both read `/auth/me`; a logout on one leaves the other authenticated and one row in
+`user_sessions`; re-login on either leaves the other untouched at two rows. The fix
+revokes every cookie *in one request*, which is one browser, not every device.
