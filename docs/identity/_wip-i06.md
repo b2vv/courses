@@ -12,7 +12,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 1 setup | branch `feat/identity-foundation`; artifacts `docs/identity/i06/`; living note here | — |
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
-| 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
+| 4 plan (2nd) | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
 | 5 GATE 2 | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed. Tasks are not cut | fresh delegates |
 | 6 tasks | — | — |
 | 7 implement | — | — |
@@ -120,3 +120,18 @@ hardest property of the slice cannot be written as specified.
 - The `APP_ENV` seed guard breaks CI (`.github/workflows/ci.yml:31` runs `make seed` with
   the variable unset) and does not defend its own threat model
   (`docker-compose.yml:61` defaults it to `development`).
+
+## Second plan draft
+
+Rewritten rather than patched. Every blocking finding is answered in the plan text and the
+reasoning for the change is kept beside it, so the next reader sees why the first shape was
+wrong rather than only the second shape.
+
+Three decisions were taken with the user to unblock it:
+
+1. The phase contract is amended to the 404 answer, in `docs/identity/spec.md` and B01.
+2. The seed becomes the source of truth via `ON CONFLICT DO UPDATE`; B09 amended.
+3. The seed gate moves from `APP_ENV` to an explicit `SEED_IDENTITIES=1`, because `APP_ENV`
+   both breaks CI and defaults to `development` in Compose.
+
+Estimate corrected in the phase task row: 1.5h → 4h.

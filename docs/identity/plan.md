@@ -11,7 +11,7 @@ Status: revision under independent critique; implementation starts only after pl
 | I03 | HTTP auth contract and runtime configuration | 2h | I02 | handlers, same-origin check, cookies, authentication middleware, typed startup config | HTTP/config matrix, role-policy tests, no-secret logging |
 | I04 | Contract generation and edge infrastructure | 1h | I03 | OpenAPI/Orval, Compose/env wiring, login-specific Nginx limit | generated drift; Nginx threshold smoke |
 | I05 | Frontend session slice and login | 2h | I04 | domain/application/port/adapter, reuse of request-scoped Query/API forwarding, RHF login, localized uk/en states | MSW, component, SSR identity/isolation tests |
-| I06 | Client route guards and completion gate | 1.5h | I05 | client-only `/learn` authenticated; `/admin` instructor/admin; header/logout; demo fixtures | ordered CI, Compose login/logout/role/expiry E2E |
+| I06 | Client route guards and completion gate | 4h | I05 | client-only `/learn` authenticated; `/admin` instructor/admin; header/logout; demo fixtures | ordered CI, Compose login/logout/role/expiry E2E |
 
 ## Acceptance scenarios
 
