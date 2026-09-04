@@ -61,3 +61,44 @@ Updated: 2026-09-04. Current completed task: I05.
 9. **Remaining limitations.** No header shows the signed-in user and no route guard exists yet, so `/learn` and `/admin` remain the Phase 1 locked placeholders; that is I06 together with logout in the header, demo fixtures and the Compose login/logout/role/expiry browser evidence. The database still seeds no identities, so the live evidence above used a temporary local user that was removed afterwards. Acceptance rows A01, A02, A04, A05 and B01 stay open until I06 supplies fixtures and Playwright coverage; A03 and A06 are covered here.
 10. **Next smallest task.** I06 adds the authenticated header with logout, client route guards for `/learn` and `/admin`, demo identity fixtures and the ordered completion gate.
 11. **User decision.** No product decision blocks I06.
+
+## Catalog URL contract — two defects fixed after I05
+
+Found while reading two reference codebases for Phase 4, both in Phase 2 code that had
+been green since `4d73072`.
+
+1. **`/courses` answered 307.** `validateCatalogSearch` always emitted all four
+   parameters, so the router rebuilt a canonical URL that differed from the request and
+   redirected to `/courses?q=&sort=recent&limit=20&offset=0`. Every catalog visit paid a
+   redirect. This is the same defect fixed for `/login` in I05; the twin in existing code
+   was not checked at the time. The rule is in `router-core` `load-server.js:530`: the
+   router compares `next.publicHref` with the canonical location built with
+   `_includeValidateSearch` and redirects on any difference.
+2. **An unusable parameter answered 500.** `?limit=abc`, a repeated parameter, an
+   out-of-range offset and an unknown sort all claimed a server fault for a malformed
+   address, which also counts them as 5xx in metrics.
+
+**What was measured before choosing a fix.** `z.catch()` cannot solve either problem: it
+injects the key even when the parameter was absent, which makes the redirect
+unconditional, and it cannot see the range rules at all because those live in
+`makeCatalogQuery` rather than in the schema. A route lane answers any thrown value with
+a hardcoded 500 (`load-server.js:303`) and offers no hook; `setResponseStatus(400)` from
+`@tanstack/react-start/server` was tried in the loader and left the response at 200. A
+400 is therefore not reachable for this case in this router version. `notFound()` is, and
+404 is defensible for an address that does not identify a valid catalog state.
+
+**Shape of the fix.** `validateCatalogSearch` echoes the four known parameters verbatim,
+drops everything else, and neither defaults nor refuses — its only job is to leave the
+URL alone. `catalogQuery` applies defaults once and refuses with `notFound()`. The route
+calls it in `beforeLoad`, inside the lane, because a `notFound()` thrown from
+`validateSearch` is not classified as a not-found and still produces 500.
+
+**Verified live.** `/courses`, `?q=Go`, `?offset=20` and `?sort=title&limit=10` all
+answer 200 with zero redirects. `?limit=abc`, `?limit=1&limit=2`, `?offset=-1`,
+`?limit=51`, `?sort=popular`, `?q=%00` and `?offset=10001` answer 404 with the
+not-found screen.
+
+**Behaviour change to note.** An unknown parameter such as `?role=admin` is now dropped
+and the catalog renders, where it was previously refused. The backend contract still
+rejects unknown query parameters, so the API surface is unchanged; only the page URL is
+now tolerant, which keeps shared links carrying tracking parameters working.
