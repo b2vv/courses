@@ -87,9 +87,28 @@ Taken with the user through `grilling`; the reasoning lives in
 | 1 | When does SSR resolve identity? | Only when the request carries a session cookie. No cookie means anonymous by definition, so public storefront traffic pays nothing. This also settles the anonymous header: it is what the root already renders |
 | 2 | How is a role refusal presented? | As a 404. Not a security claim — the aim is to keep the administration area out of sight of casual probing, so a wrong path looks like a wrong path. `notFound()` is already this repository's answer for an unusable address |
 | 3 | What does an anonymous visitor get? | Both addresses send them to login with `returnTo`. The role is checked **after** signing in: a permitted role lands on the address they asked for, a student gets 404. Revised from an earlier answer — see below |
-| 4 | What does `/learn` show a student? | An honest empty state with a way into the catalog, built on the existing `EmptyState` |
+| 4 | What does `/learn` show? | An honest empty state with a way into the catalog, built on the existing `EmptyState`. It is shown to every signed-in visitor, whatever their role — see below |
 | 5 | What is in the signed-in header? | The display name as text, a sign-out control, and an administration link rendered only for the roles allowed to use it |
 | 6 | How are demo identities kept out of a shared environment? | `make seed` refuses unless `APP_ENV` is `development`; the credentials are documented in the README beside it |
+
+### `/learn` is about enrolment, not role
+
+`CanLearn` is true for every valid role in the domain (`backend/internal/identity/domain/user.go:23`)
+and in its frontend twin (`frontend/src/domain/identity/identity.ts:36`), and the phase plan
+gates `/learn` on being *authenticated* rather than on being a student. That is deliberate:
+
+| What | Where it lives | Gated by |
+|---|---|---|
+| Courses you have access to **as a learner** — bought, or granted | `/learn` | being signed in |
+| Courses you **teach** | instructor workspace, its own phase | instructor or admin role |
+
+So an administrator or an instructor who bought someone else's course sees it on `/learn`
+exactly as a student does. What they do **not** see there is their own taught courses;
+those are their work, not their learning, and they belong to the workspace phase.
+
+For this slice the consequence is nil: enrolment does not exist as a table or a module, so
+all three roles see the same empty state. The distinction starts to matter when enrolment
+arrives, and is recorded now because it shapes that schema.
 
 ### What decision 2 and 3 do and do not mean
 
