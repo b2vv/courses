@@ -199,3 +199,31 @@ answers go here, then the third draft is written against them.
 
 The 4h estimate is also unsound: the repository has no route-level tests, no SSR harness and
 no seed integration test, and the table requires building six test surfaces from nothing.
+
+## Spike results — measured, not reasoned
+
+Throwaway tests against `@tanstack/react-router` 1.170.32 in this repository's own harness,
+run and deleted. Four questions, four answers.
+
+| # | Question | Answer |
+|---|---|---|
+| Q1 | Does a child's `beforeLoad` receive the root's `beforeLoad` context? | **Yes**, and the root runs first. `guarded.beforeLoad sees context.identity=anonymous`, ordered after `root.beforeLoad` |
+| Q2 | Does the root re-run on a plain client-side navigation? | **`beforeLoad` yes, `loader` no.** Log across a navigation: `root.beforeLoad=anonymous`, `root.loader=anonymous`, *(identity changes)*, `root.beforeLoad=signed-in`, `learn.guard sees=signed-in`, landed on `/learn` |
+| Q3 | What does `redirect()` from a child `beforeLoad` produce? | Lands on the target with search preserved: `pathname=/`, `search={"returnTo":"/guarded"}` |
+| Q4 | What does `notFound()` from a child `beforeLoad` produce? | The match takes `status="notFound"`; `isNotFound`/`isRedirect` helpers identify both throws |
+
+### What this settles
+
+**One change resolves two blocking findings.** Moving identity from the root *loader* to the
+root *beforeLoad* fixes both the ordering problem (a child's `beforeLoad` cannot read loader
+data) and the sign-in loop (the loader is retained across client navigation, `beforeLoad` is
+not). The critique's loop finding was correct about the design as written and dissolves
+under the corrected placement — which is why it was worth measuring rather than arguing.
+
+**The guard mechanism is confirmed workable**: `redirect()` and `notFound()` both behave as
+the design needs, from exactly the place the design needs them.
+
+**New cost, now measured rather than assumed:** root `beforeLoad` runs on *every* client
+navigation. With `staleTime: 0` that is an identity revalidation per navigation, not per
+document load. The third draft states this instead of the two different wrong numbers the
+second draft gave.
