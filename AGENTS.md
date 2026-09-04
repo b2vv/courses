@@ -1,6 +1,7 @@
 # Working in courses
 
 ## Scope and delivery
+- Read the repository briefing first: [work/CTO-RESEARCH.md](work/CTO-RESEARCH.md). It caches primary sources; where it disagrees with the code, the code wins and the briefing is rewritten.
 - Foundation and public catalog (Phases 1–2) are complete. Current delivery: Identity (Phase 3).
 - Phases 4–8 remain roadmap work; do not claim working admin CRUD, playback, uploads or payments.
 - Read `docs/identity/plan.md` and `work/tasks.md`; execute one logical slice at a time.
