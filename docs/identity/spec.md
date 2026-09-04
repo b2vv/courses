@@ -42,11 +42,11 @@ Registration, email verification, password reset, MFA/passkeys, OAuth, user admi
 
 ## Localization
 
-Visible login validation/errors, authenticated navigation, logout state, forbidden state and guard messages have explicit Ukrainian and English resources in the existing request-scoped `i18next` setup. Backend error codes/messages remain stable transport data and are mapped to localized UI descriptors. Logout removes private Query data before navigation so browser history cannot render stale identity.
+Visible login validation/errors, authenticated navigation, logout state and guard messages have explicit Ukrainian and English resources in the existing request-scoped `i18next` setup. Backend error codes/messages remain stable transport data and are mapped to localized UI descriptors. Logout removes private Query data before navigation so browser history cannot render stale identity.
 
 ## Rendering and route policy
 
 - `/`, `/courses`, `/courses/$slug` and `/login` remain SSR routes. Their shared identity-aware header resolves `/auth/me` on the server with the incoming cookie and hydrates the request-scoped Query cache; raw HTML tests assert the signed-in shell and `Vary: Cookie`.
-- `/learn` and `/admin/*` remain client-only as required by the foundation architecture. Client guard tests separately assert anonymous redirect on 401, a localized retryable error without redirect on 503, authenticated access, student forbidden state for `/admin`, instructor/admin shell access and absence of a post-hydration identity flash.
-- `/learn` accepts every authenticated role. `/admin/*` accepts `instructor` and `admin`; `student` receives the localized forbidden state.
+- `/learn` and `/admin/*` remain client-only as required by the foundation architecture. Client guard tests separately assert anonymous redirect on 401, a localized retryable error without redirect on 503, authenticated access, the not-found answer a student receives for `/admin`, instructor/admin shell access and absence of a post-hydration identity flash.
+- `/learn` accepts every authenticated role. `/admin/*` accepts `instructor` and `admin`. Every visitor who is not permitted — a `student`, and an anonymous visitor who signs in as one — receives the ordinary not-found answer rather than a forbidden state, so the administration area is not advertised to casual address probing. This is a deliberate amendment made during I06; the client guard is not a security boundary either way, and the server-side boundary arrives in Phase 4.
 - `returnTo` accepts only normalized internal protected paths. External URLs, protocol-relative URLs, encoded or backslash variants, control characters, recursive `/login` targets and non-protected paths fall back to `/learn`.
