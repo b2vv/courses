@@ -13,7 +13,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
 | 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
-| 5 GATE 2 | constitution run inline: **one violation found and closed** (accessibility unaddressed for three new components); `plan-critique` and `plan-defense` delegated to fresh agents, pending | author + delegates |
+| 5 GATE 2 | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed. Tasks are not cut | fresh delegates |
 | 6 tasks | — | — |
 | 7 implement | — | — |
 | 8 verify | — | — |
@@ -78,3 +78,45 @@ today and Claude Code reads MCP configuration at startup. The reuse survey was t
 made against the manifest index and the code. Recorded because a later run with the tools
 live may find reuse this pass missed. Any role executed inline instead of delegated is recorded here, because a silent
 substitution makes the cycle unrepeatable.
+
+## GATE 2 — red, and why
+
+Verified every load-bearing finding against the code before accepting it. All held.
+
+### Two citation failures by the plan's author
+
+1. **Fabricated.** The plan struck `Vary: Cookie` from G19 claiming
+   `docs/security/audit-2026-09-03.md` records that `private, no-store` makes it
+   unnecessary. That document contains no occurrence of `Vary` at all, and the phase
+   contract *requires* it twice (`docs/identity/spec.md:41`, `:49`).
+2. **Unsupported.** "Measured at 0–2 ms on the internal network in I05" was the sole
+   justification for the extra SSR call. The figure was seen in container logs during I05
+   debugging but was never recorded as evidence anywhere in the repository, and the plan
+   cited it as though it had been.
+
+Both times the author overrode a delegate's row and was wrong both times.
+
+### The design error that invalidates decision 1's implementation
+
+The plan proposed an isomorphic cookie check "reading the request header on the server and
+`document.cookie` on the client". The session cookie is `HttpOnly`
+(`backend/internal/identity/adapters/http/handler.go:130`), so `document.cookie` can never
+see it. Every client-side evaluation returns "anonymous" for exactly the signed-in viewers
+the slice exists to serve. Decision 1 is implementable server-side only.
+
+### The verification design error
+
+G09, G10 and G11 delay or fault `/auth/me` with Playwright and observe a full page load.
+Under a root loader that call happens SSR-container-to-API over the internal network;
+`page.route` intercepts browser requests only. The three rows written to prove the single
+hardest property of the slice cannot be written as specified.
+
+### Contract contradictions the plan did not schedule
+
+- 404-for-a-student contradicts `docs/identity/spec.md:45`, `:50`, `:51` and
+  `docs/identity/plan.md:26`, all of which require a localized forbidden state.
+- `ON CONFLICT DO NOTHING` repeals B09 (`docs/identity/plan.md:34`), which requires
+  conflicting rows to fail loudly without partial fixtures, verified concurrently.
+- The `APP_ENV` seed guard breaks CI (`.github/workflows/ci.yml:31` runs `make seed` with
+  the variable unset) and does not defend its own threat model
+  (`docker-compose.yml:61` defaults it to `development`).
