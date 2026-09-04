@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"courses/platform/config"
 	"courses/platform/observability"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -30,9 +31,9 @@ func main() {
 }
 
 func migrate(ctx context.Context) (int, error) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return 0, fmt.Errorf("DATABASE_URL is required")
+	databaseURL, err := config.PostgresDSN(os.Getenv)
+	if err != nil {
+		return 0, err
 	}
 	directory := os.Getenv("MIGRATIONS_DIR")
 	if directory == "" {

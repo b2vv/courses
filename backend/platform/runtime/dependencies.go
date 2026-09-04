@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"courses/platform/config"
 	"courses/platform/observability"
 	"courses/platform/postgres"
 	redisinfrastructure "courses/platform/redis"
@@ -26,9 +27,13 @@ type Dependencies struct {
 }
 
 func Open(ctx context.Context, service string, logger *slog.Logger) (*Dependencies, error) {
-	databaseURL, redisURL := os.Getenv("DATABASE_URL"), os.Getenv("REDIS_URL")
-	if databaseURL == "" || redisURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL and REDIS_URL are required")
+	databaseURL, err := config.PostgresDSN(os.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	redisURL, err := config.RedisDSN(os.Getenv)
+	if err != nil {
+		return nil, err
 	}
 	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

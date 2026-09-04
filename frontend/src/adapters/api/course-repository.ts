@@ -116,7 +116,9 @@ export function createApiCourseRepository(options: Options = {}): CourseReposito
     getPublished(slug, signal) {
       return request(
         'catalog.detail',
-        (init) => getPublishedCourse(slug, init),
+        // The generated builder interpolates the path segment verbatim, so the
+        // slug is encoded here rather than relying only on server validation.
+        (init) => getPublishedCourse(encodeURIComponent(slug), init),
         (raw) => {
           const parsed = courseSchema.safeParse(raw);
           if (!parsed.success || parsed.data.slug !== slug) return invalid;

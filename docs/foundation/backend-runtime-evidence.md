@@ -16,7 +16,7 @@ Date: 2026-09-03. Scope: Phase 1 runtime only. No Course implementation or Phase
 
 ## Runtime contract
 
-Required: `DATABASE_URL`, `REDIS_URL` (for example `redis://redis:6379/0`). Optional: `HTTP_ADDR` (API `:8080`, worker `:8081`), `MIGRATIONS_DIR` (migrate default `migrations`), standard `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and related OTLP settings.
+Required: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_HOST` and `REDIS_PASSWORD`; optional `POSTGRES_PORT` (5432), `POSTGRES_SSLMODE` (`disable`), `REDIS_PORT` (6379) and `REDIS_DB` (0). `platform/config` assembles the PostgreSQL and Redis DSNs from these so that a password containing URL-significant characters cannot corrupt the address. Optional: `HTTP_ADDR` (API `:8080`, worker `:8081`), `MIGRATIONS_DIR` (migrate default `migrations`), standard `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and related OTLP settings.
 
 API and worker expose `GET /healthz`, `GET /readyz`, `GET /metrics` internally. Worker also exposes `GET /status`, returning `stage: foundation` and `handlers: []`. Readiness checks both PostgreSQL and Redis with a shared two-second deadline. Startup dependency budget is ten seconds. HTTP draining budget is ten seconds; worker queue shutdown adds up to ten seconds. Give containers at least 40 seconds stop grace to include monitoring/exporter shutdown under failures.
 
