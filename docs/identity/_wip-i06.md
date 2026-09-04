@@ -13,7 +13,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
 | 4 plan (2nd) | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
-| 5 GATE 2 | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed. Tasks are not cut | fresh delegates |
+| 5 GATE 2 (1st) | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed. Tasks are not cut | fresh delegates |
 | 6 tasks | — | — |
 | 7 implement | — | — |
 | 8 verify | — | — |
@@ -157,3 +157,45 @@ decision happens after hydration. G07's wording overstates this and needs correc
 Not patched immediately: the critique and defence agents were reading the document at the
 time, and editing under them would produce a verdict on a version that no longer exists.
 Folded into one revision once they return.
+
+## GATE 2, second round — red again
+
+`plan-critique`: 10 blocking, 17 non-blocking. `plan-defense`: 2 covered, 3 holes.
+
+Worst three:
+
+1. **Sign-in loops.** `load-client.js:330` — the root match is retained and its loader does
+   not re-run on a client-side navigation. `login.tsx:52-57` navigates after a successful
+   sign-in, the root value still says `anonymous`, and `/learn`'s guard bounces back to
+   `/login`. The design breaks the phase's main scenario.
+2. **A requirement was lost while rebuilding the table.** Edition 1 covered the no-flash
+   rule (A04); edition 2's table contains no row mentioning it. Rebuilding to close holes
+   dropped coverage that already existed.
+3. **The author's own contract amendment is self-contradictory.** B09 now says both "the
+   seed file is the source of truth" and "conflicting rows fail loudly", which
+   `ON CONFLICT DO UPDATE` can never satisfy. Half a sentence was rewritten.
+
+Also: `SEED_IDENTITIES` cannot reach the container (`docker compose exec` does not forward
+host environment); `i06/spec.md:104` still fixes decision 6 on `APP_ENV`; `redirect()` was
+claimed as reused and is new; `/login` would resolve identity twice per SSR render;
+`work/tasks.md:30` still reads 1.5h.
+
+### The pattern, named
+
+Both editions failed on the same class: **framework behaviour asserted without reading the
+framework.** `document.cookie` against an `HttpOnly` cookie; the `beforeLoad`/loader
+ordering; now root-match retention. Plausible every time, wrong every time. Alongside it,
+false reuse claims (`redirect()`, "three call sites") and one fabricated citation (`Vary`).
+
+A third draft written the same way fails on the fourth such assumption.
+
+### Decision: verify the mechanism before drafting again
+
+Agreed with the user. A throwaway spike against the installed router answers, with running
+code rather than reasoning: whether a child's `beforeLoad` receives the root's `beforeLoad`
+context; whether root `beforeLoad` and root `loader` re-run on client navigation; what a
+`redirect()` and a `notFound()` thrown from a child `beforeLoad` actually produce. The
+answers go here, then the third draft is written against them.
+
+The 4h estimate is also unsound: the repository has no route-level tests, no SSR harness and
+no seed integration test, and the table requires building six test surfaces from nothing.
