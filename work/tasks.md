@@ -34,3 +34,4 @@ Phases 1–2 завершено. Phase 3 розпочато зі специфі�
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
 |---|---|---:|---|---|---|
 | S01 | CSP (report-only first), Permissions-Policy, HSTS and `Secure` cookies after TLS | 1.5h | TLS termination | planned | audit LOW-5, LOW-6 |
+| S02 | `__Host-` prefix on the session cookie | 0.5h | S01 (needs `Secure`) | planned | Removes the precondition for the duplicate-cookie class entirely: a `__Host-` cookie cannot be set by a sibling or parent domain. Blocked until TLS, because the prefix requires `Secure` and local development runs on http. See `docs/identity/report.md` §Security review finding |
