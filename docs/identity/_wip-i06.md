@@ -12,7 +12,7 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 1 setup | branch `feat/identity-foundation`; artifacts `docs/identity/i06/`; living note here | — |
 | 2 specify | `i06/spec.md` written | — |
 | 3 GATE 1 | `grilling` complete; all 5 questions closed, decisions in `i06/spec.md` §Рішення GATE 1. Awaiting the user's confirmation of shared understanding before the plan | user |
-| 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec`, pending | — |
+| 4 plan | `i06/plan.md` written: reuse survey, design, side effects, migration, rollback, constitution. Acceptance table delegated to `acceptance-spec` and integrated: 36 rows, two corrected by the author, one reported gap discarded as false, one accepted as a real defect | — |
 | 5 GATE 2 | — | — |
 | 6 tasks | — | — |
 | 7 implement | — | — |
@@ -60,6 +60,14 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 Derived without asking, flagged for objection: two fixtures rather than three. B01's
 instructor row is covered by the domain policy test, so a third seeded credential would add
 no evidence.
+
+### Defect the delegation found
+
+`docs/identity/spec.md:52` requires `returnTo` to reject recursive `/login` targets and
+non-protected paths. `safeReturnTo`, shipped in I05, rejects neither. The phase security
+contract has been stricter than the code since I05 landed, and no test caught it because
+the tests were written from the implementation rather than from the contract. Narrowing it
+is a task in this slice; `G15` encodes both cases.
 
 ## Delegation failures
 

@@ -117,4 +117,80 @@ a user could lose.
 
 ## Приймальні сценарії
 
-Delegated to `acceptance-spec`; the table lands here before tasks are cut.
+Delegated to `acceptance-spec`. The table is its output with two rows corrected by the
+author, marked below, and one reported gap discarded as false.
+
+The 36 rows collapse onto a small number of surfaces: a rewritten
+`frontend/e2e/route-guards.spec.ts`, route and header component tests under
+`frontend/src/**`, the Go HTTP contract test, a seed integration test, and `make smoke`.
+
+| ID | Сценарій | Передумова | Дія | Очікуваний результат | Чим перевіряється |
+|---|---|---|---|---|---|
+| G01 | Анонім на `/learn` (розряджає A06 у частині `/learn`) | Cookie відсутній; фікстури засіяні | Ввести `/learn` в адресний рядок | URL стає `/login?returnTo=%2Flearn`; видно форму входу | Playwright; компонентний тест роута з MSW `401` |
+| G02 | Анонім на `/admin`; підтверджує перегляд рішення 3 | Cookie відсутній | Відкрити `/admin` із закладки | URL стає `/login?returnTo=%2Fadmin`, статус 200, форма входу видима; 404 немає | Playwright; компонентний тест роута |
+| G03 | Студент на `/learn` (розряджає A01) | Активна сесія `student` | Відкрити `/learn` | Порожній стан `EmptyState` з посиланням у каталог; ні редиректу, ні 404 | Playwright; компонентний тест |
+| G04 | Студент на `/admin`; відмова за роллю = 404 (рішення 2, розряджає B01) | Активна сесія `student` | Відкрити `/admin` | Той самий екран «не знайдено», що й для довільної неіснуючої адреси; жодного натяку на існування адмінки | Playwright; компонентний тест; доменний тест `canAccessAdministration` |
+| G05 | Інструктор на `/learn`; `/learn` про зарахування, не про роль (рішення 4) | Активна сесія `instructor` | Відкрити `/learn` | Той самий порожній стан, що й у студента; жодних «моїх викладацьких курсів» | Компонентний тест; Playwright |
+| G06 | Інструктор на `/admin` (розряджає B01) | Активна сесія `instructor` | Відкрити `/admin` | Оболонка адміністрування з явним текстом, що керування зʼявиться пізніше; 404 немає | Playwright; компонентний тест |
+| G07 | Адміністратор на `/learn` | Активна сесія `admin` | Відкрити `/learn` | Той самий порожній стан | Компонентний тест |
+| G08 | Адміністратор на `/admin` (розряджає A02, B01) | Активна сесія `admin` | Відкрити `/admin` | Оболонка видима; URL лишається `/admin` | Playwright; компонентний тест |
+| G09 | Гонка резолву на набраній адресі (рішення 7; дзеркало A04) | Сесія `admin`; `/auth/me` відповідає із затримкою ~1 с | Повне завантаження `/admin` | Поки ідентичність невідома — стан очікування; далі оболонка. Жодного кадру з 404 і жодного редиректу на `/login` | Playwright із затримкою на `/auth/me` і DOM-спостерігачем до гідратації; компонентний тест |
+| G10 | Гонка резолву на `/learn` | Сесія `student`; `/auth/me` із затримкою | Повне завантаження `/learn` | Ані редиректу, ані 404 до відповіді; далі порожній стан | Playwright; компонентний тест |
+| G11 | `/auth/me` віддає 503 на захищеній адресі | Сесія є, сховище недоступне | Відкрити `/admin` | Локалізований повторюваний стан помилки; ні редиректу, ні 404; повтор після відновлення відкриває оболонку | Компонентний тест з MSW `503`; Playwright `recovery.spec.ts` |
+| G12 | Сесія завершилась або відкликана при відкритому табі (сценарій 6) | Ідентичність у кеші; сесію видалено на сервері | Перейти на `/admin` усередині SPA | Поведінка тотожна анонімній: `/login?returnTo=%2Fadmin`; ні зламаного екрана, ні застарілого імені в шапці | Playwright; компонентний тест з MSW `401` після `200` |
+| G13 | Повний оберт `returnTo` для дозволеної ролі (розряджає A06, C01) | Cookie відсутній | `/admin` → логін як `admin` | 200 і `Set-Cookie`; браузер на `/admin` з видимою оболонкою, не на `/learn` | Playwright; тест роута `/login` |
+| G14 | Оберт `returnTo` для забороненої ролі — роль перевіряється ПІСЛЯ входу (рішення 3) | Cookie відсутній | `/admin` → логін як `student` | Логін успішний, URL стає `/admin`, на ньому 404; назад на `/login` не повертає | Playwright; тести роутів |
+| G15 | Ворожий і непридатний `returnTo` (розряджає C01) | Cookie відсутній | Логін із `returnTo`: `https://evil.example/`, `//evil.example`, `/\evil.example`, `%2f%2fevil.example`, `/admin%0d%0aSet-Cookie:x`, **`/login`**, **`/courses`**, порожній, відсутній | Після входу URL завжди `/learn` | Табличний юніт-тест `safeReturnTo`; компонентний тест `/login`; один ворожий кейс у Playwright |
+| G16 | Шапка для аноніма не змінилася (рішення 1) | Cookie відсутній | Відкрити `/` | «Увійти» в шапці; ні імені, ні виходу, ні посилання на адміністрування | Rstest; Playwright `shell.spec.ts` |
+| G17 | Шапка для студента (рішення 5, розряджає A04) | Сесія `student` | Відкрити `/` | Видно `displayName` і «Вийти»; посилання на адміністрування немає; «Увійти» немає | Компонентний тест; Playwright |
+| G18 | Шапка для інструктора й адміністратора (рішення 5) | Сесія `instructor`, потім `admin` | Відкрити `/`, натиснути посилання адміністрування | В обох ролей імʼя, «Вийти» і посилання; клік веде на `/admin` і відкриває оболонку | Компонентний тест по ролях; Playwright |
+| G19 | SSR рендерить ідентичність без миготіння (розряджає A04) — **скориговано автором** | Валідний cookie | Перезавантажити `/courses` | Сире HTML уже містить `displayName` і контроль виходу; відповідь має `Cache-Control: private, no-store`; спостерігач, встановлений до гідратації, не фіксує кадру з анонімною шапкою | Інтеграційний тест сирого HTML; Playwright з раннім спостерігачем |
+| G20 | SSR не резолвить ідентичність без cookie (рішення 1) | Cookie відсутній | Запросити `/courses` | Анонімна шапка; у логах API за час запиту немає звернення до `/auth/me` | Інтеграційний тест SSR із лічильником; перевірка мережі |
+| G21 | Ізоляція ідентичностей між SSR-запитами | Дві різні валідні сесії | Одночасно запросити `/courses` з cookie A і B | Кожна відповідь містить своє імʼя; чуже не потрапляє | Інтеграційний тест SSR (паралельні запити) |
+| G22 | Вихід (розряджає A05) | Сесія будь-якої ролі, користувач на `/learn` | Натиснути «Вийти» | `POST /auth/logout` → 204, cookie протермінований; браузер на публічній сторінці; шапка анонімна; `/learn` знову веде на `/login?returnTo=%2Flearn` | Playwright; Go HTTP-тест cookie; компонентний тест |
+| G23 | Вихід при недоступному сховищі | Сесія; PostgreSQL недоступний | Натиснути «Вийти» | 503, cookie все одно протермінований, локалізоване повідомлення; ідентичність зникла з кешу, `/learn` замкнений | Компонентний тест з MSW `503`; Go HTTP-тест; `recovery.spec.ts` |
+| G24 | Історія браузера після виходу | Вийшов зі сторінки `/learn` | Натиснути «Назад» | Жодна сторінка з історії не показує імʼя чи вміст `/learn`; захищена адреса веде на `/login` | Playwright |
+| G25 | Вкладені захищені адреси підпорядковані тій самій матриці | Cookie відсутній, потім сесія `student` | Відкрити `/learn/go/intro` і `/admin/courses` | Анонім → `/login?returnTo=` з відповідним шляхом; студент → `/learn/go/intro` відкривається, `/admin/courses` дає 404 | Playwright (переписаний `route-guards.spec.ts`); компонентні тести splat-роутів |
+| G26 | Вхід через `/login`, коли вже увійшли | Сесія `admin` | Відкрити `/login?returnTo=%2Fadmin` | Показано, що користувач уже увійшов; контроль продовження веде на `/admin` | Компонентний тест; Playwright |
+| G27 | Локалізація станів гарда | `uk`, потім `en` | Порожній стан, 404 як студент, шапка в обох станах | В обох мовах усе перекладено; жодного ключа-заглушки в DOM | Rstest з обома локалями |
+| G28 | Три фікстури входять і мають правильні ролі (розряджає A01, A02, B01) | Виконано `make seed` | `POST /auth/login` для трьох ролей | Кожен — 200, `Set-Cookie`, DTO з очікуваною роллю; жодного поля з паролем чи токеном | Go контрактний тест; інтеграційний тест сіду |
+| G29 | Ідемпотентність сіду (розряджає C02) | Порожня БД | `make seed` двічі | Обидва рази код 0; `count(*) FROM users` = 3 після кожного; рядки ідентичні | Інтеграційний тест на Testcontainers |
+| G30 | Наявний конфліктний рядок не породжує часткових фікстур — **скориговано автором** | У БД користувач із email фікстури, але іншою роллю | `make seed` | Команда завершується кодом 0, наявний рядок не змінюється, `count(*)` не зростає; часткових фікстур не лишається | Інтеграційний тест сіду |
+| G31 | Відмова сіду поза розробкою (рішення 6, розряджає C02) | `APP_ENV` не `development` (зокрема порожнє й `Development`) | `make seed` | Ненульовий код, повідомлення називає причину; `count(*) FROM users` = 0 | Тест у `infrastructure/tests/` з переозначеним `APP_ENV` |
+| G32 | Облікові дані фікстур задокументовані як локальні (розряджає C02) | Чистий checkout | Прочитати README біля `make seed` | README містить три email-и й паролі та застереження про локальність; жодного пароля в `.env.example` чи Compose | Перевірка README; рев'ю |
+| G33 | Сід не ламає інфраструктурні пороги | Compose піднято, сід виконано | `make smoke` | Пороги API/логіну/SSR лишаються; бурст із 30 спроб логіну все одно дає 429 | `make smoke` |
+| G34 | Плейсхолдер Phase 1 більше недосяжний | Будь-який відвідувач | Пройти шість клітин матриці й вкладені адреси | «Розділ поки недоступний» і «Перейти до входу» не рендеряться ніде; переписаний spec не містить цього твердження | Playwright; grep по `LockedArea` |
+| G35 | Оболонка `/admin` нічого не вигадує (межа слайсу) | Сесія `admin` | Відкрити `/admin` | Немає списків курсів, студентів, відео, прогресу чи коментарів; є явне повідомлення про пізнішу фазу | Компонентний тест; Playwright |
+| G36 | Впорядкований гейт завершення фази (розряджає C03) | Чистий checkout, підняте Compose | Виконати всю послідовність гейтів | Кожен крок — код 0 у порядку; жоден не потребує ручного створення користувача; звіт фази посилається на цей прогін | Прогін гейта; журнал у `docs/identity/report.md` |
+
+### Author's corrections to the delegated table
+
+- **G19** demanded `Vary: Cookie` on the SSR response. Removed: `frontend/server.mjs:23`
+  sets `Cache-Control: private, no-store`, and `docs/security/audit-2026-09-03.md` records
+  that this is precisely why `Vary: Cookie` is not required. Asserting it would fail against
+  a design that is already correct.
+- **G30** demanded a non-zero exit when a conflicting row exists. Softened: the fixture
+  insert is `ON CONFLICT DO NOTHING`, which cannot fail on a conflict. Detecting
+  "same email, different role" would need a separate check for a case that arises only from
+  hand-edited data, and the property that matters — no partial fixtures — holds as written.
+
+### Reported gap discarded
+
+The delegate reported `backend/internal/identity/adapters/http/` as untracked, which would
+break a clean-checkout gate. It is tracked: `git ls-files` lists all four files, committed
+in `e8cadab`. The delegate read the stale session-start status.
+
+### Gap accepted, and it is a defect this slice must fix
+
+`docs/identity/spec.md:52` requires `returnTo` to accept **only normalized internal
+protected paths**, and to reject external URLs, protocol-relative and encoded forms,
+control characters, **recursive `/login` targets** and **non-protected paths**.
+
+`safeReturnTo` as shipped in I05 implements the first four and not the last two:
+`safeReturnTo('/login')` returns `/login`, and `safeReturnTo('/courses')` returns
+`/courses`. The phase security contract is stricter than the code that claims to satisfy
+it. G15 encodes both missing cases, and narrowing `safeReturnTo` is a task in this slice.
+
+The other two reported gaps are the slice's own work, not defects: `make seed` has no
+`APP_ENV` guard yet, and the `check` target lists neither `check-generated` nor `smoke`,
+so C03's ordered gate is not yet expressed as one command.
