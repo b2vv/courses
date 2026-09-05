@@ -62,6 +62,10 @@ func TestIdentityErrorsAreStable(t *testing.T) {
 		domain.ErrAuthenticationRequired: "authentication_required",
 		domain.ErrForbidden:              "forbidden",
 		domain.ErrDependencyUnavailable:  "dependency_unavailable",
+		domain.ErrCannotTargetSelf:       "cannot_target_self",
+		domain.ErrAdminImmutable:         "admin_immutable",
+		domain.ErrLastAdmin:              "last_admin",
+		domain.ErrUserNotFound:           "user_not_found",
 	} {
 		if errorValue.Error() != want {
 			t.Fatalf("got %q, want %q", errorValue.Error(), want)

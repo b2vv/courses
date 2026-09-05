@@ -64,6 +64,12 @@ func TestUserInvariantsAndRolePolicy(t *testing.T) {
 	if _, err := domain.NewUser(valid); err != nil {
 		t.Fatal(err)
 	}
+	deleted := valid
+	deleted.DisabledAt = &now
+	deleted.DeletedAt = &now
+	if _, err := domain.NewUser(deleted); err != nil {
+		t.Fatalf("valid deleted user: %v", err)
+	}
 
 	for _, test := range []struct {
 		name   string
@@ -79,6 +85,17 @@ func TestUserInvariantsAndRolePolicy(t *testing.T) {
 		{name: "update before create", change: func(user *domain.User) { user.UpdatedAt = now.Add(-time.Second) }},
 		{name: "disabled before create", change: func(user *domain.User) { disabled := now.Add(-time.Second); user.DisabledAt = &disabled }},
 		{name: "disabled after update", change: func(user *domain.User) { disabled := now.Add(time.Second); user.DisabledAt = &disabled }},
+		{name: "deleted before create", change: func(user *domain.User) {
+			deleted := now.Add(-time.Second)
+			user.DisabledAt = &now
+			user.DeletedAt = &deleted
+		}},
+		{name: "deleted after update", change: func(user *domain.User) {
+			deleted := now.Add(time.Second)
+			user.DisabledAt = &now
+			user.DeletedAt = &deleted
+		}},
+		{name: "deleted without disabled", change: func(user *domain.User) { user.DeletedAt = &now }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

@@ -12,4 +12,8 @@ const (
 	ErrAuthenticationRequired Error = "authentication_required"
 	ErrForbidden              Error = "forbidden"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
+	ErrCannotTargetSelf       Error = "cannot_target_self"
+	ErrAdminImmutable         Error = "admin_immutable"
+	ErrLastAdmin              Error = "last_admin"
+	ErrUserNotFound           Error = "user_not_found"
 )

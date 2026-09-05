@@ -40,6 +40,7 @@ type User struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DisabledAt  *time.Time
+	DeletedAt   *time.Time
 }
 
 func NewUser(user User) (User, error) {
@@ -53,11 +54,14 @@ func NewUser(user User) (User, error) {
 	if user.DisabledAt != nil && (user.DisabledAt.Before(user.CreatedAt) || user.DisabledAt.After(user.UpdatedAt)) {
 		return User{}, ErrInvalidUser
 	}
+	if user.DeletedAt != nil && (user.DeletedAt.Before(user.CreatedAt) || user.DeletedAt.After(user.UpdatedAt) || user.DisabledAt == nil) {
+		return User{}, ErrInvalidUser
+	}
 	return user, nil
 }
 
 func (user User) Active() bool {
-	return user.DisabledAt == nil
+	return user.DisabledAt == nil && user.DeletedAt == nil
 }
 
 func NormalizeEmail(value string) (string, error) {
