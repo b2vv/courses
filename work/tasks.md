@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a у роботі (нижче); Phase 4b і Phases 5–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b і Phases 5–8 не починалися.
 
 ## Phase 3 — Identity
 
@@ -88,4 +88,4 @@ Compose і фікстур, тобто не може бігти раніше за
 | A12 | Деградація і in-flight-гарди обох екранів: 503 на первинному read → `ErrorState` з робочим retry; гард подвійного Save | 0.75h | A11 | done | `work/report-a12.md`; R37, R38, R40; gates pass |
 | A13 | Спільні браузерні сесії: `auth.setup.ts`, `setup`-проєкт, конверсія `route-guards.spec.ts`, вимір логінів за прогін | 1h | A12 | done | `work/report-a13.md`; B19 (budget ≤7, amended); two review rounds; e2e 24/24 twice, total=7/consec=3 |
 | A14 | Браузерна подорож адмінки: `admin.spec.ts` (admin+instructor journeys, direct-API refusal), slug-неймспейс на прогін | 1.5h | A13 | done | `work/report-a14.md`; P20, P21, R33; e2e 27/27 twice, budget total=7 |
-| A15 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута, `docs/admin/report.md` | 1h | A01–A14 | planned | B18 |
+| A15 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута, `docs/admin/report.md` | 1h | A01–A14 | done | `docs/admin/report.md`; B18; full `make check` exit 0 (12 steps, 243 frontend tests, e2e 27/27) |
