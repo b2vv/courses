@@ -52,13 +52,11 @@ export function createApiSessionRepository(options: TransportOptions = {}): Sess
     expected: number,
     map: (data: unknown) => SessionResult<T>,
     caller?: AbortSignal,
-    recover?: (error: SessionError) => SessionResult<T> | undefined,
   ): Promise<SessionResult<T>> {
     const outcome = await send(operation, execute, expected, caller);
     if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
     if (outcome.status === expected) return map(outcome.data);
-    const error = wireError(outcome);
-    return recover?.(error) ?? { ok: false, error };
+    return { ok: false, error: wireError(outcome) };
   }
   return {
     logIn(credentials, signal) {
@@ -70,17 +68,18 @@ export function createApiSessionRepository(options: TransportOptions = {}): Sess
         signal,
       );
     },
-    currentUser(signal) {
-      return request<AuthenticatedUser | null>(
+    async currentUser(signal) {
+      const result = await request<AuthenticatedUser | null>(
         'identity.currentUser',
         (init) => getCurrentUser(init),
         200,
         user,
         signal,
-        // Anonymous is the ordinary state of a public page, not a failure.
-        (error) =>
-          error.code === 'authentication_required' ? { ok: true, value: null } : undefined,
       );
+      // Anonymous is the ordinary state of a public page, not a failure.
+      return !result.ok && result.error.code === 'authentication_required'
+        ? { ok: true, value: null }
+        : result;
     },
     logOut(signal) {
       return request<null>(
