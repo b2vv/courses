@@ -12,6 +12,32 @@ test('keeps shared UI and administration keys aligned across locale bundles', ()
   expect(Object.keys(uk.translation.administration)).toEqual(
     Object.keys(en.translation.administration),
   );
+  const adminListKeys = [
+    'title',
+    'empty',
+    'emptyHint',
+    'courses',
+    'courseCount',
+    'courseTable',
+    'courseTitle',
+    'slug',
+    'status',
+    'owner',
+    'updated',
+    'statusTabs',
+    'allStatuses',
+    'draft',
+    'published',
+    'archived',
+    'pages',
+    'loading',
+    'failure',
+    'failureHint',
+  ] as const;
+  for (const key of adminListKeys) {
+    expect(uk.translation.administration[key]).toBeTruthy();
+    expect(en.translation.administration[key]).toBeTruthy();
+  }
 });
 
 test('renders one request locale and changes visible copy without a reload', async () => {

@@ -1,18 +1,23 @@
 import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../adapters/api/session-repository';
+import { createAuthoring } from '../application/admin/authoring';
 import { createCatalog } from '../application/catalog/catalog';
 import { createSession } from '../application/identity/session';
+import { createAdminQueries } from '../app/composition/admin-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
+import { asBrandedId } from '../domain/course/course';
+import type { AdminCourse, AdminCourseQuery } from '../domain/course/course';
+import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
 import { routeTree } from '../routeTree.gen';
@@ -28,11 +33,13 @@ const dependencyUnavailable = {
 const server = setupServer(
   http.get(currentUserUrl, () => HttpResponse.json(authenticationRequired, { status: 401 })),
 );
+const observedAdminQueries: AdminCourseQuery[] = [];
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
 afterEach(() => {
   focusManager.setFocused(undefined);
+  observedAdminQueries.length = 0;
   server.resetHandlers();
 });
 
@@ -51,6 +58,7 @@ function createTestRouter(
   href: string,
   cachedSession: AuthenticatedUser | null,
   locale: Locale = 'uk',
+  adminCourses: readonly AdminCourse[] = [],
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -62,11 +70,34 @@ function createTestRouter(
     listPublished: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
   };
+  const adminRepository: AdminCourseRepository = {
+    list: async (query) => {
+      observedAdminQueries.push(query);
+      const filtered =
+        query.status === undefined
+          ? adminCourses
+          : adminCourses.filter((course) => course.status === query.status);
+      return {
+        ok: true,
+        value: {
+          items: filtered.slice(query.offset, query.offset + query.limit),
+          pagination: { limit: query.limit, offset: query.offset, total: filtered.length },
+        },
+      };
+    },
+    load: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+    listInstructors: async () => ({ ok: true, value: [] }),
+    create: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    save: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    transition: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    delete: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  };
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [href] }),
     context: {
       queryClient,
+      admin: createAdminQueries(createAuthoring(adminRepository)),
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
     },
@@ -164,7 +195,32 @@ test.each(['instructor', 'admin'] satisfies Role[])(
   },
 );
 
-test('G40 keeps the /admin shell empty until the later phase', async () => {
+test('P16 renders an owner-scoped course row through the guarded memory route', async () => {
+  const instructor = user('instructor');
+  answerWith(instructor);
+  const course: AdminCourse = {
+    id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
+    slug: 'owned-course',
+    title: 'Власний курс',
+    status: 'published',
+    instructorId: instructor.id,
+    updatedAt: '2026-09-05T10:15:30.000000Z',
+  };
+  const router = createTestRouter('/admin?status=published', instructor, 'uk', [course]);
+
+  await router.load();
+  renderRouter(router);
+
+  const table = screen.getByRole('table', { name: 'Курси' });
+  expect(table).toBeTruthy();
+  expect(within(table).getByRole('link', { name: 'Власний курс' }).getAttribute('href')).toBe(
+    '/admin/courses/10000000-0000-4000-8000-000000000001',
+  );
+  expect(within(table).getByText('Опубліковано')).toBeTruthy();
+  expect(observedAdminQueries).toEqual([{ status: 'published', limit: 20, offset: 0 }]);
+});
+
+test('B02 renders the admin list empty state without weakening the shell guard', async () => {
   const admin = user('admin');
   answerWith(admin);
   const router = createTestRouter('/admin', admin);
@@ -172,13 +228,48 @@ test('G40 keeps the /admin shell empty until the later phase', async () => {
   await router.load();
   renderRouter(router);
 
-  const main = screen.getByRole('main');
-  expect(main.textContent).toBe(
-    'АдмініструванняКерування курсами з’явиться в наступній фазі.Перейти до каталогу',
-  );
-  expect(main.querySelector('table')).toBeNull();
-  expect(main.querySelector('ul, ol')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Курсів ще немає' })).toBeTruthy();
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.getByRole('navigation', { name: 'Сторінки курсів' })).toBeTruthy();
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
 });
+
+test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const href = '/admin?status=nonsense&page=abc&x=1';
+  const router = createTestRouter(href, admin);
+
+  await router.load();
+  renderRouter(router);
+
+  expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
+  expect(router.state.location.href).toBe(href);
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+});
+
+test.each([
+  { role: null, expected: '/login?returnTo=%2Fadmin%3Fstatus%3Dnonsense%26page%3Dabc' },
+  { role: 'student', expected: '/admin?status=nonsense&page=abc' },
+] satisfies ReadonlyArray<{ role: Role | null; expected: string }>)(
+  'R34 keeps the shell refusal for the $role role with unusable search',
+  async ({ role, expected }) => {
+    const signedIn = role === null ? null : user(role);
+    answerWith(signedIn);
+    const router = createTestRouter('/admin?status=nonsense&page=abc', signedIn);
+
+    await router.load();
+    if (role !== null) {
+      renderRouter(router);
+      expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeTruthy();
+    }
+
+    expect(router.state.location.href).toBe(expected);
+    expect(observedAdminQueries).toEqual([]);
+  },
+);
 
 test.each([
   ['/learn/go/intro?lesson=3', null, '/login?returnTo=%2Flearn%2Fgo%2Fintro%3Flesson%3D3'],

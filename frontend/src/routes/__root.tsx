@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
+import type { AdminDependencies } from '../app/composition/admin';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { sessionQueryKey } from '../app/composition/identity-queries';
@@ -18,6 +19,7 @@ import { resolveRootIdentity, type RootIdentityContext } from '../app/compositio
 import '../app/styles/main.css';
 
 type RootRouteContext = RootIdentityContext & {
+  admin: AdminDependencies;
   catalog: ReturnType<typeof createCatalogDependencies>;
 };
 
