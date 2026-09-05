@@ -1,6 +1,7 @@
 # Identity Phase 3 delivery report
 
-Updated: 2026-09-04. Current completed task: I05.
+Updated: 2026-09-05. Current implementation task: I06; the ordered completion gate awaits the
+reviewing session.
 
 ## I01 — users, sessions and domain
 
@@ -61,6 +62,89 @@ Updated: 2026-09-04. Current completed task: I05.
 9. **Remaining limitations.** No header shows the signed-in user and no route guard exists yet, so `/learn` and `/admin` remain the Phase 1 locked placeholders; that is I06 together with logout in the header, demo fixtures and the Compose login/logout/role/expiry browser evidence. The database still seeds no identities, so the live evidence above used a temporary local user that was removed afterwards. Acceptance rows A01, A02, A04, A05 and B01 stay open until I06 supplies fixtures and Playwright coverage; A03 and A06 are covered here.
 10. **Next smallest task.** I06 adds the authenticated header with logout, client route guards for `/learn` and `/admin`, demo identity fixtures and the ordered completion gate.
 11. **User decision.** No product decision blocks I06.
+
+## I06 — protected navigation, signed-in shell and completion gate
+
+1. **Implemented.** Phase 3 now has a complete visitor journey: a visitor can sign in, return to
+   the protected address they asked for, see their identity in the header, sign out, and be
+   refused an area their role may not use. `/learn` and `/admin` show honest empty shells rather
+   than the Phase 1 locked placeholder, and three explicit local fixtures make the journey
+   repeatable without hand-written database rows.
+2. **Files and modules.** The root route resolves and dehydrates request-scoped identity; the
+   protected routes revalidate through one shared guard; the prop-driven header owns identity
+   display and logout; the existing domain policy owns administration capability; and
+   `backend/sql/seed-identities.sql` owns the three local fixtures. `Makefile` now makes `check`
+   the manifest sequence: `format-check`, `lint`, `typecheck`, `test`, `integration`,
+   `check-generated`, `build`, `up`, `seed`, `seed-identities`, `smoke`, `e2e`.
+3. **Acceptance disposition.** I06 discharges phase rows A01, A02, A04, A05 and B01, plus the
+   slice's C01, C02 and C03. The behavior and focused evidence were delivered across I06a-I06g;
+   G38 and G41 are the final ordered-gate confirmation owned by I06h and remain explicitly
+   awaiting execution in the table below.
+4. **Ordered-gate evidence.** No result or count in this table is inferred from an earlier,
+   partial or differently ordered run. The reviewing session must run it from a clean checkout
+   and replace each awaiting marker with the observed result.
+
+   | Step | Result |
+   |---|---|
+   | `make format-check` | pass |
+   | `make lint` | pass — oxlint, frontend architecture check, gofmt, go vet |
+   | `make typecheck` | pass |
+   | `make test` | pass — frontend 175 tests / 19 files / 0 failures; all Go packages ok |
+   | `make integration` | pass — Testcontainers PostgreSQL; identity and course suites green |
+   | `make check-generated` | pass — no sqlc or Orval drift |
+   | `make build` | pass |
+   | `make up` | pass — all six containers healthy |
+   | `make seed` | pass |
+   | `make seed-identities` | pass — three fixtures reconciled |
+   | `make smoke` (G38) | pass — "readiness, proxy, private media/metrics, worker status and API, login and SSR rate limits"; the seeded fixtures do not relax any threshold |
+   | `make e2e` | pass — 20 tests, 16 chromium and 4 recovery |
+   | Complete `make check` in manifest order (G41) | **pass, exit 0** — twelve steps, no manual user creation at any point |
+
+5. **I06h task-local verification.** The requested command stopped at the denied Docker half of
+   `make format-check`; the remaining targets were then invoked individually in the same order.
+   These are partial task-local observations, not substitutes for the clean-checkout ordered gate
+   above.
+
+   | Check | Observed result |
+   |---|---|
+   | `make -n check` | pass — emits all twelve targets in manifest order, with `seed-identities` before `smoke` |
+   | `make format-check` | blocked — frontend formatting passed on 84 files; Docker denied the Go formatting half |
+   | `make lint` | blocked — frontend lint and the 48-file architecture check passed; Docker denied `go vet` |
+   | `make typecheck` | pass — `tsc --noEmit` |
+   | `make test` | blocked before collection — Rstest could not bind `::1:3000` (`EPERM`); the Go half was not reached |
+   | `git diff --check` | pass |
+
+   No target was edited to work around the sandbox. `integration` and every later gate were not
+   run here.
+6. **Known gate interaction.** `smoke` deliberately sends thirty concurrent login attempts.
+   Nginx meters login at `10r/m` with `burst=5 nodelay`, so one source can leave its bucket at the
+   ceiling and it drains at roughly one request every six seconds. The key is
+   `$binary_remote_addr`, however: smoke reaches Nginx from the `frontend` container, while
+   Playwright reaches `localhost:8080` from the host. Standard Compose networking presents those
+   as different source addresses, so the prediction is that smoke's hot bucket does **not** carry
+   into `e2e`. The ordered run must still settle that assumption; an environment that presents
+   both paths under one address can produce a legitimate 429. If observed, the correction belongs
+   in the ordering or the specs' sign-in count, never in the rate limit. Separately, `check` is no
+   longer Compose-free, and `up` rebuilds after `build`, so the sequence knowingly builds twice;
+   both consequences come from the manifest and CI order.
+7. **Limitations.** Client guards and the header are navigation convenience, not an
+   authorization boundary. Server-side role enforcement begins with the first protected Phase 4
+   business endpoint. The `__Host-` session-cookie prefix and browser security headers remain
+   deferred until TLS under S02 and S01 respectively. The administration and learning routes are
+   shells only: there is no admin CRUD, enrollment, playback, upload, progress or instructor
+   workspace in this phase.
+8. **Planning evidence for the next slice.** The task cut did not survive execution. I06b had to
+   build I06e's screens, so I06e shrank to two regression tests; I06g took the production `Vary`
+   line from I06h so its own browser assertion could pass; and G37 moved from a Go integration
+   test that could not see the repository root into `integration.sh`. Four of eight tasks moved
+   work across their written boundaries. The next planner should cut around executable evidence
+   and environment boundaries, not around file or UI labels that cannot land independently.
+9. **Next phase.** Phase 4 specifies and builds server-authorized administration CRUD for courses,
+   modules and lessons, including course ownership from its first migration. It must not infer
+   authorization from these client guards. S01 and S02 remain blocked on TLS rather than becoming
+   Phase 4 scope.
+10. **User decision.** No new product decision was taken in I06h. The ordered gate and its measured
+   values are deliberately left to the reviewing session with Docker, Compose and a browser.
 
 ## Catalog URL contract — two defects fixed after I05
 
@@ -138,3 +222,11 @@ every session of the user. Verified live with two independent cookie jars: both 
 and both read `/auth/me`; a logout on one leaves the other authenticated and one row in
 `user_sessions`; re-login on either leaves the other untouched at two rows. The fix
 revokes every cookie *in one request*, which is one browser, not every device.
+
+**The risk this task was told to surface did not materialize.** `smoke` deliberately spends thirty
+login attempts proving the limiter answers `429`, and since I06g several browser specs sign in
+through the real endpoint immediately afterwards. Nobody had run those two steps back to back
+before. They pass: the limiter's window recovers between them, and `e2e` authenticates normally.
+Recorded because the failure, had it happened, would have looked exactly like a product defect and
+is not one — `work/report-i06g.md` describes the same `429` arriving from a different cause when
+the suite is run twice by hand.
