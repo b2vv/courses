@@ -1,6 +1,6 @@
-export type Result<T> =
+export type Result<T, E = CatalogError> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: CatalogError };
+  | { readonly ok: false; readonly error: E };
 export type CatalogErrorCode =
   | 'invalid_query'
   | 'invalid_slug'
@@ -35,6 +35,222 @@ export type CoursePage = {
   readonly items: readonly PublishedCourse[];
   readonly pagination: { readonly limit: number; readonly offset: number; readonly total: number };
 };
+
+declare const entityIdBrand: unique symbol;
+type BrandedId<Kind extends string> = string & { readonly [entityIdBrand]: Kind };
+
+export type CourseId = BrandedId<'course'>;
+export type ModuleId = BrandedId<'module'>;
+export type LessonId = BrandedId<'lesson'>;
+export type AuthoringErrorCode =
+  | 'invalid_request'
+  | 'authentication_required'
+  | 'origin_forbidden'
+  | 'forbidden'
+  | 'course_forbidden'
+  | 'slug_taken'
+  | 'slug_immutable'
+  | 'invalid_owner'
+  | 'invalid_status_transition'
+  | 'course_not_deletable'
+  | 'course_modified'
+  | 'course_not_found'
+  | 'dependency_unavailable'
+  | 'invalid_response'
+  | 'request_timeout'
+  | 'request_cancelled';
+export type AuthoringError = { readonly code: AuthoringErrorCode };
+export type AuthoringResult<T> = Result<T, AuthoringError>;
+export type AdminCourse = {
+  readonly id: CourseId;
+  readonly slug: string;
+  readonly title: string;
+  readonly status: CourseStatus;
+  readonly instructorId: string;
+  readonly updatedAt: string;
+};
+export type AdminCourseQuery = {
+  readonly limit: number;
+  readonly offset: number;
+  readonly status?: CourseStatus;
+};
+export type AdminCoursePage = {
+  readonly items: readonly AdminCourse[];
+  readonly pagination: { readonly limit: number; readonly offset: number; readonly total: number };
+};
+export type InstructorOption = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly role: 'instructor' | 'admin';
+};
+export type AdminCourseDraft = {
+  readonly slug: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly description: string;
+  readonly instructorId?: string;
+};
+export type AuthoringLesson = {
+  readonly id: LessonId;
+  readonly title: string;
+  readonly description: string;
+};
+export type AuthoringModule = {
+  readonly id: ModuleId;
+  readonly title: string;
+  readonly lessons: readonly AuthoringLesson[];
+};
+export type CourseTreeEdit = {
+  readonly slug: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly description: string;
+  readonly instructorId: string;
+  readonly modules: readonly AuthoringModule[];
+};
+export type CourseTree = CourseTreeEdit & {
+  readonly id: CourseId;
+  readonly status: CourseStatus;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly publishedAt: string | null;
+};
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const adminTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.(\d{6})(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** The only branding escape hatch; call it only after validating an external UUID. */
+export function asBrandedId<Kind extends 'course' | 'module' | 'lesson'>(
+  value: string,
+  _kind: Kind,
+): BrandedId<Kind> {
+  return value as BrandedId<Kind>;
+}
+
+export function newModuleId(): ModuleId {
+  return asBrandedId(crypto.randomUUID(), 'module');
+}
+
+export function newLessonId(): LessonId {
+  return asBrandedId(crypto.randomUUID(), 'lesson');
+}
+
+export function validEntityId(value: string): boolean {
+  return uuidPattern.test(value) && value !== '00000000-0000-0000-0000-000000000000';
+}
+
+export function validAdminTimestamp(value: string): boolean {
+  return adminTimestampPattern.test(value) && Number.isFinite(Date.parse(value));
+}
+
+function timestampMicros(value: string): bigint | null {
+  const match = adminTimestampPattern.exec(value);
+  const millis = Date.parse(value);
+  if (match?.[1] === undefined || !Number.isFinite(millis)) return null;
+  return BigInt(millis) * 1000n + BigInt(match[1].slice(3));
+}
+
+function validText(value: string, maximum: number, optional = false): boolean {
+  const length = [...value].length;
+  return (
+    !value.includes('\u0000') &&
+    length <= maximum &&
+    (optional || (length > 0 && value.trim().length > 0))
+  );
+}
+
+export function validCourseDraft(input: AdminCourseDraft): boolean {
+  return (
+    validSlug(input.slug) &&
+    validText(input.title, 200) &&
+    validText(input.summary, 500) &&
+    validText(input.description, 20000) &&
+    (input.instructorId === undefined || validEntityId(input.instructorId))
+  );
+}
+
+export function validCourseTreeEdit(input: CourseTreeEdit): boolean {
+  if (!validCourseDraft(input) || !validEntityId(input.instructorId) || input.modules.length > 40)
+    return false;
+  const ids = new Set<string>();
+  let lessonCount = 0;
+  for (const module of input.modules) {
+    if (!validEntityId(module.id) || ids.has(module.id) || !validText(module.title, 200))
+      return false;
+    ids.add(module.id);
+    lessonCount += module.lessons.length;
+    if (lessonCount > 120) return false;
+    for (const lesson of module.lessons) {
+      if (
+        !validEntityId(lesson.id) ||
+        ids.has(lesson.id) ||
+        !validText(lesson.title, 200) ||
+        !validText(lesson.description, 1000, true)
+      )
+        return false;
+      ids.add(lesson.id);
+    }
+  }
+  return true;
+}
+
+export function validCourseTree(input: CourseTree): boolean {
+  if (
+    !validEntityId(input.id) ||
+    !validCourseTreeEdit(input) ||
+    !validAdminTimestamp(input.createdAt) ||
+    !validAdminTimestamp(input.updatedAt)
+  )
+    return false;
+  const createdAt = timestampMicros(input.createdAt);
+  const updatedAt = timestampMicros(input.updatedAt);
+  if (createdAt === null || updatedAt === null) return false;
+  if (updatedAt < createdAt || (input.status === 'draft' && input.publishedAt !== null))
+    return false;
+  if (input.status === 'published' && input.publishedAt === null) return false;
+  if (input.publishedAt === null) return true;
+  if (!validAdminTimestamp(input.publishedAt)) return false;
+  const publishedAt = timestampMicros(input.publishedAt);
+  if (publishedAt === null) return false;
+  return publishedAt >= createdAt && publishedAt <= updatedAt;
+}
+
+export function validSlugChange(
+  currentSlug: string,
+  publishedAt: string | null,
+  proposedSlug: string,
+): boolean {
+  return currentSlug === proposedSlug || publishedAt === null;
+}
+
+export function validTransition(from: CourseStatus, to: CourseStatus): boolean {
+  return (
+    (from === 'draft' && to === 'published') ||
+    (from === 'published' && to === 'archived') ||
+    (from === 'archived' && to === 'published')
+  );
+}
+
+export function makeAdminCourseQuery(
+  input: Partial<AdminCourseQuery>,
+): AuthoringResult<AdminCourseQuery> {
+  const limit = input.limit ?? 20;
+  const offset = input.offset ?? 0;
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 50 ||
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset > 10000 ||
+    (input.status !== undefined && !['draft', 'published', 'archived'].includes(input.status))
+  )
+    return { ok: false, error: { code: 'invalid_request' } };
+  return {
+    ok: true,
+    value: { limit, offset, ...(input.status === undefined ? {} : { status: input.status }) },
+  };
+}
 
 export function validSlug(slug: string): boolean {
   return slug.length <= 120 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);

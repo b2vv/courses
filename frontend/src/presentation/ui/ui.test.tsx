@@ -169,9 +169,9 @@ describe('accessible UI primitives', () => {
     expect(within(pages).getByRole('button', { name: 'Previous' })).toBeTruthy();
     expect(within(pages).getByRole('button', { name: 'Next' })).toBeTruthy();
     expect(pages.textContent).toContain('Page 2 of 3');
-    expect(
-      screen.getByRole('navigation', { name: 'Empty result pages' }).textContent,
-    ).toContain('No pages');
+    expect(screen.getByRole('navigation', { name: 'Empty result pages' }).textContent).toContain(
+      'No pages',
+    );
     expect(screen.getByRole('table', { name: 'Courses' }).textContent).toContain('No records yet');
     expect(screen.getByText('Loading courses')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Try again' }).getAttribute('href')).toBe('/courses');

@@ -13,10 +13,7 @@ export function EmptyState({ title, children }: StateProps) {
 }
 
 type ErrorStateProps = StateProps &
-  (
-    | { retryHref: string; retryLabel: string }
-    | { retryHref?: undefined; retryLabel?: undefined }
-  );
+  ({ retryHref: string; retryLabel: string } | { retryHref?: undefined; retryLabel?: undefined });
 
 export function ErrorState({ title, children, retryHref, retryLabel }: ErrorStateProps) {
   return (

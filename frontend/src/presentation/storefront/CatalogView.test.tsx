@@ -72,9 +72,7 @@ describe('catalog presentation', () => {
     const programHeading = screen.getByRole('heading', { name: 'Програма курсу' });
     const program = programHeading.closest('section');
     if (!program) throw new Error('The program heading must label a section');
-    expect(program.textContent).toContain(
-      'Межі модулівПортиАдаптериПеревіркаКонтрактний тест',
-    );
+    expect(program.textContent).toContain('Межі модулівПортиАдаптериПеревіркаКонтрактний тест');
     expect(within(program).getAllByRole('list')).toHaveLength(3);
     expect(within(program).queryByRole('link')).toBeNull();
   });

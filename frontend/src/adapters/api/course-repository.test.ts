@@ -44,9 +44,7 @@ test('validates transport data and maps it to the published domain model', async
   }
 });
 test('maps the ordered title-only program on a published course detail', async () => {
-  server.use(
-    http.get(`${apiOrigin()}/api/v1/courses/go-basics`, () => HttpResponse.json(detail)),
-  );
+  server.use(http.get(`${apiOrigin()}/api/v1/courses/go-basics`, () => HttpResponse.json(detail)));
   const result = await createApiCourseRepository().getPublished('go-basics');
   expect(result).toEqual({
     ok: true,
