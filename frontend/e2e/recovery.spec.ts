@@ -12,6 +12,27 @@ async function compose(...args: string[]) {
 }
 test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
+test('static home remains available with an anonymous header while the API is stopped', async ({
+  page,
+}) => {
+  try {
+    await compose('stop', 'api');
+    const response = await page.goto('/');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Навички, які');
+    await expect(page.getByRole('link', { name: 'Увійти' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Вийти' })).toHaveCount(0);
+    await expect(page.getByText(/Студентка Курсу|Викладач Курсу|Адміністратор Курсу/)).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole('heading', { name: 'Не вдалося відкрити сторінку' })).toHaveCount(
+      0,
+    );
+  } finally {
+    await compose('up', '-d', '--wait', 'api');
+  }
+});
+
 test('SSR API failure is visible and retry preserves search after recovery', async ({ page }) => {
   const url = '/courses?q=Go&sort=title&limit=1&offset=0';
   try {

@@ -21,6 +21,7 @@ const server = serve({
     try {
       const response = await entry.fetch(request);
       response.headers.set('Cache-Control', 'private, no-store');
+      response.headers.append('Vary', 'Cookie');
       process.stdout.write(
         JSON.stringify({
           level: 'info',
