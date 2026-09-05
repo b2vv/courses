@@ -11,6 +11,7 @@ export const Route = createFileRoute('/admin')({
   beforeLoad: async ({ context, location }) => {
     const user = await requireIdentity(context, location);
     if (!canAccessAdministration(user)) throw notFound();
+    return { adminActor: user };
   },
   component: AdminRoute,
   pendingComponent: ProtectedRoutePending,

@@ -112,3 +112,13 @@ restore their own courses. Traps recorded: concurrent appends to gates.md lost t
 defense section (reconstructed from the agent report — appenders must never rewrite the
 file); one non-blocking nit open for implementation: §2's CourseEditorView row omits
 "error state" though R38 owns it. Next: tasks to work/tasks.md, Codex on A01.
+
+## 2026-09-05 — A11 review round
+
+Codex could not run Rstest; first real run happened at review. Six failures, three
+causes, all fixed at review: (1) four editor tests queried 'Course title' while the
+en bundle renders 'Title' (uk 'Назва') — tests aligned to the bundles; (2) the locale
+alignment test compared raw keys and broke on Ukrainian plural forms _few/_many —
+now compares plural-suffix-normalized key sets; (3) R35 promised a visible alert AND
+an immediate redirect — mutually exclusive by timing; the row is amended to the
+redirect-only observable, consistent with identity E10's established behavior.

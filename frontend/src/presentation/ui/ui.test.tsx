@@ -50,7 +50,7 @@ describe('accessible UI primitives', () => {
   it('names a modal, closes it with Escape, and restores focus to its trigger', async () => {
     const user = userEvent.setup();
     render(
-      <Dialog triggerLabel="Редагувати назву" title="Назва курсу">
+      <Dialog triggerLabel="Редагувати назву" title="Назва курсу" closeLabel="Закрити">
         <TextField label="Нова назва" />
       </Dialog>,
     );

@@ -6,10 +6,11 @@ import { Button } from './controls';
 type DialogProps = {
   triggerLabel: string;
   title: string;
+  closeLabel: string;
   children: ReactNode;
 };
 
-export function Dialog({ triggerLabel, title, children }: DialogProps) {
+export function Dialog({ triggerLabel, title, closeLabel, children }: DialogProps) {
   return (
     <Aria.DialogTrigger>
       <Button variant="secondary">{triggerLabel}</Button>
@@ -22,7 +23,7 @@ export function Dialog({ triggerLabel, title, children }: DialogProps) {
                 {children}
                 <div className="ui-dialog-actions">
                   <Button variant="secondary" onPress={close}>
-                    Закрити
+                    {closeLabel}
                   </Button>
                 </div>
               </>

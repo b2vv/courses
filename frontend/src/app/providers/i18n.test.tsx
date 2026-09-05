@@ -7,10 +7,16 @@ import { uk } from './locales/uk';
 import { LanguageSwitcher } from '../../presentation/LanguageSwitcher';
 import { HomeView } from '../../presentation/storefront/HomeView';
 
+const withoutPluralForms = (keys: string[]) => [
+  ...new Set(keys.map((key) => key.replace(/_(?:one|few|many|other)$/, ''))),
+];
+
 test('keeps shared UI and administration keys aligned across locale bundles', () => {
-  expect(Object.keys(uk.translation.ui)).toEqual(Object.keys(en.translation.ui));
-  expect(Object.keys(uk.translation.administration)).toEqual(
-    Object.keys(en.translation.administration),
+  expect(withoutPluralForms(Object.keys(uk.translation.ui))).toEqual(
+    withoutPluralForms(Object.keys(en.translation.ui)),
+  );
+  expect(withoutPluralForms(Object.keys(uk.translation.administration))).toEqual(
+    withoutPluralForms(Object.keys(en.translation.administration)),
   );
   const adminListKeys = [
     'title',

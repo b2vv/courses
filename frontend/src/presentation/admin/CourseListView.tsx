@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { ReactNode } from 'react';
 import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
 import type { AdminListState } from '../../app/router/admin-search';
 import { EmptyState, ErrorState, Link, Pagination, Skeleton, Table, Tabs } from '../ui';
@@ -8,9 +9,16 @@ type CourseListViewProps = {
   state: AdminListState;
   onStatusChange: (status: CourseStatus | undefined) => void;
   onPageChange: (page: number) => void;
+  createAction?: ReactNode;
 };
 
-export function CourseListView({ page, state, onStatusChange, onPageChange }: CourseListViewProps) {
+export function CourseListView({
+  page,
+  state,
+  onStatusChange,
+  onPageChange,
+  createAction,
+}: CourseListViewProps) {
   const { t, i18n } = useTranslation();
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
@@ -82,9 +90,12 @@ export function CourseListView({ page, state, onStatusChange, onPageChange }: Co
           <p className="eyebrow">{t('administration.courses')}</p>
           <h1>{t('administration.title')}</h1>
         </div>
-        <span className="admin-list-count">
-          {t('administration.courseCount', { count: page.pagination.total })}
-        </span>
+        <div className="admin-list-actions">
+          <span className="admin-list-count">
+            {t('administration.courseCount', { count: page.pagination.total })}
+          </span>
+          {createAction}
+        </div>
       </div>
       <Tabs
         label={t('administration.statusTabs')}

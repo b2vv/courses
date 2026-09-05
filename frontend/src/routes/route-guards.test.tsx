@@ -16,7 +16,12 @@ import { createSessionQueries, sessionQueryKey } from '../app/composition/identi
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
 import { asBrandedId } from '../domain/course/course';
-import type { AdminCourse, AdminCourseQuery } from '../domain/course/course';
+import type {
+  AdminCourse,
+  AdminCourseQuery,
+  CourseTree,
+  CourseTreeEdit,
+} from '../domain/course/course';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
@@ -59,6 +64,7 @@ function createTestRouter(
   cachedSession: AuthenticatedUser | null,
   locale: Locale = 'uk',
   adminCourses: readonly AdminCourse[] = [],
+  adminOverrides: Partial<AdminCourseRepository> = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -91,6 +97,7 @@ function createTestRouter(
     save: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     transition: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     delete: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    ...adminOverrides,
   };
   const router = createRouter({
     routeTree,
@@ -107,6 +114,22 @@ function createTestRouter(
   });
   queryClient.setQueryData(sessionQueryKey, cachedSession);
   return router;
+}
+
+function adminTree(owner: AuthenticatedUser): CourseTree {
+  return {
+    id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
+    slug: 'owned-course',
+    title: 'Власний курс',
+    summary: 'Практичний курс',
+    description: 'Опис курсу',
+    status: 'draft',
+    instructorId: owner.id,
+    createdAt: '2026-09-05T10:15:30.000000Z',
+    updatedAt: '2026-09-05T10:15:30.000001Z',
+    publishedAt: null,
+    modules: [],
+  };
 }
 
 function renderRouter(router: ReturnType<typeof createTestRouter>) {
@@ -161,6 +184,103 @@ test.each(['student', 'instructor', 'admin'] satisfies Role[])(
   },
 );
 
+test('R31 keeps the instructor owner read-only without mounting the owner query', async () => {
+  const instructor = user('instructor');
+  const course = adminTree(instructor);
+  let ownerRequests = 0;
+  answerWith(instructor);
+  const router = createTestRouter(`/admin/courses/${course.id}`, instructor, 'uk', [], {
+    load: async () => ({ ok: true, value: course }),
+    listInstructors: async () => {
+      ownerRequests += 1;
+      return { ok: true, value: [] };
+    },
+  });
+
+  await router.load();
+  renderRouter(router);
+
+  expect(await screen.findByRole('heading', { name: 'Власний курс' })).toBeTruthy();
+  expect(screen.getAllByText('instructor').length).toBeGreaterThan(0);
+  expect(screen.queryByRole('button', { name: /Власник/ })).toBeNull();
+  expect(ownerRequests).toBe(0);
+});
+
+test('R31 mounts the owner picker query for an administrator', async () => {
+  const admin = user('admin');
+  const course = adminTree(admin);
+  let ownerRequests = 0;
+  answerWith(admin);
+  const router = createTestRouter(`/admin/courses/${course.id}`, admin, 'uk', [], {
+    load: async () => ({ ok: true, value: course }),
+    listInstructors: async () => {
+      ownerRequests += 1;
+      return {
+        ok: true,
+        value: [{ id: admin.id, displayName: admin.displayName, role: 'admin' }],
+      };
+    },
+  });
+
+  await router.load();
+  renderRouter(router);
+
+  expect(await screen.findByRole('button', { name: /Власник/ })).toBeTruthy();
+  expect(ownerRequests).toBe(1);
+});
+
+test('R32 degrades an unavailable admin owner picker without blocking save', async () => {
+  const admin = user('admin');
+  const owner = user('instructor');
+  const course = adminTree(owner);
+  let saves = 0;
+  answerWith(admin);
+  const router = createTestRouter(`/admin/courses/${course.id}`, admin, 'uk', [], {
+    load: async () => ({ ok: true, value: course }),
+    listInstructors: async () => ({
+      ok: false,
+      error: { code: 'dependency_unavailable' },
+    }),
+    save: async (_id, _updatedAt, edit: CourseTreeEdit) => {
+      saves += 1;
+      return {
+        ok: true,
+        value: { ...course, ...edit, updatedAt: '2026-09-05T10:15:30.000002Z' },
+      };
+    },
+  });
+
+  await router.load();
+  renderRouter(router);
+  expect(await screen.findByText(owner.id)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Власник/ })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Зберегти зміни' }));
+
+  await waitFor(() => expect(saves).toBe(1));
+});
+
+test('R35 returns to login with the editor address when the session ends mid-edit', async () => {
+  const admin = user('admin');
+  const course = adminTree(admin);
+  answerWith(admin);
+  const router = createTestRouter(`/admin/courses/${course.id}`, admin, 'uk', [], {
+    load: async () => ({ ok: true, value: course }),
+    listInstructors: async () => ({
+      ok: true,
+      value: [{ id: admin.id, displayName: admin.displayName, role: 'admin' }],
+    }),
+    save: async () => ({ ok: false, error: { code: 'authentication_required' } }),
+  });
+
+  await router.load();
+  renderRouter(router);
+  await userEvent.click(await screen.findByRole('button', { name: 'Зберегти зміни' }));
+
+  await waitFor(() =>
+    expect(router.state.location.href).toBe(`/login?returnTo=%2Fadmin%2Fcourses%2F${course.id}`),
+  );
+});
+
 test('G04 gives a student the same not-found answer for /admin as an unknown address', async () => {
   const student = user('student');
   answerWith(student);
@@ -191,6 +311,7 @@ test.each(['instructor', 'admin'] satisfies Role[])(
 
     expect(router.state.location.href).toBe('/admin');
     expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Створити курс' })).toBeTruthy();
     expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
   },
 );
