@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAdminUsers = `-- name: CountAdminUsers :one
+SELECT count(*)
+FROM users
+WHERE (
+    ($1::text = '' AND deleted_at IS NULL)
+    OR ($1::text = 'active' AND deleted_at IS NULL AND disabled_at IS NULL)
+    OR ($1::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
+    OR ($1::text = 'deleted' AND deleted_at IS NOT NULL)
+  )
+  AND (
+    email ILIKE '%' || $2::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || $2::text || '%' ESCAPE '!'
+  )
+`
+
+type CountAdminUsersParams struct {
+	Status        string
+	SearchPattern string
+}
+
+func (q *Queries) CountAdminUsers(ctx context.Context, arg CountAdminUsersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminUsers, arg.Status, arg.SearchPattern)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createIdentitySession = `-- name: CreateIdentitySession :one
 INSERT INTO user_sessions (id, user_id, token_digest, created_at, expires_at)
 VALUES (
@@ -88,6 +115,53 @@ func (q *Queries) DeleteIdentitySession(ctx context.Context, tokenDigest []byte)
 	return result.RowsAffected(), nil
 }
 
+const deleteIdentitySessionsForUser = `-- name: DeleteIdentitySessionsForUser :execrows
+DELETE FROM user_sessions
+WHERE user_id = $1::text::uuid
+`
+
+func (q *Queries) DeleteIdentitySessionsForUser(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteIdentitySessionsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getAdministrationUser = `-- name: GetAdministrationUser :one
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at, deleted_at
+FROM users
+WHERE id = $1::text::uuid
+  AND deleted_at IS NULL
+`
+
+type GetAdministrationUserRow struct {
+	ID          string
+	Email       string
+	DisplayName string
+	Role        string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DisabledAt  pgtype.Timestamptz
+	DeletedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) GetAdministrationUser(ctx context.Context, userID string) (GetAdministrationUserRow, error) {
+	row := q.db.QueryRow(ctx, getAdministrationUser, userID)
+	var i GetAdministrationUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisabledAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getIdentityCredential = `-- name: GetIdentityCredential :one
 SELECT id::text AS id, email, display_name, role, password_hash, created_at, updated_at, disabled_at
 FROM users
@@ -120,6 +194,75 @@ func (q *Queries) GetIdentityCredential(ctx context.Context, email string) (GetI
 		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const listAdminUsers = `-- name: ListAdminUsers :many
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at, deleted_at
+FROM users
+WHERE (
+    ($1::text = '' AND deleted_at IS NULL)
+    OR ($1::text = 'active' AND deleted_at IS NULL AND disabled_at IS NULL)
+    OR ($1::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
+    OR ($1::text = 'deleted' AND deleted_at IS NOT NULL)
+  )
+  AND (
+    email ILIKE '%' || $2::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || $2::text || '%' ESCAPE '!'
+  )
+ORDER BY email COLLATE "C", id
+LIMIT $4::integer OFFSET $3::integer
+`
+
+type ListAdminUsersParams struct {
+	Status        string
+	SearchPattern string
+	PageOffset    int32
+	PageLimit     int32
+}
+
+type ListAdminUsersRow struct {
+	ID          string
+	Email       string
+	DisplayName string
+	Role        string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DisabledAt  pgtype.Timestamptz
+	DeletedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) ListAdminUsers(ctx context.Context, arg ListAdminUsersParams) ([]ListAdminUsersRow, error) {
+	rows, err := q.db.Query(ctx, listAdminUsers,
+		arg.Status,
+		arg.SearchPattern,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAdminUsersRow{}
+	for rows.Next() {
+		var i ListAdminUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.DisplayName,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DisabledAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInstructors = `-- name: ListInstructors :many
@@ -183,6 +326,59 @@ func (q *Queries) LockActiveIdentityUser(ctx context.Context, userID string) (st
 	return id, err
 }
 
+const lockAdmins = `-- name: LockAdmins :many
+SELECT id::text AS id, disabled_at
+FROM users
+WHERE role = 'admin' AND deleted_at IS NULL
+ORDER BY id
+FOR UPDATE
+`
+
+type LockAdminsRow struct {
+	ID         string
+	DisabledAt pgtype.Timestamptz
+}
+
+func (q *Queries) LockAdmins(ctx context.Context) ([]LockAdminsRow, error) {
+	rows, err := q.db.Query(ctx, lockAdmins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockAdminsRow{}
+	for rows.Next() {
+		var i LockAdminsRow
+		if err := rows.Scan(&i.ID, &i.DisabledAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockUserForStatus = `-- name: LockUserForStatus :one
+SELECT id::text AS id, disabled_at
+FROM users
+WHERE id = $1::text::uuid
+  AND deleted_at IS NULL
+FOR UPDATE
+`
+
+type LockUserForStatusRow struct {
+	ID         string
+	DisabledAt pgtype.Timestamptz
+}
+
+func (q *Queries) LockUserForStatus(ctx context.Context, userID string) (LockUserForStatusRow, error) {
+	row := q.db.QueryRow(ctx, lockUserForStatus, userID)
+	var i LockUserForStatusRow
+	err := row.Scan(&i.ID, &i.DisabledAt)
+	return i, err
+}
+
 const resolveIdentitySession = `-- name: ResolveIdentitySession :one
 SELECT
   users.id::text AS id,
@@ -228,4 +424,70 @@ func (q *Queries) ResolveIdentitySession(ctx context.Context, arg ResolveIdentit
 		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const setUserDisabledAt = `-- name: SetUserDisabledAt :execrows
+UPDATE users
+SET disabled_at = $1::timestamptz,
+    updated_at = $2::timestamptz
+WHERE id = $3::text::uuid
+  AND deleted_at IS NULL
+`
+
+type SetUserDisabledAtParams struct {
+	DisabledAt pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	UserID     string
+}
+
+func (q *Queries) SetUserDisabledAt(ctx context.Context, arg SetUserDisabledAtParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserDisabledAt, arg.DisabledAt, arg.UpdatedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserPasswordHash = `-- name: SetUserPasswordHash :execrows
+UPDATE users
+SET password_hash = $1::text,
+    updated_at = $2::timestamptz
+WHERE id = $3::text::uuid
+  AND deleted_at IS NULL
+`
+
+type SetUserPasswordHashParams struct {
+	PasswordHash string
+	UpdatedAt    pgtype.Timestamptz
+	UserID       string
+}
+
+func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserPasswordHash, arg.PasswordHash, arg.UpdatedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const softDeleteUser = `-- name: SoftDeleteUser :execrows
+UPDATE users
+SET deleted_at = $1::timestamptz,
+    disabled_at = COALESCE(disabled_at, $1::timestamptz),
+    updated_at = $1::timestamptz
+WHERE id = $2::text::uuid
+  AND deleted_at IS NULL
+`
+
+type SoftDeleteUserParams struct {
+	DeletedAt pgtype.Timestamptz
+	UserID    string
+}
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteUser, arg.DeletedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

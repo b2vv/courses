@@ -637,6 +637,10 @@ type passwordVerifier struct {
 	dummyCalls  int
 }
 
+func (verifier *passwordVerifier) Hash(string) (string, error) {
+	return "", verifier.err
+}
+
 func (verifier *passwordVerifier) Verify(_ string, _ string) (bool, error) {
 	verifier.verifyCalls++
 	return verifier.matched, verifier.err

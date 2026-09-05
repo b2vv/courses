@@ -14,6 +14,9 @@ import (
 
 	coursepostgres "courses/internal/course/adapters/postgres"
 	"courses/internal/course/domain"
+	passwords "courses/internal/identity/adapters/argon2id"
+	identitypostgres "courses/internal/identity/adapters/postgres"
+	identitydomain "courses/internal/identity/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -96,6 +99,31 @@ func TestAuthoringRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("R19 foreign module and lesson ids roll back", harness.testForeignNodeIDs)
 	t.Run("R26 cancellation rolls back a partial tree write", harness.testCancelledSave)
 	t.Run("owner eligibility is checked in create and save transactions", harness.testOwnerEligibility)
+	t.Run("R23 blocking an owner freezes their course", harness.testBlockedOwnerFreeze)
+}
+
+func (h *authoringHarness) testBlockedOwnerFreeze(t *testing.T) {
+	h.reset(t)
+	stored := h.createCourse(t, "blocked-owner-freeze", authoringInstructorID)
+	identities := identitypostgres.NewRepository(h.pool, passwords.NewVerifier())
+	if err := identities.SetStatus(h.ctx, authoringInstructorID, identitydomain.AccountBlocked, time.Now().UTC().Truncate(time.Microsecond), func(identitydomain.User, int) error {
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	edit := stored
+	edit.Title = "Blocked owner edit"
+	if _, err := h.repository.Save(h.ctx, adminActor(), edit, stored.UpdatedAt, stored.UpdatedAt.Add(time.Second)); !errors.Is(err, domain.ErrInvalidOwner) {
+		t.Fatalf("save with blocked owner: %v", err)
+	}
+	after, err := h.repository.Load(h.ctx, stored.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Title != stored.Title || !after.UpdatedAt.Equal(stored.UpdatedAt) {
+		t.Fatalf("blocked-owner save changed course: before=%+v after=%+v", stored, after)
+	}
 }
 
 func (h *authoringHarness) testTreeSaveAndDeleteMissing(t *testing.T) {

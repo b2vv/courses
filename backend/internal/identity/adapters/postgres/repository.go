@@ -21,22 +21,23 @@ import (
 
 const rotationAttempts = 3
 
-type PasswordVerifier interface {
+type Passwords interface {
 	Verify(string, string) (bool, error)
 	VerifyDummy(string) error
+	Hash(string) (string, error)
 }
 
 type Repository struct {
 	pool      *pgxpool.Pool
-	passwords PasswordVerifier
+	passwords Passwords
 	random    io.Reader
 }
 
-func NewRepository(pool *pgxpool.Pool, passwords PasswordVerifier) *Repository {
+func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
 	return newRepository(pool, passwords, rand.Reader)
 }
 
-func newRepository(pool *pgxpool.Pool, passwords PasswordVerifier, random io.Reader) *Repository {
+func newRepository(pool *pgxpool.Pool, passwords Passwords, random io.Reader) *Repository {
 	return &Repository{pool: pool, passwords: passwords, random: random}
 }
 

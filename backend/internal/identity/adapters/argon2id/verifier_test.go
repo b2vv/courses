@@ -3,11 +3,33 @@ package argon2id_test
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 
 	passwords "courses/internal/identity/adapters/argon2id"
 	"golang.org/x/crypto/argon2"
 )
+
+func TestHashProducesSupportedRandomSaltCredentials(t *testing.T) {
+	t.Parallel()
+
+	verifier := passwords.NewVerifier()
+	first, err := verifier.Hash("new password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := verifier.Hash("new password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || !strings.HasPrefix(first, "$argon2id$v=19$m=65536,t=3,p=2$") {
+		t.Fatalf("hashes first=%q second=%q", first, second)
+	}
+	matched, err := verifier.Verify(first, "new password")
+	if err != nil || !matched {
+		t.Fatalf("matched=%v err=%v", matched, err)
+	}
+}
 
 func TestVerifierAcceptsOnlySupportedArgon2idEncoding(t *testing.T) {
 	t.Parallel()

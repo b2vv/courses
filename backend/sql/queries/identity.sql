@@ -53,3 +53,79 @@ WHERE disabled_at IS NULL
   AND role IN ('instructor', 'admin')
 ORDER BY display_name COLLATE "C", id
 LIMIT 200;
+
+-- name: ListAdminUsers :many
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at, deleted_at
+FROM users
+WHERE (
+    (sqlc.arg(status)::text = '' AND deleted_at IS NULL)
+    OR (sqlc.arg(status)::text = 'active' AND deleted_at IS NULL AND disabled_at IS NULL)
+    OR (sqlc.arg(status)::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
+    OR (sqlc.arg(status)::text = 'deleted' AND deleted_at IS NOT NULL)
+  )
+  AND (
+    email ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
+  )
+ORDER BY email COLLATE "C", id
+LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
+
+-- name: CountAdminUsers :one
+SELECT count(*)
+FROM users
+WHERE (
+    (sqlc.arg(status)::text = '' AND deleted_at IS NULL)
+    OR (sqlc.arg(status)::text = 'active' AND deleted_at IS NULL AND disabled_at IS NULL)
+    OR (sqlc.arg(status)::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
+    OR (sqlc.arg(status)::text = 'deleted' AND deleted_at IS NOT NULL)
+  )
+  AND (
+    email ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
+  );
+
+-- name: GetAdministrationUser :one
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at, deleted_at
+FROM users
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: LockAdmins :many
+SELECT id::text AS id, disabled_at
+FROM users
+WHERE role = 'admin' AND deleted_at IS NULL
+ORDER BY id
+FOR UPDATE;
+
+-- name: LockUserForStatus :one
+SELECT id::text AS id, disabled_at
+FROM users
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL
+FOR UPDATE;
+
+-- name: SetUserDisabledAt :execrows
+UPDATE users
+SET disabled_at = sqlc.narg(disabled_at)::timestamptz,
+    updated_at = sqlc.arg(updated_at)::timestamptz
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: SoftDeleteUser :execrows
+UPDATE users
+SET deleted_at = sqlc.arg(deleted_at)::timestamptz,
+    disabled_at = COALESCE(disabled_at, sqlc.arg(deleted_at)::timestamptz),
+    updated_at = sqlc.arg(deleted_at)::timestamptz
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: SetUserPasswordHash :execrows
+UPDATE users
+SET password_hash = sqlc.arg(password_hash)::text,
+    updated_at = sqlc.arg(updated_at)::timestamptz
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: DeleteIdentitySessionsForUser :execrows
+DELETE FROM user_sessions
+WHERE user_id = sqlc.arg(user_id)::text::uuid;

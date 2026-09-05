@@ -1,10 +1,12 @@
 package argon2id
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -49,6 +51,14 @@ func (verifier *Verifier) Verify(encoded, password string) (bool, error) {
 func (verifier *Verifier) VerifyDummy(password string) error {
 	_, err := verifier.Verify(verifier.dummyHash, password)
 	return err
+}
+
+func (verifier *Verifier) Hash(password string) (string, error) {
+	salt := make([]byte, saltLength)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return "", err
+	}
+	return encode(password, salt), nil
 }
 
 func encode(password string, salt []byte) string {
