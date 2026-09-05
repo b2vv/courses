@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed format format-check lint typecheck test integration build e2e smoke generate check-generated check
+.PHONY: env up down dev logs migrate seed seed-identities format format-check lint typecheck test integration build e2e smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -21,6 +21,8 @@ migrate: env
 	docker compose run --rm migrate
 seed: env
 	docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/sql/seed.sql
+seed-identities: env
+	docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/sql/seed-identities.sql
 format:
 	cd frontend && npm run format
 	$(GO_RUN) gofmt -w .

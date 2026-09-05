@@ -11,13 +11,18 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	passwords "courses/internal/identity/adapters/argon2id"
+	identityhttp "courses/internal/identity/adapters/http"
+	"courses/internal/identity/application"
 	"courses/internal/identity/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -57,6 +62,190 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	if _, err := provider.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
+	pool, err := pgxpool.New(ctx, connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	t.Run("identity seed is explicit, authoritative, repeatable, and concurrent", func(t *testing.T) {
+		backendRoot := filepath.Join("..", "..", "..", "..")
+		seed, err := os.ReadFile(filepath.Join(backendRoot, "sql", "seed-identities.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		courseSeed, err := os.ReadFile(filepath.Join(backendRoot, "sql", "seed.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		normalizedCourseSeed := strings.ToLower(strings.Join(strings.Fields(string(courseSeed)), " "))
+		if strings.Contains(normalizedCourseSeed, "insert into users") {
+			t.Fatal("the course seed must not insert identity fixtures")
+		}
+		if !strings.Contains(strings.ToUpper(string(seed)), "LOCK TABLE USERS IN SHARE ROW EXCLUSIVE MODE") {
+			t.Fatal("the identity seed must serialize concurrent fixture reconciliation")
+		}
+
+		repository := NewRepository(pool, passwords.NewVerifier())
+		config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		identity := application.NewIdentity(repository, repository, func() time.Time {
+			return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+		})
+		mux := http.NewServeMux()
+		identityhttp.NewHandler(identity, config).Register(mux)
+
+		type fixture struct {
+			id, email, displayName, password string
+			role                             domain.Role
+		}
+		fixtures := []fixture{
+			{"40000000-0000-4000-8000-000000000001", "student@courseforge.local", "Студентка Курсу", "courseforge-student-demo", domain.Student},
+			{"40000000-0000-4000-8000-000000000002", "instructor@courseforge.local", "Викладач Курсу", "courseforge-instructor-demo", domain.Instructor},
+			{"40000000-0000-4000-8000-000000000003", "admin@courseforge.local", "Адміністратор Курсу", "courseforge-admin-demo", domain.Admin},
+		}
+		defer func() {
+			if _, err := pool.Exec(context.Background(), `DELETE FROM users`); err != nil {
+				t.Errorf("clean identity seed: %v", err)
+			}
+		}()
+
+		login := func(email, password string) *httptest.ResponseRecorder {
+			body := fmt.Sprintf(`{"email":%q,"password":%q}`, email, password)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Origin", "http://localhost:8080")
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			return response
+		}
+		snapshot := func() string {
+			var value string
+			err := pool.QueryRow(ctx, `SELECT string_agg(id::text || '|' || email || '|' || display_name || '|' || role || '|' || password_hash || '|' || coalesce(disabled_at::text, ''), E'\n' ORDER BY id) FROM users`).Scan(&value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return value
+		}
+		assertFixtureSet := func() {
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM users`).Scan(&count); err != nil || count != len(fixtures) {
+				t.Fatalf("fixture count=%d err=%v", count, err)
+			}
+			for _, expected := range fixtures {
+				var email, displayName string
+				var role domain.Role
+				var disabled bool
+				err := pool.QueryRow(ctx, `SELECT email, display_name, role, disabled_at IS NOT NULL FROM users WHERE id=$1`, expected.id).Scan(&email, &displayName, &role, &disabled)
+				if err != nil || email != expected.email || displayName != expected.displayName || role != expected.role || disabled {
+					t.Fatalf("fixture %s: email=%q displayName=%q role=%q disabled=%v err=%v", expected.id, email, displayName, role, disabled, err)
+				}
+			}
+		}
+
+		if _, err := pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatal(err)
+		}
+		assertFixtureSet()
+		for _, expected := range fixtures {
+			response := login(expected.email, expected.password)
+			body := response.Body.String()
+			if response.Code != http.StatusOK || len(response.Result().Cookies()) == 0 || !strings.Contains(body, `"role":"`+string(expected.role)+`"`) || strings.Contains(body, "password") || strings.Contains(body, "token") {
+				t.Fatalf("login %s: status=%d cookies=%d body=%s", expected.email, response.Code, len(response.Result().Cookies()), body)
+			}
+		}
+
+		first := snapshot()
+		if _, err := pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatal(err)
+		}
+		if second := snapshot(); second != first {
+			t.Fatalf("repeat seed changed fixture fields:\nfirst:\n%s\nsecond:\n%s", first, second)
+		}
+
+		var studentHash string
+		if err := pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, fixtures[0].id).Scan(&studentHash); err != nil {
+			t.Fatal(err)
+		}
+		updatedPassword := "courseforge-student-updated"
+		updatedHash := encodePassword(updatedPassword, []byte("student-new-salt"))
+		updatedPasswordSeed := strings.Replace(string(seed), studentHash, updatedHash, 1)
+		if updatedPasswordSeed == string(seed) {
+			t.Fatal("student password hash was not found in the seed")
+		}
+		if _, err := pool.Exec(ctx, updatedPasswordSeed); err != nil {
+			t.Fatal(err)
+		}
+		if response := login(fixtures[0].email, fixtures[0].password); response.Code != http.StatusUnauthorized {
+			t.Fatalf("old password status=%d body=%s", response.Code, response.Body.String())
+		}
+		if response := login(fixtures[0].email, updatedPassword); response.Code != http.StatusOK {
+			t.Fatalf("updated password status=%d body=%s", response.Code, response.Body.String())
+		}
+
+		changedEmail := "student-updated@courseforge.local"
+		changedAddressSeed := strings.Replace(string(seed), fixtures[0].email, changedEmail, 1)
+		if changedAddressSeed == string(seed) {
+			t.Fatal("student email was not found in the seed")
+		}
+		if _, err := pool.Exec(ctx, changedAddressSeed); err != nil {
+			t.Fatal(err)
+		}
+		var storedEmail string
+		if err := pool.QueryRow(ctx, `SELECT email FROM users WHERE id=$1`, fixtures[0].id).Scan(&storedEmail); err != nil || storedEmail != changedEmail {
+			t.Fatalf("changed email=%q err=%v", storedEmail, err)
+		}
+		var count int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM users`).Scan(&count); err != nil || count != len(fixtures) {
+			t.Fatalf("changed-address fixture count=%d err=%v", count, err)
+		}
+
+		if _, err := pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE users SET updated_at=now(), disabled_at=now() WHERE id=$1`, fixtures[0].id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatal(err)
+		}
+		assertFixtureSet()
+		if response := login(fixtures[0].email, fixtures[0].password); response.Code != http.StatusOK {
+			t.Fatalf("re-enabled fixture status=%d body=%s", response.Code, response.Body.String())
+		}
+
+		if _, err := pool.Exec(ctx, `DELETE FROM users`); err != nil {
+			t.Fatal(err)
+		}
+		ready := make(chan struct{}, 2)
+		start := make(chan struct{})
+		errors := make(chan error, 2)
+		var group sync.WaitGroup
+		for range 2 {
+			group.Add(1)
+			go func() {
+				defer group.Done()
+				ready <- struct{}{}
+				<-start
+				_, err := pool.Exec(ctx, string(seed))
+				errors <- err
+			}()
+		}
+		for range 2 {
+			<-ready
+		}
+		close(start)
+		group.Wait()
+		close(errors)
+		for err := range errors {
+			if err != nil {
+				t.Error(err)
+			}
+		}
+		assertFixtureSet()
+	})
 
 	insertUser := `INSERT INTO users(id,email,display_name,role,password_hash,created_at,updated_at)
 		VALUES($1,$2,$3,$4,'$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA','2026-09-03T12:00:00Z','2026-09-03T12:00:00Z')`
@@ -77,12 +266,6 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',$2,'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z')`, collisionDigest[:], previousDigest[:]); err != nil {
 		t.Fatal(err)
 	}
-	pool, err := pgxpool.New(ctx, connection)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-
 	t.Run("credential verification hides unknown and disabled users", func(t *testing.T) {
 		passwords := &passwordVerifier{matched: true}
 		repository := NewRepository(pool, passwords)

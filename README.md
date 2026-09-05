@@ -11,9 +11,18 @@ Prerequisites: Docker with Compose v2+, 4 GB available RAM; Node 24 for native f
 ```sh
 make up
 make seed
+make seed-identities
 ```
 
-`make up` copies `.env.example` if needed, builds, applies migrations and waits for health. Sample data is explicit and repeatable. `make down` preserves volumes.
+`make up` copies `.env.example` if needed, builds, applies migrations and waits for health. Sample data is explicit and repeatable. `make seed-identities` adds these local development fixtures only:
+
+| Role | Email | Password |
+|---|---|---|
+| Student | `student@courseforge.local` | `courseforge-student-demo` |
+| Instructor | `instructor@courseforge.local` | `courseforge-instructor-demo` |
+| Admin | `admin@courseforge.local` | `courseforge-admin-demo` |
+
+Run that target only in a local development database. `make down` preserves volumes.
 
 URLs: [home](http://localhost:8080), [catalog](http://localhost:8080/courses), [API](http://localhost:8080/api/v1/courses), [health](http://localhost:8080/healthz). Change HTTP_PORT in `.env` when needed. Base Compose exposes only Nginx on loopback. `make dev` enables frontend source watching and loopback database/API ports.
 
@@ -29,6 +38,7 @@ make integration
 make build
 make up
 make seed
+make seed-identities
 make e2e
 ```
 

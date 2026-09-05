@@ -28,7 +28,7 @@ jobs:
       - name: Start
         run: make up
       - name: Seed and smoke
-        run: make seed smoke
+        run: make seed seed-identities smoke
       - name: Browser tests
         run: cd frontend && npx playwright install --with-deps chromium && npm run e2e
       - uses: actions/upload-artifact@v4

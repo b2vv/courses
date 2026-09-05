@@ -17,7 +17,7 @@ decisions, plans, evidence, briefings and tracked work. They record; they do not
 
 ## Машинні гейти
 Make targets in order: `format-check` → `lint` → `typecheck` → `test` → `integration` →
-`check-generated` → `build` → `up` → `seed` → `smoke` → `e2e`.
+`check-generated` → `build` → `up` → `seed` → `seed-identities` → `smoke` → `e2e`.
 CI runs the same order in `.github/workflows/ci.yml`. `lint` includes the frontend
 architecture check; `check-generated` fails on sqlc/Orval drift.
 Measured results belong in the current phase report (`docs/<phase>/report.md`).
