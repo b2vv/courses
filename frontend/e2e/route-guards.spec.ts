@@ -1,27 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
+import { authFixtures as fixtures, recordRequest, trackPageRequests } from './auth';
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
-const fixtures = {
-  student: {
-    email: 'student@courseforge.local',
-    password: 'courseforge-student-demo',
-    name: 'Студентка Курсу',
-  },
-  admin: {
-    email: 'admin@courseforge.local',
-    password: 'courseforge-admin-demo',
-    name: 'Адміністратор Курсу',
-  },
-} as const;
+let finishRequestTracking = () => Promise.resolve();
 
-async function authenticate(page: Page, role: keyof typeof fixtures) {
-  const { email, password } = fixtures[role];
-  const response = await page.request.post('/api/v1/auth/login', {
-    data: { email, password },
-    headers: { Origin: new URL(baseURL).origin },
-  });
-  expect(response.status()).toBe(200);
-}
+test.beforeEach(({ page }) => {
+  finishRequestTracking = trackPageRequests(page);
+});
+
+test.afterEach(async () => {
+  await finishRequestTracking();
+});
 
 async function submitLogin(page: Page, role: keyof typeof fixtures) {
   const loginResponse = page.waitForResponse((response) => {
@@ -81,7 +69,6 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   expect((await loginResponse.allHeaders())['set-cookie']).toContain('courseforge_session=');
   await expect(page).toHaveURL((url) => url.pathname === '/admin');
   await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
-  await expect(page.getByText('Керування курсами з’явиться в наступній фазі.')).toBeVisible();
 
   const rawAdminResponse = await page.request.get('/admin');
   expect(rawAdminResponse.status()).toBe(200);
@@ -146,8 +133,19 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
 
 test('public SPA transitions do not revalidate; learning does, and Back stays signed out', async ({
   page,
+  baseURL,
 }) => {
-  await authenticate(page, 'student');
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const disposableSession = await page.request.post('/api/v1/auth/login', {
+    data: {
+      email: fixtures.student.email,
+      password: fixtures.student.password,
+    },
+    headers: { Origin: new URL(baseURL).origin },
+  });
+  await recordRequest('login');
+  expect(disposableSession.status()).toBe(200);
+
   let currentUserRequests = 0;
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/v1/auth/me') currentUserRequests += 1;

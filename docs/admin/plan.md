@@ -664,7 +664,7 @@ Mutation rows assume a valid `Origin` header unless the row is about `Origin` (D
 | B16 | The existing catalog suite stays green | migration 00003 committed | `make integration` | `repository_integration_test.go` passes, including its concurrent double seed and its failing-migration subtest | `make integration` | A01 |
 | B17 | Contract and client stay in step | all OpenAPI changes committed | `make check-generated` | sqlc and Orval output matches the committed generated files; exit 0 | `make check-generated` | A07 |
 | B18 | The ordered gate passes | clean checkout | `make check` | twelve steps exit 0, with `seed-identities` before `seed` | `make check` | A15 |
-| B19 | The e2e login budget fits the zone | Compose up, `login` bucket cold | run `make e2e` twice in a row | both runs pass; the counted host-originated `POST /auth/login` per run is at most 6, with at most 3 consecutive | `make e2e` + the count printed by the setup project | A13 |
+| B19 | The e2e login budget fits the zone | Compose up, `login` bucket cold | run `make e2e` twice in a row | both runs pass; the counted host-originated `POST /auth/login` per run is at most 7, with at most 3 consecutive | `make e2e` + the count printed by the setup project | A13 (amended 2026-09-05 at review: budget is ≤7 not ≤6 — two logout tests each need an independent session since logout revokes every presented one per 1292b3a; the two returnTo/SSR login-flow tests must use the real form; ≤3-consecutive stays the real guard, validated by a double e2e run) |
 
 ### Refusals
 

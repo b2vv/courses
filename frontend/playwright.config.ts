@@ -9,12 +9,26 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', testIgnore: '**/recovery.spec.ts', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'setup',
+      testMatch: '**/auth.setup.ts',
+      teardown: 'login-budget',
+    },
+    {
+      name: 'chromium',
+      testIgnore: '**/recovery.spec.ts',
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'] },
+    },
     {
       name: 'recovery',
       testMatch: '**/recovery.spec.ts',
-      dependencies: ['chromium'],
+      dependencies: ['setup', 'chromium'],
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'login-budget',
+      testMatch: '**/auth.teardown.ts',
     },
   ],
 });

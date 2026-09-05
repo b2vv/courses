@@ -122,3 +122,20 @@ alignment test compared raw keys and broke on Ukrainian plural forms _few/_many 
 now compares plural-suffix-normalized key sets; (3) R35 promised a visible alert AND
 an immediate redirect — mutually exclusive by timing; the row is amended to the
 redirect-only observable, consistent with identity E10's established behavior.
+
+## 2026-09-05 — A13 review round (two real traps caught at the live gate)
+
+1. **Lockfile trap.** RHF was added via host `npm install`, which produced a lock the
+   Docker image's `npm ci` rejected (missing optional wasm deps @emnapi/core, @emnapi/
+   runtime pulled by @rspack/binding-wasm32-wasi and @tailwindcss/oxide-wasm32-wasi).
+   `make build` failed at `npm ci`. Fix: regenerate the lock with the image's node via
+   `docker run node:24-bookworm npm install --package-lock-only`. Rule for next time:
+   after adding a frontend dep, regenerate the lock in-container, never trust a host
+   `npm install` lock for `npm ci`.
+2. **Shared-storageState vs logout collision.** A13's first cut put logout tests on the
+   shared per-role storageState. One server session per role token; logout revokes every
+   presented session (1292b3a), so the first logout test killed the shared token for the
+   rest — reproduced with curl (authentication_required). Fix: logout tests provision a
+   disposable session each via a context-level API login; read-only authenticated tests
+   keep the shared state. Rule: shared storageState is for session-preserving tests only;
+   any session-destroying test owns its session.

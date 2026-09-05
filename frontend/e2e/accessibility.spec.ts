@@ -1,23 +1,21 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import axe from 'axe-core';
+import { authFixtures, authStatePath, recordRequest, trackPageRequests } from './auth';
 declare global {
   interface Window {
     axe: typeof axe;
   }
 }
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
+let finishRequestTracking = () => Promise.resolve();
 
-async function authenticate(
-  page: Page,
-  credentials: { readonly email: string; readonly password: string },
-) {
-  const response = await page.request.post('/api/v1/auth/login', {
-    data: credentials,
-    headers: { Origin: new URL(baseURL).origin },
-  });
-  expect(response.status()).toBe(200);
-}
+test.beforeEach(({ page }) => {
+  finishRequestTracking = trackPageRequests(page);
+});
+
+test.afterEach(async () => {
+  await finishRequestTracking();
+});
 
 test('catalog keyboard navigation and accessible labels', async ({ page }) => {
   await page.goto('/courses');
@@ -69,11 +67,19 @@ test('catalog remains usable on mobile, dark theme and 200% text zoom', async ({
 
 test('signed-in header controls are keyboard reachable with a visible focus ring', async ({
   page,
+  baseURL,
 }) => {
-  await authenticate(page, {
-    email: 'student@courseforge.local',
-    password: 'courseforge-student-demo',
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const disposableSession = await page.request.post('/api/v1/auth/login', {
+    data: {
+      email: authFixtures.student.email,
+      password: authFixtures.student.password,
+    },
+    headers: { Origin: new URL(baseURL).origin },
   });
+  await recordRequest('login');
+  expect(disposableSession.status()).toBe(200);
+
   await page.goto('/');
   const signOut = page.getByRole('button', { name: 'Вийти' });
   const focusedLabels: string[] = [];
@@ -107,56 +113,56 @@ test('signed-in header controls are keyboard reachable with a visible focus ring
   await expect(page.getByRole('link', { name: 'Увійти' })).toBeVisible();
 });
 
-test('admin navigation remains separate and target-sized at 200% in dark mode', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await authenticate(page, {
-    email: 'admin@courseforge.local',
-    password: 'courseforge-admin-demo',
-  });
-  await page.goto('/');
-  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+test.describe('with a stored admin session', () => {
+  test.use({ storageState: authStatePath('admin') });
 
-  const administration = page.getByRole('link', { name: 'Адміністрування' });
-  const signOut = page.getByRole('button', { name: 'Вийти' });
-  const administrationBox = await administration.boundingBox();
-  const signOutBox = await signOut.boundingBox();
-  if (administrationBox === null || signOutBox === null)
-    throw new Error('Signed-in navigation controls are not rendered');
-  expect(Math.min(administrationBox.width, administrationBox.height)).toBeGreaterThanOrEqual(44);
-  expect(Math.min(signOutBox.width, signOutBox.height)).toBeGreaterThanOrEqual(44);
+  test('admin navigation remains separate and target-sized at 200% in dark mode', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.goto('/');
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
 
-  const overlaps = await page.locator('.header-inner').evaluate((header) => {
-    const navigation = header.querySelector('nav');
-    if (navigation === null) return ['navigation missing'];
-    const findOverlaps = (elements: Element[]) => {
-      const items = elements.map((element) => ({
-        label: element.textContent,
-        rectangle: element.getBoundingClientRect(),
-      }));
-      return items.flatMap((left, leftIndex) =>
-        items.slice(leftIndex + 1).flatMap((right) => {
-          const horizontal =
-            Math.min(left.rectangle.right, right.rectangle.right) -
-            Math.max(left.rectangle.left, right.rectangle.left);
-          const vertical =
-            Math.min(left.rectangle.bottom, right.rectangle.bottom) -
-            Math.max(left.rectangle.top, right.rectangle.top);
-          return horizontal > 1 && vertical > 1 ? [`${left.label}/${right.label}`] : [];
-        }),
-      );
-    };
-    return [
-      ...findOverlaps(Array.from(header.children)),
-      ...findOverlaps(Array.from(navigation.children)),
-    ];
+    const administration = page.getByRole('link', { name: 'Адміністрування' });
+    const signOut = page.getByRole('button', { name: 'Вийти' });
+    const administrationBox = await administration.boundingBox();
+    const signOutBox = await signOut.boundingBox();
+    if (administrationBox === null || signOutBox === null)
+      throw new Error('Signed-in navigation controls are not rendered');
+    expect(Math.min(administrationBox.width, administrationBox.height)).toBeGreaterThanOrEqual(44);
+    expect(Math.min(signOutBox.width, signOutBox.height)).toBeGreaterThanOrEqual(44);
+
+    const overlaps = await page.locator('.header-inner').evaluate((header) => {
+      const navigation = header.querySelector('nav');
+      if (navigation === null) return ['navigation missing'];
+      const findOverlaps = (elements: Element[]) => {
+        const items = elements.map((element) => ({
+          label: element.textContent,
+          rectangle: element.getBoundingClientRect(),
+        }));
+        return items.flatMap((left, leftIndex) =>
+          items.slice(leftIndex + 1).flatMap((right) => {
+            const horizontal =
+              Math.min(left.rectangle.right, right.rectangle.right) -
+              Math.max(left.rectangle.left, right.rectangle.left);
+            const vertical =
+              Math.min(left.rectangle.bottom, right.rectangle.bottom) -
+              Math.max(left.rectangle.top, right.rectangle.top);
+            return horizontal > 1 && vertical > 1 ? [`${left.label}/${right.label}`] : [];
+          }),
+        );
+      };
+      return [
+        ...findOverlaps(Array.from(header.children)),
+        ...findOverlaps(Array.from(navigation.children)),
+      ];
+    });
+    expect(overlaps).toEqual([]);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
   });
-  expect(overlaps).toEqual([]);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
-  ).toBe(true);
 });
 
 test('capture desktop catalog and course', async ({ page }) => {
