@@ -17,6 +17,11 @@ import type {
   AdminCourseTree,
   AdminCourseWrite,
   AdminMutationForbiddenResponse,
+  AdminUserConflictResponse,
+  AdminUserMutationForbiddenResponse,
+  AdminUserPage,
+  AdminUserPasswordRequest,
+  AdminUserStatusRequest,
   AdminWriteBadRequestResponse,
   AuthenticatedUser,
   BadRequestResponse,
@@ -28,12 +33,14 @@ import type {
   InternalErrorResponse,
   InvalidRequestResponse,
   ListAdminCoursesParams,
+  ListAdminUsersParams,
   ListPublishedCoursesParams,
   LoginRequest,
   NotFoundResponse,
   OriginForbiddenResponse,
   UnauthenticatedResponse,
-  UnavailableResponse
+  UnavailableResponse,
+  UserNotFoundResponse
 } from './models';
 
 
@@ -167,6 +174,336 @@ export const getPublishedCourse = async (slug: string, options?: RequestInit): P
 
   const data: getPublishedCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getPublishedCourseResponse
+}
+
+
+
+export type listAdminUsersResponse200 = {
+  data: AdminUserPage
+  status: 200
+}
+
+export type listAdminUsersResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listAdminUsersResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listAdminUsersResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listAdminUsersResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listAdminUsersResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listAdminUsersResponseSuccess = (listAdminUsersResponse200) & {
+  headers: Headers;
+};
+export type listAdminUsersResponseError = (listAdminUsersResponse400 | listAdminUsersResponse401 | listAdminUsersResponse403 | listAdminUsersResponse500 | listAdminUsersResponse503) & {
+  headers: Headers;
+};
+
+export type listAdminUsersResponse = (listAdminUsersResponseSuccess | listAdminUsersResponseError)
+
+export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/users?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/users`
+}
+
+/**
+ * Admin-only. By default returns active and blocked accounts while omitting deleted accounts; an explicit status filter selects one state. Search is a case-insensitive literal substring of email or display name. Query parameters must occur at most once, unknown parameters are rejected, and responses are never cached.
+ * @summary List accounts for identity administration
+ */
+export const listAdminUsers = async (params?: ListAdminUsersParams, options?: RequestInit): Promise<listAdminUsersResponse> => {
+
+  const res = await fetch(getListAdminUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminUsersResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminUsersResponse
+}
+
+
+
+export type deleteAdminUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAdminUserResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type deleteAdminUserResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type deleteAdminUserResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type deleteAdminUserResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type deleteAdminUserResponse409 = {
+  data: AdminUserConflictResponse
+  status: 409
+}
+
+export type deleteAdminUserResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type deleteAdminUserResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type deleteAdminUserResponseSuccess = (deleteAdminUserResponse204) & {
+  headers: Headers;
+};
+export type deleteAdminUserResponseError = (deleteAdminUserResponse400 | deleteAdminUserResponse401 | deleteAdminUserResponse403 | deleteAdminUserResponse404 | deleteAdminUserResponse409 | deleteAdminUserResponse500 | deleteAdminUserResponse503) & {
+  headers: Headers;
+};
+
+export type deleteAdminUserResponse = (deleteAdminUserResponseSuccess | deleteAdminUserResponseError)
+
+export const getDeleteAdminUserUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}`
+}
+
+/**
+ * Admin-only. Marks a non-admin target deleted and disabled and revokes its sessions. Deleted and unknown targets are indistinguishable. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
+ * @summary Soft-delete an account
+ */
+export const deleteAdminUser = async (id: string, options?: RequestInit): Promise<deleteAdminUserResponse> => {
+
+  const res = await fetch(getDeleteAdminUserUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAdminUserResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteAdminUserResponse
+}
+
+
+
+export type setAdminUserStatusResponse200 = {
+  data: void
+  status: 200
+}
+
+export type setAdminUserStatusResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type setAdminUserStatusResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type setAdminUserStatusResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type setAdminUserStatusResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type setAdminUserStatusResponse409 = {
+  data: AdminUserConflictResponse
+  status: 409
+}
+
+export type setAdminUserStatusResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type setAdminUserStatusResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type setAdminUserStatusResponseSuccess = (setAdminUserStatusResponse200) & {
+  headers: Headers;
+};
+export type setAdminUserStatusResponseError = (setAdminUserStatusResponse400 | setAdminUserStatusResponse401 | setAdminUserStatusResponse403 | setAdminUserStatusResponse404 | setAdminUserStatusResponse409 | setAdminUserStatusResponse500 | setAdminUserStatusResponse503) & {
+  headers: Headers;
+};
+
+export type setAdminUserStatusResponse = (setAdminUserStatusResponseSuccess | setAdminUserStatusResponseError)
+
+export const getSetAdminUserStatusUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}/status`
+}
+
+/**
+ * Admin-only and idempotent. Block revokes the target's sessions; restore makes a non-deleted target active. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached.
+ * @summary Block or restore an account
+ */
+export const setAdminUserStatus = async (id: string,
+    adminUserStatusRequest: AdminUserStatusRequest, options?: RequestInit): Promise<setAdminUserStatusResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getSetAdminUserStatusUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUserStatusRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAdminUserStatusResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as setAdminUserStatusResponse
+}
+
+
+
+export type resetAdminUserPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetAdminUserPasswordResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type resetAdminUserPasswordResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resetAdminUserPasswordResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type resetAdminUserPasswordResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type resetAdminUserPasswordResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type resetAdminUserPasswordResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type resetAdminUserPasswordResponseSuccess = (resetAdminUserPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetAdminUserPasswordResponseError = (resetAdminUserPasswordResponse400 | resetAdminUserPasswordResponse401 | resetAdminUserPasswordResponse403 | resetAdminUserPasswordResponse404 | resetAdminUserPasswordResponse500 | resetAdminUserPasswordResponse503) & {
+  headers: Headers;
+};
+
+export type resetAdminUserPasswordResponse = (resetAdminUserPasswordResponseSuccess | resetAdminUserPasswordResponseError)
+
+export const getResetAdminUserPasswordUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}/password`
+}
+
+/**
+ * Admin-only. Replaces the credential and revokes every target session, including for a blocked target; a deleted target is not operable. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. Passwords contain 1 to 1024 UTF-8 bytes; any content is accepted.
+ * @summary Reset an account password
+ */
+export const resetAdminUserPassword = async (id: string,
+    adminUserPasswordRequest: AdminUserPasswordRequest, options?: RequestInit): Promise<resetAdminUserPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResetAdminUserPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUserPasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetAdminUserPasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resetAdminUserPasswordResponse
 }
 
 

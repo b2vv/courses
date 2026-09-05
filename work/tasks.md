@@ -100,7 +100,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | T02 | Домен: `DeletedAt`, `AccountStatus`, `CanBlock`/`CanDelete` (self/admin-immutable/last-admin), межі пароля | 1h | — | done | `work/report-t02.md`; domain unit tests; gates pass |
 | T03 | Application use cases на фейках: `ListUsers`, `SetStatus`, `Delete`, `ResetPassword`; дедлайни, скасування, dependency failure | 1.25h | T02 | done | `work/report-t03.md`; R15, R17; gates pass |
 | T04 | PostgreSQL-адаптер + sqlc (READ COMMITTED): escaped list, `LockAdmins`/`LockUserForStatus`, last-admin count + session revoke, `SetUserDisabledAt` (block+restore), soft-delete+revoke, set-password+revoke, mapper, гонки | 2h | T01, T03 | done | `work/report-t04.md`; P03–P06, B03, B05, B11, B12, R09, R10, R12, R16, R18, R22, R23; gates through check-generated pass |
-| T05 | HTTP: чотири маршрути на шві 4a, admin-гейт, DTO/межі, error mapping, OpenAPI+generate | 2h | T04 | planned | P01, P02, B01, B04, R01–R08, R11, R13, R14 |
+| T05 | HTTP: чотири маршрути на шві 4a, admin-гейт, DTO/межі, error mapping, OpenAPI+generate | 2h | T04 | done | `work/report-t05.md`; P01, P02, B01, B04, R01–R08, R11, R13, R14; gates through check-generated pass |
 | T06 | Фронтовий admin-users адаптер/application: ids, zod, репозиторій із мапінгом кодів, use cases, композиція, інвалідація; Orval | 1.5h | T05 | planned | B09, R19 |
 | T07 | Маршрут `/admin/users` і в'юхи: список, таби, per-row дії, `ResetPasswordDialog`, стани, гард `canAdministerAccounts`, uk/en, a11y | 2h | T06 | planned | P07, B02, R21, R24 |
 | T08 | Браузерна подорож `admin-users.spec.ts` на disposables (спільний storageState, 0 логінів); direct-API відмова; розширення route-guards | 1h | T07 | planned | P08, R20 |

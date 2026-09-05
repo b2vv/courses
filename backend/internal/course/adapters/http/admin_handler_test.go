@@ -1393,7 +1393,7 @@ func adminReadHandler(t *testing.T, repository *adminRepository, identity *admin
 	}
 	authoring := application.NewAuthoring(repository, func() time.Time { return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC) })
 	courseHandler := coursehttp.NewHandler(application.NewCatalog(repository), authoring)
-	identityHandler := identityhttp.NewHandler(identity, identity, config)
+	identityHandler := identityhttp.NewHandler(identity, identity, nil, config)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		identityHandler.Register(mux)
 		courseHandler.Register(mux)

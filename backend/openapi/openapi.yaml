@@ -71,6 +71,131 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: List accounts for identity administration
+      description: >-
+        Admin-only. By default returns active and blocked accounts while omitting deleted
+        accounts; an explicit status filter selects one state. Search is a case-insensitive
+        literal substring of email or display name. Query parameters must occur at most once,
+        unknown parameters are rejected, and responses are never cached.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        - name: q
+          in: query
+          description: Search text, maximum 100 Unicode code points after trimming whitespace.
+          schema: { type: string, default: '' }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, blocked, deleted] }
+      responses:
+        '200':
+          description: Status-projected account rows and pagination.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUserPage' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/users/{id}:
+    delete:
+      operationId: deleteAdminUser
+      summary: Soft-delete an account
+      description: >-
+        Admin-only. Marks a non-admin target deleted and disabled and revokes its sessions.
+        Deleted and unknown targets are indistinguishable. Requires one matching Origin header,
+        accepts no query parameters, and responses are never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: The account was soft-deleted and its sessions were revoked.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminUserMutationForbidden' }
+        '404': { $ref: '#/components/responses/UserNotFound' }
+        '409': { $ref: '#/components/responses/AdminUserConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/users/{id}/status:
+    post:
+      operationId: setAdminUserStatus
+      summary: Block or restore an account
+      description: >-
+        Admin-only and idempotent. Block revokes the target's sessions; restore makes a
+        non-deleted target active. Requires one matching Origin header. Bodies are limited to
+        8 KiB, accept no duplicate or unknown members, and responses are never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUserStatusRequest' }
+      responses:
+        '200':
+          description: The requested status is in effect.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminUserMutationForbidden' }
+        '404': { $ref: '#/components/responses/UserNotFound' }
+        '409': { $ref: '#/components/responses/AdminUserConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/users/{id}/password:
+    post:
+      operationId: resetAdminUserPassword
+      summary: Reset an account password
+      description: >-
+        Admin-only. Replaces the credential and revokes every target session, including for a
+        blocked target; a deleted target is not operable. Requires one matching Origin header.
+        Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are
+        never cached. Passwords contain 1 to 1024 UTF-8 bytes; any content is accepted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUserPasswordRequest' }
+      responses:
+        '204':
+          description: The password was reset and the target's sessions were revoked.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminUserMutationForbidden' }
+        '404': { $ref: '#/components/responses/UserNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses:
     get:
       operationId: listAdminCourses
@@ -461,6 +586,43 @@ components:
         status: { type: string, enum: [draft, published, archived] }
         instructorId: { type: string, format: uuid }
         updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, displayName, role, status, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, minLength: 3, maxLength: 254 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        role: { type: string, enum: [student, instructor, admin] }
+        status: { type: string, enum: [active, blocked, deleted] }
+        updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    AdminUserPage:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/AdminUser' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    AdminUserStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, blocked] }
+    AdminUserPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: The UTF-8 encoding must also be no more than 1024 bytes.
     AdminCoursePage:
       type: object
       additionalProperties: false
@@ -593,10 +755,34 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, cannot_target_self, admin_immutable, last_admin, user_not_found, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    AdminUserMutationForbidden:
+      description: The Origin is not allowed or the authenticated account is not an administrator.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AdminUserConflict:
+      description: The operation targets the caller, targets an immutable admin, or would block the last active admin.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    UserNotFound:
+      description: The target account is unknown or deleted.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     AdminWriteBadRequest:
       description: The body is missing, malformed, oversized, outside field/tree bounds, names an ineligible owner, or carries unexpected members.
       headers:

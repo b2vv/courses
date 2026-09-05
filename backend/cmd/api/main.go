@@ -43,7 +43,8 @@ func main() {
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
-		identityHandler := identityhttp.NewHandler(identity, identityRepository, identityConfig)
+		administration := identityapplication.NewAdministration(identityRepository, time.Now)
+		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),

@@ -95,7 +95,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 		})
 		mux := http.NewServeMux()
-		identityhttp.NewHandler(identity, repository, config).Register(mux)
+		identityhttp.NewHandler(identity, repository, nil, config).Register(mux)
 
 		type fixture struct {
 			id, email, displayName, password string
@@ -374,7 +374,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		mux := http.NewServeMux()
-		identityhttp.NewHandler(identity, repository, config).Register(mux)
+		identityhttp.NewHandler(identity, repository, nil, config).Register(mux)
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(fmt.Sprintf(`{"email":%q,"password":%q}`, email, password)))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Origin", "http://localhost:8080")

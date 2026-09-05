@@ -27,10 +27,18 @@ type instructorLister interface {
 	ListInstructors(context.Context) ([]domain.User, error)
 }
 
+type administrationService interface {
+	ListUsers(context.Context, application.ListUsersInput) (application.UserPage, error)
+	SetStatus(context.Context, domain.Actor, string, domain.AccountStatus) error
+	Delete(context.Context, domain.Actor, string) error
+	ResetPassword(context.Context, string, string) error
+}
+
 type Handler struct {
-	identity    identityService
-	instructors instructorLister
-	config      Config
+	identity       identityService
+	instructors    instructorLister
+	administration administrationService
+	config         Config
 }
 
 type userKey struct{}
@@ -53,8 +61,8 @@ type instructorDTO struct {
 	Role        string `json:"role"`
 }
 
-func NewHandler(identity identityService, instructors instructorLister, config Config) *Handler {
-	return &Handler{identity: identity, instructors: instructors, config: config}
+func NewHandler(identity identityService, instructors instructorLister, administration administrationService, config Config) *Handler {
+	return &Handler{identity: identity, instructors: instructors, administration: administration, config: config}
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
@@ -62,6 +70,10 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/auth/me", handler.Authenticate(http.HandlerFunc(handler.me)))
 	mux.Handle("POST /api/v1/auth/logout", handler.RequireSameOrigin(http.HandlerFunc(handler.logout)))
 	mux.Handle("GET /api/v1/admin/instructors", handler.Authenticate(http.HandlerFunc(handler.listInstructors)))
+	mux.Handle("GET /api/v1/admin/users", handler.Authenticate(http.HandlerFunc(handler.listUsers)))
+	mux.Handle("POST /api/v1/admin/users/{id}/status", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.setUserStatus))))
+	mux.Handle("DELETE /api/v1/admin/users/{id}", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.deleteUser))))
+	mux.Handle("POST /api/v1/admin/users/{id}/password", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.resetUserPassword))))
 }
 
 func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -141,13 +153,7 @@ func (handler *Handler) RequireSameOrigin(next http.Handler) http.Handler {
 
 func (handler *Handler) listInstructors(w http.ResponseWriter, r *http.Request) {
 	identityHeaders(w)
-	user, ok := r.Context().Value(userKey{}).(domain.User)
-	if !ok {
-		writeError(w, r, domain.ErrAuthenticationRequired, "")
-		return
-	}
-	if !user.Role.CanAdministerAccounts() {
-		writeError(w, r, domain.ErrForbidden, "forbidden")
+	if _, ok := administrator(w, r); !ok {
 		return
 	}
 	users, err := handler.instructors.ListInstructors(r.Context())
@@ -256,6 +262,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, override stri
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 	case override == "forbidden":
 		httpserver.WriteError(w, r, http.StatusForbidden, "forbidden", "Permission is required")
+	case errors.Is(err, domain.ErrUserNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "user_not_found", "User was not found")
+	case errors.Is(err, domain.ErrCannotTargetSelf):
+		httpserver.WriteError(w, r, http.StatusConflict, "cannot_target_self", "An administrator cannot target their own account")
+	case errors.Is(err, domain.ErrAdminImmutable):
+		httpserver.WriteError(w, r, http.StatusConflict, "admin_immutable", "Administrator accounts cannot be deleted")
+	case errors.Is(err, domain.ErrLastAdmin):
+		httpserver.WriteError(w, r, http.StatusConflict, "last_admin", "The last active administrator cannot be blocked")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Identity service is temporarily unavailable")
 	default:

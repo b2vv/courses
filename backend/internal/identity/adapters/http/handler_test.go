@@ -184,7 +184,7 @@ func testHandler(t *testing.T, service *identityService) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := identityhttp.NewHandler(service, service, config)
+	adapter := identityhttp.NewHandler(service, service, nil, config)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
 }
 
