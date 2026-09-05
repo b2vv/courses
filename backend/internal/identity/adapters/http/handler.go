@@ -23,9 +23,14 @@ type identityService interface {
 	Logout(context.Context, string) error
 }
 
+type instructorLister interface {
+	ListInstructors(context.Context) ([]domain.User, error)
+}
+
 type Handler struct {
-	identity identityService
-	config   Config
+	identity    identityService
+	instructors instructorLister
+	config      Config
 }
 
 type userKey struct{}
@@ -42,22 +47,25 @@ type userDTO struct {
 	Role        string `json:"role"`
 }
 
-func NewHandler(identity identityService, config Config) *Handler {
-	return &Handler{identity: identity, config: config}
+type instructorDTO struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Role        string `json:"role"`
+}
+
+func NewHandler(identity identityService, instructors instructorLister, config Config) *Handler {
+	return &Handler{identity: identity, instructors: instructors, config: config}
 }
 
 func (handler *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/auth/login", handler.login)
-	mux.Handle("GET /api/v1/auth/me", handler.authenticate(http.HandlerFunc(handler.me)))
-	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
+	mux.Handle("POST /api/v1/auth/login", handler.RequireSameOrigin(http.HandlerFunc(handler.login)))
+	mux.Handle("GET /api/v1/auth/me", handler.Authenticate(http.HandlerFunc(handler.me)))
+	mux.Handle("POST /api/v1/auth/logout", handler.RequireSameOrigin(http.HandlerFunc(handler.logout)))
+	mux.Handle("GET /api/v1/admin/instructors", handler.Authenticate(http.HandlerFunc(handler.listInstructors)))
 }
 
 func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 	identityHeaders(w)
-	if !handler.sameOrigin(r) {
-		writeError(w, r, domain.ErrForbidden, "origin_forbidden")
-		return
-	}
 	input, err := decodeLogin(w, r)
 	if err != nil {
 		writeError(w, r, err, "")
@@ -89,10 +97,6 @@ func (handler *Handler) me(w http.ResponseWriter, r *http.Request) {
 
 func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	identityHeaders(w)
-	if !handler.sameOrigin(r) {
-		writeError(w, r, domain.ErrForbidden, "origin_forbidden")
-		return
-	}
 	tokens := sessionCookies(r)
 	http.SetCookie(w, handler.expiredCookie())
 	for _, token := range tokens {
@@ -104,7 +108,7 @@ func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *Handler) authenticate(next http.Handler) http.Handler {
+func (handler *Handler) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identityHeaders(w)
 		token, duplicate := sessionCookie(r)
@@ -117,13 +121,45 @@ func (handler *Handler) authenticate(next http.Handler) http.Handler {
 			writeError(w, r, err, "")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey{}, user)))
+		ctx := context.WithValue(r.Context(), userKey{}, user)
+		ctx = httpserver.WithActor(ctx, httpserver.Actor{UserID: user.ID, Role: string(user.Role)})
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func (handler *Handler) sameOrigin(r *http.Request) bool {
-	values := r.Header.Values("Origin")
-	return len(values) == 1 && values[0] != "null" && handler.config.acceptsOrigin(values[0])
+func (handler *Handler) RequireSameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identityHeaders(w)
+		values := r.Header.Values("Origin")
+		if len(values) != 1 || values[0] == "null" || !handler.config.acceptsOrigin(values[0]) {
+			writeError(w, r, domain.ErrForbidden, "origin_forbidden")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (handler *Handler) listInstructors(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	user, ok := r.Context().Value(userKey{}).(domain.User)
+	if !ok {
+		writeError(w, r, domain.ErrAuthenticationRequired, "")
+		return
+	}
+	if !user.Role.CanAdministerAccounts() {
+		writeError(w, r, domain.ErrForbidden, "forbidden")
+		return
+	}
+	users, err := handler.instructors.ListInstructors(r.Context())
+	if err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	instructors := make([]instructorDTO, 0, len(users))
+	for _, user := range users {
+		instructors = append(instructors, instructorDTO{ID: user.ID, DisplayName: user.DisplayName, Role: string(user.Role)})
+	}
+	httpserver.WriteJSON(w, http.StatusOK, instructors)
 }
 
 func (handler *Handler) sessionCookie(value string, expires time.Time, maximumAge int) *http.Cookie {
@@ -218,6 +254,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, override stri
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "invalid_credentials", "Email or password is invalid")
 	case errors.Is(err, domain.ErrAuthenticationRequired):
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+	case override == "forbidden":
+		httpserver.WriteError(w, r, http.StatusForbidden, "forbidden", "Permission is required")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Identity service is temporarily unavailable")
 	default:

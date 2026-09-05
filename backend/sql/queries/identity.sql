@@ -44,3 +44,11 @@ WHERE user_sessions.token_digest = sqlc.arg(token_digest)::bytea
   AND user_sessions.created_at <= sqlc.arg(now)::timestamptz
   AND user_sessions.expires_at > sqlc.arg(now)::timestamptz
   AND users.disabled_at IS NULL;
+
+-- name: ListInstructors :many
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at
+FROM users
+WHERE disabled_at IS NULL
+  AND role IN ('instructor', 'admin')
+ORDER BY display_name COLLATE "C", id
+LIMIT 200;

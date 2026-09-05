@@ -12,9 +12,14 @@ import (
 	"courses/platform/httpserver"
 )
 
-type Handler struct{ catalog *application.Catalog }
+type Handler struct {
+	catalog   *application.Catalog
+	authoring *application.Authoring
+}
 
-func NewHandler(catalog *application.Catalog) *Handler { return &Handler{catalog: catalog} }
+func NewHandler(catalog *application.Catalog, authoring *application.Authoring) *Handler {
+	return &Handler{catalog: catalog, authoring: authoring}
+}
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/courses", h.list)
 	mux.HandleFunc("GET /api/v1/courses/{slug}", h.get)

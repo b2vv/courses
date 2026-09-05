@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Courses API
   version: 1.0.0
-  description: Public catalog and session authentication. Purchases and media playback are not implemented.
+  description: Public catalog, session authentication and protected administration reads. Administration mutations, purchases and media playback are not implemented.
 servers:
   - url: /
 paths:
@@ -66,6 +66,89 @@ paths:
               schema: { $ref: '#/components/schemas/Course' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses:
+    get:
+      operationId: listAdminCourses
+      summary: List courses visible to the authenticated staff member
+      description: >-
+        Admins see every course. Instructors see only courses they own. Students and
+        unrecognised roles are forbidden. Query parameters must occur at most once and
+        unknown parameters are rejected. Responses are never cached.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, published, archived] }
+      responses:
+        '200':
+          description: Owner-scoped course rows and pagination.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCoursePage' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses/{id}:
+    get:
+      operationId: getAdminCourse
+      summary: Get an authored course tree
+      description: >-
+        Admins may read any tree. An instructor may read only a tree they own. Unknown
+        IDs are distinguished from ownership refusals for authenticated staff. Query
+        parameters are not supported. Responses are never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The complete authored course tree in module and lesson order.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCourseTree' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/instructors:
+    get:
+      operationId: listInstructors
+      summary: List eligible course owners
+      description: >-
+        Admin-only, unpaginated and bounded to 200 active instructor or admin accounts.
+        Email, password data and account status are never exposed. Responses are never cached.
+      responses:
+        '200':
+          description: Eligible owners in deterministic display-name and ID order.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 200
+                items: { $ref: '#/components/schemas/Instructor' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/auth/login:
@@ -149,7 +232,7 @@ components:
       required: true
       schema: { type: string, pattern: '^[a-f0-9]{32}$' }
     NoStore:
-      description: Identity responses are never stored by caches or shared proxies.
+      description: This response is never stored by caches or shared proxies.
       required: true
       schema: { type: string, enum: [no-store] }
     SessionCookie:
@@ -192,6 +275,73 @@ components:
           maxItems: 50
           items: { $ref: '#/components/schemas/Course' }
         pagination: { $ref: '#/components/schemas/Pagination' }
+    AdminCourse:
+      type: object
+      additionalProperties: false
+      required: [id, slug, title, status, instructorId, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        status: { type: string, enum: [draft, published, archived] }
+        instructorId: { type: string, format: uuid }
+        updatedAt: { type: string, format: date-time }
+    AdminCoursePage:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/AdminCourse' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    AdminLesson:
+      type: object
+      additionalProperties: false
+      required: [id, title, description]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 1000 }
+    AdminModule:
+      type: object
+      additionalProperties: false
+      required: [id, title, lessons]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        lessons:
+          type: array
+          maxItems: 120
+          items: { $ref: '#/components/schemas/AdminLesson' }
+    AdminCourseTree:
+      type: object
+      additionalProperties: false
+      required: [id, slug, title, summary, description, status, instructorId, createdAt, updatedAt, publishedAt, modules]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        status: { type: string, enum: [draft, published, archived] }
+        instructorId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        modules:
+          type: array
+          maxItems: 40
+          items: { $ref: '#/components/schemas/AdminModule' }
+    Instructor:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, role]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        role: { type: string, enum: [instructor, admin] }
     LoginRequest:
       type: object
       additionalProperties: false
@@ -223,12 +373,12 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
     InvalidRequest:
-      description: The request body is missing, malformed, oversized or carries unexpected members.
+      description: The request path, query or body is missing, malformed, oversized or carries unexpected members.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
         Cache-Control: { $ref: '#/components/headers/NoStore' }
@@ -251,6 +401,14 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: The authenticated actor lacks permission for the resource or operation.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     BadRequest:
       description: Invalid query parameters or slug.
       headers:
@@ -259,9 +417,10 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     NotFound:
-      description: Published course was not found.
+      description: Course was not found.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -269,6 +428,7 @@ components:
       description: Unexpected error; internal details are never returned.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -276,6 +436,7 @@ components:
       description: A dependency was unavailable or the bounded read timed out.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

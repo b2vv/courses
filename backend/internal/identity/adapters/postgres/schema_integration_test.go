@@ -95,7 +95,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			return time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
 		})
 		mux := http.NewServeMux()
-		identityhttp.NewHandler(identity, config).Register(mux)
+		identityhttp.NewHandler(identity, repository, config).Register(mux)
 
 		type fixture struct {
 			id, email, displayName, password string

@@ -28,6 +28,10 @@ func (role Role) CanAccessAdministration() bool {
 	return role == Instructor || role == Admin
 }
 
+func (role Role) CanAdministerAccounts() bool {
+	return role == Admin
+}
+
 type User struct {
 	ID          string
 	Email       string

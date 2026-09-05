@@ -157,6 +157,22 @@ func (repository *Repository) Revoke(ctx context.Context, token string) error {
 	return nil
 }
 
+func (repository *Repository) ListInstructors(ctx context.Context) ([]domain.User, error) {
+	rows, err := generated.New(repository.pool).ListInstructors(ctx)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	users := make([]domain.User, 0, len(rows))
+	for _, row := range rows {
+		user, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+		if err != nil {
+			return nil, domain.ErrDependencyUnavailable
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
 func (repository *Repository) newSessionMaterial() (string, [32]byte, string, error) {
 	raw := make([]byte, 32)
 	if _, err := io.ReadFull(repository.random, raw); err != nil {

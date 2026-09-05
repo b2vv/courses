@@ -37,17 +37,20 @@ func main() {
 	}
 	err = func() error {
 		defer dependencies.Close()
-		catalog := courseapplication.NewCatalog(coursepostgres.NewRepository(dependencies.Database))
-		courseHandler := coursehttp.NewHandler(catalog)
+		courseRepository := coursepostgres.NewRepository(dependencies.Database)
+		catalog := courseapplication.NewCatalog(courseRepository)
+		authoring := courseapplication.NewAuthoring(courseRepository, time.Now)
+		courseHandler := coursehttp.NewHandler(catalog, authoring)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
-		identityHandler := identityhttp.NewHandler(identity, identityConfig)
+		identityHandler := identityhttp.NewHandler(identity, identityRepository, identityConfig)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
 			Register: func(mux *http.ServeMux) {
 				courseHandler.Register(mux)
 				identityHandler.Register(mux)
+				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 			},
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))

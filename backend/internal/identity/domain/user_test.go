@@ -91,20 +91,24 @@ func TestUserInvariantsAndRolePolicy(t *testing.T) {
 	}
 
 	for _, test := range []struct {
-		role      domain.Role
-		learn     bool
-		adminArea bool
+		role            domain.Role
+		learn           bool
+		adminArea       bool
+		administerUsers bool
 	}{
-		{role: domain.Student, learn: true, adminArea: false},
+		{role: domain.Student, learn: true},
 		{role: domain.Instructor, learn: true, adminArea: true},
-		{role: domain.Admin, learn: true, adminArea: true},
-		{role: domain.Role("owner"), learn: false, adminArea: false},
+		{role: domain.Admin, learn: true, adminArea: true, administerUsers: true},
+		{role: domain.Role("owner")},
 	} {
 		if got := test.role.CanLearn(); got != test.learn {
 			t.Errorf("%s CanLearn=%v", test.role, got)
 		}
 		if got := test.role.CanAccessAdministration(); got != test.adminArea {
 			t.Errorf("%s CanAccessAdministration=%v", test.role, got)
+		}
+		if got := test.role.CanAdministerAccounts(); got != test.administerUsers {
+			t.Errorf("%s CanAdministerAccounts=%v", test.role, got)
 		}
 	}
 }

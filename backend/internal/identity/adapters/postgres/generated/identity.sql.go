@@ -121,6 +121,53 @@ func (q *Queries) GetIdentityCredential(ctx context.Context, email string) (GetI
 	return i, err
 }
 
+const listInstructors = `-- name: ListInstructors :many
+SELECT id::text AS id, email, display_name, role, created_at, updated_at, disabled_at
+FROM users
+WHERE disabled_at IS NULL
+  AND role IN ('instructor', 'admin')
+ORDER BY display_name COLLATE "C", id
+LIMIT 200
+`
+
+type ListInstructorsRow struct {
+	ID          string
+	Email       string
+	DisplayName string
+	Role        string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DisabledAt  pgtype.Timestamptz
+}
+
+func (q *Queries) ListInstructors(ctx context.Context) ([]ListInstructorsRow, error) {
+	rows, err := q.db.Query(ctx, listInstructors)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInstructorsRow{}
+	for rows.Next() {
+		var i ListInstructorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.DisplayName,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DisabledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockActiveIdentityUser = `-- name: LockActiveIdentityUser :one
 SELECT id::text AS id
 FROM users

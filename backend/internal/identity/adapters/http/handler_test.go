@@ -23,11 +23,12 @@ import (
 )
 
 type identityService struct {
-	loginCalls, authenticateCalls, logoutCalls int
-	logoutTokens                               []string
-	loginResult                                application.LoginResult
-	user                                       domain.User
-	err                                        error
+	loginCalls, authenticateCalls, logoutCalls, listInstructorCalls int
+	logoutTokens                                                    []string
+	loginResult                                                     application.LoginResult
+	user                                                            domain.User
+	instructors                                                     []domain.User
+	err                                                             error
 }
 
 func (service *identityService) Login(context.Context, application.LoginInput) (application.LoginResult, error) {
@@ -42,6 +43,10 @@ func (service *identityService) Logout(_ context.Context, token string) error {
 	service.logoutCalls++
 	service.logoutTokens = append(service.logoutTokens, token)
 	return service.err
+}
+func (service *identityService) ListInstructors(context.Context) ([]domain.User, error) {
+	service.listInstructorCalls++
+	return service.instructors, service.err
 }
 
 func TestLoginHTTPValidationAndCookie(t *testing.T) {
@@ -179,7 +184,7 @@ func testHandler(t *testing.T, service *identityService) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := identityhttp.NewHandler(service, config)
+	adapter := identityhttp.NewHandler(service, service, config)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
 }
 
