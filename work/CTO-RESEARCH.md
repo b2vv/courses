@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Дата | 2026-09-04 |
-| Базовий коміт | `eada97b` |
-| Всього комітів у репо | 19 (`git rev-list --count HEAD`) |
-| Гейт свіжості цього прогону | 4 коміти від `fd83598`; два з них чіпають області брифінгу (фронтові API-адаптери, контракт URL каталогу), тож §3 і §6 перезібрано. Перший прогін 2026-09-04 порівнювати не мав із чим. |
+| Дата | 2026-09-05 |
+| Базовий коміт | `c8d2324` |
+| Всього комітів у репо | 58 (`git rev-list --count HEAD`) |
+| Гейт свіжості цього прогону | 39 комітів від `eada97b`. Дельта — весь I06 (гарди, хедер, сід, фінальний gate), закриття Phase 3, logout-фікс `1292b3a`, поява `work/PRODUCT-BRIEF.md` як джерела роадмапу. Перезібрано §1, §2, §3, §4, §6; §5 без змін — `go.mod` і `package.json` дельта не чіпала (`git diff --stat eada97b..HEAD`). |
 
 Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело.
 
@@ -13,19 +13,16 @@
 
 ## 1. Вердикт на один екран
 
-**Продукт.** Self-hosted платформа онлайн-курсів із наміром продавати курси. Зараз працює публічний каталог (перегляд і пошук опублікованих курсів) та автентифікація сесією. Постачання — Docker Compose на одному хості, тільки loopback; жодного деплой-таргета в репо немає. Масштаб даних мізерний: 2 міграції, каталог із пагінацією до 50 елементів на сторінку (`backend/openapi/openapi.yaml`, `Pagination.limit` max 50). Логіка живе в Go-модульному моноліті; фронтенд має власний домен/застосунок і не приймає бізнес-рішень.
+**Продукт.** Self-hosted платформа продажу онлайн-курсів (вихідне ТЗ: `work/PRODUCT-BRIEF.md`). Працює: публічний каталог із пошуком, повна сесійна автентифікація — логін, SSR-хедер із користувачем, logout, гарди `/learn` і `/admin` за роллю, три локальні фікстури. Постачання — Docker Compose на одному хості, Nginx на `127.0.0.1`; деплой-таргета немає. Масштаб даних: 2 міграції, каталог ≤50 на сторінку.
 
-**Поточний стан.** Phase 1 (foundation) і Phase 2 (каталог) закриті. Phase 3 Identity — I01–I05 done, I06 лишається (`work/tasks.md:25-30`). Phases 4–8 (адмінка, upload/транскодинг, підписане відтворення, транскрипти, замовлення/оплата) не починалися (`AGENTS.md:6`).
+**Поточний стан.** Phases 1–3 закриті: `make check` — exit 0 по дванадцяти кроках, 175 фронт-тестів, e2e 20/20 (`docs/identity/report.md` §I06 п.4). Черга задач порожня (`work/tasks.md`). Роадмап Phase 4–8 — `work/PRODUCT-BRIEF.md` §21 з уточненнями §24.
 
-**Живий P0.** I06: хедер із користувачем і logout, клієнтські гарди `/learn` і `/admin`, демо-фікстури, фінальний ordered gate (`work/tasks.md:30`). Без нього відкриті приймальні сценарії A01, A02, A04, A05, B01 (`docs/identity/plan.md:20-26`).
+**Живий P0.** Специфікація Phase 4 (admin CRUD курсів/модулів/уроків + publish/archive workflow) через spec-flow. Зафіксовані вимоги до спеки з першого дня: `instructor_id` у першій міграції, handler-level авторизація з першим ендпоїнтом, RHF/TanStack Table в'їжджають зі споживачами (`work/PRODUCT-BRIEF.md` §24, `docs/identity/report.md` §I06 п.9).
 
-**Архітектурний факт №1 — SSR ходить в API повз Nginx.**
-Природне припущення «весь трафік проходить через edge, отже edge-контролі застосовуються до всього» тут **хибне**. Сторінкові маршрути рендеряться в SSR-контейнері, який б'є в API напряму по внутрішній docker-мережі: `API_BASE_URL: 'http://api:8080'` (`docker-compose.yml:102`), а `apiOrigin()` на сервері повертає саме це значення (`frontend/src/adapters/api/api-origin.ts:4`). Стрілка є на діаграмі (`docs/architecture/containers.md:8`), але наслідки з неї не витягли, і це вже коштувало двох реальних дефектів:
+**Архітектурний факт №1 — клієнтські гарди не є авторизацією; серверної перевірки ролі не існує ніде.**
+`/learn` і `/admin` захищені лише `beforeLoad` у браузері (`frontend/src/routes/learn.tsx:12`, `admin.tsx`), обидва маршрути `ssr: false`. На бекенді жоден хендлер не перевіряє роль: `/auth/me` — єдиний автентифікований ендпоїнт, а доменна політика ролей має тільки unit-покриття (`docs/identity/plan.md` §Decisions). Перший захищений бізнес-ендпоїнт Phase 4 **не має чого успадкувати** — авторизаційний wrapper ще належить написати, і Done-звіт не сміє посилатися на гарди як на захист (`docs/identity/report.md` §I06 п.7).
 
-- Rate limit був лише на `location ^~ /api/`, тож SSR-навантаження на каталог і `ILIKE`-пошук було неметрованим — знахідка MEDIUM-1 аудиту (`docs/security/audit-2026-09-03.md`). Закрито в I04 зоною `web` (`infrastructure/nginx/nginx.conf:25,71`).
-- Серверний виклик не має заголовка `Origin`, а `login`/`logout` вимагають рівно один збіжний `Origin` (`backend/internal/identity/adapters/http/handler.go:57,92`). Тому **логін і логаут фізично неможливі з SSR** і лишаються браузерними операціями (`docs/identity/report.md`, секція I04 п.7).
-
-Практичне правило для будь-якої наступної задачі: усе, що стосується edge-політик (ліміти, заголовки, авторизація на межі), треба окремо питати «а SSR цей шлях узагалі перетинає?».
+**Архітектурний факт №2 — SSR ходить в API повз Nginx.** Сторінкові маршрути рендеряться в SSR-контейнері, який б'є в API напряму: `API_BASE_URL: http://api:8080` (`docker-compose.yml:102`), `apiOrigin()` на сервері віддає саме це (`frontend/src/adapters/api/api-origin.ts:4`). Наслідки вже коштували двох дефектів (неметрований SSR-трафік — аудит MEDIUM-1; логін/логаут фізично неможливі з SSR, бо серверний виклик не несе `Origin`, який `login`/`logout` вимагають рівно один). Правило: для будь-якої edge-політики окремо питати «а SSR цей шлях перетинає?».
 
 ---
 
@@ -33,37 +30,39 @@
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| Що це | Self-hosted вітрина курсів і майбутня навчальна платформа | `docs/architecture/context.md:3` |
-| Для кого | Відвідувач (публічний каталог); student / instructor / admin як автентифіковані актори з Phase 3 | `docs/architecture/context.md:3`, `docs/identity/spec.md` §Outcome |
-| Формат постачання | Docker Compose; хост-порт публікує тільки Nginx, і той на `127.0.0.1` | `docker-compose.yml:114` |
-| Що працює зараз | Публічний каталог + сторінка курсу, uk/en, login/me/logout | `README.md:3`, `docs/identity/report.md` I03–I05 |
-| Чого немає | Реєстрація, скидання пароля, MFA, OAuth, адмінка, enrollment, курс-CRUD, refresh-токени | `docs/identity/spec.md` §Out of scope |
-| Комерція | Платіжного провайдера не підключено; замовлення — Phase 8 | `README.md:3,49` |
-| Масштаб даних | 2 міграції, сторінка каталогу ≤50, offset ≤10000 | `backend/migrations/`, `backend/openapi/openapi.yaml` §Pagination |
-| Мова контенту | Контент курсів український; i18next локалізує лише системний UI | `docs/foundation/report.md` |
+| Що це | Self-hosted платформа продажу курсів із власним відеосховищем, HLS, транскриптами | `work/PRODUCT-BRIEF.md` §1 |
+| Для кого | Відвідувач (каталог); student / instructor / admin — автентифіковані актори | `docs/architecture/context.md:3`, `backend/internal/identity/domain/user.go` |
+| Роадмап | Phase 4 адмінка → 5 upload → 6 playback+progress → 7 транскрипт(+гілки бесід) → 8 замовлення; робоче місце інструктора — окрема пізня фаза | `work/PRODUCT-BRIEF.md` §21, §24 |
+| Формат постачання | Docker Compose; хост-порт публікує тільки Nginx на `127.0.0.1` | `docker-compose.yml:114` |
+| Що працює зараз | Каталог + сторінка курсу, uk/en; логін → returnTo → хедер із ім'ям → logout; `/learn`, `/admin` — чесні порожні shell-и за роллю; `make seed-identities` — три фікстури | `docs/identity/report.md` §I06 п.1, `README.md:17-23` |
+| Чого немає | Реєстрація, скидання пароля, MFA, OAuth, admin CRUD, enrollment, playback, upload, прогрес, коментарі, оплата | `docs/identity/spec.md` §Out of scope, `AGENTS.md:6` |
+| Масштаб даних | 2 міграції; каталог limit ≤50, offset ≤10000 | `backend/migrations/`, `backend/openapi/openapi.yaml` §Pagination |
+| Мова | Контент український; i18next локалізує системний UI (uk/en) | `docs/foundation/report.md` |
 
 ---
 
 ## 3. Кодова база й seams
 
-**Розкладка.** Один Go-модуль `courses` (`backend/go.mod:1`) з трьома виконуваними файлами: `cmd/api`, `cmd/media-worker`, `cmd/migrate`. Бізнес-модулі — `internal/course` та `internal/identity`, кожен із `domain / application / ports / adapters`. Інфраструктура — `platform/{architecture,config,httpserver,observability,postgres,redis,runtime}`.
+**Розкладка.** Один Go-модуль `courses` із `cmd/{api,media-worker,migrate}`; бізнес-модулі `internal/{course,identity}`, кожен `domain/application/ports/adapters`; інфраструктура `platform/{architecture,config,httpserver,observability,postgres,redis,runtime}`. Фронтенд: `src/{domain,application,ports,adapters,presentation,app,routes}` — identity-зріз присутній на всіх шарах (`frontend/src/domain/identity`, `application/identity`, `app/composition/identity*.ts`, `presentation/identity`).
 
 **Межі та що їх перетинає:**
 
 | Seam | Що перетинає | Джерело |
 |---|---|---|
 | Браузер ↔ Nginx | HTTP; Nginx — єдиний публічний вхід | `infrastructure/nginx/nginx.conf:37-84` |
-| Nginx ↔ API | тільки `/api/*`; edge чистить `traceparent`/`tracestate` | `nginx.conf:67-68` |
-| **SSR ↔ API** | **прямий HTTP по внутрішній мережі, повз Nginx**, з форвардингом куки запиту | `docker-compose.yml:102`, `docs/architecture/containers.md:8` |
-| API ↔ worker | тільки через чергу Redis/Asynq; спільного коду домену немає | `backend/cmd/media-worker/main.go:38,44,52` |
-| domain ↔ решта | Go: домен імпортує лише stdlib; application — лише domain/ports. Перевіряється тестом | `backend/platform/architecture/boundaries_test.go:13-45` |
-| domain ↔ решта (фронт) | TS: файли в `domain/` не мають **жодного** імпорту; `application/` і `ports/` — лише inward | `frontend/scripts/check-architecture.mjs:44,48` |
-| presentation ↔ мережа | `fetch` у `routes/` і `presentation/` заборонений статично | `frontend/scripts/check-architecture.mjs:63` |
-| Generated ↔ домен | sqlc/Orval живуть тільки в адаптерах і мапляться явно | `AGENTS.md:16`, `Makefile:49` |
-| Транспорт ↔ домен (фронт) | один `createApiTransport` віддає transport outcome; кожен домен мапить його у власний union помилок, вокабуляри не змішуються | `frontend/src/adapters/api/transport.ts` |
-| Nginx ↔ медіа | Nginx віддає байти; Go і SSR їх не проксюють. Зараз `/media/*` → 403 | `AGENTS.md:19`, `nginx.conf:44-45` |
+| Nginx ↔ API | тільки `/api/*`; edge чистить `traceparent`/`tracestate`; логін має власну строгу зону | `nginx.conf:29,67-68` |
+| **SSR ↔ API** | **прямий HTTP по внутрішній мережі, повз Nginx**, з явним форвардингом куки | `docker-compose.yml:102`, `frontend/src/adapters/api/request-headers.ts` |
+| Корінь роутера ↔ identity | `beforeLoad: resolveRootIdentity` — один SSR-резолв на запит, дегідрація в кеш `['session']`; куки немає → `null` без мережі; `timeoutMs: 1000` на SSR-гілці | `frontend/src/routes/__root.tsx:25`, `app/composition/root-identity.ts` |
+| Захищені маршрути ↔ сесія | один спільний `requireIdentity` (`fetchQuery` + роль через `notFound()`); маршрути `ssr: false`; layout підписаний на `['session']` і редіректить, коли сесія зникає | `frontend/src/routes/learn.tsx:11-18`, `app/composition/require-identity.ts` |
+| API ↔ worker | тільки черга Redis/Asynq; спільного доменного коду немає | `backend/cmd/media-worker/main.go` |
+| domain ↔ решта (Go) | домен імпортує лише stdlib; application — лише domain/ports; перевіряється тестом | `backend/platform/architecture/boundaries_test.go` |
+| domain ↔ решта (TS) | файли `domain/` без імпортів; `application/`, `ports/` — лише inward; `fetch` у `routes/`/`presentation/` заборонений статично | `frontend/scripts/check-architecture.mjs:44-63` |
+| Generated ↔ домен | sqlc/Orval живуть в адаптерах, мапляться явно; drift — червоний гейт | `Makefile:46,49` |
+| Транспорт ↔ домен (фронт) | один `createApiTransport` → transport outcome; кожен домен мапить у власний union помилок | `frontend/src/adapters/api/transport.ts` |
+| Фікстури ↔ БД | чистий SQL-сід `ON CONFLICT` reconcile-до-файлу, окрема ціль `make seed-identities`; Go його не виконує | `backend/sql/seed-identities.sql`, `Makefile:24` |
+| Nginx ↔ медіа | Nginx віддає байти; Go і SSR не проксюють; зараз `/media/*` → 403 | `AGENTS.md:19`, `nginx.conf:44-45` |
 
-**Що варто знати про request-scope.** QueryClient та i18next створюються на кожен SSR-запит (`frontend/src/router.tsx:11-14`); глобальних мутабельних клієнтів немає. Кука форвардиться явно, бо на сервері немає браузерного cookie-jar (`frontend/src/adapters/api/request-headers.ts`), і обидва API-адаптери ходять через спільний транспорт (`frontend/src/adapters/api/transport.ts`).
+**Request-scope.** QueryClient та i18next — на кожен SSR-запит (`frontend/src/router.tsx:11-14`); глобальних мутабельних клієнтів немає. Хедер — prop-driven, з `refetchOnMount: false` на identity-запиті — інакше кожен маунт бив у `/me` і G07 був червоний (`work/report-i06d.md`).
 
 ---
 
@@ -71,25 +70,32 @@
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| CI | Один workflow `ci.yml`, тригер `[push, pull_request]` | `.github/workflows/ci.yml:2` |
-| Порядок гейтів | format → lint → typecheck → unit → integration → generated drift → build → up → seed+smoke → Playwright → shutdown | `.github/workflows/ci.yml:14-39` |
-| Деплой | **Кроку деплою в репо немає** — CI лише перевіряє | `.github/workflows/ci.yml` (відсутність job) |
-| Локальний запуск | `make up` (копіює `.env`, білдить, мігрує, чекає health, **релоадить Nginx**), `make seed` | `Makefile:8-12,22` |
-| Go-тулчейн | Пінований контейнер `golang:1.27.1-bookworm`; Go локально не потрібен | `Makefile:2-3` |
+| CI | Один workflow `ci.yml`, тригер `[push, pull_request]`, timeout 30 хв | `.github/workflows/ci.yml:2,7` |
+| Порядок гейтів | `check`: format-check → lint → typecheck → test → integration → check-generated → build → up → seed → seed-identities → smoke → e2e; CI повторює той самий порядок | `Makefile:54`, `.github/workflows/ci.yml:14-39` |
+| Виміряний стан | Повний `make check` exit 0; 175 фронт-тестів / усі Go-пакети / e2e 20/20 | `docs/identity/report.md` §I06 п.4 |
+| Деплой | Кроку деплою немає — CI лише перевіряє | `.github/workflows/ci.yml` (відсутність job) |
+| Локальний запуск | `make up` (копіює `.env`, білдить, мігрує, чекає health, релоадить Nginx), `make seed`, `make seed-identities` | `Makefile:8-12,22-25`, `README.md:11-15` |
+| Go-тулчейн | Пінований контейнер `golang:1.27.1-bookworm`; Go-тест-контейнери монтують **лише `backend/`** — репо-рутові перевірки живуть в `integration.sh` | `Makefile:2-3`, `work/report-i06f.md` |
 | Node | 24 для нативних фронт-інструментів | `.github/workflows/ci.yml:11` |
-| Rate limits на edge | `api` 10r/s burst 20 · `web` 50r/s burst 100 · `login` 10r/m burst 5 | `nginx.conf:21,25,29,49,60,71` |
-| Моніторинг | Опційний профіль Prometheus; метрики не виходять за docker-мережу | `docker-compose.yml` §prometheus, `nginx.conf:46-47` |
+| Rate limits | `api` 10r/s burst 20 · `web` 50r/s burst 100 · `login` 10r/m burst 5, ключ `$binary_remote_addr` | `nginx.conf:21-29` |
+| Моніторинг | Опційний профіль Prometheus; метрики внутрішні | `docker-compose.yml` §prometheus |
 
-**Дві пастки вимірювання, зафіксовані на практиці** (`docs/identity/report.md` I04 п.6, I05 п.8):
+**Пастки вимірювання, всі зафіксовані на практиці:**
 
-- `nginx.conf` — bind-mount, і контейнер не перестворюється сам; правки конфігу невидимі, поки Nginx не перезавантажено. `make up` тепер робить `nginx -s reload` (`Makefile:12`).
-- `/healthz` віддає **сам Nginx** (`nginx.conf:42`), тому як сигнал готовності фронтенду він марний. Треба `docker compose up -d --wait <service>`.
+- `make e2e` двічі поспіль → 429: e2e логіниться з хоста в зону `login`; другий прогін застає гарячий bucket. З чистого стека проходить; `docker compose restart nginx` скидає лімітер. Справжній фікс — спільний `storageState`, тригер: коли e2e виросте (`work/report-i06g.md`).
+- `smoke` (30 логінів) перед `e2e` — проходить: smoke б'є з docker-мережі, Playwright — з хоста; адреси різні, buckets різні (`docs/identity/report.md` §I06 п.6).
+- Правка `frontend/server.mjs` вимагає `docker compose up -d --build frontend` — інакше e2e міряє старий контейнер (`work/report-i06g.md`).
+- `nginx.conf` — bind-mount; правки невидимі без релоаду; `make up` тепер релоадить (`Makefile:12`).
+- `/healthz` віддає сам Nginx — марний як сигнал готовності фронтенду (`nginx.conf:42`).
+- `check` свідомо білдить двічі (`build`, потім `up`) — наслідок порядку маніфесту (`docs/identity/report.md` §I06 п.6).
 
 ---
 
 ## 5. Залежності
 
-**Backend** (`backend/go.mod`): Go 1.27.1 · pgx/v5 5.10.0 · goose/v3 3.28.0 · asynq 0.26.0 · go-redis/v9 9.22.0 · kin-openapi 0.149.0 (контрактні тести) · prometheus client 1.24.1 · OTel 1.46.0 · `golang.org/x/crypto` 0.55.0 (Argon2id) · testcontainers-go 0.44.0.
+Дельта `eada97b..HEAD` не чіпала `go.mod` і `package.json` — розділ звірено і збережено.
+
+**Backend** (`backend/go.mod`): Go 1.27.1 · pgx/v5 5.10.0 · goose/v3 3.28.0 · asynq 0.26.0 · go-redis/v9 9.22.0 · kin-openapi 0.149.0 · prometheus client 1.24.1 · OTel 1.46.0 · `golang.org/x/crypto` 0.55.0 (Argon2id) · testcontainers-go 0.44.0.
 
 **Frontend** (`frontend/package.json`): React 19.2.7 · TanStack Router 1.170.32 / Query 5.102.8 / Start 1.168.49 · react-aria-components 1.21.0 · i18next 26.4.1 · zod 4.5.4 · tailwindcss 4.3.3 · srvx 1.0.1. Інструменти: Rsbuild 2.2.2, Rstest 0.11.11, Playwright 1.62.1, MSW 2.15.0, Orval 8.27.0, oxlint 1.81.0 / oxfmt 0.66.0, TypeScript 6.0.3.
 
@@ -97,44 +103,44 @@
 
 | Блокування | Джерело |
 |---|---|
-| Orval-клієнт генерується з `backend/openapi/openapi.yaml` — зміна контракту зобов'язує `make generate`, інакше падає drift-гейт | `frontend/orval.config.ts:5`, `Makefile:46,49` |
-| sqlc-код генерується з `backend/sql/queries` і живе під адаптерами | `Makefile:46` |
-| Заборонені явно: Rust, ORM, service locator, Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn | `AGENTS.md:12,24` |
-| Залежність додається тільки коли її щось реально споживає | `AGENTS.md:25` |
+| Orval-клієнт ← `backend/openapi/openapi.yaml`; зміна контракту зобов'язує `make generate`, інакше drift-гейт | `frontend/orval.config.ts:5`, `Makefile:46,49` |
+| sqlc ← `backend/sql/queries`, живе під адаптерами | `Makefile:46` |
+| Заборонені: Rust, ORM, service locator, Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn | `AGENTS.md:12,24` |
+| Зі стек-списку ТЗ ще не встановлені (чекають споживача): RHF і TanStack Table/Virtual → Phase 4, Zustand → 5–6, hls.js → 6, TipTap → 7, ECharts → прогрес/аналітика | `work/PRODUCT-BRIEF.md` §3, `frontend/package.json` |
 
 ---
 
 ## 6. Ризики
 
-**Відкриті знахідки аудиту** (`docs/security/audit-2026-09-03.md`; 0 critical, 0 high):
+**Відкриті знахідки аудиту** (`docs/security/audit-2026-09-03.md`; 0 critical/high; повторне рев'ю гілки I06 — 0 HIGH/MEDIUM, один sub-threshold logout-фікс уже змерджений `1292b3a`):
 
 | ID | Суть | Стан |
 |---|---|---|
-| LOW-5 | Немає CSP, Permissions-Policy, COOP/COEP, HSTS | відкладено в задачу `S01`, за TLS (`work/tasks.md` §Pre-deploy hardening) |
-| LOW-6 | Locale-кука без `Secure` | те саме, за TLS |
+| LOW-5 | Немає CSP, Permissions-Policy, HSTS | `S01`, за TLS (`work/tasks.md` §Pre-deploy) |
+| LOW-6 | Куки без `Secure`; `__Host-` неможливий на http | `S01`→`S02`, за TLS (`work/tasks.md:37`) |
 
-MEDIUM-1, MEDIUM-2, LOW-1..LOW-4 закриті (`docs/security/audit-2026-09-03.md` §Що змінилося).
+**Свідомий борг із власниками й тригерами:**
 
-**Свідомо недороблене:**
-
-| Що | Джерело |
-|---|---|
-| БД не сідить жодної ідентичності — демо-креденшели належать I06 | `backend/sql/seed.sql` (жодного рядка users), `docs/identity/report.md` I05 п.9 |
-| `/learn` і `/admin` — досі Phase 1 плейсхолдери, гардів немає | `frontend/src/routes/learn.tsx`, `docs/identity/report.md` I05 п.9 |
-| Немає handler-level авторизації за роллю — чекає на перший захищений admin-ендпоїнт | `docs/identity/spec.md` §Scope |
-| Worker стартує, але не обробляє задач транскодингу | `README.md:49`, `backend/cmd/media-worker/main.go` |
-| Індетермінований commit у PostgreSQL свідомо віддається як 503 без куки | `docs/identity/spec.md` §Security contract |
+| Що | Тригер повернення | Джерело |
+|---|---|---|
+| `presentation/ui/data.tsx` (`Table`, `Pagination`) хардкодить українську | перший рендер цих компонентів англійською — імовірно Phase 4 | `work/report-i06d.md` |
+| `rstest.config.ts` глобально аліасить `@tanstack/react-start/server$` | тест, якому потрібне щось поза `getCookie` | `frontend/rstest.config.ts:10` (`ponytail:`) |
+| `RootIdentity.unavailable` продукується, але жоден споживач не відрізняє його від `anonymous` | еволюція хедера/гардів — дати сенс або згорнути | `work/report-i06a.md` |
+| Надлишкова рання перевірка в `safeReturnTo` — свідомий пояс на trust boundary | — | `work/report-i06c.md` |
+| Worker стартує, задач не обробляє | Phase 5 | `README.md:59`, `backend/cmd/media-worker/main.go` |
+| Індетермінований commit → 503 без куки, свідомо | — | `docs/identity/spec.md` §Security contract |
 
 **Де найкрихкіше:**
 
 | Місце | Чому | Джерело |
 |---|---|---|
-| Точність часу на межі application↔сховище | `time.Now` не переживав round-trip через `timestamptz`; логін був повністю зламаний при 100% зелених тестах, бо всі тести брали рівні секунди | `docs/identity/report.md` I03 п.6 |
-| Edge-конфіг | Правки `nginx.conf` невидимі без релоаду — один замір уже дав хибний результат | `docs/identity/report.md` I04 п.6 |
-| MSW як інструмент | У цій зв'язці **не віддає заголовки запиту** хендлеру, тож форвардинг куки через нього не перевіряється | `docs/identity/report.md` I05 п.8 |
-| Вартість логіну | Argon2id `m=64MiB, t=3, p=2`, і `VerifyDummy` платить ту саму ціну за неіснуючі акаунти — тому логін має окрему жорстку зону, а не загальну API | `nginx.conf:29`, `backend/internal/identity/adapters/argon2id/verifier.go:14-16` |
-| Контракт URL сторінки | `validateSearch`, що емітить дефолт, змушує роутер переписати адресу й віддати 307: правило `next.publicHref !== canonical.publicHref` у `router-core` `load-server.js:530`. Цей дефект був і в `/login`, і в `/courses` | `docs/identity/report.md` §Catalog URL contract |
-| Статуси помилок SSR | лейн маршруту віддає захардкоджений 500 на будь-який throw (`load-server.js:303`); гачка відсутня, `setResponseStatus` не діє. Досяжні лише 200, 404 через `notFound()`, 3xx через `redirect()` і 500 | `docs/identity/report.md` §Catalog URL contract |
-| Перед публічним bind | Потрібні TLS, керовані секрети, бекапи, квоти сховища | `README.md:51` |
+| Серверна авторизація | Не існує; Phase 4 будує її з нуля і не сміє успадкувати з клієнтських гардів | `docs/identity/report.md` §I06 п.7 |
+| Розріз задач | I06: чотири з восьми задач переносили роботу через свої межі; різати треба по виконуваних доказах і межах середовищ, не по файлових/UI-ярликах | `docs/identity/report.md` §I06 п.8 |
+| Точність часу application↔сховище | `time.Now` (нс) не переживав round-trip `timestamptz`; логін був зламаний при зелених тестах | `docs/identity/report.md` I03 п.6 |
+| MSW | Не віддає заголовки запиту хендлеру — форвардинг куки доводиться на білдері заголовків і наживо | `docs/identity/report.md` I05 п.8 |
+| Вартість логіну | Argon2id `m=64MiB,t=3,p=2`; `VerifyDummy` платить ту саму ціну — тому окрема жорстка зона `login` | `backend/internal/identity/adapters/argon2id/verifier.go:14-16`, `nginx.conf:29` |
+| Контракт URL сторінки | `validateSearch`, що емітить дефолт → роутер переписує адресу → 307 (`load-server.js:530`); дефект був у `/login` і `/courses` | `docs/identity/report.md` §Catalog URL contract |
+| Статуси SSR | Лейн маршруту віддає захардкоджений 500 на будь-який throw; досяжні лише 200 / 404 (`notFound()`) / 3xx (`redirect()`) / 500 | `docs/identity/report.md` §Catalog URL contract |
+| Перед публічним bind | TLS, керовані секрети, бекапи, квоти сховища | `README.md:61` |
 
-**⚠️ Неперевірені тези: 0.** Кожна теза вище має посилання на код, документ або файл конфігурації.
+**⚠️ Неперевірені тези: 0.**
