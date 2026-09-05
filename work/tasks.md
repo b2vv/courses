@@ -98,7 +98,7 @@ Compose і фікстур, тобто не може бігти раніше за
 |---|---|---:|---|---|---|
 | T01 | Міграція 00004 (`deleted_at`, два CHECK, партковий unique, drop email_key, down); `GetIdentityCredential` +`deleted_at IS NULL`; фікс канарки 00004→00005; сід-фікстури +disposables | 2h | GATE 2 green | done | `work/report-t01.md`; B06, B07, B08; disposables moved to d-range; gates through check-generated pass |
 | T02 | Домен: `DeletedAt`, `AccountStatus`, `CanBlock`/`CanDelete` (self/admin-immutable/last-admin), межі пароля | 1h | — | done | `work/report-t02.md`; domain unit tests; gates pass |
-| T03 | Application use cases на фейках: `ListUsers`, `SetStatus`, `Delete`, `ResetPassword`; дедлайни, скасування, dependency failure | 1.25h | T02 | planned | R15, R17 |
+| T03 | Application use cases на фейках: `ListUsers`, `SetStatus`, `Delete`, `ResetPassword`; дедлайни, скасування, dependency failure | 1.25h | T02 | done | `work/report-t03.md`; R15, R17; gates pass |
 | T04 | PostgreSQL-адаптер + sqlc (READ COMMITTED): escaped list, `LockAdmins`/`LockUserForStatus`, last-admin count + session revoke, `SetUserDisabledAt` (block+restore), soft-delete+revoke, set-password+revoke, mapper, гонки | 2h | T01, T03 | planned | P03–P06, B03, B05, B11, B12, R09, R10, R12, R16, R18, R22, R23 |
 | T05 | HTTP: чотири маршрути на шві 4a, admin-гейт, DTO/межі, error mapping, OpenAPI+generate | 2h | T04 | planned | P01, P02, B01, B04, R01–R08, R11, R13, R14 |
 | T06 | Фронтовий admin-users адаптер/application: ids, zod, репозиторій із мапінгом кодів, use cases, композиція, інвалідація; Orval | 1.5h | T05 | planned | B09, R19 |
