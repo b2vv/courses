@@ -16,7 +16,8 @@ the fallback the manifest prescribes. Flushed as decisions land, not at the end.
 | 5 GATE 2 (1st) | **RED.** `plan-critique`: 11 blocking, 19 non-blocking. `plan-defense`: 0 covered, 5 holes. Constitution: 1 violation, closed | fresh delegates |
 | 5 GATE 2 (2nd) | **RED.** `plan-critique`: 10 blocking, 17 non-blocking. `plan-defense`: 2 covered, 3 holes. Decision taken: spike the router before drafting again | fresh delegates + user |
 | 5 GATE 2 (3rd) | **RED.** Four lenses, `4 запущено / 4 повернулось`; deduplicated to 8 blocking themes. Constitution inline: 1 blocking. `plan-defense` **not run** — it would judge a text that is about to change. Two forks put to the user | fresh delegates |
-| 6 tasks | cut into I06a–I06h at edition 3; the cut itself is now a blocking finding (evidence per task) and is recut with edition 4 | — |
+| 5 GATE 2 (4th) | **GREEN.** `plan-critique`'s eight blocking themes all answered in edition 4, zero left open. `plan-defense`: 5 questions, 2 holes returned, both closed in the plan text — final verdict 0 holes. Constitution: closed | fresh delegates |
+| 6 tasks | recut with edition 4: tests moved to the tasks that own the behaviour, column renamed `owns`, all 49 acceptance rows assigned | — |
 | 7 implement | — | — |
 | 8 verify | — | — |
 | 9 wrap | — | — |
@@ -411,3 +412,51 @@ consecutive tasks with none. The column is renamed `owns`. All 49 acceptance row
 owning task; edition 3 left G10a, G10b, G12, G13, G14, G22 and G23 with none. The estimate falls
 from ≈12h to ≈11.5h, and the false premise it rested on — "no route-level test at all" — is
 corrected in both the plan and the tracker.
+
+## GATE 2, fourth round — green
+
+`plan-critique`'s eight blocking themes are all answered in edition 4; zero left open.
+
+`plan-defense` ran on edition 4 with a fresh delegate on `sonnet` — not the author's tier, and
+not the tier that ran the critique. It re-opened every mechanical citation the plan makes
+rather than trusting any of them and found none false, which is the first time in this slice
+that has been true. It returned **two holes**, both narrow, and both invisible to all four
+critique lenses — which is the argument for running both gates instead of one:
+
+1. **Sign-out had no failure branch.** §Header said sign-out "navigates to the catalog" with no
+   second path, while G26 demanded a localized message under a store failure — a message with
+   nowhere to appear. Not a silence that an acceptance row could cover, but a contradiction
+   between the design and its own table. Closed by reading `handler.go:90-105`: the server sets
+   `expiredCookie()` *before* it attempts revocation, so the browser is signed out either way
+   and only the message differs. It renders as the kit's `Toast` from the root `Layout`, which
+   does not unmount across the navigation the sign-out itself causes. This also removes a race
+   with the mounted-route subscription, which would have navigated on its own once the cache
+   turned `null`.
+2. **A fast series of navigations had no owner.** Closed by measurement rather than by writing
+   code: the router owns the navigation transaction as `router._tx` and discards a stale one at
+   commit (`load-client.js:655`, `:831`, `:835`, `:861`, `:866`), so an abandoned guard's
+   `redirect()` or `notFound()` is never applied. Recorded as a measured fact, with an explicit
+   statement that the slice owes no acceptance row for it — the guarantee belongs to the router,
+   not to I06.
+
+Final verdict: **0 holes, gate green.** The defense table lives in `i06/plan.md`
+§"GATE 2 — plan-defense", because a verdict that exists only in a conversation closes nothing
+for the next reader.
+
+### What the three refusals cost, and what they bought
+
+Four editions, three red gates, one throwaway spike, sixteen delegated agent runs. Every
+refusal was earned by the same failure — asserting framework behaviour without opening the
+framework — and each one moved the failure one layer deeper: `document.cookie` against an
+`HttpOnly` cookie, then `beforeLoad`-versus-loader ordering, then root-match retention, then
+`ensureQueryData`'s treatment of `staleTime`. The pattern only broke when the rule changed from
+"reason carefully" to "open the file, and if the file cannot answer, run it".
+
+Edition 4 is the first written under that rule throughout, and it is also the first whose
+citations survived an adversarial re-check unchanged.
+
+## Next
+
+Gate is green. Implementation starts at **I06a** through `tdd`, one task at a time.
+`work/tasks.md` §"I06 розрізано на задачі" carries the order and the dependencies; `I06c` and
+`I06f` have none and can go in any order relative to the rest.

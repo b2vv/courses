@@ -21,6 +21,7 @@ was written, and the reading is cited so the next reader can repeat it rather th
 | `notFound()` from a child `beforeLoad` sets `status="notFound"` | The 404 answer works from the guard |
 | `beforeLoad` is skipped on the server for `ssr: false` matches (`load-server.js:159`) | `/learn` and `/admin` decide client-side |
 | `__beforeLoadContext` dehydrates as `b` (`ssr-server.js:25`) and the client rebuilds the root context from it (`load-client.js:1200-1204`), starting the handoff load past the root | The guard's client-side decision needs **no** network call: the root's answer crossed in the HTML |
+| The router owns the navigation transaction as `router._tx` and discards a stale one at commit — `if (router._tx !== tx) return` (`load-client.js:655`, and again at `:831`, `:835`, `:861`, `:866`) | A fast series of navigations is safe by construction. If a visitor opens `/admin` and moves on before the guard's `fetchQuery` resolves, the abandoned guard's `redirect()` or `notFound()` is never applied — the slice writes no cancellation logic of its own, and no acceptance row is owed for it |
 
 ### Query — `@tanstack/query-core` 5.102.8
 
@@ -46,8 +47,9 @@ got wrong.
 
 **Reused unchanged:** `identity-queries.current()`, `sessionQueryKey` and its `staleTime: 0`;
 `session.logOut` (written in I05, still without a consumer); `canAccessAdministration`;
-`EmptyState`, **`ErrorState` with `retryHref`** (`presentation/ui/states.tsx:15-27`), `Button`
-and `Link`; the shared API transport; **`SessionQueryError`** with its
+`EmptyState`, **`ErrorState` with `retryHref`** (`presentation/ui/states.tsx:15-27`),
+**`Toast`** (`presentation/ui/overlays.tsx:105`), `Button` and `Link`; the shared API
+transport; **`SessionQueryError`** with its
 `dependency_unavailable` code (`identity-queries.ts:5-12`); `notFound()`, already used by
 `app/router/catalog-search.ts:77`; `createIsomorphicFn` request options from
 `app/composition/identity.ts:7`.
@@ -208,10 +210,24 @@ is fixed, a query string cannot change origin.
 
 `Layout` reads `['session']` and passes props to a prop-driven component, like `LoginView`.
 Name as text, a sign-out `Button`, and a `Link` to `/admin` only when
-`canAccessAdministration`. Sign-out calls the reused use case, sets the query to `null`, and
-navigates to the catalog. The component is **not** called `SessionMenu`: `Menu` exists in the
+`canAccessAdministration`. The component is **not** called `SessionMenu`: `Menu` exists in the
 kit and GATE 1 decision 5 explicitly rejected a menu, so the name would contradict the
 decision it implements.
+
+**Sign-out has two branches, and both end signed out.** The server expires the cookie
+*before* it attempts revocation — `handler.go:97` sets `expiredCookie()` and only then loops
+over the tokens — so the browser's session is gone whether the revocation succeeds or answers
+503. The client therefore sets `['session']` to `null` and navigates to the catalog in **both**
+cases; the difference is only what the visitor is told. On failure the localized message is
+rendered as the kit's `Toast` (`presentation/ui/overlays.tsx:105`) from the root `Layout`,
+which does not unmount across the navigation, so the message survives the move to a public
+page. Putting it in the sign-out control instead would show a message that the very same
+action then navigates away from.
+
+This also settles the interaction with the mounted-route subscription above: on `/learn` the
+cache turning `null` would make that subscription navigate anyway. One branch, one
+destination, and a message that outlives the transition — rather than two mechanisms racing
+for the same navigation. G26 is written against exactly this.
 
 Accessibility: the sign-out control is a real button in tab order with the kit's visible focus
 ring and a ≥44px target; the administration link sits in the existing `<nav>`; the name is
@@ -350,6 +366,34 @@ Sized at **≈11.5h across eight tasks**. Edition 3 said twelve and justified it
 has no route-level test at all" — false, as §Reuse now records — and with a comparison to a
 figure of twenty that was never measured. The remaining cost is real but smaller: test files on
 harnesses that already exist, plus one genuinely new integration test for the seed.
+
+## GATE 2 — plan-defense
+
+Five fixed questions, run on this edition by a fresh delegate with clean context. Every
+mechanical citation the plan makes was re-opened and checked rather than taken on trust; none
+was found false. Two holes were returned and both are closed above, in the plan text rather
+than in a conversation, because the next reader reads the plan.
+
+| # | Питання | Закрито рядком | Вердикт |
+|---|---|---|---|
+| 1 | кривий інпут | §Identity in the root (every failure maps through `unwrap`); §`safeReturnTo`; `acceptance.md` G13, G14, G15, G16 | закрито |
+| 2 | відмова залежності | §Identity in the root (SSR deadline); §Guard (`unavailable` → `ErrorState`); **§Header, sign-out's two branches**; `acceptance.md` G09, G10, G10a, G10b, G26 | закрито |
+| 3 | гонка й повторний виклик | §Freshness (dedup, `query.js:157-162`); §Fixtures (`LOCK TABLE`); **§Measured facts, router transaction ownership**; `acceptance.md` G23, G25, G35 | закрито |
+| 4 | порожні та граничні дані | §Screens; `acceptance.md` G03, G19, G06, G15a, G33, G34, G34a, G34b, G40 | закрито |
+| 5 | rollback | §Rollback, including the named irreversible row — the contract amendments are not covered by reverting the code | закрито |
+
+**Дірок: 0.** The two the delegate found were narrow and neither had been noticed by the four
+critique lenses, which is the point of running both gates rather than one:
+
+1. **Sign-out had no failure branch.** The design said sign-out "navigates to the catalog"
+   with no second path, while G26 demanded a localized message under a store failure — a
+   message with nowhere to appear. Closed by reading `handler.go:90-105`: the cookie is expired
+   before revocation is attempted, so both branches end signed out and only the message
+   differs.
+2. **A fast series of navigations had no owner.** Closed by measurement rather than by writing
+   code: the router discards a stale transaction at commit, so an abandoned guard's redirect is
+   never applied. The plan now records the fact and says explicitly that the slice owes no
+   acceptance row for it.
 
 ## Приймальні сценарії
 
