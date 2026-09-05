@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Courses API
   version: 1.0.0
-  description: Public catalog, session authentication and protected administration reads. Administration mutations, purchases and media playback are not implemented.
+  description: Public catalog, session authentication and protected administration course authoring. Status changes, deletion, purchases and media playback are not implemented.
 servers:
   - url: /
 paths:
@@ -100,6 +100,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      operationId: createAdminCourse
+      summary: Create a draft course
+      description: >-
+        Creates a new draft with no modules. Instructors always become the owner and may
+        omit instructorId or echo their own ID. Admins must choose an eligible active
+        instructor or admin. The unique slug is the replay guard, so an identical replay
+        returns slug_taken. Requires one matching Origin header. Bodies are limited to
+        512 KiB, accept no duplicate or unknown members, and responses are never cached.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCourseWrite' }
+      responses:
+        '201':
+          description: The newly created draft course with a server-minted ID and empty tree.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCourseTree' }
+        '400': { $ref: '#/components/responses/AdminWriteBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses/{id}:
     get:
       operationId: getAdminCourse
@@ -126,6 +155,44 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      operationId: saveAdminCourse
+      summary: Replace an authored course tree
+      description: >-
+        Replaces all editable course fields, modules and lessons. Array indexes define
+        contiguous zero-based positions; lifecycle and position members are rejected.
+        expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read.
+        Instructors may save only their own course and must omit instructorId or echo their
+        own ID; admins may reassign to an eligible active instructor or admin. Slugs remain
+        mutable only until first publication. Requires one matching Origin header. Bodies
+        are limited to 512 KiB, accept no duplicate or unknown members, and responses are
+        never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCourseSaveRequest' }
+      responses:
+        '200':
+          description: The saved course tree with a new updatedAt token.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCourseTree' }
+        '400': { $ref: '#/components/responses/AdminWriteBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/instructors:
@@ -285,7 +352,7 @@ components:
         title: { type: string, minLength: 1, maxLength: 200 }
         status: { type: string, enum: [draft, published, archived] }
         instructorId: { type: string, format: uuid }
-        updatedAt: { type: string, format: date-time }
+        updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
     AdminCoursePage:
       type: object
       additionalProperties: false
@@ -327,13 +394,45 @@ components:
         description: { type: string, minLength: 1, maxLength: 20000 }
         status: { type: string, enum: [draft, published, archived] }
         instructorId: { type: string, format: uuid }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        publishedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { $ref: '#/components/schemas/AdminTimestamp' }
+        updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+        publishedAt: { $ref: '#/components/schemas/NullableAdminTimestamp' }
         modules:
           type: array
           maxItems: 40
           items: { $ref: '#/components/schemas/AdminModule' }
+    AdminCourseWrite:
+      type: object
+      additionalProperties: false
+      required: [slug, title, summary, description]
+      properties:
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        instructorId: { type: string, format: uuid }
+    AdminCourseSaveRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedUpdatedAt, course, modules]
+      properties:
+        expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+        course: { $ref: '#/components/schemas/AdminCourseWrite' }
+        modules:
+          type: array
+          maxItems: 40
+          items: { $ref: '#/components/schemas/AdminModule' }
+    AdminTimestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 timestamp carrying exactly six fractional-second digits.
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$'
+    NullableAdminTimestamp:
+      type: string
+      format: date-time
+      nullable: true
+      description: RFC 3339 timestamp carrying exactly six fractional-second digits, or null.
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$'
     Instructor:
       type: object
       additionalProperties: false
@@ -373,10 +472,26 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    AdminWriteBadRequest:
+      description: The body is missing, malformed, oversized, outside field/tree bounds, names an ineligible owner, or carries unexpected members.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AdminMutationForbidden:
+      description: The Origin is not allowed, the actor is not staff, or the instructor does not own the course or attempted reassignment.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     InvalidRequest:
       description: The request path, query or body is missing, malformed, oversized or carries unexpected members.
       headers:
@@ -418,6 +533,14 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     NotFound:
       description: Course was not found.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: The slug is taken or immutable, or the optimistic concurrency token is stale.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
         Cache-Control: { $ref: '#/components/headers/NoStore' }
