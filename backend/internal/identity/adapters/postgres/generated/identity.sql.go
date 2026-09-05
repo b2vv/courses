@@ -92,6 +92,7 @@ const getIdentityCredential = `-- name: GetIdentityCredential :one
 SELECT id::text AS id, email, display_name, role, password_hash, created_at, updated_at, disabled_at
 FROM users
 WHERE email = $1::text
+  AND deleted_at IS NULL
 `
 
 type GetIdentityCredentialRow struct {

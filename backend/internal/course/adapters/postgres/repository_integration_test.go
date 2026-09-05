@@ -75,8 +75,11 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if _, err := provider.UpTo(ctx, 2); err != nil {
 			t.Fatal(err)
 		}
-		identitySeed := mustRead(t, filepath.Join("..", "..", "..", "..", "sql", "seed-identities.sql"))
-		if _, err := pool.Exec(ctx, string(identitySeed)); err != nil {
+		preAdministrationIdentitySeed := `INSERT INTO users (id, email, display_name, role, password_hash) VALUES
+		('40000000-0000-4000-8000-000000000001', 'student@courseforge.local', 'Студентка Курсу', 'student', '$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+		('40000000-0000-4000-8000-000000000002', 'instructor@courseforge.local', 'Викладач Курсу', 'instructor', '$argon2id$v=19$m=65536,t=3,p=2$aW5zdHJ1Y3Rvci1zZWVkIQ$zjeAhI2zv+SPciv5gZZegL3BFoWNrJGqMg721CkxRrI'),
+		('40000000-0000-4000-8000-000000000003', 'admin@courseforge.local', 'Адміністратор Курсу', 'admin', '$argon2id$v=19$m=65536,t=3,p=2$YWRtaW4tZGVtby1zZWVkIQ$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0')`
+		if _, err := pool.Exec(ctx, preAdministrationIdentitySeed); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, "UPDATE users SET disabled_at=updated_at WHERE id='40000000-0000-4000-8000-000000000003'"); err != nil {
@@ -88,6 +91,27 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if _, err := provider.Up(ctx); err != nil {
 			t.Fatal(err)
+		}
+		var userCount, deletedCount int
+		if err := db.QueryRowContext(ctx, `SELECT count(*), count(deleted_at) FROM users`).Scan(&userCount, &deletedCount); err != nil {
+			t.Fatal(err)
+		}
+		if userCount != 3 || deletedCount != 0 {
+			t.Fatalf("identity administration migration changed users: count=%d deleted=%d", userCount, deletedCount)
+		}
+		var activeEmailIndex, oldEmailConstraint bool
+		if err := db.QueryRowContext(ctx, `SELECT
+		EXISTS (
+			SELECT 1 FROM pg_indexes
+			WHERE schemaname='public' AND tablename='users' AND indexname='users_email_active_key'
+				AND indexdef LIKE 'CREATE UNIQUE INDEX%'
+				AND indexdef LIKE '%WHERE (deleted_at IS NULL)'
+		),
+		EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='users'::regclass AND conname='users_email_key')`).Scan(&activeEmailIndex, &oldEmailConstraint); err != nil {
+			t.Fatal(err)
+		}
+		if !activeEmailIndex || oldEmailConstraint {
+			t.Fatalf("identity administration email index: active=%t old constraint=%t", activeEmailIndex, oldEmailConstraint)
 		}
 		var courseCount, ownerCount int
 		var ownerID string
@@ -156,7 +180,7 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, "DELETE FROM courses"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, string(identitySeed)); err != nil {
+		if _, err := pool.Exec(ctx, preAdministrationIdentitySeed); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := provider.Up(ctx); err != nil {
@@ -169,10 +193,11 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		files := fstest.MapFS{
-			"00001_courses.sql":   &fstest.MapFile{Data: initial},
-			"00002_identity.sql":  &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
-			"00003_authoring.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00003_authoring.sql"))},
-			"00004_failure.sql":   &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
+			"00001_courses.sql":        &fstest.MapFile{Data: initial},
+			"00002_identity.sql":       &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
+			"00003_authoring.sql":      &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00003_authoring.sql"))},
+			"00004_identity_admin.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00004_identity_admin.sql"))},
+			"00005_failure.sql":        &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
 		}
 		failure, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithDisableGlobalRegistry(true))
 		if err != nil {

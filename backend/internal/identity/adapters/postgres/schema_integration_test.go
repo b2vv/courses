@@ -105,6 +105,9 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			{"40000000-0000-4000-8000-000000000001", "student@courseforge.local", "Студентка Курсу", "courseforge-student-demo", domain.Student},
 			{"40000000-0000-4000-8000-000000000002", "instructor@courseforge.local", "Викладач Курсу", "courseforge-instructor-demo", domain.Instructor},
 			{"40000000-0000-4000-8000-000000000003", "admin@courseforge.local", "Адміністратор Курсу", "courseforge-admin-demo", domain.Admin},
+			{"40000000-0000-4000-8000-0000000000d1", "block-me@courseforge.local", "Тест блокування", "courseforge-student-demo", domain.Student},
+			{"40000000-0000-4000-8000-0000000000d2", "delete-me@courseforge.local", "Тест видалення", "courseforge-student-demo", domain.Student},
+			{"40000000-0000-4000-8000-0000000000d3", "reset-me@courseforge.local", "Тест скидання пароля", "courseforge-student-demo", domain.Student},
 		}
 		defer func() {
 			if _, err := pool.Exec(context.Background(), `DELETE FROM users`); err != nil {
@@ -123,7 +126,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		}
 		snapshot := func() string {
 			var value string
-			err := pool.QueryRow(ctx, `SELECT string_agg(id::text || '|' || email || '|' || display_name || '|' || role || '|' || password_hash || '|' || coalesce(disabled_at::text, ''), E'\n' ORDER BY id) FROM users`).Scan(&value)
+			err := pool.QueryRow(ctx, `SELECT string_agg(id::text || '|' || email || '|' || display_name || '|' || role || '|' || password_hash || '|' || coalesce(disabled_at::text, '') || '|' || coalesce(deleted_at::text, ''), E'\n' ORDER BY id) FROM users`).Scan(&value)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -137,10 +140,10 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			for _, expected := range fixtures {
 				var email, displayName string
 				var role domain.Role
-				var disabled bool
-				err := pool.QueryRow(ctx, `SELECT email, display_name, role, disabled_at IS NOT NULL FROM users WHERE id=$1`, expected.id).Scan(&email, &displayName, &role, &disabled)
-				if err != nil || email != expected.email || displayName != expected.displayName || role != expected.role || disabled {
-					t.Fatalf("fixture %s: email=%q displayName=%q role=%q disabled=%v err=%v", expected.id, email, displayName, role, disabled, err)
+				var disabled, deleted bool
+				err := pool.QueryRow(ctx, `SELECT email, display_name, role, disabled_at IS NOT NULL, deleted_at IS NOT NULL FROM users WHERE id=$1`, expected.id).Scan(&email, &displayName, &role, &disabled, &deleted)
+				if err != nil || email != expected.email || displayName != expected.displayName || role != expected.role || disabled || deleted {
+					t.Fatalf("fixture %s: email=%q displayName=%q role=%q disabled=%v deleted=%v err=%v", expected.id, email, displayName, role, disabled, deleted, err)
 				}
 			}
 		}
@@ -149,7 +152,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertFixtureSet()
-		for _, expected := range fixtures {
+		for _, expected := range fixtures[:3] {
 			response := login(expected.email, expected.password)
 			body := response.Body.String()
 			if response.Code != http.StatusOK || len(response.Result().Cookies()) == 0 || !strings.Contains(body, `"role":"`+string(expected.role)+`"`) || strings.Contains(body, "password") || strings.Contains(body, "token") {
@@ -205,7 +208,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, string(seed)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := pool.Exec(ctx, `UPDATE users SET updated_at=now(), disabled_at=now() WHERE id=$1`, fixtures[0].id); err != nil {
+		if _, err := pool.Exec(ctx, `UPDATE users SET updated_at=now(), disabled_at=now(), deleted_at=now() WHERE id=$1`, fixtures[0].id); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, string(seed)); err != nil {
@@ -266,6 +269,40 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		('50000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',$2,'2026-09-03T12:00:00Z','2026-09-04T00:00:00Z')`, collisionDigest[:], previousDigest[:]); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("identity administration schema has soft-delete constraints and partial email uniqueness", func(t *testing.T) {
+		var column, validConstraint, impliesDisabled, activeEmailIndex, oldEmailConstraint bool
+		err := database.QueryRowContext(ctx, `SELECT
+		EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='users' AND column_name='deleted_at'
+				AND data_type='timestamp with time zone' AND is_nullable='YES'
+		),
+		EXISTS (
+			SELECT 1 FROM pg_constraint
+			WHERE conrelid='users'::regclass AND conname='users_deleted_at_valid' AND contype='c'
+		),
+		EXISTS (
+			SELECT 1 FROM pg_constraint
+			WHERE conrelid='users'::regclass AND conname='users_deleted_implies_disabled' AND contype='c'
+		),
+		EXISTS (
+			SELECT 1
+			FROM pg_index
+			WHERE indexrelid='users_email_active_key'::regclass
+				AND indisunique
+				AND pg_get_expr(indpred, indrelid) LIKE '%deleted_at IS NULL%'
+		),
+		EXISTS (
+			SELECT 1 FROM pg_constraint
+			WHERE conrelid='users'::regclass AND conname='users_email_key'
+		)`).Scan(&column, &validConstraint, &impliesDisabled, &activeEmailIndex, &oldEmailConstraint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !column || !validConstraint || !impliesDisabled || !activeEmailIndex || oldEmailConstraint {
+			t.Fatalf("identity administration schema: column=%t valid=%t implies-disabled=%t active-index=%t old-constraint=%t", column, validConstraint, impliesDisabled, activeEmailIndex, oldEmailConstraint)
+		}
+	})
 	t.Run("credential verification hides unknown and disabled users", func(t *testing.T) {
 		passwords := &passwordVerifier{matched: true}
 		repository := NewRepository(pool, passwords)
@@ -306,6 +343,45 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			if _, err := repository.VerifyCredentials(ctx, email, "wrong-password"); !errors.Is(err, domain.ErrInvalidCredentials) {
 				t.Fatalf("%s: %v", email, err)
 			}
+		}
+	})
+
+	t.Run("login selects the active user after email reuse", func(t *testing.T) {
+		const (
+			deletedID = "40000000-0000-4000-8000-000000000090"
+			activeID  = "40000000-0000-4000-8000-000000000091"
+			email     = "reused@courseforge.local"
+			password  = "courseforge-reused-active"
+		)
+		hash := encodePassword(password, []byte("reused-user-salt"))
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash,created_at,updated_at,disabled_at,deleted_at) VALUES
+		($1,$3,'Deleted reuse fixture','student',$4,'2026-09-03T12:00:00Z','2026-09-03T12:00:00Z','2026-09-03T12:00:00Z','2026-09-03T12:00:00Z'),
+		($2,$3,'Active reuse fixture','student',$4,'2026-09-03T12:00:00Z','2026-09-03T12:00:00Z',NULL,NULL)`, deletedID, activeID, email, hash); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if _, err := pool.Exec(context.Background(), `DELETE FROM users WHERE id IN ($1,$2)`, deletedID, activeID); err != nil {
+				t.Errorf("clean email-reuse pair before migration down: %v", err)
+			}
+		}()
+
+		repository := NewRepository(pool, passwords.NewVerifier())
+		identity := application.NewIdentity(repository, repository, func() time.Time {
+			return time.Date(2026, 9, 3, 13, 0, 0, 0, time.UTC)
+		})
+		config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mux := http.NewServeMux()
+		identityhttp.NewHandler(identity, repository, config).Register(mux)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(fmt.Sprintf(`{"email":%q,"password":%q}`, email, password)))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", "http://localhost:8080")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || len(response.Result().Cookies()) == 0 || !strings.Contains(response.Body.String(), activeID) {
+			t.Fatalf("reused-email login: status=%d cookies=%d body=%s", response.Code, len(response.Result().Cookies()), response.Body.String())
 		}
 	})
 
@@ -508,6 +584,9 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			`UPDATE users SET password_hash='plaintext' WHERE email='student@courseforge.local'`,
 			`UPDATE users SET updated_at='2026-09-03T11:59:59Z' WHERE email='student@courseforge.local'`,
 			`UPDATE users SET disabled_at='2026-09-03T12:00:01Z' WHERE email='student@courseforge.local'`,
+			`UPDATE users SET disabled_at='2026-09-03T12:00:00Z', deleted_at='2026-09-03T11:59:59Z' WHERE email='student@courseforge.local'`,
+			`UPDATE users SET updated_at='2026-09-03T12:00:01Z', disabled_at='2026-09-03T12:00:01Z', deleted_at='2026-09-03T12:00:02Z' WHERE email='student@courseforge.local'`,
+			`UPDATE users SET deleted_at='2026-09-03T12:00:00Z' WHERE email='student@courseforge.local'`,
 			`UPDATE user_sessions SET token_digest=decode('ab','hex')`,
 			`UPDATE user_sessions SET expires_at=created_at`,
 			`UPDATE user_sessions SET token_digest=(SELECT min(token_digest) FROM user_sessions)`,
