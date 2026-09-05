@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b і Phases 5–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phases 5–8 не починалися.
 
 ## Phase 3 — Identity
 
@@ -89,3 +89,19 @@ Compose і фікстур, тобто не може бігти раніше за
 | A13 | Спільні браузерні сесії: `auth.setup.ts`, `setup`-проєкт, конверсія `route-guards.spec.ts`, вимір логінів за прогін | 1h | A12 | done | `work/report-a13.md`; B19 (budget ≤7, amended); two review rounds; e2e 24/24 twice, total=7/consec=3 |
 | A14 | Браузерна подорож адмінки: `admin.spec.ts` (admin+instructor journeys, direct-API refusal), slug-неймспейс на прогін | 1.5h | A13 | done | `work/report-a14.md`; P20, P21, R33; e2e 27/27 twice, budget total=7 |
 | A15 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута, `docs/admin/report.md` | 1h | A01–A14 | done | `docs/admin/report.md`; B18; full `make check` exit 0 (12 steps, 243 frontend tests, e2e 27/27) |
+
+## Phase 4b — Identity administration
+
+Джерело scope: [spec-4b](../docs/admin/spec-4b.md) (GATE 1 закрито). План 2.1, GATE 2 зелений ([plan-4b](../docs/admin/plan-4b.md), [gates-4b](../docs/admin/gates-4b.md)). Виконавець коду — Codex; кожен гейт переганяється в сесії-рев'юері перед комітом. Стрижень: `deleted ⊂ disabled` (soft-delete пише і `deleted_at`, і `disabled_at`; інваріант у CHECK).
+
+| ID | Назва | Estimate | Depends on | Status | Owns / archive pointer |
+|---|---|---:|---|---|---|
+| T01 | Міграція 00004 (`deleted_at`, два CHECK, партковий unique, drop email_key, down); `GetIdentityCredential` +`deleted_at IS NULL`; фікс канарки 00004→00005; сід-фікстури +disposables | 2h | GATE 2 green | in_progress | B06, B07, B08 |
+| T02 | Домен: `DeletedAt`, `AccountStatus`, `CanBlock`/`CanDelete` (self/admin-immutable/last-admin), межі пароля | 1h | — | planned | доменні unit-тести |
+| T03 | Application use cases на фейках: `ListUsers`, `SetStatus`, `Delete`, `ResetPassword`; дедлайни, скасування, dependency failure | 1.25h | T02 | planned | R15, R17 |
+| T04 | PostgreSQL-адаптер + sqlc (READ COMMITTED): escaped list, `LockAdmins`/`LockUserForStatus`, last-admin count + session revoke, `SetUserDisabledAt` (block+restore), soft-delete+revoke, set-password+revoke, mapper, гонки | 2h | T01, T03 | planned | P03–P06, B03, B05, B11, B12, R09, R10, R12, R16, R18, R22, R23 |
+| T05 | HTTP: чотири маршрути на шві 4a, admin-гейт, DTO/межі, error mapping, OpenAPI+generate | 2h | T04 | planned | P01, P02, B01, B04, R01–R08, R11, R13, R14 |
+| T06 | Фронтовий admin-users адаптер/application: ids, zod, репозиторій із мапінгом кодів, use cases, композиція, інвалідація; Orval | 1.5h | T05 | planned | B09, R19 |
+| T07 | Маршрут `/admin/users` і в'юхи: список, таби, per-row дії, `ResetPasswordDialog`, стани, гард `canAdministerAccounts`, uk/en, a11y | 2h | T06 | planned | P07, B02, R21, R24 |
+| T08 | Браузерна подорож `admin-users.spec.ts` на disposables (спільний storageState, 0 логінів); direct-API відмова; розширення route-guards | 1h | T07 | planned | P08, R20 |
+| T09 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута; секція звіту 4b | 1h | T01–T08 | planned | B10 |
