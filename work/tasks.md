@@ -27,7 +27,7 @@ Phases 1–2 завершено. Phase 3 розпочато зі специфі�
 | I03 | HTTP middleware, cookies and typed runtime config | 2h | I02 | done | `docs/identity/report.md` I03; full gate sequence + live curl evidence; microsecond-clock defect fixed |
 | I04 | OpenAPI/Orval, Compose and Nginx auth edge | 1.5h | I03 | done | `docs/identity/report.md` I04; 12-case OpenAPI contract test; audit MEDIUM-1 closed with the `web` zone and a strict `login` zone |
 | I05 | Frontend session adapter and localized login | 2h | I04 | done | `docs/identity/report.md` I05; 112 frontend tests; A03/A06 covered; login redirect defect fixed |
-| I06 | Client route guards and completion gate | ~12h, cut into I06a–I06h below | I05 | planned | `docs/identity/i06/plan.md` 3rd edition; two GATE 2 refusals recorded in `docs/identity/_wip-i06.md` |
+| I06 | Client route guards and completion gate | ~11.5h, cut into I06a–I06h below | I05 | planned | `docs/identity/i06/plan.md` 4th edition; three GATE 2 refusals recorded in `docs/identity/_wip-i06.md` |
 
 ## Pre-deploy hardening
 
@@ -38,18 +38,32 @@ Phases 1–2 завершено. Phase 3 розпочато зі специфі�
 
 ### I06 розрізано на задачі
 
-Оцінка 1.5h була неправдивою; реальна ≈12h, і план фази обмежує задачу двома годинами.
-Домінує не сама фіча, а те, що у `frontend/src` **немає жодного маршрутного тесту**, немає
-перевірки SSR-виводу й немає інтеграційного тесту сіду — а таблиця вимагає всіх трьох.
+Оцінка 1.5h була неправдивою; реальна ≈11.5h, і план фази обмежує задачу двома годинами.
 
-| ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
+Третя редакція казала ≈12h, бо стверджувала, що у `frontend/src` **немає жодного маршрутного
+тесту**. Це неправда: `app/composition/catalog-queries.test.tsx:40-68` уже будує роутер на
+memory history, `CatalogView.test.tsx:172-184` рендерить `RouterProvider`, `e2e/shell.spec.ts`
+перевіряє SSR-вивід, `e2e/recovery.spec.ts:46` вживає `request`-фікстуру, а
+`schema_integration_test.go:30-53` — робочий харнес на Testcontainers. Бракує тестових
+**файлів**, не тестових **поверхонь**.
+
+Третя редакція також збирала всі тести в одну кінцеву задачу I06g. `docs/identity/plan.md:3`
+вимагає, щоб **кожна** задача давала власний доказ верифікації, тож шість задач поспіль без
+доказу — порушення правила фази, і колонка «закриває» ставала неперевірною до самого кінця.
+Тести переїхали до задач, які володіють поведінкою; у I06g лишилось те, що справді потребує
+Compose і фікстур, тобто не може бігти раніше за них.
+
+Колонка називається **owns**: задача володіє рядком і несе його доказ. Усі 49 рядків
+`acceptance.md` мають власника; жоден не лишився без задачі, як було в третій редакції, де
+без власника висіли G10a, G10b, G12, G13, G14, G22 і G23.
+
+| ID | Назва | Estimate | Depends on | Status | Owns / archive pointer |
 |---|---|---:|---|---|---|
-| I06a | Кореневий `beforeLoad`: резолв ідентичності, перевірка сесійної куки за іменем, дискримінований результат без кидків; `login.tsx` знімає власний лоадер | 2h | GATE 2 green | planned | закриває G07, G10, G15, G22a |
-| I06b | Layout-роути `/learn` і `/admin` із гардами, `errorComponent` і `pendingComponent`; видалення `LockedArea` і ключів `locked.*` | 2h | I06a | planned | закриває G01–G06, G08, G09, G11, G39 |
-| I06c | Звуження `safeReturnTo` під `spec.md:52` плюс збереження `search` у `returnTo` | 1h | — | planned | закриває G15a, G15b, G16, G17, G18 |
-| I06d | `SessionMenu`, вихід, посилання на адмінку за роллю, uk/en, доступність | 2h | I06a | planned | закриває G19, G20, G24–G28, G29–G31 |
-| I06e | Екрани `/learn` і `/admin` на `EmptyState`, uk/en | 0.5h | I06b | planned | закриває G03, G40 |
-| I06f | Фікстури: три ідентичності, `ON CONFLICT DO UPDATE`, гейт через psql-змінну, `ci.yml`, README | 1.5h | — | planned | закриває G32–G38 |
-| I06g | Тестові поверхні, яких немає: маршрутні тести, сире SSR-HTML через `page.request`, лічильник звернень, паралельний SSR, інтеграційний тест сіду | 2h | I06a–I06f | planned | несуче для більшості рядків вище |
-| I06h | `Vary` через append, ціль `check` у порядку маніфесту, переписаний `route-guards.spec.ts`, фінальний впорядкований гейт | 1h | усі | planned | закриває G21, G21a, G41 |
-
+| I06a | Кореневий `beforeLoad`: `ensureQueryData`, перевірка куки через `getCookie` у композиції, гілка «куки немає» пише `null` у кеш, `timeoutMs: 1000` на SSR-гілці, дискримінований результат без кидків; `login.tsx` знімає власний лоадер | 2h | GATE 2 green | planned | G10, G15, G22, G23 |
+| I06b | Гарди в `learn.tsx` і `admin.tsx`: один `requireIdentity` з `fetchQuery`, роль інлайном через `notFound()`, `errorComponent` на `ErrorState`, `pendingComponent`, підписка layout-компонента на `['session']` для G12; видалення `LockedArea` і ключів `locked.*` | 2h | I06a | planned | G01, G02, G04, G05, G06, G08, G09, G11, G12, G13, G14, G39 |
+| I06c | Звуження `safeReturnTo`: префікс `^/(learn\|admin)(/\|$)`, відмова dot-сегментів, нормалізація кінцевого слеша, збереження `search` | 1h | — | planned | G15a, G15b, G16 |
+| I06d | Шапка: prop-driven компонент (не `SessionMenu` — `Menu` у кіті зайнятий і GATE 1 меню відхилив), вихід, посилання на адмінку за роллю, `refetchOnMount: false`, uk/en, доступність | 2h | I06a | planned | G19, G20, G24, G25, G26, G29, G30, G31 |
+| I06e | Екрани `/learn` і `/admin` на `EmptyState`, uk/en | 0.5h | I06b | planned | G03, G40 |
+| I06f | `backend/sql/seed-identities.sql` (чистий SQL, `ON CONFLICT (id)`, `disabled_at = NULL`, `LOCK TABLE`), ціль `make seed-identities`, `ci.yml`, README; інтеграційний тест на наявному харнесі | 1.5h | — | planned | G32, G33, G34, G34a, G34b, G35, G36, G37 |
+| I06g | Браузерні докази проти Compose: переписаний `route-guards.spec.ts`, сире SSR-HTML через `page.request`, лічильник запитів після гідратації, каденція ревалідації | 1.5h | I06a–I06f | planned | G07, G10a, G10b, G17, G18, G21, G21a, G22a, G27, G28 |
+| I06h | `Vary` через append, ціль `check` у порядку маніфесту з `seed-identities`, фінальний впорядкований гейт, запис верифікації й обмежень у `docs/identity/report.md` (`AGENTS.md:9`) | 1h | усі | planned | G38, G41 |

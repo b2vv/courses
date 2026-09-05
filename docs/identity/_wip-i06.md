@@ -368,3 +368,46 @@ unknown role, missing `displayName`, 401, 500, timeout and client abort all surf
    through `pool.Exec`, which it cannot do with a psql metacommand. Decision 6's "explicit
    confirmation" becomes a target name instead of an environment variable — the user's intent
    is unchanged, the mechanism is not.
+
+## Fourth plan draft
+
+Rewritten, not patched, for the third time. All eight blocking themes and the constitution
+blocking are answered in the plan text, and the reasoning for each change is kept beside it.
+**Zero blocking left open.**
+
+Two decisions were taken with the user to unblock it. Both are mechanism choices whose
+alternatives were measured rather than argued.
+
+1. **Freshness is bought at the protected boundary, not on every navigation.** The root keeps
+   `ensureQueryData` — a cache read costing nothing — and the `/learn` and `/admin` guards call
+   `fetchQuery`, which with `staleTime: 0` always revalidates and deduplicates concurrent reads
+   (`query.js:157-162`). The rejected alternative, `fetchQuery` in the root, would block every
+   in-app navigation on a round trip, anonymous visitors included, because an `HttpOnly` cookie
+   leaves the client unable to rule itself out. The slice's own scenario 6 asks about "the next
+   navigation **to a protected address**", so the guarantee is bought exactly at the boundary
+   the specification names. The header takes `refetchOnMount: false` — without it the dehydrated
+   value is instantly stale and fires one `/auth/me` per document load — while
+   `refetchOnWindowFocus` stays default, because G12 depends on it.
+2. **The seed gate is a second file and a second target, not a third variable.**
+   `backend/sql/seed-identities.sql` plus `make seed-identities`. No variable, no `-v`, no `\if`,
+   no stderr noise. G36 holds by construction, since a target that is not invoked cannot seed;
+   the existing Go harness applies plain SQL through `pool.Exec`, which it cannot do with a psql
+   metacommand; and `ci.yml` changes one line instead of gaining an environment variable.
+   Decision 6's "explicit confirmation" becomes the target name. `i06/spec.md` decision 6 is
+   amended accordingly and now records all three mechanisms and why the first two failed.
+
+Three further corrections worth naming, because each was a claim rather than an oversight:
+
+- **The upsert conflicts on `id`, not on `email`,** and sets `disabled_at = NULL`. Edition 3
+  had it backwards and would have aborted the whole seed on an address edit.
+- **`safeReturnTo` is narrowed, not replaced,** and a single trailing slash is normalized away
+  before the prefix test. Edition 3's allowlist regex contradicted its own acceptance row G15b.
+- **The slice lands as several commits, one per task.** Edition 3's squash was justified by "one
+  logical change", a premise its own eight-task cut had already retired (`AGENTS.md:9`).
+
+The task table is recut: tests move to the tasks that own the behaviour, because
+`docs/identity/plan.md:3` requires each task to produce its own evidence and edition 3 left six
+consecutive tasks with none. The column is renamed `owns`. All 49 acceptance rows now have an
+owning task; edition 3 left G10a, G10b, G12, G13, G14, G22 and G23 with none. The estimate falls
+from ≈12h to ≈11.5h, and the false premise it rested on — "no route-level test at all" — is
+corrected in both the plan and the tracker.
