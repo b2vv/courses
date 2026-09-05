@@ -1,6 +1,7 @@
 # Admin course management — Phase 4 specification
 
-Status: draft, awaiting GATE 1. Intent only: stack, files and architecture belong to the
+Status: GATE 1 decisions taken 2026-09-05; awaiting the user's shared-understanding
+confirmation. Intent only: stack, files and architecture belong to the
 plan. Roadmap source: `work/PRODUCT-BRIEF.md` §21 (Phase 4) and §24 (standing decisions).
 
 ## Problem
@@ -14,14 +15,22 @@ first protected handler has nothing to inherit (briefing §1, architectural fact
 
 ## User scenarios
 
-Actors: **admin** (course management), **instructor** (admitted to the admin shell today;
-extent of Phase 4 access is Q1), **student / anonymous** (must be refused by the server).
+Phase 4 delivers two slices in order: **4a — course management** (this document's
+scenarios), then **4b — identity administration** (outlined below, detailed when 4a
+ships).
+
+Actors: **admin** (manages all courses), **instructor** (creates courses and manages
+only the courses they own — ownership-scoped from day one, GATE 1 Q1), **student /
+anonymous** (must be refused by the server).
 
 - **S1 Create.** An admin creates a course with a title, slug, description and an owner
-  (a user with the instructor or admin role). It appears in the admin course list as
-  `draft` and is absent from the public catalog and from its public URL.
-- **S2 Structure.** An admin adds modules to a course and lessons to modules, renames
-  them and reorders them; the admin editor shows the resulting structure.
+  chosen from users with the instructor or admin role; an instructor creates a course
+  and automatically owns it. It appears in the admin course list as `draft` and is
+  absent from the public catalog and from its public URL.
+- **S2 Structure.** An authorized editor (admin on any course, instructor on an owned
+  course) adds modules to a course and lessons to modules, renames them and reorders
+  them; the admin editor shows the resulting structure. A lesson is a title, plain-text
+  description and order — no rich text, no media fields (Phase 5 adds its own).
 - **S3 Publish.** An admin publishes a draft; the course becomes visible in the public
   catalog and on its public page.
 - **S4 Archive.** An admin archives a published course; it leaves the catalog and its
@@ -30,7 +39,8 @@ extent of Phase 4 access is Q1), **student / anonymous** (must be refused by the
   course are immediately public; there is no draft-of-published or versioning (Q5 fixes
   deletion; versioning is out of scope).
 - **S6 Refusal.** Anonymous requests receive the authentication-required answer; a
-  student receives the role refusal. Enforcement is server-side on every admin operation;
+  student receives the role refusal; an instructor mutating a course they do not own
+  receives the ownership refusal. Enforcement is server-side on every admin operation;
   the client guard is navigation convenience, never the mechanism.
 - **S7 Admin UI.** The admin shell lists courses with status and opens a course editor
   for structure and fields. Forms validate input, uk/en localization, keyboard
@@ -62,21 +72,37 @@ outcomes they must cover.
 - Video upload, transcoding, storage; lesson media beyond a named placeholder (Phase 5).
 - Playback, enrollment, student progress (Phase 6); transcripts and comment threads
   (Phase 7); orders and payments (Phase 8).
-- Instructor workspace and ownership-scoped views ("my courses only"): Phase 4 records
-  ownership and never builds views on it (`work/PRODUCT-BRIEF.md` §24.3).
-- User management (creating/disabling users, assigning roles): fixtures and future
-  bootstrap remain the only way users exist.
-- Registration, password reset, MFA — the identity out-of-scope list stands.
+- Instructor workspace (students, media, progress, moderation views): its own late
+  phase. Phase 4 *does* enforce ownership on mutations (GATE 1 amended brief §24.3) but
+  builds no instructor-specific views beyond the shared admin shell.
+- Per-course user blocking by instructors: no substrate until enrollment exists;
+  deferred to the enrollment-carrying phase (GATE 1, Q1a).
+- Registration, self-service password reset, MFA — the identity out-of-scope list
+  stands. Admin-driven user administration is slice 4b, not out of scope.
 
-## Open questions (GATE 1)
+## Slice 4b — identity administration (outline)
 
-| # | Question | Recommendation |
-|---|---|---|
-| Q1 | Does the instructor role get Phase 4 course-management access — all courses, or none? | Mutations admin-only; instructor keeps shell access and sees the course list read-only. Ownership-scoped instructor work is its own phase. |
-| Q2 | Owner assignment: chosen at create from existing instructor/admin users; reassignable later? | Required at create, reassignable by admin; both are ordinary updates. |
-| Q3 | Reverse transitions: unpublish (`published→draft`)? restore (`archived→published`)? | Allow `archived→published` as the undo; no `published→draft` — retiring means archive. Matrix stays three states, three transitions. |
-| Q4 | May an empty course (no modules/lessons) be published? | Yes. The catalog already renders structureless courses; a structural gate is invented policy. |
-| Q5 | Is hard delete available, and for which states? | Delete drafts only (course/module/lesson in a draft course); published/archived are retired, never deleted. Module/lesson deletion inside a published course: allowed, it is an edit (S5). |
-| Q6 | Does the public course page show the program (module/lesson titles) in Phase 4? | Yes — the data exists and it is the first visible payoff; text only, no media claims. |
-| Q7 | What is a lesson in Phase 4? | Title + plain-text description + order. No rich text (TipTap waits for a real editor need), no media fields beyond a nullable placeholder for Phase 5. |
-| Q8 | Public URL of an archived course? | Not-found. No enrollment exists, so nobody loses access they had; an "archived" page is invented surface. |
+Detailed specification follows when 4a ships; the agreed shape (GATE 1):
+
+- Admin lists users; blocks and restores them (`users.disabled_at` already refuses
+  authentication — 4b gives it an operator). Admin soft-deletes users: a deleted status,
+  with email uniqueness enforced among non-deleted users.
+- Admin resets a password by setting a new one directly — no mailer exists, so no email
+  flow is promised.
+- No fourth role. Domain invariants instead: an admin cannot be deleted and cannot have
+  their role changed through the API; an admin may be blocked, but not by themselves.
+  A super-admin role becomes its own decision when a real admin hierarchy appears.
+
+## GATE 1 decisions (2026-09-05)
+
+| # | Decision |
+|---|---|
+| Q1 | Both roles mutate; **instructor is ownership-scoped now** (amends brief §24.3). User administration split off as slice 4b; per-course blocking waits for enrollment. |
+| Q1b | No super_admin role; admin-protection invariants in the domain instead. |
+| Q2 | Admin and instructor both create courses; instructor becomes owner automatically, admin picks the owner; only admin reassigns ownership. |
+| Q3 | Transitions: `draft→published→archived` plus `archived→published` restore. Nothing else. |
+| Q4 | An empty course may be published; publish validates fields only. |
+| Q5 | Hard delete for draft courses only (cascade); modules/lessons deletable always as structure edits. Published/archived courses are archived, never deleted. |
+| Q6 | The public course page shows the program (module/lesson titles) — text only. |
+| Q7 | Lesson = title + plain-text description + order. No media columns yet. |
+| Q8 | Archived course public URL answers not-found, indistinguishable from draft. **Standing principle recorded in brief §24: a purchased course never loses access on archive — ownership, not rental** (binds Phases 6/8). |

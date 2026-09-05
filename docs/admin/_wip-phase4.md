@@ -24,3 +24,10 @@ user administration (admin blocks/restores/deletes users, resets passwords; soft
 with unique-email-among-non-deleted), per-course user blocking by instructors, and a
 possible super-admin role (admin cannot delete an admin, only block). Placement of these
 is being grilled next; per-course blocking has no substrate before enrollment exists.
+
+## 2026-09-05 — GATE 1 complete, awaiting confirmation
+
+All eight questions answered one-by-one (AskUserQuestion); decisions table lives in
+`spec.md` §GATE 1 decisions, amendments 7-9 appended to the product brief §24. Scope
+settled: Phase 4 = slice 4a (courses, ownership-scoped) + slice 4b (identity
+administration, outlined). Next: user confirms shared understanding → plan.md.
