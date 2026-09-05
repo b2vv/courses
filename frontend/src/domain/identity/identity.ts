@@ -59,9 +59,8 @@ export function makeCredentials(input: CredentialsInput): SessionResult<Credenti
 }
 
 /**
- * A return target is only ever a path inside this application. Anything a
- * browser could read as another origin - an absolute URL, a protocol-relative
- * path, a backslash or encoded-slash form - falls back to the default.
+ * A return target is only ever a normalized protected path inside this
+ * application. Anything else falls back to the default.
  */
 export function safeReturnTo(value: string | undefined, fallback = '/learn'): string {
   if (value === undefined || value === '') return fallback;
@@ -74,5 +73,11 @@ export function safeReturnTo(value: string | undefined, fallback = '/learn'): st
     const code = character.codePointAt(0) ?? 0;
     if (code < 0x20 || code === 0x7f) return fallback;
   }
-  return value;
+  const searchIndex = value.indexOf('?');
+  let path = searchIndex === -1 ? value : value.slice(0, searchIndex);
+  const search = searchIndex === -1 ? '' : value.slice(searchIndex);
+  if (path.endsWith('/')) path = path.slice(0, -1);
+  if (!/^\/(learn|admin)(\/|$)/.test(path)) return fallback;
+  if (path.split('/').some((segment) => segment === '.' || segment === '..')) return fallback;
+  return path + (search === '?' ? '' : search);
 }

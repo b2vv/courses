@@ -44,13 +44,17 @@ describe('identity domain', () => {
   });
 
   it.each([
-    ['an absolute URL', 'https://evil.example/path'],
-    ['a scheme-relative URL', '//evil.example/path'],
+    ['an absolute URL', 'https://evil.example/'],
+    ['a scheme-relative URL', '//evil.example'],
     ['a backslash form', '/\\evil.example'],
-    ['an encoded slash pair', '/%2fevil.example'],
-    ['a bare host', 'evil.example'],
-    ['a javascript URL', 'javascript:alert(1)'],
+    ['an encoded slash pair', '%2f%2fevil.example'],
+    ['an encoded header split', '/admin%0d%0aSet-Cookie:x'],
+    ['parent path segments', '/learn/../..'],
+    ['current path segments', '/admin/./x'],
+    ['a recursive login target', '/login'],
+    ['a public path', '/courses'],
     ['an empty value', ''],
+    ['an absent value', undefined],
   ])('refuses %s as a return target', (_name, value) => {
     expect(safeReturnTo(value)).toBe('/learn');
   });
@@ -60,12 +64,13 @@ describe('identity domain', () => {
     expect(safeReturnTo(`/learn${String.fromCodePoint(0)}`)).toBe('/learn');
   });
 
-  it.each(['/learn', '/courses/go-basics', '/admin?tab=users', '/courses?q=Go&offset=20'])(
-    'keeps the internal path %s',
-    (value) => {
-      expect(safeReturnTo(value)).toBe(value);
-    },
-  );
+  it.each([
+    ['a deep protected path with search', '/learn/go/intro?lesson=3', '/learn/go/intro?lesson=3'],
+    ['an administration path with a trailing slash', '/admin/', '/admin'],
+    ['a protected path with empty search', '/learn?', '/learn'],
+  ])('keeps %s', (_name, value, expected) => {
+    expect(safeReturnTo(value)).toBe(expected);
+  });
 
   it('falls back when no target was given', () => {
     expect(safeReturnTo(undefined)).toBe('/learn');

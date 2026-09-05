@@ -7,14 +7,14 @@ describe('login URL search contract', () => {
     expect(Object.hasOwn(validateLoginSearch({}), 'returnTo')).toBe(false);
   });
 
-  it.each(['/learn', '/courses/go-basics', '/courses?q=Go'])(
-    'keeps the internal path %s',
+  it.each(['/learn', '/admin', '/learn/go/intro?lesson=3'])(
+    'keeps the protected path %s',
     (returnTo) => {
       expect(validateLoginSearch({ returnTo })).toEqual({ returnTo });
     },
   );
 
-  it.each(['https://evil.example', '//evil.example', '/\\evil.example', 'evil.example', ''])(
+  it.each(['https://evil.example', '//evil.example', '/\\evil.example', '/courses', ''])(
     'strips the unusable target %p from the address instead of honouring it',
     (returnTo) => {
       expect(validateLoginSearch({ returnTo })).toEqual({});
