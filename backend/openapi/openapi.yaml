@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Courses API
   version: 1.0.0
-  description: Public catalog, session authentication and protected administration course authoring. Status changes, deletion, purchases and media playback are not implemented.
+  description: Public catalog, session authentication and protected administration course authoring. Purchases and media playback are not implemented.
 servers:
   - url: /
 paths:
@@ -182,6 +182,75 @@ paths:
       responses:
         '200':
           description: The saved course tree with a new updatedAt token.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCourseTree' }
+        '400': { $ref: '#/components/responses/AdminWriteBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      operationId: deleteAdminCourse
+      summary: Delete a draft course
+      description: >-
+        Permanently deletes a draft course and its tree. Published and archived courses
+        cannot be deleted. expectedUpdatedAt must be the exact RFC 3339 microsecond token
+        returned by a read. Instructors may delete only their own draft; admins may delete
+        any draft. Requires one matching Origin header, accepts no duplicate or unknown
+        body members, and responses are never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCourseDeleteRequest' }
+      responses:
+        '204':
+          description: The draft course and its tree were deleted.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/AdminWriteBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses/{id}/status:
+    post:
+      operationId: transitionAdminCourse
+      summary: Publish, archive or restore a course
+      description: >-
+        Performs one legal lifecycle transition: draft to published, published to archived,
+        or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond
+        token returned by a read, and every accepted transition returns a new token.
+        Instructors may transition only their own course; admins may transition any course.
+        Requires one matching Origin header, accepts no duplicate or unknown body members,
+        and responses are never cached.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminCourseStatusRequest' }
+      responses:
+        '200':
+          description: The transitioned course tree with a new updatedAt token.
           headers:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
             Cache-Control: { $ref: '#/components/headers/NoStore' }
@@ -422,6 +491,19 @@ components:
           type: array
           maxItems: 40
           items: { $ref: '#/components/schemas/AdminModule' }
+    AdminCourseStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, expectedUpdatedAt]
+      properties:
+        status: { type: string, enum: [draft, published, archived] }
+        expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    AdminCourseDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedUpdatedAt]
+      properties:
+        expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
     AdminTimestamp:
       type: string
       format: date-time
@@ -540,7 +622,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Conflict:
-      description: The slug is taken or immutable, or the optimistic concurrency token is stale.
+      description: The slug is taken or immutable, the lifecycle operation is not allowed, or the optimistic concurrency token is stale.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
         Cache-Control: { $ref: '#/components/headers/NoStore' }

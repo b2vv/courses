@@ -39,6 +39,8 @@ type adminRepository struct {
 	listCalls, loadCalls int
 	createCalls          int
 	saveCalls            int
+	transitionCalls      int
+	deleteCalls          int
 	lastActor            domain.Actor
 	lastQuery            domain.Query
 	lastStatus           domain.Status
@@ -148,11 +150,51 @@ func (repository *adminRepository) Save(_ context.Context, _ domain.Actor, tree 
 	repository.courses[tree.ID] = stored
 	return stored, nil
 }
-func (*adminRepository) Transition(context.Context, domain.Actor, string, domain.Status, domain.Status, time.Time, time.Time) (domain.CourseTree, error) {
-	return domain.CourseTree{}, errors.New("unexpected transition")
+func (repository *adminRepository) Transition(_ context.Context, actor domain.Actor, id string, from, to domain.Status, expectedUpdatedAt, updatedAt time.Time) (domain.CourseTree, error) {
+	repository.transitionCalls++
+	repository.lastActor = actor
+	repository.lastExpected = expectedUpdatedAt
+	stored, exists := repository.courses[id]
+	if !exists {
+		return domain.CourseTree{}, domain.ErrCourseNotFound
+	}
+	if err := actor.CanManage(stored.InstructorID); err != nil {
+		return domain.CourseTree{}, err
+	}
+	if stored.Status != from {
+		return domain.CourseTree{}, domain.ErrInvalidStatusTransition
+	}
+	if !stored.UpdatedAt.Equal(expectedUpdatedAt) {
+		return domain.CourseTree{}, domain.ErrCourseModified
+	}
+	stored.Status = to
+	if to == domain.Published && stored.PublishedAt == nil {
+		publishedAt := updatedAt
+		stored.PublishedAt = &publishedAt
+	}
+	stored.UpdatedAt = updatedAt
+	repository.courses[id] = stored
+	return stored, nil
 }
-func (*adminRepository) Delete(context.Context, domain.Actor, string, time.Time) error {
-	return errors.New("unexpected delete")
+func (repository *adminRepository) Delete(_ context.Context, actor domain.Actor, id string, expectedUpdatedAt time.Time) error {
+	repository.deleteCalls++
+	repository.lastActor = actor
+	repository.lastExpected = expectedUpdatedAt
+	stored, exists := repository.courses[id]
+	if !exists {
+		return domain.ErrCourseNotFound
+	}
+	if err := actor.CanManage(stored.InstructorID); err != nil {
+		return err
+	}
+	if stored.Status != domain.Draft {
+		return domain.ErrCourseNotDeletable
+	}
+	if !stored.UpdatedAt.Equal(expectedUpdatedAt) {
+		return domain.ErrCourseModified
+	}
+	delete(repository.courses, id)
+	return nil
 }
 
 func (repository *adminRepository) owner() string {
@@ -713,6 +755,214 @@ func TestAdminSaveRefusalContracts(t *testing.T) {
 	})
 }
 
+func TestAdminLifecycleHappyAndBoundaryContracts(t *testing.T) {
+	t.Run("P11 P12 P13 publish archive and restore update public visibility", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		draft := repository.courses[adminCourseID]
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Published, draft.UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		published := decodeAdminTree(t, response)
+		if response.Code != http.StatusOK || published.Status != string(domain.Published) || published.PublishedAt == nil {
+			t.Fatalf("publish status=%d body=%s", response.Code, response.Body.String())
+		}
+		firstPublishedAt := *published.PublishedAt
+		assertPublicCourseStatus(t, handler, draft.Slug, http.StatusOK)
+
+		response, request = serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Archived, repository.courses[adminCourseID].UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		archived := decodeAdminTree(t, response)
+		if response.Code != http.StatusOK || archived.Status != string(domain.Archived) {
+			t.Fatalf("archive status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertPublicCourseStatus(t, handler, draft.Slug, http.StatusNotFound)
+		publicList := httptest.NewRecorder()
+		handler.ServeHTTP(publicList, httptest.NewRequest(http.MethodGet, "/api/v1/courses", nil))
+		if publicList.Code != http.StatusOK || adminListCount(t, publicList) != 0 {
+			t.Fatalf("archived course remained in catalog: %s", publicList.Body.String())
+		}
+
+		response, request = serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Published, repository.courses[adminCourseID].UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		restored := decodeAdminTree(t, response)
+		if response.Code != http.StatusOK || restored.Status != string(domain.Published) || restored.PublishedAt == nil || *restored.PublishedAt != firstPublishedAt {
+			t.Fatalf("restore status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertPublicCourseStatus(t, handler, draft.Slug, http.StatusOK)
+	})
+
+	t.Run("P14 instructor publishes their own course", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Instructor), http.MethodPost, lifecyclePath(), statusBody(domain.Published, repository.courses[adminCourseID].UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK || decodeAdminTree(t, response).Status != string(domain.Published) || repository.lastActor != (domain.Actor{UserID: instructorUserID, Role: domain.ActorInstructor}) {
+			t.Fatalf("status=%d actor=%+v body=%s", response.Code, repository.lastActor, response.Body.String())
+		}
+	})
+
+	t.Run("B01 an empty course may be published", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+		tree := repository.courses[adminCourseID]
+		tree.Modules = []domain.Module{}
+		repository.courses[adminCourseID] = tree
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Published, tree.UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK || decodeAdminTree(t, response).Status != string(domain.Published) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("a draft course can be deleted", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodDelete, coursePath(), expectedUpdatedAtBody(repository.courses[adminCourseID].UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusNoContent || response.Body.Len() != 0 || repository.deleteCalls != 1 {
+			t.Fatalf("status=%d deleteCalls=%d body=%s", response.Code, repository.deleteCalls, response.Body.String())
+		}
+		if _, exists := repository.courses[adminCourseID]; exists {
+			t.Fatal("deleted course remains in repository")
+		}
+	})
+}
+
+func TestAdminMutationRefusalMatrix(t *testing.T) {
+	t.Run("R08 anonymous is refused on every mutation", func(t *testing.T) {
+		for _, mutation := range adminMutationCases(seededAdminWriteRepository(domain.Draft, instructorUserID)) {
+			t.Run(mutation.name, func(t *testing.T) {
+				repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+				mutation := mutation.forRepository(repository)
+				identity := &adminIdentity{}
+				handler := adminReadHandler(t, repository, identity)
+				response, request := serveAdminJSONAs(t, handler, identity, identitydomain.User{}, false, "http://localhost:8080", mutation.method, mutation.path, mutation.body)
+				assertAdminHTTPContract(t, request, response, true)
+				if response.Code != http.StatusUnauthorized || repository.writeCalls() != 0 {
+					t.Fatalf("status=%d writes=%d body=%s", response.Code, repository.writeCalls(), response.Body.String())
+				}
+				assertAdminError(t, response, "authentication_required")
+			})
+		}
+	})
+
+	t.Run("R09 a student is refused on every mutation", func(t *testing.T) {
+		for _, mutation := range adminMutationCases(seededAdminWriteRepository(domain.Draft, instructorUserID)) {
+			t.Run(mutation.name, func(t *testing.T) {
+				repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+				mutation := mutation.forRepository(repository)
+				identity := &adminIdentity{}
+				handler := adminReadHandler(t, repository, identity)
+				response, request := serveAdminJSONAs(t, handler, identity, identityUser(identitydomain.Student), true, "http://localhost:8080", mutation.method, mutation.path, mutation.body)
+				assertAdminHTTPContract(t, request, response, true)
+				if response.Code != http.StatusForbidden || repository.writeCalls() != 0 {
+					t.Fatalf("status=%d writes=%d body=%s", response.Code, repository.writeCalls(), response.Body.String())
+				}
+				assertAdminError(t, response, "forbidden")
+			})
+		}
+	})
+
+	t.Run("R10 cross-site mutation is refused before authentication", func(t *testing.T) {
+		for _, mutation := range adminMutationCases(seededAdminWriteRepository(domain.Draft, instructorUserID)) {
+			t.Run(mutation.name, func(t *testing.T) {
+				repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+				before := cloneCourseTree(repository.courses[adminCourseID])
+				mutation := mutation.forRepository(repository)
+				identity := &adminIdentity{}
+				handler := adminReadHandler(t, repository, identity)
+				response, request := serveAdminJSONAs(t, handler, identity, identityUser(identitydomain.Student), true, "https://foreign.example", mutation.method, mutation.path, mutation.body)
+				assertAdminHTTPContract(t, request, response, true)
+				if response.Code != http.StatusForbidden || identity.authenticateCalls != 0 || repository.writeCalls() != 0 || !reflect.DeepEqual(repository.courses[adminCourseID], before) {
+					t.Fatalf("status=%d auth=%d writes=%d body=%s", response.Code, identity.authenticateCalls, repository.writeCalls(), response.Body.String())
+				}
+				assertAdminError(t, response, "origin_forbidden")
+			})
+		}
+	})
+
+	t.Run("R11 a foreign instructor cannot save transition or delete", func(t *testing.T) {
+		for _, mutation := range adminMutationCases(seededAdminWriteRepository(domain.Draft, instructorUserID))[1:] {
+			t.Run(mutation.name, func(t *testing.T) {
+				repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+				before := cloneCourseTree(repository.courses[adminCourseID])
+				mutation := mutation.forRepository(repository)
+				identity := &adminIdentity{}
+				handler := adminReadHandler(t, repository, identity)
+				response, request := serveAdminJSONAs(t, handler, identity, identityUserWithID(otherOwnerID, identitydomain.Instructor), true, "http://localhost:8080", mutation.method, mutation.path, mutation.body)
+				assertAdminHTTPContract(t, request, response, true)
+				if response.Code != http.StatusForbidden || !reflect.DeepEqual(repository.courses[adminCourseID], before) {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+				assertAdminError(t, response, "course_forbidden")
+
+				read := serveAdminRead(handler, identity, identityUser(identitydomain.Admin), coursePath())
+				readTree := decodeAdminTree(t, read)
+				if read.Code != http.StatusOK || readTree.Title != before.Title || readTree.Status != string(before.Status) || readTree.UpdatedAt != formatTestTime(before.UpdatedAt) {
+					t.Fatalf("following read changed: status=%d body=%s", read.Code, read.Body.String())
+				}
+			})
+		}
+	})
+}
+
+func TestAdminLifecycleRefusalContracts(t *testing.T) {
+	t.Run("R14 an illegal transition is a named conflict and leaves status unchanged", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Published, instructorUserID)
+		before := cloneCourseTree(repository.courses[adminCourseID])
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Draft, before.UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusConflict || !reflect.DeepEqual(repository.courses[adminCourseID], before) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminError(t, response, "invalid_status_transition")
+	})
+
+	t.Run("R15 published and archived courses cannot be deleted", func(t *testing.T) {
+		for _, status := range []domain.Status{domain.Published, domain.Archived} {
+			t.Run(string(status), func(t *testing.T) {
+				repository := seededAdminWriteRepository(status, instructorUserID)
+				before := cloneCourseTree(repository.courses[adminCourseID])
+				identity := &adminIdentity{}
+				handler := adminReadHandler(t, repository, identity)
+				response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodDelete, coursePath(), expectedUpdatedAtBody(before.UpdatedAt))
+				assertAdminHTTPContract(t, request, response, true)
+				if response.Code != http.StatusConflict || !reflect.DeepEqual(repository.courses[adminCourseID], before) {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+				assertAdminError(t, response, "course_not_deletable")
+			})
+		}
+	})
+
+	t.Run("R23 a transition retires the previous tree token", func(t *testing.T) {
+		repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+		before := cloneCourseTree(repository.courses[adminCourseID])
+		response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPost, lifecyclePath(), statusBody(domain.Published, before.UpdatedAt))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("publish status=%d body=%s", response.Code, response.Body.String())
+		}
+		published := cloneCourseTree(repository.courses[adminCourseID])
+		published.Title = "Stale edit"
+		response, request = serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPut, coursePath(), saveCourseBody(published, formatTestTime(before.UpdatedAt)))
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusConflict || repository.courses[adminCourseID].Title == "Stale edit" {
+			t.Fatalf("stale save status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminError(t, response, "course_modified")
+	})
+}
+
 func TestAdminWriteStrictJSON(t *testing.T) {
 	repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
 	identity := &adminIdentity{}
@@ -779,6 +1029,7 @@ func TestAdminWriteStrictJSON(t *testing.T) {
 type adminTreeResponse struct {
 	ID           string  `json:"id"`
 	Slug         string  `json:"slug"`
+	Title        string  `json:"title"`
 	Status       string  `json:"status"`
 	InstructorID string  `json:"instructorId"`
 	UpdatedAt    string  `json:"updatedAt"`
@@ -792,6 +1043,66 @@ type adminTreeResponse struct {
 			Description string `json:"description"`
 		} `json:"lessons"`
 	} `json:"modules"`
+}
+
+type adminMutationCase struct {
+	name   string
+	method string
+	path   string
+	body   any
+}
+
+func (mutation adminMutationCase) forRepository(repository *adminRepository) adminMutationCase {
+	for _, current := range adminMutationCases(repository) {
+		if current.name == mutation.name {
+			return current
+		}
+	}
+	panic("unknown admin mutation case")
+}
+
+func adminMutationCases(repository *adminRepository) []adminMutationCase {
+	tree := repository.courses[adminCourseID]
+	saveBody := saveCourseBody(tree, formatTestTime(tree.UpdatedAt))
+	saveBody["course"].(map[string]any)["title"] = "Matrix update"
+	return []adminMutationCase{
+		{name: "create", method: http.MethodPost, path: "/api/v1/admin/courses", body: createCourseBody("matrix-course", adminUserID)},
+		{name: "save", method: http.MethodPut, path: coursePath(), body: saveBody},
+		{name: "status", method: http.MethodPost, path: lifecyclePath(), body: statusBody(domain.Published, tree.UpdatedAt)},
+		{name: "delete", method: http.MethodDelete, path: coursePath(), body: expectedUpdatedAtBody(tree.UpdatedAt)},
+	}
+}
+
+func coursePath() string {
+	return "/api/v1/admin/courses/" + adminCourseID
+}
+
+func lifecyclePath() string {
+	return coursePath() + "/status"
+}
+
+func statusBody(status domain.Status, expectedUpdatedAt time.Time) map[string]any {
+	return map[string]any{"status": string(status), "expectedUpdatedAt": formatTestTime(expectedUpdatedAt)}
+}
+
+func expectedUpdatedAtBody(expectedUpdatedAt time.Time) map[string]any {
+	return map[string]any{"expectedUpdatedAt": formatTestTime(expectedUpdatedAt)}
+}
+
+func (repository *adminRepository) writeCalls() int {
+	return repository.createCalls + repository.saveCalls + repository.transitionCalls + repository.deleteCalls
+}
+
+func assertPublicCourseStatus(t *testing.T, handler http.Handler, slug string, status int) {
+	t.Helper()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/courses/"+slug, nil))
+	if response.Code != status {
+		t.Fatalf("public course status=%d body=%s", response.Code, response.Body.String())
+	}
+	if status == http.StatusNotFound {
+		assertAdminError(t, response, "course_not_found")
+	}
 }
 
 func newAdminWriteRepository() *adminRepository {
@@ -918,6 +1229,23 @@ func serveAdminJSON(
 	return serveAdminRaw(t, handler, identity, user, method, path, encoded)
 }
 
+func serveAdminJSONAs(
+	t *testing.T,
+	handler http.Handler,
+	identity *adminIdentity,
+	user identitydomain.User,
+	authenticated bool,
+	origin, method, path string,
+	body any,
+) (*httptest.ResponseRecorder, *http.Request) {
+	t.Helper()
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return serveAdminRawAs(t, handler, identity, user, authenticated, origin, method, path, encoded)
+}
+
 func serveAdminRaw(
 	t *testing.T,
 	handler http.Handler,
@@ -927,11 +1255,28 @@ func serveAdminRaw(
 	body []byte,
 ) (*httptest.ResponseRecorder, *http.Request) {
 	t.Helper()
+	return serveAdminRawAs(t, handler, identity, user, true, "http://localhost:8080", method, path, body)
+}
+
+func serveAdminRawAs(
+	t *testing.T,
+	handler http.Handler,
+	identity *adminIdentity,
+	user identitydomain.User,
+	authenticated bool,
+	origin, method, path string,
+	body []byte,
+) (*httptest.ResponseRecorder, *http.Request) {
+	t.Helper()
 	identity.user = user
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Origin", "http://localhost:8080")
-	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+	if origin != "" {
+		request.Header.Set("Origin", origin)
+	}
+	if authenticated {
+		request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	request.Body = io.NopCloser(bytes.NewReader(body))

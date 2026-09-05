@@ -88,6 +88,15 @@ type saveAdminCourseRequest struct {
 	Modules           *[]saveAdminModuleRequest `json:"modules"`
 }
 
+type transitionAdminCourseRequest struct {
+	Status            *string `json:"status"`
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
+}
+
+type deleteAdminCourseRequest struct {
+	ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
+}
+
 func (h *Handler) RegisterAdmin(
 	mux *http.ServeMux,
 	authenticate func(http.Handler) http.Handler,
@@ -97,6 +106,8 @@ func (h *Handler) RegisterAdmin(
 	mux.Handle("GET /api/v1/admin/courses/{id}", authenticate(http.HandlerFunc(h.getAdminCourse)))
 	mux.Handle("POST /api/v1/admin/courses", requireSameOrigin(authenticate(http.HandlerFunc(h.createAdminCourse))))
 	mux.Handle("PUT /api/v1/admin/courses/{id}", requireSameOrigin(authenticate(http.HandlerFunc(h.saveAdminCourse))))
+	mux.Handle("POST /api/v1/admin/courses/{id}/status", requireSameOrigin(authenticate(http.HandlerFunc(h.transitionAdminCourse))))
+	mux.Handle("DELETE /api/v1/admin/courses/{id}", requireSameOrigin(authenticate(http.HandlerFunc(h.deleteAdminCourse))))
 }
 
 func (h *Handler) listAdminCourses(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +211,61 @@ func (h *Handler) saveAdminCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, mapAdminCourseTree(saved))
+}
+
+func (h *Handler) transitionAdminCourse(w http.ResponseWriter, r *http.Request) {
+	adminHeaders(w)
+	actor, ok := adminActor(w, r)
+	if !ok {
+		return
+	}
+	if !emptyAdminQuery(r.URL.RawQuery) {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	request, err := decodeAdminJSON[transitionAdminCourseRequest](w, r)
+	if err != nil || request.Status == nil || request.ExpectedUpdatedAt == nil {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	expectedUpdatedAt, err := parseAdminTime(*request.ExpectedUpdatedAt)
+	if err != nil {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	tree, err := h.authoring.Transition(r.Context(), actor, r.PathValue("id"), domain.Status(*request.Status), expectedUpdatedAt)
+	if err != nil {
+		writeAdminError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapAdminCourseTree(tree))
+}
+
+func (h *Handler) deleteAdminCourse(w http.ResponseWriter, r *http.Request) {
+	adminHeaders(w)
+	actor, ok := adminActor(w, r)
+	if !ok {
+		return
+	}
+	if !emptyAdminQuery(r.URL.RawQuery) {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	request, err := decodeAdminJSON[deleteAdminCourseRequest](w, r)
+	if err != nil || request.ExpectedUpdatedAt == nil {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	expectedUpdatedAt, err := parseAdminTime(*request.ExpectedUpdatedAt)
+	if err != nil {
+		writeAdminError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	if err := h.authoring.Delete(r.Context(), actor, r.PathValue("id"), expectedUpdatedAt); err != nil {
+		writeAdminError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func parseAdminCourseQuery(raw string) (application.AuthoringListInput, error) {
@@ -474,6 +540,10 @@ func writeAdminError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "slug_immutable", "Published course slug cannot be changed")
 	case errors.Is(err, domain.ErrCourseModified):
 		httpserver.WriteError(w, r, http.StatusConflict, "course_modified", "Course changed since it was loaded")
+	case errors.Is(err, domain.ErrInvalidStatusTransition):
+		httpserver.WriteError(w, r, http.StatusConflict, "invalid_status_transition", "Course status transition is invalid")
+	case errors.Is(err, domain.ErrCourseNotDeletable):
+		httpserver.WriteError(w, r, http.StatusConflict, "course_not_deletable", "Only draft courses can be deleted")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Course authoring is temporarily unavailable")
 	default:
