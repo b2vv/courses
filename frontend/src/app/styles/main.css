@@ -88,6 +88,18 @@ nav a {
   align-items: center;
   font-weight: 600;
 }
+.header-inner nav {
+  min-width: 0;
+  max-width: 100%;
+}
+.header-identity-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.sign-out-message {
+  padding-block-start: 1rem;
+}
 .language-switcher {
   display: inline-flex;
   padding: 0.2rem;

@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import * as Aria from 'react-aria-components';
+import { useTranslation } from 'react-i18next';
 import { Button } from './controls';
 
 type DialogProps = {
@@ -103,13 +104,14 @@ export function Tooltip({ children, content }: TooltipProps) {
 type ToastProps = { message: string; onDismiss: () => void };
 
 export function Toast({ message, onDismiss }: ToastProps) {
+  const { t } = useTranslation();
   return (
     <div className="ui-toast">
       <output aria-live="polite" aria-atomic="true">
         {message}
       </output>
-      <Button variant="secondary" onPress={onDismiss} aria-label="Закрити повідомлення">
-        Закрити
+      <Button variant="secondary" onPress={onDismiss} aria-label={t('ui.closeMessage')}>
+        {t('common.close')}
       </Button>
     </div>
   );

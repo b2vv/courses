@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
@@ -10,12 +11,22 @@ import { createCatalog } from '../application/catalog/catalog';
 import { createSession } from '../application/identity/session';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
+import { createI18n, I18nProvider, type Locale } from '../app/providers/i18n';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
 import { routeTree } from '../routeTree.gen';
 
 const currentUserUrl = `${apiOrigin()}/api/v1/auth/me`;
-const server = setupServer();
+const logoutUrl = `${apiOrigin()}/api/v1/auth/logout`;
+const authenticationRequired = {
+  error: { code: 'authentication_required', message: 'x', requestId: 'a'.repeat(32) },
+};
+const dependencyUnavailable = {
+  error: { code: 'dependency_unavailable', message: 'x', requestId: 'b'.repeat(32) },
+};
+const server = setupServer(
+  http.get(currentUserUrl, () => HttpResponse.json(authenticationRequired, { status: 401 })),
+);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
@@ -35,15 +46,13 @@ function user(role: Role): AuthenticatedUser {
   };
 }
 
-const authenticationRequired = {
-  error: { code: 'authentication_required', message: 'x', requestId: 'a'.repeat(32) },
-};
-const dependencyUnavailable = {
-  error: { code: 'dependency_unavailable', message: 'x', requestId: 'b'.repeat(32) },
-};
-
-function createTestRouter(href: string, cachedSession: AuthenticatedUser | null) {
+function createTestRouter(
+  href: string,
+  cachedSession: AuthenticatedUser | null,
+  locale: Locale = 'uk',
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const i18n = createI18n(locale);
   const identityDependencies = {
     ...createSessionQueries(createSession(createApiSessionRepository())),
     shouldLoadCurrentUser: true,
@@ -62,6 +71,7 @@ function createTestRouter(href: string, cachedSession: AuthenticatedUser | null)
     },
     defaultPendingMs: 0,
     defaultPendingMinMs: 0,
+    Wrap: ({ children }) => <I18nProvider instance={i18n}>{children}</I18nProvider>,
   });
   queryClient.setQueryData(sessionQueryKey, cachedSession);
   return router;
@@ -240,3 +250,107 @@ test('G12 leaves a mounted protected route when focus revalidation ends the sess
 
   await waitFor(() => expect(router.state.location.href).toBe('/login?returnTo=%2Fadmin'));
 });
+
+test('G24 signs out, clears the cached identity and navigates to the catalog', async () => {
+  const admin = user('admin');
+  let current: AuthenticatedUser | null = admin;
+  let currentUserRequests = 0;
+  let logoutRequests = 0;
+  server.use(
+    http.get(currentUserUrl, () => {
+      currentUserRequests += 1;
+      return current === null
+        ? HttpResponse.json(authenticationRequired, { status: 401 })
+        : HttpResponse.json(current);
+    }),
+    http.post(logoutUrl, () => {
+      logoutRequests += 1;
+      current = null;
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  const router = createTestRouter('/learn', admin);
+  await router.load();
+  renderRouter(router);
+  expect(currentUserRequests).toBe(1);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Вийти' }));
+
+  await waitFor(() => expect(router.state.location.href).toBe('/courses'));
+  await waitFor(() => expect(router.state.status).toBe('idle'));
+  expect(logoutRequests).toBe(1);
+  expect(router.options.context.queryClient.getQueryData(sessionQueryKey)).toBe(null);
+  expect(screen.getByRole('link', { name: 'Увійти' })).toBeTruthy();
+  expect(screen.queryByText('admin')).toBeNull();
+
+  await router.navigate({ to: '/learn' });
+  expect(router.state.location.href).toBe('/login?returnTo=%2Flearn');
+  expect(currentUserRequests).toBe(2);
+});
+
+test('G25 ignores a second sign-out while the first request is pending', async () => {
+  const admin = user('admin');
+  answerWith(null);
+  const browser = userEvent.setup();
+  let logoutRequests = 0;
+  let release: (() => void) | undefined;
+  const responseGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.post(logoutUrl, async () => {
+      logoutRequests += 1;
+      await responseGate;
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  const router = createTestRouter('/', admin);
+  await router.load();
+  renderRouter(router);
+
+  await browser.click(screen.getByRole('button', { name: 'Вийти' }));
+  const pendingButton = await screen.findByRole('button', { name: 'Виходимо…' });
+  expect(pendingButton.hasAttribute('disabled')).toBe(true);
+  await browser.click(pendingButton);
+  expect(logoutRequests).toBe(1);
+
+  if (release === undefined) throw new Error('The delayed logout response was not initialized');
+  release();
+  await waitFor(() => expect(router.state.location.href).toBe('/courses'));
+  await waitFor(() => expect(router.state.status).toBe('idle'));
+});
+
+test.each([
+  {
+    locale: 'uk',
+    signOut: 'Вийти',
+    login: 'Увійти',
+    message: 'Сеанс у браузері завершено, але сервер не підтвердив вихід.',
+  },
+  {
+    locale: 'en',
+    signOut: 'Sign out',
+    login: 'Log in',
+    message: 'Your browser session ended, but the server did not confirm sign-out.',
+  },
+] satisfies ReadonlyArray<{ locale: Locale; signOut: string; login: string; message: string }>)(
+  'G26/G31 ends the $locale local session and localizes the revocation failure',
+  async ({ locale, signOut, login, message }) => {
+    const admin = user('admin');
+    answerWith(null);
+    server.use(
+      http.post(logoutUrl, () => HttpResponse.json(dependencyUnavailable, { status: 503 })),
+    );
+    const router = createTestRouter('/', admin, locale);
+    await router.load();
+    renderRouter(router);
+
+    await userEvent.click(screen.getByRole('button', { name: signOut }));
+
+    await waitFor(() => expect(router.state.location.href).toBe('/courses'));
+    await waitFor(() => expect(router.state.status).toBe('idle'));
+    expect(router.options.context.queryClient.getQueryData(sessionQueryKey)).toBe(null);
+    expect(screen.getByRole('status').textContent).toContain(message);
+    expect(screen.getByRole('link', { name: login })).toBeTruthy();
+  },
+);

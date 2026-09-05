@@ -75,6 +75,12 @@ export const resources = {
         title: 'Адміністрування',
         empty: 'Керування курсами з’явиться в наступній фазі.',
       },
+      identity: {
+        signOut: 'Вийти',
+        signingOut: 'Виходимо…',
+        signOutFailure:
+          'Сеанс у браузері завершено, але сервер не підтвердив вихід. Спробуйте ще раз пізніше.',
+      },
       login: {
         label: 'Кабінет студента',
         title: 'Вхід у кабінет',
@@ -187,6 +193,12 @@ export const resources = {
       administration: {
         title: 'Administration',
         empty: 'Course management will arrive in the next phase.',
+      },
+      identity: {
+        signOut: 'Sign out',
+        signingOut: 'Signing out…',
+        signOutFailure:
+          'Your browser session ended, but the server did not confirm sign-out. Try again later.',
       },
       login: {
         label: 'Student area',

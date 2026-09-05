@@ -4,11 +4,16 @@ import {
   Outlet,
   Scripts,
   Link,
+  useNavigate,
 } from '@tanstack/react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { sessionQueryKey } from '../app/composition/identity-queries';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
+import { IdentityHeader } from '../presentation/identity/IdentityHeader';
+import { Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import '../app/styles/main.css';
 
@@ -74,6 +79,24 @@ function Document({ children }: { children: ReactNode }) {
 
 function Layout() {
   const { t } = useTranslation();
+  const { identityDependencies } = Route.useRouteContext();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
+  const signOut = useMutation({
+    mutationFn: () =>
+      identityDependencies.session.logOut().then((result) => identityDependencies.unwrap(result)),
+    onMutate: () => setSignOutFailed(false),
+    onSettled: async (_data, error) => {
+      setSignOutFailed(error !== null);
+      try {
+        await navigate({ to: '/courses' });
+      } finally {
+        queryClient.setQueryData(sessionQueryKey, null);
+      }
+    },
+  });
   return (
     <>
       <a className="skip-link" href="#main">
@@ -86,11 +109,20 @@ function Layout() {
           </Link>
           <nav aria-label={t('common.mainNavigation')}>
             <Link to="/courses">{t('common.catalog')}</Link>
-            <Link to="/login">{t('common.login')}</Link>
+            <IdentityHeader
+              user={session.data ?? null}
+              isSigningOut={signOut.isPending}
+              onSignOut={() => signOut.mutate()}
+            />
             <LanguageSwitcher />
           </nav>
         </div>
       </header>
+      {signOutFailed && (
+        <div className="shell sign-out-message">
+          <Toast message={t('identity.signOutFailure')} onDismiss={() => setSignOutFailed(false)} />
+        </div>
+      )}
       <main id="main" className="shell main-content" tabIndex={-1}>
         <Outlet />
       </main>
