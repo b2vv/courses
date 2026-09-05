@@ -1,14 +1,30 @@
-import { describe, expect, it } from '@rstest/core';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from '@rstest/core';
+import { QueryClient } from '@tanstack/react-query';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
 import { useState } from 'react';
-import { AuthoringQueryError } from '../../app/composition/admin-queries';
+import { apiOrigin } from '../../adapters/api/api-origin';
+import { createApiAdminCourseRepository } from '../../adapters/api/admin-course-repository';
+import { createAuthoring } from '../../application/admin/authoring';
+import { AuthoringQueryError, createAdminQueries } from '../../app/composition/admin-queries';
+import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { asBrandedId } from '../../domain/course/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../domain/course/course';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
+import { CourseListFailure } from './CourseListView';
 
 const admin: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000003',
@@ -30,6 +46,11 @@ const tree: CourseTree = {
   publishedAt: null,
   modules: [],
 };
+
+const server = setupServer();
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 function savedTree(current: CourseTree, edit: CourseTreeEdit): CourseTree {
   return { ...current, ...edit, updatedAt: '2026-09-01T00:00:00.000002Z' };
@@ -298,6 +319,114 @@ describe('course editor', () => {
     expect(screen.getByText('Enter a value.')).toBeTruthy();
     expect(screen.getByText('Use at most 120 characters.')).toBeTruthy();
     expect(saves).toBe(0);
+  });
+
+  it('R38 retries an unavailable primary editor read without showing an empty form', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const adminQueries = createAdminQueries(createAuthoring(createApiAdminCourseRepository()));
+    let reads = 0;
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/admin/courses/${tree.id}`, () => {
+        reads += 1;
+        return reads === 1
+          ? HttpResponse.json(
+              {
+                error: {
+                  code: 'dependency_unavailable',
+                  message: 'x',
+                  requestId: 'b'.repeat(32),
+                },
+              },
+              { status: 503 },
+            )
+          : HttpResponse.json(tree);
+      }),
+    );
+    const root = createRootRoute({ component: Outlet });
+    const editor = createRoute({
+      getParentRoute: () => root,
+      path: '/admin/courses/$courseId',
+      loader: ({ abortController }) =>
+        ensureRouteQuery(queryClient, adminQueries.detail(tree.id), abortController.signal),
+      component: () => (
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      ),
+      errorComponent: CourseListFailure,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([editor]),
+      history: createMemoryHistory({ initialEntries: [`/admin/courses/${tree.id}`] }),
+      defaultPendingMs: 0,
+      defaultPendingMinMs: 0,
+      Wrap: ({ children }) => <I18nProvider instance={createI18n('en')}>{children}</I18nProvider>,
+    });
+
+    await router.load();
+    render(<RouterProvider router={router} />);
+
+    const error = await screen.findByRole('alert');
+    expect(within(error).getByRole('heading', { name: 'Could not load courses' })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull();
+    await userEvent.click(within(error).getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Title' })).toBeTruthy();
+    expect(reads).toBe(2);
+  });
+
+  it('R40 disables Save while one PUT is in flight and ignores a second press', async () => {
+    const browser = userEvent.setup();
+    const authoring = createAuthoring(createApiAdminCourseRepository());
+    let puts = 0;
+    let releasePut: (() => void) | undefined;
+    const pendingPut = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    server.use(
+      http.put(`${apiOrigin()}/api/v1/admin/courses/${tree.id}`, async () => {
+        puts += 1;
+        await pendingPut;
+        return HttpResponse.json({
+          ...tree,
+          updatedAt: '2026-09-01T00:00:00.000002Z',
+        });
+      }),
+    );
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={async (current, edit) => {
+            const result = await authoring.save(current, edit);
+            if (!result.ok) throw new AuthoringQueryError(result.error);
+            return result.value;
+          }}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    await browser.click(save);
+    await waitFor(() => expect(puts).toBe(1));
+    expect(save.hasAttribute('disabled')).toBe(true);
+    await browser.click(save);
+    expect(puts).toBe(1);
+
+    if (releasePut === undefined) throw new Error('The save request was not initialized');
+    releasePut();
+    await waitFor(() => expect(save.hasAttribute('disabled')).toBe(false));
   });
 });
 

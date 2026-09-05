@@ -7,6 +7,7 @@ import { asBrandedId, validEntityId } from '../domain/course/course';
 import type { CourseId, CourseStatus, CourseTree, CourseTreeEdit } from '../domain/course/course';
 import type { AuthenticatedUser } from '../domain/identity/identity';
 import { CourseEditorPending, CourseEditorView } from '../presentation/admin/CourseEditorView';
+import { CourseListFailure } from '../presentation/admin/CourseListView';
 
 function courseId(value: string): CourseId {
   if (!validEntityId(value)) throw notFound();
@@ -40,6 +41,7 @@ export const Route = createFileRoute('/admin/courses/$courseId')({
   }),
   component: AdminCourseEditorRoute,
   pendingComponent: CourseEditorPending,
+  errorComponent: CourseListFailure,
 });
 
 function AdminCourseEditorRoute() {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from './controls';
+import { Button, Link } from './controls';
 
 type StateProps = { title: string; children?: ReactNode };
 
@@ -13,14 +13,23 @@ export function EmptyState({ title, children }: StateProps) {
 }
 
 type ErrorStateProps = StateProps &
-  ({ retryHref: string; retryLabel: string } | { retryHref?: undefined; retryLabel?: undefined });
+  (
+    | { retryHref: string; retryLabel: string; onRetry?: undefined }
+    | { onRetry: () => void; retryLabel: string; retryHref?: undefined }
+    | { retryHref?: undefined; retryLabel?: undefined; onRetry?: undefined }
+  );
 
-export function ErrorState({ title, children, retryHref, retryLabel }: ErrorStateProps) {
+export function ErrorState({ title, children, retryHref, retryLabel, onRetry }: ErrorStateProps) {
   return (
     <section className="ui-state ui-state--error" role="alert">
       <h2>{title}</h2>
       {children}
       {retryHref && <Link href={retryHref}>{retryLabel}</Link>}
+      {onRetry && (
+        <Button type="button" onPress={onRetry}>
+          {retryLabel}
+        </Button>
+      )}
     </section>
   );
 }

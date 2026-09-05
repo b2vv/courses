@@ -1,3 +1,5 @@
+import { useRouter } from '@tanstack/react-router';
+import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
@@ -112,10 +114,15 @@ export function CourseListPending() {
   return <Skeleton label={t('administration.loading')} lines={5} />;
 }
 
-export function CourseListFailure() {
+export function CourseListFailure({ reset }: ErrorComponentProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   return (
-    <ErrorState title={t('administration.failure')}>
+    <ErrorState
+      title={t('administration.failure')}
+      retryLabel={t('common.retry')}
+      onRetry={() => void router.invalidate().then(reset)}
+    >
       <p>{t('administration.failureHint')}</p>
     </ErrorState>
   );
