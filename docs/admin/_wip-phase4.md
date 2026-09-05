@@ -139,3 +139,11 @@ redirect-only observable, consistent with identity E10's established behavior.
    disposable session each via a context-level API login; read-only authenticated tests
    keep the shared state. Rule: shared storageState is for session-preserving tests only;
    any session-destroying test owns its session.
+
+## 2026-09-06 — Phase 4b GATE 1 complete
+
+Slice 4b (identity administration) specified in docs/admin/spec-4b.md. Five questions +
+one capability-model fork answered: sessions die immediately on block/delete (same tx);
+password reset revokes sessions; role change out of 4b; deleted users shown under a
+status filter; last-active-admin protected by a domain invariant; capabilities are
+additive (brief §24.10). Next: plan-4b.md → GATE 2 → tasks → Codex.
