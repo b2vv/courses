@@ -11,6 +11,7 @@ import (
 	"courses/internal/course/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,7 +41,7 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	}
 	items := make([]domain.Course, 0, len(rows))
 	for _, row := range rows {
-		course, err := mapCourse(row)
+		course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
 		if err != nil {
 			return domain.Page{}, err
 		}
@@ -63,7 +64,7 @@ func (r *Repository) GetPublished(ctx context.Context, slug string) (domain.Cour
 	if err != nil {
 		return domain.Course{}, persistenceError(err)
 	}
-	return mapCourse(row)
+	return mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
 }
 
 func persistenceError(err error) error {
@@ -80,13 +81,13 @@ func persistenceError(err error) error {
 	return domain.ErrDependencyUnavailable
 }
 
-func mapCourse(row generated.Course) (domain.Course, error) {
+func mapCourse(id pgtype.UUID, slug, title, summary, description, status string, createdAt, updatedAt, storedPublishedAt pgtype.Timestamptz) (domain.Course, error) {
 	var publishedAt *time.Time
-	if row.PublishedAt.Valid {
-		value := row.PublishedAt.Time
+	if storedPublishedAt.Valid {
+		value := storedPublishedAt.Time
 		publishedAt = &value
 	}
-	return domain.NewCourse(domain.Course{ID: row.ID.String(), Slug: row.Slug, Title: row.Title, Summary: row.Summary, Description: row.Description, Status: domain.Status(row.Status), CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time, PublishedAt: publishedAt})
+	return domain.NewCourse(domain.Course{ID: id.String(), Slug: slug, Title: title, Summary: summary, Description: description, Status: domain.Status(status), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: publishedAt})
 }
 
 func rollback(tx pgx.Tx) {

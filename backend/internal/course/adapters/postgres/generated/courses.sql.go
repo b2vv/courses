@@ -7,7 +7,29 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countAuthoringCourses = `-- name: CountAuthoringCourses :one
+SELECT count(*)
+FROM courses
+WHERE ($1::boolean OR instructor_id = $2::text::uuid)
+  AND ($3::text = '' OR status = $3::text)
+`
+
+type CountAuthoringCoursesParams struct {
+	IsAdmin bool
+	ActorID string
+	Status  string
+}
+
+func (q *Queries) CountAuthoringCourses(ctx context.Context, arg CountAuthoringCoursesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuthoringCourses, arg.IsAdmin, arg.ActorID, arg.Status)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const countPublishedCourses = `-- name: CountPublishedCourses :one
 SELECT count(*) FROM courses
@@ -23,14 +45,116 @@ func (q *Queries) CountPublishedCourses(ctx context.Context, searchPattern strin
 	return count, err
 }
 
+const createAuthoringCourse = `-- name: CreateAuthoringCourse :one
+INSERT INTO courses (
+  id, instructor_id, slug, title, summary, description, status,
+  created_at, updated_at, published_at
+)
+VALUES (
+  gen_random_uuid(),
+  $1::text::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::text,
+  'draft',
+  $6::timestamptz,
+  $6::timestamptz,
+  NULL
+)
+RETURNING id::text AS id
+`
+
+type CreateAuthoringCourseParams struct {
+	OwnerID     string
+	Slug        string
+	Title       string
+	Summary     string
+	Description string
+	CreatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) CreateAuthoringCourse(ctx context.Context, arg CreateAuthoringCourseParams) (string, error) {
+	row := q.db.QueryRow(ctx, createAuthoringCourse,
+		arg.OwnerID,
+		arg.Slug,
+		arg.Title,
+		arg.Summary,
+		arg.Description,
+		arg.CreatedAt,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getAuthoringCourse = `-- name: GetAuthoringCourse :one
+SELECT
+  id::text AS id,
+  slug,
+  title,
+  summary,
+  description,
+  status,
+  instructor_id::text AS instructor_id,
+  created_at,
+  updated_at,
+  published_at
+FROM courses
+WHERE id = $1::text::uuid
+`
+
+type GetAuthoringCourseRow struct {
+	ID           string
+	Slug         string
+	Title        string
+	Summary      string
+	Description  string
+	Status       string
+	InstructorID string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	PublishedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetAuthoringCourseRow, error) {
+	row := q.db.QueryRow(ctx, getAuthoringCourse, courseID)
+	var i GetAuthoringCourseRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Summary,
+		&i.Description,
+		&i.Status,
+		&i.InstructorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+	)
+	return i, err
+}
+
 const getPublishedCourse = `-- name: GetPublishedCourse :one
 SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at
 FROM courses WHERE slug = $1 AND status = 'published'
 `
 
-func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) (Course, error) {
+type GetPublishedCourseRow struct {
+	ID          pgtype.UUID
+	Slug        string
+	Title       string
+	Summary     string
+	Description string
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	PublishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) (GetPublishedCourseRow, error) {
 	row := q.db.QueryRow(ctx, getPublishedCourse, slug)
-	var i Course
+	var i GetPublishedCourseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
@@ -43,6 +167,147 @@ func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) (Course, 
 		&i.PublishedAt,
 	)
 	return i, err
+}
+
+const listAuthoringCourses = `-- name: ListAuthoringCourses :many
+SELECT
+  id::text AS id,
+  slug,
+  title,
+  status,
+  instructor_id::text AS instructor_id,
+  updated_at
+FROM courses
+WHERE ($1::boolean OR instructor_id = $2::text::uuid)
+  AND ($3::text = '' OR status = $3::text)
+ORDER BY updated_at DESC, id ASC
+LIMIT $5::integer OFFSET $4::integer
+`
+
+type ListAuthoringCoursesParams struct {
+	IsAdmin    bool
+	ActorID    string
+	Status     string
+	PageOffset int32
+	PageLimit  int32
+}
+
+type ListAuthoringCoursesRow struct {
+	ID           string
+	Slug         string
+	Title        string
+	Status       string
+	InstructorID string
+	UpdatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCoursesParams) ([]ListAuthoringCoursesRow, error) {
+	rows, err := q.db.Query(ctx, listAuthoringCourses,
+		arg.IsAdmin,
+		arg.ActorID,
+		arg.Status,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuthoringCoursesRow{}
+	for rows.Next() {
+		var i ListAuthoringCoursesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Status,
+			&i.InstructorID,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuthoringLessons = `-- name: ListAuthoringLessons :many
+SELECT lessons.id::text AS id, lessons.module_id::text AS module_id,
+  lessons.title, lessons.description, lessons.position
+FROM course_lessons AS lessons
+JOIN course_modules AS modules ON modules.id = lessons.module_id
+WHERE modules.course_id = $1::text::uuid
+ORDER BY modules.position, modules.id, lessons.position, lessons.id
+`
+
+type ListAuthoringLessonsRow struct {
+	ID          string
+	ModuleID    string
+	Title       string
+	Description string
+	Position    int32
+}
+
+func (q *Queries) ListAuthoringLessons(ctx context.Context, courseID string) ([]ListAuthoringLessonsRow, error) {
+	rows, err := q.db.Query(ctx, listAuthoringLessons, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuthoringLessonsRow{}
+	for rows.Next() {
+		var i ListAuthoringLessonsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ModuleID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuthoringModules = `-- name: ListAuthoringModules :many
+SELECT id::text AS id, title, position
+FROM course_modules
+WHERE course_id = $1::text::uuid
+ORDER BY position, id
+`
+
+type ListAuthoringModulesRow struct {
+	ID       string
+	Title    string
+	Position int32
+}
+
+func (q *Queries) ListAuthoringModules(ctx context.Context, courseID string) ([]ListAuthoringModulesRow, error) {
+	rows, err := q.db.Query(ctx, listAuthoringModules, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuthoringModulesRow{}
+	for rows.Next() {
+		var i ListAuthoringModulesRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.Position); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPublishedCourses = `-- name: ListPublishedCourses :many
@@ -65,7 +330,19 @@ type ListPublishedCoursesParams struct {
 	PageLimit     int32
 }
 
-func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCoursesParams) ([]Course, error) {
+type ListPublishedCoursesRow struct {
+	ID          pgtype.UUID
+	Slug        string
+	Title       string
+	Summary     string
+	Description string
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	PublishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCoursesParams) ([]ListPublishedCoursesRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedCourses,
 		arg.SearchPattern,
 		arg.SortBy,
@@ -76,9 +353,9 @@ func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCou
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Course{}
+	items := []ListPublishedCoursesRow{}
 	for rows.Next() {
-		var i Course
+		var i ListPublishedCoursesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Slug,
@@ -98,4 +375,68 @@ func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCou
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAuthoringCourse = `-- name: LockAuthoringCourse :one
+SELECT
+  id::text AS id,
+  slug,
+  title,
+  summary,
+  description,
+  status,
+  instructor_id::text AS instructor_id,
+  created_at,
+  updated_at,
+  published_at
+FROM courses
+WHERE id = $1::text::uuid
+FOR UPDATE
+`
+
+type LockAuthoringCourseRow struct {
+	ID           string
+	Slug         string
+	Title        string
+	Summary      string
+	Description  string
+	Status       string
+	InstructorID string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	PublishedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) LockAuthoringCourse(ctx context.Context, courseID string) (LockAuthoringCourseRow, error) {
+	row := q.db.QueryRow(ctx, lockAuthoringCourse, courseID)
+	var i LockAuthoringCourseRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Title,
+		&i.Summary,
+		&i.Description,
+		&i.Status,
+		&i.InstructorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublishedAt,
+	)
+	return i, err
+}
+
+const lockEligibleAuthoringOwner = `-- name: LockEligibleAuthoringOwner :one
+SELECT id::text AS id
+FROM users
+WHERE id = $1::text::uuid
+  AND disabled_at IS NULL
+  AND role IN ('instructor', 'admin')
+FOR SHARE
+`
+
+func (q *Queries) LockEligibleAuthoringOwner(ctx context.Context, ownerID string) (string, error) {
+	row := q.db.QueryRow(ctx, lockEligibleAuthoringOwner, ownerID)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }

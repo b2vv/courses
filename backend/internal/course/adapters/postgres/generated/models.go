@@ -3,19 +3,3 @@
 //   sqlc v1.30.0
 
 package generated
-
-import (
-	"github.com/jackc/pgx/v5/pgtype"
-)
-
-type Course struct {
-	ID          pgtype.UUID
-	Slug        string
-	Title       string
-	Summary     string
-	Description string
-	Status      string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	PublishedAt pgtype.Timestamptz
-}
