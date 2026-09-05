@@ -28,10 +28,10 @@ type TableProps = {
   label: string;
   columns: readonly TableColumn[];
   rows: readonly TableRow[];
-  emptyMessage?: string;
+  emptyMessage: string;
 };
 
-export function Table({ label, columns, rows, emptyMessage = 'Ще немає записів' }: TableProps) {
+export function Table({ label, columns, rows, emptyMessage }: TableProps) {
   return (
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll wide tables.
     <section className="ui-table-scroll" aria-label={label} tabIndex={0}>
@@ -66,27 +66,45 @@ export function Table({ label, columns, rows, emptyMessage = 'Ще немає з
   );
 }
 
-type PaginationProps = { page: number; totalPages: number; onPageChange: (page: number) => void };
+type PaginationProps = {
+  label: string;
+  previousLabel: string;
+  nextLabel: string;
+  pageLabel: string;
+  emptyLabel: string;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+};
 
-export function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+export function Pagination({
+  label,
+  previousLabel,
+  nextLabel,
+  pageLabel,
+  emptyLabel,
+  page,
+  totalPages,
+  onPageChange,
+}: PaginationProps) {
   return (
-    <nav aria-label="Сторінки результатів" className="ui-pagination">
+    <nav aria-label={label} className="ui-pagination">
       <Button
         variant="secondary"
         isDisabled={page <= 1 || totalPages === 0}
         onPress={() => onPageChange(page - 1)}
       >
-        Назад
+        {previousLabel}
       </Button>
       <span className="ui-pagination-label" aria-live="polite">
-        {totalPages === 0 ? 'Немає сторінок' : `Сторінка ${page} з ${totalPages}`}
+        {totalPages === 0 ? emptyLabel : pageLabel}
       </span>
       <Button
         variant="secondary"
         isDisabled={page >= totalPages}
         onPress={() => onPageChange(page + 1)}
       >
-        Далі
+        {nextLabel}
       </Button>
     </nav>
   );

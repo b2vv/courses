@@ -12,14 +12,13 @@ export function EmptyState({ title, children }: StateProps) {
   );
 }
 
-type ErrorStateProps = StateProps & { retryHref?: string; retryLabel?: string };
+type ErrorStateProps = StateProps &
+  (
+    | { retryHref: string; retryLabel: string }
+    | { retryHref?: undefined; retryLabel?: undefined }
+  );
 
-export function ErrorState({
-  title,
-  children,
-  retryHref,
-  retryLabel = 'Спробувати ще раз',
-}: ErrorStateProps) {
+export function ErrorState({ title, children, retryHref, retryLabel }: ErrorStateProps) {
   return (
     <section className="ui-state ui-state--error" role="alert">
       <h2>{title}</h2>
@@ -29,9 +28,9 @@ export function ErrorState({
   );
 }
 
-type SkeletonProps = { label?: string; lines?: number };
+type SkeletonProps = { label: string; lines?: number };
 
-export function Skeleton({ label = 'Завантаження', lines = 3 }: SkeletonProps) {
+export function Skeleton({ label, lines = 3 }: SkeletonProps) {
   const lineCount = Number.isFinite(lines) ? Math.max(1, Math.min(10, Math.floor(lines))) : 3;
   return (
     <output className="ui-skeleton">

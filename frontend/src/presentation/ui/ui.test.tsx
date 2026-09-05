@@ -11,7 +11,9 @@ import {
   Pagination,
   ProgressBar,
   Select,
+  Skeleton,
   Switch,
+  Table,
   Tabs,
   TextField,
   Toast,
@@ -107,6 +109,11 @@ describe('accessible UI primitives', () => {
     let requestedPage = 3;
     render(
       <Pagination
+        label="Сторінки результатів"
+        previousLabel="Назад"
+        nextLabel="Далі"
+        pageLabel="Сторінка 3 з 3"
+        emptyLabel="Немає сторінок"
         page={3}
         totalPages={3}
         onPageChange={(page) => {
@@ -120,6 +127,56 @@ describe('accessible UI primitives', () => {
     expect(screen.getByRole('navigation', { name: 'Сторінки результатів' }).textContent).toContain(
       'Сторінка 3 з 3',
     );
+  });
+
+  it('renders only caller-supplied English labels for localized kit states', () => {
+    const { container } = render(
+      <>
+        <Pagination
+          label="Result pages"
+          previousLabel="Previous"
+          nextLabel="Next"
+          pageLabel="Page 2 of 3"
+          emptyLabel="No pages"
+          page={2}
+          totalPages={3}
+          onPageChange={() => {}}
+        />
+        <Pagination
+          label="Empty result pages"
+          previousLabel="Previous"
+          nextLabel="Next"
+          pageLabel="Page 1 of 1"
+          emptyLabel="No pages"
+          page={1}
+          totalPages={0}
+          onPageChange={() => {}}
+        />
+        <Table
+          label="Courses"
+          columns={[{ id: 'title', label: 'Title' }]}
+          rows={[]}
+          emptyMessage="No records yet"
+        />
+        <Skeleton label="Loading courses" />
+        <ErrorState title="Courses unavailable" retryHref="/courses" retryLabel="Try again">
+          Reload the page.
+        </ErrorState>
+      </>,
+    );
+
+    const pages = screen.getByRole('navigation', { name: 'Result pages' });
+    expect(within(pages).getByRole('button', { name: 'Previous' })).toBeTruthy();
+    expect(within(pages).getByRole('button', { name: 'Next' })).toBeTruthy();
+    expect(pages.textContent).toContain('Page 2 of 3');
+    expect(
+      screen.getByRole('navigation', { name: 'Empty result pages' }).textContent,
+    ).toContain('No pages');
+    expect(screen.getByRole('table', { name: 'Courses' }).textContent).toContain('No records yet');
+    expect(screen.getByText('Loading courses')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Try again' }).getAttribute('href')).toBe('/courses');
+    expect(container.textContent).not.toMatch(/[\u0400-\u04ff]/u);
+    expect(container.innerHTML).not.toMatch(/[\u0400-\u04ff]/u);
   });
 
   it('filters combobox options while typing', async () => {
@@ -188,6 +245,7 @@ describe('accessible UI primitives', () => {
         <ErrorState
           title="Каталог тимчасово недоступний"
           retryHref="/courses?q=Go&sort=title&offset=20"
+          retryLabel="Спробувати ще раз"
         >
           Перезавантажте сторінку.
         </ErrorState>

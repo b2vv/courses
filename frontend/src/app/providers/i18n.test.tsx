@@ -2,8 +2,17 @@ import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider, createI18n } from './i18n';
+import { en } from './locales/en';
+import { uk } from './locales/uk';
 import { LanguageSwitcher } from '../../presentation/LanguageSwitcher';
 import { HomeView } from '../../presentation/storefront/HomeView';
+
+test('keeps shared UI and administration keys aligned across locale bundles', () => {
+  expect(Object.keys(uk.translation.ui)).toEqual(Object.keys(en.translation.ui));
+  expect(Object.keys(uk.translation.administration)).toEqual(
+    Object.keys(en.translation.administration),
+  );
+});
 
 test('renders one request locale and changes visible copy without a reload', async () => {
   const i18n = createI18n('uk');
