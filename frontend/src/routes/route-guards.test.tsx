@@ -107,6 +107,28 @@ test.each([
   expect(router.state.location.href).toBe(expected);
 });
 
+test.each(['student', 'instructor', 'admin'] satisfies Role[])(
+  'G03 opens the same /learn empty state for the %s role',
+  async (role) => {
+    const signedIn = user(role);
+    answerWith(signedIn);
+    const router = createTestRouter('/learn', signedIn);
+
+    await router.load();
+    renderRouter(router);
+
+    expect(router.state.location.href).toBe('/learn');
+    expect(screen.getByRole('main').textContent).toBe(
+      'Ваше навчанняКурси з’являться тут після відкриття навчального доступу.Перейти до каталогу',
+    );
+    expect(screen.getByRole('link', { name: 'Перейти до каталогу' }).getAttribute('href')).toBe(
+      '/courses',
+    );
+    expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
+    expect(screen.queryByText('Ваші викладацькі курси')).toBeNull();
+  },
+);
+
 test('G04 gives a student the same not-found answer for /admin as an unknown address', async () => {
   const student = user('student');
   answerWith(student);
@@ -140,6 +162,22 @@ test.each(['instructor', 'admin'] satisfies Role[])(
     expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
   },
 );
+
+test('G40 keeps the /admin shell empty until the later phase', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const router = createTestRouter('/admin', admin);
+
+  await router.load();
+  renderRouter(router);
+
+  const main = screen.getByRole('main');
+  expect(main.textContent).toBe(
+    'АдмініструванняКерування курсами з’явиться в наступній фазі.Перейти до каталогу',
+  );
+  expect(main.querySelector('table')).toBeNull();
+  expect(main.querySelector('ul, ol')).toBeNull();
+});
 
 test.each([
   ['/learn/go/intro?lesson=3', null, '/login?returnTo=%2Flearn%2Fgo%2Fintro%3Flesson%3D3'],
