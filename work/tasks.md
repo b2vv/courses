@@ -74,7 +74,7 @@ Compose і фікстур, тобто не може бігти раніше за
 
 | ID | Назва | Estimate | Depends on | Status | Owns / archive pointer |
 |---|---|---:|---|---|---|
-| A01 | Міграція 00003 (`instructor_id`, `course_modules`, `course_lessons`); перепорядкування гейта в `Makefile`/`ci.yml`/`README`/`standards.md`; власник+lock+conflict у `seed.sql`; три фікси `repository_integration_test.go` | 2h | GATE 2 green | in_progress | P01, B13, B14, B15, B16 |
+| A01 | Міграція 00003 (`instructor_id`, `course_modules`, `course_lessons`); перепорядкування гейта в `Makefile`/`ci.yml`/`README`/`standards.md`; власник+lock+conflict у `seed.sql`; три фікси `repository_integration_test.go` | 2h | GATE 2 green | done | `work/report-a01.md`; P01, B13–B16; ordered gates through `integration` pass |
 | A02 | Доменні правила authoring, порти й use cases на фейках: політика, переходи, slug-мутабельність, інваріанти дерева, дублікати id, дедлайни, скасування | 1.75h | A01 | planned | R24, R25, R39 |
 | A03 | PostgreSQL authoring-адаптер і sqlc: читання дерева, транзакційний запис із гардами D-3b/D-3c, guarded delete/transition, owner-scoped list, мапінг `23505` | 2h | A02 | planned | P08–P10, B03, B10, B11, R16–R19, R26 |
 | A04 | Авторизаційний шов і три захищені read: `httpserver.Actor`, експорт `Authenticate`/`RequireSameOrigin`, `GET` list/one/instructors, OpenAPI+generate | 2h | A03 | planned | P07, R01–R07 |

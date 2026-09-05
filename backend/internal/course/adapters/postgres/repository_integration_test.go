@@ -15,6 +15,7 @@ import (
 
 	"courses/internal/course/adapters/postgres"
 	"courses/internal/course/domain"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -67,14 +68,98 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("empty page contract: %+v", page)
 	}
 
-	t.Run("migration up down up", func(t *testing.T) {
+	t.Run("authoring migration backfill failure and rollback", func(t *testing.T) {
 		if _, err := provider.DownTo(ctx, 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.UpTo(ctx, 2); err != nil {
+			t.Fatal(err)
+		}
+		identitySeed := mustRead(t, filepath.Join("..", "..", "..", "..", "sql", "seed-identities.sql"))
+		if _, err := pool.Exec(ctx, string(identitySeed)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE users SET disabled_at=updated_at WHERE id='40000000-0000-4000-8000-000000000003'"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO courses (id,slug,title,summary,description,status)
+		SELECT ('50000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'migration-'||n,'Migration fixture','Fixture summary','Fixture description','draft' FROM generate_series(1,5) AS n`); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := provider.Up(ctx); err != nil {
 			t.Fatal(err)
 		}
+		var courseCount, ownerCount int
+		var ownerID string
+		var ownersEnabled bool
+		if err := db.QueryRowContext(ctx, `SELECT count(*), count(DISTINCT courses.instructor_id), min(courses.instructor_id::text), bool_and(users.disabled_at IS NULL)
+		FROM courses JOIN users ON users.id=courses.instructor_id`).Scan(&courseCount, &ownerCount, &ownerID, &ownersEnabled); err != nil {
+			t.Fatal(err)
+		}
+		if courseCount != 5 || ownerCount != 1 || ownerID != "40000000-0000-4000-8000-000000000002" || !ownersEnabled {
+			t.Fatalf("authoring backfill: courses=%d owners=%d owner=%s enabled=%t", courseCount, ownerCount, ownerID, ownersEnabled)
+		}
+		var nullable string
+		if err := db.QueryRowContext(ctx, "SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='courses' AND column_name='instructor_id'").Scan(&nullable); err != nil {
+			t.Fatal(err)
+		}
+		if nullable != "NO" {
+			t.Fatalf("instructor_id nullable: %s", nullable)
+		}
+
+		if _, err := provider.DownTo(ctx, 2); err != nil {
+			t.Fatal(err)
+		}
+		var lessonsGone, modulesGone, ownerGone bool
+		if err := db.QueryRowContext(ctx, `SELECT to_regclass('course_lessons') IS NULL, to_regclass('course_modules') IS NULL,
+		NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='courses' AND column_name='instructor_id')`).Scan(&lessonsGone, &modulesGone, &ownerGone); err != nil {
+			t.Fatal(err)
+		}
+		if !lessonsGone || !modulesGone || !ownerGone {
+			t.Fatalf("authoring down migration: lessons gone=%t modules gone=%t owner gone=%t", lessonsGone, modulesGone, ownerGone)
+		}
 		if _, err := repository.ListPublished(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := pool.Exec(ctx, "DELETE FROM courses"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "DELETE FROM users"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "INSERT INTO courses (id,slug,title,summary,description,status) VALUES ('50000000-0000-4000-8000-000000000999','ownerless','Ownerless','Fixture summary','Fixture description','draft')"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.Up(ctx); err == nil {
+			t.Fatal("expected authoring migration to reject courses without users")
+		} else {
+			var pgError *pgconn.PgError
+			if !errors.As(err, &pgError) || pgError.Code != "23502" {
+				t.Fatalf("expected not-null violation, got %v", err)
+			}
+		}
+		if err := db.QueryRowContext(ctx, "SELECT count(*) FROM courses").Scan(&courseCount); err != nil {
+			t.Fatal(err)
+		}
+		if courseCount != 1 {
+			t.Fatalf("failed migration changed course count: %d", courseCount)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT to_regclass('course_lessons') IS NULL, to_regclass('course_modules') IS NULL,
+		NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='courses' AND column_name='instructor_id')`).Scan(&lessonsGone, &modulesGone, &ownerGone); err != nil {
+			t.Fatal(err)
+		}
+		if !lessonsGone || !modulesGone || !ownerGone {
+			t.Fatalf("failed migration changed schema: lessons gone=%t modules gone=%t owner gone=%t", lessonsGone, modulesGone, ownerGone)
+		}
+
+		if _, err := pool.Exec(ctx, "DELETE FROM courses"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(identitySeed)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.Up(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -84,9 +169,10 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		files := fstest.MapFS{
-			"00001_courses.sql":  &fstest.MapFile{Data: initial},
-			"00002_identity.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
-			"00003_failure.sql":  &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
+			"00001_courses.sql":   &fstest.MapFile{Data: initial},
+			"00002_identity.sql":  &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
+			"00003_authoring.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00003_authoring.sql"))},
+			"00004_failure.sql":   &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
 		}
 		failure, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithDisableGlobalRegistry(true))
 		if err != nil {
@@ -107,6 +193,13 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 	t.Run("concurrent repeated seed and hidden courses", func(t *testing.T) {
+		identitySeed, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "sql", "seed-identities.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(identitySeed)); err != nil {
+			t.Fatal(err)
+		}
 		seed, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "sql", "seed.sql"))
 		if err != nil {
 			t.Fatal(err)
@@ -142,6 +235,7 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 	})
 	t.Run("database constraints reject invalid entities", func(t *testing.T) {
 		for _, statement := range []string{
+			"INSERT INTO courses (id,slug,title,summary,description,status) VALUES ('90000000-0000-4000-8000-000000000001','missing-owner','Missing owner','Fixture summary','Fixture description','draft')",
 			"UPDATE courses SET slug='invalid--slug' WHERE slug='draft-course'",
 			"UPDATE courses SET status='unknown' WHERE slug='draft-course'",
 			"UPDATE courses SET status='published' WHERE slug='draft-course'",
@@ -155,8 +249,8 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 	t.Run("one max beyond end and stable ties", func(t *testing.T) {
-		_, err := pool.Exec(ctx, `INSERT INTO courses (id,slug,title,summary,description,status,created_at,updated_at,published_at)
-		SELECT ('20000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'bulk-'||n,'Tied title','Bulk fixture','Fixture description','published','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z' FROM generate_series(1,51) AS n`)
+		_, err := pool.Exec(ctx, `INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at)
+		SELECT ('20000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'40000000-0000-4000-8000-000000000002','bulk-'||n,'Tied title','Bulk fixture','Fixture description','published','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z' FROM generate_series(1,51) AS n`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +274,7 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 	})
 	t.Run("literal wildcard search", func(t *testing.T) {
 		for index, title := range []string{"100% reliable", "snake_case", `path\to!`} {
-			_, err := pool.Exec(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,created_at,updated_at,published_at) VALUES($1,$2,$3,'Literal fixture','Fixture description','published','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z')`, fmt.Sprintf("30000000-0000-4000-8000-%012d", index+1), fmt.Sprintf("literal-%d", index), title)
+			_, err := pool.Exec(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at) VALUES($1,'40000000-0000-4000-8000-000000000002',$2,$3,'Literal fixture','Fixture description','published','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z')`, fmt.Sprintf("30000000-0000-4000-8000-%012d", index+1), fmt.Sprintf("literal-%d", index), title)
 			if err != nil {
 				t.Fatal(err)
 			}

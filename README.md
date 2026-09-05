@@ -10,8 +10,8 @@ Prerequisites: Docker with Compose v2+, 4 GB available RAM; Node 24 for native f
 
 ```sh
 make up
-make seed
 make seed-identities
+make seed
 ```
 
 `make up` copies `.env.example` if needed, builds, applies migrations and waits for health. Sample data is explicit and repeatable. `make seed-identities` adds these local development fixtures only:
@@ -37,12 +37,13 @@ make format-check lint typecheck test
 make integration
 make build
 make up
-make seed
 make seed-identities
+make seed
+make smoke
 make e2e
 ```
 
-`make migrate` applies Goose migrations. `make generate` regenerates sqlc and Orval; `make check-generated` rejects contract drift. Generated code belongs to adapters, never domain. `make format` formats code. CI uses format → lint → typecheck → unit → integration → generated drift → build → E2E. See [testing](docs/development/testing.md) and the factual [report](docs/foundation/report.md).
+`make migrate` applies Goose migrations. `make generate` regenerates sqlc and Orval; `make check-generated` rejects contract drift. Generated code belongs to adapters, never domain. `make format` formats code. CI uses format → lint → typecheck → unit → integration → generated drift → build → up → seed identities → seed courses → smoke → E2E. See [testing](docs/development/testing.md) and the factual [report](docs/foundation/report.md).
 
 ## Repository
 

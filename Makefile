@@ -19,7 +19,7 @@ logs:
 	docker compose logs -f --tail=100
 migrate: env
 	docker compose run --rm migrate
-seed: env
+seed: seed-identities
 	docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/sql/seed.sql
 seed-identities: env
 	docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/sql/seed-identities.sql
@@ -51,4 +51,4 @@ generate:
 check-generated: generate
 	git diff --exit-code -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated
 	@test -z "$$(git ls-files --others --exclude-standard -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated)"
-check: format-check lint typecheck test integration check-generated build up seed seed-identities smoke e2e
+check: format-check lint typecheck test integration check-generated build up seed-identities seed smoke e2e
