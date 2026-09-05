@@ -80,7 +80,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | A04 | Авторизаційний шов і три захищені read: `httpserver.Actor`, експорт `Authenticate`/`RequireSameOrigin`, `GET` list/one/instructors, OpenAPI+generate | 2h | A03 | done | `work/report-a04.md`; P07, R01–R07; ordered gates through `check-generated` pass |
 | A05 | Create і tree-write: `POST /admin/courses`, `PUT /admin/courses/{id}`, межі розміру/полів, slug, власник, replay, OpenAPI+generate | 2h | A04 | done | `work/report-a05.md`; P02–P06, B04–B08, B12, R12, R13, R20–R22, R29; ordered gates through `check-generated` pass |
 | A06 | Життєвий цикл: `POST /status`, `DELETE`, мутаційна половина матриці відмов, OpenAPI+generate | 1.5h | A05 | done | `work/report-a06.md`; P11–P14, B01, R08–R11, R14, R15, R23; ordered gates through `check-generated` pass |
-| A07 | Публічна програма: read у репозиторії, схема `CourseDetail`, фронтовий домен/схема/`CourseView`, drift-гейт | 1.5h | A06 | planned | P15, B17 |
+| A07 | Публічна програма: read у репозиторії, схема `CourseDetail`, фронтовий домен/схема/`CourseView`, drift-гейт | 1.5h | A06 | done | `work/report-a07.md`; P15, B17; ordered gates through `check-generated` pass |
 | A08 | i18n-борг кіта й розкол локалей: label-props у `Table`/`Pagination`/`Skeleton`, оновлення всіх викликів, `locales/{uk,en}.ts` | 1h | — | planned | P17 |
 | A09 | Фронтовий admin-адаптер і application: branded ids, типи дерева, порт, use cases, zod, репозиторій, композиція, інвалідація | 1.5h | A06, A08 | planned | R27 |
 | A10 | Admin-список і перебудова shell: `admin.tsx` → layout з `Outlet`, `admin.index.tsx`, некидаючий парсинг search, таби статусів, пагінація, стани, uk/en | 2h | A09 | planned | P16, P18, B02, R34 |

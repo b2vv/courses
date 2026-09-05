@@ -62,6 +62,7 @@ export const resources = {
       course: {
         all: '← Усі курси',
         about: 'Про курс',
+        program: 'Програма курсу',
         comingSoon: 'Навчання незабаром',
         unavailable:
           'Зараз можна ознайомитися з описом. Доступ до уроків і придбання курсу ще готуються.',
@@ -181,6 +182,7 @@ export const resources = {
       course: {
         all: '← All courses',
         about: 'About the course',
+        program: 'Course program',
         comingSoon: 'Learning access is coming soon',
         unavailable:
           'You can review the course description now. Lessons and purchasing are still being prepared.',

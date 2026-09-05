@@ -9,7 +9,7 @@ import (
 
 type CourseRepository interface {
 	ListPublished(context.Context, domain.Query) (domain.Page, error)
-	GetPublished(context.Context, string) (domain.Course, error)
+	GetPublished(context.Context, string) (domain.CourseDetail, error)
 }
 
 type AuthoringRepository interface {

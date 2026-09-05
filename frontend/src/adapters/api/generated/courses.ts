@@ -21,7 +21,7 @@ import type {
   AuthenticatedUser,
   BadRequestResponse,
   ConflictResponse,
-  Course,
+  CourseDetail,
   CoursePage,
   ForbiddenResponse,
   Instructor,
@@ -106,7 +106,7 @@ export const listPublishedCourses = async (params?: ListPublishedCoursesParams, 
 
 
 export type getPublishedCourseResponse200 = {
-  data: Course
+  data: CourseDetail
   status: 200
 }
 
@@ -148,7 +148,7 @@ export const getGetPublishedCourseUrl = (slug: string,) => {
 }
 
 /**
- * Draft, archived and unknown courses all return the same 404 response. Query parameters are not supported.
+ * Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions, lesson descriptions or ownership. Query parameters are not supported.
  * @summary Get a published course
  */
 export const getPublishedCourse = async (slug: string, options?: RequestInit): Promise<getPublishedCourseResponse> => {

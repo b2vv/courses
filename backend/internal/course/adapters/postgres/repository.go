@@ -53,18 +53,37 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	return domain.Page{Items: items, Limit: query.Limit, Offset: query.Offset, Total: total}, nil
 }
 
-func (r *Repository) GetPublished(ctx context.Context, slug string) (domain.Course, error) {
+func (r *Repository) GetPublished(ctx context.Context, slug string) (domain.CourseDetail, error) {
 	if err := domain.ValidateSlug(slug); err != nil {
-		return domain.Course{}, err
+		return domain.CourseDetail{}, err
 	}
-	row, err := generated.New(r.pool).GetPublishedCourse(ctx, slug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Course{}, domain.ErrCourseNotFound
-	}
+	rows, err := generated.New(r.pool).GetPublishedCourse(ctx, slug)
 	if err != nil {
-		return domain.Course{}, persistenceError(err)
+		return domain.CourseDetail{}, persistenceError(err)
 	}
-	return mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
+	if len(rows) == 0 {
+		return domain.CourseDetail{}, domain.ErrCourseNotFound
+	}
+	row := rows[0]
+	course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
+	if err != nil {
+		return domain.CourseDetail{}, err
+	}
+	program := make([]domain.ProgramModule, 0)
+	moduleID := ""
+	for _, row := range rows {
+		if row.ModuleID == "" {
+			continue
+		}
+		if row.ModuleID != moduleID {
+			program = append(program, domain.ProgramModule{Title: row.ModuleTitle, Lessons: []domain.ProgramLesson{}})
+			moduleID = row.ModuleID
+		}
+		if row.LessonPresent {
+			program[len(program)-1].Lessons = append(program[len(program)-1].Lessons, domain.ProgramLesson{Title: row.LessonTitle})
+		}
+	}
+	return domain.CourseDetail{Course: course, Program: program}, nil
 }
 
 func persistenceError(err error) error {

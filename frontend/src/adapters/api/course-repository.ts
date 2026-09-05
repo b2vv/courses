@@ -1,8 +1,8 @@
 import { makePublishedCourse } from '../../domain/course/course';
-import type { CatalogError, CoursePage, Result } from '../../domain/course/course';
+import type { CatalogError, CourseDetail, CoursePage, Result } from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 import { getPublishedCourse, listPublishedCourses } from './generated/courses';
-import { courseSchema, errorSchema, pageSchema } from './course-schema';
+import { courseDetailSchema, errorSchema, pageSchema } from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 
@@ -70,15 +70,26 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
       );
     },
     getPublished(slug, signal) {
-      return request(
+      return request<CourseDetail>(
         'catalog.detail',
         // The generated builder interpolates the path segment verbatim, so the
         // slug is encoded here rather than relying only on server validation.
         (init) => getPublishedCourse(encodeURIComponent(slug), init),
         (raw) => {
-          const parsed = courseSchema.safeParse(raw);
+          const parsed = courseDetailSchema.safeParse(raw);
           if (!parsed.success || parsed.data.slug !== slug) return invalid;
-          return makePublishedCourse(parsed.data);
+          const course = makePublishedCourse(parsed.data);
+          if (!course.ok) return course;
+          return {
+            ok: true,
+            value: {
+              ...course.value,
+              program: parsed.data.program.map((module) => ({
+                title: module.title,
+                lessons: module.lessons.map((lesson) => ({ title: lesson.title })),
+              })),
+            },
+          };
         },
         signal,
       );

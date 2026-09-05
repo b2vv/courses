@@ -220,6 +220,19 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if page.Total != 3 || len(page.Items) != 3 || page.Items[0].Slug != "go-backend-foundations" {
 			t.Fatalf("seed/visibility/order: %+v", page)
 		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_modules (id,course_id,title,position) VALUES
+		('60000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','PostgreSQL',1),
+		('60000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','HTTP API',0),
+		('60000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','Draft secret',0),
+		('60000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','Archived secret',0);
+		INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
+		('70000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000001','Contracts','Must stay private',1),
+		('70000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','Handlers','Must stay private',0),
+		('70000000-0000-4000-8000-000000000003','60000000-0000-4000-8000-000000000002','Transactions','Must stay private',0),
+		('70000000-0000-4000-8000-000000000004','60000000-0000-4000-8000-000000000003','Draft lesson','Must stay private',0),
+		('70000000-0000-4000-8000-000000000005','60000000-0000-4000-8000-000000000004','Archived lesson','Must stay private',0)`); err != nil {
+			t.Fatal(err)
+		}
 		for _, slug := range []string{"draft-course", "archived-course", "missing-course"} {
 			if _, err := repository.GetPublished(ctx, slug); !errors.Is(err, domain.ErrCourseNotFound) {
 				t.Fatalf("%s: %v", slug, err)
@@ -231,6 +244,12 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if course.Title != "Go: фундамент надійного бекенду" || course.Status != domain.Published || course.PublishedAt == nil {
 			t.Fatalf("wrong mapped course: %+v", course)
+		}
+		if len(course.Program) != 2 || course.Program[0].Title != "HTTP API" || course.Program[1].Title != "PostgreSQL" ||
+			len(course.Program[0].Lessons) != 2 || course.Program[0].Lessons[0].Title != "Handlers" ||
+			course.Program[0].Lessons[1].Title != "Contracts" || len(course.Program[1].Lessons) != 1 ||
+			course.Program[1].Lessons[0].Title != "Transactions" {
+			t.Fatalf("wrong public program order: %+v", course.Program)
 		}
 	})
 	t.Run("database constraints reject invalid entities", func(t *testing.T) {

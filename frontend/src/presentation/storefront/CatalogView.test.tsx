@@ -9,18 +9,26 @@ import {
 } from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { CatalogQuery, CoursePage, PublishedCourse } from '../../domain/course/course';
+import { createI18n, I18nProvider } from '../../app/providers/i18n';
+import type { CatalogQuery, CourseDetail, CoursePage } from '../../domain/course/course';
 import { CatalogFailure, CatalogLoading, CourseNotFound } from './CatalogStates';
 import { CatalogView } from './CatalogView';
 import { CourseView } from './CourseView';
 
-const architectureCourse: PublishedCourse = {
+const architectureCourse: CourseDetail = {
   id: '7b823b02-65f6-4875-8e66-65e44fd08329',
   slug: 'go-architecture',
   title: 'Архітектура застосунків Go',
   summary: 'Побудуйте API з чіткими межами модулів.',
   description: 'Працюємо з портами та адаптерами.\nЗавершуємо наскрізним тестом API.',
   publishedAt: '2026-09-01T09:00:00Z',
+  program: [
+    {
+      title: 'Межі модулів',
+      lessons: [{ title: 'Порти' }, { title: 'Адаптери' }],
+    },
+    { title: 'Перевірка', lessons: [{ title: 'Контрактний тест' }] },
+  ],
 };
 
 const initialQuery: CatalogQuery = { q: '', sort: 'recent', limit: 20, offset: 0 };
@@ -60,6 +68,27 @@ describe('catalog presentation', () => {
     ).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Навчання незабаром' })).toBeTruthy();
     expect(screen.getByRole('link', { name: '← Усі курси' }).getAttribute('href')).toBe('/courses');
+
+    const programHeading = screen.getByRole('heading', { name: 'Програма курсу' });
+    const program = programHeading.closest('section');
+    if (!program) throw new Error('The program heading must label a section');
+    expect(program.textContent).toContain(
+      'Межі модулівПортиАдаптериПеревіркаКонтрактний тест',
+    );
+    expect(within(program).getAllByRole('list')).toHaveLength(3);
+    expect(within(program).queryByRole('link')).toBeNull();
+  });
+
+  it('omits an empty program section and localizes a present program heading', () => {
+    const { rerender } = render(<CourseView course={{ ...architectureCourse, program: [] }} />);
+    expect(screen.queryByRole('heading', { name: 'Програма курсу' })).toBeNull();
+
+    rerender(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseView course={architectureCourse} />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole('heading', { name: 'Course program' })).toBeTruthy();
   });
 
   it('submits edited search and sort with the chosen limit and resets the old offset', async () => {

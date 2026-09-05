@@ -36,6 +36,17 @@ type courseDTO struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	PublishedAt *time.Time `json:"publishedAt"`
 }
+type programLessonDTO struct {
+	Title string `json:"title"`
+}
+type programModuleDTO struct {
+	Title   string             `json:"title"`
+	Lessons []programLessonDTO `json:"lessons"`
+}
+type courseDetailDTO struct {
+	courseDTO
+	Program []programModuleDTO `json:"program"`
+}
 type paginationDTO struct {
 	Limit  int   `json:"limit"`
 	Offset int   `json:"offset"`
@@ -77,7 +88,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusOK, mapCourse(course))
+	httpserver.WriteJSON(w, http.StatusOK, mapCourseDetail(course))
 }
 
 func parseQuery(raw string) (domain.Query, error) {
@@ -133,6 +144,18 @@ func decimal(value string) (int, error) {
 
 func mapCourse(course domain.Course) courseDTO {
 	return courseDTO{ID: course.ID, Slug: course.Slug, Title: course.Title, Summary: course.Summary, Description: course.Description, Status: string(course.Status), CreatedAt: course.CreatedAt, UpdatedAt: course.UpdatedAt, PublishedAt: course.PublishedAt}
+}
+
+func mapCourseDetail(course domain.CourseDetail) courseDetailDTO {
+	program := make([]programModuleDTO, 0, len(course.Program))
+	for _, module := range course.Program {
+		lessons := make([]programLessonDTO, 0, len(module.Lessons))
+		for _, lesson := range module.Lessons {
+			lessons = append(lessons, programLessonDTO{Title: lesson.Title})
+		}
+		program = append(program, programModuleDTO{Title: module.Title, Lessons: lessons})
+	}
+	return courseDetailDTO{courseDTO: mapCourse(course.Course), Program: program}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {

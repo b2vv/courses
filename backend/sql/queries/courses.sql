@@ -16,9 +16,26 @@ WHERE status = 'published'
   AND (title ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
        OR summary ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!');
 
--- name: GetPublishedCourse :one
-SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at
-FROM courses WHERE slug = $1 AND status = 'published';
+-- name: GetPublishedCourse :many
+SELECT
+  courses.id,
+  courses.slug,
+  courses.title,
+  courses.summary,
+  courses.description,
+  courses.status,
+  courses.created_at,
+  courses.updated_at,
+  courses.published_at,
+  COALESCE(modules.id::text, '')::text AS module_id,
+  COALESCE(modules.title, '')::text AS module_title,
+  COALESCE(lessons.title, '')::text AS lesson_title,
+  (lessons.id IS NOT NULL)::boolean AS lesson_present
+FROM courses
+LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
+LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
+WHERE courses.slug = $1 AND courses.status = 'published'
+ORDER BY modules.position, modules.id, lessons.position, lessons.id;
 
 -- name: ListAuthoringCourses :many
 SELECT

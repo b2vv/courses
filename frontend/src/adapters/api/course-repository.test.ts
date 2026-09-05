@@ -15,6 +15,13 @@ const course = {
   updatedAt: '2026-09-01T00:00:00Z',
   publishedAt: '2026-09-01T00:00:00Z',
 };
+const detail = {
+  ...course,
+  program: [
+    { title: 'Модуль 1', lessons: [{ title: 'Урок 1' }, { title: 'Урок 2' }] },
+    { title: 'Модуль 2', lessons: [{ title: 'Урок 3' }] },
+  ],
+};
 const query = { q: '', sort: 'recent', limit: 20, offset: 0 } satisfies Parameters<
   ReturnType<typeof createApiCourseRepository>['listPublished']
 >[0];
@@ -36,11 +43,29 @@ test('validates transport data and maps it to the published domain model', async
     expect(result.value.items[0]).not.toHaveProperty('createdAt');
   }
 });
+test('maps the ordered title-only program on a published course detail', async () => {
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/courses/go-basics`, () => HttpResponse.json(detail)),
+  );
+  const result = await createApiCourseRepository().getPublished('go-basics');
+  expect(result).toEqual({
+    ok: true,
+    value: {
+      id: course.id,
+      slug: course.slug,
+      title: course.title,
+      summary: course.summary,
+      description: course.description,
+      publishedAt: course.publishedAt,
+      program: detail.program,
+    },
+  });
+});
 test('rejects malformed success and hidden content', async () => {
   const repository = createApiCourseRepository();
   server.use(
     http.get(`${apiOrigin()}/api/v1/courses/go-basics`, () =>
-      HttpResponse.json({ ...course, status: 'draft' }),
+      HttpResponse.json({ ...detail, status: 'draft' }),
     ),
   );
   expect(await repository.getPublished('go-basics')).toEqual({

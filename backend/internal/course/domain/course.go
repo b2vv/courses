@@ -39,6 +39,20 @@ type Course struct {
 	PublishedAt *time.Time
 }
 
+type ProgramLesson struct {
+	Title string
+}
+
+type ProgramModule struct {
+	Title   string
+	Lessons []ProgramLesson
+}
+
+type CourseDetail struct {
+	Course
+	Program []ProgramModule
+}
+
 func NewCourse(course Course) (Course, error) {
 	if !validID(course.ID) || ValidateSlug(course.Slug) != nil || !validText(course.Title, 200) || !validText(course.Summary, 500) || !validText(course.Description, 20000) {
 		return Course{}, ErrInvalidCourse

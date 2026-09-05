@@ -13,14 +13,14 @@ import (
 type repository struct {
 	query domain.Query
 	list  func(context.Context, domain.Query) (domain.Page, error)
-	get   func(context.Context, string) (domain.Course, error)
+	get   func(context.Context, string) (domain.CourseDetail, error)
 }
 
 func (r *repository) ListPublished(ctx context.Context, query domain.Query) (domain.Page, error) {
 	r.query = query
 	return r.list(ctx, query)
 }
-func (r *repository) GetPublished(ctx context.Context, slug string) (domain.Course, error) {
+func (r *repository) GetPublished(ctx context.Context, slug string) (domain.CourseDetail, error) {
 	return r.get(ctx, slug)
 }
 
@@ -42,7 +42,9 @@ func TestListPublishedCoursesNormalizesQueryAndRetainsPagination(t *testing.T) {
 }
 
 func TestGetPublishedCourseValidatesSlugAndPropagatesExplicitNotFound(t *testing.T) {
-	useCases := application.NewCatalog(&repository{get: func(context.Context, string) (domain.Course, error) { return domain.Course{}, domain.ErrCourseNotFound }})
+	useCases := application.NewCatalog(&repository{get: func(context.Context, string) (domain.CourseDetail, error) {
+		return domain.CourseDetail{}, domain.ErrCourseNotFound
+	}})
 	if _, err := useCases.GetPublishedCourse(context.Background(), "invalid--slug"); !errors.Is(err, domain.ErrInvalidSlug) {
 		t.Fatalf("got %v", err)
 	}
@@ -65,9 +67,9 @@ func TestReadCancellationReachesRepository(t *testing.T) {
 }
 
 func TestSlowDependencyIsBoundedWithoutCallerCancellation(t *testing.T) {
-	repo := &repository{get: func(ctx context.Context, _ string) (domain.Course, error) {
+	repo := &repository{get: func(ctx context.Context, _ string) (domain.CourseDetail, error) {
 		<-ctx.Done()
-		return domain.Course{}, domain.ErrDependencyUnavailable
+		return domain.CourseDetail{}, domain.ErrDependencyUnavailable
 	}}
 	// Outer deadline only protects a regressed test from hanging indefinitely.
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)

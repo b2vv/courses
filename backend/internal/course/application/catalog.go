@@ -21,9 +21,9 @@ func (c *Catalog) ListPublishedCourses(ctx context.Context, input domain.Query) 
 	return c.repository.ListPublished(ctx, query)
 }
 
-func (c *Catalog) GetPublishedCourse(ctx context.Context, slug string) (domain.Course, error) {
+func (c *Catalog) GetPublishedCourse(ctx context.Context, slug string) (domain.CourseDetail, error) {
 	if err := domain.ValidateSlug(slug); err != nil {
-		return domain.Course{}, err
+		return domain.CourseDetail{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

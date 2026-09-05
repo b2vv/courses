@@ -1,5 +1,5 @@
 import { makeCatalogQuery, validSlug } from '../../domain/course/course';
-import type { CatalogQuery, CoursePage, PublishedCourse, Result } from '../../domain/course/course';
+import type { CatalogQuery, CourseDetail, CoursePage, Result } from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 
 export function createCatalog(repository: CourseRepository) {
@@ -8,7 +8,7 @@ export function createCatalog(repository: CourseRepository) {
       const result = makeCatalogQuery(input);
       return result.ok ? repository.listPublished(result.value, signal) : Promise.resolve(result);
     },
-    get(slug: string, signal?: AbortSignal): Promise<Result<PublishedCourse>> {
+    get(slug: string, signal?: AbortSignal): Promise<Result<CourseDetail>> {
       return validSlug(slug)
         ? repository.getPublished(slug, signal)
         : Promise.resolve({ ok: false, error: { code: 'invalid_slug' } });

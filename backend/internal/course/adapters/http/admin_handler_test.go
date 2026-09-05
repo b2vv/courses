@@ -218,13 +218,21 @@ func (repository *adminRepository) ListPublished(_ context.Context, query domain
 	return domain.Page{Items: items, Limit: query.Limit, Offset: query.Offset, Total: int64(len(items))}, nil
 }
 
-func (repository *adminRepository) GetPublished(_ context.Context, slug string) (domain.Course, error) {
+func (repository *adminRepository) GetPublished(_ context.Context, slug string) (domain.CourseDetail, error) {
 	for _, tree := range repository.courses {
 		if tree.Slug == slug && tree.Status == domain.Published {
-			return publicCourse(tree), nil
+			program := make([]domain.ProgramModule, 0, len(tree.Modules))
+			for _, module := range tree.Modules {
+				lessons := make([]domain.ProgramLesson, 0, len(module.Lessons))
+				for _, lesson := range module.Lessons {
+					lessons = append(lessons, domain.ProgramLesson{Title: lesson.Title})
+				}
+				program = append(program, domain.ProgramModule{Title: module.Title, Lessons: lessons})
+			}
+			return domain.CourseDetail{Course: publicCourse(tree), Program: program}, nil
 		}
 	}
-	return domain.Course{}, domain.ErrCourseNotFound
+	return domain.CourseDetail{}, domain.ErrCourseNotFound
 }
 
 func publicCourse(tree domain.CourseTree) domain.Course {

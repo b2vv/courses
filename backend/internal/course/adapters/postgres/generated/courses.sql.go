@@ -135,38 +135,76 @@ func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetA
 	return i, err
 }
 
-const getPublishedCourse = `-- name: GetPublishedCourse :one
-SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at
-FROM courses WHERE slug = $1 AND status = 'published'
+const getPublishedCourse = `-- name: GetPublishedCourse :many
+SELECT
+  courses.id,
+  courses.slug,
+  courses.title,
+  courses.summary,
+  courses.description,
+  courses.status,
+  courses.created_at,
+  courses.updated_at,
+  courses.published_at,
+  COALESCE(modules.id::text, '')::text AS module_id,
+  COALESCE(modules.title, '')::text AS module_title,
+  COALESCE(lessons.title, '')::text AS lesson_title,
+  (lessons.id IS NOT NULL)::boolean AS lesson_present
+FROM courses
+LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
+LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
+WHERE courses.slug = $1 AND courses.status = 'published'
+ORDER BY modules.position, modules.id, lessons.position, lessons.id
 `
 
 type GetPublishedCourseRow struct {
-	ID          pgtype.UUID
-	Slug        string
-	Title       string
-	Summary     string
-	Description string
-	Status      string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	PublishedAt pgtype.Timestamptz
+	ID            pgtype.UUID
+	Slug          string
+	Title         string
+	Summary       string
+	Description   string
+	Status        string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	PublishedAt   pgtype.Timestamptz
+	ModuleID      string
+	ModuleTitle   string
+	LessonTitle   string
+	LessonPresent bool
 }
 
-func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) (GetPublishedCourseRow, error) {
-	row := q.db.QueryRow(ctx, getPublishedCourse, slug)
-	var i GetPublishedCourseRow
-	err := row.Scan(
-		&i.ID,
-		&i.Slug,
-		&i.Title,
-		&i.Summary,
-		&i.Description,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.PublishedAt,
-	)
-	return i, err
+func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) ([]GetPublishedCourseRow, error) {
+	rows, err := q.db.Query(ctx, getPublishedCourse, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPublishedCourseRow{}
+	for rows.Next() {
+		var i GetPublishedCourseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Summary,
+			&i.Description,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublishedAt,
+			&i.ModuleID,
+			&i.ModuleTitle,
+			&i.LessonTitle,
+			&i.LessonPresent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAuthoringCourses = `-- name: ListAuthoringCourses :many

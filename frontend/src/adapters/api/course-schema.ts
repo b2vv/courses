@@ -11,6 +11,21 @@ export const courseSchema = z.object({
   updatedAt: z.iso.datetime({ offset: true }),
   publishedAt: z.iso.datetime({ offset: true }).nullable(),
 });
+const programTitleSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((title) => title.trim().length > 0);
+const programLessonSchema = z.object({ title: programTitleSchema }).strict();
+const programModuleSchema = z
+  .object({
+    title: programTitleSchema,
+    lessons: z.array(programLessonSchema).max(120),
+  })
+  .strict();
+export const courseDetailSchema = courseSchema.extend({
+  program: z.array(programModuleSchema).max(40),
+});
 export const pageSchema = z.object({
   items: z.array(courseSchema).max(50),
   pagination: z.object({

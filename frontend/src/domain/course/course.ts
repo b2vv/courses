@@ -19,6 +19,12 @@ export type PublishedCourse = {
   readonly description: string;
   readonly publishedAt: string;
 };
+export type ProgramLesson = { readonly title: string };
+export type ProgramModule = {
+  readonly title: string;
+  readonly lessons: readonly ProgramLesson[];
+};
+export type CourseDetail = PublishedCourse & { readonly program: readonly ProgramModule[] };
 export type CatalogQuery = {
   readonly q: string;
   readonly sort: 'recent' | 'title';

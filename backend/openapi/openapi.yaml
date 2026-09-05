@@ -46,7 +46,10 @@ paths:
     get:
       operationId: getPublishedCourse
       summary: Get a published course
-      description: Draft, archived and unknown courses all return the same 404 response. Query parameters are not supported.
+      description: >-
+        Draft, archived and unknown courses all return the same 404 response. The program
+        contains ordered module titles and ordered lesson titles only; it exposes no ids,
+        positions, lesson descriptions or ownership. Query parameters are not supported.
       parameters:
         - name: slug
           in: path
@@ -58,12 +61,12 @@ paths:
             pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
       responses:
         '200':
-          description: Published course
+          description: Published course with its ordered title-only program.
           headers:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Course' }
+              schema: { $ref: '#/components/schemas/CourseDetail' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -393,6 +396,42 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time, nullable: true }
+    ProgramLesson:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+    ProgramModule:
+      type: object
+      additionalProperties: false
+      required: [title, lessons]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        lessons:
+          type: array
+          maxItems: 120
+          items: { $ref: '#/components/schemas/ProgramLesson' }
+    CourseDetail:
+      type: object
+      additionalProperties: false
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, program]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        status:
+          type: string
+          enum: [published]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time }
+        program:
+          type: array
+          maxItems: 40
+          items: { $ref: '#/components/schemas/ProgramModule' }
     Pagination:
       type: object
       additionalProperties: false

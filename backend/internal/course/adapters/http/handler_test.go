@@ -34,14 +34,20 @@ func (r repository) ListPublished(_ context.Context, q domain.Query) (domain.Pag
 	}
 	return domain.Page{Items: items, Limit: q.Limit, Offset: q.Offset, Total: 1}, nil
 }
-func (r repository) GetPublished(_ context.Context, slug string) (domain.Course, error) {
+func (r repository) GetPublished(_ context.Context, slug string) (domain.CourseDetail, error) {
 	if r.failure != nil {
-		return domain.Course{}, r.failure
+		return domain.CourseDetail{}, r.failure
 	}
 	if slug != "go-foundations" {
-		return domain.Course{}, domain.ErrCourseNotFound
+		return domain.CourseDetail{}, domain.ErrCourseNotFound
 	}
-	return fixture(), nil
+	return domain.CourseDetail{
+		Course: fixture(),
+		Program: []domain.ProgramModule{
+			{Title: "HTTP API", Lessons: []domain.ProgramLesson{{Title: "Handlers"}, {Title: "Contracts"}}},
+			{Title: "PostgreSQL", Lessons: []domain.ProgramLesson{{Title: "Transactions"}}},
+		},
+	}, nil
 }
 func fixture() domain.Course {
 	now := time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC)
@@ -156,6 +162,37 @@ func TestListPreservesDefaultsAndRequestedPagination(t *testing.T) {
 		}
 		if body.Pagination.Limit != tc.limit || body.Pagination.Offset != tc.offset || len(body.Items) != tc.items {
 			t.Fatalf("%s: unexpected transport mapping: %s", tc.path, response.Body.String())
+		}
+	}
+}
+
+func TestPublishedCourseDetailExposesOnlyOrderedProgramTitles(t *testing.T) {
+	response := httptest.NewRecorder()
+	handler(nil).ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/courses/go-foundations", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status %d body=%s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Program json.RawMessage `json:"program"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"title":"HTTP API","lessons":[{"title":"Handlers"},{"title":"Contracts"}]},{"title":"PostgreSQL","lessons":[{"title":"Transactions"}]}]`
+	if string(body.Program) != want {
+		t.Fatalf("program = %s, want %s", body.Program, want)
+	}
+}
+
+func TestUnpublishedCourseProgramsAreNotExposed(t *testing.T) {
+	for _, slug := range []string{"draft-course", "archived-course"} {
+		response := httptest.NewRecorder()
+		handler(nil).ServeHTTP(response, httptest.NewRequest("GET", "/api/v1/courses/"+slug, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s: status %d body=%s", slug, response.Code, response.Body.String())
+		}
+		if strings.Contains(response.Body.String(), "program") || strings.Contains(response.Body.String(), "Handlers") {
+			t.Fatalf("%s leaked a program: %s", slug, response.Body.String())
 		}
 	}
 }
