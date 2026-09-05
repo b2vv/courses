@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phases 4–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a у роботі (нижче); Phase 4b і Phases 5–8 не починалися.
 
 ## Phase 3 — Identity
 
@@ -67,3 +67,25 @@ Compose і фікстур, тобто не може бігти раніше за
 | I06f | `backend/sql/seed-identities.sql` (чистий SQL, `ON CONFLICT (id)`, `disabled_at = NULL`, `LOCK TABLE`), ціль `make seed-identities`, `ci.yml`, README; інтеграційний тест на наявному харнесі | 1.5h | — | done | `work/report-i06f.md`; G32-G37; ordered gates through `integration` pass; G37 relocated to `integration.sh` |
 | I06g | Браузерні докази проти Compose: переписаний `route-guards.spec.ts`, сире SSR-HTML через `page.request`, лічильник запитів після гідратації, каденція ревалідації | 1.5h | I06a–I06f | done | `work/report-i06g.md`; G07, G10a, G10b, G17, G18, G21, G21a, G22a, G27, G28 + browser halves of G03/G29/G30/G40; e2e 20/20; `Vary` moved here from I06h |
 | I06h | Ціль `check` у порядку маніфесту з `seed-identities`, фінальний впорядкований гейт, запис верифікації й обмежень у `docs/identity/report.md` (`AGENTS.md:9`). **`Vary` уже зроблено в I06g** — тест і рядок, який він доводить, мали лежати разом | 1h | усі | done | `docs/identity/report.md` §I06; G38, G41; `make check` exit 0 across twelve steps |
+
+## Phase 4a — Admin course management
+
+Джерело scope: [spec](../docs/admin/spec.md) (GATE 1 закрито). План, приймальна таблиця на 80 рядків і розріз: [plan](../docs/admin/plan.md), редакція 2.1, GATE 2 зелений ([gates](../docs/admin/gates.md)). Виконавець коду — Codex за бріфами `work/brief-<task>.md`; кожен гейт переганяється в сесії-рев'юері перед комітом.
+
+| ID | Назва | Estimate | Depends on | Status | Owns / archive pointer |
+|---|---|---:|---|---|---|
+| A01 | Міграція 00003 (`instructor_id`, `course_modules`, `course_lessons`); перепорядкування гейта в `Makefile`/`ci.yml`/`README`/`standards.md`; власник+lock+conflict у `seed.sql`; три фікси `repository_integration_test.go` | 2h | GATE 2 green | in_progress | P01, B13, B14, B15, B16 |
+| A02 | Доменні правила authoring, порти й use cases на фейках: політика, переходи, slug-мутабельність, інваріанти дерева, дублікати id, дедлайни, скасування | 1.75h | A01 | planned | R24, R25, R39 |
+| A03 | PostgreSQL authoring-адаптер і sqlc: читання дерева, транзакційний запис із гардами D-3b/D-3c, guarded delete/transition, owner-scoped list, мапінг `23505` | 2h | A02 | planned | P08–P10, B03, B10, B11, R16–R19, R26 |
+| A04 | Авторизаційний шов і три захищені read: `httpserver.Actor`, експорт `Authenticate`/`RequireSameOrigin`, `GET` list/one/instructors, OpenAPI+generate | 2h | A03 | planned | P07, R01–R07 |
+| A05 | Create і tree-write: `POST /admin/courses`, `PUT /admin/courses/{id}`, межі розміру/полів, slug, власник, replay, OpenAPI+generate | 2h | A04 | planned | P02–P06, B04–B08, B12, R12, R13, R20–R22, R29 |
+| A06 | Життєвий цикл: `POST /status`, `DELETE`, мутаційна половина матриці відмов, OpenAPI+generate | 1.5h | A05 | planned | P11–P14, B01, R08–R11, R14, R15, R23 |
+| A07 | Публічна програма: read у репозиторії, схема `CourseDetail`, фронтовий домен/схема/`CourseView`, drift-гейт | 1.5h | A06 | planned | P15, B17 |
+| A08 | i18n-борг кіта й розкол локалей: label-props у `Table`/`Pagination`/`Skeleton`, оновлення всіх викликів, `locales/{uk,en}.ts` | 1h | — | planned | P17 |
+| A09 | Фронтовий admin-адаптер і application: branded ids, типи дерева, порт, use cases, zod, репозиторій, композиція, інвалідація | 1.5h | A06, A08 | planned | R27 |
+| A10 | Admin-список і перебудова shell: `admin.tsx` → layout з `Outlet`, `admin.index.tsx`, некидаючий парсинг search, таби статусів, пагінація, стани, uk/en | 2h | A09 | planned | P16, P18, B02, R34 |
+| A11 | Редактор курсу з React Hook Form: діалог створення, редагування/reorder дерева, delete, статуси, власник, конфлікт і відмови, a11y | 2h | A10 | planned | P19, B09, R28, R30–R32, R35, R36 |
+| A12 | Деградація і in-flight-гарди обох екранів: 503 на первинному read → `ErrorState` з робочим retry; гард подвійного Save | 0.75h | A11 | planned | R37, R38, R40 |
+| A13 | Спільні браузерні сесії: `auth.setup.ts`, `setup`-проєкт, конверсія `route-guards.spec.ts`, вимір логінів за прогін | 1h | A12 | planned | B19 |
+| A14 | Браузерна подорож адмінки: `admin.spec.ts` (admin+instructor journeys, direct-API refusal), slug-неймспейс на прогін | 1.5h | A13 | planned | P20, P21, R33 |
+| A15 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута, `docs/admin/report.md` | 1h | A01–A14 | planned | B18 |
