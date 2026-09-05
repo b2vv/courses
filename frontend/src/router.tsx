@@ -18,7 +18,7 @@ export function getRouter() {
     context: {
       queryClient,
       catalog: createCatalogDependencies(),
-      identity: createIdentityDependencies(),
+      identityDependencies: createIdentityDependencies(),
     },
     defaultPreload: 'intent',
     parseSearch: parseUrlSearch,

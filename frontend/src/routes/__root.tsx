@@ -6,18 +6,18 @@ import {
   Link,
 } from '@tanstack/react-router';
 import type { createCatalogDependencies } from '../app/composition/catalog';
-import type { createIdentityDependencies } from '../app/composition/identity';
-import type { QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
+import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import '../app/styles/main.css';
 
-export const Route = createRootRouteWithContext<{
-  queryClient: QueryClient;
+type RootRouteContext = RootIdentityContext & {
   catalog: ReturnType<typeof createCatalogDependencies>;
-  identity: ReturnType<typeof createIdentityDependencies>;
-}>()({
+};
+
+export const Route = createRootRouteWithContext<RootRouteContext>()({
+  beforeLoad: resolveRootIdentity,
   head: () => ({
     meta: [
       { charSet: 'utf-8' },

@@ -1,13 +1,29 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
-import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
+import { getCookie, getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createSession } from '../../application/identity/session';
 import { createApiSessionRepository } from '../../adapters/api/session-repository';
 import { createSessionQueries } from './identity-queries';
 
+const sessionCookieName = 'courseforge_session';
+const identitySsrTimeoutMs = 1_000;
+
 const requestOptions = createIsomorphicFn()
-  .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
-  .client(() => ({}));
+  .server(() => ({
+    shouldLoadCurrentUser: getCookie(sessionCookieName) !== undefined,
+    transport: {
+      cookie: getRequestHeader('cookie') ?? '',
+      requestSignal: getRequest().signal,
+      timeoutMs: identitySsrTimeoutMs,
+    },
+  }))
+  .client(() => ({ shouldLoadCurrentUser: true, transport: {} }));
 
 export function createIdentityDependencies() {
-  return createSessionQueries(createSession(createApiSessionRepository(requestOptions())));
+  const request = requestOptions();
+  return {
+    ...createSessionQueries(createSession(createApiSessionRepository(request.transport))),
+    shouldLoadCurrentUser: request.shouldLoadCurrentUser,
+  };
 }
+
+export type IdentityDependencies = ReturnType<typeof createIdentityDependencies>;
