@@ -8,9 +8,11 @@ import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../adapters/api/session-repository';
 import { createAuthoring } from '../application/admin/authoring';
+import { createUserAdministration } from '../application/admin/users';
 import { createCatalog } from '../application/catalog/catalog';
 import { createSession } from '../application/identity/session';
 import { createAdminQueries } from '../app/composition/admin-queries';
+import { createAdminUserQueries } from '../app/composition/admin-user-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import type { Locale } from '../app/composition/locale';
@@ -23,6 +25,7 @@ import type {
   CourseTreeEdit,
 } from '../domain/course/course';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
+import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
 import { routeTree } from '../routeTree.gen';
@@ -99,12 +102,27 @@ function createTestRouter(
     delete: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     ...adminOverrides,
   };
+  const adminUserRepository: AdminUserRepository = {
+    list: async (query) => ({
+      ok: true,
+      value: {
+        items: [],
+        pagination: { limit: query.limit, offset: query.offset, total: 0 },
+      },
+    }),
+    setStatus: async () => ({ ok: true, value: null }),
+    delete: async () => ({ ok: true, value: null }),
+    resetPassword: async () => ({ ok: true, value: null }),
+  };
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [href] }),
     context: {
       queryClient,
-      admin: createAdminQueries(createAuthoring(adminRepository)),
+      admin: {
+        ...createAdminQueries(createAuthoring(adminRepository)),
+        users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
+      },
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
     },
