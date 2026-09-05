@@ -2,8 +2,9 @@ import { expect, test } from '@rstest/core';
 import { apiRequestHeaders } from './request-headers';
 
 test('forwards the request cookie verbatim when one was given', () => {
-  const headers = apiRequestHeaders('courseforge_session=abc; courseforge_locale=uk');
-  expect(headers.get('Cookie')).toBe('courseforge_session=abc; courseforge_locale=uk');
+  const cookie = 'courseforge_session=first; courseforge_session=second; courseforge_locale=uk';
+  const headers = apiRequestHeaders(cookie);
+  expect(headers.get('Cookie')).toBe(cookie);
   expect(headers.get('Accept')).toBe('application/json');
 });
 

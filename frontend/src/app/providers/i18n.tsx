@@ -67,10 +67,13 @@ export const resources = {
           'Зараз можна ознайомитися з описом. Доступ до уроків і придбання курсу ще готуються.',
         continue: 'Продовжити перегляд',
       },
-      locked: {
-        title: 'Розділ поки недоступний',
-        text: 'Кабінет та керування курсами ще готуються до відкриття.',
-        action: 'Перейти до входу',
+      learn: {
+        title: 'Ваше навчання',
+        empty: 'Курси з’являться тут після відкриття навчального доступу.',
+      },
+      administration: {
+        title: 'Адміністрування',
+        empty: 'Керування курсами з’явиться в наступній фазі.',
       },
       login: {
         label: 'Кабінет студента',
@@ -177,10 +180,13 @@ export const resources = {
           'You can review the course description now. Lessons and purchasing are still being prepared.',
         continue: 'Keep browsing',
       },
-      locked: {
-        title: 'This area is not available yet',
-        text: 'Student and course management areas are still being prepared.',
-        action: 'Go to login',
+      learn: {
+        title: 'Your learning',
+        empty: 'Courses will appear here when learning access opens.',
+      },
+      administration: {
+        title: 'Administration',
+        empty: 'Course management will arrive in the next phase.',
       },
       login: {
         label: 'Student area',
