@@ -1,6 +1,6 @@
 # Courses
 
-Self-hosted online-course platform foundation. Current scope: a public catalog vertical slice, with infrastructure for later identity, administration, private HLS and transcripts. No payment provider or automatic transcription is connected.
+Self-hosted online-course platform foundation. Current scope: a public catalog vertical slice and session-based identity, with infrastructure for later administration, private HLS and transcripts. No payment provider or automatic transcription is connected.
 
 Stack: React 19, strict TypeScript, TanStack Start/Router/Query, Rsbuild/Rspack, Tailwind 4, React Aria and request-scoped i18next; Go 1.27.1 modular monolith, pgx/sqlc/Goose, PostgreSQL 17, Redis/Asynq, FFmpeg worker image and Nginx. Rstest, Testing Library, MSW, Playwright, Oxlint/Oxfmt and Go/Testcontainers supply checks.
 
@@ -56,6 +56,6 @@ work/              Task states and completion pointers
 
 ## Foundation limitations
 
-Identity/login, admin CRUD, upload/transcoding, signed playback, synchronized transcript and orders are future phases. Locked routes do not simulate authentication. `/media` is deliberately forbidden; the worker starts but does not process transcoding tasks. Domain vocabulary and planned storage/transcription seams are documented before implementation. Advanced UI/player/editor dependencies are installed only with real consumers.
+Admin CRUD, upload/transcoding, signed playback, synchronized transcript and orders are future phases. Client route guards are navigation convenience only; server-side role authorization begins with Phase 4's first protected endpoint. `/media` is deliberately forbidden; the worker starts but does not process transcoding tasks. Domain vocabulary and planned storage/transcription seams are documented before implementation. Advanced UI/player/editor dependencies are installed only with real consumers.
 
 No DRM is claimed. Before public deployment add TLS, managed secrets, backups/restores, storage quotas and the remaining authorization gates. Optional monitoring starts with `docker compose --profile monitoring up -d`; metrics stay internal. Follow [local setup](docs/development/local-setup.md), [troubleshooting](docs/development/troubleshooting.md), [architecture](docs/architecture/context.md) and [ADR decisions](docs/adr/001-modular-monolith.md).
