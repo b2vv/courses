@@ -104,4 +104,4 @@ Compose і фікстур, тобто не може бігти раніше за
 | T06 | Фронтовий admin-users адаптер/application: ids, zod, репозиторій із мапінгом кодів, use cases, композиція, інвалідація; Orval | 1.5h | T05 | done | `work/report-t06.md`; B09, R19; gates pass |
 | T07 | Маршрут `/admin/users` і в'юхи: список, таби, per-row дії, `ResetPasswordDialog`, стани, гард `canAdministerAccounts`, uk/en, a11y | 2h | T06 | done | `work/report-t07.md`; P07, B02, R21, R24; review: button-name + removed a runner-hanging redundant test; gates pass |
 | T08 | Браузерна подорож `admin-users.spec.ts` на disposables (спільний storageState, 0 логінів); direct-API відмова; розширення route-guards | 1h | T07 | done | `work/report-t08.md`; P08, R20; e2e 30/30 twice, budget total=7 |
-| T09 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута; секція звіту 4b | 1h | T01–T08 | planned | B10 |
+| T09 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута; секція звіту 4b | 1h | T01–T08 | done | `docs/admin/report-4b.md`; B10; full `make check` exit 0 (293 frontend tests, e2e 30/30) |
