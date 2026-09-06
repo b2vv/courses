@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { authFixtures as fixtures, recordRequest, trackPageRequests } from './auth';
+import { authFixtures as fixtures, authStatePath, recordRequest, trackPageRequests } from './auth';
 
 let finishRequestTracking = () => Promise.resolve();
 
@@ -178,4 +178,67 @@ test('public SPA transitions do not revalidate; learning does, and Back stays si
   });
   await expect(page.getByText(fixtures.student.name)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toHaveCount(0);
+});
+
+test.describe('with stored non-admin sessions', () => {
+  test.describe('as an instructor', () => {
+    test.use({ storageState: authStatePath('instructor') });
+
+    test('the admin users route renders not-found before loading the directory', async ({
+      page,
+    }) => {
+      let directoryRequests = 0;
+      page.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/api/v1/admin/users') directoryRequests += 1;
+      });
+
+      await page.goto('/admin/users');
+
+      await expect(page.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeVisible();
+      expect(directoryRequests).toBe(0);
+    });
+  });
+
+  test.describe('as a student', () => {
+    test.use({ storageState: authStatePath('student') });
+
+    test('R20 direct API access is refused without mutating the user', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const targetID = '40000000-0000-4000-8000-0000000000d3';
+
+      await page.goto('/courses');
+      await expect(page.getByText(fixtures.student.name, { exact: true })).toBeVisible();
+
+      const readResponse = await page.request.get('/api/v1/admin/users');
+      expect(readResponse.status()).toBe(403);
+      expect(await readResponse.json()).toMatchObject({ error: { code: 'forbidden' } });
+
+      const mutationResponse = await page.request.post(`/api/v1/admin/users/${targetID}/status`, {
+        data: { status: 'blocked' },
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(mutationResponse.status()).toBe(403);
+      expect(await mutationResponse.json()).toMatchObject({ error: { code: 'forbidden' } });
+
+      const adminContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('admin'),
+      });
+      try {
+        const unchangedResponse = await adminContext.request.get(
+          '/api/v1/admin/users?q=reset-me%40courseforge.local',
+        );
+        expect(unchangedResponse.status()).toBe(200);
+        expect(await unchangedResponse.json()).toMatchObject({
+          items: [{ id: targetID, status: 'active' }],
+        });
+      } finally {
+        await adminContext.close();
+      }
+    });
+  });
 });
