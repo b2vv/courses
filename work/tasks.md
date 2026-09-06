@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 (media upload) у роботі (нижче); Phases 6–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phases 6–8 не починалися.
 
 ## Phase 3 — Identity
 
@@ -131,4 +131,4 @@ Compose і фікстур, тобто не може бігти раніше за
 | M14 | Фронтовий адаптер: типи, порт із `cancelUpload`, zod, репозиторій, tus-клієнт, поллінг | 1.75h | M09 | done | `work/report-m14.md`; P11, B09, R23 + R44 (fingerprint refusals, §24); 319 frontend tests green |
 | M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | done | `work/report-m15.md`; P09, B20, R24, R25, R41; 330 frontend tests green with axe |
 | M16 | Браузерна подорож: `media.setup.ts` (чотири кліпи), `media.spec.ts` — upload→processing→ready, сходинки, плейлист проти цільового бінаря, рестарт у спостережений `processing` | 1.75h | M13, M15 | done | `work/report-m16.md`; P04, P05, P08, B05, B25–B27, B30, R26, R35, R13 post-half; e2e 35/35 twice |
-| M17 | Впорядкований гейт і звіт: повний `make check`, `docs/media/report.md` | 1h | M01–M16 | planned | B10 |
+| M17 | Впорядкований гейт і звіт: повний `make check`, `docs/media/report.md` | 1h | M01–M16 | done | `docs/media/report.md`; B10; full `make check` exit 0 (330 frontend tests, 38 Go packages, e2e 35/35) |
