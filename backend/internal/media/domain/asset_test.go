@@ -82,6 +82,28 @@ func TestTransitionWriters(t *testing.T) {
 	}
 }
 
+func TestFailureReasonPermanent(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		reason domain.FailureReason
+		want   bool
+	}{
+		{reason: domain.UnsupportedSource, want: true},
+		{reason: domain.ProbeFailed},
+		{reason: domain.RenderFailed},
+		{reason: domain.PublishFailed},
+		{reason: domain.StorageUnavailable},
+	} {
+		t.Run(string(test.reason), func(t *testing.T) {
+			t.Parallel()
+			if got := test.reason.Permanent(); got != test.want {
+				t.Fatalf("got %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestNewAssetTicketBounds(t *testing.T) {
 	t.Parallel()
 

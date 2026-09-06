@@ -33,6 +33,40 @@ func TestAcceptSource(t *testing.T) {
 	}
 }
 
+func TestAcceptContainer(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		head []byte
+		want error
+	}{
+		{name: "MP4 isom", head: []byte("\x00\x00\x00\x18ftypisom")},
+		{name: "MP4 iso2", head: []byte("\x00\x00\x00\x18ftypiso2")},
+		{name: "MP4 iso4", head: []byte("\x00\x00\x00\x18ftypiso4")},
+		{name: "MP4 iso5", head: []byte("\x00\x00\x00\x18ftypiso5")},
+		{name: "MP4 iso6", head: []byte("\x00\x00\x00\x18ftypiso6")},
+		{name: "MP4 mp41", head: []byte("\x00\x00\x00\x18ftypmp41")},
+		{name: "MP4 mp42", head: []byte("\x00\x00\x00\x18ftypmp42")},
+		{name: "MP4 avc1", head: []byte("\x00\x00\x00\x18ftypavc1")},
+		{name: "MP4 mmp4", head: []byte("\x00\x00\x00\x18ftypmmp4")},
+		{name: "MP4 dash", head: []byte("\x00\x00\x00\x18ftypdash")},
+		{name: "MP4 M4V", head: []byte("\x00\x00\x00\x18ftypM4V ")},
+		{name: "QuickTime", head: []byte("\x00\x00\x00\x18ftypqt  ")},
+		{name: "Matroska or WebM", head: []byte("\x1a\x45\xdf\xa3\x00\x00\x00\x00\x00\x00\x00\x00")},
+		{name: "unlisted brand", head: []byte("\x00\x00\x00\x18ftypwebm"), want: domain.ErrUnsupportedSource},
+		{name: "plain text", head: []byte("plain text!!"), want: domain.ErrUnsupportedSource},
+		{name: "short EBML head", head: []byte("\x1a\x45\xdf\xa3\x00\x00\x00\x00\x00\x00\x00"), want: domain.ErrUnsupportedSource},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if err := domain.AcceptContainer(test.head); !errors.Is(err, test.want) {
+				t.Fatalf("got %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
 func TestSelectLadder(t *testing.T) {
 	t.Parallel()
 

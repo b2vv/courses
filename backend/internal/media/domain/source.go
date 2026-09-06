@@ -5,6 +5,8 @@ const (
 	CodecHEVC = "hevc"
 	CodecAAC  = "aac"
 	CodecMP3  = "mp3"
+
+	ContainerSniffBytes = 12
 )
 
 type SourceProbe struct {
@@ -12,6 +14,24 @@ type SourceProbe struct {
 	Height     int
 	VideoCodec string
 	AudioCodec string
+}
+
+func AcceptContainer(head []byte) error {
+	if len(head) < ContainerSniffBytes {
+		return ErrUnsupportedSource
+	}
+	if string(head[:4]) == "\x1a\x45\xdf\xa3" {
+		return nil
+	}
+	if string(head[4:8]) != "ftyp" {
+		return ErrUnsupportedSource
+	}
+	switch string(head[8:12]) {
+	case "isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "mmp4", "dash", "M4V ", "qt  ":
+		return nil
+	default:
+		return ErrUnsupportedSource
+	}
 }
 
 func AcceptSource(probe SourceProbe) error {

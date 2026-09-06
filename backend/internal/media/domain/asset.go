@@ -38,6 +38,10 @@ const (
 	StorageUnavailable FailureReason = "storage_unavailable"
 )
 
+func (reason FailureReason) Permanent() bool {
+	return reason == UnsupportedSource
+}
+
 type VideoAsset struct {
 	ID            string
 	LessonID      string

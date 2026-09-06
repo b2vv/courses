@@ -8,11 +8,12 @@ import (
 )
 
 type MediaStorage interface {
-	Free(context.Context) (int64, error)
-	Size(context.Context, domain.StorageKey) (int64, error)
-	Append(context.Context, domain.StorageKey, int64, io.Reader) (int64, error)
-	Truncate(context.Context, domain.StorageKey, int64) error
-	Move(context.Context, domain.StorageKey, domain.StorageKey) error
-	Publish(context.Context, domain.StorageKey, domain.StorageKey) error
-	Purge(context.Context, domain.StorageKey) error
+	Free(ctx context.Context) (int64, error)
+	Size(ctx context.Context, key domain.StorageKey) (int64, error)
+	Head(ctx context.Context, key domain.StorageKey, n int) ([]byte, error)
+	Append(ctx context.Context, key domain.StorageKey, offset int64, body io.Reader) (int64, error)
+	Truncate(ctx context.Context, key domain.StorageKey, size int64) error
+	Move(ctx context.Context, from, to domain.StorageKey) error
+	Publish(ctx context.Context, work, destination domain.StorageKey) error
+	Purge(ctx context.Context, key domain.StorageKey) error
 }
