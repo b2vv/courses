@@ -2,10 +2,13 @@ import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiAdminCourseRepository } from '../../adapters/api/admin-course-repository';
 import { createApiAdminUserRepository } from '../../adapters/api/admin-user-repository';
+import { createApiLessonVideoRepository } from '../../adapters/api/lesson-video-repository';
 import { createAuthoring } from '../../application/admin/authoring';
+import { createLessonVideos } from '../../application/admin/lesson-video';
 import { createUserAdministration } from '../../application/admin/users';
 import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
+import { createAdminVideoQueries } from './admin-video-queries';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -17,7 +20,10 @@ export function createAdminDependencies() {
   const users = createAdminUserQueries(
     createUserAdministration(createApiAdminUserRepository(options)),
   );
-  return { ...courses, users };
+  const videos = createAdminVideoQueries(
+    createLessonVideos(createApiLessonVideoRepository(options)),
+  );
+  return { ...courses, users, videos };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

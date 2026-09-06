@@ -8,11 +8,13 @@ import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../adapters/api/session-repository';
 import { createAuthoring } from '../application/admin/authoring';
+import { createLessonVideos } from '../application/admin/lesson-video';
 import { createUserAdministration } from '../application/admin/users';
 import { createCatalog } from '../application/catalog/catalog';
 import { createSession } from '../application/identity/session';
 import { createAdminQueries } from '../app/composition/admin-queries';
 import { createAdminUserQueries } from '../app/composition/admin-user-queries';
+import { createAdminVideoQueries } from '../app/composition/admin-video-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import type { Locale } from '../app/composition/locale';
@@ -28,6 +30,7 @@ import type { AdminUser, AdminUserQuery } from '../domain/identity/administratio
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
+import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
 import { routeTree } from '../routeTree.gen';
 
@@ -130,6 +133,13 @@ function createTestRouter(
     resetPassword: async () => ({ ok: true, value: null }),
     ...adminUserOverrides,
   };
+  const lessonVideoRepository: LessonVideoRepository = {
+    mint: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    listByCourse: async () => ({ ok: true, value: [] }),
+    retry: async () => ({ ok: false, error: { code: 'video_not_found' } }),
+    transfer: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    cancelUpload: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  };
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [href] }),
@@ -138,6 +148,7 @@ function createTestRouter(
       admin: {
         ...createAdminQueries(createAuthoring(adminRepository)),
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
+        videos: createAdminVideoQueries(createLessonVideos(lessonVideoRepository)),
       },
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),

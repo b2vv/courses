@@ -25,6 +25,31 @@ export type TransportOutcome =
 
 const defaultTimeoutMs = 5000;
 
+export type RequestControl = {
+  readonly signal: AbortSignal;
+  failureCode(error: unknown): TransportFailureCode;
+};
+
+/** Shared cancellation/deadline/fetch-failure classification for JSON and binary transports. */
+export function createRequestControl(
+  options: TransportOptions,
+  caller: AbortSignal | undefined,
+  timeoutMs = defaultTimeoutMs,
+): RequestControl {
+  const deadline = AbortSignal.timeout(options.timeoutMs ?? timeoutMs);
+  const controls = [caller, options.requestSignal].filter(
+    (signal): signal is AbortSignal => signal !== undefined,
+  );
+  return {
+    signal: AbortSignal.any([...controls, deadline]),
+    failureCode(error) {
+      if (controls.some((control) => control.aborted)) return 'request_cancelled';
+      if (deadline.aborted) return 'request_timeout';
+      return error instanceof SyntaxError ? 'invalid_response' : 'dependency_unavailable';
+    },
+  };
+}
+
 /**
  * What a status the contract does not name means. A server fault or a refusal
  * by the edge is a dependency problem the caller may retry; anything else is an
@@ -50,11 +75,7 @@ export function createApiTransport(options: TransportOptions = {}) {
     expected: number,
     caller?: AbortSignal,
   ): Promise<TransportOutcome> {
-    const deadline = AbortSignal.timeout(options.timeoutMs ?? defaultTimeoutMs);
-    const controls = [caller, options.requestSignal].filter(
-      (signal): signal is AbortSignal => signal !== undefined,
-    );
-    const signal = AbortSignal.any([...controls, deadline]);
+    const control = createRequestControl(options, caller);
     return tracer.startActiveSpan(
       operation,
       {},
@@ -63,7 +84,7 @@ export function createApiTransport(options: TransportOptions = {}) {
         try {
           const response = await execute({
             headers: apiRequestHeaders(options.cookie),
-            signal,
+            signal: control.signal,
             credentials: 'same-origin',
             redirect: 'error',
             cache: 'no-store',
@@ -72,12 +93,7 @@ export function createApiTransport(options: TransportOptions = {}) {
           return { ok: true, status: response.status, data: response.data };
         } catch (error) {
           span.setStatus({ code: SpanStatusCode.ERROR });
-          // Control signals remain distinct from malformed JSON and network errors.
-          if (controls.some((control) => control.aborted))
-            return { ok: false, code: 'request_cancelled' };
-          if (deadline.aborted) return { ok: false, code: 'request_timeout' };
-          if (error instanceof SyntaxError) return { ok: false, code: 'invalid_response' };
-          return { ok: false, code: 'dependency_unavailable' };
+          return { ok: false, code: control.failureCode(error) };
         } finally {
           span.end();
         }
