@@ -1,5 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { canAccessAdministration, type AuthenticatedUser } from '../../domain/identity/identity';
+import {
+  canAccessAdministration,
+  canAdministerAccounts,
+  type AuthenticatedUser,
+} from '../../domain/identity/identity';
 import { Button, Link } from '../ui';
 
 type IdentityHeaderProps = {
@@ -17,6 +21,7 @@ export function IdentityHeader({ user, isSigningOut, onSignOut }: IdentityHeader
     <>
       <span className="header-identity-name">{user.displayName}</span>
       {canAccessAdministration(user) && <Link href="/admin">{t('administration.title')}</Link>}
+      {canAdministerAccounts(user) && <Link href="/admin/users">{t('adminUsers.title')}</Link>}
       <Button variant="secondary" isDisabled={isSigningOut} onPress={onSignOut}>
         {isSigningOut ? t('identity.signingOut') : t('identity.signOut')}
       </Button>

@@ -40,6 +40,10 @@ export function canAccessAdministration(user: AuthenticatedUser): boolean {
   return user.role === 'instructor' || user.role === 'admin';
 }
 
+export function canAdministerAccounts(user: AuthenticatedUser): boolean {
+  return user.role === 'admin';
+}
+
 /**
  * A syntactically impossible email fails as `invalid_credentials` rather than as
  * its own code, so the shape of the refusal never reveals whether an address

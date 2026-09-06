@@ -24,6 +24,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
 } from '../domain/course/course';
+import type { AdminUser, AdminUserQuery } from '../domain/identity/administration';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
@@ -42,12 +43,14 @@ const server = setupServer(
   http.get(currentUserUrl, () => HttpResponse.json(authenticationRequired, { status: 401 })),
 );
 const observedAdminQueries: AdminCourseQuery[] = [];
+const observedAdminUserQueries: AdminUserQuery[] = [];
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
 afterEach(() => {
   focusManager.setFocused(undefined);
   observedAdminQueries.length = 0;
+  observedAdminUserQueries.length = 0;
   server.resetHandlers();
 });
 
@@ -68,6 +71,8 @@ function createTestRouter(
   locale: Locale = 'uk',
   adminCourses: readonly AdminCourse[] = [],
   adminOverrides: Partial<AdminCourseRepository> = {},
+  adminUsers: readonly AdminUser[] = [],
+  adminUserOverrides: Partial<AdminUserRepository> = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -103,16 +108,27 @@ function createTestRouter(
     ...adminOverrides,
   };
   const adminUserRepository: AdminUserRepository = {
-    list: async (query) => ({
-      ok: true,
-      value: {
-        items: [],
-        pagination: { limit: query.limit, offset: query.offset, total: 0 },
-      },
-    }),
+    list: async (query) => {
+      observedAdminUserQueries.push(query);
+      const searched = adminUsers.filter(
+        (listed) =>
+          (query.status === undefined || listed.status === query.status) &&
+          (query.q === '' ||
+            listed.email.toLowerCase().includes(query.q.toLowerCase()) ||
+            listed.displayName.toLowerCase().includes(query.q.toLowerCase())),
+      );
+      return {
+        ok: true,
+        value: {
+          items: searched.slice(query.offset, query.offset + query.limit),
+          pagination: { limit: query.limit, offset: query.offset, total: searched.length },
+        },
+      };
+    },
     setStatus: async () => ({ ok: true, value: null }),
     delete: async () => ({ ok: true, value: null }),
     resetPassword: async () => ({ ok: true, value: null }),
+    ...adminUserOverrides,
   };
   const router = createRouter({
     routeTree,
@@ -387,6 +403,34 @@ test('R34 keeps unusable admin search text in the URL and queries with independe
   expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
   expect(router.state.location.href).toBe(href);
   expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+});
+
+test('R21 keeps unusable user search text in the URL and loads default directory filters', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const href = '/admin/users?status=nonsense&page=abc';
+  const router = createTestRouter(href, admin);
+
+  await router.load();
+  renderRouter(router);
+
+  expect(screen.getByRole('heading', { name: 'Користувачі' })).toBeTruthy();
+  expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
+  expect(router.state.location.href).toBe(href);
+  expect(observedAdminUserQueries).toEqual([{ q: '', limit: 20, offset: 0 }]);
+});
+
+test('R24 gives an instructor not-found at /admin/users before loading the directory', async () => {
+  const instructor = user('instructor');
+  answerWith(instructor);
+  const router = createTestRouter('/admin/users', instructor);
+
+  await router.load();
+  renderRouter(router);
+
+  expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: 'Користувачі' })).toBeNull();
+  expect(observedAdminUserQueries).toEqual([]);
 });
 
 test.each([

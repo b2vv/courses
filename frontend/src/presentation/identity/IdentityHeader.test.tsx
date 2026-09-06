@@ -45,6 +45,7 @@ test.each([
   expect(screen.queryByText(role ?? 'student') !== null).toBe(hasName);
   expect(screen.queryByRole('button', { name: 'Вийти' }) !== null).toBe(hasSignOut);
   expect(screen.queryByRole('link', { name: 'Адміністрування' }) !== null).toBe(hasAdministration);
+  expect(screen.queryByRole('link', { name: 'Користувачі' }) !== null).toBe(role === 'admin');
   expect(screen.queryByRole('link', { name: 'Увійти' }) !== null).toBe(role === null);
 });
 
@@ -102,5 +103,6 @@ test('G31 renders the English signed-in actions', () => {
   );
 
   expect(screen.getByRole('link', { name: 'Administration' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Users' }).getAttribute('href')).toBe('/admin/users');
   expect(screen.getByRole('button', { name: 'Signing out…' })).toBeTruthy();
 });

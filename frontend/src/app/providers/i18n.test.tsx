@@ -18,6 +18,12 @@ test('keeps shared UI and administration keys aligned across locale bundles', ()
   expect(withoutPluralForms(Object.keys(uk.translation.administration))).toEqual(
     withoutPluralForms(Object.keys(en.translation.administration)),
   );
+  expect(withoutPluralForms(Object.keys(uk.translation.adminUsers))).toEqual(
+    withoutPluralForms(Object.keys(en.translation.adminUsers)),
+  );
+  expect(Object.keys(uk.translation.adminUsers.error)).toEqual(
+    Object.keys(en.translation.adminUsers.error),
+  );
   const adminListKeys = [
     'title',
     'empty',
@@ -43,6 +49,33 @@ test('keeps shared UI and administration keys aligned across locale bundles', ()
   for (const key of adminListKeys) {
     expect(uk.translation.administration[key]).toBeTruthy();
     expect(en.translation.administration[key]).toBeTruthy();
+  }
+  const adminUserKeys = [
+    'title',
+    'empty',
+    'emptyHint',
+    'userCount',
+    'userTable',
+    'email',
+    'name',
+    'role',
+    'status',
+    'actions',
+    'statusTabs',
+    'allStatuses',
+    'active',
+    'blocked',
+    'deleted',
+    'pages',
+    'loading',
+    'failure',
+    'failureHint',
+    'degraded',
+    'degradedHint',
+  ] as const;
+  for (const key of adminUserKeys) {
+    expect(uk.translation.adminUsers[key]).toBeTruthy();
+    expect(en.translation.adminUsers[key]).toBeTruthy();
   }
 });
 
