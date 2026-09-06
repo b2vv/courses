@@ -14,6 +14,8 @@ import type {
 } from '../../domain/course/course';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
+import { LessonVideoField } from './LessonVideoField';
+import type { CourseEditorVideo } from './LessonVideoField';
 
 type CourseFormValues = {
   slug: string;
@@ -40,6 +42,7 @@ type CourseEditorViewProps = {
   onTransition: (current: CourseTree, status: CourseStatus) => Promise<CourseTree>;
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
+  video?: CourseEditorVideo;
 };
 
 type CourseCreateDialogProps = {
@@ -211,9 +214,13 @@ function OwnerField({
 function LessonFields({
   form,
   moduleIndex,
+  savedLessonIds,
+  video,
 }: {
   form: UseFormReturn<CourseFormValues>;
   moduleIndex: number;
+  savedLessonIds: ReadonlySet<string>;
+  video: CourseEditorVideo | undefined;
 }) {
   const { t } = useTranslation();
   const lessons = useFieldArray({
@@ -249,6 +256,13 @@ function LessonFields({
               multiline
             />
           </div>
+          {video !== undefined && (
+            <LessonVideoField
+              lessonId={lesson.id}
+              isSaved={savedLessonIds.has(lesson.id)}
+              {...video}
+            />
+          )}
           <div className="admin-row-actions">
             <Button
               type="button"
@@ -293,7 +307,15 @@ function LessonFields({
   );
 }
 
-function ModuleFields({ form }: { form: UseFormReturn<CourseFormValues> }) {
+function ModuleFields({
+  form,
+  savedLessonIds,
+  video,
+}: {
+  form: UseFormReturn<CourseFormValues>;
+  savedLessonIds: ReadonlySet<string>;
+  video: CourseEditorVideo | undefined;
+}) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
 
@@ -317,7 +339,12 @@ function ModuleFields({ form }: { form: UseFormReturn<CourseFormValues> }) {
               maximum={200}
               required
             />
-            <LessonFields form={form} moduleIndex={moduleIndex} />
+            <LessonFields
+              form={form}
+              moduleIndex={moduleIndex}
+              savedLessonIds={savedLessonIds}
+              video={video}
+            />
             <div className="admin-row-actions">
               <Button
                 type="button"
@@ -358,6 +385,10 @@ function nextStatus(status: CourseStatus): CourseStatus {
   return status === 'published' ? 'archived' : 'published';
 }
 
+function lessonIds(course: CourseTree): Set<string> {
+  return new Set(course.modules.flatMap((module) => module.lessons.map((lesson) => lesson.id)));
+}
+
 export function CourseEditorView({
   course,
   actor,
@@ -366,11 +397,13 @@ export function CourseEditorView({
   onTransition,
   onDelete,
   onAuthenticationRequired,
+  video,
 }: CourseEditorViewProps) {
   const { t } = useTranslation();
   const [message, setMessage] = useState<string>();
   const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [savedLessonIds, setSavedLessonIds] = useState(() => lessonIds(course));
   const form = useForm<CourseFormValues>({ defaultValues: formValues(course) });
   const resetVersion = useRef(course.updatedAt);
 
@@ -378,6 +411,7 @@ export function CourseEditorView({
     if (resetVersion.current === course.updatedAt) return;
     resetVersion.current = course.updatedAt;
     form.reset(formValues(course));
+    setSavedLessonIds(lessonIds(course));
   }, [course, form]);
 
   function showError(error: unknown) {
@@ -392,6 +426,7 @@ export function CourseEditorView({
     try {
       const saved = await onSave(course, values);
       form.reset(formValues(saved));
+      setSavedLessonIds(lessonIds(saved));
       setMessageKind('status');
       setMessage(t('administration.saved'));
     } catch (error) {
@@ -494,7 +529,7 @@ export function CourseEditorView({
             <OwnerField form={form} actor={actor} options={ownerOptions} />
           </div>
         </section>
-        <ModuleFields form={form} />
+        <ModuleFields form={form} savedLessonIds={savedLessonIds} video={video} />
         <div className="admin-editor-save">
           <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
             {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}

@@ -170,7 +170,7 @@ type FileUploadProps = Omit<Aria.FileTriggerProps, 'children'> & {
 export function FileUpload({ label, isDisabled, ...props }: FileUploadProps) {
   return (
     <Aria.FileTrigger {...props}>
-      <Button variant="secondary" isDisabled={isDisabled ?? false}>
+      <Button type="button" variant="secondary" isDisabled={isDisabled ?? false}>
         {label}
       </Button>
     </Aria.FileTrigger>

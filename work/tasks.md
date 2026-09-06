@@ -129,6 +129,6 @@ Compose і фікстур, тобто не може бігти раніше за
 | M12 | Обв'язка воркера: хендлер на mux, гарди claim, `Recover`+`Sweep` до `server.Start`, метрики, `/status`; smoke з `ffmpeg -version` | 1.5h | M06, M08, M11 | done | `work/report-m12.md`; P10, B19, B33; smoke exit 0 printing ffmpeg 5.1.9 |
 | M13 | Edge і топологія: сервіс `upload` у Compose, зона й локація `/uploads/` у nginx, README | 1h | M12 | done | `work/report-m13.md`; R12, R13 (pre-transcode half; post half to M16 per §23); smoke exit 0 |
 | M14 | Фронтовий адаптер: типи, порт із `cancelUpload`, zod, репозиторій, tus-клієнт, поллінг | 1.75h | M09 | done | `work/report-m14.md`; P11, B09, R23 + R44 (fingerprint refusals, §24); 319 frontend tests green |
-| M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | planned | P09, B20, R24, R25, R41 |
+| M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | done | `work/report-m15.md`; P09, B20, R24, R25, R41; 330 frontend tests green with axe |
 | M16 | Браузерна подорож: `media.setup.ts` (чотири кліпи), `media.spec.ts` — upload→processing→ready, сходинки, плейлист проти цільового бінаря, рестарт у спостережений `processing` | 1.75h | M13, M15 | planned | P04, P05, P08, B05, B25–B27, B30, R26, R35 |
 | M17 | Впорядкований гейт і звіт: повний `make check`, `docs/media/report.md` | 1h | M01–M16 | planned | B10 |

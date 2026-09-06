@@ -458,6 +458,44 @@ nav a {
   padding: var(--space-4) 0 0 var(--space-4);
   border-inline-start: 1px solid var(--color-border);
 }
+.admin-video-field {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+.admin-video-field h3,
+.admin-video-field p {
+  margin: 0;
+}
+.admin-video-field .ui-progress {
+  inline-size: min(100%, 32rem);
+}
+.admin-video-state {
+  display: inline-flex;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-weight: 650;
+}
+.admin-video-state[data-video-state='ready'] {
+  color: var(--color-success);
+}
+.admin-video-state[data-video-state='failed'],
+.admin-video-error {
+  color: var(--color-danger);
+}
+.admin-video-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.admin-video-hint {
+  color: var(--color-muted);
+}
 .admin-row-actions,
 .admin-editor-save {
   display: flex;

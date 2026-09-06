@@ -1,17 +1,37 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
 import { AuthoringQueryError } from '../app/composition/admin-queries';
+import { VideoQueryError } from '../app/composition/admin-video-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
 import { asBrandedId, validEntityId } from '../domain/course/course';
 import type { CourseId, CourseStatus, CourseTree, CourseTreeEdit } from '../domain/course/course';
 import type { AuthenticatedUser } from '../domain/identity/identity';
+import type {
+  VideoErrorCode,
+  VideoTransferProgress,
+  VideoTransferTarget,
+} from '../domain/media/video';
 import { CourseEditorPending, CourseEditorView } from '../presentation/admin/CourseEditorView';
+import type {
+  CourseEditorVideo,
+  LessonVideoFieldActions,
+  LessonVideoFieldActionResult,
+} from '../presentation/admin/LessonVideoField';
 import { CourseListFailure } from '../presentation/admin/CourseListView';
 
 function courseId(value: string): CourseId {
   if (!validEntityId(value)) throw notFound();
   return asBrandedId(value, 'course');
+}
+
+function videoErrorCode(error: unknown): VideoErrorCode | undefined {
+  return error instanceof VideoQueryError
+    ? error.code
+    : error === null || error === undefined
+      ? undefined
+      : 'dependency_unavailable';
 }
 
 export const Route = createFileRoute('/admin/courses/$courseId')({
@@ -58,6 +78,76 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
   const save = useMutation(admin.save(queryClient));
   const transition = useMutation(admin.transition(queryClient));
   const remove = useMutation(admin.delete(queryClient));
+  const mintVideo = useMutation(admin.videos.mint(queryClient));
+  const retryVideo = useMutation(admin.videos.retry(queryClient));
+  const transferVideo = useMutation(admin.videos.transfer(queryClient));
+  const cancelVideo = useMutation(admin.videos.cancelUpload(queryClient));
+  const [activeTransfers, setActiveTransfers] = useState(0);
+  const videos = useQuery(admin.videos.list(course.id, activeTransfers > 0));
+  const videosError = videoErrorCode(videos.error);
+  const authenticationRequired = () => queryClient.setQueryData(sessionQueryKey, null);
+
+  useEffect(() => {
+    if (videoErrorCode(videos.error) === 'authentication_required')
+      queryClient.setQueryData(sessionQueryKey, null);
+  }, [queryClient, videos.error]);
+
+  async function videoAction(action: () => Promise<void>): Promise<LessonVideoFieldActionResult> {
+    try {
+      await action();
+      return null;
+    } catch (error) {
+      const code = videoErrorCode(error) ?? 'dependency_unavailable';
+      if (code === 'authentication_required') authenticationRequired();
+      return code;
+    }
+  }
+
+  async function transferFile(
+    target: VideoTransferTarget,
+    file: File,
+    onProgress: (progress: VideoTransferProgress) => void,
+  ) {
+    setActiveTransfers((count) => count + 1);
+    try {
+      await transferVideo.mutateAsync({ courseId: course.id, target, file, onProgress });
+    } finally {
+      setActiveTransfers((count) => count - 1);
+    }
+  }
+
+  const videoActions: LessonVideoFieldActions = {
+    upload: (lessonId, file, onProgress) =>
+      videoAction(async () => {
+        const ticket = await mintVideo.mutateAsync({
+          courseId: course.id,
+          lessonId,
+          declaredBytes: file.size,
+          originalName: file.name,
+        });
+        await transferFile({ kind: 'new', ticket }, file, onProgress);
+      }),
+    resume: (video, file, onProgress) =>
+      videoAction(async () => {
+        await transferFile(
+          {
+            kind: 'resume',
+            videoId: video.videoId,
+            declaredBytes: video.declaredBytes,
+          },
+          file,
+          onProgress,
+        );
+      }),
+    retry: (video) =>
+      videoAction(async () => {
+        await retryVideo.mutateAsync({ courseId: course.id, videoId: video.videoId });
+      }),
+    cancel: (video) =>
+      videoAction(async () => {
+        await cancelVideo.mutateAsync({ courseId: course.id, videoId: video.videoId });
+      }),
+  };
   const actions = {
     onSave: (current: CourseTree, edit: CourseTreeEdit) => save.mutateAsync({ current, edit }),
     onTransition: (current: CourseTree, status: CourseStatus) =>
@@ -66,7 +156,13 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
       await remove.mutateAsync(current);
       await navigate({ to: '/admin' });
     },
-    onAuthenticationRequired: () => queryClient.setQueryData(sessionQueryKey, null),
+    onAuthenticationRequired: authenticationRequired,
+    video: {
+      rows: videos.data ?? [],
+      isLoading: videos.isPending,
+      ...(videosError === undefined ? {} : { error: videosError }),
+      actions: videoActions,
+    },
   };
 
   return actor.role === 'admin' ? (
@@ -83,6 +179,7 @@ function AdminOwnerEditor({
   onTransition,
   onDelete,
   onAuthenticationRequired,
+  video,
 }: {
   course: CourseTree;
   actor: AuthenticatedUser;
@@ -90,6 +187,7 @@ function AdminOwnerEditor({
   onTransition: (current: CourseTree, status: CourseStatus) => Promise<CourseTree>;
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
+  video: CourseEditorVideo;
 }) {
   const { admin } = Route.useRouteContext();
   const instructors = useQuery(admin.instructors());
@@ -102,6 +200,7 @@ function AdminOwnerEditor({
       onTransition={onTransition}
       onDelete={onDelete}
       onAuthenticationRequired={onAuthenticationRequired}
+      video={video}
     />
   );
 }
