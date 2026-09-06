@@ -1,73 +1,99 @@
-# Report M08 — blocked before implementation
+# Report M08 — ffmpeg Transcoder adapter
 
 ## Outcome
 
-M08 is blocked by a missing contract required by the read-first plan. No ffmpeg adapter or
-adapter test remains in the repository.
+M08 is implemented in the adapter slice only:
 
-The blocking requirement is `docs/media/plan.md` D-11:
+- `backend/internal/media/adapters/ffmpeg/transcoder.go` implements `ports.Transcoder` over
+  `ffprobe`, `ffmpeg`, and storage paths derived only from validated UUID/claim-token keys.
+- `backend/internal/media/adapters/ffmpeg/transcoder_test.go` records exact argv fixtures and
+  the `/bin/sleep` cancellation observation without requiring ffmpeg.
 
-> Thumbnail, a second short invocation: `-ss <1 s, or 0 if the source is shorter> ...`
+No domain, port, application, worker, PostgreSQL, HTTP, tus, frontend, dependency, or
+generated file was changed. `work/tasks.md` and `docs/media/report.md` were not edited.
 
-The existing inward contracts cannot supply the fact needed to choose that fixed argument:
+## Implemented contract
 
-- `domain.SourceProbe` contains only `Width`, `Height`, `VideoCodec`, and `AudioCodec`.
-- `ports.Transcoder.Thumbnail` accepts only the context, source key, and destination key.
-- `application.Transcode.Process` does not pass its probe to `Thumbnail`.
+### Probe and thumbnail
 
-Always emitting `-ss 1` would fail the stated sub-second-source branch. Always emitting
-`-ss 0`, retaining mutable probe state in the adapter, or running an extra private probe from
-`Thumbnail` would be a workaround rather than implementation of the existing contract. The
-brief says: “Do not modify the domain, ports or application — if a contract is missing, STOP
-and report.” Therefore implementation stopped. A contract-owning slice must first decide how
-the thumbnail call receives duration (for example, a duration-bearing probe passed into the
-call); this report does not choose or implement that change.
+- Probe argv is exactly `ffprobe -v error -show_streams -show_format -print_format json --
+  <source>`.
+- The JSON decoder ignores unknown members, extracts the first video and audio streams, and
+  populates width, height, codecs, and `format.duration` into `domain.SourceProbe`, including
+  `DurationSeconds`.
+- Missing codec/dimension values are refused at the existing parse → `domain.AcceptSource`
+  seam before rendering; missing, negative, non-finite, or non-numeric duration is refused by
+  the parser rather than becoming zero.
+- Thumbnail argv seeks to `0` when `DurationSeconds < 1`, otherwise `1`, and uses
+  `scale='min(640,iw)':-2`, so it cannot upscale.
 
-## Second specification conflict
+### Render argv
 
-`work/brief-m08.md` says cancellation “kills the process group.” The recorded cancellation
-decision in `docs/media/plan.md` D-10 says the opposite: use `exec.CommandContext`'s default
-direct-process `SIGKILL` plus `WaitDelay`, with “No `Setpgid` and no process-group signalling.”
-R20 likewise observes that `/bin/sleep` exits within `WaitDelay`; it does not specify a process
-group. This must be reconciled before an exact cancellation test can be claimed. No
-process-group workaround was added.
+The fixed one-, two-, and three-rung argv fixtures pin:
 
-## Read-first and scope audit
+- H.264 High, `yuv420p`, capped CRF 21, and ceilings/buffers `365k/730k`,
+  `3000k/6000k`, `6000k/12000k`;
+- level 4.1 on 360p/720p and no explicit level on 1080p;
+- frame-rate-independent `expr:gte(t,n_forced*2)` on every video stream and no probed frame
+  rate in argv;
+- AAC-LC stereo at 128k, one audio output, and an audio-first shared `agroup`;
+- fMP4 HLS, six-second VOD segments, `independent_segments`, the `init.mp4` template, and
+  `master.m3u8`;
+- each rung's `min(width,iw)` / `min(height,ih)` scale with
+  `force_original_aspect_ratio=decrease:force_divisible_by=2`.
 
-The prescribed sources were read in order: the required D-11, D-8, verified-facts, port, and
-acceptance-row material in `docs/media/plan.md`; ADR 009; the existing transcoder port and
-source domain; then `work/PRODUCT-BRIEF.md` section 11's no-user-argument rule. The existing
-three-method `Transcoder` interface is present, but it is insufficient for the D-11 thumbnail
-branch above.
+The fixtures cover 1920×1040, 1080×1920 portrait, and 320×240 sources. The last keeps the
+mandatory 360p-labelled rendition while the `min()` caps prevent enlargement. The adapter
+supplies only the `init.mp4` template; it never constructs `init_N.mp4`.
 
-An implementation and test draft was created during the red/green pass, then removed when the
-mandatory specification review exposed the contract blocker. No domain, port, application,
-worker, PostgreSQL, HTTP, tus, frontend, dependency, or generated file was changed.
-`work/tasks.md` and `docs/media/report.md` were not edited. No file inside a `generated/`
-directory was written. No test requiring ffmpeg and no skip-if-missing guard was added.
+### No-user-argument and cancellation rules
+
+The argv builders accept no original filename. Source and output path components are fixed
+directories plus a strictly validated asset UUID and claim token; a non-prefix ladder or an
+invalid storage key is rejected. R21's malicious original name is absent from render and
+thumbnail argv, and both lists are compared element-by-element with fixed literals.
+
+Every process is created with `exec.CommandContext` and `WaitDelay = 2s`. Cancellation uses
+the command's default direct-process kill; there is no `Setpgid`, `SysProcAttr`, process-group
+signal, shell, or hand-written cancellation hook. R20 starts `/bin/sleep`, observes that it
+started before cancellation, requires a returned `context.Canceled`, and bounds completion by
+`WaitDelay`.
 
 ## Review
 
-The implementation workflow's two-axis review was adapted to the explicit M08 files because
-Git is forbidden.
+The implementation workflow's code-review step was adapted to the explicit M08 files because
+Git is forbidden. Two independent read-only axes reviewed the files.
 
-- Standards axis: the discarded draft had no documented-standard violation. Literal expected
-  argv fixtures duplicated fixed sections by design so the expected value was independent of
-  the implementation.
-- Specification axis: found the blocking thumbnail contract gap above. It also confirmed the
-  brief/plan cancellation conflict and noted that a robust R20 test must prove `/bin/sleep`
-  started before cancellation, not merely sleep for a guessed interval.
+### Standards axis
 
-The review caused the required stop; its draft findings were not shipped as partial code.
+No hard violation was found. The adapter is stdlib-only, stays in the media adapter layer,
+and follows ADR 009. Three non-blocking smell judgements were considered and retained:
+
+- literal one-/two-/three-rung expected argv repeat stable sections intentionally, because
+  deriving expected data from the production builder would make the exact-argv proof
+  tautological;
+- the private `resolveWork(..., thumbnail bool)` keeps one validation body for the two fixed
+  temporary-key shapes; a new artifact abstraction would add machinery without another
+  consumer;
+- probe, render, thumbnail, and process lifecycle remain in the one file the M08 placement
+  plan explicitly assigns to this adapter.
+
+### Specification axis
+
+The first pass found that the malicious-filename test exact-compared render argv but not the
+thumbnail argv. The test was corrected to exact-compare both. The follow-up pass found no
+remaining blocking specification issue and confirmed B13, B21, B28, R20, and R21 are
+represented at their prescribed seams.
 
 ## Verification performed
 
-- Read-through compared the requested behavior with the exact existing `SourceProbe` and
-  `Transcoder` signatures and established that the required duration cannot cross either
-  boundary.
-- `gofmt -w` and `gofmt -d` ran successfully on the discarded Go draft before the blocker was
-  found. They are not claimed as evidence for an implementation because those files were
-  removed.
+- `gofmt -w backend/internal/media/adapters/ffmpeg/transcoder.go
+  backend/internal/media/adapters/ffmpeg/transcoder_test.go` — exit 0.
+- `gofmt -d` over the same two files — exit 0 with no diff.
+- Source read-through checked the exact fixed argv, the duration branch, storage-key
+  validation, parser fields, `CommandContext`, and `WaitDelay`.
+- Static read-through found no `Setpgid`, `SysProcAttr`, `Process.Kill`, direct `exec.Command`,
+  or constructed `init_N` name. `OriginalName` occurs only in the R21 test fixture/assertion.
 - No filesystem write was denied, so there is no denied-write error text to report.
 - No Git command was run and no commit was created.
 
@@ -76,27 +102,41 @@ The review caused the required stop; its draft findings were not shipped as part
 The exact environment denial is: **“No Docker: no Go compile or test. gofmt + read-through.”**
 The following checks are unrun and none is represented as passed:
 
-- focused `go test ./internal/media/adapters/ffmpeg` — not run; Go test execution is denied,
-  and the adapter was removed after the blocker;
-- direct Go compilation, `go test`, `go vet`, and `go build` — not run; compilation and tests
-  are denied;
+- focused `go test ./internal/media/adapters/ffmpeg` — not run; Go compilation and test
+  execution are denied;
+- the R20 `/bin/sleep` test — written but not run because it is a Go test;
+- direct Go compilation, `go test`, `go vet`, and `go build` — not run;
 - `make format-check` — not run; its Go path uses Docker;
 - `make lint` — not run; its Go vet path compiles through Docker;
 - `make typecheck` — not run; Go compilation is denied;
 - `make test` — not run; Go compilation and tests are denied;
-- `make integration` — not run; Docker is denied and it is outside M08's unit-test evidence;
+- `make integration` — not run; Docker is denied and it is outside M08's unit evidence;
 - `make check-generated` — not run; it performs Git-backed drift checking and Git is denied;
 - `make build` — not run; Docker and Go compilation are denied;
-- `make up`, `make seed-identities`, `make seed`, and `make smoke` — not run; Docker Compose is
-  denied and these checks are outside M08;
+- `make up`, `make seed-identities`, `make seed`, and `make smoke` — not run; Docker Compose
+  is denied and these checks are outside M08;
 - `make e2e` — not run; Docker Compose is denied and it is outside M08;
 - aggregate `make check` — not run because it contains the denied checks above;
-- ffmpeg and ffprobe execution — not run; the brief requires unit evidence without ffmpeg,
-  and the only permitted process-behavior fixture would be `/bin/sleep` after the contract and
-  cancellation wording are corrected.
+- ffmpeg and ffprobe execution — not run; the brief requires argv/parsing evidence without
+  either binary and forbids a test that requires ffmpeg or skips when it is absent.
 
-## Required next decision
+No skip-if-missing guard was added.
 
-Revise the inward thumbnail contract so D-11's seek choice is expressible, and reconcile the
-brief's process-group phrase with D-10's accepted no-process-group decision. M08 can then be
-implemented without changing scope or inventing an adapter-side workaround.
+## Reviewer verification (measured in the reviewing session)
+
+`make test` and `make integration` pass — `courses/internal/media/adapters/ffmpeg` green,
+with **zero `exec.LookPath` and zero `Skip(`**: the suite genuinely needs no ffmpeg rather
+than hiding behind a conditional skip, which AGENTS.md forbids. Verified by inspection:
+the scale expression is the `min(640,iw)`/`min(360,ih)` form with `force_divisible_by=2`
+(the shape execution proved necessary, twice); the Apple constants `-hls_time 6`,
+`-hls_flags independent_segments` and the frame-rate-independent
+`force_key_frames expr:gte(t,n_forced*2)` are pinned; cancellation uses `WaitDelay` with
+**no `Setpgid`**, matching D-10 — the point my own brief had got backwards. The
+no-user-argument rule has a real adversarial test: the original name is set to
+`"; rm -rf / --preset x.mp4` and asserted absent from both render and thumbnail argv.
+format-check and lint pass.
+
+This task stopped once and was right to: D-11's thumbnail seek needed a duration no
+contract carried, and the brief contradicted D-10 on cancellation. Both were repaired
+before it resumed (plan §17). Provenance: implemented with Codex (gpt-5.6-sol); reviewed
+and verified here.
