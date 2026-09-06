@@ -1,0 +1,151 @@
+package application
+
+import (
+	"context"
+	"errors"
+	"io"
+	"syscall"
+	"time"
+
+	"courses/internal/media/domain"
+	"courses/internal/media/ports"
+)
+
+const (
+	mediaOperationTimeout = 3 * time.Second
+	ticketLifetime        = 24 * time.Hour
+	retryClaimAge         = 40 * time.Minute
+	mediaStoreResolution  = time.Microsecond
+)
+
+type Clock func() time.Time
+
+type Upload struct {
+	repository ports.AssetRepository
+	storage    ports.MediaStorage
+	queue      ports.TranscodingQueue
+	now        Clock
+}
+
+func NewUpload(repository ports.AssetRepository, storage ports.MediaStorage, queue ports.TranscodingQueue, now Clock) *Upload {
+	return &Upload{repository: repository, storage: storage, queue: queue, now: now}
+}
+
+func (upload *Upload) MintTicket(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string) (domain.VideoAsset, error) {
+	if err := domain.ValidateTicket(declaredBytes, originalName); err != nil {
+		return domain.VideoAsset{}, err
+	}
+	now := upload.timestamp()
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	asset, err := upload.repository.Mint(callCtx, actor, lessonID, declaredBytes, originalName, now.Add(ticketLifetime), now)
+	return asset, mediaOperationError(ctx, err)
+}
+
+func (upload *Upload) AppendChunk(ctx context.Context, id string, offset int64, body io.Reader) (domain.VideoAsset, error) {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+
+	asset, err := upload.repository.AppendChunk(callCtx, id, offset, upload.timestamp(), func(locked domain.VideoAsset) (int64, error) {
+		scratch := uploadScratchKey(locked.ID)
+		if locked.State == domain.Created {
+			free, err := upload.storage.Free(callCtx)
+			if err != nil {
+				return 0, err
+			}
+			if free < 3*locked.DeclaredBytes {
+				return 0, syscall.ENOSPC
+			}
+		}
+		if err := upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes); err != nil {
+			return 0, err
+		}
+		written, err := upload.storage.Append(callCtx, scratch, locked.ReceivedBytes, body)
+		if err != nil {
+			_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
+			return 0, err
+		}
+		if locked.State == domain.Created {
+			head, err := upload.storage.Head(callCtx, scratch, domain.ContainerSniffBytes)
+			if err != nil {
+				_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
+				return 0, err
+			}
+			if err := domain.AcceptContainer(head); err != nil {
+				_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
+				return 0, err
+			}
+		}
+		return locked.ReceivedBytes + written, nil
+	})
+	if errors.Is(err, domain.ErrUnsupportedSource) {
+		if failErr := upload.repository.Fail(callCtx, id, domain.Created, "", domain.UnsupportedSource, upload.timestamp()); failErr != nil {
+			return domain.VideoAsset{}, mediaOperationError(ctx, failErr)
+		}
+		return domain.VideoAsset{}, domain.ErrUnsupportedMedia
+	}
+	return asset, mediaOperationError(ctx, err)
+}
+
+func (upload *Upload) CompleteUpload(ctx context.Context, id string) (domain.VideoAsset, error) {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	asset, err := upload.repository.Complete(callCtx, id, upload.timestamp(), func(locked domain.VideoAsset) error {
+		return upload.storage.Move(callCtx, uploadScratchKey(locked.ID), sourceKey(locked.ID))
+	})
+	if err != nil {
+		return domain.VideoAsset{}, mediaOperationError(ctx, err)
+	}
+	if err := upload.queue.Enqueue(callCtx, asset.ID, asset.Attempt); err != nil {
+		return domain.VideoAsset{}, mediaOperationError(ctx, err)
+	}
+	return asset, nil
+}
+
+func (upload *Upload) CancelUpload(ctx context.Context, id string) error {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	return mediaOperationError(ctx, upload.repository.Cancel(callCtx, id, upload.timestamp()))
+}
+
+func (upload *Upload) ListCourseVideos(ctx context.Context, actor domain.Actor, courseID string) ([]domain.VideoAsset, error) {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	assets, err := upload.repository.ListCourseVideos(callCtx, actor, courseID)
+	return assets, mediaOperationError(ctx, err)
+}
+
+func (upload *Upload) Retry(ctx context.Context, actor domain.Actor, id string) (domain.VideoAsset, error) {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	asset, err := upload.repository.Retry(callCtx, actor, id, retryClaimAge, upload.timestamp())
+	if err != nil {
+		return domain.VideoAsset{}, mediaOperationError(ctx, err)
+	}
+	if err := upload.queue.Enqueue(callCtx, asset.ID, asset.Attempt); err != nil {
+		return domain.VideoAsset{}, mediaOperationError(ctx, err)
+	}
+	return asset, nil
+}
+
+func (upload *Upload) timestamp() time.Time {
+	return upload.now().UTC().Truncate(mediaStoreResolution)
+}
+
+func mediaOperationError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return err
+}
+
+func sourceKey(id string) domain.StorageKey {
+	return domain.StorageKey{Kind: domain.StorageSource, ID: id, Leaf: "original"}
+}
+
+func uploadScratchKey(id string) domain.StorageKey {
+	return domain.StorageKey{Kind: domain.StorageTemporary, ID: id, Leaf: "upload"}
+}

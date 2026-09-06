@@ -1,99 +1,105 @@
-# Report M04 — stopped on missing domain and port contracts
+# Report M04 — media application use cases over fakes
 
 ## Outcome
 
-M04 implementation stopped before creating `application/upload.go`,
-`application/transcode.go`, or their tests. The brief says: “If a domain rule or port method
-is missing, STOP and report rather than adding it here.” The M03 surface cannot express the
-required application behavior without changing the domain or ports, which this slice does not
-own.
+M04 is implemented over the M03a domain and port surface. The first M04 attempt stopped
+without application code because six required contracts were missing. Plan §2.1 and M03a
+repaired that stop with the three transaction policy callbacks, `Load`, explicit claim
+disposition, `DeleteSwept`, `MediaStorage.Head`, `ports.Job`, the container rule and
+`TranscodeOutcome`.
 
-Only this report was added. `work/tasks.md`, Git, and every `generated/` directory were left
-untouched.
+## Changed
 
-## Blocking contract gaps
+- `backend/internal/media/application/upload.go` adds `MintTicket`, `AppendChunk`,
+  `CompleteUpload`, `CancelUpload`, `ListCourseVideos` and `Retry`. Calls are bounded,
+  timestamps are UTC/microsecond-normalized, mint validates before the repository, the first
+  chunk gates free space and sniffs its container inside `ChunkPolicy`, completion moves the
+  source inside `CompletePolicy`, and completion/retry commit before enqueue.
+- `backend/internal/media/application/transcode.go` extends the existing outcome with the
+  `Transcode` use cases: the exhaustive load/claim dispositions, a fresh claim token, disk
+  gate, probe and codec refusal, ladder/render/thumbnail, guarded publication, retry
+  exhaustion, dependency pass-through, cause-sensitive cancellation, `Sweep` and `Recover`.
+  Canceled work gets a bounded detached finalization context so cleanup and the guarded
+  requeue/fail can run after the render context is canceled.
+- `backend/internal/media/application/upload_test.go` and `transcode_test.go` add fake-only
+  coverage with recorded call counts for T1–T9 application paths, invalid tickets before any
+  repository call, first/later chunks, disk and container refusals, commit-before-enqueue,
+  duplicate enqueue success at the queue-port boundary, enqueue-after-commit recovery,
+  exhaustive no-ops, retry exhaustion, permanent malformed sources, lost claims, both
+  cancellation causes, disk exhaustion, dependency faults, publish failure, sweep ordering,
+  C5 and C6 recovery, and an inert duplicate delivery.
 
-1. **The first-PATCH free-space gate cannot preserve `created`.** D-15 requires checking
-   `MediaStorage.Free` against `3 × declared_bytes` before T2 and leaving the row unchanged in
-   `created` on insufficient space. The application has no read method for obtaining the
-   asset's `declared_bytes`, while `AssetRepository.BeginUpload(ctx, id, now)` performs the
-   state operation without a policy callback. Calling `BeginUpload` first would commit T2 too
-   early; calling `Free` first lacks the required byte count. The 4b callback-into-repository
-   idiom named by the brief cannot be applied through the current port.
+No adapter, SQL, HTTP, tus server, frontend, dependency, or generated file was added or
+changed. `work/tasks.md` and `docs/media/report.md` were not edited.
 
-2. **Sweep cannot delete bytes before deleting the row.** D-7 requires, for C1–C4, purging
-   the four storage-key families and only then deleting the repository row, with a retryable
-   row remaining if byte deletion fails. `AssetRepository` exposes `SweepCandidates`, but no
-   method or callback for deleting a successfully purged candidate. Deleting inside
-   `SweepCandidates` would reverse the required ordering and could orphan bytes.
+## Read-through verification
 
-3. **Publish cannot enforce the claim-token-before-bytes invariant at the application seam.**
-   D-8/D-10 require the repository transaction to lock and validate `(processing,
-   claim_token)` before any stale HLS destination is removed or the working directory is
-   renamed. `AssetRepository.Publish` has no storage callback, while `MediaStorage.Publish`
-   is a separate call. Either call order violates the required atomic sequence. This is the
-   same repository-policy callback shape the brief explicitly directs M04 to mirror.
-
-4. **The twelve-step claim flow has no load/re-read operation.** D-10 steps 1 and 2 require
-   loading before claim and re-reading after a zero-row claim to apply the exhaustive nil list
-   and distinguish an unclaimable `processing` row. `AssetRepository` exposes no load/read
-   method and `Claim` returns no explicit claimed/not-claimed result. Inferring claim success
-   from returned fields would be an undocumented port contract and still would not implement
-   the required pre-claim load step exactly.
-
-5. **The first-chunk container refusal has no domain rule.** T2/T8 and D-8 require the
-   application to recognize accepted MP4/MOV `ftyp` brands or Matroska EBML magic before any
-   byte is written, failing the `created` row with `unsupported_source` otherwise. The domain
-   exposes codec-level `AcceptSource(SourceProbe)` only; it has no first-chunk/container
-   policy. Implementing that business rule inside M04 would violate the brief's ownership
-   boundary.
-
-6. **R15's no-retry outcome has no inward retry-disposition vocabulary.** R15 requires the
-   job error to wrap `asynq.SkipRetry`, but M04 is also required to import only domain and
-   ports. Neither contains an equivalent permanent-job marker for a later Asynq adapter to
-   translate. Importing Asynq in application would violate the module boundary; silently
-   moving the assertion to M08 would not execute this brief exactly.
-
-These are contract-shape blockers, not implementation choices. No workaround was attempted.
-
-## Read-through performed
-
-- Read the brief's sources in its specified order: `docs/media/plan.md` §2 application rows,
-  §1, D-10, D-7, D-15, §8, and R14–R19/R31/R32/R33/R36/R42; then both 4b administration
-  files, both 4a authoring files, and all M03 media domain and port files.
-- Cross-checked D-7/D-8/D-10/D-15 against the exact M03 method signatures and the M03 report.
-- Confirmed no existing media application helper supplies any of the missing contracts.
+- The six gaps in the stopped report are now represented directly by the exact §2.1 port
+  signatures; no additional port or domain contract was needed.
+- `Process` follows D-10's order: sweep; exhaustive load; explicit claim disposition; free
+  space; probe/refusal; isolated work keys; render and thumbnail; claim-guarded publish;
+  cleanup; requeue or fail before returning a retryable outcome.
+- `ready`, `failed`, evicted, absent, orphaned, `created` and `uploading` assets return the
+  zero outcome before claim/transcode/publish. An unclaimable `processing` row returns a
+  retryable error rather than being consumed.
+- Plain `context.Canceled` requeues even on the final attempt. A final-attempt
+  `context.DeadlineExceeded` writes `render_failed`; non-final cancellation/deadline paths
+  requeue first.
+- Storage exhaustion maps only to the closed `storage_unavailable` failure reason; raw
+  paths/stderr are never placed in an outcome. Repository, storage and queue dependency
+  errors pass through rather than being relabelled as business refusals.
+- Sweep purges source, HLS, thumbnail and temporary key families before `DeleteSwept`.
+  Recovery enqueues only the rows returned by the repository, using the repository-bumped
+  attempt, so C5 can only free claims while C6 produces a fresh task id.
+- Production application imports only the standard library plus
+  `courses/internal/media/{domain,ports}`. There is no Asynq reference under the media
+  application package.
 
 ## Verification performed
 
-- Direct scope read-through: no application, adapter, transport, frontend, dependency, SQL,
-  or generated file was added or changed.
-- `gofmt` was not run because the STOP condition fired before any Go file was created or
-  edited; there was no Go formatting target.
-- No filesystem write was denied. Therefore there is no denied-write error text to report.
+- `gofmt -w` ran over the four changed/new application files: exit 0.
+- `gofmt -d` ran over the same files: exit 0 with no output.
+- A direct compile-oriented read-through checked imports, interface method signatures,
+  fake implementations, state mutation order, policy callback placement, failure outcomes,
+  cleanup order and call-count assertions.
+- No filesystem write was denied, so there is no denied-write error text to report.
 - No Git command was run.
 
-## Checks not run — denied by the brief or inapplicable after STOP
+## Checks not run — denied by the brief
 
 None of these checks is represented as passed:
 
-- `make format-check` — not run; its Go half uses Docker. Local `gofmt` was inapplicable
-  because no Go file changed.
+- `make format-check` — not run; its Go half uses Docker. Local `gofmt` is the formatting
+  evidence.
 - `make lint` — not run; its Go-vet half compiles through Docker.
 - `make typecheck` — not run; Go compilation is denied.
-- `make test` — not run; Go compilation and test execution are denied, and no M04 tests were
-  created after the mandatory STOP.
+- `make test` — not run; Go compilation and test execution are denied, including the new
+  fake-port tests and architecture boundary test.
 - `make integration` — not run; Docker/Testcontainers are denied and adapters are outside
   M04.
 - `make check-generated` — not run; it invokes Git and writes generated output, both denied.
 - `make build` — not run; it requires Docker and compilation.
+- `make up`, `make migrate`, `make seed`, `make seed-identities` and `make smoke` — not run;
+  they require Docker Compose and are outside this application-only slice.
 - `make e2e` — not run; it requires Docker Compose and M04 owns no browser surface.
 - Aggregate `make check` — not run because it includes the denied checks above.
 
-## Required predecessor repair
+## Limitation and next task
 
-Revise the M03 domain/port contract in its own slice, then rerun M04. At minimum, the revised
-surface must make the first-PATCH policy atomic, provide post-purge row deletion, put storage
-publication behind the locked claim check, make claim disposition explicit, define the
-container-sniff rule, and define an inward permanent-job outcome that the Asynq adapter can
-map to `SkipRetry`.
+The new Go code and fake tests have formatting and read-through evidence only; compilation and
+test success are deliberately not claimed. The next planned slice is M05, the PostgreSQL
+repository writes that implement these application-facing contracts.
+
+## Reviewer verification (measured in the reviewing session)
+
+One review fix: `transcode.go` declared a function named `processDisposition` colliding
+with the type of the same name, so the package did not build (`redeclared in this block`,
+plus two conversion errors at the call sites). The function is renamed `dispositionOf`.
+This is exactly the class the sandbox cannot catch — Codex could not compile, said so, and
+claimed only formatting evidence.
+
+After the fix: `make test` pass — `courses/internal/media/application` green (22 test
+functions across upload and transcode), domain green; `make integration` pass including
+`courses/platform/architecture`, so the application layer's domain+ports-only rule is
+machine-checked, not asserted; format-check, lint and typecheck pass. Provenance:
+implemented with Codex (gpt-5.6-sol); reviewed, corrected and verified here.
