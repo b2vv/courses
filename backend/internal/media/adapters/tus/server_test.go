@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"courses/internal/media/adapters/tus"
 	"courses/internal/media/application"
 	"courses/internal/media/domain"
+	"courses/internal/media/ports"
 	"courses/platform/httpserver"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -48,6 +50,40 @@ type tusHarness struct {
 	ctx        context.Context
 	pool       *pgxpool.Pool
 	repository *mediapostgres.Repository
+}
+
+type tusJob struct {
+	assetID string
+	attempt int
+}
+
+type tusQueue struct{ jobs []tusJob }
+
+func (queue *tusQueue) Enqueue(_ context.Context, assetID string, attempt int) error {
+	queue.jobs = append(queue.jobs, tusJob{assetID: assetID, attempt: attempt})
+	return nil
+}
+
+type tusStorage struct {
+	ports.MediaStorage
+	free       *int64
+	beforeHead func(context.Context) error
+}
+
+func (storage *tusStorage) Free(ctx context.Context) (int64, error) {
+	if storage.free != nil {
+		return *storage.free, nil
+	}
+	return storage.MediaStorage.Free(ctx)
+}
+
+func (storage *tusStorage) Head(ctx context.Context, key domain.StorageKey, limit int) ([]byte, error) {
+	if storage.beforeHead != nil {
+		if err := storage.beforeHead(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return storage.MediaStorage.Head(ctx, key, limit)
 }
 
 func TestTusServerAgainstPostgreSQL(t *testing.T) {
@@ -91,6 +127,12 @@ func TestTusServerAgainstPostgreSQL(t *testing.T) {
 	defer pool.Close()
 	harness := &tusHarness{ctx: ctx, pool: pool, repository: mediapostgres.NewRepository(pool)}
 
+	t.Run("P03 HEAD then PATCH lands the source and queues one job", harness.testCompleteUpload)
+	t.Run("B18 the first chunk rejects an unsupported container", harness.testUnsupportedContainer)
+	t.Run("B35 an unsupported first chunk consumes the ticket before a waiting PATCH", harness.testConcurrentUnsupportedContainer)
+	t.Run("B23 a full volume refuses the first byte", harness.testDiskGate)
+	t.Run("B31 a post-rename crash is repaired without another append", harness.testPostRenameCrashRepair)
+	t.Run("B34 a post-fsync crash replays the terminal chunk", harness.testPostFsyncCrashRepair)
 	t.Run("B02 a chunk beyond the declared length is refused", harness.testDeclaredLengthCap)
 	t.Run("B03 a crash-mid-chunk file is repaired to the column", harness.testCrashMidChunkRepair)
 	t.Run("R10 unavailable tickets write nothing", harness.testUnavailableTickets)
@@ -101,11 +143,185 @@ func TestTusServerAgainstPostgreSQL(t *testing.T) {
 	t.Run("three-verb tus surface and protocol headers", harness.testProtocolSurface)
 }
 
+func (h *tusHarness) testPostRenameCrashRepair(t *testing.T) {
+	h.reset(t)
+	source := []byte("\x00\x00\x00\x18ftypisomfinal-chunk!")
+	const received = int64(12)
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, int64(len(source)), received, tusNow.Add(time.Hour), nil)
+	storage, queue, handler := h.server(t)
+	if _, err := storage.Append(h.ctx, sourceKey(tusAssetOne), 0, bytes.NewReader(source)); err != nil {
+		t.Fatal(err)
+	}
+
+	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, received, bytes.NewReader(source[received:]), false)
+	if response.Code != http.StatusNoContent || response.Header().Get("Upload-Offset") != strconv.Itoa(len(source)) {
+		t.Fatalf("PATCH status=%d offset=%q body=%s", response.Code, response.Header().Get("Upload-Offset"), response.Body.String())
+	}
+	assertStoredBytes(t, storage, sourceKey(tusAssetOne), source)
+	if _, err := storage.Size(h.ctx, scratchKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scratch err=%v, want not-exist", err)
+	}
+	h.assertAsset(t, tusAssetOne, domain.Queued, int64(len(source)), "")
+	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, attempt: 0}) {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+}
+
+func (h *tusHarness) testPostFsyncCrashRepair(t *testing.T) {
+	h.reset(t)
+	source := []byte("\x00\x00\x00\x18ftypisomfinal-chunk!")
+	const received = int64(12)
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, int64(len(source)), received, tusNow.Add(time.Hour), nil)
+	storage, queue, handler := h.server(t)
+	h.writeScratch(t, storage, tusAssetOne, source)
+
+	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, received, bytes.NewReader(source[received:]), false)
+	if response.Code != http.StatusNoContent || response.Header().Get("Upload-Offset") != strconv.Itoa(len(source)) {
+		t.Fatalf("PATCH status=%d offset=%q body=%s", response.Code, response.Header().Get("Upload-Offset"), response.Body.String())
+	}
+	assertStoredBytes(t, storage, sourceKey(tusAssetOne), source)
+	if _, err := storage.Size(h.ctx, scratchKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scratch err=%v, want not-exist", err)
+	}
+	h.assertAsset(t, tusAssetOne, domain.Queued, int64(len(source)), "")
+	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, attempt: 0}) {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+}
+
+func (h *tusHarness) testUnsupportedContainer(t *testing.T) {
+	h.reset(t)
+	source := []byte("plain text!!")
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, int64(len(source)), 0, tusNow.Add(time.Hour), nil)
+	storage, queue, handler := h.server(t)
+
+	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader(source), false)
+	if response.Code != http.StatusBadRequest || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"unsupported_media"`)) {
+		t.Fatalf("PATCH status=%d body=%s", response.Code, response.Body.String())
+	}
+	h.assertAsset(t, tusAssetOne, domain.Failed, 0, domain.UnsupportedSource)
+	if len(queue.jobs) != 0 {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+	if _, err := storage.Size(h.ctx, sourceKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("source err=%v, want not-exist", err)
+	}
+}
+
+func (h *tusHarness) testConcurrentUnsupportedContainer(t *testing.T) {
+	h.reset(t)
+	invalid := []byte("plain text!!")
+	valid := []byte("\x00\x00\x00\x18ftypisom")
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, int64(len(valid)), 0, tusNow.Add(time.Hour), nil)
+	enteredPolicy := make(chan struct{})
+	releasePolicy := make(chan struct{})
+	var enterOnce sync.Once
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(releasePolicy) }) })
+	storage, queue, handler := h.serverConfigured(t, func(storage *tusStorage) {
+		storage.beforeHead = func(ctx context.Context) error {
+			var waitErr error
+			enterOnce.Do(func() {
+				close(enteredPolicy)
+				select {
+				case <-releasePolicy:
+				case <-ctx.Done():
+					waitErr = ctx.Err()
+				}
+			})
+			return waitErr
+		}
+	})
+
+	invalidResult := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		invalidResult <- serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader(invalid), false)
+	}()
+	select {
+	case <-enteredPolicy:
+	case response := <-invalidResult:
+		t.Fatalf("invalid PATCH completed before entering its policy barrier: status=%d body=%s", response.Code, response.Body.String())
+	case <-time.After(5 * time.Second):
+		t.Fatal("invalid PATCH never entered its policy barrier")
+	}
+
+	validResult := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		validResult <- serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader(valid), false)
+	}()
+	h.waitForBlockedAppend(t)
+	select {
+	case response := <-validResult:
+		t.Fatalf("valid PATCH completed before invalid policy was released: status=%d body=%s", response.Code, response.Body.String())
+	default:
+	}
+	releaseOnce.Do(func() { close(releasePolicy) })
+
+	invalidResponse := <-invalidResult
+	if invalidResponse.Code != http.StatusBadRequest || !bytes.Contains(invalidResponse.Body.Bytes(), []byte(`"code":"unsupported_media"`)) {
+		t.Fatalf("invalid PATCH status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	}
+	validResponse := <-validResult
+	if validResponse.Code == http.StatusNoContent {
+		t.Fatalf("valid PATCH advanced the failed ticket: status=%d body=%s", validResponse.Code, validResponse.Body.String())
+	}
+	h.assertAsset(t, tusAssetOne, domain.Failed, 0, domain.UnsupportedSource)
+	if len(queue.jobs) != 0 {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+	if _, err := storage.Size(h.ctx, sourceKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("source err=%v, want not-exist", err)
+	}
+}
+
+func (h *tusHarness) testDiskGate(t *testing.T) {
+	h.reset(t)
+	source := []byte("\x00\x00\x00\x18ftypisom")
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, int64(len(source)), 0, tusNow.Add(time.Hour), nil)
+	storage, queue, handler := h.server(t, 3*int64(len(source))-1)
+
+	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader(source), false)
+	if response.Code != http.StatusInsufficientStorage || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"insufficient_storage"`)) {
+		t.Fatalf("PATCH status=%d body=%s", response.Code, response.Body.String())
+	}
+	h.assertAsset(t, tusAssetOne, domain.Created, 0, "")
+	if len(queue.jobs) != 0 {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+	if _, err := storage.Size(h.ctx, scratchKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scratch err=%v, want not-exist", err)
+	}
+}
+
+func (h *tusHarness) testCompleteUpload(t *testing.T) {
+	h.reset(t)
+	source := []byte("\x00\x00\x00\x18ftypisom")
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, int64(len(source)), 0, tusNow.Add(time.Hour), nil)
+	storage, queue, handler := h.server(t)
+
+	head := serveTus(handler, http.MethodHead, "/uploads/"+tusAssetOne, 0, nil, false)
+	if head.Code != http.StatusOK || head.Header().Get("Upload-Offset") != "0" {
+		t.Fatalf("HEAD status=%d headers=%v body=%s", head.Code, head.Header(), head.Body.String())
+	}
+	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader(source), false)
+	if response.Code != http.StatusNoContent || response.Header().Get("Upload-Offset") != strconv.Itoa(len(source)) {
+		t.Fatalf("PATCH status=%d offset=%q body=%s", response.Code, response.Header().Get("Upload-Offset"), response.Body.String())
+	}
+	assertStoredBytes(t, storage, sourceKey(tusAssetOne), source)
+	if _, err := storage.Size(h.ctx, scratchKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scratch err=%v, want not-exist", err)
+	}
+	h.assertAsset(t, tusAssetOne, domain.Queued, int64(len(source)), "")
+	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, attempt: 0}) {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
+}
+
 func (h *tusHarness) testDeclaredLengthCap(t *testing.T) {
 	h.reset(t)
 	const declared = int64(1024 * 1024)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, declared, declared, tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 	want := bytes.Repeat([]byte("a"), int(declared))
 	h.writeScratch(t, storage, tusAssetOne, want)
 
@@ -125,7 +341,7 @@ func (h *tusHarness) testCrashMidChunkRepair(t *testing.T) {
 	remainder := []byte("replacement-tail")
 	want := append(append([]byte(nil), prefix...), remainder...)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, int64(len(want)), int64(len(prefix)), tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, queue, handler := h.server(t)
 	h.writeScratch(t, storage, tusAssetOne, append(append([]byte(nil), prefix...), crashed...))
 
 	assertHeadOffset(t, handler, tusAssetOne, int64(len(prefix)))
@@ -133,8 +349,14 @@ func (h *tusHarness) testCrashMidChunkRepair(t *testing.T) {
 	if response.Code != http.StatusNoContent || response.Header().Get("Upload-Offset") != strconv.Itoa(len(want)) || response.Header().Get("Upload-Expires") != tusNow.Add(time.Hour).Format(http.TimeFormat) {
 		t.Fatalf("PATCH status=%d offset=%q body=%s", response.Code, response.Header().Get("Upload-Offset"), response.Body.String())
 	}
-	assertScratch(t, storage, tusAssetOne, want)
+	assertStoredBytes(t, storage, sourceKey(tusAssetOne), want)
+	if _, err := storage.Size(h.ctx, scratchKey(tusAssetOne)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scratch err=%v, want not-exist", err)
+	}
 	h.assertReceived(t, tusAssetOne, int64(len(want)))
+	if len(queue.jobs) != 1 {
+		t.Fatalf("jobs=%v", queue.jobs)
+	}
 }
 
 func (h *tusHarness) testUnavailableTickets(t *testing.T) {
@@ -142,7 +364,7 @@ func (h *tusHarness) testUnavailableTickets(t *testing.T) {
 	evictedAt := tusNow.Add(-time.Minute)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, 12, 0, tusNow.Add(time.Hour), &evictedAt)
 	h.insertAsset(t, tusAssetTwo, tusLessonOne, domain.Created, 12, 0, tusNow.Add(-time.Second), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 
 	for _, id := range []string{tusUnknownAsset, tusAssetOne, tusAssetTwo} {
 		response := serveTus(handler, http.MethodPatch, "/uploads/"+id, 0, bytes.NewReader([]byte("x")), false)
@@ -161,7 +383,7 @@ func (h *tusHarness) testWrongOffset(t *testing.T) {
 	h.reset(t)
 	want := []byte("committed-data")
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 128, int64(len(want)), tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 	h.writeScratch(t, storage, tusAssetOne, want)
 
 	response := serveTus(handler, http.MethodPatch, "/uploads/"+tusAssetOne, 0, bytes.NewReader([]byte("loser")), false)
@@ -178,7 +400,7 @@ func (h *tusHarness) testConcurrentPatch(t *testing.T) {
 	chunk := []byte("one-chunk")
 	want := append(append([]byte(nil), prefix...), chunk...)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 128, int64(len(prefix)), tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 	h.writeScratch(t, storage, tusAssetOne, prefix)
 
 	start := make(chan struct{})
@@ -212,7 +434,7 @@ func (h *tusHarness) testConcurrentPatch(t *testing.T) {
 func (h *tusHarness) testDeleteFreesLesson(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Created, 12, 0, tusNow.Add(time.Hour), nil)
-	_, handler := h.server(t)
+	_, _, handler := h.server(t)
 
 	response := serveTus(handler, http.MethodDelete, "/uploads/"+tusAssetOne, 0, nil, false)
 	if response.Code != http.StatusNoContent {
@@ -241,7 +463,7 @@ func (h *tusHarness) testChunkedBodyCap(t *testing.T) {
 	h.reset(t)
 	const received = int64(1)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 16*1024*1024, received, tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 	want := []byte("a")
 	h.writeScratch(t, storage, tusAssetOne, want)
 	body := bytes.NewReader(bytes.Repeat([]byte("b"), 9*1024*1024))
@@ -258,7 +480,7 @@ func (h *tusHarness) testChunkedBodyCap(t *testing.T) {
 func (h *tusHarness) testProtocolSurface(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 12, 1, tusNow.Add(time.Hour), nil)
-	storage, handler := h.server(t)
+	storage, _, handler := h.server(t)
 	h.writeScratch(t, storage, tusAssetOne, []byte("a"))
 
 	head := serveTus(handler, http.MethodHead, "/uploads/"+tusAssetOne, 0, nil, false)
@@ -301,7 +523,15 @@ func (h *tusHarness) testProtocolSurface(t *testing.T) {
 	}
 }
 
-func (h *tusHarness) server(t *testing.T) (*mediafilesystem.Storage, http.Handler) {
+func (h *tusHarness) server(t *testing.T, free ...int64) (*mediafilesystem.Storage, *tusQueue, http.Handler) {
+	return h.serverConfigured(t, func(storage *tusStorage) {
+		if len(free) == 1 {
+			storage.free = &free[0]
+		}
+	})
+}
+
+func (h *tusHarness) serverConfigured(t *testing.T, configure func(*tusStorage)) (*mediafilesystem.Storage, *tusQueue, http.Handler) {
 	t.Helper()
 	storage, err := mediafilesystem.New(t.TempDir())
 	if err != nil {
@@ -312,11 +542,14 @@ func (h *tusHarness) server(t *testing.T) (*mediafilesystem.Storage, http.Handle
 			t.Errorf("close storage: %v", err)
 		}
 	})
-	upload := application.NewUpload(h.repository, storage, nil, func() time.Time { return tusNow })
+	queue := &tusQueue{}
+	mediaStorage := &tusStorage{MediaStorage: storage}
+	configure(mediaStorage)
+	upload := application.NewUpload(h.repository, mediaStorage, queue, func() time.Time { return tusNow })
 	tickets := application.NewTickets(h.repository, nil, func() time.Time { return tusNow })
 	uploadServer := tus.NewServer(upload)
 	mediaHandler := mediahttp.NewHandler(tickets)
-	return storage, httpserver.NewHandler(httpserver.Options{Service: "upload", Register: func(mux *http.ServeMux) {
+	return storage, queue, httpserver.NewHandler(httpserver.Options{Service: "upload", Register: func(mux *http.ServeMux) {
 		uploadServer.Register(mux)
 		mediaHandler.RegisterAdmin(mux, func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -324,6 +557,44 @@ func (h *tusHarness) server(t *testing.T) (*mediafilesystem.Storage, http.Handle
 			})
 		}, func(next http.Handler) http.Handler { return next })
 	}})
+}
+
+func (h *tusHarness) waitForBlockedAppend(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
+	defer cancel()
+	for {
+		var waiting bool
+		err := h.pool.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM pg_stat_activity
+			WHERE datname=current_database() AND pid<>pg_backend_pid()
+				AND wait_event_type='Lock' AND query LIKE '%FOR UPDATE OF assets%'
+		)`).Scan(&waiting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("valid PATCH never waited on the invalid PATCH row lock")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func (h *tusHarness) assertAsset(t *testing.T, id string, state domain.State, received int64, reason domain.FailureReason) {
+	t.Helper()
+	var gotState string
+	var gotReceived int64
+	var gotReason *string
+	if err := h.pool.QueryRow(h.ctx, `SELECT state, received_bytes, failure_reason FROM video_assets WHERE id=$1`, id).Scan(&gotState, &gotReceived, &gotReason); err != nil {
+		t.Fatal(err)
+	}
+	if domain.State(gotState) != state || gotReceived != received || reason == "" && gotReason != nil || reason != "" && (gotReason == nil || *gotReason != string(reason)) {
+		t.Fatalf("asset state=%s received=%d reason=%v, want state=%s received=%d reason=%s", gotState, gotReceived, gotReason, state, received, reason)
+	}
 }
 
 func (h *tusHarness) reset(t *testing.T) {
@@ -405,7 +676,11 @@ func assertHeadOffset(t *testing.T, handler http.Handler, id string, want int64)
 
 func assertScratch(t *testing.T, storage *mediafilesystem.Storage, id string, want []byte) {
 	t.Helper()
-	key := scratchKey(id)
+	assertStoredBytes(t, storage, scratchKey(id), want)
+}
+
+func assertStoredBytes(t *testing.T, storage *mediafilesystem.Storage, key domain.StorageKey, want []byte) {
+	t.Helper()
 	size, err := storage.Size(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)
@@ -421,4 +696,8 @@ func assertScratch(t *testing.T, storage *mediafilesystem.Storage, id string, wa
 
 func scratchKey(id string) domain.StorageKey {
 	return domain.StorageKey{Kind: domain.StorageTemporary, ID: id, Leaf: "upload"}
+}
+
+func sourceKey(id string) domain.StorageKey {
+	return domain.StorageKey{Kind: domain.StorageSource, ID: id, Leaf: "original"}
 }

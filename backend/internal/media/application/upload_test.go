@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -24,8 +25,7 @@ type fakeRepository struct {
 	calls           []string
 	asset           domain.VideoAsset
 	mint            func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
-	appendChunk     func(context.Context, string, int64, time.Time, ports.ChunkPolicy) (domain.VideoAsset, error)
-	complete        func(context.Context, string, time.Time, ports.CompletePolicy) (domain.VideoAsset, error)
+	appendChunk     func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
 	cancel          func(context.Context, string, time.Time) error
 	list            func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
 	load            func(context.Context, string) (domain.VideoAsset, error)
@@ -44,14 +44,9 @@ func (repository *fakeRepository) Mint(ctx context.Context, actor domain.Actor, 
 	return repository.mint(ctx, actor, lessonID, declaredBytes, originalName, expiresAt, now)
 }
 
-func (repository *fakeRepository) AppendChunk(ctx context.Context, id string, offset int64, now time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
+func (repository *fakeRepository) AppendChunk(ctx context.Context, id string, offset int64, now time.Time, chunkPolicy ports.ChunkPolicy, completePolicy ports.CompletePolicy) (domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "append")
-	return repository.appendChunk(ctx, id, offset, now, policy)
-}
-
-func (repository *fakeRepository) Complete(ctx context.Context, id string, now time.Time, policy ports.CompletePolicy) (domain.VideoAsset, error) {
-	repository.calls = append(repository.calls, "complete")
-	return repository.complete(ctx, id, now, policy)
+	return repository.appendChunk(ctx, id, offset, now, chunkPolicy, completePolicy)
 }
 
 func (repository *fakeRepository) Cancel(ctx context.Context, id string, now time.Time) error {
@@ -208,8 +203,8 @@ func TestAppendChunkPastDeclaredLengthRollsStorageBack(t *testing.T) {
 	asset := mediaAsset(domain.Uploading)
 	asset.ReceivedBytes = asset.DeclaredBytes
 	storage := defaultStorage()
-	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
-		_, err := policy(asset)
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
+		_, err := chunkPolicy(asset)
 		return domain.VideoAsset{}, err
 	}}
 
@@ -227,8 +222,8 @@ func TestAppendChunkRejectsAScratchFileShorterThanTheColumn(t *testing.T) {
 	asset.DeclaredBytes = 24
 	storage := defaultStorage()
 	storage.size = func(context.Context, domain.StorageKey) (int64, error) { return 11, nil }
-	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
-		_, err := policy(asset)
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
+		_, err := chunkPolicy(asset)
 		return domain.VideoAsset{}, err
 	}}
 
@@ -249,8 +244,8 @@ func TestAppendChunkSurfacesRollbackFailure(t *testing.T) {
 	storage := defaultStorage()
 	storage.append = func(context.Context, domain.StorageKey, int64, io.Reader) (int64, error) { return 1, appendFailure }
 	storage.truncate = func(context.Context, domain.StorageKey, int64) error { return rollbackFailure }
-	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
-		_, err := policy(asset)
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
+		_, err := chunkPolicy(asset)
 		return domain.VideoAsset{}, err
 	}}
 
@@ -307,9 +302,9 @@ func TestAppendChunkRunsRepairWriteAndFirstChunkPolicies(t *testing.T) {
 		data, err := io.ReadAll(body)
 		return int64(len(data)), err
 	}
-	repository := &fakeRepository{appendChunk: func(ctx context.Context, _ string, offset int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
+	repository := &fakeRepository{appendChunk: func(ctx context.Context, _ string, offset int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
 		assertMediaDeadlineBetween(t, ctx, 119*time.Second, 120*time.Second)
-		newOffset, err := policy(asset)
+		newOffset, err := chunkPolicy(asset)
 		if err != nil {
 			return domain.VideoAsset{}, err
 		}
@@ -325,17 +320,53 @@ func TestAppendChunkRunsRepairWriteAndFirstChunkPolicies(t *testing.T) {
 	if got.State != domain.Uploading || got.ReceivedBytes != 12 {
 		t.Fatalf("asset=%+v", got)
 	}
-	assertStrings(t, storage.calls, []string{"free", "truncate", "append", "head"})
+	assertStrings(t, storage.calls, []string{"size", "free", "truncate", "append", "head"})
+}
+
+func TestCompletedSingleChunkSourceRepairsBeforeTheDiskGate(t *testing.T) {
+	t.Parallel()
+	asset := mediaAsset(domain.Created)
+	storage := defaultStorage()
+	storage.size = func(_ context.Context, key domain.StorageKey) (int64, error) {
+		if key.Kind != domain.StorageSource {
+			t.Fatalf("Size key=%+v", key)
+		}
+		return asset.DeclaredBytes, nil
+	}
+	storage.free = func(context.Context) (int64, error) {
+		t.Fatal("Free called for an already-complete source")
+		return 0, nil
+	}
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, completePolicy ports.CompletePolicy) (domain.VideoAsset, error) {
+		newOffset, err := chunkPolicy(asset)
+		if err != nil {
+			return domain.VideoAsset{}, err
+		}
+		asset.ReceivedBytes = newOffset
+		asset.State = domain.Uploading
+		if err := completePolicy(asset); err != nil {
+			return domain.VideoAsset{}, err
+		}
+		asset.State = domain.Queued
+		return asset, nil
+	}}
+	queue := &fakeQueue{enqueue: func(context.Context, string, int) error { return nil }}
+
+	got, err := application.NewUpload(repository, storage, queue, time.Now).AppendChunk(context.Background(), asset.ID, 0, bytes.NewBufferString("not-read"))
+	if err != nil || got.State != domain.Queued || got.ReceivedBytes != got.DeclaredBytes {
+		t.Fatalf("asset=%+v err=%v", got, err)
+	}
+	assertStrings(t, storage.calls, []string{"size", "size"})
 }
 
 func TestLaterChunkSkipsTheFirstChunkGateAndSniff(t *testing.T) {
 	t.Parallel()
 	asset := mediaAsset(domain.Uploading)
-	asset.DeclaredBytes = 24
+	asset.DeclaredBytes = 36
 	asset.ReceivedBytes = 12
 	storage := defaultStorage()
-	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
-		newOffset, err := policy(asset)
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
+		newOffset, err := chunkPolicy(asset)
 		if err != nil {
 			return domain.VideoAsset{}, err
 		}
@@ -346,7 +377,7 @@ func TestLaterChunkSkipsTheFirstChunkGateAndSniff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ReceivedBytes != 24 {
+	if got.ReceivedBytes != 24 || got.State != domain.Uploading {
 		t.Fatalf("asset=%+v", got)
 	}
 	assertStrings(t, storage.calls, []string{"size", "append"})
@@ -374,21 +405,21 @@ func TestAppendChunkDiskAndContainerRefusalsDoNotCommitUploading(t *testing.T) {
 			storage := defaultStorage()
 			test.configure(storage)
 			repository := &fakeRepository{}
-			repository.appendChunk = func(_ context.Context, _ string, _ int64, _ time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
-				newOffset, err := policy(asset)
+			repository.appendChunk = func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, _ ports.CompletePolicy) (domain.VideoAsset, error) {
+				newOffset, err := chunkPolicy(asset)
 				if err != nil {
+					if errors.Is(err, domain.ErrUnsupportedSource) {
+						asset.State = domain.Failed
+						asset.FailureReason = domain.UnsupportedSource
+					}
 					return domain.VideoAsset{}, err
 				}
 				asset.State = domain.Uploading
 				asset.ReceivedBytes = newOffset
 				return asset, nil
 			}
-			repository.fail = func(_ context.Context, _ string, from domain.State, token domain.ClaimToken, reason domain.FailureReason, _ time.Time) error {
-				if from != domain.Created || token != "" || reason != domain.UnsupportedSource {
-					t.Fatalf("fail from=%s token=%q reason=%s", from, token, reason)
-				}
-				asset.State = domain.Failed
-				asset.FailureReason = reason
+			repository.fail = func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error {
+				t.Fatal("unsupported first chunk must be failed inside AppendChunk")
 				return nil
 			}
 
@@ -405,12 +436,17 @@ func TestAppendChunkDiskAndContainerRefusalsDoNotCommitUploading(t *testing.T) {
 
 func TestCompleteCommitsBeforeEnqueueAndRetryRepairsAnEnqueueFailure(t *testing.T) {
 	t.Parallel()
-	asset := mediaAsset(domain.Uploading)
-	asset.ReceivedBytes = asset.DeclaredBytes
+	asset := mediaAsset(domain.Created)
 	storage := defaultStorage()
 	repository := &fakeRepository{}
-	repository.complete = func(_ context.Context, _ string, _ time.Time, policy ports.CompletePolicy) (domain.VideoAsset, error) {
-		if err := policy(asset); err != nil {
+	repository.appendChunk = func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, completePolicy ports.CompletePolicy) (domain.VideoAsset, error) {
+		newOffset, err := chunkPolicy(asset)
+		if err != nil {
+			return domain.VideoAsset{}, err
+		}
+		asset.ReceivedBytes = newOffset
+		asset.State = domain.Uploading
+		if err := completePolicy(asset); err != nil {
 			return domain.VideoAsset{}, err
 		}
 		asset.State = domain.Queued
@@ -436,7 +472,7 @@ func TestCompleteCommitsBeforeEnqueueAndRetryRepairsAnEnqueueFailure(t *testing.
 	upload := application.NewUpload(repository, storage, queue, time.Now)
 	tickets := application.NewTickets(repository, queue, time.Now)
 
-	if _, err := upload.CompleteUpload(context.Background(), asset.ID); !errors.Is(err, enqueueFailure) {
+	if _, err := upload.AppendChunk(context.Background(), asset.ID, 0, bytes.NewBufferString("\x00\x00\x00\x18ftypisom")); !errors.Is(err, enqueueFailure) {
 		t.Fatalf("complete: %v", err)
 	}
 	if asset.State != domain.Queued {
@@ -452,10 +488,15 @@ func TestCompleteCommitsBeforeEnqueueAndRetryRepairsAnEnqueueFailure(t *testing.
 
 func TestDuplicateEnqueueIsSuccessAtTheQueuePortBoundary(t *testing.T) {
 	t.Parallel()
-	asset := mediaAsset(domain.Uploading)
-	asset.ReceivedBytes = asset.DeclaredBytes
-	repository := &fakeRepository{complete: func(_ context.Context, _ string, _ time.Time, policy ports.CompletePolicy) (domain.VideoAsset, error) {
-		if err := policy(asset); err != nil {
+	asset := mediaAsset(domain.Created)
+	repository := &fakeRepository{appendChunk: func(_ context.Context, _ string, _ int64, _ time.Time, chunkPolicy ports.ChunkPolicy, completePolicy ports.CompletePolicy) (domain.VideoAsset, error) {
+		newOffset, err := chunkPolicy(asset)
+		if err != nil {
+			return domain.VideoAsset{}, err
+		}
+		asset.ReceivedBytes = newOffset
+		asset.State = domain.Uploading
+		if err := completePolicy(asset); err != nil {
 			return domain.VideoAsset{}, err
 		}
 		asset.State = domain.Queued
@@ -469,7 +510,7 @@ func TestDuplicateEnqueueIsSuccessAtTheQueuePortBoundary(t *testing.T) {
 		// The queue adapter's contract maps an existing task id to success.
 		return nil
 	}}
-	if _, err := application.NewUpload(repository, defaultStorage(), queue, time.Now).CompleteUpload(context.Background(), asset.ID); err != nil {
+	if _, err := application.NewUpload(repository, defaultStorage(), queue, time.Now).AppendChunk(context.Background(), asset.ID, 0, bytes.NewBufferString("\x00\x00\x00\x18ftypisom")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.NewTickets(repository, queue, time.Now).Retry(context.Background(), domain.Actor{Administrator: true}, asset.ID); err != nil {
@@ -529,7 +570,12 @@ func TestUploadReportsCallerCancellation(t *testing.T) {
 func defaultStorage() *fakeStorage {
 	return &fakeStorage{
 		free: func(context.Context) (int64, error) { return 1 << 40, nil },
-		size: func(context.Context, domain.StorageKey) (int64, error) { return 12, nil },
+		size: func(_ context.Context, key domain.StorageKey) (int64, error) {
+			if key.Kind == domain.StorageSource {
+				return 0, os.ErrNotExist
+			}
+			return 12, nil
+		},
 		head: func(context.Context, domain.StorageKey, int) ([]byte, error) {
 			return []byte("\x00\x00\x00\x18ftypisom"), nil
 		},

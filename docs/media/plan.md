@@ -239,7 +239,7 @@ Per `.claude/standards.md` §Розміщення. Every new file is named; exte
 | `backend/internal/media/ports/storage.go` | `MediaStorage` — opaque `StorageKey` in, no filesystem path crosses the boundary (ADR 004); `Free` for the disk gates, whose only callers are the upload service's first `PATCH` and the worker's claim — never the API (D-15). Signatures in §2.1 |
 | `backend/internal/media/ports/transcoder.go` | `Transcoder` — `Probe`, `Render`, `Thumbnail` |
 | `backend/internal/media/ports/queue.go` | `TranscodingQueue` — `Enqueue(ctx, assetID string, attempt int) error` |
-| `backend/internal/media/application/upload.go` | `MintTicket`, `AppendChunk` (which supplies the `ChunkPolicy` closure), `CompleteUpload`, `CancelUpload`, `ListCourseVideos`, `Retry` |
+| `backend/internal/media/application/upload.go` | `MintTicket`, `AppendChunk` (which supplies both completion policies and enqueues only after the terminal commit), `CancelUpload`, `ListCourseVideos`, `Retry` |
 | `backend/internal/media/application/transcode.go` | `Process` — the twelve steps of brief §11 over the four ports, returning a `TranscodeOutcome` (§2.1) so the queue adapter can decide the task's fate without the application knowing what a queue is; `Sweep`; `Recover` |
 | `backend/internal/media/application/*_test.go` | fake-port tests: every transition, retry exhaustion, malformed source, no-op on `ready`/not-found, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure |
 | `backend/internal/media/adapters/postgres/repository.go` | the mint transaction (lesson→module→course join with `FOR SHARE`, `CanEditLesson`, generation assignment, insert), the guarded state UPDATEs on `(state, claim_token)`, the list and retry reads |
@@ -277,17 +277,20 @@ commits or rolls back on what the closure returns.
 // scratch repair, append, fsync — and, when the locked asset is still in
 // `created`, the D-15 free-space gate (Free < 3 x DeclaredBytes) and the D-8
 // container sniff over the first ContainerSniffBytes bytes. It returns the new
-// received-byte count. Any error aborts the transaction, so the row is left
-// exactly as it was locked: a refused first chunk stays in `created`,
-// unchanged and cancellable, never `uploading` and never `failed`.
+// received-byte count. ErrUnsupportedSource is the single terminal outcome:
+// AppendChunk commits the locked `created` row as `failed`, reason
+// `unsupported_source`, with received_bytes still zero, then returns that typed
+// error. Every other error aborts the transaction and leaves the row exactly as
+// it was locked.
 type ChunkPolicy func(domain.VideoAsset) (int64, error)
 
-// CompletePolicy runs inside Complete's transaction: after the row is locked
-// and received_bytes is verified equal to declared_bytes, and before T3 is
-// written. It renames the scratch key onto source/{id}/original (D-2d). It
-// must be idempotent — succeeding when the source key already holds
-// declared_bytes — which is what lets B31's repair path terminate. An error
-// aborts, leaving the row in `uploading`.
+// CompletePolicy runs inside AppendChunk's transaction only when ChunkPolicy
+// returns declared_bytes: after the row is locked and the terminal offset is
+// known, and before T3 is written. It renames the scratch key onto
+// source/{id}/original (D-2d). It must be idempotent — succeeding when the
+// source key already holds declared_bytes — which is what lets B31's repair
+// path terminate. An error aborts, leaving the row at its previously committed
+// offset and state.
 type CompletePolicy func(domain.VideoAsset) error
 
 // PublishPolicy runs inside Publish's transaction: after the row is locked and
@@ -308,9 +311,7 @@ type AssetRepository interface {
     Mint(ctx context.Context, actor domain.Actor, lessonID string,
         declaredBytes int64, originalName string, expiresAt, now time.Time) (domain.VideoAsset, error)
     AppendChunk(ctx context.Context, id string, offset int64, now time.Time,
-        policy ChunkPolicy) (domain.VideoAsset, error)
-    Complete(ctx context.Context, id string, now time.Time,
-        policy CompletePolicy) (domain.VideoAsset, error)
+        chunkPolicy ChunkPolicy, completePolicy CompletePolicy) (domain.VideoAsset, error)
     Cancel(ctx context.Context, id string, now time.Time) error              // tus DELETE -> evicted_at
 
     // Job lifecycle. Claim reports disposition explicitly: on a zero-row
@@ -1860,6 +1861,8 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | B29 | Start-up recovery reclaims a claim of any age, including one whose terminal write never landed | Testcontainers; a `processing` row with a claim token whose `updated_at` is **seconds** old, left that way by a terminal write that failed | run the recovery pass | before it, the row is still `processing` — not `failed`, not `ready`, so no state was invented; after it, the row reads `queued` with a null `claim_token` and is claimable again, and a second `processing` row hours old is reclaimed identically | integration | M06 |
 | B30 | A sub-360p source is encoded at its own size, not enlarged | Compose up; the **320×240** fixture of §5.f | transcode it | `master.m3u8` lists one variant at `RESOLUTION=320x240`, and the encoded segments probe as 320×240 — the claim edition 2 asserted and GATE 2 round 2 disproved is now produced by ffmpeg itself | e2e | M16 |
 | B31 | A crash between the completion rename and its commit does not lose the source | a ticket whose source is fully written to `source/{id}/original` while the row still reads `uploading` with `received_bytes < declared_bytes` and no scratch file | `PATCH` the final chunk again | `204`; the asset reads `queued` with `received_bytes = declared_bytes`, no byte is appended anywhere, and no `503` is returned | integration | M11 |
+| B34 | A crash after the final append and fsync but before its commit is repaired | a ticket whose scratch file holds the complete source while the row still reads `uploading` with `received_bytes < declared_bytes` and no source file | `PATCH` the final chunk again | `204`; scratch is first truncated to `received_bytes`, the retried final chunk lands byte-for-byte at `source/{id}/original`, the asset reads `queued` with `received_bytes = declared_bytes`, and exactly one enqueue is recorded | integration | M11 |
+| B35 | An unsupported first chunk consumes the ticket before a waiting valid PATCH can advance it | Testcontainers PostgreSQL; a minted ticket; invalid PATCH A held inside its `ChunkPolicy` after taking the row lock; valid PATCH B waiting on that lock | release A, then observe both responses and the durable state | A answers `400 unsupported_media`; B does not advance the row; the asset reads `failed` with `received_bytes = 0` and reason `unsupported_source`; no source exists and no enqueue was recorded | integration `tus/server_test.go` + repository | M11 |
 | B28 | The render argv pins the Apple codec constraints | a 1920×1080 probe | build the render argv | it carries `-profile:v:N high` and `-pix_fmt:v:N yuv420p` on every rung, `-level:v:N 4.1` on the 360p and 720p rungs and **no `-level` on the 1080p rung**, plus `-profile:a:0 aac_low`, `-ac 2`, `-hls_time 6`, `-hls_flags independent_segments`, a `force_key_frames` expression of `expr:gte(t,n_forced*2)` per video stream, and the ladder ceilings 365k/3000k/6000k — and it interpolates no probed frame rate | unit `transcoder_test.go` | M08 |
 
 ### Refusals
@@ -1909,7 +1912,7 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | R40 | A chunked body cannot stream past the chunk cap | a valid ticket | `PATCH` a 9 MiB body with `Transfer-Encoding: chunked` and no `Content-Length` | the tus server's `MaxBytesReader` answers `413`, the scratch file is truncated back, and `HEAD` reports the unchanged offset — the case nginx's `Content-Length` check cannot see | integration | M10 |
 | R41 | A stranded row offers a retry instead of polling forever, at the threshold the server honours | the editor with a `queued` row 11 minutes old, a `queued` row seconds old, a `processing` row 41 minutes old and a `processing` row seconds old | inspect each | the 11-minute `queued` and the 41-minute `processing` render an enabled retry control; the two fresh rows render progress with no retry control — the client's thresholds are C6's 10 minutes and T9's 40 minutes, so no rendered control can answer `409` | component | M15 |
 
-Group counts: **11 happy, 33 boundary, 42 refusal = 86 rows.** Manual rows: 0. Every task
+Group counts: **11 happy, 35 boundary, 42 refusal = 88 rows.** Manual rows: 0. Every task
 except M01 owns at least one row; no row has two owners.
 
 **What round 5 proposed cutting, and what was cut.** The complexity lens named roughly half an
@@ -1941,14 +1944,14 @@ between tasks.
 | M02 | Migration `00005_media.sql` with its named CHECKs and three indexes; the course canary fix (real `00005` into the `fstest.MapFS` at `:195`, canary renumbered to `00006_failure.sql` at `:200`) | 1.5h | M01 | Testcontainers PostgreSQL (`make integration`) | B07, B08, B32 |
 | M03 | Media domain: `VideoAsset`, the six states and the T1–T9 matrix, `ClaimToken`, `StorageKey`, `Actor.CanEditLesson`, ticket bounds, `SourceProbe`/`AcceptSource`/`SelectLadder`, the error set; and the four port interfaces | 1.5h | — | Go unit tests, stdlib only (`make test`) | B17, R27 |
 | M03a | **Revise the M03 domain and port surface to §2.1**: `AcceptContainer` + `ContainerSniffBytes` and `FailureReason.Permanent()` in the domain, with table tests; `ChunkPolicy`/`CompletePolicy`/`PublishPolicy`, `Load`, the two-value `Claim`, `AppendChunk` replacing `BeginUpload`+`Advance`, `DeleteSwept`, `Head` on `MediaStorage`, and `ports.Job`. No adapter exists yet, so nothing downstream is broken by the change | 1h | M03 | Go unit tests, stdlib only (`make test`) | R43 |
-| M04 | Application use cases over fakes: mint/append/complete/cancel/list/retry, `Process` returning a `TranscodeOutcome`, `Sweep` and `Recover` — retry exhaustion, malformed source, no-op on ready/absent, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure | 2h | M03a | Go unit tests with fake ports (`make test`) | R14–R19, R31, R32, R33, R36, R42 |
+| M04 | Application use cases over fakes: mint/append-and-complete/cancel/list/retry, `Process` returning a `TranscodeOutcome`, `Sweep` and `Recover` — retry exhaustion, malformed source, no-op on ready/absent, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure | 2h | M03a | Go unit tests with fake ports (`make test`) | R14–R19, R31, R32, R33, R36, R42 |
 | M05 | Media repository writes: the mint transaction (join with `FOR SHARE OF courses`, `CanEditLesson`, generation assignment, insert, `23505` mapping), the guarded state UPDATEs on `(state, claim_token)`, the list and retry reads | 2h | M02, M04 | Testcontainers PostgreSQL (`make integration`) | P06, B16, B22, R28, R38 |
 | M06 | Publish, eviction, recovery and sweep queries: the publish-and-evict transaction, recovery classes C5/C6, reclaim classes C1–C4 | 1.75h | M05 | Testcontainers PostgreSQL (`make integration`) | B06, B14, B24, B29 |
 | M07 | Filesystem `MediaStorage`: key→path resolution in an owned root, `os.Root` opens, traversal and symlink refusal, truncate-and-append with `fsync`, atomic publish, purge with ENOENT-is-success, `Free` | 1.5h | M03 | Go integration against a tempdir, no database (`make integration`) | B11, B12 |
 | M08 | ffmpeg `Transcoder`: the argv builders — the Apple conformance constants (High/L4.1/yuv420p, AAC-LC stereo, `-hls_time 6`, `independent_segments`, the 2 s `force_key_frames` expression, the audio `agroup`, the 365k/3000k/6000k ceilings) and `force_divisible_by=2`; ffprobe JSON parsing; `exec.CommandContext` with `WaitDelay` | 1.75h | M03 | Go unit tests; process behaviour against `/bin/sleep` — **no ffmpeg needed** (`make test`) | B13, B21, B28, R20, R21 |
 | M09 | The API surface: the three operations, DTOs and bounds, the actor mapping, error mapping, `RegisterAdmin` on the 4a seam, `cmd/api` wiring, the OpenAPI paths/schemas/codes and generated output | 2h | M05 | Go contract tests against `openapi.yaml` (`make test`) | P01, P02, P07, B01, B04, B15, R01–R09, R22, R37, R39 |
 | M10 | The tus protocol server: `HEAD`/`PATCH`/`DELETE`, the D-2d write protocol (row lock, offset equality, truncate-to-column repair, fsync, guarded advance), the `MaxBytesReader` chunk cap, termination | 2h | M07, M09 | Testcontainers PostgreSQL (`make integration`) | B02, B03, R10, R11, R29, R30, R40 |
-| M11 | Completion and the third executable: the first-chunk sniff, the first-`PATCH` disk gate, the rename into `source/`, commit-then-enqueue and the crash-repair branch; `cmd/upload/main.go` with its readiness write probe; the Dockerfile `upload` stage | 1.75h | M10 | Testcontainers PostgreSQL + a tempdir storage adapter + fake queue (`make integration`); the image stage by `make build`, which is in the gate | P03, B18, B23, B31 |
+| M11 | Completion and the third executable: the atomic first-chunk sniff refusal, the first-`PATCH` disk gate, the rename into `source/`, commit-then-enqueue and both crash-repair branches; `cmd/upload/main.go` with its readiness write probe; the Dockerfile `upload` stage | 1.75h | M10 | Testcontainers PostgreSQL + a tempdir storage adapter + fake queue (`make integration`); the image stage by `make build`, which is in the gate | P03, B18, B23, B31, B34, B35 |
 | M12 | Worker wiring: the media handler on the mux, the payload, the claim guards and the step-2 retryable branch, the `ErrorHandler`, `Recover`-then-`Sweep` before `server.Start`, the two metrics with pre-initialised label values, `/status`; the `smoke.sh` handler assertion inverted and the `ffmpeg -version` assertion added | 1.5h | M06, M08, M11 | Compose (`make smoke`) | P10, B19, B33 |
 | M13 | Edge and topology: the `upload` Compose service and its limits, nginx's `upload` zone and `/uploads/` location, `nginx.depends_on`, the remaining `smoke.sh` assertions, README | 1h | M12 | Compose (`make smoke`) | R12, R13 |
 | M14 | Frontend adapter and application: domain types, the port including `cancelUpload`, zod schemas, the Orval-backed repository with business-code mapping, the hand-written tus client and its transport, `admin.ts` extension, the bounded poll predicate; regenerates Orval | 1.75h | M09 | Rstest with MSW (`make test`), `make check-generated` | P11, B09, R23 |
@@ -2311,3 +2314,69 @@ error is now surfaced.
 Method note: none of the three was a missing contract, and all three could have been
 silently worked around with code that runs. They surfaced because the brief gives Codex a
 discussion channel as well as a stop.
+
+## §20 — Amendment, 2026-09-06 (gate owner, during M11)
+
+M11 stopped and reported that the published port contract contradicts D-2d, and it is right.
+**The defect originates in §2.1**, the amendment written after M04's stop: it split the write
+into `AppendChunk(..., ChunkPolicy)` and `Complete(..., CompletePolicy)` — two transactions —
+while D-2d describes completion as the **terminal branch of the same transaction**, renaming
+scratch into `source/` before the single commit that writes `queued`.
+
+**The window this opens.** `AppendChunk` commits `received_bytes = declared_bytes` while the
+row is still `uploading`. A crash before the separate `Complete` transaction leaves an asset
+that no one can repair: `HEAD` reports the declared offset, so a conforming tus client
+considers the upload finished and sends no further `PATCH`; there is no source and no job,
+and the row is eventually swept as an expired upload. B31 covers the mirror window — source
+renamed while the column is still short — so nothing covered this one.
+
+**Amendment.** `AppendChunk` takes **both** policies. The repository invokes `ChunkPolicy` as
+before and, only on the terminal branch where the new offset reaches `declared_bytes`,
+invokes `CompletePolicy` (the rename into `source/`) before the single guarded UPDATE that
+commits `queued`. The application enqueues after that method returns, so commit-then-enqueue
+still holds and D-15's Redis-down exit is unchanged. `Complete` is removed unless a recovery
+caller needs it; if kept, its only caller must be named.
+
+**A new acceptance row** covers a crash after the final append and fsync but before the
+database commit, alongside B31's mirror case.
+
+Method note: this is the second contract defect in the same section, and both were caught by
+the implementer rather than by six rounds of gates. The gates checked whether the described
+mechanisms were correct; they did not check whether the port signatures could express them
+(M04) or whether the signatures contradicted the mechanism they served (M11). A port table is
+a contract, and a contract that disagrees with the decision it implements is a defect even
+when every method in it is individually sound.
+
+## §21 — Amendment, 2026-09-06 (gate owner, during M11)
+
+M11 raised a second contract defect, again in §2.1, and again it is accepted.
+
+**The conflict.** §2.1 states a blanket rule — every `ChunkPolicy` error aborts the
+transaction and leaves the row exactly as locked. D-8 requires the opposite for exactly one
+error: a failed first-chunk container sniff must **consume the ticket atomically**,
+`created → failed` with reason `unsupported_source`, answering `400` with no enqueue (B18).
+
+**The race the conflict opens.** Because the policy error rolls back and releases the row
+lock, the failure is written by a *separate* transaction. An invalid first `PATCH` A can
+release its lock, a valid `PATCH` B can advance the still-`created` asset, and A's guarded
+`Fail` then loses. The invalid chunk does not consume the ticket and can answer with a
+conflict or dependency error instead of the required `400`. B18's sequential case passes
+throughout, so nothing existing catches it.
+
+**Amendment.** `ErrUnsupportedSource` is `ChunkPolicy`'s one **terminal** outcome rather than
+an ordinary abort: still holding the row lock, `AppendChunk` writes `state='failed'`,
+`failure_reason='unsupported_source'`, keeps `received_bytes = 0` and commits, then returns
+the typed error for the application to map. Every other policy error aborts unchanged, and
+the application drops its separate `Fail` call. A new acceptance row holds the invalid first
+`PATCH` inside the policy until a valid one is waiting, and proves the invalid one answers
+`400`, the valid one cannot advance the row, the final state is `failed`, and neither source
+nor job exists.
+
+**Pattern, recorded so the next phase avoids it.** This is the third defect in §2.1, and all
+three share one cause: **§2.1 wrote blanket rules where the decisions it serves are
+specific.** "Every policy error aborts" reads as a clean invariant and silently contradicts
+D-8; "AppendChunk then Complete" reads as a clean decomposition and silently contradicts
+D-2d's single transaction; and the original method list carried no signatures at all. A
+contract section must be checked *against every decision it implements*, not merely for
+internal consistency — and none of the six gate rounds did that, because they were reading
+the mechanisms, not the seam between mechanism and signature.

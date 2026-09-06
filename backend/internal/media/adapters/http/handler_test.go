@@ -65,12 +65,8 @@ func (*mediaRepository) Load(context.Context, string) (mediadomain.VideoAsset, e
 	panic("unexpected Load")
 }
 
-func (*mediaRepository) AppendChunk(context.Context, string, int64, time.Time, ports.ChunkPolicy) (mediadomain.VideoAsset, error) {
+func (*mediaRepository) AppendChunk(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (mediadomain.VideoAsset, error) {
 	panic("unexpected AppendChunk")
-}
-
-func (*mediaRepository) Complete(context.Context, string, time.Time, ports.CompletePolicy) (mediadomain.VideoAsset, error) {
-	panic("unexpected Complete")
 }
 
 func (*mediaRepository) Cancel(context.Context, string, time.Time) error { panic("unexpected Cancel") }

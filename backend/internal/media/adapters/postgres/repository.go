@@ -159,7 +159,8 @@ func (repository *Repository) Mint(
 	return asset, nil
 }
 
-func (repository *Repository) AppendChunk(ctx context.Context, id string, offset int64, now time.Time, policy ports.ChunkPolicy) (domain.VideoAsset, error) {
+func (repository *Repository) AppendChunk(ctx context.Context, id string, offset int64, now time.Time,
+	chunkPolicy ports.ChunkPolicy, completePolicy ports.CompletePolicy) (domain.VideoAsset, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.VideoAsset{}, persistenceError(err)
@@ -179,58 +180,43 @@ func (repository *Repository) AppendChunk(ctx context.Context, id string, offset
 	if locked.ReceivedBytes != offset {
 		return domain.VideoAsset{}, domain.ErrInvalidStateTransition
 	}
-	newReceived, err := policy(locked)
+	newReceived, err := chunkPolicy(locked)
 	if err != nil {
+		if errors.Is(err, domain.ErrUnsupportedSource) {
+			result, updateErr := tx.Exec(ctx, `UPDATE video_assets
+				SET state='failed', failure_reason=$3, received_bytes=0, updated_at=$2
+				WHERE id=$1::text::uuid AND state='created' AND received_bytes=0
+				  AND expires_at>$2 AND evicted_at IS NULL`, id, now, domain.UnsupportedSource)
+			if updateErr != nil {
+				return domain.VideoAsset{}, persistenceError(updateErr)
+			}
+			if result.RowsAffected() != 1 {
+				return domain.VideoAsset{}, domain.ErrInvalidStateTransition
+			}
+			if commitErr := commit(ctx, tx); commitErr != nil {
+				return domain.VideoAsset{}, commitErr
+			}
+		}
 		return domain.VideoAsset{}, err
 	}
 	if newReceived < offset || newReceived > locked.DeclaredBytes {
 		return domain.VideoAsset{}, domain.ErrInvalidRequest
 	}
+	if newReceived == locked.DeclaredBytes {
+		completing := locked
+		completing.State = domain.Uploading
+		completing.ReceivedBytes = newReceived
+		if err := completePolicy(completing); err != nil {
+			return domain.VideoAsset{}, err
+		}
+	}
 	updated, err := scanAsset(tx.QueryRow(ctx, `UPDATE video_assets AS assets
-		SET received_bytes=$3, state='uploading', updated_at=$4
+		SET received_bytes=$3,
+			state=CASE WHEN $3=declared_bytes THEN 'queued' ELSE 'uploading' END,
+			updated_at=$4
 		WHERE id=$1::text::uuid AND received_bytes=$2
 		  AND state IN ('created','uploading') AND expires_at>$4 AND evicted_at IS NULL
 		RETURNING `+mediaAssetColumns, id, offset, newReceived, now))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.VideoAsset{}, domain.ErrInvalidStateTransition
-	}
-	if err != nil {
-		return domain.VideoAsset{}, persistenceError(err)
-	}
-	if err := commit(ctx, tx); err != nil {
-		return domain.VideoAsset{}, err
-	}
-	return updated, nil
-}
-
-func (repository *Repository) Complete(ctx context.Context, id string, now time.Time, policy ports.CompletePolicy) (domain.VideoAsset, error) {
-	tx, err := repository.pool.Begin(ctx)
-	if err != nil {
-		return domain.VideoAsset{}, persistenceError(err)
-	}
-	defer rollback(tx)
-	now = storeTime(now)
-	locked, err := scanAsset(tx.QueryRow(ctx, lockMediaAsset, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.VideoAsset{}, domain.ErrVideoNotFound
-	}
-	if err != nil {
-		return domain.VideoAsset{}, persistenceError(err)
-	}
-	if !activeUpload(locked, now) {
-		return domain.VideoAsset{}, domain.ErrVideoNotFound
-	}
-	if locked.State != domain.Uploading || locked.ReceivedBytes != locked.DeclaredBytes {
-		return domain.VideoAsset{}, domain.ErrInvalidStateTransition
-	}
-	if err := policy(locked); err != nil {
-		return domain.VideoAsset{}, err
-	}
-	updated, err := scanAsset(tx.QueryRow(ctx, `UPDATE video_assets AS assets
-		SET state='queued', updated_at=$2
-		WHERE id=$1::text::uuid AND state='uploading'
-		  AND received_bytes=declared_bytes AND expires_at>$2 AND evicted_at IS NULL
-		RETURNING `+mediaAssetColumns, id, now))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.VideoAsset{}, domain.ErrInvalidStateTransition
 	}

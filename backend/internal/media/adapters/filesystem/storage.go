@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -45,6 +46,26 @@ func New(rootPath string) (*Storage, error) {
 
 func (storage *Storage) Close() error {
 	return storage.root.Close()
+}
+
+func (storage *Storage) Ready(ctx context.Context) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return err
+	}
+	name := path.Join(string(domain.StorageTemporary), ".ready-"+hex.EncodeToString(random))
+	file, err := storage.root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, file.Close(), storage.root.RemoveAll(name)) }()
+	if _, err := file.Write([]byte{0}); err != nil {
+		return err
+	}
+	return file.Sync()
 }
 
 func (storage *Storage) Free(ctx context.Context) (free int64, err error) {

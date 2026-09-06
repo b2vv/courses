@@ -196,6 +196,20 @@ func TestFreeReturnsPositiveBytes(t *testing.T) {
 	}
 }
 
+func TestReadyWritesAndRemovesItsProbe(t *testing.T) {
+	storage, rootPath := openTestStorage(t)
+	if err := storage.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(rootPath, "temporary"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temporary entries after readiness probe = %+v", entries)
+	}
+}
+
 func openTestStorage(t *testing.T) (*Storage, string) {
 	t.Helper()
 	rootPath := t.TempDir()

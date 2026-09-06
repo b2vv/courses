@@ -413,25 +413,26 @@ func (h *mediaHarness) testLifecycleWrites(t *testing.T) {
 	policyFailure := errors.New("storage unavailable")
 	if _, err := h.repository.AppendChunk(h.ctx, asset.ID, 0, mediaNow, func(domain.VideoAsset) (int64, error) {
 		return 0, policyFailure
-	}); !errors.Is(err, policyFailure) {
+	}, func(domain.VideoAsset) error { return nil }); !errors.Is(err, policyFailure) {
 		t.Fatalf("append policy error=%v", err)
 	}
 	if stored, err := h.repository.Load(h.ctx, asset.ID); err != nil || stored.State != domain.Created || stored.ReceivedBytes != 0 {
 		t.Fatalf("after refused append asset=%+v err=%v", stored, err)
 	}
-	asset, err = h.repository.AppendChunk(h.ctx, asset.ID, 0, mediaNow.Add(time.Second), func(locked domain.VideoAsset) (int64, error) {
+	if _, err := h.repository.AppendChunk(h.ctx, asset.ID, 0, mediaNow.Add(time.Second), func(locked domain.VideoAsset) (int64, error) {
 		if locked.State != domain.Created || locked.ReceivedBytes != 0 {
 			t.Fatalf("append policy asset=%+v", locked)
 		}
 		return locked.DeclaredBytes, nil
-	})
-	if err != nil || asset.State != domain.Uploading || asset.ReceivedBytes != asset.DeclaredBytes {
-		t.Fatalf("appended asset=%+v err=%v", asset, err)
-	}
-	if _, err := h.repository.Complete(h.ctx, asset.ID, mediaNow.Add(2*time.Second), func(domain.VideoAsset) error { return policyFailure }); !errors.Is(err, policyFailure) {
+	}, func(domain.VideoAsset) error { return policyFailure }); !errors.Is(err, policyFailure) {
 		t.Fatalf("complete policy error=%v", err)
 	}
-	asset, err = h.repository.Complete(h.ctx, asset.ID, mediaNow.Add(2*time.Second), func(locked domain.VideoAsset) error {
+	if stored, err := h.repository.Load(h.ctx, asset.ID); err != nil || stored.State != domain.Created || stored.ReceivedBytes != 0 {
+		t.Fatalf("after refused completion asset=%+v err=%v", stored, err)
+	}
+	asset, err = h.repository.AppendChunk(h.ctx, asset.ID, 0, mediaNow.Add(2*time.Second), func(locked domain.VideoAsset) (int64, error) {
+		return locked.DeclaredBytes, nil
+	}, func(locked domain.VideoAsset) error {
 		if locked.State != domain.Uploading || locked.ReceivedBytes != locked.DeclaredBytes {
 			t.Fatalf("complete policy asset=%+v", locked)
 		}
