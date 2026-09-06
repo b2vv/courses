@@ -2449,3 +2449,28 @@ carry a valid container prefix, pass ffprobe and reach `ready` as a "successful"
   same reason; we do not attest an identity we cannot check.
 Never splice unverified bytes. `declaredBytes` must still match. R44 owns both refusals in
 M14; M15 owns the cancel-and-restart affordance.
+
+## §25 — Amendments, 2026-09-07 (gate owner, during M16)
+
+**1. §23's own correction was insufficient, and the flaw is mine.** §23 moved half of R13 to
+M16 so the six refusals would be re-checked *after* a transcode, because an existence-
+dependent edge rule could refuse a missing path while serving a published one. But R13 names
+the literal path `/media/x/master.m3u8`, which **is still missing after the transcode** — so
+repeating those six requests proves exactly what the pre-transcode run proved, and the leak
+§23 was written to catch would pass all six. **Amended:** M13 keeps the literal matrix
+pre-transcode; **M16's post-transcode check uses the real published path**,
+`/media/hls/{publishedVideoId}/master.m3u8`. A refusal for a path that exists is the only
+thing that proves publication privacy.
+
+**2. P05/P08 as written are flaky by construction.** They ask the main 640×360 journey to
+visibly pass through `processing`, but §5.f records that the 2-second fixtures render in well
+under a second while D-12 polls every 3 seconds: the asset can legitimately move
+`queued → processing → ready` between two polls, so a **correct** product would fail
+intermittently. That is precisely why §5.f generates a 5-minute clip. **Amended:** the
+640×360 journey owns determinate upload progress, `ready`, and reload-stable `ready`; the
+`processing → ready` observation without navigation is co-asserted in **R35's long-fixture
+test**, which already must observe `processing` before restarting the worker.
+
+Method note: both defects are of the same family as §19–§21 — a rule that reads correctly in
+prose and cannot hold at runtime. Here the tell was arithmetic that nobody did: render time
+under a second against a three-second poll.
