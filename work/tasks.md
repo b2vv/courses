@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phases 5–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 (media upload) у роботі (нижче); Phases 6–8 не починалися.
 
 ## Phase 3 — Identity
 
@@ -105,3 +105,29 @@ Compose і фікстур, тобто не може бігти раніше за
 | T07 | Маршрут `/admin/users` і в'юхи: список, таби, per-row дії, `ResetPasswordDialog`, стани, гард `canAdministerAccounts`, uk/en, a11y | 2h | T06 | done | `work/report-t07.md`; P07, B02, R21, R24; review: button-name + removed a runner-hanging redundant test; gates pass |
 | T08 | Браузерна подорож `admin-users.spec.ts` на disposables (спільний storageState, 0 логінів); direct-API відмова; розширення route-guards | 1h | T07 | done | `work/report-t08.md`; P08, R20; e2e 30/30 twice, budget total=7 |
 | T09 | Впорядкований гейт і звіт: повний `make check` з чистого чекаута; секція звіту 4b | 1h | T01–T08 | done | `docs/admin/report-4b.md`; B10; full `make check` exit 0 (293 frontend tests, e2e 30/30) |
+
+## Phase 5 — Media upload and transcoding
+
+Джерело scope: [spec](../docs/media/spec.md) (GATE 1 закрито, Q2 амендовано 2026-09-06). План редакції 3.3, GATE 2 зелений після **шести раундів** ([plan](../docs/media/plan.md), [gates](../docs/media/gates.md)); дослідження кодеків — [research-codecs.md](../docs/media/research-codecs.md). Виконавець коду — Codex; кожен гейт переганяється тут перед комітом.
+
+**Три речі, які цей план коштував гейтам і які не можна загубити при виконанні:** ffmpeg воркера — **5.1.9** (не хостовий 7.1.1), і будь-який доказ мусить називати бінар і місце запуску; `/media/*` лишається **403** на edge протягом усієї фази; API-композиція **не має адаптера сховища** — байти не проходять крізь Go API.
+
+| ID | Назва | Estimate | Depends on | Status | Owns |
+|---|---|---:|---|---|---|
+| M01 | ADR 008 (tus-інгест) і ADR 009 (fMP4/CMAF, `init_N.mp4`) | 0.5h | GATE 2 green | in_progress | — (докази: самі ADR) |
+| M02 | Міграція `00005_media.sql` з іменованими CHECK і трьома індексами; фікс канарки 00005→00006 | 1.5h | M01 | planned | B07, B08, B32 |
+| M03 | Домен медіа: `VideoAsset`, шість станів і матриця T1–T9, `ClaimToken`, `StorageKey`, `Actor.CanEditLesson`, `SelectLadder`; чотири порти | 1.5h | — | planned | B17, R27 |
+| M04 | Use cases на фейках: mint/begin/append/complete/cancel/list/retry, `Process` із гардами claim-token, `Sweep`, `Recover` | 2h | M03 | planned | R14–R19, R31–R33, R36, R42 |
+| M05 | Репозиторій: mint-транзакція (`FOR SHARE OF courses`, `CanEditLesson`, generation, `23505`), guarded UPDATE на `(state, claim_token)` | 2h | M02, M04 | planned | P06, B16, B22, R28, R38 |
+| M06 | Publish/eviction/recovery/sweep: транзакція публікації з витісненням, класи C5/C6 і C1–C4 | 1.75h | M05 | planned | B06, B14, B24, B29 |
+| M07 | Filesystem `MediaStorage`: `os.Root`, відмова traversal/symlink, truncate-and-append з `fsync`, атомарний publish, `Free` | 1.5h | M03 | planned | B11, B12 |
+| M08 | ffmpeg `Transcoder`: argv із Apple-константами й `force_divisible_by=2`, парсинг ffprobe, `WaitDelay` — **без потреби в ffmpeg** | 1.75h | M03 | planned | B13, B21, B28, R20, R21 |
+| M09 | API-поверхня: три операції на шві 4a, DTO/межі, error mapping, OpenAPI+generate | 2h | M05 | planned | P01, P02, P07, B01, B04, B15, R01–R09, R22, R37, R39 |
+| M10 | tus-сервер: `HEAD`/`PATCH`/`DELETE`, протокол запису D-2d, `MaxBytesReader` | 2h | M07, M09 | planned | B02, B03, R10, R11, R29, R30, R40 |
+| M11 | Завершення й третій виконуваний файл: sniff першого чанка, дисковий gate, rename у `source/`, commit-then-enqueue; `cmd/upload`; стадія Dockerfile | 1.75h | M10 | planned | P03, B18, B23, B31 |
+| M12 | Обв'язка воркера: хендлер на mux, гарди claim, `Recover`+`Sweep` до `server.Start`, метрики, `/status`; smoke з `ffmpeg -version` | 1.5h | M06, M08, M11 | planned | P10, B19, B33 |
+| M13 | Edge і топологія: сервіс `upload` у Compose, зона й локація `/uploads/` у nginx, README | 1h | M12 | planned | R12, R13 |
+| M14 | Фронтовий адаптер: типи, порт із `cancelUpload`, zod, репозиторій, tus-клієнт, поллінг | 1.75h | M09 | planned | P11, B09, R23 |
+| M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | planned | P09, B20, R24, R25, R41 |
+| M16 | Браузерна подорож: `media.setup.ts` (чотири кліпи), `media.spec.ts` — upload→processing→ready, сходинки, плейлист проти цільового бінаря, рестарт у спостережений `processing` | 1.75h | M13, M15 | planned | P04, P05, P08, B05, B25–B27, B30, R26, R35 |
+| M17 | Впорядкований гейт і звіт: повний `make check`, `docs/media/report.md` | 1h | M01–M16 | planned | B10 |
