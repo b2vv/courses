@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Дата | 2026-09-05 |
-| Базовий коміт | `dc4aac4` |
-| Всього комітів у репо | 75 (`git rev-list --count HEAD`) |
+| Базовий коміт | `0c46f10` |
+| Всього комітів у репо | 93 (`git rev-list --count HEAD`) |
 | Гейт свіжості цього прогону | 17 комітів від `c8d2324` — уся Phase 4a (admin course CRUD, авторизаційний шов, публічна програма). Оновлено архітектурний факт №1 (серверна авторизація тепер ІСНУЄ), §2 (нові seams authoring), §5 (react-hook-form додано). Повне перезбирання відкладене; наступний значущий план — запустити `cto-research` начисто. |
 
 Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело.
@@ -15,7 +15,7 @@
 
 **Продукт.** Self-hosted платформа продажу онлайн-курсів (вихідне ТЗ: `work/PRODUCT-BRIEF.md`). Працює: публічний каталог із пошуком, повна сесійна автентифікація — логін, SSR-хедер із користувачем, logout, гарди `/learn` і `/admin` за роллю, три локальні фікстури. Постачання — Docker Compose на одному хості, Nginx на `127.0.0.1`; деплой-таргета немає. Масштаб даних: 2 міграції, каталог ≤50 на сторінку.
 
-**Поточний стан.** Phases 1–3 закриті: `make check` — exit 0 по дванадцяти кроках, 175 фронт-тестів, e2e 20/20 (`docs/identity/report.md` §I06 п.4). Черга задач порожня (`work/tasks.md`). Роадмап Phase 4–8 — `work/PRODUCT-BRIEF.md` §21 з уточненнями §24.
+**Поточний стан.** Phases 1–4 закриті (4a admin course CRUD, 4b identity-адміністрування; `make check` exit 0, e2e 30/30). Раніше: Phases 1–3 закриті: `make check` — exit 0 по дванадцяти кроках, 175 фронт-тестів, e2e 20/20 (`docs/identity/report.md` §I06 п.4). Черга задач порожня (`work/tasks.md`). Роадмап Phase 4–8 — `work/PRODUCT-BRIEF.md` §21 з уточненнями §24.
 
 **Живий P0.** Специфікація Phase 4 (admin CRUD курсів/модулів/уроків + publish/archive workflow) через spec-flow. Зафіксовані вимоги до спеки з першого дня: `instructor_id` у першій міграції, handler-level авторизація з першим ендпоїнтом, RHF/TanStack Table в'їжджають зі споживачами (`work/PRODUCT-BRIEF.md` §24, `docs/identity/report.md` §I06 п.9).
 
@@ -129,6 +129,17 @@
 | Надлишкова рання перевірка в `safeReturnTo` — свідомий пояс на trust boundary | — | `work/report-i06c.md` |
 | Worker стартує, задач не обробляє | Phase 5 | `README.md:59`, `backend/cmd/media-worker/main.go` |
 | Індетермінований commit → 503 без куки, свідомо | — | `docs/identity/spec.md` §Security contract |
+
+**Стан медіа-підсистеми перед Phase 5 (перевірено в коді 2026-09-06):**
+
+| Що | Факт | Джерело |
+|---|---|---|
+| media-worker | Asynq-сервер із **порожнім** `NewServeMux()` — жодного хендлера чи продюсера; невідомі задачі падають видимо, а не вдають транскодинг | `backend/cmd/media-worker/main.go:50` |
+| ffmpeg | Уже в образі воркера | `backend/Dockerfile:31` |
+| Том | `media-data` — writable у воркера (`/media`), read-only в nginx (`/media:ro`) | `docker-compose.yml:88,117` |
+| Публічний доступ | `/media` і `/media/` → **403** на edge; байти нікуди не віддаються | `infrastructure/nginx/nginx.conf:44-45` |
+| Модуль | `internal/media` **не існує**; домену VideoAsset/Upload/TranscodingJob немає | `backend/internal/` |
+| Ліміт тіла | `client_max_body_size 1m` — на два порядки менший за відеофайл | `infrastructure/nginx/nginx.conf` |
 
 **Де найкрихкіше:**
 
