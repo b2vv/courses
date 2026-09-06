@@ -127,7 +127,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | M10 | tus-сервер: `HEAD`/`PATCH`/`DELETE`, протокол запису D-2d, `MaxBytesReader` | 2h | M07, M09 | done | `work/report-m10.md`; B02, B03, R10, R11, R29, R30, R40; 3 discussion items accepted (plan §19) |
 | M11 | Завершення й третій виконуваний файл: sniff першого чанка, дисковий gate, rename у `source/`, commit-then-enqueue; `cmd/upload`; стадія Dockerfile | 1.75h | M10 | done | `work/report-m11.md`; P03, B18, B23, B31 + B34, B35 (new, §20/§21); build exit 0 with the upload stage |
 | M12 | Обв'язка воркера: хендлер на mux, гарди claim, `Recover`+`Sweep` до `server.Start`, метрики, `/status`; smoke з `ffmpeg -version` | 1.5h | M06, M08, M11 | done | `work/report-m12.md`; P10, B19, B33; smoke exit 0 printing ffmpeg 5.1.9 |
-| M13 | Edge і топологія: сервіс `upload` у Compose, зона й локація `/uploads/` у nginx, README | 1h | M12 | planned | R12, R13 |
+| M13 | Edge і топологія: сервіс `upload` у Compose, зона й локація `/uploads/` у nginx, README | 1h | M12 | done | `work/report-m13.md`; R12, R13 (pre-transcode half; post half to M16 per §23); smoke exit 0 |
 | M14 | Фронтовий адаптер: типи, порт із `cancelUpload`, zod, репозиторій, tus-клієнт, поллінг | 1.75h | M09 | planned | P11, B09, R23 |
 | M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | planned | P09, B20, R24, R25, R41 |
 | M16 | Браузерна подорож: `media.setup.ts` (чотири кліпи), `media.spec.ts` — upload→processing→ready, сходинки, плейлист проти цільового бінаря, рестарт у спостережений `processing` | 1.75h | M13, M15 | planned | P04, P05, P08, B05, B25–B27, B30, R26, R35 |

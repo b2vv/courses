@@ -96,6 +96,30 @@ services:
       retries: 15
     read_only: true
     tmpfs: [/tmp]
+  upload:
+    <<: *runtime
+    build: { context: ./backend, dockerfile: Dockerfile, target: upload }
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-courses}
+      POSTGRES_USER: ${POSTGRES_USER:-courses}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run make env}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run make env}
+      HTTP_ADDR: ':8082'
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    volumes: [media-data:/media]
+    mem_limit: 512m
+    pids_limit: 64
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', '--max-time', '3', 'http://127.0.0.1:8082/readyz']
+      interval: 5s
+      timeout: 4s
+      retries: 15
+    read_only: true
+    tmpfs: [/tmp]
   frontend:
     <<: *runtime
     build: { context: ., dockerfile: frontend/Dockerfile, target: production }
@@ -119,6 +143,7 @@ services:
       api: { condition: service_healthy }
       frontend: { condition: service_healthy }
       media-worker: { condition: service_healthy }
+      upload: { condition: service_healthy }
     healthcheck:
       test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz']
       interval: 5s

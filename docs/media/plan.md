@@ -2395,3 +2395,20 @@ keep their exact `queued`/`failed` values. A fabricated state is worse than an h
 absence: an operator reading `failed` would hunt for a retry control while the row sits
 `queued`, or read `queued` and assume it is safe while it is still `processing` after a
 failed terminal write.
+
+## §23 — Amendments, 2026-09-06 (gate owner, during M13)
+
+**1. R13's evidence was assigned to a task that cannot produce half of it.** The row requires
+the six path/auth combinations to answer `403` both **before and after** a successful
+transcode, but M13 is a Compose/smoke task and the first successful transcode belongs to M16
+under `make e2e`. The half that matters most is the one M13 could not run: an
+existence-dependent edge rule could refuse missing media and still expose a *published*
+file, and a pre-transcode smoke would pass throughout. **R13 is split**: M13 owns the six
+pre-transcode variants under `make smoke`; **M16 repeats the same six after its asset reaches
+`ready`**, under `make e2e`. Same shape as B19's smoke-runs-before-e2e correction.
+
+**2. `AGENTS.md` was left stale for the whole phase.** It still named Phase 4 as the current
+delivery and forbade claiming working uploads, while M13 documents the upload topology in the
+README. The plan had parked that update in M17, which means the repository's binding document
+would have been wrong for the entire phase rather than for a moment at the end. The
+current-delivery line is corrected **now**; M17 still owns the final closing statement.

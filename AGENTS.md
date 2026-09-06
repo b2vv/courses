@@ -2,8 +2,8 @@
 
 ## Scope and delivery
 - Read the repository briefing first: [work/CTO-RESEARCH.md](work/CTO-RESEARCH.md). It caches primary sources; where it disagrees with the code, the code wins and the briefing is rewritten.
-- Foundation, public catalog and identity (Phases 1–3) are complete. Current delivery: admin course management (Phase 4).
-- Phase 4 and later remain roadmap work; do not claim working admin CRUD, playback, uploads, payments, comment threads, student progress or an instructor workspace. The phase roadmap lives in `work/PRODUCT-BRIEF.md` §21/§24; the current move ranking in `work/AGENDA.md`.
+- Foundation, public catalog, identity and admin course management (Phases 1–4) are complete. Current delivery: media upload and transcoding (Phase 5).
+- Phase 6 and later remain roadmap work; do not claim working playback, payments, comment threads, student progress or an instructor workspace. Uploads and transcoding are in flight in Phase 5 — claim only what the phase report records as measured. The phase roadmap lives in `work/PRODUCT-BRIEF.md` §21/§24; the current move ranking in `work/AGENDA.md`.
 - Read the current phase's `docs/<phase>/plan.md` and `work/tasks.md`; execute one logical slice at a time.
 - Preserve existing work. Never commit secrets, `.env`, media bytes or dependency caches.
 - Use small logical commits and record current-phase verification, limitations and next task in the current phase's `docs/<phase>/report.md`.

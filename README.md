@@ -2,7 +2,7 @@
 
 Self-hosted online-course platform foundation. Current scope: a public catalog vertical slice and session-based identity, with infrastructure for later administration, private HLS and transcripts. No payment provider or automatic transcription is connected.
 
-Stack: React 19, strict TypeScript, TanStack Start/Router/Query, Rsbuild/Rspack, Tailwind 4, React Aria and request-scoped i18next; Go 1.27.1 modular monolith, pgx/sqlc/Goose, PostgreSQL 17, Redis/Asynq, FFmpeg worker image and Nginx. Rstest, Testing Library, MSW, Playwright, Oxlint/Oxfmt and Go/Testcontainers supply checks.
+Stack: React 19, strict TypeScript, TanStack Start/Router/Query, Rsbuild/Rspack, Tailwind 4, React Aria and request-scoped i18next; Go 1.27.1 modular monolith, pgx/sqlc/Goose, PostgreSQL 17, Redis/Asynq, a dedicated upload service, FFmpeg worker image and Nginx. Rstest, Testing Library, MSW, Playwright, Oxlint/Oxfmt and Go/Testcontainers supply checks.
 
 ## Start
 
@@ -25,6 +25,11 @@ make seed
 Run that target only in a local development database. `make down` preserves volumes.
 
 URLs: [home](http://localhost:8080), [catalog](http://localhost:8080/courses), [API](http://localhost:8080/api/v1/courses), [health](http://localhost:8080/healthz). Change HTTP_PORT in `.env` when needed. Base Compose exposes only Nginx on loopback. `make dev` enables frontend source watching and loopback database/API ports.
+
+Nginx routes chunked tus requests under `/uploads/` to the dedicated upload service. That
+service writes the shared `media-data` volume; the media worker reads and writes it, while
+Nginx mounts it read-only. The API and SSR server never proxy media bytes. `/media` and every
+path below it remain forbidden with `403`, so this topology does not expose playback.
 
 ## Development checks
 
@@ -57,6 +62,6 @@ work/              Task states and completion pointers
 
 ## Foundation limitations
 
-Admin CRUD, upload/transcoding, signed playback, synchronized transcript and orders are future phases. Client route guards are navigation convenience only; server-side role authorization begins with Phase 4's first protected endpoint. `/media` is deliberately forbidden; the worker starts but does not process transcoding tasks. Domain vocabulary and planned storage/transcription seams are documented before implementation. Advanced UI/player/editor dependencies are installed only with real consumers.
+The browser upload UI, signed playback, synchronized transcript and orders remain future work. Client route guards are navigation convenience only; protected operations rely on server-side authorization. `/media` is deliberately forbidden even though the dedicated upload service and media worker are wired into the Compose topology. Advanced UI/player dependencies are installed only with real consumers.
 
 No DRM is claimed. Before public deployment add TLS, managed secrets, backups/restores, storage quotas and the remaining authorization gates. Optional monitoring starts with `docker compose --profile monitoring up -d`; metrics stay internal. Follow [local setup](docs/development/local-setup.md), [troubleshooting](docs/development/troubleshooting.md), [architecture](docs/architecture/context.md) and [ADR decisions](docs/adr/001-modular-monolith.md).
