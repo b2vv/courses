@@ -116,3 +116,18 @@ Environment note: two integration runs failed on Testcontainers startup
 infrastructure flakiness, confirmed by a clean re-run — recorded so a later reader does not
 mistake it for a code defect. Provenance: implemented with Codex (gpt-5.6-sol); reviewed,
 corrected and verified here.
+
+## Flake found and fixed after M08 (reviewing session)
+
+R38's `generation index` subtest failed once in roughly five runs. The non-determinism was
+in the test, not the code: that subtest drops the pending index so the generation index is
+the one under test, but `Mint` holds the course row `FOR SHARE`, which does not serialise
+the `MAX(generation)` read. A staggered pair therefore computes two distinct generations and
+both legitimately succeed — an outcome PostgreSQL never promised would be a collision. The
+`pending index` subtest has no such gap: with that index present every interleaving
+conflicts, so it keeps its strict one-success/one-conflict assertion.
+
+The generation subtest now retries the race until it collides (bounded at 50 attempts,
+cleaning up the non-colliding rows between tries) and fails only if it never collides, so
+the 23505→`ErrUploadInProgress` mapping stays proven without asserting an outcome the
+database does not guarantee. Four consecutive `make integration` runs: zero failures.

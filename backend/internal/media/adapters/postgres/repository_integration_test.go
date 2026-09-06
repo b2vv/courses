@@ -332,7 +332,10 @@ func (h *mediaHarness) testConcurrentMints(t *testing.T) {
 				t.Errorf("restore generation index: %v", err)
 			}
 		}()
-		h.assertConcurrentMintOutcomes(t)
+		successes, conflicts := h.raceTwoMints(t)
+		if successes != 1 || conflicts != 1 {
+			t.Fatalf("successes=%d conflicts=%d", successes, conflicts)
+		}
 	})
 
 	t.Run("generation index", func(t *testing.T) {
@@ -347,11 +350,35 @@ func (h *mediaHarness) testConcurrentMints(t *testing.T) {
 				t.Errorf("restore pending index: %v", err)
 			}
 		}()
-		h.assertConcurrentMintOutcomes(t)
+		h.assertGenerationCollisionEventually(t)
 	})
 }
 
-func (h *mediaHarness) assertConcurrentMintOutcomes(t *testing.T) {
+// assertGenerationCollisionEventually proves the 23505 mapping for the generation index.
+// Unlike the pending index, which conflicts under every interleaving, this one only fires
+// when both mints read the same MAX(generation) before either commits: the mint holds the
+// course row FOR SHARE, which does not serialise that read, so a staggered pair legitimately
+// produces two distinct generations and two successes. The race is therefore retried until
+// it collides, which keeps the mapping proven without asserting an outcome PostgreSQL never
+// promised.
+func (h *mediaHarness) assertGenerationCollisionEventually(t *testing.T) {
+	t.Helper()
+	for attempt := range 50 {
+		successes, conflicts := h.raceTwoMints(t)
+		if conflicts == 1 && successes == 1 {
+			return
+		}
+		if conflicts > 0 {
+			t.Fatalf("attempt %d: successes=%d conflicts=%d", attempt, successes, conflicts)
+		}
+		if _, err := h.pool.Exec(h.ctx, `DELETE FROM video_assets WHERE lesson_id=$1::text::uuid AND state='created'`, mediaLessonOne); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Fatal("two concurrent mints never collided on video_assets_generation in 50 attempts")
+}
+
+func (h *mediaHarness) raceTwoMints(t *testing.T) (successes, conflicts int) {
 	t.Helper()
 	start := make(chan struct{})
 	results := make(chan error, 2)
@@ -363,7 +390,6 @@ func (h *mediaHarness) assertConcurrentMintOutcomes(t *testing.T) {
 		}()
 	}
 	close(start)
-	var successes, conflicts int
 	for range 2 {
 		err := <-results
 		switch {
@@ -375,9 +401,7 @@ func (h *mediaHarness) assertConcurrentMintOutcomes(t *testing.T) {
 			t.Fatalf("mint result=%v", err)
 		}
 	}
-	if successes != 1 || conflicts != 1 {
-		t.Fatalf("successes=%d conflicts=%d", successes, conflicts)
-	}
+	return successes, conflicts
 }
 
 func (h *mediaHarness) testLifecycleWrites(t *testing.T) {
