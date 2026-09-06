@@ -14,6 +14,9 @@ type SourceProbe struct {
 	Height     int
 	VideoCodec string
 	AudioCodec string
+	// DurationSeconds is what the thumbnail's seek position depends on: D-11 seeks to
+	// one second, or to zero when the source is shorter than that.
+	DurationSeconds float64
 }
 
 func AcceptContainer(head []byte) error {

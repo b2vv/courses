@@ -2228,3 +2228,29 @@ had already solved this once — `StatusPolicy`/`DeletePolicy` in
 `identity/ports/administration.go` — and this plan cited that file as a reuse precedent without
 carrying its shape across. The general rule for later phases: **when a decision says "inside the
 same transaction", the port table owes a signature, not a name.**
+
+## §17 — Amendment, 2026-09-06 (gate owner, during M08)
+
+M08 stopped before implementing the ffmpeg adapter and reported a contract gap, correctly.
+D-11's thumbnail branch seeks to one second, or to zero when the source is shorter than
+that — but `domain.SourceProbe` carried no duration and `ports.Transcoder.Thumbnail`
+received no probe, so the adapter could not decide the argument. Always emitting `-ss 1`
+would break the sub-second branch; a private second probe inside the adapter would be a
+workaround.
+
+Repair applied (forced, single sensible shape — a repair, not a design fork):
+
+- `domain.SourceProbe` gains `DurationSeconds float64`, documented as existing for the
+  thumbnail seek.
+- `ports.Transcoder.Thumbnail` gains a `domain.SourceProbe` parameter.
+- `application.Transcode.Process` threads the probe it already holds into the call.
+
+Note for later phases: `duration_seconds` was dropped in an earlier gate round as a field
+with no consumer. That was true of the *asset row* and false of the *probe* — a decision in
+this same document needed it. Removing a field for want of a consumer is right; the check
+should be "no consumer **in this document**", not "no consumer in the schema".
+
+A second item was a briefing error, not a plan defect: the M08 brief said cancellation
+"kills the process group", while D-10 records the opposite — `exec.CommandContext`'s
+default direct-process SIGKILL plus `WaitDelay`, explicitly **no `Setpgid`, no
+process-group signalling**. The brief was corrected; D-10 stands.

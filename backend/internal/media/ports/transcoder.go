@@ -9,5 +9,5 @@ import (
 type Transcoder interface {
 	Probe(context.Context, domain.StorageKey) (domain.SourceProbe, error)
 	Render(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error
-	Thumbnail(context.Context, domain.StorageKey, domain.StorageKey) error
+	Thumbnail(context.Context, domain.StorageKey, domain.StorageKey, domain.SourceProbe) error
 }

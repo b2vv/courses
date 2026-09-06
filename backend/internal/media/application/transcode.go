@@ -112,7 +112,7 @@ func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (Transco
 	if err := transcode.transcoder.Render(callCtx, source, work, renditions); err != nil {
 		return transcode.transcoderFailure(callCtx, job, token, err, domain.RenderFailed)
 	}
-	if err := transcode.transcoder.Thumbnail(callCtx, source, workThumbnail); err != nil {
+	if err := transcode.transcoder.Thumbnail(callCtx, source, workThumbnail, probe); err != nil {
 		return transcode.transcoderFailure(callCtx, job, token, err, domain.RenderFailed)
 	}
 

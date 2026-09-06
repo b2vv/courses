@@ -29,7 +29,7 @@ func (transcoder *fakeTranscoder) Render(ctx context.Context, source, work domai
 	return transcoder.render(ctx, source, work, renditions)
 }
 
-func (transcoder *fakeTranscoder) Thumbnail(ctx context.Context, source, destination domain.StorageKey) error {
+func (transcoder *fakeTranscoder) Thumbnail(ctx context.Context, source, destination domain.StorageKey, probe domain.SourceProbe) error {
 	transcoder.calls = append(transcoder.calls, "thumbnail")
 	return transcoder.thumbnail(ctx, source, destination)
 }
