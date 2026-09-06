@@ -1823,7 +1823,7 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | P08 | The full browser journey | Compose up; the fixture generated; admin `storageState` | sign in as admin, open a course editor, choose the clip on a saved lesson, wait | the progress bar advances, the lesson shows `processing` and then `ready`, and a reload still shows `ready` | e2e | M16 |
 | P09 | The editor renders the control and the progress | a loaded tree with one saved lesson | choose a file in the component test | the `FileUpload` control is present for that lesson and a determinate `ProgressBar` renders while the mocked transfer runs | component `LessonVideoField.test.tsx` | M15 |
 | P10 | The worker registers the media handler | Compose up | `GET /status` on the worker | `handlers` is exactly `["media:transcode"]` and `stage` is `"media"` | `make smoke` | M12 |
-| P11 | Polling runs only while work is in flight | MSW answering `processing`, then `ready`, and separately a lone `created` row | mount the editor and let two intervals pass in each case | requests continue while a row is `queued`/`processing` and **stop** at `ready`; a lone `created` row with no transfer in this tab produces **no** polling at all | component with MSW | M14 |
+| P11 | Polling runs only while work is in flight | a QueryObserver over MSW answering `processing`, then `ready`, and separately a lone `created` row | advance two polling intervals in each case and evaluate the explicit in-tab-transfer branch | requests continue while a row is `queued`/`processing` and **stop** at `ready`; a lone `created` row with no transfer in this tab produces **no** polling at all; the explicit live-transfer flag selects the interval | query unit with MSW; M15 owns editor wiring | M14 |
 
 ### Boundaries
 
@@ -1911,8 +1911,9 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | R39 | A sniff-failed asset is not retryable | admin session; a `failed` asset with `received_bytes = 0` and no source | `POST /videos/{id}/retry` | `409 video_not_retryable`; no task is enqueued and the state is unchanged | contract | M09 |
 | R40 | A chunked body cannot stream past the chunk cap | a valid ticket | `PATCH` a 9 MiB body with `Transfer-Encoding: chunked` and no `Content-Length` | the tus server's `MaxBytesReader` answers `413`, the scratch file is truncated back, and `HEAD` reports the unchanged offset — the case nginx's `Content-Length` check cannot see | integration | M10 |
 | R41 | A stranded row offers a retry instead of polling forever, at the threshold the server honours | the editor with a `queued` row 11 minutes old, a `queued` row seconds old, a `processing` row 41 minutes old and a `processing` row seconds old | inspect each | the 11-minute `queued` and the 41-minute `processing` render an enabled retry control; the two fresh rows render progress with no retry control — the client's thresholds are C6's 10 minutes and T9's 40 minutes, so no rendered control can answer `409` | component | M15 |
+| R44 | An interrupted upload never resumes from an unattested file | an interrupted ticket; separately, (a) the persisted fingerprint differs from the reselected `File`, and (b) the persisted fingerprint is absent | ask the client to resume in each case | both refuse with `upload_resume_unverified` before `HEAD` or `PATCH`; no byte is sent, and M15 can present cancel-and-restart | client unit | M14 |
 
-Group counts: **11 happy, 35 boundary, 42 refusal = 88 rows.** Manual rows: 0. Every task
+Group counts: **11 happy, 35 boundary, 43 refusal = 89 rows.** Manual rows: 0. Every task
 except M01 owns at least one row; no row has two owners.
 
 **What round 5 proposed cutting, and what was cut.** The complexity lens named roughly half an
@@ -1954,7 +1955,7 @@ between tasks.
 | M11 | Completion and the third executable: the atomic first-chunk sniff refusal, the first-`PATCH` disk gate, the rename into `source/`, commit-then-enqueue and both crash-repair branches; `cmd/upload/main.go` with its readiness write probe; the Dockerfile `upload` stage | 1.75h | M10 | Testcontainers PostgreSQL + a tempdir storage adapter + fake queue (`make integration`); the image stage by `make build`, which is in the gate | P03, B18, B23, B31, B34, B35 |
 | M12 | Worker wiring: the media handler on the mux, the payload, the claim guards and the step-2 retryable branch, the `ErrorHandler`, `Recover`-then-`Sweep` before `server.Start`, the two metrics with pre-initialised label values, `/status`; the `smoke.sh` handler assertion inverted and the `ffmpeg -version` assertion added | 1.5h | M06, M08, M11 | Compose (`make smoke`) | P10, B19, B33 |
 | M13 | Edge and topology: the `upload` Compose service and its limits, nginx's `upload` zone and `/uploads/` location, `nginx.depends_on`, the remaining `smoke.sh` assertions, README | 1h | M12 | Compose (`make smoke`) | R12, R13 |
-| M14 | Frontend adapter and application: domain types, the port including `cancelUpload`, zod schemas, the Orval-backed repository with business-code mapping, the hand-written tus client and its transport, `admin.ts` extension, the bounded poll predicate; regenerates Orval | 1.75h | M09 | Rstest with MSW (`make test`), `make check-generated` | P11, B09, R23 |
+| M14 | Frontend adapter and application: domain types, the port including `cancelUpload`, zod schemas, the Orval-backed repository with business-code mapping, the hand-written tus client and its transport, `admin.ts` extension, the bounded poll predicate; regenerates Orval | 1.75h | M09 | Rstest with pure tus-header units plus MSW status/body/DELETE (`make test`), `make check-generated` | P11, B09, R23, R44 |
 | M15 | `LessonVideoField` and its mount inside `CourseEditorView`: the file control, progress, state badges by the D-12 rule, failure reason and retry (including the stale-`queued` retry affordance), the unsaved-lesson hint, the interrupted-upload resume/cancel affordance, degraded states, uk/en, accessibility | 2h | M14 | Rstest component tests including axe | P09, B20, R24, R25, R41 |
 | M16 | The browser journey: `media.setup.ts` generating the four clips into `/tmp` (three short, one 5-minute), `media.spec.ts` (upload → processing → ready, the one-rung and sub-360p ladders, the playlist assertions against the target binary, the shared audio rendition, the histogram scrape, the restart into an observed `processing`, the direct-API refusal), the playwright `setup` `testMatch` change | 1.75h | M13, M15 | Playwright against Compose (`make e2e`) | P04, P05, P08, B05, B25, B26, B27, B30, R26, R35 |
 | M17 | Ordered gate and report: full `make check` from a clean checkout; `docs/media/report.md` with measured results, limitations and the next task; `AGENTS.md`'s current-delivery line moved to Phase 5 | 1h | M01–M16 | `make check`, twelve steps | B10 |
@@ -2412,3 +2413,39 @@ delivery and forbade claiming working uploads, while M13 documents the upload to
 README. The plan had parked that update in M17, which means the repository's binding document
 would have been wrong for the entire phase rather than for a moment at the end. The
 current-delivery line is corrected **now**; M17 still owns the final closing statement.
+
+## §24 — Amendments, 2026-09-06 (gate owner, during M14)
+
+**1. The tus client cannot be proven through MSW in this environment.** Measured while
+reviewing M14: custom headers do not survive the MSW + happy-dom pairing **in either
+direction** — a resolver reads `Tus-Resumable` as `null`, and a response's `Upload-Offset`
+never reaches the client (adding `Access-Control-Expose-Headers` changes nothing). The
+repository already recorded the request-side half of this in `docs/identity/report.md` §I05
+("MSW in this setup does not expose request headers to a handler"), where cookie forwarding
+was moved to the header builder and proven live instead. The tus protocol is header-carried
+almost entirely, so the same resolution applies and is now the plan's: **the client's
+header-dependent logic is unit-tested as pure functions** — offset/length parsing from a
+`Headers` value, request-header construction, status→code mapping, chunk arithmetic — while
+MSW covers only what survives (status codes, bodies, `DELETE`), and **the wire behaviour is
+proven in M16 against Compose**. **This is provisional, not settled**: the adapter tests run
+under `happy-dom` although none of them renders anything, and under a `node` environment
+MSW would round-trip headers normally — recorded as backlog **B-2**, to be taken as soon as
+this phase closes and before Phase 6's player adapter speaks in headers too. No acceptance row changes owner; P11/B09/R23 keep their
+evidence, with the split named per row.
+
+**2. Interrupted resume can splice a different file onto a stored prefix.** D-13 promises
+resume after reload by reselecting the file, while the tus surface deliberately omits
+checksums, so from a non-zero offset nothing proves identity: a different file of the same
+size completes the transfer and enqueues a **silently corrupt source**, contradicting the
+spec's source-preservation guarantee. Worse than obvious corruption — a spliced file can
+carry a valid container prefix, pass ffprobe and reach `ready` as a "successful" video.
+
+**Decision.** The client persists a fingerprint with the ticket when a transfer starts —
+`originalName`, `size` and `lastModified` — and on resume recomputes it from the reselected
+`File`:
+- fingerprint matches → resume from the stored offset, as today;
+- fingerprint mismatches → **refuse to resume**, offer cancel-and-restart;
+- fingerprint absent (a different browser, cleared storage) → **refuse to resume** for the
+  same reason; we do not attest an identity we cannot check.
+Never splice unverified bytes. `declaredBytes` must still match. R44 owns both refusals in
+M14; M15 owns the cancel-and-restart affordance.

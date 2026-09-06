@@ -65,3 +65,51 @@ comes first.
 - The brief's §17 list of what must never be logged: passwords, session cookies, playback
   tokens, payment secrets, full private transcript documents.
 - Metrics stay internal to the docker network unless TLS and auth land first (`S01`).
+
+---
+
+## B-2 — Adapter tests run under a DOM they do not need, which costs header coverage
+
+**Raised:** 2026-09-06 (user pushed back on accepting it), during Phase 5 M14.
+**Shape:** small test-infrastructure fix; likely a config change, not a rewrite.
+
+### The symptom, measured
+
+Custom HTTP headers do not survive the MSW + happy-dom pairing **in either direction**:
+a resolver reads `Tus-Resumable` as `null`, and a mocked `Upload-Offset` never reaches the
+client. Adding `Access-Control-Expose-Headers` changes nothing. The repository already hit
+the request-side half in Phase 3 (`docs/identity/report.md` §I05, cookie forwarding), and
+Phase 5's tus client — a protocol carried almost entirely in headers — hit both sides.
+
+**What it costs today:** plan §24 routes the tus client's wire proof to e2e (M16) and unit-
+tests the header logic as pure functions. That is honest and the coverage is real, but the
+adapter layer permanently cannot assert what it actually sends and receives, and the next
+header-carrying protocol will pay the same price.
+
+### The leading hypothesis, and why it is cheap
+
+`frontend/rstest.config.ts` sets `testEnvironment: 'happy-dom'` **globally**, while
+**zero** tests under `frontend/src/adapters/api/` render anything — they are pure network
+adapters that need no DOM. Under a `node` environment they would use Node's real `fetch`
+(undici), where MSW round-trips headers normally.
+
+Candidates, cheapest first:
+1. **Per-file environment** for the adapter tests (an rstest docblock or equivalent), or a
+   second test project scoped to `src/adapters/api/**` with `testEnvironment: 'node'`.
+2. Upgrade happy-dom, if the header behaviour is a known fixed defect.
+3. Leave as is and keep the e2e-only proof — the current state, and the one to abandon.
+
+**Verify before adopting:** write one throwaway adapter test under `node` that asserts a
+request header in a resolver and a response header at the client. If both pass, the fix is
+option 1 and the §24 workaround can be narrowed to whatever genuinely needs a browser.
+
+### Trigger
+
+Take it as soon as Phase 5 closes — before Phase 6 adds a player, whose adapter will also
+speak in headers (range requests, cache-control, signed URLs). Fixing it after that phase
+means retrofitting two adapters instead of one.
+
+### Constraint
+
+Do not weaken what exists: the browser-dependent tests (components, routes) must stay on
+happy-dom. This is about scoping the environment to the tests that need it, not replacing it.
