@@ -121,7 +121,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | M04 | Use cases на фейках: mint/append/complete/cancel/list/retry, `Process` із гардами claim-token, `Sweep`, `Recover` | 2h | M03a | done | `work/report-m04.md`; R14–R19, R31–R33, R36, R42; 22 fake-port tests green; one build fix at review |
 | M05 | Репозиторій: mint-транзакція (`FOR SHARE OF courses`, `CanEditLesson`, generation, `23505`), guarded UPDATE на `(state, claim_token)` | 2h | M02, M04 | done | `work/report-m05.md`; P06, B16, B22, R28, R38; integration exit 0; one harness fix at review |
 | M06 | Publish/eviction/recovery/sweep: транзакція публікації з витісненням, класи C5/C6 і C1–C4 | 1.75h | M05 | done | `work/report-m06.md`; B06, B14, B24, B29; integration exit 0; Requeue/Fail added at review (briefing gap) |
-| M07 | Filesystem `MediaStorage`: `os.Root`, відмова traversal/symlink, truncate-and-append з `fsync`, атомарний publish, `Free` | 1.5h | M03 | planned | B11, B12 |
+| M07 | Filesystem `MediaStorage`: `os.Root`, відмова traversal/symlink, truncate-and-append з `fsync`, атомарний publish, `Free` | 1.5h | M03 | done | `work/report-m07.md`; B11, B12; tempdir suite green (no Docker needed) |
 | M08 | ffmpeg `Transcoder`: argv із Apple-константами й `force_divisible_by=2`, парсинг ffprobe, `WaitDelay` — **без потреби в ffmpeg** | 1.75h | M03 | planned | B13, B21, B28, R20, R21 |
 | M09 | API-поверхня: три операції на шві 4a, DTO/межі, error mapping, OpenAPI+generate | 2h | M05 | planned | P01, P02, P07, B01, B04, B15, R01–R09, R22, R37, R39 |
 | M10 | tus-сервер: `HEAD`/`PATCH`/`DELETE`, протокол запису D-2d, `MaxBytesReader` | 2h | M07, M09 | planned | B02, B03, R10, R11, R29, R30, R40 |
