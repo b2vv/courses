@@ -392,6 +392,101 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{lessonId}/video:
+    post:
+      operationId: mintAdminVideoTicket
+      summary: Mint a video upload ticket
+      description: >-
+        Admins may mint for any saved lesson; instructors may mint only for lessons in courses
+        they own. The minted video asset ID is also the single-use upload ticket ID. Requires
+        one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown
+        members, and responses are never cached. The API records metadata only and does not
+        access media storage.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MediaTicketRequest' }
+      responses:
+        '201':
+          description: A created asset and its resumable upload ticket.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaUploadTicket' }
+        '400': { $ref: '#/components/responses/MediaBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/MediaForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '409': { $ref: '#/components/responses/UploadConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses/{courseId}/videos:
+    get:
+      operationId: listAdminCourseVideos
+      summary: List a course's video assets
+      description: >-
+        Admins may read any course; instructors may read only courses they own. Returns one
+        item per non-evicted asset, including multiple generations for a lesson. Storage keys
+        and filesystem paths are never exposed. Query parameters are not supported and
+        responses are never cached.
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The course's non-evicted video assets, or an empty items array.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseVideos' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/MediaForbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/videos/{videoId}/retry:
+    post:
+      operationId: retryAdminVideo
+      summary: Retry video transcoding
+      description: >-
+        Admins may retry any owned asset; instructors may retry only assets in courses they
+        own. A failed or queued asset may be retried, as may a processing asset whose claim is
+        older than 40 minutes, but only after the complete source landed. Success clears any
+        claim, increments the attempt and enqueues the asset. Requires one matching Origin
+        header, accepts no query parameters, and responses are never cached.
+      parameters:
+        - name: videoId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The asset is queued for another transcoding attempt.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaVideo' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/MediaForbidden' }
+        '404': { $ref: '#/components/responses/VideoNotFound' }
+        '409': { $ref: '#/components/responses/VideoNotRetryable' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/instructors:
     get:
       operationId: listInstructors
@@ -705,6 +800,49 @@ components:
       required: [expectedUpdatedAt]
       properties:
         expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    MediaTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [declaredBytes, originalName]
+      properties:
+        declaredBytes: { type: integer, format: int64, minimum: 1, maximum: 2147483648 }
+        originalName: { type: string, minLength: 1, maxLength: 255 }
+    MediaUploadTicket:
+      type: object
+      additionalProperties: false
+      required: [videoId, uploadUrl, chunkBytes, maxBytes, expiresAt]
+      properties:
+        videoId: { type: string, format: uuid }
+        uploadUrl:
+          type: string
+          pattern: '^/uploads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        chunkBytes: { type: integer, format: int64, enum: [8388608] }
+        maxBytes: { type: integer, format: int64, enum: [2147483648] }
+        expiresAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    MediaVideo:
+      type: object
+      additionalProperties: false
+      required: [lessonId, videoId, state, generation, originalName, receivedBytes, declaredBytes, updatedAt]
+      properties:
+        lessonId: { type: string, format: uuid }
+        videoId: { type: string, format: uuid }
+        state: { type: string, enum: [created, uploading, queued, processing, ready, failed] }
+        generation: { type: integer, format: int32, minimum: 1 }
+        originalName: { type: string, minLength: 1, maxLength: 255 }
+        receivedBytes: { type: integer, format: int64, minimum: 0, maximum: 2147483648 }
+        declaredBytes: { type: integer, format: int64, minimum: 1, maximum: 2147483648 }
+        updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+        failureReason:
+          type: string
+          enum: [unsupported_source, probe_failed, render_failed, publish_failed, storage_unavailable]
+    CourseVideos:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MediaVideo' }
     AdminTimestamp:
       type: string
       format: date-time
@@ -755,10 +893,58 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, cannot_target_self, admin_immutable, last_admin, user_not_found, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    MediaBadRequest:
+      description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    MediaForbidden:
+      description: The Origin is not allowed, the actor is not staff, or the instructor does not own the course.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LessonNotFound:
+      description: The lesson is unknown.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    UploadConflict:
+      description: The lesson already has a non-terminal, unexpired video asset.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    VideoNotFound:
+      description: The video is unknown or evicted.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    VideoNotRetryable:
+      description: The video state is not retryable, its processing claim is still live, or its source never landed.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     AdminUserMutationForbidden:
       description: The Origin is not allowed or the authenticated account is not an administrator.
       headers:

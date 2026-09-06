@@ -2254,3 +2254,30 @@ A second item was a briefing error, not a plan defect: the M08 brief said cancel
 "kills the process group", while D-10 records the opposite — `exec.CommandContext`'s
 default direct-process SIGKILL plus `WaitDelay`, explicitly **no `Setpgid`, no
 process-group signalling**. The brief was corrected; D-10 stands.
+
+## §18 — Amendments, 2026-09-06 (gate owner, during M09)
+
+M09 opened the first `## Discussion` under the two-channel protocol
+(`work/codex-working-model.md`). All three items were accepted.
+
+**1. R22's precondition was impossible as written.** It asked for "a storage failure through
+the port" while calling mint and the course-videos read, but neither operation touches
+`MediaStorage` (`application/upload.go` — `MintTicket` calls only `repository.Mint`;
+`ListCourseVideos` only `repository.ListCourseVideos`), and D-15 forbids storage in the API
+outright. Following it literally would have wired a storage adapter into `api` and shipped
+the very boundary violation the plan refuses. R22's precondition is amended to: **a
+dependency failure carrying filesystem-looking private detail, forced through the
+repository/application seam** — the row's real subject was always that the fixed 503 body
+discloses no path, filename or ffmpeg text, not which port produced the fault.
+
+**2. The API had to pass `nil` storage, which made D-15 conventional rather than
+structural.** `NewUpload(repository, storage, queue, now)` demands a storage slot, and the
+byte methods dereference it; the API is safe today only because it happens to call just
+three methods. Accepted correction: **split construction so the API cannot receive
+byte-handling methods at all** — the ticket/list/retry operations get their own type over
+repository and queue, and the chunk/complete operations keep storage. D-15 then holds
+because the type system says so, not because a caller is careful.
+
+**3. `adapters/asynq/queue.go` had no owning task.** The plan named the producer and its
+D-10 options but assigned the file to no slice, while M09's retry endpoint cannot work
+without it. **M09 owns the producer**; M12 owns the consumer wiring, unchanged.

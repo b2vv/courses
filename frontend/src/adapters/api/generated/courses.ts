@@ -28,19 +28,29 @@ import type {
   ConflictResponse,
   CourseDetail,
   CoursePage,
+  CourseVideos,
   ForbiddenResponse,
   Instructor,
   InternalErrorResponse,
   InvalidRequestResponse,
+  LessonNotFoundResponse,
   ListAdminCoursesParams,
   ListAdminUsersParams,
   ListPublishedCoursesParams,
   LoginRequest,
+  MediaBadRequestResponse,
+  MediaForbiddenResponse,
+  MediaTicketRequest,
+  MediaUploadTicket,
+  MediaVideo,
   NotFoundResponse,
   OriginForbiddenResponse,
   UnauthenticatedResponse,
   UnavailableResponse,
-  UserNotFoundResponse
+  UploadConflictResponse,
+  UserNotFoundResponse,
+  VideoNotFoundResponse,
+  VideoNotRetryableResponse
 } from './models';
 
 
@@ -1004,6 +1014,246 @@ const res = await fetch(getTransitionAdminCourseUrl(id),
 
   const data: transitionAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as transitionAdminCourseResponse
+}
+
+
+
+export type mintAdminVideoTicketResponse201 = {
+  data: MediaUploadTicket
+  status: 201
+}
+
+export type mintAdminVideoTicketResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type mintAdminVideoTicketResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type mintAdminVideoTicketResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type mintAdminVideoTicketResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type mintAdminVideoTicketResponse409 = {
+  data: UploadConflictResponse
+  status: 409
+}
+
+export type mintAdminVideoTicketResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type mintAdminVideoTicketResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type mintAdminVideoTicketResponseSuccess = (mintAdminVideoTicketResponse201) & {
+  headers: Headers;
+};
+export type mintAdminVideoTicketResponseError = (mintAdminVideoTicketResponse400 | mintAdminVideoTicketResponse401 | mintAdminVideoTicketResponse403 | mintAdminVideoTicketResponse404 | mintAdminVideoTicketResponse409 | mintAdminVideoTicketResponse500 | mintAdminVideoTicketResponse503) & {
+  headers: Headers;
+};
+
+export type mintAdminVideoTicketResponse = (mintAdminVideoTicketResponseSuccess | mintAdminVideoTicketResponseError)
+
+export const getMintAdminVideoTicketUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/video`
+}
+
+/**
+ * Admins may mint for any saved lesson; instructors may mint only for lessons in courses they own. The minted video asset ID is also the single-use upload ticket ID. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. The API records metadata only and does not access media storage.
+ * @summary Mint a video upload ticket
+ */
+export const mintAdminVideoTicket = async (lessonId: string,
+    mediaTicketRequest: MediaTicketRequest, options?: RequestInit): Promise<mintAdminVideoTicketResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getMintAdminVideoTicketUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(mediaTicketRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mintAdminVideoTicketResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as mintAdminVideoTicketResponse
+}
+
+
+
+export type listAdminCourseVideosResponse200 = {
+  data: CourseVideos
+  status: 200
+}
+
+export type listAdminCourseVideosResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listAdminCourseVideosResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listAdminCourseVideosResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type listAdminCourseVideosResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listAdminCourseVideosResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listAdminCourseVideosResponseSuccess = (listAdminCourseVideosResponse200) & {
+  headers: Headers;
+};
+export type listAdminCourseVideosResponseError = (listAdminCourseVideosResponse400 | listAdminCourseVideosResponse401 | listAdminCourseVideosResponse403 | listAdminCourseVideosResponse500 | listAdminCourseVideosResponse503) & {
+  headers: Headers;
+};
+
+export type listAdminCourseVideosResponse = (listAdminCourseVideosResponseSuccess | listAdminCourseVideosResponseError)
+
+export const getListAdminCourseVideosUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/videos`
+}
+
+/**
+ * Admins may read any course; instructors may read only courses they own. Returns one item per non-evicted asset, including multiple generations for a lesson. Storage keys and filesystem paths are never exposed. Query parameters are not supported and responses are never cached.
+ * @summary List a course's video assets
+ */
+export const listAdminCourseVideos = async (courseId: string, options?: RequestInit): Promise<listAdminCourseVideosResponse> => {
+
+  const res = await fetch(getListAdminCourseVideosUrl(courseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminCourseVideosResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminCourseVideosResponse
+}
+
+
+
+export type retryAdminVideoResponse200 = {
+  data: MediaVideo
+  status: 200
+}
+
+export type retryAdminVideoResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type retryAdminVideoResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type retryAdminVideoResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type retryAdminVideoResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type retryAdminVideoResponse409 = {
+  data: VideoNotRetryableResponse
+  status: 409
+}
+
+export type retryAdminVideoResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type retryAdminVideoResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type retryAdminVideoResponseSuccess = (retryAdminVideoResponse200) & {
+  headers: Headers;
+};
+export type retryAdminVideoResponseError = (retryAdminVideoResponse400 | retryAdminVideoResponse401 | retryAdminVideoResponse403 | retryAdminVideoResponse404 | retryAdminVideoResponse409 | retryAdminVideoResponse500 | retryAdminVideoResponse503) & {
+  headers: Headers;
+};
+
+export type retryAdminVideoResponse = (retryAdminVideoResponseSuccess | retryAdminVideoResponseError)
+
+export const getRetryAdminVideoUrl = (videoId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/retry`
+}
+
+/**
+ * Admins may retry any owned asset; instructors may retry only assets in courses they own. A failed or queued asset may be retried, as may a processing asset whose claim is older than 40 minutes, but only after the complete source landed. Success clears any claim, increments the attempt and enqueues the asset. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
+ * @summary Retry video transcoding
+ */
+export const retryAdminVideo = async (videoId: string, options?: RequestInit): Promise<retryAdminVideoResponse> => {
+
+  const res = await fetch(getRetryAdminVideoUrl(videoId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryAdminVideoResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as retryAdminVideoResponse
 }
 
 

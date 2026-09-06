@@ -15,6 +15,10 @@ import (
 	identityhttp "courses/internal/identity/adapters/http"
 	identitypostgres "courses/internal/identity/adapters/postgres"
 	identityapplication "courses/internal/identity/application"
+	mediaasynq "courses/internal/media/adapters/asynq"
+	mediahttp "courses/internal/media/adapters/http"
+	mediapostgres "courses/internal/media/adapters/postgres"
+	mediaapplication "courses/internal/media/application"
 
 	"courses/platform/httpserver"
 	"courses/platform/observability"
@@ -45,6 +49,10 @@ func main() {
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
 		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig)
+		mediaRepository := mediapostgres.NewRepository(dependencies.Database)
+		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
+		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
+		mediaHandler := mediahttp.NewHandler(mediaTickets)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
@@ -52,6 +60,7 @@ func main() {
 				courseHandler.Register(mux)
 				identityHandler.Register(mux)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 			},
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))

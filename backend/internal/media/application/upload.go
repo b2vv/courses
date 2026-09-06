@@ -20,6 +20,16 @@ const (
 
 type Clock func() time.Time
 
+type Tickets struct {
+	repository ports.AssetRepository
+	queue      ports.TranscodingQueue
+	now        Clock
+}
+
+func NewTickets(repository ports.AssetRepository, queue ports.TranscodingQueue, now Clock) *Tickets {
+	return &Tickets{repository: repository, queue: queue, now: now}
+}
+
 type Upload struct {
 	repository ports.AssetRepository
 	storage    ports.MediaStorage
@@ -31,14 +41,14 @@ func NewUpload(repository ports.AssetRepository, storage ports.MediaStorage, que
 	return &Upload{repository: repository, storage: storage, queue: queue, now: now}
 }
 
-func (upload *Upload) MintTicket(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string) (domain.VideoAsset, error) {
+func (tickets *Tickets) MintTicket(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string) (domain.VideoAsset, error) {
 	if err := domain.ValidateTicket(declaredBytes, originalName); err != nil {
 		return domain.VideoAsset{}, err
 	}
-	now := upload.timestamp()
+	now := tickets.timestamp()
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	asset, err := upload.repository.Mint(callCtx, actor, lessonID, declaredBytes, originalName, now.Add(ticketLifetime), now)
+	asset, err := tickets.repository.Mint(callCtx, actor, lessonID, declaredBytes, originalName, now.Add(ticketLifetime), now)
 	return asset, mediaOperationError(ctx, err)
 }
 
@@ -108,24 +118,28 @@ func (upload *Upload) CancelUpload(ctx context.Context, id string) error {
 	return mediaOperationError(ctx, upload.repository.Cancel(callCtx, id, upload.timestamp()))
 }
 
-func (upload *Upload) ListCourseVideos(ctx context.Context, actor domain.Actor, courseID string) ([]domain.VideoAsset, error) {
+func (tickets *Tickets) ListCourseVideos(ctx context.Context, actor domain.Actor, courseID string) ([]domain.VideoAsset, error) {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	assets, err := upload.repository.ListCourseVideos(callCtx, actor, courseID)
+	assets, err := tickets.repository.ListCourseVideos(callCtx, actor, courseID)
 	return assets, mediaOperationError(ctx, err)
 }
 
-func (upload *Upload) Retry(ctx context.Context, actor domain.Actor, id string) (domain.VideoAsset, error) {
+func (tickets *Tickets) Retry(ctx context.Context, actor domain.Actor, id string) (domain.VideoAsset, error) {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	asset, err := upload.repository.Retry(callCtx, actor, id, retryClaimAge, upload.timestamp())
+	asset, err := tickets.repository.Retry(callCtx, actor, id, retryClaimAge, tickets.timestamp())
 	if err != nil {
 		return domain.VideoAsset{}, mediaOperationError(ctx, err)
 	}
-	if err := upload.queue.Enqueue(callCtx, asset.ID, asset.Attempt); err != nil {
+	if err := tickets.queue.Enqueue(callCtx, asset.ID, asset.Attempt); err != nil {
 		return domain.VideoAsset{}, mediaOperationError(ctx, err)
 	}
 	return asset, nil
+}
+
+func (tickets *Tickets) timestamp() time.Time {
+	return tickets.now().UTC().Truncate(mediaStoreResolution)
 }
 
 func (upload *Upload) timestamp() time.Time {

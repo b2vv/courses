@@ -179,8 +179,8 @@ func TestMintTicketValidatesBeforeRepositoryAndBoundsTheCall(t *testing.T) {
 		}
 		return mediaAsset(domain.Created), nil
 	}}
-	upload := application.NewUpload(repository, nil, nil, func() time.Time { return now })
-	if _, err := upload.MintTicket(context.Background(), actor, mediaLessonID, 12, "lesson.mp4"); err != nil {
+	tickets := application.NewTickets(repository, nil, func() time.Time { return now })
+	if _, err := tickets.MintTicket(context.Background(), actor, mediaLessonID, 12, "lesson.mp4"); err != nil {
 		t.Fatal(err)
 	}
 	if len(repository.calls) != 1 || repository.calls[0] != "mint" {
@@ -188,10 +188,10 @@ func TestMintTicketValidatesBeforeRepositoryAndBoundsTheCall(t *testing.T) {
 	}
 
 	repository.calls = nil
-	if _, err := upload.MintTicket(context.Background(), actor, mediaLessonID, 0, "lesson.mp4"); !errors.Is(err, domain.ErrInvalidRequest) {
+	if _, err := tickets.MintTicket(context.Background(), actor, mediaLessonID, 0, "lesson.mp4"); !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("zero bytes: %v", err)
 	}
-	if _, err := upload.MintTicket(context.Background(), actor, mediaLessonID, domain.MaximumDeclaredBytes+1, "lesson.mp4"); !errors.Is(err, domain.ErrUploadTooLarge) {
+	if _, err := tickets.MintTicket(context.Background(), actor, mediaLessonID, domain.MaximumDeclaredBytes+1, "lesson.mp4"); !errors.Is(err, domain.ErrUploadTooLarge) {
 		t.Fatalf("oversized: %v", err)
 	}
 	if len(repository.calls) != 0 {
@@ -338,6 +338,7 @@ func TestCompleteCommitsBeforeEnqueueAndRetryRepairsAnEnqueueFailure(t *testing.
 		return nil
 	}}
 	upload := application.NewUpload(repository, storage, queue, time.Now)
+	tickets := application.NewTickets(repository, queue, time.Now)
 
 	if _, err := upload.CompleteUpload(context.Background(), asset.ID); !errors.Is(err, enqueueFailure) {
 		t.Fatalf("complete: %v", err)
@@ -345,7 +346,7 @@ func TestCompleteCommitsBeforeEnqueueAndRetryRepairsAnEnqueueFailure(t *testing.
 	if asset.State != domain.Queued {
 		t.Fatalf("state=%s", asset.State)
 	}
-	if got, err := upload.Retry(context.Background(), domain.Actor{Administrator: true}, asset.ID); err != nil || got.Attempt != 1 {
+	if got, err := tickets.Retry(context.Background(), domain.Actor{Administrator: true}, asset.ID); err != nil || got.Attempt != 1 {
 		t.Fatalf("retry asset=%+v err=%v", got, err)
 	}
 	if len(queue.calls) != 2 {
@@ -375,7 +376,7 @@ func TestDuplicateEnqueueIsSuccessAtTheQueuePortBoundary(t *testing.T) {
 	if _, err := application.NewUpload(repository, defaultStorage(), queue, time.Now).CompleteUpload(context.Background(), asset.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.NewUpload(repository, defaultStorage(), queue, time.Now).Retry(context.Background(), domain.Actor{Administrator: true}, asset.ID); err != nil {
+	if _, err := application.NewTickets(repository, queue, time.Now).Retry(context.Background(), domain.Actor{Administrator: true}, asset.ID); err != nil {
 		t.Fatal(err)
 	}
 	if asset.State != domain.Queued || len(queue.calls) != 2 {
@@ -403,13 +404,14 @@ func TestCancelListAndDependencyFailuresPassThrough(t *testing.T) {
 		},
 	}
 	upload := application.NewUpload(repository, nil, nil, time.Now)
+	tickets := application.NewTickets(repository, nil, time.Now)
 	if err := upload.CancelUpload(context.Background(), mediaAssetID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := upload.ListCourseVideos(context.Background(), domain.Actor{}, mediaCourseID); err != want || err.Error() != "dependency_unavailable" {
+	if _, err := tickets.ListCourseVideos(context.Background(), domain.Actor{}, mediaCourseID); err != want || err.Error() != "dependency_unavailable" {
 		t.Fatalf("list detail escaped: %v", err)
 	}
-	if _, err := upload.MintTicket(context.Background(), domain.Actor{}, mediaLessonID, 12, "lesson.mp4"); err != want || err.Error() != "dependency_unavailable" {
+	if _, err := tickets.MintTicket(context.Background(), domain.Actor{}, mediaLessonID, 12, "lesson.mp4"); err != want || err.Error() != "dependency_unavailable" {
 		t.Fatalf("mint detail escaped: %v", err)
 	}
 }
