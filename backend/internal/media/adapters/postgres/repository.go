@@ -272,6 +272,64 @@ func (repository *Repository) Claim(ctx context.Context, id string, token domain
 	return asset, claimed, nil
 }
 
+// Requeue returns a claimed asset to the queue, releasing its claim. The guard is the
+// claim token, so an attempt whose claim was already reclaimed changes nothing.
+func (repository *Repository) Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	if _, err := scanAsset(tx.QueryRow(ctx, lockMediaAsset, id)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrVideoNotFound
+		}
+		return persistenceError(err)
+	}
+	result, err := tx.Exec(ctx, `UPDATE video_assets
+		SET state='queued', claim_token=NULL, updated_at=$3
+		WHERE id=$1::text::uuid AND state='processing' AND claim_token=$2::text::uuid`,
+		id, string(token), now)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrInvalidStateTransition
+	}
+	return commit(ctx, tx)
+}
+
+// Fail records a terminal failure for a claimed asset. The from state and the claim token
+// are both guards, so a reclaimed or already-advanced asset is never overwritten.
+func (repository *Repository) Fail(ctx context.Context, id string, from domain.State,
+	token domain.ClaimToken, reason domain.FailureReason, now time.Time) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	if _, err := scanAsset(tx.QueryRow(ctx, lockMediaAsset, id)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrVideoNotFound
+		}
+		return persistenceError(err)
+	}
+	result, err := tx.Exec(ctx, `UPDATE video_assets
+		SET state='failed', failure_reason=$4, claim_token=NULL, updated_at=$5
+		WHERE id=$1::text::uuid AND state=$2
+		  AND (claim_token=$3::text::uuid OR ($3='' AND claim_token IS NULL))`,
+		id, string(from), string(token), string(reason), now)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.ErrInvalidStateTransition
+	}
+	return commit(ctx, tx)
+}
+
 func (repository *Repository) Cancel(ctx context.Context, id string, now time.Time) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	coursepostgres "courses/internal/course/adapters/postgres"
 	coursedomain "courses/internal/course/domain"
+	"courses/internal/media/application"
 	"courses/internal/media/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,6 +35,13 @@ const (
 	mediaLessonOne   = "72000000-0000-4000-8000-000000000001"
 	mediaLessonTwo   = "72000000-0000-4000-8000-000000000002"
 	mediaAssetOne    = "82000000-0000-4000-8000-000000000001"
+	mediaAssetTwo    = "82000000-0000-4000-8000-000000000002"
+	mediaAssetThree  = "82000000-0000-4000-8000-000000000003"
+	mediaAssetFour   = "82000000-0000-4000-8000-000000000004"
+	mediaAssetFive   = "82000000-0000-4000-8000-000000000005"
+	mediaAssetSix    = "82000000-0000-4000-8000-000000000006"
+	mediaClaimA      = "33333333333343338333333333333333"
+	mediaClaimB      = "44444444444444448444444444444444"
 )
 
 var mediaNow = time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
@@ -42,6 +51,47 @@ type mediaHarness struct {
 	connection string
 	pool       *pgxpool.Pool
 	repository *Repository
+}
+
+type sweepStorage struct {
+	calls  []domain.StorageKey
+	failOn domain.StorageKind
+}
+
+func (*sweepStorage) Free(context.Context) (int64, error) {
+	panic("unexpected sweepStorage.Free call")
+}
+
+func (*sweepStorage) Size(context.Context, domain.StorageKey) (int64, error) {
+	panic("unexpected sweepStorage.Size call")
+}
+
+func (*sweepStorage) Head(context.Context, domain.StorageKey, int) ([]byte, error) {
+	panic("unexpected sweepStorage.Head call")
+}
+
+func (*sweepStorage) Append(context.Context, domain.StorageKey, int64, io.Reader) (int64, error) {
+	panic("unexpected sweepStorage.Append call")
+}
+
+func (*sweepStorage) Truncate(context.Context, domain.StorageKey, int64) error {
+	panic("unexpected sweepStorage.Truncate call")
+}
+
+func (*sweepStorage) Move(context.Context, domain.StorageKey, domain.StorageKey) error {
+	panic("unexpected sweepStorage.Move call")
+}
+
+func (*sweepStorage) Publish(context.Context, domain.StorageKey, domain.StorageKey) error {
+	panic("unexpected sweepStorage.Publish call")
+}
+
+func (storage *sweepStorage) Purge(_ context.Context, key domain.StorageKey) error {
+	storage.calls = append(storage.calls, key)
+	if key.Kind == storage.failOn {
+		return domain.ErrDependencyUnavailable
+	}
+	return nil
 }
 
 type mintTraceKey struct{}
@@ -117,6 +167,12 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("R28 ownership and authoring writes serialize", harness.testOwnershipSerialization)
 	t.Run("R38 concurrent mints map either unique collision", harness.testConcurrentMints)
 	t.Run("lifecycle writes lock policy guard and advance", harness.testLifecycleWrites)
+	t.Run("B06 a third ready generation evicts and reaps the oldest", harness.testPublishEvictsOldest)
+	t.Run("B14 an orphan remains retryable until its purge succeeds", harness.testOrphanSweepOrdering)
+	t.Run("C1-C4 sweep candidates are state agnostic and bounded", harness.testSweepCandidateClasses)
+	t.Run("C6 recovery bumps only stale queued attempts", harness.testQueuedRecovery)
+	t.Run("B24 recovery makes a stale publish lose its claim", harness.testRecoveredClaimCannotPublish)
+	t.Run("B29 recovery reclaims processing claims of every age", harness.testThresholdFreeProcessingRecovery)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {
@@ -387,6 +443,217 @@ func (h *mediaHarness) testLifecycleWrites(t *testing.T) {
 	}
 }
 
+func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertAsset(t, mediaAssetTwo, mediaLessonOne, 2, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertAsset(t, mediaAssetThree, mediaLessonOne, 3, domain.Processing, mediaNow.Add(time.Hour), nil)
+	policyFailure := errors.New("publish bytes failed")
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetThree, mediaClaimA, []domain.Rendition{domain.Rendition360p}, mediaNow, func(domain.VideoAsset) error {
+		return policyFailure
+	}); !errors.Is(err, policyFailure) {
+		t.Fatalf("publish policy error=%v", err)
+	}
+	stillProcessing, err := h.repository.Load(h.ctx, mediaAssetThree)
+	if err != nil || stillProcessing.State != domain.Processing || stillProcessing.ClaimToken != mediaClaimA {
+		t.Fatalf("after policy rollback asset=%+v err=%v", stillProcessing, err)
+	}
+	var evictedCount int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM video_assets WHERE evicted_at IS NOT NULL`).Scan(&evictedCount); err != nil || evictedCount != 0 {
+		t.Fatalf("evicted count=%d err=%v", evictedCount, err)
+	}
+
+	policyCalls := 0
+	published, evicted, err := h.repository.Publish(
+		h.ctx,
+		mediaAssetThree,
+		mediaClaimA,
+		[]domain.Rendition{domain.Rendition360p, domain.Rendition720p},
+		mediaNow,
+		func(locked domain.VideoAsset) error {
+			policyCalls++
+			if locked.ID != mediaAssetThree || locked.State != domain.Processing || locked.ClaimToken != mediaClaimA {
+				t.Fatalf("publish policy asset=%+v", locked)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policyCalls != 1 || published.ID != mediaAssetThree || published.State != domain.Ready ||
+		published.ClaimToken != "" || len(published.Renditions) != 2 {
+		t.Fatalf("policy calls=%d published=%+v", policyCalls, published)
+	}
+	if evicted == nil || evicted.ID != mediaAssetOne || evicted.Generation != 1 || evicted.EvictedAt == nil || !evicted.EvictedAt.Equal(mediaNow) {
+		t.Fatalf("evicted=%+v", evicted)
+	}
+	assets, err := h.repository.ListCourseVideos(h.ctx, ownerActor(), mediaCourseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 2 || assets[0].ID != mediaAssetThree || assets[1].ID != mediaAssetTwo {
+		t.Fatalf("active assets=%+v", assets)
+	}
+	storage := &sweepStorage{}
+	if err := application.NewTranscode(h.repository, storage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertSweepKeys(t, storage.calls, mediaAssetOne)
+	h.assertAssetCount(t, mediaAssetOne, 0)
+}
+
+func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	if _, err := h.pool.Exec(h.ctx, `DELETE FROM course_lessons WHERE id=$1`, mediaLessonOne); err != nil {
+		t.Fatal(err)
+	}
+	assets, err := h.repository.ListCourseVideos(h.ctx, ownerActor(), mediaCourseID)
+	if err != nil || len(assets) != 0 {
+		t.Fatalf("course assets=%+v err=%v", assets, err)
+	}
+
+	failingStorage := &sweepStorage{failOn: domain.StorageHLS}
+	if err := application.NewTranscode(h.repository, failingStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); !errors.Is(err, domain.ErrDependencyUnavailable) {
+		t.Fatalf("failed purge error=%v", err)
+	}
+	if len(failingStorage.calls) != 2 || failingStorage.calls[0].Kind != domain.StorageSource || failingStorage.calls[1].Kind != domain.StorageHLS {
+		t.Fatalf("failed purge calls=%+v", failingStorage.calls)
+	}
+	h.assertAssetCount(t, mediaAssetOne, 1)
+	candidates, err := h.repository.SweepCandidates(h.ctx, mediaNow, 50)
+	if err != nil || len(candidates) != 1 || candidates[0].ID != mediaAssetOne || candidates[0].LessonID != "" || candidates[0].State != domain.Ready {
+		t.Fatalf("retry candidates=%+v err=%v", candidates, err)
+	}
+	successfulStorage := &sweepStorage{}
+	if err := application.NewTranscode(h.repository, successfulStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertSweepKeys(t, successfulStorage.calls, mediaAssetOne)
+	h.assertAssetCount(t, mediaAssetOne, 0)
+}
+
+func (h *mediaHarness) testSweepCandidateClasses(t *testing.T) {
+	h.reset(t)
+	evictedAt := mediaNow.Add(-time.Minute)
+	h.insertAssetAt(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), &evictedAt, mediaNow.Add(-5*time.Minute))
+	h.insertAssetAt(t, mediaAssetTwo, mediaLessonTwo, 1, domain.Ready, mediaNow.Add(time.Hour), nil, mediaNow.Add(-4*time.Minute))
+	if _, err := h.pool.Exec(h.ctx, `DELETE FROM course_lessons WHERE id=$1`, mediaLessonTwo); err != nil {
+		t.Fatal(err)
+	}
+	h.insertAssetAt(t, mediaAssetThree, mediaLessonOne, 2, domain.Uploading, mediaNow.Add(-time.Second), nil, mediaNow.Add(-3*time.Minute))
+	h.insertAssetAt(t, mediaAssetFour, mediaLessonOne, 3, domain.Failed, mediaNow.Add(time.Hour), nil, mediaNow.Add(-31*24*time.Hour))
+	h.insertAssetAt(t, mediaAssetFive, mediaLessonOne, 4, domain.Failed, mediaNow.Add(time.Hour), nil, mediaNow.Add(-29*24*time.Hour))
+	h.insertAssetAt(t, mediaAssetSix, mediaLessonOne, 5, domain.Ready, mediaNow.Add(time.Hour), nil, mediaNow.Add(-time.Minute))
+
+	candidates, err := h.repository.SweepCandidates(h.ctx, mediaNow, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{mediaAssetOne: true, mediaAssetTwo: true, mediaAssetThree: true, mediaAssetFour: true}
+	if len(candidates) != len(want) {
+		t.Fatalf("candidates=%+v", candidates)
+	}
+	for _, candidate := range candidates {
+		if !want[candidate.ID] {
+			t.Fatalf("unexpected candidate=%+v", candidate)
+		}
+		delete(want, candidate.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing candidates=%v", want)
+	}
+	bounded, err := h.repository.SweepCandidates(h.ctx, mediaNow, 2)
+	if err != nil || len(bounded) != 2 {
+		t.Fatalf("bounded=%+v err=%v", bounded, err)
+	}
+}
+
+func (h *mediaHarness) testQueuedRecovery(t *testing.T) {
+	h.reset(t)
+	h.insertAssetAt(t, mediaAssetOne, mediaLessonOne, 1, domain.Queued, mediaNow.Add(time.Hour), nil, mediaNow.Add(-11*time.Minute))
+	h.insertAssetAt(t, mediaAssetTwo, mediaLessonTwo, 1, domain.Queued, mediaNow.Add(time.Hour), nil, mediaNow.Add(-9*time.Minute))
+
+	recovered, err := h.repository.Recover(h.ctx, mediaNow, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recovered) != 1 || recovered[0].ID != mediaAssetOne || recovered[0].Attempt != 1 ||
+		recovered[0].State != domain.Queued || !recovered[0].UpdatedAt.Equal(mediaNow) {
+		t.Fatalf("recovered=%+v", recovered)
+	}
+	fresh, err := h.repository.Load(h.ctx, mediaAssetTwo)
+	if err != nil || fresh.Attempt != 0 || !fresh.UpdatedAt.Equal(mediaNow.Add(-9*time.Minute)) {
+		t.Fatalf("fresh=%+v err=%v", fresh, err)
+	}
+
+	h.reset(t)
+	h.insertAssetAt(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil, mediaNow.Add(-time.Second))
+	h.insertAssetAt(t, mediaAssetTwo, mediaLessonTwo, 1, domain.Queued, mediaNow.Add(time.Hour), nil, mediaNow.Add(-11*time.Minute))
+	recovered, err = h.repository.Recover(h.ctx, mediaNow, 1)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("shared-limit recovered=%+v err=%v", recovered, err)
+	}
+	processing, err := h.repository.Load(h.ctx, mediaAssetOne)
+	if err != nil || processing.State != domain.Queued || processing.ClaimToken != "" {
+		t.Fatalf("shared-limit processing=%+v err=%v", processing, err)
+	}
+	staleQueued, err := h.repository.Load(h.ctx, mediaAssetTwo)
+	if err != nil || staleQueued.Attempt != 0 || !staleQueued.UpdatedAt.Equal(mediaNow.Add(-11*time.Minute)) {
+		t.Fatalf("shared-limit queued=%+v err=%v", staleQueued, err)
+	}
+}
+
+func (h *mediaHarness) testRecoveredClaimCannotPublish(t *testing.T) {
+	h.reset(t)
+	h.insertAssetAt(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil, mediaNow.Add(-time.Hour))
+	if _, err := h.repository.Recover(h.ctx, mediaNow, 50); err != nil {
+		t.Fatal(err)
+	}
+	claimed, ok, err := h.repository.Claim(h.ctx, mediaAssetOne, mediaClaimB, mediaNow.Add(time.Second))
+	if err != nil || !ok || claimed.ClaimToken != mediaClaimB {
+		t.Fatalf("claimed=%+v ok=%t err=%v", claimed, ok, err)
+	}
+	policyCalled := false
+	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, mediaNow.Add(2*time.Second), func(domain.VideoAsset) error {
+		policyCalled = true
+		return nil
+	})
+	if err != nil || policyCalled || published.ID != "" || evicted != nil {
+		t.Fatalf("published=%+v evicted=%+v policy=%t err=%v", published, evicted, policyCalled, err)
+	}
+	current, err := h.repository.Load(h.ctx, mediaAssetOne)
+	if err != nil || current.State != domain.Processing || current.ClaimToken != mediaClaimB {
+		t.Fatalf("current=%+v err=%v", current, err)
+	}
+}
+
+func (h *mediaHarness) testThresholdFreeProcessingRecovery(t *testing.T) {
+	h.reset(t)
+	h.insertAssetAt(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil, mediaNow.Add(-2*time.Second))
+	h.insertAssetAt(t, mediaAssetTwo, mediaLessonTwo, 1, domain.Processing, mediaNow.Add(time.Hour), nil, mediaNow.Add(-2*time.Hour))
+	for _, id := range []string{mediaAssetOne, mediaAssetTwo} {
+		before, err := h.repository.Load(h.ctx, id)
+		if err != nil || before.State != domain.Processing || before.ClaimToken != mediaClaimA {
+			t.Fatalf("before id=%s asset=%+v err=%v", id, before, err)
+		}
+	}
+	recovered, err := h.repository.Recover(h.ctx, mediaNow, 50)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("C5 enqueue candidates=%+v err=%v", recovered, err)
+	}
+	for _, id := range []string{mediaAssetOne, mediaAssetTwo} {
+		after, err := h.repository.Load(h.ctx, id)
+		if err != nil || after.State != domain.Queued || after.ClaimToken != "" || !after.UpdatedAt.Equal(mediaNow) {
+			t.Fatalf("after id=%s asset=%+v err=%v", id, after, err)
+		}
+		if _, claimed, err := h.repository.Claim(h.ctx, id, mediaClaimB, mediaNow.Add(time.Second)); err != nil || !claimed {
+			t.Fatalf("claim id=%s claimed=%t err=%v", id, claimed, err)
+		}
+	}
+}
+
 func (h *mediaHarness) reset(t *testing.T) {
 	t.Helper()
 	statements := []struct {
@@ -415,6 +682,10 @@ func (h *mediaHarness) reset(t *testing.T) {
 }
 
 func (h *mediaHarness) insertAsset(t *testing.T, id, lessonID string, generation int, state domain.State, expiresAt time.Time, evictedAt *time.Time) {
+	h.insertAssetAt(t, id, lessonID, generation, state, expiresAt, evictedAt, mediaNow.Add(-time.Hour))
+}
+
+func (h *mediaHarness) insertAssetAt(t *testing.T, id, lessonID string, generation int, state domain.State, expiresAt time.Time, evictedAt *time.Time, updatedAt time.Time) {
 	t.Helper()
 	received := int64(0)
 	claimToken := ""
@@ -424,7 +695,7 @@ func (h *mediaHarness) insertAsset(t *testing.T, id, lessonID string, generation
 		received = 1024
 	}
 	if state == domain.Processing {
-		claimToken = "33333333333343338333333333333333"
+		claimToken = mediaClaimA
 	}
 	if state == domain.Ready {
 		renditions = []string{"360p"}
@@ -435,9 +706,33 @@ func (h *mediaHarness) insertAsset(t *testing.T, id, lessonID string, generation
 	if _, err := h.pool.Exec(h.ctx, `INSERT INTO video_assets(
 		id,lesson_id,generation,state,claim_token,declared_bytes,received_bytes,original_name,
 		failure_reason,renditions,expires_at,evicted_at,created_at,updated_at)
-		VALUES($1,$2,$3,$4,NULLIF($5,'')::uuid,1024,$6,'fixture.mp4',NULLIF($7,''),$8,$9,$10,$11,$11)`,
-		id, lessonID, generation, string(state), claimToken, received, failureReason, renditions, expiresAt, evictedAt, mediaNow.Add(-time.Hour)); err != nil {
+		VALUES($1,$2,$3,$4,NULLIF($5,'')::uuid,1024,$6,'fixture.mp4',NULLIF($7,''),$8,$9,$10,$11,$12)`,
+		id, lessonID, generation, string(state), claimToken, received, failureReason, renditions, expiresAt, evictedAt, updatedAt.Add(-time.Hour), updatedAt); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (h *mediaHarness) assertAssetCount(t *testing.T, id string, want int) {
+	t.Helper()
+	var count int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM video_assets WHERE id=$1`, id).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("asset %s count=%d want=%d", id, count, want)
+	}
+}
+
+func assertSweepKeys(t *testing.T, keys []domain.StorageKey, assetID string) {
+	t.Helper()
+	want := []domain.StorageKind{domain.StorageSource, domain.StorageHLS, domain.StorageThumbnail, domain.StorageTemporary}
+	if len(keys) != len(want) {
+		t.Fatalf("purged keys=%+v", keys)
+	}
+	for index, kind := range want {
+		if keys[index].Kind != kind || keys[index].ID != assetID {
+			t.Fatalf("purged keys=%+v", keys)
+		}
 	}
 }
 

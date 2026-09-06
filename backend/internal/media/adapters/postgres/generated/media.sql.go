@@ -11,6 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteSweptMediaAsset = `-- name: DeleteSweptMediaAsset :exec
+DELETE FROM video_assets
+WHERE id = $1::text::uuid
+`
+
+func (q *Queries) DeleteSweptMediaAsset(ctx context.Context, assetID string) error {
+	_, err := q.db.Exec(ctx, deleteSweptMediaAsset, assetID)
+	return err
+}
+
 const listMediaCourseVideos = `-- name: ListMediaCourseVideos :many
 SELECT
   courses.instructor_id::text AS instructor_id,
@@ -157,4 +167,211 @@ func (q *Queries) LoadMediaAsset(ctx context.Context, assetID string) (LoadMedia
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const recoverProcessingMediaAssets = `-- name: RecoverProcessingMediaAssets :execrows
+WITH candidates AS (
+  SELECT id
+  FROM video_assets
+  WHERE state = 'processing'
+  ORDER BY updated_at, id
+  LIMIT $2::integer
+  FOR UPDATE
+)
+UPDATE video_assets AS assets
+SET state = 'queued',
+    claim_token = NULL,
+    updated_at = $1::timestamptz
+FROM candidates
+WHERE assets.id = candidates.id
+`
+
+type RecoverProcessingMediaAssetsParams struct {
+	Now     pgtype.Timestamptz
+	MaxRows int32
+}
+
+func (q *Queries) RecoverProcessingMediaAssets(ctx context.Context, arg RecoverProcessingMediaAssetsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recoverProcessingMediaAssets, arg.Now, arg.MaxRows)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const recoverQueuedMediaAssets = `-- name: RecoverQueuedMediaAssets :many
+WITH candidates AS (
+  SELECT id
+  FROM video_assets
+  WHERE state = 'queued'
+    AND updated_at < $1::timestamptz - interval '10 minutes'
+  ORDER BY updated_at, id
+  LIMIT $2::integer
+  FOR UPDATE
+)
+UPDATE video_assets AS assets
+SET attempt = assets.attempt + 1,
+    updated_at = $1::timestamptz
+FROM candidates
+WHERE assets.id = candidates.id
+RETURNING
+  assets.id::text AS id,
+  COALESCE(assets.lesson_id::text, '')::text AS lesson_id,
+  assets.generation,
+  assets.state,
+  COALESCE(replace(assets.claim_token::text, '-', ''), '')::text AS claim_token,
+  assets.declared_bytes,
+  assets.received_bytes,
+  assets.original_name,
+  assets.attempt,
+  COALESCE(assets.failure_reason, '')::text AS failure_reason,
+  assets.renditions,
+  assets.expires_at,
+  assets.evicted_at,
+  assets.created_at,
+  assets.updated_at
+`
+
+type RecoverQueuedMediaAssetsParams struct {
+	Now     pgtype.Timestamptz
+	MaxRows int32
+}
+
+type RecoverQueuedMediaAssetsRow struct {
+	ID            string
+	LessonID      string
+	Generation    int32
+	State         string
+	ClaimToken    string
+	DeclaredBytes int64
+	ReceivedBytes int64
+	OriginalName  string
+	Attempt       int32
+	FailureReason string
+	Renditions    []string
+	ExpiresAt     pgtype.Timestamptz
+	EvictedAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) RecoverQueuedMediaAssets(ctx context.Context, arg RecoverQueuedMediaAssetsParams) ([]RecoverQueuedMediaAssetsRow, error) {
+	rows, err := q.db.Query(ctx, recoverQueuedMediaAssets, arg.Now, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecoverQueuedMediaAssetsRow{}
+	for rows.Next() {
+		var i RecoverQueuedMediaAssetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.Generation,
+			&i.State,
+			&i.ClaimToken,
+			&i.DeclaredBytes,
+			&i.ReceivedBytes,
+			&i.OriginalName,
+			&i.Attempt,
+			&i.FailureReason,
+			&i.Renditions,
+			&i.ExpiresAt,
+			&i.EvictedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sweepMediaCandidates = `-- name: SweepMediaCandidates :many
+SELECT
+  id::text AS id,
+  COALESCE(lesson_id::text, '')::text AS lesson_id,
+  generation,
+  state,
+  COALESCE(replace(claim_token::text, '-', ''), '')::text AS claim_token,
+  declared_bytes,
+  received_bytes,
+  original_name,
+  attempt,
+  COALESCE(failure_reason, '')::text AS failure_reason,
+  renditions,
+  expires_at,
+  evicted_at,
+  created_at,
+  updated_at
+FROM video_assets
+WHERE evicted_at IS NOT NULL
+   OR lesson_id IS NULL
+   OR (state IN ('created', 'uploading') AND expires_at < $1::timestamptz)
+   OR (state = 'failed' AND updated_at < $1::timestamptz - interval '30 days')
+ORDER BY updated_at, id
+LIMIT $2::integer
+`
+
+type SweepMediaCandidatesParams struct {
+	Now     pgtype.Timestamptz
+	MaxRows int32
+}
+
+type SweepMediaCandidatesRow struct {
+	ID            string
+	LessonID      string
+	Generation    int32
+	State         string
+	ClaimToken    string
+	DeclaredBytes int64
+	ReceivedBytes int64
+	OriginalName  string
+	Attempt       int32
+	FailureReason string
+	Renditions    []string
+	ExpiresAt     pgtype.Timestamptz
+	EvictedAt     pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) SweepMediaCandidates(ctx context.Context, arg SweepMediaCandidatesParams) ([]SweepMediaCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, sweepMediaCandidates, arg.Now, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SweepMediaCandidatesRow{}
+	for rows.Next() {
+		var i SweepMediaCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.Generation,
+			&i.State,
+			&i.ClaimToken,
+			&i.DeclaredBytes,
+			&i.ReceivedBytes,
+			&i.OriginalName,
+			&i.Attempt,
+			&i.FailureReason,
+			&i.Renditions,
+			&i.ExpiresAt,
+			&i.EvictedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
