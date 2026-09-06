@@ -11,19 +11,27 @@ export default defineConfig({
   projects: [
     {
       name: 'setup',
-      testMatch: '**/auth.setup.ts',
+      testMatch: ['**/auth.setup.ts', '**/media.setup.ts'],
       teardown: 'login-budget',
     },
     {
       name: 'chromium',
-      testIgnore: '**/recovery.spec.ts',
+      testIgnore: ['**/recovery.spec.ts', '**/media.spec.ts'],
       dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // The media journey restarts the worker and saturates its two CPUs with a five-minute
+      // transcode, which starves anything running beside it. Same reason recovery is isolated.
+      name: 'media',
+      testMatch: '**/media.spec.ts',
+      dependencies: ['setup', 'chromium'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'recovery',
       testMatch: '**/recovery.spec.ts',
-      dependencies: ['setup', 'chromium'],
+      dependencies: ['setup', 'chromium', 'media'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
