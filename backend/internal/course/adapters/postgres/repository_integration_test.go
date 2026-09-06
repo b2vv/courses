@@ -67,6 +67,11 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 	if page.Items == nil || len(page.Items) != 0 || page.Total != 0 {
 		t.Fatalf("empty page contract: %+v", page)
 	}
+	preAdministrationIdentitySeed := `INSERT INTO users (id, email, display_name, role, password_hash) VALUES
+	('40000000-0000-4000-8000-000000000001', 'student@courseforge.local', 'Студентка Курсу', 'student', '$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+	('40000000-0000-4000-8000-000000000002', 'instructor@courseforge.local', 'Викладач Курсу', 'instructor', '$argon2id$v=19$m=65536,t=3,p=2$aW5zdHJ1Y3Rvci1zZWVkIQ$zjeAhI2zv+SPciv5gZZegL3BFoWNrJGqMg721CkxRrI'),
+	('40000000-0000-4000-8000-000000000003', 'admin@courseforge.local', 'Адміністратор Курсу', 'admin', '$argon2id$v=19$m=65536,t=3,p=2$YWRtaW4tZGVtby1zZWVkIQ$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0')
+	ON CONFLICT (id) DO NOTHING`
 
 	t.Run("authoring migration backfill failure and rollback", func(t *testing.T) {
 		if _, err := provider.DownTo(ctx, 0); err != nil {
@@ -75,10 +80,6 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if _, err := provider.UpTo(ctx, 2); err != nil {
 			t.Fatal(err)
 		}
-		preAdministrationIdentitySeed := `INSERT INTO users (id, email, display_name, role, password_hash) VALUES
-		('40000000-0000-4000-8000-000000000001', 'student@courseforge.local', 'Студентка Курсу', 'student', '$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
-		('40000000-0000-4000-8000-000000000002', 'instructor@courseforge.local', 'Викладач Курсу', 'instructor', '$argon2id$v=19$m=65536,t=3,p=2$aW5zdHJ1Y3Rvci1zZWVkIQ$zjeAhI2zv+SPciv5gZZegL3BFoWNrJGqMg721CkxRrI'),
-		('40000000-0000-4000-8000-000000000003', 'admin@courseforge.local', 'Адміністратор Курсу', 'admin', '$argon2id$v=19$m=65536,t=3,p=2$YWRtaW4tZGVtby1zZWVkIQ$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0')`
 		if _, err := pool.Exec(ctx, preAdministrationIdentitySeed); err != nil {
 			t.Fatal(err)
 		}
@@ -187,6 +188,85 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+	t.Run("media migration preserves populated database", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 4); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, preAdministrationIdentitySeed); err != nil {
+			t.Fatal(err)
+		}
+		seed := mustRead(t, filepath.Join("..", "..", "..", "..", "sql", "seed.sql"))
+		if _, err := pool.Exec(ctx, string(seed)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_modules (id,course_id,title,position) VALUES
+		('61000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000004','Migration module',0);
+		INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
+		('71000000-0000-4000-8000-000000000001','61000000-0000-4000-8000-000000000001','Migration lesson','Must survive migration 00005',0)`); err != nil {
+			t.Fatal(err)
+		}
+		var userCount, courseCount, moduleCount, lessonCount int
+		if err := db.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM users),
+		(SELECT count(*) FROM courses),
+		(SELECT count(*) FROM course_modules),
+		(SELECT count(*) FROM course_lessons)`).Scan(&userCount, &courseCount, &moduleCount, &lessonCount); err != nil {
+			t.Fatal(err)
+		}
+		if userCount != 3 || courseCount != 5 || moduleCount != 1 || lessonCount != 1 {
+			t.Fatalf("media migration fixture: users=%d courses=%d modules=%d lessons=%d", userCount, courseCount, moduleCount, lessonCount)
+		}
+		tables := []string{"users", "courses", "course_modules", "course_lessons"}
+		before := make(map[string]string, len(tables))
+		for _, table := range tables {
+			var snapshot string
+			if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(jsonb_agg(to_jsonb(existing_row) ORDER BY id), '[]'::jsonb)::text FROM (SELECT * FROM %s) AS existing_row`, table)).Scan(&snapshot); err != nil {
+				t.Fatal(err)
+			}
+			before[table] = snapshot
+		}
+		lessonStructureQuery := `SELECT jsonb_build_object(
+		'columns', (SELECT jsonb_agg(jsonb_build_array(column_name, data_type, is_nullable, column_default) ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='course_lessons'),
+		'constraints', (SELECT jsonb_agg(jsonb_build_array(conname, pg_get_constraintdef(oid)) ORDER BY conname) FROM pg_constraint WHERE conrelid='course_lessons'::regclass),
+		'indexes', (SELECT jsonb_agg(indexdef ORDER BY indexname) FROM pg_indexes WHERE schemaname='public' AND tablename='course_lessons')
+		)::text`
+		var lessonStructureBefore string
+		if err := db.QueryRowContext(ctx, lessonStructureQuery).Scan(&lessonStructureBefore); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := provider.UpTo(ctx, 5); err != nil {
+			t.Fatal(err)
+		}
+		var videoAssetsExists bool
+		var mediaIndexCount int
+		if err := db.QueryRowContext(ctx, `SELECT
+		to_regclass('video_assets') IS NOT NULL,
+		(SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='video_assets' AND indexname IN (
+			'video_assets_pending_per_lesson', 'video_assets_generation', 'video_assets_by_lesson'
+		))`).Scan(&videoAssetsExists, &mediaIndexCount); err != nil {
+			t.Fatal(err)
+		}
+		if !videoAssetsExists || mediaIndexCount != 3 {
+			t.Fatalf("media migration schema: table=%t indexes=%d", videoAssetsExists, mediaIndexCount)
+		}
+		for _, table := range tables {
+			var after string
+			if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(jsonb_agg(to_jsonb(existing_row) ORDER BY id), '[]'::jsonb)::text FROM (SELECT * FROM %s) AS existing_row`, table)).Scan(&after); err != nil {
+				t.Fatal(err)
+			}
+			if after != before[table] {
+				t.Fatalf("media migration changed pre-existing %s rows", table)
+			}
+		}
+		var lessonStructureAfter string
+		if err := db.QueryRowContext(ctx, lessonStructureQuery).Scan(&lessonStructureAfter); err != nil {
+			t.Fatal(err)
+		}
+		if lessonStructureAfter != lessonStructureBefore {
+			t.Fatal("media migration changed course_lessons structure")
+		}
+	})
 	t.Run("failed migration rolls back its complete transaction", func(t *testing.T) {
 		initial, err := os.ReadFile(filepath.Join(directory, "00001_courses.sql"))
 		if err != nil {
@@ -197,7 +277,8 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			"00002_identity.sql":       &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00002_identity.sql"))},
 			"00003_authoring.sql":      &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00003_authoring.sql"))},
 			"00004_identity_admin.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00004_identity_admin.sql"))},
-			"00005_failure.sql":        &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
+			"00005_media.sql":          &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00005_media.sql"))},
+			"00006_failure.sql":        &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
 		}
 		failure, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithDisableGlobalRegistry(true))
 		if err != nil {
@@ -215,6 +296,70 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if _, err := repository.ListPublished(ctx, query); err != nil {
 			t.Fatal(err)
+		}
+	})
+	t.Run("ready assets require real renditions", func(t *testing.T) {
+		for index, test := range []struct {
+			name          string
+			renditionsSQL string
+		}{
+			{name: "default empty"},
+			{name: "explicit empty", renditionsSQL: `'{}'::text[]`},
+			{name: "null element", renditionsSQL: `'{NULL}'::text[]`},
+			{name: "empty element", renditionsSQL: `'{""}'::text[]`},
+			{name: "mixed null element", renditionsSQL: `'{360p,NULL}'::text[]`},
+			{name: "mixed empty element", renditionsSQL: `'{360p,""}'::text[]`},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				id := fmt.Sprintf("80000000-0000-4000-8000-%012d", index+1)
+				statement := `INSERT INTO video_assets (id,generation,state,declared_bytes,original_name,expires_at,created_at,updated_at)
+				VALUES ($1,$2,'ready',1024,'source.mp4','2026-09-07T00:00:00Z','2026-09-06T00:00:00Z','2026-09-06T00:00:00Z')`
+				if test.renditionsSQL != "" {
+					statement = fmt.Sprintf(`INSERT INTO video_assets (id,generation,state,declared_bytes,original_name,renditions,expires_at,created_at,updated_at)
+					VALUES ($1,$2,'ready',1024,'source.mp4',%s,'2026-09-07T00:00:00Z','2026-09-06T00:00:00Z','2026-09-06T00:00:00Z')`, test.renditionsSQL)
+				}
+				_, err := pool.Exec(ctx, statement, id, index+1)
+				var pgError *pgconn.PgError
+				if !errors.As(err, &pgError) || pgError.Code != "23514" || pgError.ConstraintName != "video_assets_ready_has_renditions" {
+					t.Fatalf("expected 23514 video_assets_ready_has_renditions, got %v", err)
+				}
+				var count int
+				if err := db.QueryRowContext(ctx, "SELECT count(*) FROM video_assets WHERE id=$1", id).Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if count != 0 {
+					t.Fatal("refused ready asset was created")
+				}
+			})
+		}
+
+		if _, err := pool.Exec(ctx, `INSERT INTO video_assets (id,generation,state,declared_bytes,original_name,renditions,expires_at,created_at,updated_at)
+		VALUES ('80000000-0000-4000-8000-000000000007',7,'ready',1024,'source.mp4','{360p}','2026-09-07T00:00:00Z','2026-09-06T00:00:00Z','2026-09-06T00:00:00Z')`); err != nil {
+			t.Fatalf("valid rendition refused: %v", err)
+		}
+		var accepted int
+		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM video_assets WHERE id='80000000-0000-4000-8000-000000000007' AND renditions='{360p}'`).Scan(&accepted); err != nil {
+			t.Fatal(err)
+		}
+		if accepted != 1 {
+			t.Fatal("valid ready asset was not created")
+		}
+
+		if _, err := pool.Exec(ctx, `INSERT INTO video_assets (id,generation,state,declared_bytes,original_name,expires_at,created_at,updated_at)
+		VALUES ('80000000-0000-4000-8000-000000000008',8,'queued',1024,'source.mp4','2026-09-07T00:00:00Z','2026-09-06T00:00:00Z','2026-09-06T00:00:00Z')`); err != nil {
+			t.Fatal(err)
+		}
+		_, err := pool.Exec(ctx, "UPDATE video_assets SET state='ready' WHERE id='80000000-0000-4000-8000-000000000008'")
+		var pgError *pgconn.PgError
+		if !errors.As(err, &pgError) || pgError.Code != "23514" || pgError.ConstraintName != "video_assets_ready_has_renditions" {
+			t.Fatalf("expected queued-to-ready 23514 video_assets_ready_has_renditions, got %v", err)
+		}
+		var state string
+		if err := db.QueryRowContext(ctx, "SELECT state FROM video_assets WHERE id='80000000-0000-4000-8000-000000000008'").Scan(&state); err != nil {
+			t.Fatal(err)
+		}
+		if state != "queued" {
+			t.Fatalf("failed ready update changed state to %s", state)
 		}
 	})
 	t.Run("concurrent repeated seed and hidden courses", func(t *testing.T) {

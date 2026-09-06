@@ -115,7 +115,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | ID | Назва | Estimate | Depends on | Status | Owns |
 |---|---|---:|---|---|---|
 | M01 | ADR 008 (tus-інгест) і ADR 009 (fMP4/CMAF, `init_N.mp4`) | 0.5h | GATE 2 green | done | `work/report-m01.md`; ADR 008 + ADR 009 (supersedes 005 segment clause) |
-| M02 | Міграція `00005_media.sql` з іменованими CHECK і трьома індексами; фікс канарки 00005→00006 | 1.5h | M01 | planned | B07, B08, B32 |
+| M02 | Міграція `00005_media.sql` з іменованими CHECK і трьома індексами; фікс канарки 00005→00006 | 1.5h | M01 | done | `work/report-m02.md`; B07, B08, B32; integration green against real PostgreSQL |
 | M03 | Домен медіа: `VideoAsset`, шість станів і матриця T1–T9, `ClaimToken`, `StorageKey`, `Actor.CanEditLesson`, `SelectLadder`; чотири порти | 1.5h | — | planned | B17, R27 |
 | M04 | Use cases на фейках: mint/begin/append/complete/cancel/list/retry, `Process` із гардами claim-token, `Sweep`, `Recover` | 2h | M03 | planned | R14–R19, R31–R33, R36, R42 |
 | M05 | Репозиторій: mint-транзакція (`FOR SHARE OF courses`, `CanEditLesson`, generation, `23505`), guarded UPDATE на `(state, claim_token)` | 2h | M02, M04 | planned | P06, B16, B22, R28, R38 |
