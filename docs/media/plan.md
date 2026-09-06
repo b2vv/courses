@@ -1,6 +1,14 @@
 # Media upload and transcoding — Phase 5 plan
 
-Edition 3.3, 2026-09-06. **GATE 2 round 6 returned GREEN**: N-17 was closed by execution
+Edition 3.4, 2026-09-06. Edition 3.4 is a **focused amendment made after implementation
+began**: M01–M03 landed green, then M04 stopped without writing code and reported six
+contract-shape gaps (`work/report-m04.md`). The report is right and the fault is this plan's —
+§2 listed port **method names**, which cannot express the inside-one-transaction ordering D-7,
+D-8, D-10 and D-15 require. §2.1 now gives exact Go signatures with three policy callbacks and
+states where each runs; D-8 gains the container sniff as a named domain function; D-10 gains
+the inward permanent-failure vocabulary; and one task, **M03a (1 h)**, revises the M03 surface
+before M04 reruns. §16 records it. Nothing else was restructured and no row changed owner.
+Edition 3.3 followed **GATE 2 round 6, which returned GREEN**: N-17 was closed by execution
 inside `courses-media-worker-1` on ffmpeg 5.1.9 (B26's presences and absences match the muxer
 attribute for attribute), and the tightened named CHECK was verified against live PostgreSQL
 17.11 — all four empty shapes plus `{360p,NULL}` and `{360p,""}` refused as
@@ -224,15 +232,15 @@ Per `.claude/standards.md` §Розміщення. Every new file is named; exte
 | `backend/migrations/00005_media.sql` | `video_assets`, its named CHECKs, the three indexes, `ON DELETE SET NULL` to `course_lessons`; down migration (§6) |
 | `backend/internal/media/domain/asset.go` | `VideoAsset`, `State`, `ClaimToken`, `Generation`, `StorageKey` and its four kinds, the transition matrix of §1, ticket bounds, `NewAsset` invariants |
 | `backend/internal/media/domain/actor.go` | `Actor{UserID string; Administrator bool}`, `CanEditLesson(ownerID string) error` — capability, not role vocabulary (D-3) |
-| `backend/internal/media/domain/source.go` | `SourceProbe`, the accepted codec set (Q2), `AcceptSource`, `SelectLadder` (always ≥1 rung, never upscaling — D-11) |
+| `backend/internal/media/domain/source.go` | `SourceProbe`, the accepted codec set (Q2), `AcceptSource`, `SelectLadder` (always ≥1 rung, never upscaling — D-11), **`AcceptContainer` + `ContainerSniffBytes`** (the first-chunk container rule, D-8), **`FailureReason.Permanent()`** (D-10) |
 | `backend/internal/media/domain/errors.go` | the business errors of §8 |
 | `backend/internal/media/domain/*_test.go` | table tests: transitions, ladder (landscape, portrait, sub-360p), source acceptance, ticket bounds |
-| `backend/internal/media/ports/repository.go` | `AssetRepository` — `Mint`, `BeginUpload`, `Advance`, `Complete`, `Claim`, `Publish`, `Requeue`, `Fail`, `Cancel`, `ListCourseVideos`, `Retry`, `SweepCandidates`, `Recover`. **Ownership is inside `Mint`/`Retry`/`ListCourseVideos`, not a second port** (D-1) |
-| `backend/internal/media/ports/storage.go` | `MediaStorage` — opaque `StorageKey` in, no filesystem path crosses the boundary (ADR 004); `Free(ctx) (int64, error)` for the disk gates, whose only callers are the upload service's first `PATCH` and the worker's claim — never the API (D-15) |
+| `backend/internal/media/ports/repository.go` | `AssetRepository` and its three policy types — exact signatures in §2.1. **Ownership is inside `Mint`/`Retry`/`ListCourseVideos`, not a second port** (D-1) |
+| `backend/internal/media/ports/storage.go` | `MediaStorage` — opaque `StorageKey` in, no filesystem path crosses the boundary (ADR 004); `Free` for the disk gates, whose only callers are the upload service's first `PATCH` and the worker's claim — never the API (D-15). Signatures in §2.1 |
 | `backend/internal/media/ports/transcoder.go` | `Transcoder` — `Probe`, `Render`, `Thumbnail` |
 | `backend/internal/media/ports/queue.go` | `TranscodingQueue` — `Enqueue(ctx, assetID string, attempt int) error` |
-| `backend/internal/media/application/upload.go` | `MintTicket`, `BeginUpload`, `AppendChunk`, `CompleteUpload`, `CancelUpload`, `ListCourseVideos`, `Retry` |
-| `backend/internal/media/application/transcode.go` | `Process` — the twelve steps of brief §11 over the four ports; `Sweep`; `Recover` |
+| `backend/internal/media/application/upload.go` | `MintTicket`, `AppendChunk` (which supplies the `ChunkPolicy` closure), `CompleteUpload`, `CancelUpload`, `ListCourseVideos`, `Retry` |
+| `backend/internal/media/application/transcode.go` | `Process` — the twelve steps of brief §11 over the four ports, returning a `TranscodeOutcome` (§2.1) so the queue adapter can decide the task's fate without the application knowing what a queue is; `Sweep`; `Recover` |
 | `backend/internal/media/application/*_test.go` | fake-port tests: every transition, retry exhaustion, malformed source, no-op on `ready`/not-found, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure |
 | `backend/internal/media/adapters/postgres/repository.go` | the mint transaction (lesson→module→course join with `FOR SHARE`, `CanEditLesson`, generation assignment, insert), the guarded state UPDATEs on `(state, claim_token)`, the list and retry reads |
 | `backend/internal/media/adapters/postgres/publish.go` | the publish-and-evict transaction, the recovery pass, the sweep candidate queries |
@@ -251,6 +259,139 @@ Per `.claude/standards.md` §Розміщення. Every new file is named; exte
 
 `ports/ownership.go` and `adapters/postgres/ownership.go` **do not exist** — edition 1's
 mistake, closed by BLK-2 (D-1).
+
+### 2.1 Port contracts — exact signatures
+
+Added after M04 stopped on contract shape (`work/report-m04.md`, §16). Method *names* alone
+could not express the atomicity D-7, D-8, D-10 and D-15 require: three sequences must run
+**inside one transaction, between the row lock and the guarded write**, and a port whose
+methods are separate calls cannot order them. The fix is the 4b policy-callback idiom
+(`identity/ports/administration.go`: `StatusPolicy`, `DeletePolicy`) — the adapter opens the
+transaction, takes the lock, hands the locked facts to a closure the application supplied, and
+commits or rolls back on what the closure returns.
+
+```go
+// ChunkPolicy runs inside AppendChunk's transaction: after the row is locked
+// and Upload-Offset is verified equal to received_bytes, and before the
+// guarded advance is written. It performs D-2d steps 3-4 over MediaStorage —
+// scratch repair, append, fsync — and, when the locked asset is still in
+// `created`, the D-15 free-space gate (Free < 3 x DeclaredBytes) and the D-8
+// container sniff over the first ContainerSniffBytes bytes. It returns the new
+// received-byte count. Any error aborts the transaction, so the row is left
+// exactly as it was locked: a refused first chunk stays in `created`,
+// unchanged and cancellable, never `uploading` and never `failed`.
+type ChunkPolicy func(domain.VideoAsset) (int64, error)
+
+// CompletePolicy runs inside Complete's transaction: after the row is locked
+// and received_bytes is verified equal to declared_bytes, and before T3 is
+// written. It renames the scratch key onto source/{id}/original (D-2d). It
+// must be idempotent — succeeding when the source key already holds
+// declared_bytes — which is what lets B31's repair path terminate. An error
+// aborts, leaving the row in `uploading`.
+type CompletePolicy func(domain.VideoAsset) error
+
+// PublishPolicy runs inside Publish's transaction: after the row is locked and
+// (state = 'processing', claim_token = the caller's) is verified, and before
+// the guarded UPDATE. Only then may it remove a stale hls/{id} destination and
+// rename the working directory in (D-8). A goroutine whose claim was lost
+// never reaches this closure, so it touches no bytes at all. An error aborts
+// and publishes nothing.
+type PublishPolicy func(domain.VideoAsset) error
+
+type AssetRepository interface {
+    // Reads.
+    Load(ctx context.Context, id string) (domain.VideoAsset, error)          // ErrVideoNotFound when absent or evicted
+    ListCourseVideos(ctx context.Context, actor domain.Actor, courseID string) ([]domain.VideoAsset, error)
+
+    // Ticket lifecycle. Mint runs the D-1 sequence in one transaction:
+    // FOR SHARE OF courses -> CanEditLesson -> MAX(generation)+1 -> INSERT.
+    Mint(ctx context.Context, actor domain.Actor, lessonID string,
+        declaredBytes int64, originalName string, expiresAt, now time.Time) (domain.VideoAsset, error)
+    AppendChunk(ctx context.Context, id string, offset int64, now time.Time,
+        policy ChunkPolicy) (domain.VideoAsset, error)
+    Complete(ctx context.Context, id string, now time.Time,
+        policy CompletePolicy) (domain.VideoAsset, error)
+    Cancel(ctx context.Context, id string, now time.Time) error              // tus DELETE -> evicted_at
+
+    // Job lifecycle. Claim reports disposition explicitly: on a zero-row
+    // claim it returns the re-read row and false, so D-10 step 2 branches on
+    // one round trip rather than inferring from fields.
+    Claim(ctx context.Context, id string, token domain.ClaimToken, now time.Time) (domain.VideoAsset, bool, error)
+    Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition,
+        now time.Time, policy PublishPolicy) (published domain.VideoAsset, evicted *domain.VideoAsset, err error)
+    Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error
+    Fail(ctx context.Context, id string, from domain.State, token domain.ClaimToken,
+        reason domain.FailureReason, now time.Time) error
+    Retry(ctx context.Context, actor domain.Actor, id string, claimAge time.Duration, now time.Time) (domain.VideoAsset, error)
+
+    // Sweep and recovery (D-7). SweepCandidates deletes nothing; the caller
+    // purges the bytes and only then calls DeleteSwept, so a purge failure
+    // leaves a row the next pass retries. Recover applies C5 and C6.
+    SweepCandidates(ctx context.Context, now time.Time, limit int) ([]domain.VideoAsset, error)
+    DeleteSwept(ctx context.Context, id string) error
+    Recover(ctx context.Context, now time.Time, limit int) ([]domain.VideoAsset, error)
+}
+
+type MediaStorage interface {
+    Free(ctx context.Context) (int64, error)
+    Size(ctx context.Context, key domain.StorageKey) (int64, error)
+    Head(ctx context.Context, key domain.StorageKey, n int) ([]byte, error)  // the sniff's first bytes
+    Append(ctx context.Context, key domain.StorageKey, offset int64, body io.Reader) (int64, error)
+    Truncate(ctx context.Context, key domain.StorageKey, size int64) error
+    Move(ctx context.Context, from, to domain.StorageKey) error
+    Publish(ctx context.Context, work, destination domain.StorageKey) error
+    Purge(ctx context.Context, key domain.StorageKey) error
+}
+
+// Transcoder and TranscodingQueue are unchanged from M03.
+
+// Job carries what the handler knows without the application importing asynq:
+// the adapter fills RetryCount and MaxRetry from asynq.GetRetryCount and
+// asynq.GetMaxRetry, so D-10 step 12's "final permitted attempt" is decidable
+// inward.
+type Job struct {
+    AssetID    string
+    Attempt    int
+    RetryCount int
+    MaxRetry   int
+}
+```
+
+**Where each callback runs, restated as a rule an implementer can check:** every policy is
+invoked by the *adapter*, inside `pool.Begin`, after the row's `SELECT … FOR UPDATE` and after
+the guard that method exists to enforce, and before that method's `UPDATE`. None of them may be
+called by the application directly, and none of them opens its own transaction. The application
+supplies the closure and never sees a `pgx.Tx` — which is what keeps `ports` free of a database
+type (AGENTS.md: ports reference domain only).
+
+**The application never learns that a queue exists.** `Process` returns a value the adapter
+reads:
+
+```go
+// TranscodeOutcome is the job's business result. err is reserved for
+// dependency faults, which are always retryable.
+type TranscodeOutcome struct {
+    Failed    bool
+    Reason    domain.FailureReason // set when Failed
+    Permanent bool                 // == Reason.Permanent(); Q8's never-retry
+}
+
+func (t *Transcode) Process(ctx context.Context, job ports.Job) (TranscodeOutcome, error)
+```
+
+The Asynq adapter (`adapters/asynq/handler.go`, M12) is the only place that maps it:
+
+| `Process` returns | Handler returns | Asynq does |
+|---|---|---|
+| `err != nil` | that error | retries with backoff, archives after `MaxRetry` |
+| `outcome.Permanent` | `fmt.Errorf("%s: %w", outcome.Reason, asynq.SkipRetry)` | archives immediately, never retries (R15) |
+| `outcome.Failed` without `Permanent` | the reason as an error | retries |
+| zero outcome | `nil` | marks done |
+
+`domain.FailureReason.Permanent()` is the single inward source of that verdict:
+`UnsupportedSource` is permanent, and `ProbeFailed`, `RenderFailed`, `PublishFailed` and
+`StorageUnavailable` are not. Adding a permanent reason later is a one-line domain change with a
+table test, and no adapter edit.
 
 ### Backend — the third executable and shared plumbing
 
@@ -706,9 +847,30 @@ than left to the implementer.
 
 The thumbnail is renamed into `thumbnails/` after the playlist directory lands.
 
-**Sniff on the first chunk (Q2).** The container check runs in the **first `PATCH`**, on the
-twelve bytes that are already in hand: an `ftyp` brand accepted for mp4/mov, or the Matroska
-EBML magic. A failure consumes the ticket — `state = 'failed'`, reason `unsupported_source`,
+**Sniff on the first chunk (Q2), as a named domain rule.** The container check runs in the
+**first `PATCH`**, on the twelve bytes already in hand, and it is a business rule, so it lives
+in the domain rather than in the upload adapter:
+
+```go
+// ContainerSniffBytes is how many leading bytes AcceptContainer needs: an
+// ISO-BMFF box header is 8 bytes and its major brand occupies bytes 8-11.
+const ContainerSniffBytes = 12
+
+// AcceptContainer applies the Q2 container half to the head of a source.
+// ErrUnsupportedSource for anything it does not recognise.
+func AcceptContainer(head []byte) error
+```
+
+It accepts exactly two shapes. **ISO-BMFF**: bytes 4–7 are `ftyp` and the major brand at bytes
+8–11 is one of `isom`, `iso2`, `iso4`, `iso5`, `iso6`, `mp41`, `mp42`, `avc1`, `mmp4`, `dash`,
+`M4V ` (MP4 family) or `qt  ` (QuickTime `.mov`). **Matroska/WebM**: the EBML magic
+`1A 45 DF A3` at offset 0. A head shorter than `ContainerSniffBytes` is a refusal, not a pass.
+
+The rule is deliberately **permissive and cheap**, not authoritative: the EBML magic covers
+`.webm` as well as `.mkv`, and a VP9 WebM will be refused later by `AcceptSource` in the worker.
+That division is Q2 as amended (`spec.md:67`) — the container at the edge, the codecs where
+ffprobe lives — and it is why the sniff never tries to parse a DocType out of bytes it does not
+have. **M03a owns the rule and R43; M11 owns its use in the first `PATCH` and B18.** A failure consumes the ticket — `state = 'failed'`, reason `unsupported_source`,
 `400 unsupported_media` — writes nothing under `source/`, and **never enqueues**. Edition 1
 sniffed at completion, which refused a renamed text file only after up to 2 GiB had been
 transferred; the same bytes are available in the first request.
@@ -1738,6 +1900,7 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | R32 | A transient failure on a non-final attempt returns the asset to queued | fakes: a transcoder failing transiently, retry count below the maximum | run the job | the asset reads `queued` with a null claim token **before** the handler returns its error, and a following claim succeeds | application fake | M04 |
 | R33 | A render that runs out of disk is retryable, not permanent | fakes: a storage port reporting free space below the render threshold, then a render returning `ENOSPC` | run the job in each case | both leave the asset `queued`, remove any working directory, count a `storage_unavailable` failure, and return an error that does **not** wrap `SkipRetry` | application fake | M04 |
 | R35 | A worker restarted mid-render leaves nothing stranded | Compose up; the **5-minute** 1280×720 fixture of §5.f uploaded, and the status read **observed to be `processing`** before the action | `docker compose restart media-worker`, then wait | the test records that `processing` was observed first, so the restart genuinely lands mid-render; after it the asset is claimed again and reaches `ready`, never resting in `processing` — the only end-to-end evidence for the BLK-1 closure | e2e | M16 |
+| R43 | The container sniff accepts the Q2 set and nothing else | none | evaluate `AcceptContainer` over an `ftyp isom` head, `ftyp qt  `, the EBML magic, an `ftyp` with an unlisted brand, a plain-text head, and a head shorter than `ContainerSniffBytes` | the first three are accepted; the last three are refused as `ErrUnsupportedSource` — a short head is a refusal, not a pass | unit `source_test.go` | M03a |
 | R42 | C6 produces a real delivery against a retained task id, and its duplicate is inert | fakes: a `queued` asset older than 10 minutes whose `assetId:attempt` task is already archived, and separately one whose task is still pending | run the worker-start recovery, then deliver both tasks | C6 increments `attempt` first and enqueues under the **new** id in both cases, so the queue records one accepted enqueue each and never reports success on a conflict that produced no task; delivering the duplicate for the second asset returns `nil` through step 1's exhaustive list rather than starting a second render | application fake | M04 |
 | R36 | A delivery for an unclaimable row is retried, not consumed | fakes: an asset that is `processing` and not claimable | run the job | the handler returns a **retryable** error and does not return `nil`, so the task is neither marked done nor archived; for a `ready`, evicted or absent asset it still returns `nil` | application fake | M04 |
 | R37 | Retry frees a stale claim but never a live one | admin session; one `processing` asset older than the claim age and one claimed seconds ago | `POST /videos/{id}/retry` on each | the stale one answers `200`, reads `queued` with a null `claim_token` and is enqueued; the fresh one answers `409 video_not_retryable` and keeps its token | contract | M09 |
@@ -1746,7 +1909,7 @@ themselves (the 4b T02 precedent); every other task owns at least one.
 | R40 | A chunked body cannot stream past the chunk cap | a valid ticket | `PATCH` a 9 MiB body with `Transfer-Encoding: chunked` and no `Content-Length` | the tus server's `MaxBytesReader` answers `413`, the scratch file is truncated back, and `HEAD` reports the unchanged offset — the case nginx's `Content-Length` check cannot see | integration | M10 |
 | R41 | A stranded row offers a retry instead of polling forever, at the threshold the server honours | the editor with a `queued` row 11 minutes old, a `queued` row seconds old, a `processing` row 41 minutes old and a `processing` row seconds old | inspect each | the 11-minute `queued` and the 41-minute `processing` render an enabled retry control; the two fresh rows render progress with no retry control — the client's thresholds are C6's 10 minutes and T9's 40 minutes, so no rendered control can answer `409` | component | M15 |
 
-Group counts: **11 happy, 33 boundary, 41 refusal = 85 rows.** Manual rows: 0. Every task
+Group counts: **11 happy, 33 boundary, 42 refusal = 86 rows.** Manual rows: 0. Every task
 except M01 owns at least one row; no row has two owners.
 
 **What round 5 proposed cutting, and what was cut.** The complexity lens named roughly half an
@@ -1777,7 +1940,8 @@ between tasks.
 | M01 | ADR 008 (tus ingest: the three-verb surface, the third executable, the ticket capability, the Q1 deviation) and ADR 009 (fMP4/CMAF `.m4s` superseding the segment clause of ADR 005, and the verified `init_N.mp4` naming) | 0.5h | GATE 2 green | the two documents; `.claude/standards.md` Мірник consistency | — (evidence: the ADRs) |
 | M02 | Migration `00005_media.sql` with its named CHECKs and three indexes; the course canary fix (real `00005` into the `fstest.MapFS` at `:195`, canary renumbered to `00006_failure.sql` at `:200`) | 1.5h | M01 | Testcontainers PostgreSQL (`make integration`) | B07, B08, B32 |
 | M03 | Media domain: `VideoAsset`, the six states and the T1–T9 matrix, `ClaimToken`, `StorageKey`, `Actor.CanEditLesson`, ticket bounds, `SourceProbe`/`AcceptSource`/`SelectLadder`, the error set; and the four port interfaces | 1.5h | — | Go unit tests, stdlib only (`make test`) | B17, R27 |
-| M04 | Application use cases over fakes: mint/begin/append/complete/cancel/list/retry, `Process` with the claim-token guards, `Sweep` and `Recover` — retry exhaustion, malformed source, no-op on ready/absent, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure | 2h | M03 | Go unit tests with fake ports (`make test`) | R14–R19, R31, R32, R33, R36, R42 |
+| M03a | **Revise the M03 domain and port surface to §2.1**: `AcceptContainer` + `ContainerSniffBytes` and `FailureReason.Permanent()` in the domain, with table tests; `ChunkPolicy`/`CompletePolicy`/`PublishPolicy`, `Load`, the two-value `Claim`, `AppendChunk` replacing `BeginUpload`+`Advance`, `DeleteSwept`, `Head` on `MediaStorage`, and `ports.Job`. No adapter exists yet, so nothing downstream is broken by the change | 1h | M03 | Go unit tests, stdlib only (`make test`) | R43 |
+| M04 | Application use cases over fakes: mint/append/complete/cancel/list/retry, `Process` returning a `TranscodeOutcome`, `Sweep` and `Recover` — retry exhaustion, malformed source, no-op on ready/absent, duplicate enqueue, enqueue-after-commit failure, cancellation, disk exhaustion, dependency failure | 2h | M03a | Go unit tests with fake ports (`make test`) | R14–R19, R31, R32, R33, R36, R42 |
 | M05 | Media repository writes: the mint transaction (join with `FOR SHARE OF courses`, `CanEditLesson`, generation assignment, insert, `23505` mapping), the guarded state UPDATEs on `(state, claim_token)`, the list and retry reads | 2h | M02, M04 | Testcontainers PostgreSQL (`make integration`) | P06, B16, B22, R28, R38 |
 | M06 | Publish, eviction, recovery and sweep queries: the publish-and-evict transaction, recovery classes C5/C6, reclaim classes C1–C4 | 1.75h | M05 | Testcontainers PostgreSQL (`make integration`) | B06, B14, B24, B29 |
 | M07 | Filesystem `MediaStorage`: key→path resolution in an owned root, `os.Root` opens, traversal and symlink refusal, truncate-and-append with `fsync`, atomic publish, purge with ENOENT-is-success, `Free` | 1.5h | M03 | Go integration against a tempdir, no database (`make integration`) | B11, B12 |
@@ -1792,15 +1956,14 @@ between tasks.
 | M16 | The browser journey: `media.setup.ts` generating the four clips into `/tmp` (three short, one 5-minute), `media.spec.ts` (upload → processing → ready, the one-rung and sub-360p ladders, the playlist assertions against the target binary, the shared audio rendition, the histogram scrape, the restart into an observed `processing`, the direct-API refusal), the playwright `setup` `testMatch` change | 1.75h | M13, M15 | Playwright against Compose (`make e2e`) | P04, P05, P08, B05, B25, B26, B27, B30, R26, R35 |
 | M17 | Ordered gate and report: full `make check` from a clean checkout; `docs/media/report.md` with measured results, limitations and the next task; `AGENTS.md`'s current-delivery line moved to Phase 5 | 1h | M01–M16 | `make check`, twelve steps | B10 |
 
-**Total: 27.25 h** — the arithmetic of the column above: five tasks at 2 h (M04, M05, M09,
-M10, M15), five at 1.75 h (M06, M08, M11, M14, M16), four at 1.5 h (M02, M03, M07, M12), two
-at 1 h (M13, M17) and one at 0.5 h (M01). Seventeen tasks; edition 2's parenthetical
-double-counted in words beside an arithmetically correct total, which is worse than either
-error alone.
+**Total: 28.25 h** — the arithmetic of the column above: five tasks at 2 h (M04, M05, M09,
+M10, M15), five at 1.75 h (M06, M08, M11, M14, M16), four at 1.5 h (M02, M03, M07, M12), three
+at 1 h (M03a, M13, M17) and one at 0.5 h (M01). **Eighteen tasks** — M03a was added after M04
+stopped on contract shape (§16); it is the only task inserted after implementation began.
 
 **Which tasks need Docker:** M02, M05, M06, M07, M10, M11 need Testcontainers
 (`make integration`); M12, M13 need Compose (`make smoke`); M16 needs Compose (`make e2e`);
-M17 needs everything. M01, M03, M04, M08, M09, M14, M15 need no Docker.
+M17 needs everything. M01, M03, M03a, M04, M08, M09, M14, M15 need no Docker.
 
 **Which tasks need a real ffmpeg run:** only M16, and only inside the worker container. **None**
 of M03–M15 executes ffmpeg, by construction (§5.e).
@@ -1829,6 +1992,10 @@ of M03–M15 executes ffmpeg, by construction (§5.e).
   not a style one.
 - **M02 early** because every later Go task runs against the migrated schema, and the canary
   renumber must land with the migration or `make integration` is red between tasks.
+- **M03a sits between M03 and M04** because M04 stopped against M03's surface rather than
+  writing around it (§16). It is a contract revision with no adapter behind it yet, so it costs
+  an hour and breaks nothing; had M04 improvised the missing shapes, M05–M07 would have
+  inherited them.
 - **M04 split from M05/M06 by evidence environment, not by layer**: M04 is everything provable
   with fakes in `make test`; M05 and M06 are what needs real PostgreSQL, split again because
   the mint path and the publish/recovery path are two distinct bodies of SQL and one 3.75 h
@@ -2027,3 +2194,37 @@ variant** playlist" is exact, and generalising it to "every variant playlist" tu
 on the audio rendition. Stated in B26 and in D-11's conformance table.
 
 Retained from round 6: **none**.
+
+---
+
+## 16. Amendment after M04 — port contracts made expressible
+
+M01–M03 landed green. **M04 stopped without writing code** and reported six contract-shape gaps
+(`work/report-m04.md`); the report is correct, and the fault is this plan's, not the
+implementer's. §2's port table listed **method names**, M03 implemented exactly those names, and
+names carry no signature: three of the sequences D-7, D-8, D-10 and D-15 require must run
+*inside one transaction between the row lock and the guarded write*, and separate port calls
+cannot order them however they are sequenced.
+
+| Gap | Closed by | Where |
+|---|---|---|
+| 1. The first-`PATCH` disk gate cannot leave the row in `created`: nothing reads `declared_bytes`, and `BeginUpload` writes T2 with no policy hook | `AppendChunk(…, ChunkPolicy)` replaces `BeginUpload`+`Advance`; the policy sees the locked asset (so it has `DeclaredBytes`), runs `Free`, the sniff and the append, and an error aborts before T2 | §2.1, D-15 |
+| 2. Sweep cannot purge bytes before deleting the row | `SweepCandidates` deletes nothing; the new `DeleteSwept(id)` is called only after a successful purge, so a purge failure leaves a retryable row | §2.1, D-7 |
+| 3. Publish cannot validate `(processing, claim_token)` before touching `hls/` | `Publish(…, PublishPolicy)`; the adapter locks, verifies the token, and only then invokes the closure that removes a stale destination and renames | §2.1, D-8, D-10 step 10 |
+| 4. No load before claim, and `Claim` reports no disposition | `Load(id)` added; `Claim` returns `(asset, claimed bool, error)`, giving step 2 its re-read in the same round trip | §2.1, D-10 steps 1–2 |
+| 5. The container sniff has no domain rule | `AcceptContainer(head []byte) error` + `ContainerSniffBytes`, with the accepted `ftyp` brands and the EBML magic named | D-8, R43 |
+| 6. No inward permanent-failure vocabulary; application may not import asynq | `FailureReason.Permanent()` in the domain, `TranscodeOutcome` from `Process`, and a four-row mapping table in the Asynq adapter — the only place `asynq.SkipRetry` appears | §2.1, D-10 |
+
+**What this cost:** one new task, **M03a (1 h)**, placed between M03 and M04, owning **R43**.
+Total 27.25 h → **28.25 h**, 17 tasks → **18**, 85 rows → **86**. No existing row changed owner,
+no decision was reversed, and no schema or slice shape moved — every gap was a missing
+*signature* for behaviour the plan already specified in prose.
+
+**The lesson, recorded because it is cheap to repeat.** §2's placement table is written to answer
+"what files exist", and for twelve editions that was enough. It is not enough for a port whose
+methods must compose into an atomic sequence: there, the contract *is* the signature, and a table
+of names reads as complete while under-specifying exactly the part the decisions depend on. 4b
+had already solved this once — `StatusPolicy`/`DeletePolicy` in
+`identity/ports/administration.go` — and this plan cited that file as a reuse precedent without
+carrying its shape across. The general rule for later phases: **when a decision says "inside the
+same transaction", the port table owes a signature, not a name.**
