@@ -11,12 +11,19 @@ import (
 	"syscall"
 	"time"
 
+	mediaasynq "courses/internal/media/adapters/asynq"
+	mediaffmpeg "courses/internal/media/adapters/ffmpeg"
+	mediafilesystem "courses/internal/media/adapters/filesystem"
+	mediapostgres "courses/internal/media/adapters/postgres"
+	mediaapplication "courses/internal/media/application"
 	"courses/platform/httpserver"
 	"courses/platform/observability"
 	redisinfrastructure "courses/platform/redis"
 	"courses/platform/runtime"
 	"github.com/hibiken/asynq"
 )
+
+const mediaRoot = "/media"
 
 func main() {
 	logger := observability.NewLogger("media-worker")
@@ -39,17 +46,36 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	storage, err := mediafilesystem.New(mediaRoot)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := storage.Close(); err != nil {
+			logger.Error("media storage shutdown failed")
+		}
+	}()
+	repository := mediapostgres.NewRepository(dependencies.Database)
+	queue := mediaasynq.NewQueue(dependencies.Redis)
+	transcode := mediaapplication.NewTranscode(repository, storage, mediaffmpeg.New(mediaRoot), queue, time.Now)
+	if err := transcode.Recover(ctx); err != nil {
+		return errors.New("media recovery failed")
+	}
+	if err := transcode.Sweep(ctx); err != nil {
+		return errors.New("media sweep failed")
+	}
 	var queueHealthy atomic.Bool
 	queueHealthy.Store(true)
 	server := asynq.NewServer(queueOption, asynq.Config{
 		Concurrency: 1, Queues: map[string]int{"media": 1}, ShutdownTimeout: 10 * time.Second,
 		Logger:              redisinfrastructure.QueueLogger{Logger: logger},
+		ErrorHandler:        mediaasynq.NewErrorHandler(logger),
 		HealthCheckInterval: 5 * time.Second,
 		HealthCheckFunc:     func(err error) { queueHealthy.Store(err == nil) },
 	})
-	// No media handlers or producers exist in foundation. Unsupported externally
-	// enqueued tasks fail visibly through Asynq instead of pretending to transcode.
-	if err := server.Start(asynq.NewServeMux()); err != nil {
+	mux := asynq.NewServeMux()
+	mux.Handle(mediaasynq.TaskTypeTranscode, mediaasynq.NewHandler(transcode.Process, dependencies.Metrics))
+	if err := server.Start(mux); err != nil {
 		return errors.New("queue startup failed")
 	}
 	defer server.Shutdown()
@@ -73,7 +99,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 			if ctx.Err() != nil || !queueHealthy.Load() {
 				return errors.New("worker is not ready")
 			}
-			return dependencies.Ready(request)
+			return errors.Join(dependencies.Ready(request), storage.Ready(request))
 		},
 		Register: func(mux *http.ServeMux) {
 			mux.HandleFunc("GET /status", func(w http.ResponseWriter, _ *http.Request) {
@@ -81,10 +107,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 					Service  string   `json:"service"`
 					Stage    string   `json:"stage"`
 					Handlers []string `json:"handlers"`
-				}{Service: "media-worker", Stage: "foundation", Handlers: []string{}})
+				}{Service: "media-worker", Stage: "media", Handlers: []string{mediaasynq.TaskTypeTranscode}})
 			})
 		},
 	})
-	logger.Info("worker starting", "address", runtime.Address(":8081"), "registeredHandlers", 0)
+	logger.Info("worker starting", "address", runtime.Address(":8081"), "registeredHandlers", 1)
 	return httpserver.Run(ctx, runtime.Address(":8081"), handler)
 }

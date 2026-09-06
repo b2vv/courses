@@ -2380,3 +2380,18 @@ D-2d's single transaction; and the original method list carried no signatures at
 contract section must be checked *against every decision it implements*, not merely for
 internal consistency — and none of the six gate rounds did that, because they were reading
 the mechanisms, not the seam between mechanism and signature.
+
+## §22 — Amendment, 2026-09-06 (gate owner, during M12)
+
+D-14 requires every media log line to carry the asset state, but `TranscodeOutcome` carries
+only `Failed`, `Reason` and `Permanent`. On a dependency fault the adapter genuinely cannot
+know whether the row ended `queued` (the requeue committed) or is still `processing` (the
+terminal write failed) — and querying PostgreSQL from the error path can fail for the same
+outage that caused it.
+
+**Amendment.** The logging vocabulary admits a bounded `state="unknown"`, permitted **only**
+for invalid payloads and dependency/finalisation faults. Business outcomes and cancellation
+keep their exact `queued`/`failed` values. A fabricated state is worse than an honest
+absence: an operator reading `failed` would hunt for a retry control while the row sits
+`queued`, or read `queued` and assume it is safe while it is still `processing` after a
+failed terminal write.
