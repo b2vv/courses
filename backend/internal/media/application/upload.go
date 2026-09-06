@@ -13,6 +13,7 @@ import (
 
 const (
 	mediaOperationTimeout = 3 * time.Second
+	uploadChunkTimeout    = 120 * time.Second
 	ticketLifetime        = 24 * time.Hour
 	retryClaimAge         = 40 * time.Minute
 	mediaStoreResolution  = time.Microsecond
@@ -53,7 +54,7 @@ func (tickets *Tickets) MintTicket(ctx context.Context, actor domain.Actor, less
 }
 
 func (upload *Upload) AppendChunk(ctx context.Context, id string, offset int64, body io.Reader) (domain.VideoAsset, error) {
-	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	callCtx, cancel := context.WithTimeout(ctx, uploadChunkTimeout)
 	defer cancel()
 
 	asset, err := upload.repository.AppendChunk(callCtx, id, offset, upload.timestamp(), func(locked domain.VideoAsset) (int64, error) {
@@ -67,26 +68,42 @@ func (upload *Upload) AppendChunk(ctx context.Context, id string, offset int64, 
 				return 0, syscall.ENOSPC
 			}
 		}
-		if err := upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes); err != nil {
-			return 0, err
+		if locked.ReceivedBytes == 0 {
+			if err := upload.storage.Truncate(callCtx, scratch, 0); err != nil {
+				return 0, err
+			}
+		} else {
+			size, err := upload.storage.Size(callCtx, scratch)
+			if err != nil {
+				return 0, err
+			}
+			if size < locked.ReceivedBytes {
+				return 0, io.ErrUnexpectedEOF
+			}
+			if size > locked.ReceivedBytes {
+				if err := upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes); err != nil {
+					return 0, err
+				}
+			}
 		}
 		written, err := upload.storage.Append(callCtx, scratch, locked.ReceivedBytes, body)
 		if err != nil {
-			_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
-			return 0, err
+			return 0, upload.rollbackChunk(callCtx, scratch, locked.ReceivedBytes, err)
+		}
+		newReceived := locked.ReceivedBytes + written
+		if newReceived > locked.DeclaredBytes {
+			return 0, upload.rollbackChunk(callCtx, scratch, locked.ReceivedBytes, domain.ErrInvalidRequest)
 		}
 		if locked.State == domain.Created {
 			head, err := upload.storage.Head(callCtx, scratch, domain.ContainerSniffBytes)
 			if err != nil {
-				_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
-				return 0, err
+				return 0, upload.rollbackChunk(callCtx, scratch, locked.ReceivedBytes, err)
 			}
 			if err := domain.AcceptContainer(head); err != nil {
-				_ = upload.storage.Truncate(callCtx, scratch, locked.ReceivedBytes)
-				return 0, err
+				return 0, upload.rollbackChunk(callCtx, scratch, locked.ReceivedBytes, err)
 			}
 		}
-		return locked.ReceivedBytes + written, nil
+		return newReceived, nil
 	})
 	if errors.Is(err, domain.ErrUnsupportedSource) {
 		if failErr := upload.repository.Fail(callCtx, id, domain.Created, "", domain.UnsupportedSource, upload.timestamp()); failErr != nil {
@@ -95,6 +112,27 @@ func (upload *Upload) AppendChunk(ctx context.Context, id string, offset int64, 
 		return domain.VideoAsset{}, domain.ErrUnsupportedMedia
 	}
 	return asset, mediaOperationError(ctx, err)
+}
+
+func (upload *Upload) rollbackChunk(ctx context.Context, scratch domain.StorageKey, offset int64, cause error) error {
+	if err := upload.storage.Truncate(ctx, scratch, offset); err != nil {
+		return err
+	}
+	return cause
+}
+
+func (upload *Upload) HeadUpload(ctx context.Context, id string) (domain.VideoAsset, error) {
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	asset, err := upload.repository.Load(callCtx, id)
+	if err != nil {
+		return domain.VideoAsset{}, mediaOperationError(ctx, err)
+	}
+	now := upload.timestamp()
+	if asset.EvictedAt != nil || !asset.ExpiresAt.After(now) || asset.State != domain.Created && asset.State != domain.Uploading {
+		return domain.VideoAsset{}, domain.ErrVideoNotFound
+	}
+	return asset, nil
 }
 
 func (upload *Upload) CompleteUpload(ctx context.Context, id string) (domain.VideoAsset, error) {

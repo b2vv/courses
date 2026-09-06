@@ -2281,3 +2281,33 @@ because the type system says so, not because a caller is careful.
 **3. `adapters/asynq/queue.go` had no owning task.** The plan named the producer and its
 D-10 options but assigned the file to no slice, while M09's retry endpoint cannot work
 without it. **M09 owns the producer**; M12 owns the consumer wiring, unchanged.
+
+## §19 — Amendments, 2026-09-06 (gate owner, during M10)
+
+M10's `## Discussion` raised three items; all accepted. The second is the most serious
+defect this plan has carried.
+
+**1. D-2d step 3, as written, could never start an upload.** The sentence said a missing
+scratch file with no completed source is a `503`. But a freshly minted `created` row has no
+scratch file *by design* — the first `PATCH` is what creates it — so following the sentence
+literally would have refused **every upload at its first byte**, and the feature would not
+have worked at all. Amended: **a missing scratch file at `received_bytes = 0` is initialised
+at zero** (the storage adapter's safe zero-length initialiser); a missing or short scratch
+file at a positive truth-column offset remains a `503`. The implementation follows the
+amended rule, and an application test pins the short-file refusal at a positive offset.
+
+**2. The scratch file could get ahead of the truth column (B02).** A chunk beyond the
+declared length was appended and fsynced before the repository refused it; the transaction
+rolled the column back, nothing rolled the file back, and the next request began with a file
+longer than the column — breaking the "column is truth" invariant the whole protocol rests
+on. Amended: the declared length is a **second cap inside the transaction policy**, and the
+file is truncated to the locked column before the refusal returns.
+
+**3. A failed compensating truncate was discarded.** After a failed `Append`, `Head` or
+container check, the error from the compensating `Truncate` was ignored, so a failed rollback
+could leave uncommitted bytes while the handler reported an ordinary resumable refusal. The
+error is now surfaced.
+
+Method note: none of the three was a missing contract, and all three could have been
+silently worked around with code that runs. They surfaced because the brief gives Codex a
+discussion channel as well as a stop.

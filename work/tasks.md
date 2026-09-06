@@ -124,7 +124,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | M07 | Filesystem `MediaStorage`: `os.Root`, відмова traversal/symlink, truncate-and-append з `fsync`, атомарний publish, `Free` | 1.5h | M03 | done | `work/report-m07.md`; B11, B12; tempdir suite green (no Docker needed) |
 | M08 | ffmpeg `Transcoder`: argv із Apple-константами й `force_divisible_by=2`, парсинг ffprobe, `WaitDelay` — **без потреби в ffmpeg** | 1.75h | M03 | done | `work/report-m08.md`; B13, B21, B28, R20, R21; suite needs no ffmpeg (zero LookPath/Skip) |
 | M09 | API-поверхня: три операції на шві 4a, DTO/межі, error mapping, OpenAPI+generate | 2h | M05 | done | `work/report-m09.md`; P01, P02, P07, B01, B04, B15, R01–R09, R22 (amended §18), R37, R39; +asynq producer |
-| M10 | tus-сервер: `HEAD`/`PATCH`/`DELETE`, протокол запису D-2d, `MaxBytesReader` | 2h | M07, M09 | planned | B02, B03, R10, R11, R29, R30, R40 |
+| M10 | tus-сервер: `HEAD`/`PATCH`/`DELETE`, протокол запису D-2d, `MaxBytesReader` | 2h | M07, M09 | done | `work/report-m10.md`; B02, B03, R10, R11, R29, R30, R40; 3 discussion items accepted (plan §19) |
 | M11 | Завершення й третій виконуваний файл: sniff першого чанка, дисковий gate, rename у `source/`, commit-then-enqueue; `cmd/upload`; стадія Dockerfile | 1.75h | M10 | planned | P03, B18, B23, B31 |
 | M12 | Обв'язка воркера: хендлер на mux, гарди claim, `Recover`+`Sweep` до `server.Start`, метрики, `/status`; smoke з `ffmpeg -version` | 1.5h | M06, M08, M11 | planned | P10, B19, B33 |
 | M13 | Edge і топологія: сервіс `upload` у Compose, зона й локація `/uploads/` у nginx, README | 1h | M12 | planned | R12, R13 |
