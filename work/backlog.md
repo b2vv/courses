@@ -72,14 +72,28 @@ comes first.
 
 **Raised:** 2026-09-06 (user pushed back on accepting it), during Phase 5 M14.
 **Shape:** small test-infrastructure fix; likely a config change, not a rewrite.
+**Status: DONE, 2026-09-07** — task `B02`, evidence `work/report-b02.md`. What follows is
+kept as the record of the diagnosis, with its one error corrected below.
 
-### The symptom, measured
+### The symptom, corrected 2026-09-07
 
-Custom HTTP headers do not survive the MSW + happy-dom pairing **in either direction**:
-a resolver reads `Tus-Resumable` as `null`, and a mocked `Upload-Offset` never reaches the
-client. Adding `Access-Control-Expose-Headers` changes nothing. The repository already hit
-the request-side half in Phase 3 (`docs/identity/report.md` §I05, cookie forwarding), and
-Phase 5's tus client — a protocol carried almost entirely in headers — hit both sides.
+**This entry was wrong about half of the symptom, and the correction matters.** It claimed
+custom headers die "in either direction". Measured with one probe on both environments
+(reviewer, then confirmed independently by the implementer's `## Discussion`):
+
+| Environment | request-side `Tus-Resumable` | response-side `Upload-Offset` |
+|---|---|---|
+| `happy-dom` | `"1.0.0"` — **arrives** | `null` — lost |
+| `node` | `"1.0.0"` | `"42"` |
+
+Only the **response** side breaks, which is consistent with happy-dom implementing the CORS
+safelist for response headers; `Access-Control-Expose-Headers` did not change it. The
+Phase 3 case (`docs/identity/report.md` §I05, cookie forwarding) is a **different
+mechanism** — `Cookie` is a forbidden header name that script may not set — and a `node`
+environment does not fix it. Filed as one symptom, they were two.
+
+**Why the error was worth correcting rather than deleting:** cited as written, it would have
+sent the next header-carrying adapter's request-side proof into slow e2e for no reason.
 
 **What it costs today:** plan §24 routes the tus client's wire proof to e2e (M16) and unit-
 tests the header logic as pure functions. That is honest and the coverage is real, but the
@@ -113,3 +127,30 @@ means retrofitting two adapters instead of one.
 
 Do not weaken what exists: the browser-dependent tests (components, routes) must stay on
 happy-dom. This is about scoping the environment to the tests that need it, not replacing it.
+
+### Outcome, 2026-09-07
+
+Taken at its own trigger, before Phase 6's player adapter. `frontend/rstest.config.ts` now
+declares two projects: `adapter-node` (`node`, `src/adapters/api/**`, with an
+`@opentelemetry/api` alias to its CJS build and `API_BASE_URL` in the project's own `env`)
+and `dom` (`happy-dom`, everything else). The constraint above held: nothing that renders
+moved off happy-dom.
+
+**Two obstacles this entry had not predicted, both real:**
+1. `@opentelemetry/api` fails under `node` — its `module` condition points at `build/esm`,
+   whose relative imports are extensionless and therefore bundler-only.
+2. `apiOrigin()` takes its SSR branch under `node` and needs `API_BASE_URL`.
+
+**The payoff was collected, not just unlocked:** the tus protocol is now proven on the wire
+in the adapter layer — PATCH/HEAD request headers read from an MSW resolver, offset
+progression driven only by the response's `Upload-Offset`, resume metadata from `Upload-Length`,
+and refusal of a response whose `Tus-Resumable` is missing or foreign. Both new assertions
+were shown red before green. 330 → 334 tests; `adapter-node` 11 files / 97, `dom` 27 / 237.
+
+**Deliberately not done here:** removing the `typeof window` branch from `apiOrigin()`. It
+was considered and measured — orval always emits `options?: Parameters<typeof mutator>[1]`,
+so a mutator requiring `origin: string` fails to typecheck at every generated call site, and
+only `origin?: string` with a runtime throw compiles. That trades a compile-time guarantee
+for a runtime one. It is also unnecessary: after this split both branches of `apiOrigin()`
+execute — the SSR branch under `adapter-node`, the browser branch under the `dom` tests that
+still call it. Previously only the browser branch ran anywhere.

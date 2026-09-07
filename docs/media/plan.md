@@ -2474,3 +2474,29 @@ test**, which already must observe `processing` before restarting the worker.
 Method note: both defects are of the same family as §19–§21 — a rule that reads correctly in
 prose and cannot hold at runtime. Here the tell was arithmetic that nobody did: render time
 under a second against a three-second poll.
+
+## §26 — Amendment, 2026-09-07 (gate owner, after phase close, task B02)
+
+**§24 п.1's provisional workaround is now narrowed, and its diagnosis was half wrong.**
+§24 п.1 routed the tus client's wire proof to e2e because "custom headers do not survive the
+MSW + happy-dom pairing **in either direction**". Measured on both environments with one
+probe (reviewer, confirmed independently by the implementer's `## Discussion` in
+`work/report-b02.md`): **only the response side breaks.** The request-side
+`Tus-Resumable` arrives intact under happy-dom. The Phase 3 precedent cited alongside it
+(`docs/identity/report.md` §I05, cookie forwarding) is a **different mechanism** — `Cookie`
+is a forbidden header name — and is not fixed by changing environments. Two symptoms were
+filed as one.
+
+**What changed.** `frontend/rstest.config.ts` declares two projects: `adapter-node` runs
+`src/adapters/api/**` under `node` (where MSW round-trips headers both ways), `dom` runs
+everything else under `happy-dom`. Nothing that renders moved. The tus protocol is now
+proven **in the adapter layer, on the wire**: PATCH/HEAD request headers read from an MSW
+resolver, offset progression driven only by the response's `Upload-Offset`, resume metadata
+from `Upload-Length`, and refusal of a response whose `Tus-Resumable` is missing or foreign.
+Both new assertions were shown red before green.
+
+**What did not change.** The pure-function tests of §24 п.1 remain — they are still valid
+unit coverage, and this amendment adds a layer rather than replacing one. `media.spec.ts`
+keeps its end-to-end proof; the acceptance rows P11/B09/R23/R44 keep their owners and their
+evidence. `apiOrigin()` keeps its `typeof window` branch, deliberately: see `work/backlog.md`
+B-2 §Outcome for the measurement that rejected removing it.

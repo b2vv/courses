@@ -132,3 +132,9 @@ Compose і фікстур, тобто не може бігти раніше за
 | M15 | `LessonVideoField` у `CourseEditorView`: контрол файлу, прогрес, бейджі станів, retry, resume/cancel, uk/en, a11y | 2h | M14 | done | `work/report-m15.md`; P09, B20, R24, R25, R41; 330 frontend tests green with axe |
 | M16 | Браузерна подорож: `media.setup.ts` (чотири кліпи), `media.spec.ts` — upload→processing→ready, сходинки, плейлист проти цільового бінаря, рестарт у спостережений `processing` | 1.75h | M13, M15 | done | `work/report-m16.md`; P04, P05, P08, B05, B25–B27, B30, R26, R35, R13 post-half; e2e 35/35 twice |
 | M17 | Впорядкований гейт і звіт: повний `make check`, `docs/media/report.md` | 1h | M01–M16 | done | `docs/media/report.md`; B10; full `make check` exit 0 (330 frontend tests, 38 Go packages, e2e 35/35) |
+
+## Беклог, узятий за тригером
+
+| ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
+|---|---|---:|---|---|---|
+| B02 | B-2: адаптерні тести під `node`, tus доводиться на дроті в адаптерному шарі | 1h | Phase 5 closed | done | бриф `work/brief-b02.md`; звіт `work/report-b02.md`; беклог `work/backlog.md` B-2 §Outcome; амендмент `docs/media/plan.md` §26 |
