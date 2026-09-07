@@ -68,3 +68,31 @@ Persist-каналу в репо немає (`CLAUDE.local.md` відсутні�
 
 **Пройдено 2026-09-07.** Делеговано `grilling`; вісім питань, усі закриті замовником.
 Блокуючих відкритих питань не лишилось. Спеку оновлено під рішення (`spec.md` §5).
+
+## GATE 2 — конституція (інлайн, рецензент, 2026-09-07)
+
+Мірник — `.claude/standards.md` §Мірник: `AGENTS.md`, `docs/architecture/*`, `docs/adr/*`.
+
+**Головне: ADR 005 уже вирішив механізм, і план із ним збігається** — «Nginx serves
+playlists/segments after **auth_request**, Go checks session/enrollment and issues a
+**3-minute scoped grant**». D-1 (кука на 3 хв) і D-2 (`auth_request`) не винаходять нічого,
+а виконують ухвалене. Це добре — але ADR 005 ставить і умови, і дві з них план не закриває.
+
+| # | Знахідка | Вага | Джерело |
+|---|---|---|---|
+| C1 | **Поведінка HTTP range не розглянута ніде.** ADR 005 прямо вимагає, щоб `range behavior` була врегульована **до** ввімкнення медіа; вихідне ТЗ теж перелічує «підтримка HTTP range requests там, де потрібно». У плані немає ні рішення, ні приймального рядка | **blocking** | `docs/adr/005-hls-nginx.md`, `PRODUCT-BRIEF` §Вимоги |
+| C2 | **G1 суперечить ADR 005.** ADR каже «Go checks session/**enrollment**»; ми свідомо замінили enrollment на «автентифікований + опублікований». Маніфест: «зміна, що суперечить ADR, потребує нового ADR». Нового ADR план не передбачає | **blocking** | `.claude/standards.md` §Мірник |
+| C3 | **`AGENTS.md` містить два твердження, які ця фаза робить хибними:** рядок скоупу «Current delivery: media upload and transcoding (Phase 5)» і архітектурне «Foundation media access is denied until authorization exists». План не передбачає їх правки | **blocking** | `AGENTS.md` §Scope, §Architecture |
+| C4 | План не називає, що нові ендпоїнти йдуть у `backend/openapi/openapi.yaml` і що `make check-generated` мусить лишитись зеленим. Без цього Orval-клієнт дрейфує — у Phase 5 це робив M09 явно | non-blocking | `.claude/standards.md` §Машинні гейти |
+| C5 | D-3 описує контракт `authorize`, але не каже, що політика трьох умов живе в `playback/application`, а хендлер лишається перекладачем транспорту | non-blocking | `AGENTS.md` §Architecture |
+
+**Що план виконує без зауважень:** домен без фреймворків; порти лише на справжні зовнішні
+залежності (три, четвертого «на майбутнє» немає); байти не течуть крізь Go і SSR (ADR 004
+«API and SSR get no media mount» збережено); request-scoped композиція без глобальних
+мутабельних клієнтів; явні бізнес-коди; доказ не в URL; a11y-вимоги в A15/B18/B19.
+
+**Деталь ADR 005, яку план виконує випадково, а мусить свідомо:** «relative playlist URLs
+must retain credentials». Наші сегменти лежать під `/media/`, а кука має `Path=/media` — тож
+відносні URL у плейлисті справді донесуть її. Це має бути named-рішення з тестом, а не збіг.
+
+**Вердикт конституції: ЧЕРВОНИЙ** — три blocking. Гейт не пройдено до правки плану.
