@@ -46,7 +46,7 @@ function memoryStorage(): FingerprintStorage & { readonly entries: Map<string, s
 }
 
 describe('tus header and chunk contract', () => {
-  test('builds the exact request headers without relying on MSW header forwarding', () => {
+  test('builds the exact request headers as pure values', () => {
     expect(Object.fromEntries(buildTusHeaders('HEAD'))).toEqual({ 'tus-resumable': '1.0.0' });
     expect(Object.fromEntries(buildTusHeaders('PATCH', 3))).toEqual({
       'content-type': 'application/offset+octet-stream',
@@ -105,8 +105,118 @@ describe('tus header and chunk contract', () => {
   });
 });
 
+describe('tus wire contract', () => {
+  test('sends the exact PATCH and HEAD headers through the transport', async () => {
+    server.use(
+      http.head(url, ({ request }) => {
+        expect(request.headers.get('Tus-Resumable')).toBe('1.0.0');
+        expect(request.headers.has('Content-Type')).toBe(false);
+        expect(request.headers.has('Upload-Offset')).toBe(false);
+        return new HttpResponse(null, {
+          status: 200,
+          headers: {
+            'Tus-Resumable': '1.0.0',
+            'Upload-Offset': '3',
+            'Upload-Length': '6',
+          },
+        });
+      }),
+      http.patch(url, async ({ request }) => {
+        expect(request.headers.get('Tus-Resumable')).toBe('1.0.0');
+        expect(request.headers.get('Content-Type')).toBe('application/offset+octet-stream');
+        expect(request.headers.get('Upload-Offset')).toBe('3');
+        expect(await request.text()).toBe('def');
+        return new HttpResponse(null, {
+          status: 204,
+          headers: { 'Tus-Resumable': '1.0.0', 'Upload-Offset': '6' },
+        });
+      }),
+    );
+
+    const transport = createTusTransport();
+    expect(await transport.send('HEAD', videoId)).toMatchObject({ ok: true });
+    expect(await transport.send('PATCH', videoId, new Blob(['def']), 3)).toMatchObject({
+      ok: true,
+    });
+  });
+
+  test('reads each PATCH offset and advances to the next chunk', async () => {
+    const declaredBytes = videoChunkBytes + 3;
+    const offsets: number[] = [];
+    const bodySizes: number[] = [];
+    server.use(
+      http.head(
+        url,
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: {
+              'Tus-Resumable': '1.0.0',
+              'Upload-Offset': '0',
+              'Upload-Length': String(declaredBytes),
+            },
+          }),
+      ),
+      http.patch(url, async ({ request }) => {
+        const offset = Number(request.headers.get('Upload-Offset'));
+        const bodySize = (await request.arrayBuffer()).byteLength;
+        offsets.push(offset);
+        bodySizes.push(bodySize);
+        return new HttpResponse(null, {
+          status: 204,
+          headers: {
+            'Tus-Resumable': '1.0.0',
+            'Upload-Offset': String(offset + bodySize),
+          },
+        });
+      }),
+    );
+
+    const progress: number[] = [];
+    const result = await createTusClient({}, memoryStorage()).transfer(
+      { kind: 'new', ticket },
+      new File([new ArrayBuffer(declaredBytes)], 'lesson.mp4', { lastModified: 1234 }),
+      ({ receivedBytes }) => progress.push(receivedBytes),
+    );
+
+    expect(result).toEqual({ ok: true, value: null });
+    expect(offsets).toEqual([0, videoChunkBytes]);
+    expect(bodySizes).toEqual([videoChunkBytes, 3]);
+    expect(progress).toEqual([0, videoChunkBytes, declaredBytes]);
+  });
+
+  test.each([
+    ['missing', { 'Upload-Offset': '6' }],
+    ['different', { 'Tus-Resumable': '0.2.2', 'Upload-Offset': '6' }],
+  ])('rejects a PATCH response with a %s tus version', async (_case, responseHeaders) => {
+    server.use(
+      http.head(
+        url,
+        () =>
+          new HttpResponse(null, {
+            status: 200,
+            headers: {
+              'Tus-Resumable': '1.0.0',
+              'Upload-Offset': '0',
+              'Upload-Length': '6',
+            },
+          }),
+      ),
+      http.patch(url, () => new HttpResponse(null, { status: 204, headers: responseHeaders })),
+    );
+
+    expect(
+      await createTusClient({}, memoryStorage()).transfer(
+        { kind: 'new', ticket },
+        new File(['abcdef'], 'lesson.mp4', { lastModified: 1234 }),
+        () => {},
+      ),
+    ).toEqual({ ok: false, error: { code: 'invalid_response' } });
+  });
+});
+
 describe('tus client', () => {
-  test('MSW covers PATCH body/status and DELETE without asserting custom headers', async () => {
+  test('maps PATCH status and sends DELETE through MSW', async () => {
     server.use(
       http.patch(url, async ({ request }) => {
         expect(await request.text()).toBe('bad');
@@ -169,45 +279,36 @@ describe('tus client', () => {
     server.use(http.head(url, () => new HttpResponse(null, { status: 503 })));
     await createTusClient({}, storage).transfer({ kind: 'new', ticket }, file, () => {});
 
-    const calls: Array<{
-      readonly method: string;
-      readonly body: string;
-      readonly offset: number;
-    }> = [];
-    const transport: TusTransport = {
-      async send(method, _videoId, body, offset = 0) {
-        if (method === 'HEAD') {
-          return {
-            ok: true,
-            response: new Response(null, {
-              status: 200,
-              headers: {
-                'Tus-Resumable': '1.0.0',
-                'Upload-Offset': '3',
-                'Upload-Length': '6',
-              },
-            }),
-          };
-        }
-        calls.push({ method, body: body === undefined ? '' : await body.text(), offset });
-        return {
-          ok: true,
-          response: new Response(null, {
-            status: 204,
-            headers: { 'Tus-Resumable': '1.0.0', 'Upload-Offset': '6' },
-          }),
-        };
-      },
-    };
+    server.resetHandlers();
+    server.use(
+      http.head(url, ({ request }) => {
+        expect(request.headers.get('Tus-Resumable')).toBe('1.0.0');
+        return new HttpResponse(null, {
+          status: 200,
+          headers: {
+            'Tus-Resumable': '1.0.0',
+            'Upload-Offset': '3',
+            'Upload-Length': '6',
+          },
+        });
+      }),
+      http.patch(url, async ({ request }) => {
+        expect(request.headers.get('Upload-Offset')).toBe('3');
+        expect(await request.text()).toBe('def');
+        return new HttpResponse(null, {
+          status: 204,
+          headers: { 'Tus-Resumable': '1.0.0', 'Upload-Offset': '6' },
+        });
+      }),
+    );
     const progress: number[] = [];
     expect(
-      await createTusClient({}, storage, transport).transfer(
+      await createTusClient({}, storage).transfer(
         { kind: 'resume', videoId, declaredBytes: 6 },
         file,
         ({ receivedBytes }) => progress.push(receivedBytes),
       ),
     ).toEqual({ ok: true, value: null });
-    expect(calls).toEqual([{ method: 'PATCH', body: 'def', offset: 3 }]);
     expect(progress).toEqual([3, 6]);
     expect(storage.entries.size).toBe(0);
   });
