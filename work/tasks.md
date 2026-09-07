@@ -138,3 +138,31 @@ Compose і фікстур, тобто не може бігти раніше за
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
 |---|---|---:|---|---|---|
 | B02 | B-2: адаптерні тести під `node`, tus доводиться на дроті в адаптерному шарі | 1h | Phase 5 closed | done | бриф `work/brief-b02.md`; звіт `work/report-b02.md`; беклог `work/backlog.md` B-2 §Outcome; амендмент `docs/media/plan.md` §26 |
+
+## Phase 6 — playback
+
+Джерело scope: [spec](../docs/playback/spec.md) (GATE 1 пройдено, 14 рішень G1–G14).
+План: [plan.md](../docs/playback/plan.md) **редакція 6**; GATE 2 закрито на ній із названим
+списком відкритого (§11). Спайк edge: [spike-edge.md](../docs/playback/spike-edge.md).
+
+**Три речі, які не можна загубити:** відеобайти не йдуть крізь Go і SSR; недоступність
+перевірки — відмова, ніколи не пропуск; витіснення кусається на сервері, клієнтський стоп —
+лише зручність.
+
+| ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
+|---|---|---:|---|---|---|
+| T1 | Спайк до справжнього Go: `authorize` з Redis і Postgres, замір під навантаженням | 1.5h | GATE 2 closed | planned | закриває O1, O2 з plan §11 |
+| T2 | Міграція 00006 + `duration_seconds` у воркері, канарка, `lock_timeout` | 1.5h | — | planned | |
+| T3 | Домен і порти `playback`; Lua з трьома значеннями | 2h | T2 | planned | |
+| T4 | `authorize` + edge-конфіг; порядок умов D-3 | 2h | T1, T3 | planned | |
+| T5 | `play` і heartbeat: контракти, 409/410, прогрес | 2h | T3, T4 | planned | |
+| T6 | Читальна модель навчання + спільний тест предиката | 1.5h | T2 | planned | |
+| T7 | **Віха:** плеєр на мінімальному маршруті, таблиця відновлення | 2h | T5, T6 | planned | після неї існує працюючий продукт |
+| T8 | Навчальна поверхня: зміст, позначки, «продовжити» | 2h | T7 | planned | |
+| T9 | Прогрес у плеєрі: каденція, події, засів `clientSeq` | 1.5h | T7 | planned | |
+| T10 | Ліміт і витіснення наскрізь по курсах | 1.5h | T7 | planned | |
+| T11 | A11y, локалізація, теми, 200% зуму | 1.5h | T8 | planned | |
+| T12 | Проба AV1 у полі мінту | 0.5h | T5 | planned | |
+| ADR-1 | ADR 010 — предикат доступу до появи enrollment | 0.5h | — | planned | конституційний блокер C2 |
+| DOC-1 | `AGENTS.md`: скоуп і «media access is denied» | 0.25h | T4 | planned | конституційний блокер C3 |
+| T13 | Впорядкований гейт і звіт фази | 1h | усі | planned | `docs/playback/report.md` |
