@@ -323,10 +323,13 @@ Redis уже зник, і сервер віддавав би 409 неправд�
 1. `CREATE TABLE lesson_progress` з FK на `users(id)` і **`course_lessons(id)`** ⟵ C11 —
    таблиці `lessons` не існує (`00003_authoring.sql:35`), Phase 5 посилається саме на
    `course_lessons` (`00005_media.sql:6`). Міграція редакції 1 не застосувалась би.
-   **Обидва FK — `ON DELETE CASCADE`, і це не косметика ⟵ C-FK:** `deleteMissingAuthoringLessons`
-   видаляє рядки `course_lessons` при **кожному** збереженні курсу
-   (`course/adapters/postgres/authoring.go:237`), тож FK без `ON DELETE` дав би порушення на
-   першому ж редагуванні курсу, у якого вже є прогрес.
+   **Обидва FK — `ON DELETE CASCADE` ⟵ C-FK, обґрунтування уточнене:**
+   `deleteMissingAuthoringLessons` (`course/adapters/postgres/authoring.go:36-42`)
+   **виконується** на кожному збереженні курсу, але містить
+   `AND NOT (lesson.id::text = ANY($2::text[]))` — тобто **видаляє лише уроки, відсутні в
+   надісланому дереві**. Отже порушення FK настало б не на будь-якому редагуванні, а тоді,
+   коли з курсу прибирають урок, у якого вже є прогрес. Рішення від цього не змінюється;
+   змінюється точність підстави.
 2. `ALTER TABLE video_assets ADD COLUMN duration_seconds numeric NULL` ⟵ C4, з явним
    **`lock_timeout`** ⟵ E-r4: воркер пише в цю таблицю безперервно, тож міграція без
    таймауту чекала б на блокування невизначено довго.
@@ -387,7 +390,7 @@ _Пережив критику; уточнено одне речення._
 
 Переписано після четвертого GATE 2. **Рядків: 94. Ручних: 0.** Рядки, помічені ✅, мають **виміряне** очікування, а не припущене.
 
-**Рівні названо правильно ⟵ C12.** `infrastructure/tests/integration.sh:26-34` монтує **лише
+**Рівні названо правильно ⟵ C12.** `infrastructure/tests/integration.sh` (32 рядки) монтує **лише
 `backend/`** і ганяє Go-тести з testcontainers — **nginx там не існує**. Тому всі edge-твердження
 йдуть у `smoke.sh` (розширюється ⟵ C37), а не в `integration`.
 
