@@ -151,7 +151,7 @@ Compose і фікстур, тобто не може бігти раніше за
 
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
 |---|---|---:|---|---|---|
-| T1 | Спайк до справжнього Go: `authorize` з Redis і Postgres, замір під навантаженням | 1.5h | GATE 2 closed | planned | закриває O1, O2 з plan §11 |
+| T1 | Спайк до справжнього Go: `authorize` з Redis і Postgres, замір під навантаженням | 1.5h | GATE 2 closed | in_progress | закриває **O2**; O1 потребує браузера й переїхав у T7 |
 | T2 | Міграція 00006 + `duration_seconds` у воркері, канарка, `lock_timeout` | 1.5h | — | planned | |
 | T3 | Домен і порти `playback`; Lua з трьома значеннями | 2h | T2 | planned | |
 | T4 | `authorize` + edge-конфіг; порядок умов D-3 | 2h | T1, T3 | planned | |
