@@ -6,11 +6,12 @@ import (
 	"testing"
 )
 
-func TestTranscodingMetricsArePreinitialised(t *testing.T) {
+func TestMetricsArePreinitialised(t *testing.T) {
 	response := httptest.NewRecorder()
 	NewMetrics().Handler().ServeHTTP(response, httptest.NewRequest("GET", "/metrics", nil))
 	body := response.Body.String()
 	for _, series := range []string{
+		`courses_playback_authorization_database_checks_total 0`,
 		`courses_transcoding_job_duration_seconds_count{outcome="ready"} 0`,
 		`courses_transcoding_job_duration_seconds_count{outcome="failed"} 0`,
 		`courses_transcoding_job_duration_seconds_count{outcome="cancelled"} 0`,

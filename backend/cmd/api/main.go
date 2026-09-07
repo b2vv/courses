@@ -19,6 +19,10 @@ import (
 	mediahttp "courses/internal/media/adapters/http"
 	mediapostgres "courses/internal/media/adapters/postgres"
 	mediaapplication "courses/internal/media/application"
+	playbackhttp "courses/internal/playback/adapters/http"
+	playbackpostgres "courses/internal/playback/adapters/postgres"
+	playbackredis "courses/internal/playback/adapters/redis"
+	playbackapplication "courses/internal/playback/application"
 
 	"courses/platform/httpserver"
 	"courses/platform/observability"
@@ -53,6 +57,10 @@ func main() {
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
 		mediaHandler := mediahttp.NewHandler(mediaTickets)
+		playbackOwnership := playbackredis.NewOwnershipReader(dependencies.Redis)
+		playbackAccess := playbackpostgres.NewVideoAccessReader(dependencies.Database, dependencies.Metrics.PlaybackDatabaseChecks)
+		playbackAuthorizer := playbackapplication.NewAuthorizer(playbackOwnership, playbackAccess)
+		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
@@ -61,6 +69,7 @@ func main() {
 				identityHandler.Register(mux)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				playbackHandler.Register(mux, identityHandler.Authenticate)
 			},
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))
