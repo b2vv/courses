@@ -2,27 +2,70 @@
 
 | | |
 |---|---|
-| Дата | 2026-09-05 |
-| Базовий коміт | `0c46f10` |
-| Всього комітів у репо | 93 (`git rev-list --count HEAD`) |
-| Гейт свіжості цього прогону | 17 комітів від `c8d2324` — уся Phase 4a (admin course CRUD, авторизаційний шов, публічна програма). Оновлено архітектурний факт №1 (серверна авторизація тепер ІСНУЄ), §2 (нові seams authoring), §5 (react-hook-form додано). Повне перезбирання відкладене; наступний значущий план — запустити `cto-research` начисто. |
+| Дата | 2026-09-07 |
+| Базовий коміт | `1eb1390` |
+| Всього комітів у репо | 126 (`git rev-list --count HEAD`) |
+| Гейт свіжості цього прогону | **34 коміти** від `0c46f10`, 128 файлів, +19442 рядки — уся Phase 5 (медіа) плюс закритий беклог-пункт B02. Це не оновлення шапки: брифінг перезібрано **начисто** по всіх шести розділах. Попередня редакція описувала репо без жодного рядка медіа. |
+| Тез із міткою `⚠️ неперевірено` | **2** (позначені в §4 і §6) |
 
-Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело.
+Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело,
+а кеш переписується під нього.
 
 ---
 
 ## 1. Вердикт на один екран
 
-**Продукт.** Self-hosted платформа продажу онлайн-курсів (вихідне ТЗ: `work/PRODUCT-BRIEF.md`). Працює: публічний каталог із пошуком, повна сесійна автентифікація — логін, SSR-хедер із користувачем, logout, гарди `/learn` і `/admin` за роллю, три локальні фікстури. Постачання — Docker Compose на одному хості, Nginx на `127.0.0.1`; деплой-таргета немає. Масштаб даних: 2 міграції, каталог ≤50 на сторінку.
+**Продукт.** Self-hosted платформа продажу онлайн-курсів (вихідне ТЗ —
+`work/PRODUCT-BRIEF.md`). Працює: публічний каталог із пошуком, повна сесійна
+автентифікація, адміністрування курсів/модулів/уроків із publish/archive, адміністрування
+акаунтів, **і завантаження відео на урок із транскодуванням у HLS-сходинки**. Постачання —
+Docker Compose на одному хості, Nginx на `127.0.0.1`; деплой-таргета в репозиторії немає
+(`docker-compose.yml`, `docs/media/report.md` §Post-deploy).
 
-**Поточний стан.** Phases 1–4 закриті (4a admin course CRUD, 4b identity-адміністрування; `make check` exit 0, e2e 30/30). Раніше: Phases 1–3 закриті: `make check` — exit 0 по дванадцяти кроках, 175 фронт-тестів, e2e 20/20 (`docs/identity/report.md` §I06 п.4). Черга задач порожня (`work/tasks.md`). Роадмап Phase 4–8 — `work/PRODUCT-BRIEF.md` §21 з уточненнями §24.
+**Поточний стан.** Phases 1–5 закриті. Останній повний ордер-гейт: `make check` exit 0 —
+334 фронт-тести у двох rstest-проєктах, 38 Go-пакетів, e2e 35/35
+(`docs/media/report.md` §2, перезаміряно на `1eb1390`). Черга задач порожня
+(`work/tasks.md`). Роадмап Phase 6–8 — `work/PRODUCT-BRIEF.md` §21 з уточненнями §24
+(п.1–17). Беклог: `work/backlog.md` — B-1 (обсервабельність) відкритий, B-2 закритий
+2026-09-07.
 
-**Живий P0.** Специфікація Phase 4 (admin CRUD курсів/модулів/уроків + publish/archive workflow) через spec-flow. Зафіксовані вимоги до спеки з першого дня: `instructor_id` у першій міграції, handler-level авторизація з першим ендпоїнтом, RHF/TanStack Table в'їжджають зі споживачами (`work/PRODUCT-BRIEF.md` §24, `docs/identity/report.md` §I06 п.9).
+**Живий P0.** Специфікація **Phase 6** (плеєр + підписаний доступ до медіа) через
+`spec-flow`. Два рішення для неї вже ухвалені й записані: §24.16 — друга мова приходить
+окремим аудіо-вивантаженням із мовним тегом, перша доріжка витягується з вихідного відео;
+§24.17 — Phase 6 ставить пробу можливостей AV1-декодера, щоб умова (2) §24.14 стала
+вимірюваною.
 
-**Архітектурний факт №1 — серверна авторизація тепер існує (Phase 4a), клієнтські гарди лишаються лише навігаційними.**
-Станом до 4a серверної перевірки ролі не було ніде; 4a це виправила. Шов: `httpserver.Actor` (`backend/platform/httpserver/actor.go`), експортовані `Authenticate` і `RequireSameOrigin` з identity-хендлера, і `RegisterAdmin` у `internal/course/adapters/http/admin_handler.go` перевіряє роль+власність на кожній admin-операції (матриця відмов пінована контрактними тестами). `Role.CanAdministerAccounts()` (admin-only) — точка розширення, яку 4b переюзує. Клієнтські гарди (`ssr:false` на `/learn`,`/admin`) — досі лише навігаційна зручність, не механізм; сервер вирішує (`docs/admin/report.md` §6).
+### Архітектурний факт №1 — медіа-байти вже існують, але **шва авторизації до них немає взагалі**, і найочевидніше рішення заборонене
 
-**Архітектурний факт №2 — SSR ходить в API повз Nginx.** Сторінкові маршрути рендеряться в SSR-контейнері, який б'є в API напряму: `API_BASE_URL: http://api:8080` (`docker-compose.yml:102`), `apiOrigin()` на сервері віддає саме це (`frontend/src/adapters/api/api-origin.ts:4`). Наслідки вже коштували двох дефектів (неметрований SSR-трафік — аудит MEDIUM-1; логін/логаут фізично неможливі з SSR, бо серверний виклик не несе `Origin`, який `login`/`logout` вимагають рівно один). Правило: для будь-якої edge-політики окремо питати «а SSR цей шлях перетинає?».
+Це те, що найлегше зрозуміти неправильно: «Phase 5 зробила відео, отже плеєр — це майже
+готове». Насправді Phase 5 виробляє байти і **не дає нікому права їх читати**.
+
+| Що саме | Джерело |
+|---|---|
+| `/media` і `/media/` віддають **403 усім, беззастережно** — це не помилка конфігурації, а рішення фази | `infrastructure/nginx/nginx.conf:45-46` |
+| Nginx монтує том із медіа **тільки на читання** і є єдиним, хто взагалі бачить байти | `docker-compose.yml:141` (`media-data:/media:ro`) |
+| Go ніколи не віддає медіа-байти, і це правило, а не збіг | `AGENTS.md` §Architecture: «Nginx serves media bytes; Go and SSR never proxy them» |
+| Отже Phase 6 винаходить шов авторизації **на edge** (підписаний URL / `X-Accel-Redirect` / `auth_request`), а не ендпоїнт у Go, що стрімить файли | наслідок трьох рядків вище |
+
+Тобто робота Phase 6 — не «додати плеєр до готового бекенда», а **спроєктувати відсутній
+механізм доступу** так, щоб він не порушив правило «байти не течуть крізь Go».
+`docs/media/report.md` §6 називає це першим обмеженням фази: «No playback… no signed access».
+
+### Архітектурний факт №2 — SSR ходить в API повз Nginx
+
+Сторінкові маршрути рендеряться в SSR-контейнері, який б'є в API напряму:
+`API_BASE_URL: http://api:8080` (`docker-compose.yml:126`), і серверна гілка `apiOrigin()`
+віддає саме це (`frontend/src/adapters/api/api-origin.ts:4`). Це вже коштувало двох
+дефектів (неметрований SSR-трафік; логін/логаут неможливі з SSR, бо серверний виклик не
+несе `Origin`). **Правило, яке прямо стосується Phase 6:** для будь-якої edge-політики
+окремо питати «а SSR цей шлях перетинає?» — підписаний URL, який видає edge, SSR не побачить.
+
+### Архітектурний факт №3 — виконуваних файлів чотири, і байти не проходять крізь Go API
+
+`backend/cmd/`: `api`, `media-worker`, `upload`, `migrate`. Чанки завантаження йдуть у
+**окремий сервіс `upload:8082`**, куди Nginx маршрутизує `/uploads/` напряму
+(`infrastructure/nginx/nginx.conf:49-63`, `docker-compose.yml:99`), і Go API їх не бачить.
+Композиція API навмисно **не має адаптера сховища** (`docs/media/plan.md`, шапка задач).
 
 ---
 
@@ -30,128 +73,132 @@
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| Що це | Self-hosted платформа продажу курсів із власним відеосховищем, HLS, транскриптами | `work/PRODUCT-BRIEF.md` §1 |
-| Для кого | Відвідувач (каталог); student / instructor / admin — автентифіковані актори | `docs/architecture/context.md:3`, `backend/internal/identity/domain/user.go` |
-| Роадмап | Phase 4 адмінка → 5 upload → 6 playback+progress → 7 транскрипт(+гілки бесід) → 8 замовлення; робоче місце інструктора — окрема пізня фаза | `work/PRODUCT-BRIEF.md` §21, §24 |
-| Формат постачання | Docker Compose; хост-порт публікує тільки Nginx на `127.0.0.1` | `docker-compose.yml:114` |
-| Що працює зараз | Каталог + сторінка курсу, uk/en; логін → returnTo → хедер із ім'ям → logout; `/learn`, `/admin` — чесні порожні shell-и за роллю; `make seed-identities` — три фікстури | `docs/identity/report.md` §I06 п.1, `README.md:17-23` |
-| Чого немає | Реєстрація, скидання пароля, MFA, OAuth, admin CRUD, enrollment, playback, upload, прогрес, коментарі, оплата | `docs/identity/spec.md` §Out of scope, `AGENTS.md:6` |
-| Масштаб даних | 2 міграції; каталог limit ≤50, offset ≤10000 | `backend/migrations/`, `backend/openapi/openapi.yaml` §Pagination |
-| Мова | Контент український; i18next локалізує системний UI (uk/en) | `docs/foundation/report.md` |
+| Що це | Платформа продажу й доставки онлайн-курсів, self-hosted | `work/PRODUCT-BRIEF.md` |
+| Для кого | Студент (каталог, навчання), інструктор (авторство — окрема фаза після Phase 6), адмін | `work/PRODUCT-BRIEF.md` §24.3 |
+| Що працює зараз | каталог із пошуком; логін/сесія/logout; адмін CRUD курсів, модулів, уроків; publish/archive; адміністрування акаунтів; вивантаження відео на урок і транскодування в HLS | `docs/admin/report.md`, `docs/identity/report.md`, `docs/media/report.md` §1 |
+| Чого **немає** | програвання відео, підписаний доступ, прогрес студента, оплати, коментарі, транскрипт, робоче місце інструктора | `AGENTS.md` §Scope; `docs/media/report.md` §6 |
+| Формат постачання | Docker Compose, один хост, Nginx на `127.0.0.1`; TLS немає | `docker-compose.yml`, `work/tasks.md` §Pre-deploy hardening (S01/S02 чекають TLS) |
+| Масштаб даних | 5 міграцій; каталог ≤50 на сторінку; стеля відео 2 GiB, чанк 8 MiB | `backend/migrations/`, `backend/internal/media/domain/asset.go:12`, `frontend/src/domain/media/video.ts:72` |
+| Роадмап | Phase 6 плеєр+прогрес, 7 транскрипт+бесіди, 8 замовлення й оплата | `work/PRODUCT-BRIEF.md` §21 + §24 |
 
----
+**Рішення, які вже ухвалені за Phase 6 і які не переухвалюють:** §24.14 (AV1 відкладено за
+трьома умовами), §24.15+§24.16 (мультимовне аудіо — окремі аудіо-вивантаження з мовним
+тегом), §24.17 (проба можливостей AV1 будується в Phase 6), §24.3 (робоче місце інструктора
+— окрема фаза **після** Phase 6).
 
 ## 3. Кодова база й seams
 
-**Розкладка.** Один Go-модуль `courses` із `cmd/{api,media-worker,migrate}`; бізнес-модулі `internal/{course,identity}`, кожен `domain/application/ports/adapters`; інфраструктура `platform/{architecture,config,httpserver,observability,postgres,redis,runtime}`. Фронтенд: `src/{domain,application,ports,adapters,presentation,app,routes}` — identity-зріз присутній на всіх шарах (`frontend/src/domain/identity`, `application/identity`, `app/composition/identity*.ts`, `presentation/identity`).
+**Форма.** Модульний моноліт на Go + окремі виконувані файли; фронт — TanStack Start/SSR.
+Домен без фреймворків; адаптери дивляться всередину; згенеровані sqlc/Orval моделі живуть в
+адаптерах (`AGENTS.md` §Architecture; напрямок залежностей перевіряється машинно —
+`backend/platform/architecture/boundaries_test.go`, `frontend/scripts/check-architecture.mjs`).
 
-**Межі та що їх перетинає:**
+**Backend-модулі:** `course`, `identity`, `media` — кожен із `{domain,application,ports,adapters}`
+(`backend/internal/`). Спільна інфраструктура — `backend/platform/{architecture,config,httpserver,observability,postgres,redis,runtime}`.
 
-| Seam | Що перетинає | Джерело |
+**Медіа-модуль (новий у Phase 5):**
+
+| Шар | Вміст | Джерело |
 |---|---|---|
-| Браузер ↔ Nginx | HTTP; Nginx — єдиний публічний вхід | `infrastructure/nginx/nginx.conf:37-84` |
-| Nginx ↔ API | тільки `/api/*`; edge чистить `traceparent`/`tracestate`; логін має власну строгу зону | `nginx.conf:29,67-68` |
-| **SSR ↔ API** | **прямий HTTP по внутрішній мережі, повз Nginx**, з явним форвардингом куки | `docker-compose.yml:102`, `frontend/src/adapters/api/request-headers.ts` |
-| Корінь роутера ↔ identity | `beforeLoad: resolveRootIdentity` — один SSR-резолв на запит, дегідрація в кеш `['session']`; куки немає → `null` без мережі; `timeoutMs: 1000` на SSR-гілці | `frontend/src/routes/__root.tsx:25`, `app/composition/root-identity.ts` |
-| Захищені маршрути ↔ сесія | один спільний `requireIdentity` (`fetchQuery` + роль через `notFound()`); маршрути `ssr: false`; layout підписаний на `['session']` і редіректить, коли сесія зникає | `frontend/src/routes/learn.tsx:11-18`, `app/composition/require-identity.ts` |
-| API ↔ worker | тільки черга Redis/Asynq; спільного доменного коду немає | `backend/cmd/media-worker/main.go` |
-| domain ↔ решта (Go) | домен імпортує лише stdlib; application — лише domain/ports; перевіряється тестом | `backend/platform/architecture/boundaries_test.go` |
-| domain ↔ решта (TS) | файли `domain/` без імпортів; `application/`, `ports/` — лише inward; `fetch` у `routes/`/`presentation/` заборонений статично | `frontend/scripts/check-architecture.mjs:44-63` |
-| Generated ↔ домен | sqlc/Orval живуть в адаптерах, мапляться явно; drift — червоний гейт | `Makefile:46,49` |
-| Транспорт ↔ домен (фронт) | один `createApiTransport` → transport outcome; кожен домен мапить у власний union помилок | `frontend/src/adapters/api/transport.ts` |
-| Фікстури ↔ БД | чистий SQL-сід `ON CONFLICT` reconcile-до-файлу, окрема ціль `make seed-identities`; Go його не виконує | `backend/sql/seed-identities.sql`, `Makefile:24` |
-| Nginx ↔ медіа | Nginx віддає байти; Go і SSR не проксюють; зараз `/media/*` → 403 | `AGENTS.md:19`, `nginx.conf:44-45` |
+| domain | `VideoAsset`, шість станів `created→uploading→queued→processing→ready\|failed`, `ClaimToken`, `Generation`, п'ять `FailureReason`, `StorageKey{Kind,ID,Leaf}` із чотирма видами (`source`, `hls`, `thumbnails`, `temporary`) | `backend/internal/media/domain/asset.go:16-39,150-161` |
+| ports | `queue`, `repository`, `storage`, `transcoder` — чотири | `backend/internal/media/ports/` |
+| adapters | `asynq` (черга), `ffmpeg` (транскодер), `filesystem` (сховище на `os.Root`), `http` (API-поверхня), `postgres`, `tus` (протокол-сервер) | `backend/internal/media/adapters/` |
 
-**Request-scope.** QueryClient та i18next — на кожен SSR-запит (`frontend/src/router.tsx:11-14`); глобальних мутабельних клієнтів немає. Хедер — prop-driven, з `refetchOnMount: false` на identity-запиті — інакше кожен маунт бив у `/me` і G07 був червоний (`work/report-i06d.md`).
+**Ключові seams і що їх перетинає:**
 
----
+| Межа | Що перетинає | Джерело |
+|---|---|---|
+| Браузер → `upload:8082` | чанки tus, повз Go API і повз SSR | `infrastructure/nginx/nginx.conf:49-63` |
+| `upload` → Postgres | завершення вивантаження **в одній транзакції** з постановкою задачі | `docs/media/report.md` §1, plan §20/§21 |
+| API → Redis/asynq | продюсер задач транскодування | `backend/internal/media/adapters/asynq/` |
+| `media-worker` → ffmpeg | рендер сходинок; **воркер одноконкурентний** | `backend/cmd/media-worker/main.go:70` (`Concurrency: 1`) |
+| worker → сховище | атомарна публікація з витісненням старої генерації | `backend/internal/media/adapters/filesystem/storage.go:230` (`Publish`) |
+| Nginx → том медіа | **тільки читання, і зараз 403 для всіх** — шов Phase 6 | `docker-compose.yml:141`, `nginx.conf:45-46` |
+| SSR → API | напряму, повз Nginx (факт №2) | `docker-compose.yml:126` |
+
+**Frontend.** `frontend/src/{domain,application,ports,adapters,presentation,app,routes}`.
+Адаптер один — `adapters/api`. П'ять портів, серед них `LessonVideoRepository.ts`.
+tus-клієнт написаний вручну (`adapters/api/tus-client.ts`); згенерований Orval-клієнт —
+`adapters/api/generated/` (руками не правиться, дрейф ловить `make check-generated`).
+
+**Тестові середовища фронту розділені (B02, 2026-09-07):** `frontend/rstest.config.ts`
+декларує два проєкти — `adapter-node` (`node`, `src/adapters/api/**`) і `dom` (`happy-dom`,
+решта). Причина: happy-dom застосовує CORS-safelist до **response**-заголовків, тому
+протокол, що живе в заголовках, не можна було довести в адаптерному шарі. Тепер можна
+(`work/backlog.md` B-2 §Outcome, `docs/media/plan.md` §26).
 
 ## 4. Інфра й доставка
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| CI | Один workflow `ci.yml`, тригер `[push, pull_request]`, timeout 30 хв | `.github/workflows/ci.yml:2,7` |
-| Порядок гейтів | `check`: format-check → lint → typecheck → test → integration → check-generated → build → up → seed → seed-identities → smoke → e2e; CI повторює той самий порядок | `Makefile:54`, `.github/workflows/ci.yml:14-39` |
-| Виміряний стан | Повний `make check` exit 0; 175 фронт-тестів / усі Go-пакети / e2e 20/20 | `docs/identity/report.md` §I06 п.4 |
-| Деплой | Кроку деплою немає — CI лише перевіряє | `.github/workflows/ci.yml` (відсутність job) |
-| Локальний запуск | `make up` (копіює `.env`, білдить, мігрує, чекає health, релоадить Nginx), `make seed`, `make seed-identities` | `Makefile:8-12,22-25`, `README.md:11-15` |
-| Go-тулчейн | Пінований контейнер `golang:1.27.1-bookworm`; Go-тест-контейнери монтують **лише `backend/`** — репо-рутові перевірки живуть в `integration.sh` | `Makefile:2-3`, `work/report-i06f.md` |
-| Node | 24 для нативних фронт-інструментів | `.github/workflows/ci.yml:11` |
-| Rate limits | `api` 10r/s burst 20 · `web` 50r/s burst 100 · `login` 10r/m burst 5, ключ `$binary_remote_addr` | `nginx.conf:21-29` |
-| Моніторинг | Опційний профіль Prometheus; метрики внутрішні | `docker-compose.yml` §prometheus |
+| Сервіси Compose | `postgres`, `redis`, `migrate`, `api`, `media-worker`, `upload`, `frontend`, `nginx`, `prometheus` (профіль) | `docker-compose.yml` |
+| Томи | `postgres-data`, `redis-data`, `media-data`, `prometheus-data` | `docker-compose.yml:164-167` |
+| Порядок гейтів | `format-check → lint → typecheck → test → integration → check-generated → build → up → seed-identities → seed → smoke → e2e` | `Makefile:54`, `.claude/standards.md` |
+| CI | той самий порядок у `.github/workflows/ci.yml`; артефакт — playwright-траси | `.github/workflows/ci.yml:12-39` |
+| Зелене зараз | увесь ланцюг, exit 0 на `1eb1390` | перезаміряно цим прогоном |
+| Rate limits на edge | зони `api` 10r/s, `web` 50r/s, `login` 10r/m, `upload` 30r/s | `infrastructure/nginx/nginx.conf:21-30` |
+| Тіло запиту | `/uploads/` — `client_max_body_size 16m`, буферизація запиту вимкнена | `nginx.conf:50-52` |
+| Деплой | **немає таргета в репозиторії** | `docs/media/report.md` §Post-deploy |
 
-**Пастки вимірювання, всі зафіксовані на практиці:**
-
-- `make e2e` двічі поспіль → 429: e2e логіниться з хоста в зону `login`; другий прогін застає гарячий bucket. З чистого стека проходить; `docker compose restart nginx` скидає лімітер. Справжній фікс — спільний `storageState`, тригер: коли e2e виросте (`work/report-i06g.md`).
-- `smoke` (30 логінів) перед `e2e` — проходить: smoke б'є з docker-мережі, Playwright — з хоста; адреси різні, buckets різні (`docs/identity/report.md` §I06 п.6).
-- Правка `frontend/server.mjs` вимагає `docker compose up -d --build frontend` — інакше e2e міряє старий контейнер (`work/report-i06g.md`).
-- `nginx.conf` — bind-mount; правки невидимі без релоаду; `make up` тепер релоадить (`Makefile:12`).
-- `/healthz` віддає сам Nginx — марний як сигнал готовності фронтенду (`nginx.conf:42`).
-- `check` свідомо білдить двічі (`build`, потім `up`) — наслідок порядку маніфесту (`docs/identity/report.md` §I06 п.6).
-
----
+**Пастки прогону, зафіксовані емпірично:** `make e2e` двічі поспіль ловить 429 — скидається
+`docker compose restart nginx` плюс пересів ідентичностей; медіа-подорож живе в окремому
+Playwright-проєкті, бо рестартує воркер і насичує два CPU. ⚠️ **неперевірено цим прогоном:**
+чи 429 відтворюється й після Phase 5 — цього разу e2e біг один раз (джерело твердження —
+хендоф Phase 5, не власний замір).
 
 ## 5. Залежності
 
-Дельта `eada97b..HEAD` не чіпала `go.mod` і `package.json` — розділ звірено і збережено.
+**Go** (`backend/go.mod`, Go 1.27.1): `pgx/v5` 5.10.0, `goose/v3` 3.28.0, `asynq` 0.26.0,
+`go-redis/v9` 9.22.0, `kin-openapi` 0.149.0, `prometheus/client_golang` 1.24.1,
+OpenTelemetry 1.46.0, `testcontainers-go` 0.44.0, `golang.org/x/crypto` 0.55.0.
 
-**Backend** (`backend/go.mod`): Go 1.27.1 · pgx/v5 5.10.0 · goose/v3 3.28.0 · asynq 0.26.0 · go-redis/v9 9.22.0 · kin-openapi 0.149.0 · prometheus client 1.24.1 · OTel 1.46.0 · `golang.org/x/crypto` 0.55.0 (Argon2id) · testcontainers-go 0.44.0.
+**Frontend** (`frontend/package.json`, Node ≥24 <25): React 19.2.7, TanStack Start 1.168.49
+/ Router 1.170.32 / Query 5.102.8, `react-aria-components` 1.21.0, Rsbuild 2.2.2,
+`@rstest/core` 0.11.11, `msw` 2.15.0, `happy-dom` 20.13.2, `orval` 8.27.0, `zod` 4.5.4,
+`tailwindcss` 4.3.3, `react-hook-form` ^7.87.0, Playwright 1.62.1, `oxlint` 1.81.0 /
+`oxfmt` 0.66.0.
 
-**Frontend** (`frontend/package.json`): React 19.2.7 · TanStack Router 1.170.32 / Query 5.102.8 / Start 1.168.49 · react-aria-components 1.21.0 · i18next 26.4.1 · zod 4.5.4 · tailwindcss 4.3.3 · srvx 1.0.1. Інструменти: Rsbuild 2.2.2, Rstest 0.11.11, Playwright 1.62.1, MSW 2.15.0, Orval 8.27.0, oxlint 1.81.0 / oxfmt 0.66.0, TypeScript 6.0.3.
+**Заблоковане на чому:**
 
-**Що на чому заблоковане:**
+| Що | Чекає на | Джерело |
+|---|---|---|
+| S01 (CSP, HSTS, `Secure`), S02 (`__Host-` кука) | TLS-термінацію, якої немає | `work/tasks.md` §Pre-deploy hardening |
+| AV1 як додаткова сходинка | три умови §24.14; умову (2) робить вимірюваною §24.17 | `work/PRODUCT-BRIEF.md` §24.14, §24.17 |
+| Друга мова аудіо | Phase 6+ разом із плеєром; спосіб доставки вже вирішено | `work/PRODUCT-BRIEF.md` §24.16 |
+| Другий воркер / `Concurrency > 1` | справжній lease-heartbeat | `docs/media/report.md` §6, D-7 |
 
-| Блокування | Джерело |
-|---|---|
-| Orval-клієнт ← `backend/openapi/openapi.yaml`; зміна контракту зобов'язує `make generate`, інакше drift-гейт | `frontend/orval.config.ts:5`, `Makefile:46,49` |
-| sqlc ← `backend/sql/queries`, живе під адаптерами | `Makefile:46` |
-| Заборонені: Rust, ORM, service locator, Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn | `AGENTS.md:12,24` |
-| Зі стек-списку ТЗ ще не встановлені (чекають споживача): RHF і TanStack Table/Virtual → Phase 4, Zustand → 5–6, hls.js → 6, TipTap → 7, ECharts → прогрес/аналітика | `work/PRODUCT-BRIEF.md` §3, `frontend/package.json` |
-
----
+**Версія ffmpeg — не деталь, а вимога до доказів.** Воркер везе **ffmpeg 5.1.9**, хост —
+7.1.1, і поведінка мукcера між ними різна (у 5.1.9 майстер-плейлист не має
+`AVERAGE-BANDWIDTH`). Будь-яке твердження про плейлисти мусить називати бінар; `B33` друкує
+версію воркера в кожен smoke-прогін (`docs/media/report.md` §3).
 
 ## 6. Ризики
 
-**Відкриті знахідки аудиту** (`docs/security/audit-2026-09-03.md`; 0 critical/high; повторне рев'ю гілки I06 — 0 HIGH/MEDIUM, один sub-threshold logout-фікс уже змерджений `1292b3a`):
-
-| ID | Суть | Стан |
+| Ризик | Стан | Джерело |
 |---|---|---|
-| LOW-5 | Немає CSP, Permissions-Policy, HSTS | `S01`, за TLS (`work/tasks.md` §Pre-deploy) |
-| LOW-6 | Куки без `Secure`; `__Host-` неможливий на http | `S01`→`S02`, за TLS (`work/tasks.md:37`) |
+| **Програвання не існує** — `/media/*` 403 для всіх, нема плеєра, підписаного доступу, прогресу | за задумом; це і є Phase 6 | `docs/media/report.md` §6, `nginx.conf:45-46` |
+| **Обсервабельності немає** — фронтового логера нема взагалі, логи живуть як stdout контейнерів і гинуть при рестарті, Prometheus пише серії, які ніхто не читає | відкритий беклог **B-1**, не заплановано | `work/backlog.md` B-1 |
+| **Воркер одноконкурентний, і pass відновлення це припускає** — другий репліка або `Concurrency > 1` потребує lease-heartbeat | тригер записано в D-7 | `backend/cmd/media-worker/main.go:70`, `docs/media/report.md` §6 |
+| **TLS немає**, тому дві безпекові задачі стоять | S01, S02 `planned` | `work/tasks.md` |
+| **Одна аудіо-доріжка** | спосіб доставки другої вирішено (§24.16), реалізація — Phase 6+ | `work/PRODUCT-BRIEF.md` §24.16 |
+| **Метрики не покидають docker-мережу** без TLS і авторизації | навмисно | `work/backlog.md` B-1 §Constraints |
 
-**Свідомий борг із власниками й тригерами:**
+**Свідомий борг у коді практично відсутній:** `TODO`/`FIXME`/`t.Skip(`/`.skip(` — **0**
+входжень у `backend/`, `frontend/src/`, `frontend/e2e/`; маркерів `ponytail:` — **1**
+(`frontend/rstest.config.ts:12`, пояснює спільний rspack-аліас двох тестових проєктів).
 
-| Що | Тригер повернення | Джерело |
-|---|---|---|
-| `presentation/ui/data.tsx` (`Table`, `Pagination`) хардкодить українську | перший рендер цих компонентів англійською — імовірно Phase 4 | `work/report-i06d.md` |
-| `rstest.config.ts` глобально аліасить `@tanstack/react-start/server$` | тест, якому потрібне щось поза `getCookie` | `frontend/rstest.config.ts:10` (`ponytail:`) |
-| `RootIdentity.unavailable` продукується, але жоден споживач не відрізняє його від `anonymous` | еволюція хедера/гардів — дати сенс або згорнути | `work/report-i06a.md` |
-| Надлишкова рання перевірка в `safeReturnTo` — свідомий пояс на trust boundary | — | `work/report-i06c.md` |
-| Worker стартує, задач не обробляє | Phase 5 | `README.md:59`, `backend/cmd/media-worker/main.go` |
-| Індетермінований commit → 503 без куки, свідомо | — | `docs/identity/spec.md` §Security contract |
+**Найкрихкіше місце процесу, а не коду.** Шість раундів GATE 2 у Phase 5 — включно з
+рецензентами, що ганяли справжній ffmpeg і живий PostgreSQL — не побачили, що
+опублікований протокол вивантаження **не міг прийняти перший байт**, що таблиця портів
+суперечила рішенню, яке реалізовувала, і що CHECK-обмеження не обмежувало нічого
+(`array_length('{}',1)` — NULL, а NULL CHECK **виконано**). Усі три знайшов виконавець, у
+момент, коли щось уперше мусило справді запуститись. Висновок, який варто нести в Phase 6:
+гейти читають механізми, але не читають шов між механізмом і підписом, що його обслуговує,
+і не питають, чи система здатна стартувати з порожнього стану
+(`docs/media/report.md` §3).
 
-**Стан медіа-підсистеми перед Phase 5 (перевірено в коді 2026-09-06):**
-
-| Що | Факт | Джерело |
-|---|---|---|
-| media-worker | Asynq-сервер із **порожнім** `NewServeMux()` — жодного хендлера чи продюсера; невідомі задачі падають видимо, а не вдають транскодинг | `backend/cmd/media-worker/main.go:50` |
-| ffmpeg | Уже в образі воркера | `backend/Dockerfile:31` |
-| Том | `media-data` — writable у воркера (`/media`), read-only в nginx (`/media:ro`) | `docker-compose.yml:88,117` |
-| Публічний доступ | `/media` і `/media/` → **403** на edge; байти нікуди не віддаються | `infrastructure/nginx/nginx.conf:44-45` |
-| Модуль | `internal/media` **не існує**; домену VideoAsset/Upload/TranscodingJob немає | `backend/internal/` |
-| Ліміт тіла | `client_max_body_size 1m` — на два порядки менший за відеофайл | `infrastructure/nginx/nginx.conf` |
-
-**Де найкрихкіше:**
-
-| Місце | Чому | Джерело |
-|---|---|---|
-| Серверна авторизація | Не існує; Phase 4 будує її з нуля і не сміє успадкувати з клієнтських гардів | `docs/identity/report.md` §I06 п.7 |
-| Розріз задач | I06: чотири з восьми задач переносили роботу через свої межі; різати треба по виконуваних доказах і межах середовищ, не по файлових/UI-ярликах | `docs/identity/report.md` §I06 п.8 |
-| Точність часу application↔сховище | `time.Now` (нс) не переживав round-trip `timestamptz`; логін був зламаний при зелених тестах | `docs/identity/report.md` I03 п.6 |
-| MSW | Не віддає заголовки запиту хендлеру — форвардинг куки доводиться на білдері заголовків і наживо | `docs/identity/report.md` I05 п.8 |
-| Вартість логіну | Argon2id `m=64MiB,t=3,p=2`; `VerifyDummy` платить ту саму ціну — тому окрема жорстка зона `login` | `backend/internal/identity/adapters/argon2id/verifier.go:14-16`, `nginx.conf:29` |
-| Контракт URL сторінки | `validateSearch`, що емітить дефолт → роутер переписує адресу → 307 (`load-server.js:530`); дефект був у `/login` і `/courses` | `docs/identity/report.md` §Catalog URL contract |
-| Статуси SSR | Лейн маршруту віддає захардкоджений 500 на будь-який throw; досяжні лише 200 / 404 (`notFound()`) / 3xx (`redirect()`) / 500 | `docs/identity/report.md` §Catalog URL contract |
-| Перед публічним bind | TLS, керовані секрети, бекапи, квоти сховища | `README.md:61` |
-
-**⚠️ Неперевірені тези: 0.**
+⚠️ **неперевірено:** чи testcontainers-гонка ryuk-reaper, яка цього прогону дала два падіння
+`make integration` з семи запусків (далі п'ять чистих поспіль), відтворюється поза
+контенцією з `docker compose build`. Схоже, що це середовищний флак, а не дефект коду —
+зміна B02 суто фронтова й Go-тестів не торкається, — але окремого заміру під навантаженням
+не робилось.
