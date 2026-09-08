@@ -165,6 +165,108 @@ test.describe('with a stored admin session', () => {
   });
 });
 
+test.describe('with a stored student session', () => {
+  test.use({ storageState: authStatePath('student') });
+
+  test('B24a B25 lesson controls remain keyboard-visible and usable at 200%', async ({ page }) => {
+    const lessonId = '30000000-0000-4000-8000-000000000001';
+    await page.route('**/api/v1/learn/courses/layout-course', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: '10000000-0000-4000-8000-000000000001',
+          slug: 'layout-course',
+          title: 'Курс для перевірки програвача',
+          summary: 'Перевірка доступного компонування.',
+          description: 'Макет без завантаження медіа.',
+          status: 'published',
+          createdAt: '2026-09-08T08:00:00Z',
+          updatedAt: '2026-09-08T08:00:00Z',
+          publishedAt: '2026-09-08T08:00:00Z',
+          modules: [
+            {
+              id: '20000000-0000-4000-8000-000000000001',
+              title: 'Довга назва модуля для перевірки компонування',
+              lessons: [
+                {
+                  id: lessonId,
+                  title: 'Доступне відтворення на вузькому екрані',
+                  videoState: 'ready',
+                  position: 0,
+                  completed: false,
+                  clientSeq: 0,
+                },
+              ],
+            },
+          ],
+          continueLessonId: lessonId,
+        }),
+      });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.goto(`/learn/layout-course/${lessonId}`);
+    await page.addScriptTag({ content: axe.source });
+    const contrastViolations = () =>
+      page.evaluate(async () => {
+        const result = await window.axe.run(document, {
+          runOnly: { type: 'rule', values: ['color-contrast'] },
+        });
+        return result.violations.map((violation) => violation.id);
+      });
+    expect(await contrastViolations()).toEqual([]);
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    expect(await contrastViolations()).toEqual([]);
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+
+    const play = page.getByRole('button', { name: 'Відтворити' });
+    const seek = page.getByRole('slider', { name: 'Позиція відтворення' });
+    const quality = page.getByRole('button', { name: /Якість/ });
+    await expect(play).toBeVisible();
+    await expect(seek).toBeVisible();
+    await expect(quality).toBeVisible();
+    for (
+      let index = 0;
+      index < 12 && !(await play.evaluate((node) => node === document.activeElement));
+      index += 1
+    )
+      await page.keyboard.press('Tab');
+    await expect(play).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(seek).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(quality).toBeFocused();
+
+    const focusRing = await quality.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+    });
+    expect(focusRing.style).not.toBe('none');
+    expect(focusRing.width).toBeGreaterThanOrEqual(3);
+
+    for (const control of [play, seek, quality]) {
+      const box = await control.boundingBox();
+      if (box === null) throw new Error('Lesson playback control is not rendered');
+      expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    const overlap = await page.locator('.lesson-player-controls').evaluate((controls) => {
+      const items = Array.from(controls.children).map((element) => element.getBoundingClientRect());
+      return items.some((left, index) =>
+        items.slice(index + 1).some((right) => {
+          const horizontal = Math.min(left.right, right.right) - Math.max(left.left, right.left);
+          const vertical = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
+          return horizontal > 1 && vertical > 1;
+        }),
+      );
+    });
+    expect(overlap).toBe(false);
+  });
+});
+
 test('capture desktop catalog and course', async ({ page }) => {
   await page.goto('/courses');
   await page.screenshot({

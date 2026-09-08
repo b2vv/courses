@@ -5,6 +5,7 @@ import { createI18n, I18nProvider } from './app/providers/i18n';
 import { createCatalogDependencies } from './app/composition/catalog';
 import { createAdminDependencies } from './app/composition/admin';
 import { createIdentityDependencies } from './app/composition/identity';
+import { createLearnDependencies } from './app/composition/learn';
 import { detectLocale } from './app/composition/locale';
 import { parseUrlSearch, stringifyUrlSearch } from './app/router/url-search';
 import { routeTree } from './routeTree.gen';
@@ -21,6 +22,7 @@ export function getRouter() {
       admin: createAdminDependencies(),
       catalog: createCatalogDependencies(),
       identityDependencies: createIdentityDependencies(),
+      learn: createLearnDependencies(),
     },
     defaultPreload: 'intent',
     parseSearch: parseUrlSearch,

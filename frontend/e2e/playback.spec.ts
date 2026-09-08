@@ -1,0 +1,466 @@
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type Request,
+  type Response,
+} from '@playwright/test';
+import { promisify } from 'node:util';
+import { authStatePath, trackPageRequests } from './auth';
+
+const execute = promisify(execFile);
+const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fixtures');
+const namespace = `e2e-playback-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const adminID = '40000000-0000-4000-8000-000000000003';
+const moduleID = randomUUID();
+const lessonID = randomUUID();
+
+type CourseToken = { readonly id: string; readonly updatedAt: string };
+type PlaybackSession = {
+  readonly playbackId: string;
+  readonly mediaPath: string;
+  readonly heartbeatSeconds: number;
+  readonly ownershipTtlSeconds: number;
+};
+
+let course: CourseToken | undefined;
+let finishRequestTracking = () => Promise.resolve();
+
+function object(payload: unknown, name: string): object {
+  if (typeof payload !== 'object' || payload === null) throw new Error(`${name} must be an object`);
+  return payload;
+}
+
+function courseToken(payload: unknown): CourseToken {
+  const record = object(payload, 'Admin course response');
+  const id = Reflect.get(record, 'id');
+  const updatedAt = Reflect.get(record, 'updatedAt');
+  if (typeof id !== 'string' || typeof updatedAt !== 'string')
+    throw new Error('Admin course response must carry id and updatedAt');
+  return { id, updatedAt };
+}
+
+function playbackSession(payload: unknown): PlaybackSession {
+  const record = object(payload, 'Playback session');
+  const playbackId = Reflect.get(record, 'playbackId');
+  const mediaPath = Reflect.get(record, 'mediaPath');
+  const heartbeatSeconds = Reflect.get(record, 'heartbeatSeconds');
+  const ownershipTtlSeconds = Reflect.get(record, 'ownershipTtlSeconds');
+  if (
+    typeof playbackId !== 'string' ||
+    typeof mediaPath !== 'string' ||
+    typeof heartbeatSeconds !== 'number' ||
+    typeof ownershipTtlSeconds !== 'number'
+  )
+    throw new Error('Playback session response is incomplete');
+  return { playbackId, mediaPath, heartbeatSeconds, ownershipTtlSeconds };
+}
+
+function videoID(payload: unknown): string {
+  const id = Reflect.get(object(payload, 'Media ticket'), 'videoId');
+  if (typeof id !== 'string') throw new Error('Media ticket response must carry videoId');
+  return id;
+}
+
+async function adminContext(browser: Browser, baseURL: string): Promise<BrowserContext> {
+  return browser.newContext({ baseURL, storageState: authStatePath('admin') });
+}
+
+async function uploadReady(page: Page, file: string): Promise<string> {
+  await page.goto(`/admin/courses/${course?.id ?? 'missing'}`);
+  const lesson = page.getByRole('group', { name: 'Урок 1' });
+  const minted = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/admin/lessons/${lessonID}/video` &&
+      response.request().method() === 'POST',
+  );
+  await lesson.locator('input[type="file"]').setInputFiles(file);
+  const response = await minted;
+  expect(response.status()).toBe(201);
+  const id = videoID(await response.json());
+  await expect(lesson.locator('[data-video-state]')).toHaveAttribute('data-video-state', 'ready', {
+    timeout: 240_000,
+  });
+  return id;
+}
+
+async function openAndPlay(page: Page): Promise<PlaybackSession> {
+  if (course === undefined) throw new Error('Playback course was not created');
+  await page.goto(`/learn/${namespace}/${lessonID}`);
+  const minted = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/playback/sessions' &&
+      response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Відтворити' }).click();
+  const response = await minted;
+  expect(response.status()).toBe(201);
+  await expect.poll(() => videoTime(page)).toBeGreaterThan(0);
+  return playbackSession(await response.json());
+}
+
+function isMediaRequest(request: Request): boolean {
+  return new URL(request.url()).pathname.startsWith('/media/p/');
+}
+
+async function videoTime(page: Page): Promise<number> {
+  return page.locator('video').evaluate((node) => {
+    if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+    return node.currentTime;
+  });
+}
+
+async function videoEnded(page: Page): Promise<boolean> {
+  return page.locator('video').evaluate((node) => {
+    if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+    return node.ended;
+  });
+}
+
+async function setPosition(page: Page, seconds: number) {
+  await page.getByRole('slider', { name: 'Позиція відтворення' }).evaluate((node, value) => {
+    if (!(node instanceof HTMLInputElement)) throw new Error('Playback position is not an input');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (setter === undefined) throw new Error('Native input value setter is unavailable');
+    Reflect.apply(setter, node, [String(value)]);
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  }, seconds);
+}
+
+async function segmentCovering(
+  page: Page,
+  session: PlaybackSession,
+  rendition: string,
+  positionSeconds: number,
+): Promise<string> {
+  const master = new URL(session.mediaPath, page.url());
+  const playlist = new URL(`${rendition}/index.m3u8`, master);
+  const response = await page.request.get(playlist.toString());
+  expect(response.status()).toBe(200);
+  const lines = (await response.text()).split(/\r?\n/);
+  let start = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? '';
+    if (!line.startsWith('#EXTINF:')) continue;
+    const duration = Number.parseFloat(line.slice('#EXTINF:'.length).split(',')[0] ?? '');
+    if (!Number.isFinite(duration) || duration <= 0)
+      throw new Error(`Invalid EXTINF duration in ${playlist.pathname}`);
+    const segment = lines.slice(index + 1).find((candidate) => {
+      const trimmed = candidate.trim();
+      return trimmed !== '' && !trimmed.startsWith('#');
+    });
+    if (segment === undefined) throw new Error(`EXTINF has no segment in ${playlist.pathname}`);
+    if (positionSeconds >= start && positionSeconds < start + duration)
+      return new URL(segment.trim(), playlist).pathname;
+    start += duration;
+  }
+  throw new Error(`No ${rendition} segment covers ${positionSeconds}s`);
+}
+
+test.describe('T7 playback milestone', () => {
+  test.describe.configure({ mode: 'serial', timeout: 420_000 });
+
+  test.beforeAll(async ({ browser, baseURL }) => {
+    // `describe.configure` sets the timeout of the tests, not of this hook, and the hook
+    // transcodes a five-minute fixture before the first test can run.
+    test.setTimeout(420_000);
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const context = await adminContext(browser, baseURL);
+    const page = await context.newPage();
+    const draft = {
+      slug: namespace,
+      title: `T7 playback ${namespace}`,
+      summary: 'A real HLS playback fixture.',
+      description: 'Run-scoped course for the T7 browser recovery table.',
+      instructorId: adminID,
+    };
+    try {
+      const created = await context.request.post('/api/v1/admin/courses', {
+        data: draft,
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(created.status()).toBe(201);
+      course = courseToken(await created.json());
+      const saved = await context.request.put(`/api/v1/admin/courses/${course.id}`, {
+        data: {
+          expectedUpdatedAt: course.updatedAt,
+          course: draft,
+          modules: [
+            {
+              id: moduleID,
+              title: `Module ${namespace}`,
+              lessons: [
+                {
+                  id: lessonID,
+                  title: `Recovery ${namespace}`,
+                  description: 'HLS ownership and recovery.',
+                },
+              ],
+            },
+          ],
+        },
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(saved.status()).toBe(200);
+      course = courseToken(await saved.json());
+      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-5min.mp4'));
+      const published = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+        data: { status: 'published', expectedUpdatedAt: course.updatedAt },
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(published.status()).toBe(200);
+      course = courseToken(await published.json());
+    } finally {
+      await context.close();
+    }
+  });
+
+  test.beforeEach(({ page }) => {
+    finishRequestTracking = trackPageRequests(page);
+  });
+
+  test.afterEach(async () => {
+    await finishRequestTracking();
+  });
+
+  test.afterAll(async () => {
+    if (course === undefined) return;
+    await execute(
+      'docker',
+      [
+        'compose',
+        'exec',
+        '-T',
+        'postgres',
+        'sh',
+        '-eu',
+        '-c',
+        // psql interpolates `:'name'` only while parsing its own input, never inside `-c`,
+        // so the statement is fed on stdin.
+        `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DELETE FROM courses WHERE id = :'course_id';
+SQL`,
+        'playback-cleanup',
+        course.id,
+      ],
+      { cwd: repositoryRoot, timeout: 60_000 },
+    );
+  });
+
+  test.describe('as a student', () => {
+    test.use({ storageState: authStatePath('student') });
+
+    test('P01 P09 P10 plays real HLS, selects a rung and seeks into unloaded media', async ({
+      page,
+    }) => {
+      const mediaResponses: Response[] = [];
+      page.on('response', (response) => {
+        if (new URL(response.url()).pathname.startsWith('/media/p/')) mediaResponses.push(response);
+      });
+      const session = await openAndPlay(page);
+      const expectedSegment = await segmentCovering(page, session, '360p', 80);
+      await expect(page.getByRole('button', { name: /Якість/ })).toBeVisible();
+      await page.getByRole('button', { name: /Якість/ }).click();
+      await page.getByRole('option', { name: '360p' }).click();
+      await setPosition(page, 80);
+      await expect
+        .poll(() =>
+          mediaResponses.some(
+            (response) =>
+              response.status() === 200 && new URL(response.url()).pathname === expectedSegment,
+          ),
+        )
+        .toBe(true);
+      expect(mediaResponses.some((response) => response.status() === 200)).toBe(true);
+      expect(await videoTime(page)).toBeGreaterThan(70);
+    });
+
+    test('P08 renews ownership at least four times during a 30-second view', async ({ page }) => {
+      let heartbeats = 0;
+      let deniedSegments = 0;
+      page.on('response', (response) => {
+        const pathname = new URL(response.url()).pathname;
+        if (pathname === '/api/v1/playback/heartbeat' && response.status() === 204) heartbeats += 1;
+        if (pathname.startsWith('/media/p/') && response.status() === 403) deniedSegments += 1;
+      });
+      const session = await openAndPlay(page);
+      expect(
+        {
+          heartbeatSeconds: session.heartbeatSeconds,
+          ownershipTtlSeconds: session.ownershipTtlSeconds,
+        },
+        'Recreate api with the documented T7 2s/6s profile',
+      ).toEqual({ heartbeatSeconds: 2, ownershipTtlSeconds: 6 });
+      await page.waitForTimeout(30_000);
+      expect(heartbeats).toBeGreaterThanOrEqual(4);
+      expect(deniedSegments).toBe(0);
+      expect(await videoTime(page)).toBeGreaterThan(25);
+    });
+
+    test('B39 O1 remints after 410 without takeover and prints browser measurements', async ({
+      page,
+    }) => {
+      const active = new Set<Request>();
+      let activeAtMint = -1;
+      let playRequests = 0;
+      page.on('request', (request) => {
+        if (isMediaRequest(request)) active.add(request);
+        if (new URL(request.url()).pathname === '/api/v1/playback/sessions') {
+          playRequests += 1;
+          if (playRequests === 2) activeAtMint = active.size;
+        }
+      });
+      const settle = (request: Request) => active.delete(request);
+      page.on('requestfinished', settle);
+      page.on('requestfailed', settle);
+      const session = await openAndPlay(page);
+      await page.getByRole('button', { name: 'Пауза' }).click();
+      const before = await page.locator('video').evaluate((video) => {
+        if (!(video instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        const descriptor = Object.getOwnPropertyDescriptor(
+          HTMLMediaElement.prototype,
+          'currentTime',
+        );
+        if (descriptor?.get === undefined || descriptor.set === undefined)
+          throw new Error('HTMLMediaElement.currentTime descriptor is unavailable');
+        const getCurrentTime = descriptor.get;
+        const setCurrentTime = descriptor.set;
+        const writes: Array<{ before: number; assigned: number }> = [];
+        Reflect.set(video, '__o1CurrentTimeWrites', writes);
+        Object.defineProperty(video, 'currentTime', {
+          configurable: true,
+          get: () => Reflect.apply(getCurrentTime, video, []),
+          set: (assigned: number) => {
+            writes.push({ before: Reflect.apply(getCurrentTime, video, []), assigned });
+            Reflect.apply(setCurrentTime, video, [assigned]);
+          },
+        });
+        return Reflect.apply(getCurrentTime, video, []);
+      });
+      await page.waitForTimeout((session.ownershipTtlSeconds + 1) * 1_000);
+      const activeImmediatelyBeforeRemint = active.size;
+      await page.getByRole('button', { name: 'Відтворити' }).click();
+      await expect.poll(() => playRequests).toBe(2);
+      await expect(page.getByText('Відео відтворюється на іншому пристрої.')).toHaveCount(0);
+      await expect.poll(() => videoTime(page)).toBeGreaterThan(before);
+      const writes = await page.locator('video').evaluate((video) => {
+        const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
+        if (!Array.isArray(value)) return [];
+        return value.flatMap((entry) => {
+          if (typeof entry !== 'object' || entry === null) return [];
+          const beforeWrite = Reflect.get(entry, 'before');
+          const assigned = Reflect.get(entry, 'assigned');
+          return typeof beforeWrite === 'number' && typeof assigned === 'number'
+            ? [{ before: beforeWrite, assigned }]
+            : [];
+        });
+      });
+      const restoreWrite = writes.at(-1);
+      const stopLoadObservation =
+        activeImmediatelyBeforeRemint === 0
+          ? 'inconclusive: no old request was in flight immediately before remint'
+          : activeAtMint === 0
+            ? 'yes'
+            : `no: ${activeAtMint} old request(s) remained`;
+      console.log(
+        `O1 hls.js in-flight immediately before remint: ${activeImmediatelyBeforeRemint}`,
+      );
+      console.log(`O1 hls.js in-flight when mint request began after stopLoad: ${activeAtMint}`);
+      console.log(`O1 stopLoad cleared old in-flight requests before mint: ${stopLoadObservation}`);
+      console.log(
+        `O1 currentTime before explicit restore: ${restoreWrite?.before ?? 'not observed'}; assigned restore: ${restoreWrite?.assigned ?? 'not observed'}; pre-remint: ${before}`,
+      );
+      expect(activeAtMint).toBeGreaterThanOrEqual(0);
+      expect(restoreWrite).toBeDefined();
+    });
+
+    test('B40 finishes the retained generation and sees replacement on next opening', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const first = await openAndPlay(page);
+      const oldVideo = /\/hls\/([^/]+)\/master\.m3u8$/.exec(first.mediaPath)?.[1];
+      if (oldVideo === undefined) throw new Error('First playback path has no video id');
+      const context = await adminContext(browser, baseURL);
+      try {
+        const adminPage = await context.newPage();
+        const replacement = await uploadReady(
+          adminPage,
+          path.join(fixtureDirectory, 'e2e-1280x720-5min.mp4'),
+        );
+        expect(replacement).not.toBe(oldVideo);
+      } finally {
+        await context.close();
+      }
+      const oldResponses: number[] = [];
+      page.on('response', (response) => {
+        const pathname = new URL(response.url()).pathname;
+        if (pathname.includes(`/hls/${oldVideo}/`) && pathname.endsWith('.m4s'))
+          oldResponses.push(response.status());
+      });
+      await setPosition(page, 298);
+      await expect.poll(() => videoEnded(page)).toBe(true);
+      expect(oldResponses).toContain(200);
+      expect(oldResponses).not.toContain(404);
+      expect(oldResponses).not.toContain(403);
+      await page.reload();
+      const next = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === '/api/v1/playback/sessions',
+      );
+      await page.getByRole('button', { name: 'Відтворити' }).click();
+      const nextSession = playbackSession(await (await next).json());
+      expect(nextSession.mediaPath).not.toContain(`/hls/${oldVideo}/`);
+    });
+
+    test('R04 archive stops a started student view', async ({ page, browser, baseURL }) => {
+      if (baseURL === undefined || course === undefined)
+        throw new Error('Playback course fixture is unavailable');
+      await openAndPlay(page);
+      await page.waitForTimeout(31_000);
+      const deniedSegment = page.waitForResponse(
+        (response) => isMediaRequest(response.request()) && response.status() === 403,
+      );
+      const context = await adminContext(browser, baseURL);
+      try {
+        const archived = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+          data: { status: 'archived', expectedUpdatedAt: course.updatedAt },
+          headers: { Origin: new URL(baseURL).origin },
+        });
+        expect(archived.status()).toBe(200);
+        course = courseToken(await archived.json());
+      } finally {
+        await context.close();
+      }
+      await setPosition(page, 120);
+      await deniedSegment;
+      await expect(
+        page.getByRole('heading', { name: 'Перегляд зупинено. Курс більше недоступний.' }),
+      ).toBeVisible();
+    });
+  });
+
+  test.describe('as an admin', () => {
+    test.use({ storageState: authStatePath('admin') });
+
+    test('P11 plays the archived course through the same route', async ({ page }) => {
+      const segment = page.waitForResponse(
+        (response) =>
+          isMediaRequest(response.request()) &&
+          /\.m4s$/.test(new URL(response.url()).pathname) &&
+          response.status() === 200,
+      );
+      await openAndPlay(page);
+      expect((await segment).status()).toBe(200);
+    });
+  });
+});

@@ -17,6 +17,7 @@ import { createAdminUserQueries } from '../app/composition/admin-user-queries';
 import { createAdminVideoQueries } from '../app/composition/admin-video-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
+import { createLearnQueries } from '../app/composition/learn-queries';
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
 import { asBrandedId } from '../domain/course/course';
@@ -31,6 +32,7 @@ import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
+import type { PlaybackRepository } from '../ports/PlaybackRepository';
 import type { AuthenticatedUser, Role } from '../domain/identity/identity';
 import { routeTree } from '../routeTree.gen';
 
@@ -140,6 +142,11 @@ function createTestRouter(
     transfer: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     cancelUpload: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
   };
+  const playbackRepository: PlaybackRepository = {
+    getCourse: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+    play: async () => ({ ok: false, error: { code: 'lesson_not_found' } }),
+    heartbeat: async () => ({ ok: false, error: { code: 'playback_session_expired' } }),
+  };
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [href] }),
@@ -152,6 +159,12 @@ function createTestRouter(
       },
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
+      learn: {
+        ...createLearnQueries(playbackRepository),
+        createMedia: () => {
+          throw new Error('Playback media is not used by route guard tests');
+        },
+      },
     },
     defaultPendingMs: 0,
     defaultPendingMinMs: 0,

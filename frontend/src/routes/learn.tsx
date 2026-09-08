@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
 import {
@@ -20,6 +20,12 @@ export const Route = createFileRoute('/learn')({
 function LearnRoute() {
   const { identityDependencies } = Route.useRouteContext();
   useRedirectWhenSessionEnds(identityDependencies);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  if (pathname !== '/learn' && pathname !== '/learn/') return <Outlet />;
+  return <LearnEmptyState />;
+}
+
+export function LearnEmptyState() {
   const { t } = useTranslation();
   return (
     <EmptyState title={t('learn.title')}>

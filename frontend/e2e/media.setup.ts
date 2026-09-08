@@ -13,13 +13,15 @@ const shortSizes = ['640x360', '1280x720', '320x240'] as const;
 async function compose(...args: string[]) {
   return execute('docker', ['compose', ...args], {
     cwd: repositoryRoot,
-    timeout: 120_000,
+    timeout: 300_000,
     maxBuffer: 1024 * 1024,
   });
 }
 
 test('generate the four media fixtures with the worker ffmpeg', async () => {
-  test.setTimeout(120_000);
+  // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
+  // so the budget covers all four encodes plus streaming the bytes out.
+  test.setTimeout(600_000);
   await mkdir(fixtureDirectory, { recursive: true });
   await compose(
     'exec',

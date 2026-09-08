@@ -16,7 +16,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: ['**/recovery.spec.ts', '**/media.spec.ts'],
+      testIgnore: ['**/recovery.spec.ts', '**/media.spec.ts', '**/playback.spec.ts'],
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
     },
@@ -29,9 +29,17 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // Playback owns another long transcode plus 30-second/expiry measurements. It reuses the
+      // media setup bytes but runs alone so its network counts cannot race the Phase 5 journey.
+      name: 'playback',
+      testMatch: '**/playback.spec.ts',
+      dependencies: ['media'],
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'recovery',
       testMatch: '**/recovery.spec.ts',
-      dependencies: ['setup', 'chromium', 'media'],
+      dependencies: ['playback'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
