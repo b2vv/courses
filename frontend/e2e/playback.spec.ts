@@ -538,7 +538,10 @@ SQL`,
     // So the block starts from a known state instead of a hoped-for one. Lessons 2 and 4
     // carry no video, so there is no other lesson to move onto; this runs before R04,
     // which archives the course irreversibly.
-    test.beforeAll(async () => {
+    // Cleaning on entry protects the block that cleans; only cleaning on exit protects the
+    // tests that come after it. R04 opens lesson 1 too, and would inherit 290 from P02 - the
+    // very state B39 hung on - so the reset runs on both sides and the order stops mattering.
+    const resetLessonProgress = async () => {
       if (course === undefined) throw new Error('Playback course was not created');
       await execute(
         'docker',
@@ -562,7 +565,10 @@ SQL`,
         ],
         { cwd: repositoryRoot, timeout: 60_000 },
       );
-    });
+    };
+
+    test.beforeAll(resetLessonProgress);
+    test.afterAll(resetLessonProgress);
 
     test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
       page,
