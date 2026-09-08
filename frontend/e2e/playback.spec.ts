@@ -85,9 +85,30 @@ async function uploadReady(page: Page, file: string): Promise<string> {
   const response = await minted;
   expect(response.status()).toBe(201);
   const id = videoID(await response.json());
-  await expect(lesson.locator('[data-video-state]')).toHaveAttribute('data-video-state', 'ready', {
-    timeout: 240_000,
-  });
+  // Чекати на data-video-state уроку не можна: якщо в уроку вже була готова генерація,
+  // атрибут показує 'ready' МИТТЄВО, і хелпер повертається до того, як нове відео
+  // дотранскодувалось. Питаємо стан САМЕ цього asset id.
+  await expect
+    .poll(
+      async () => {
+        const listed = await page.request.get(
+          `/api/v1/admin/courses/${course?.id ?? 'missing'}/videos`,
+        );
+        if (listed.status() !== 200) return `http ${listed.status()}`;
+        const body: unknown = await listed.json();
+        if (typeof body !== 'object' || body === null || !('items' in body)) return 'no items';
+        const items = (body as { items: unknown }).items;
+        if (!Array.isArray(items)) return 'items not an array';
+        for (const item of items) {
+          if (typeof item !== 'object' || item === null) continue;
+          const record = item as { videoId?: unknown; state?: unknown };
+          if (record.videoId === id && typeof record.state === 'string') return record.state;
+        }
+        return 'absent';
+      },
+      { timeout: 240_000, intervals: [1_000] },
+    )
+    .toBe('ready');
   return id;
 }
 

@@ -16,7 +16,13 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: ['**/recovery.spec.ts', '**/media.spec.ts', '**/playback.spec.ts'],
+      testIgnore: [
+        '**/recovery.spec.ts',
+        '**/media.spec.ts',
+        '**/playback.spec.ts',
+        '**/playback.setup.ts',
+        '**/playback.teardown.ts',
+      ],
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
     },
@@ -33,8 +39,21 @@ export default defineConfig({
       // media setup bytes but runs alone so its network counts cannot race the Phase 5 journey.
       name: 'playback',
       testMatch: '**/playback.spec.ts',
-      dependencies: ['media'],
+      // P08 must observe several ownership renewals inside one view, which the shipped
+      // 30/180 cadence cannot show without two minutes of playback. The profile project
+      // recreates api at 2/6 and the teardown puts the documented defaults back, so
+      // docker-compose.yml keeps 30/180 for development and for every other project.
+      dependencies: ['media', 'playback-profile'],
+      teardown: 'playback-profile-teardown',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'playback-profile',
+      testMatch: '**/playback.setup.ts',
+    },
+    {
+      name: 'playback-profile-teardown',
+      testMatch: '**/playback.teardown.ts',
     },
     {
       name: 'recovery',
