@@ -694,6 +694,92 @@ nav a {
   gap: var(--space-4);
   max-inline-size: 64rem;
 }
+.course-learning {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 23rem);
+  align-items: start;
+  gap: clamp(var(--space-6), 4vw, var(--space-8));
+}
+.course-learning-player {
+  min-inline-size: 0;
+}
+.course-outline {
+  border-block-start: 3px solid var(--color-primary);
+  background: var(--color-surface);
+}
+.course-outline-heading {
+  padding: var(--space-6) var(--space-4) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+}
+.course-outline-heading .eyebrow,
+.course-outline-heading h2 {
+  margin: 0;
+}
+.course-outline-heading h2 {
+  margin-block-start: var(--space-1);
+  font-size: 1.35rem;
+}
+.course-outline-modules,
+.course-outline-lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.course-outline-module > h3 {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  margin: 0;
+  padding: var(--space-6) var(--space-4) var(--space-2);
+  font-size: 1rem;
+}
+.course-outline-module > h3 > span {
+  color: var(--color-muted);
+  font: 0.72rem var(--font-utility);
+  letter-spacing: 0.08em;
+}
+.course-outline-lesson {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  min-block-size: var(--control-min-size);
+  padding: var(--space-2) var(--space-4);
+  border-inline-start: 3px solid transparent;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.course-outline-lesson:hover {
+  background: var(--color-background);
+}
+.course-outline-lesson[data-current] {
+  border-inline-start-color: var(--color-primary);
+  background: var(--color-background);
+  font-weight: 700;
+}
+.course-outline-number {
+  color: var(--color-muted);
+  font: 0.72rem var(--font-utility);
+}
+.course-outline-title {
+  min-inline-size: 0;
+}
+.course-outline-state {
+  grid-column: 2;
+  color: var(--color-muted);
+  font: 0.68rem var(--font-utility);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.course-outline-state[data-state='completed'] {
+  color: var(--color-success);
+}
+@media (max-width: 64rem) {
+  .course-learning {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .lesson-player h1 {
   margin-block-end: 0;
 }

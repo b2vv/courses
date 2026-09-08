@@ -39,9 +39,9 @@ export function CourseView({ course }: { course: CourseDetail }) {
           )}
         </div>
         <aside className="availability">
-          <h2>{t('course.comingSoon')}</h2>
-          <p>{t('course.unavailable')}</p>
-          <Link href="/courses">{t('course.continue')}</Link>
+          <h2>{t('course.learningTitle')}</h2>
+          <p>{t('course.learningHint')}</p>
+          <Link href={`/learn/${course.slug}`}>{t('course.startLearning')}</Link>
         </aside>
       </div>
     </article>

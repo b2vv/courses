@@ -53,14 +53,17 @@ export const en = {
       all: '← All courses',
       about: 'About the course',
       program: 'Course program',
-      comingSoon: 'Learning access is coming soon',
-      unavailable:
-        'You can review the course description now. Lessons and purchasing are still being prepared.',
-      continue: 'Keep browsing',
+      learningTitle: 'Ready to begin?',
+      learningHint: 'We will open the first unfinished lesson in the course program.',
+      startLearning: 'Start learning',
     },
     learn: {
       title: 'Your learning',
       empty: 'Courses will appear here when learning access opens.',
+      program: 'Course program',
+      outline: 'Course contents',
+      completed: 'Completed',
+      current: 'Current lesson',
       video: {
         noVideo: 'This lesson has no video yet.',
         processing: 'The video is being prepared.',

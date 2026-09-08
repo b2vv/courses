@@ -1,16 +1,31 @@
 import { useMemo } from 'react';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
-import { parseLessonRoute } from '../app/router/learn-route';
+import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import { lessonInCourse } from '../domain/playback/playback';
+import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { LearnEmptyState } from './learn';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
   beforeLoad: async ({ context, params, abortController }) => {
+    const courseSlug = parseCourseRoute(params._splat);
+    if (courseSlug !== null) {
+      const course = await ensureRouteQuery(
+        context.queryClient,
+        context.learn.course(courseSlug),
+        abortController.signal,
+      );
+      if (course.continueLessonId === null) return { lessonRoute: null };
+      throw redirect({
+        to: '/learn/$',
+        params: { _splat: `${course.slug}/${course.continueLessonId}` },
+        replace: true,
+      });
+    }
     const lessonRoute = parseLessonRoute(params._splat);
     if (lessonRoute === null) return { lessonRoute: null };
     const course = await ensureRouteQuery(
@@ -62,11 +77,13 @@ function LessonRoutePlayer({
     [learn, lessonId, queryClient, slug],
   );
   return (
-    <LessonPlayer
-      courseTitle={course.title}
-      lesson={found.value}
-      actions={actions}
-      createMedia={learn.createMedia}
-    />
+    <CourseLearningView course={course} currentLessonId={lessonId}>
+      <LessonPlayer
+        courseTitle={course.title}
+        lesson={found.value}
+        actions={actions}
+        createMedia={learn.createMedia}
+      />
+    </CourseLearningView>
   );
 }

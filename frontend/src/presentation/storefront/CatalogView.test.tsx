@@ -57,7 +57,7 @@ describe('catalog presentation', () => {
     expect(screen.queryByRole('link', { name: 'Наступна →' })).toBeNull();
   });
 
-  it('shows a complete detail description and an honest availability message', () => {
+  it('shows a complete detail description and a course learning entry', () => {
     render(<CourseView course={architectureCourse} />);
 
     expect(
@@ -66,7 +66,10 @@ describe('catalog presentation', () => {
     expect(
       screen.getByText('Працюємо з портами та адаптерами. Завершуємо наскрізним тестом API.'),
     ).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Навчання незабаром' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Готові почати?' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
+      '/learn/go-architecture',
+    );
     expect(screen.getByRole('link', { name: '← Усі курси' }).getAttribute('href')).toBe('/courses');
 
     const programHeading = screen.getByRole('heading', { name: 'Програма курсу' });

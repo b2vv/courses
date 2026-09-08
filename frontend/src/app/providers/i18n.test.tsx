@@ -7,9 +7,58 @@ import { uk } from './locales/uk';
 import { LanguageSwitcher } from '../../presentation/LanguageSwitcher';
 import { HomeView } from '../../presentation/storefront/HomeView';
 
+const pluralSuffix = /_(?:zero|one|two|few|many|other)$/;
+
 const withoutPluralForms = (keys: string[]) => [
-  ...new Set(keys.map((key) => key.replace(/_(?:one|few|many|other)$/, ''))),
+  ...new Set(keys.map((key) => key.replace(pluralSuffix, ''))),
 ];
+
+function flattenLocale(value: unknown, prefix = ''): Map<string, string> {
+  if (typeof value === 'string') return new Map([[prefix, value]]);
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new Error(`Locale value at ${prefix || '<root>'} must be an object or string`);
+  const flattened = new Map<string, string>();
+  for (const [key, child] of Object.entries(value)) {
+    const childPrefix = prefix === '' ? key : `${prefix}.${key}`;
+    for (const [path, text] of flattenLocale(child, childPrefix)) flattened.set(path, text);
+  }
+  return flattened;
+}
+
+function baseKeys(locale: Map<string, string>) {
+  return [...new Set([...locale.keys()].map((key) => key.replace(pluralSuffix, '')))].sort();
+}
+
+function pluralBases(...locales: Array<Map<string, string>>) {
+  return [
+    ...new Set(
+      locales.flatMap((locale) =>
+        [...locale.keys()]
+          .filter((key) => pluralSuffix.test(key))
+          .map((key) => key.replace(pluralSuffix, '')),
+      ),
+    ),
+  ];
+}
+
+test('B26 keeps complete non-empty locale trees aligned with language-specific plurals', () => {
+  const locales = {
+    en: flattenLocale(en.translation),
+    uk: flattenLocale(uk.translation),
+  };
+
+  expect(baseKeys(locales.uk)).toEqual(baseKeys(locales.en));
+  for (const [language, locale] of Object.entries(locales)) {
+    expect([...locale.entries()].filter(([, value]) => value.trim() === '')).toEqual([]);
+    const categories = new Intl.PluralRules(language).resolvedOptions().pluralCategories;
+    for (const base of pluralBases(locales.en, locales.uk)) {
+      expect(
+        categories.filter((category) => !locale.has(`${base}_${category}`)),
+        `${language} plural forms for ${base}`,
+      ).toEqual([]);
+    }
+  }
+});
 
 test('keeps shared UI and administration keys aligned across locale bundles', () => {
   expect(withoutPluralForms(Object.keys(uk.translation.ui))).toEqual(

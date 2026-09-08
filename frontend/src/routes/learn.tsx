@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
 import {
@@ -11,6 +11,8 @@ export const Route = createFileRoute('/learn')({
   ssr: false,
   beforeLoad: async ({ context, location }) => {
     await requireIdentity(context, location);
+    if (location.pathname === '/learn' || location.pathname === '/learn/')
+      throw redirect({ to: '/courses', replace: true });
   },
   component: LearnRoute,
   pendingComponent: ProtectedRoutePending,

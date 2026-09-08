@@ -21,11 +21,21 @@ const namespace = `e2e-playback-${Date.now().toString(36)}-${randomUUID().slice(
 const adminID = '40000000-0000-4000-8000-000000000003';
 const moduleID = randomUUID();
 const lessonID = randomUUID();
+const secondLessonID = randomUUID();
+const secondModuleID = randomUUID();
+const thirdLessonID = randomUUID();
+const fourthLessonID = randomUUID();
 
 type CourseToken = { readonly id: string; readonly updatedAt: string };
+type UploadTarget = {
+  readonly lessonID: string;
+  readonly moduleNumber: number;
+  readonly lessonNumber: number;
+};
 type PlaybackSession = {
   readonly playbackId: string;
   readonly mediaPath: string;
+  readonly clientSeq: number;
   readonly heartbeatSeconds: number;
   readonly ownershipTtlSeconds: number;
 };
@@ -51,16 +61,18 @@ function playbackSession(payload: unknown): PlaybackSession {
   const record = object(payload, 'Playback session');
   const playbackId = Reflect.get(record, 'playbackId');
   const mediaPath = Reflect.get(record, 'mediaPath');
+  const clientSeq = Reflect.get(record, 'clientSeq');
   const heartbeatSeconds = Reflect.get(record, 'heartbeatSeconds');
   const ownershipTtlSeconds = Reflect.get(record, 'ownershipTtlSeconds');
   if (
     typeof playbackId !== 'string' ||
     typeof mediaPath !== 'string' ||
+    typeof clientSeq !== 'number' ||
     typeof heartbeatSeconds !== 'number' ||
     typeof ownershipTtlSeconds !== 'number'
   )
     throw new Error('Playback session response is incomplete');
-  return { playbackId, mediaPath, heartbeatSeconds, ownershipTtlSeconds };
+  return { playbackId, mediaPath, clientSeq, heartbeatSeconds, ownershipTtlSeconds };
 }
 
 function videoID(payload: unknown): string {
@@ -73,12 +85,50 @@ async function adminContext(browser: Browser, baseURL: string): Promise<BrowserC
   return browser.newContext({ baseURL, storageState: authStatePath('admin') });
 }
 
-async function uploadReady(page: Page, file: string): Promise<string> {
+function heartbeatPosition(response: Response, expectedLessonID: string): number | null {
+  if (
+    response.status() !== 204 ||
+    new URL(response.url()).pathname !== '/api/v1/playback/heartbeat'
+  )
+    return null;
+  const body: unknown = response.request().postDataJSON();
+  if (typeof body !== 'object' || body === null) return null;
+  const position = Reflect.get(body, 'positionSeconds');
+  return Reflect.get(body, 'lessonId') === expectedLessonID && typeof position === 'number'
+    ? position
+    : null;
+}
+
+function learningLessonPosition(payload: unknown, expectedLessonID: string): number {
+  const modules = Reflect.get(object(payload, 'Learning course'), 'modules');
+  if (!Array.isArray(modules)) throw new Error('Learning course modules must be an array');
+  for (const module of modules) {
+    if (typeof module !== 'object' || module === null) continue;
+    const lessons = Reflect.get(module, 'lessons');
+    if (!Array.isArray(lessons)) continue;
+    for (const lesson of lessons) {
+      if (typeof lesson !== 'object' || lesson === null) continue;
+      if (Reflect.get(lesson, 'id') !== expectedLessonID) continue;
+      const position = Reflect.get(lesson, 'position');
+      if (typeof position !== 'number')
+        throw new Error('Learning lesson must carry numeric position');
+      return position;
+    }
+  }
+  throw new Error(`Learning course does not contain lesson ${expectedLessonID}`);
+}
+
+async function uploadReady(
+  page: Page,
+  file: string,
+  target: UploadTarget = { lessonID, moduleNumber: 1, lessonNumber: 1 },
+): Promise<string> {
   await page.goto(`/admin/courses/${course?.id ?? 'missing'}`);
-  const lesson = page.getByRole('group', { name: 'Урок 1' });
+  const module = page.getByRole('group', { name: `Модуль ${target.moduleNumber}` });
+  const lesson = module.getByRole('group', { name: `Урок ${target.lessonNumber}` });
   const minted = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === `/api/v1/admin/lessons/${lessonID}/video` &&
+      new URL(response.url()).pathname === `/api/v1/admin/lessons/${target.lessonID}/video` &&
       response.request().method() === 'POST',
   );
   await lesson.locator('input[type="file"]').setInputFiles(file);
@@ -112,9 +162,9 @@ async function uploadReady(page: Page, file: string): Promise<string> {
   return id;
 }
 
-async function openAndPlay(page: Page): Promise<PlaybackSession> {
+async function openAndPlay(page: Page, targetLessonID = lessonID): Promise<PlaybackSession> {
   if (course === undefined) throw new Error('Playback course was not created');
-  await page.goto(`/learn/${namespace}/${lessonID}`);
+  await page.goto(`/learn/${namespace}/${targetLessonID}`);
   const minted = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/api/v1/playback/sessions' &&
@@ -191,8 +241,8 @@ test.describe('T7 playback milestone', () => {
 
   test.beforeAll(async ({ browser, baseURL }) => {
     // `describe.configure` sets the timeout of the tests, not of this hook, and the hook
-    // transcodes a five-minute fixture before the first test can run.
-    test.setTimeout(420_000);
+    // transcodes two five-minute fixtures before the first test can run.
+    test.setTimeout(720_000);
     if (baseURL === undefined) throw new Error('Playwright baseURL is required');
     const context = await adminContext(browser, baseURL);
     const page = await context.newPage();
@@ -217,12 +267,33 @@ test.describe('T7 playback milestone', () => {
           modules: [
             {
               id: moduleID,
-              title: `Module ${namespace}`,
+              title: `Module one ${namespace}`,
               lessons: [
                 {
                   id: lessonID,
-                  title: `Recovery ${namespace}`,
+                  title: `First lesson ${namespace}`,
                   description: 'HLS ownership and recovery.',
+                },
+                {
+                  id: secondLessonID,
+                  title: `Second lesson ${namespace}`,
+                  description: 'The next curriculum step.',
+                },
+              ],
+            },
+            {
+              id: secondModuleID,
+              title: `Module two ${namespace}`,
+              lessons: [
+                {
+                  id: thirdLessonID,
+                  title: `Third lesson ${namespace}`,
+                  description: 'A later curriculum step.',
+                },
+                {
+                  id: fourthLessonID,
+                  title: `Fourth lesson ${namespace}`,
+                  description: 'The final curriculum step.',
                 },
               ],
             },
@@ -233,6 +304,11 @@ test.describe('T7 playback milestone', () => {
       expect(saved.status()).toBe(200);
       course = courseToken(await saved.json());
       await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-5min.mp4'));
+      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-5min.mp4'), {
+        lessonID: thirdLessonID,
+        moduleNumber: 2,
+        lessonNumber: 1,
+      });
       const published = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
         data: { status: 'published', expectedUpdatedAt: course.updatedAt },
         headers: { Origin: new URL(baseURL).origin },
@@ -278,6 +354,89 @@ SQL`,
 
   test.describe('as a student', () => {
     test.use({ storageState: authStatePath('student') });
+
+    test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
+      page,
+    }) => {
+      const firstHeartbeat = page.waitForResponse((response) => {
+        const position = heartbeatPosition(response, lessonID);
+        return position !== null && position > 0 && position < 285;
+      });
+      await openAndPlay(page);
+      const firstHeartbeatResponse = await firstHeartbeat;
+      const firstPosition = heartbeatPosition(firstHeartbeatResponse, lessonID);
+      if (firstPosition === null) throw new Error('First heartbeat position was not captured');
+      // The exact equality below races the 2s cadence: a second heartbeat landing before the
+      // read would raise the stored position and fail the test on correct behaviour. Pausing
+      // stops the cadence at its source - the heartbeat effect is gated on `playing` and its
+      // cleanup clears the timer - so the comparison stays strict instead of being loosened.
+      await page.getByRole('button', { name: 'Пауза' }).click();
+      const firstRead = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(firstRead.status()).toBe(200);
+      expect(learningLessonPosition(await firstRead.json(), lessonID)).toBe(firstPosition);
+
+      const completedHeartbeat = page.waitForResponse((response) => {
+        const position = heartbeatPosition(response, lessonID);
+        return position !== null && position >= 285;
+      });
+      // Seeking alone sends nothing: `seekTo` only moves the element and local state. Resuming
+      // is what carries the new position, because pressing play heartbeats before it plays.
+      await setPosition(page, 290);
+      await page.getByRole('button', { name: 'Відтворити' }).click();
+      await completedHeartbeat;
+
+      let learningReads = 0;
+      page.on('request', (request) => {
+        if (
+          request.method() === 'GET' &&
+          new URL(request.url()).pathname === `/api/v1/learn/courses/${namespace}`
+        )
+          learningReads += 1;
+      });
+      await page.goto(`/courses/${namespace}`);
+      await page.getByRole('link', { name: 'Почати навчання' }).click();
+
+      await expect(page).toHaveURL(`/learn/${namespace}/${secondLessonID}`);
+      const outline = page.getByRole('navigation', { name: 'Зміст курсу' });
+      const lessons = outline.getByRole('link');
+      await expect(lessons).toHaveCount(4);
+      await expect(lessons.nth(0)).toContainText('Переглянуто');
+      await expect(lessons.nth(0)).not.toHaveAttribute('aria-current', 'page');
+      await expect(lessons.nth(1)).toHaveAttribute('aria-current', 'page');
+      await expect(lessons.nth(1)).toContainText('Поточний урок');
+      // Without these three the row does not exclude an outline that marks every lesson
+      // watched, which is what reading the course's `completed` instead of the lesson's would
+      // produce. All five assertions above pass in that case; these are the ones that do not.
+      await expect(lessons.nth(1)).not.toContainText('Переглянуто');
+      await expect(lessons.nth(2)).not.toContainText('Переглянуто');
+      await expect(lessons.nth(3)).not.toContainText('Переглянуто');
+      expect(learningReads).toBe(1);
+    });
+
+    test('R37 clamps an oversized heartbeat to the known 300-second duration', async ({ page }) => {
+      await page.goto(`/learn/${namespace}/${thirdLessonID}`);
+      const origin = new URL(page.url()).origin;
+      const minted = await page.request.post('/api/v1/playback/sessions', {
+        data: { lessonId: thirdLessonID },
+        headers: { Origin: origin },
+      });
+      expect(minted.status()).toBe(201);
+      const session = playbackSession(await minted.json());
+      const heartbeat = await page.request.post('/api/v1/playback/heartbeat', {
+        data: {
+          playbackId: session.playbackId,
+          lessonId: thirdLessonID,
+          positionSeconds: 100_000,
+          clientSeq: session.clientSeq + 1,
+          reason: 'seek',
+        },
+        headers: { Origin: origin },
+      });
+      expect(heartbeat.status()).toBe(204);
+      const learning = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(learning.status()).toBe(200);
+      expect(learningLessonPosition(await learning.json(), thirdLessonID)).toBe(300);
+    });
 
     test('P01 P09 P10 plays real HLS, selects a rung and seeks into unloaded media', async ({
       page,

@@ -86,7 +86,13 @@ function createTestRouter(
     shouldLoadCurrentUser: true,
   };
   const catalogRepository: CourseRepository = {
-    listPublished: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    listPublished: async (query) => ({
+      ok: true,
+      value: {
+        items: [],
+        pagination: { limit: query.limit, offset: query.offset, total: 0 },
+      },
+    }),
     getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
   };
   const adminRepository: AdminCourseRepository = {
@@ -221,7 +227,7 @@ test.each([
 });
 
 test.each(['student', 'instructor', 'admin'] satisfies Role[])(
-  'G03 opens the same /learn empty state for the %s role',
+  'R36 sends the %s role from /learn to the public catalog',
   async (role) => {
     const signedIn = user(role);
     answerWith(signedIn);
@@ -230,17 +236,40 @@ test.each(['student', 'instructor', 'admin'] satisfies Role[])(
     await router.load();
     renderRouter(router);
 
-    expect(router.state.location.href).toBe('/learn');
-    expect(screen.getByRole('main').textContent).toBe(
-      'Ваше навчанняКурси з’являться тут після відкриття навчального доступу.Перейти до каталогу',
-    );
-    expect(screen.getByRole('link', { name: 'Перейти до каталогу' }).getAttribute('href')).toBe(
-      '/courses',
-    );
+    expect(router.state.location.href).toBe('/courses');
+    expect(screen.getByRole('heading', { name: 'Каталог курсів' })).toBeTruthy();
     expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
     expect(screen.queryByText('Ваші викладацькі курси')).toBeNull();
   },
 );
+
+test('R24 keeps the generated route tree equal to the complete expected path list', () => {
+  const router = createTestRouter('/', null);
+  const routes = Object.values(router.routesById)
+    .filter((route) => route.id !== '__root__')
+    .map((route) => ({ id: route.id, path: route.path, fullPath: route.fullPath }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+
+  expect(routes).toEqual(
+    [
+      { id: '/', path: '/', fullPath: '/' },
+      { id: '/admin', path: 'admin', fullPath: '/admin' },
+      { id: '/admin/', path: '/', fullPath: '/admin/' },
+      { id: '/admin/$', path: '$', fullPath: '/admin/$' },
+      {
+        id: '/admin/courses/$courseId',
+        path: 'courses/$courseId',
+        fullPath: '/admin/courses/$courseId',
+      },
+      { id: '/admin/users/', path: 'users/', fullPath: '/admin/users/' },
+      { id: '/courses/', path: 'courses/', fullPath: '/courses/' },
+      { id: '/courses/$slug', path: 'courses/$slug', fullPath: '/courses/$slug' },
+      { id: '/learn', path: 'learn', fullPath: '/learn' },
+      { id: '/learn/$', path: '$', fullPath: '/learn/$' },
+      { id: '/login', path: 'login', fullPath: '/login' },
+    ].sort((left, right) => left.id.localeCompare(right.id)),
+  );
+});
 
 test('R31 keeps the instructor owner read-only without mounting the owner query', async () => {
   const instructor = user('instructor');

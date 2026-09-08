@@ -24,6 +24,17 @@ async function submitLogin(page: Page, role: keyof typeof fixtures) {
   return loginResponse;
 }
 
+test.describe('catalog learning entry', () => {
+  test.use({ storageState: authStatePath('student') });
+
+  test('R36 sends /learn to the public catalog', async ({ page }) => {
+    await page.goto('/learn');
+
+    await expect(page).toHaveURL((url) => url.pathname === '/courses');
+    await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  });
+});
+
 test('anonymous protected roots and nested addresses preserve their return URL', async ({
   page,
 }) => {
@@ -50,8 +61,8 @@ test('student returnTo reaches the not-found admin answer and the learning shell
   await expect(page.getByText('Студентка Курсу')).toBeVisible();
 
   await page.goto('/learn');
-  await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Перейти до каталогу' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/courses');
+  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
 
   await page.goto('/learn/go/intro');
   await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toBeVisible();
@@ -128,7 +139,8 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
 
   await page.goto('/learn');
-  await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/courses');
+  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
 });
 
 test('public SPA transitions do not revalidate; learning does, and Back stays signed out', async ({
@@ -167,15 +179,14 @@ test('public SPA transitions do not revalidate; learning does, and Back stays si
     if (typeof navigate !== 'function') throw new Error('TanStack Router cannot navigate');
     await Reflect.apply(navigate, router, [{ to: '/learn' }]);
   });
-  await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/courses');
+  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
   expect(currentUserRequests).toBe(1);
 
   await page.getByRole('button', { name: 'Вийти' }).click();
   await expect(page).toHaveURL((url) => url.pathname === '/courses');
   await page.goBack();
-  await expect(page).toHaveURL((url) => {
-    return url.pathname === '/login' && url.searchParams.get('returnTo') === '/learn';
-  });
+  await expect(page).toHaveURL((url) => url.pathname === '/courses');
   await expect(page.getByText(fixtures.student.name)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toHaveCount(0);
 });
