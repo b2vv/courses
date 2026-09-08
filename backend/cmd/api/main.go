@@ -38,6 +38,10 @@ func main() {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
 	}
+	if _, err := playbackhttp.ConfigFromEnvironment(os.Getenv); err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
 	dependencies, err := runtime.Open(ctx, "api", logger)
 	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())

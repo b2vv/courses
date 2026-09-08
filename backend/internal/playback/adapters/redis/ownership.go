@@ -26,7 +26,7 @@ type storedOwnership struct {
 }
 
 func (reader *OwnershipReader) Load(ctx context.Context, userID string) (domain.Ownership, error) {
-	value, err := reader.client.Get(ctx, "playback:owner:"+userID).Result()
+	value, err := reader.client.Get(ctx, ownershipKey(userID)).Result()
 	if errors.Is(err, redisclient.Nil) {
 		return domain.Ownership{}, domain.ErrForbidden
 	}
@@ -42,3 +42,5 @@ func (reader *OwnershipReader) Load(ctx context.Context, userID string) (domain.
 	}
 	return domain.Ownership{PlaybackID: stored.PlaybackID, VideoID: stored.VideoID, LessonID: stored.LessonID}, nil
 }
+
+func ownershipKey(userID string) string { return "playback:owner:" + userID }
