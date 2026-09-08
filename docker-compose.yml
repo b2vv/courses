@@ -61,6 +61,8 @@ services:
       APP_ENV: ${APP_ENV:-development}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      PLAYBACK_HEARTBEAT_SECONDS: ${PLAYBACK_HEARTBEAT_SECONDS:-30}
+      PLAYBACK_OWNERSHIP_TTL_SECONDS: ${PLAYBACK_OWNERSHIP_TTL_SECONDS:-180}
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -135,6 +137,9 @@ services:
   nginx:
     <<: *runtime
     image: nginxinc/nginx-unprivileged:1.30.4-alpine
+    # Transcoder output is 0750/0640 owned by the `courses` group, so the worker keeps the
+    # tree off the world while nginx still reads the bytes it is the only one allowed to serve.
+    group_add: ['10001']
     ports: ['127.0.0.1:${HTTP_PORT:-8080}:8080']
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
