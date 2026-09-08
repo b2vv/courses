@@ -18,10 +18,32 @@ async function compose(...args: string[]) {
   });
 }
 
+// Redis працює з `appendonly yes` на постійному томі `redis-data`, а чергу asynq між
+// прогонами не чистить ніхто. Прогін, обірваний посеред транскодування, лишає задачу; на
+// наступному `make up` воркер її відновлює й зʼїдає свій бюджет 2 CPU / 2 GB, поки транскод
+// цього прогону стоїть за нею в черзі — і фікстура не встигає у власний таймаут. Червоне
+// виходить із причини, не повʼязаної з кодом.
+//
+// ПЕРЕДУМОВА, за якої дренаж безпечний: важкі гейти цього репо запускає рівно одна сесія за
+// раз (домовленість між сесіями, 2026-09-08). Конкурентного прогону, чию легітимну задачу
+// можна знести, немає. **Якщо це зміниться — цей дренаж прибрати першим.**
+async function drainTranscodeQueue() {
+  await compose(
+    'exec',
+    '-T',
+    'redis',
+    'sh',
+    '-c',
+    'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --scan --pattern "asynq:*" | ' +
+      'xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL > /dev/null',
+  );
+}
+
 test('generate the four media fixtures with the worker ffmpeg', async () => {
   // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
   // so the budget covers all four encodes plus streaming the bytes out.
   test.setTimeout(600_000);
+  await drainTranscodeQueue();
   await mkdir(fixtureDirectory, { recursive: true });
   await compose(
     'exec',
