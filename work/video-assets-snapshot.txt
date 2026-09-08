@@ -1,0 +1,4 @@
+ state | duration_is_null | count 
+-------+------------------+-------
+(0 rows)
+
