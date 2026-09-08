@@ -75,7 +75,7 @@ func (*mediaRepository) Claim(context.Context, string, mediadomain.ClaimToken, t
 	panic("unexpected Claim")
 }
 
-func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, time.Time, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
+func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, *float64, time.Time, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
 	panic("unexpected Publish")
 }
 

@@ -117,7 +117,7 @@ func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (Transco
 	}
 
 	var policyErr error
-	published, evicted, err := transcode.repository.Publish(callCtx, asset.ID, token, renditions, transcode.timestamp(), func(domain.VideoAsset) error {
+	published, evicted, err := transcode.repository.Publish(callCtx, asset.ID, token, renditions, probe.UsableDurationSeconds(), transcode.timestamp(), func(domain.VideoAsset) error {
 		if err := transcode.storage.Publish(callCtx, work, hlsKey(asset.ID)); err != nil {
 			policyErr = err
 			return err

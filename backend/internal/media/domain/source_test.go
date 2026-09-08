@@ -33,6 +33,34 @@ func TestAcceptSource(t *testing.T) {
 	}
 }
 
+func TestSourceProbeUsableDuration(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		duration float64
+		want     *float64
+	}{
+		{name: "negative is absent", duration: -1},
+		{name: "zero is absent"},
+		{name: "positive is present", duration: 61.25, want: durationPointer(61.25)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got := (domain.SourceProbe{DurationSeconds: test.duration}).UsableDurationSeconds()
+			if got == nil || test.want == nil {
+				if got != nil || test.want != nil {
+					t.Fatalf("got %v, want %v", got, test.want)
+				}
+				return
+			}
+			if *got != *test.want {
+				t.Fatalf("got %v, want %v", *got, *test.want)
+			}
+		})
+	}
+}
+
 func TestAcceptContainer(t *testing.T) {
 	t.Parallel()
 
@@ -113,3 +141,5 @@ func sameRenditions(got, want []domain.Rendition) bool {
 	}
 	return true
 }
+
+func durationPointer(value float64) *float64 { return &value }

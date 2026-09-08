@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -267,6 +268,116 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal("media migration changed course_lessons structure")
 		}
 	})
+	t.Run("playback migration preserves populated database", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 5); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions (id,user_id,token_digest,created_at,expires_at) VALUES
+		('91000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',decode(repeat('ab',32),'hex'),'2026-09-07T00:00:00Z','2026-09-08T00:00:00Z');
+		INSERT INTO video_assets (id,lesson_id,generation,state,declared_bytes,original_name,expires_at,created_at,updated_at) VALUES
+		('81000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000001',1,'queued',1024,'migration.mp4','2026-09-08T00:00:00Z','2026-09-07T00:00:00Z','2026-09-07T00:00:00Z')`); err != nil {
+			t.Fatal(err)
+		}
+		tables := []string{"users", "courses", "course_modules", "course_lessons", "user_sessions"}
+		before := make(map[string]string, len(tables))
+		for _, table := range tables {
+			var snapshot string
+			if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(jsonb_agg(to_jsonb(existing_row) ORDER BY id), '[]'::jsonb)::text FROM (SELECT * FROM %s) AS existing_row`, table)).Scan(&snapshot); err != nil {
+				t.Fatal(err)
+			}
+			before[table] = snapshot
+		}
+		videoAssetSnapshot := `SELECT COALESCE(jsonb_agg(to_jsonb(existing_row) ORDER BY id), '[]'::jsonb)::text
+		FROM (SELECT id,lesson_id,generation,state,claim_token,declared_bytes,received_bytes,original_name,attempt,
+		failure_reason,renditions,expires_at,evicted_at,created_at,updated_at FROM video_assets) AS existing_row`
+		var assetsBefore string
+		if err := db.QueryRowContext(ctx, videoAssetSnapshot).Scan(&assetsBefore); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := provider.UpTo(ctx, 6); err != nil {
+			t.Fatal(err)
+		}
+		var progressTable, durationNullable bool
+		var clientSeqType string
+		var cascadeForeignKeys, progressIndexes int
+		if err := db.QueryRowContext(ctx, `SELECT
+		to_regclass('lesson_progress') IS NOT NULL,
+		EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='video_assets' AND column_name='duration_seconds' AND data_type='numeric' AND is_nullable='YES'),
+		(SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='lesson_progress' AND column_name='client_seq'),
+		(SELECT count(*) FROM pg_constraint WHERE conrelid='lesson_progress'::regclass AND contype='f' AND confdeltype='c'),
+		(SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='lesson_progress')`).Scan(
+			&progressTable, &durationNullable, &clientSeqType, &cascadeForeignKeys, &progressIndexes,
+		); err != nil {
+			t.Fatal(err)
+		}
+		if !progressTable || !durationNullable || clientSeqType != "bigint" || cascadeForeignKeys != 2 || progressIndexes != 1 {
+			t.Fatalf("playback schema: table=%t duration_nullable=%t client_seq=%s cascades=%d indexes=%d", progressTable, durationNullable, clientSeqType, cascadeForeignKeys, progressIndexes)
+		}
+		for _, table := range tables {
+			var after string
+			if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(jsonb_agg(to_jsonb(existing_row) ORDER BY id), '[]'::jsonb)::text FROM (SELECT * FROM %s) AS existing_row`, table)).Scan(&after); err != nil {
+				t.Fatal(err)
+			}
+			if after != before[table] {
+				t.Fatalf("playback migration changed pre-existing %s rows", table)
+			}
+		}
+		var assetsAfter string
+		if err := db.QueryRowContext(ctx, videoAssetSnapshot).Scan(&assetsAfter); err != nil {
+			t.Fatal(err)
+		}
+		if assetsAfter != assetsBefore {
+			t.Fatal("playback migration changed pre-existing video_assets rows")
+		}
+	})
+	t.Run("playback migration lock timeout rolls back and retry succeeds", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 5); err != nil {
+			t.Fatal(err)
+		}
+		blocker, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		released := false
+		t.Cleanup(func() {
+			if !released {
+				_ = blocker.Rollback()
+			}
+		})
+		if _, err := blocker.ExecContext(ctx, `LOCK TABLE video_assets IN ROW EXCLUSIVE MODE`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.UpTo(ctx, 6); err == nil {
+			t.Fatal("expected playback migration lock timeout")
+		} else if !strings.Contains(strings.ToLower(err.Error()), "lock timeout") {
+			t.Fatalf("playback migration failure=%v, want lock timeout", err)
+		}
+		var progressTable, durationColumn bool
+		if err := db.QueryRowContext(ctx, `SELECT
+		to_regclass('lesson_progress') IS NOT NULL,
+		EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='video_assets' AND column_name='duration_seconds')`).Scan(&progressTable, &durationColumn); err != nil {
+			t.Fatal(err)
+		}
+		if progressTable || durationColumn {
+			t.Fatalf("timed-out migration left partial schema: table=%t duration=%t", progressTable, durationColumn)
+		}
+		if err := blocker.Rollback(); err != nil {
+			t.Fatal(err)
+		}
+		released = true
+		if _, err := provider.UpTo(ctx, 6); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT
+		to_regclass('lesson_progress') IS NOT NULL,
+		EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='video_assets' AND column_name='duration_seconds')`).Scan(&progressTable, &durationColumn); err != nil {
+			t.Fatal(err)
+		}
+		if !progressTable || !durationColumn {
+			t.Fatalf("retry did not apply playback schema: table=%t duration=%t", progressTable, durationColumn)
+		}
+	})
 	t.Run("failed migration rolls back its complete transaction", func(t *testing.T) {
 		initial, err := os.ReadFile(filepath.Join(directory, "00001_courses.sql"))
 		if err != nil {
@@ -278,7 +389,8 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			"00003_authoring.sql":      &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00003_authoring.sql"))},
 			"00004_identity_admin.sql": &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00004_identity_admin.sql"))},
 			"00005_media.sql":          &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00005_media.sql"))},
-			"00006_failure.sql":        &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
+			"00006_playback.sql":       &fstest.MapFile{Data: mustRead(t, filepath.Join(directory, "00006_playback.sql"))},
+			"00007_failure.sql":        &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE migration_canary (id integer);\nSELECT 1/0;\n-- +goose Down\nDROP TABLE migration_canary;\n")},
 		}
 		failure, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithDisableGlobalRegistry(true))
 		if err != nil {
@@ -293,6 +405,15 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if exists {
 			t.Fatal("failed migration committed partial schema")
+		}
+		var progressTable, durationColumn bool
+		if err := db.QueryRowContext(ctx, `SELECT
+		to_regclass('lesson_progress') IS NOT NULL,
+		EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='video_assets' AND column_name='duration_seconds')`).Scan(&progressTable, &durationColumn); err != nil {
+			t.Fatal(err)
+		}
+		if !progressTable || !durationColumn {
+			t.Fatalf("failed later migration rolled back playback schema: table=%t duration=%t", progressTable, durationColumn)
 		}
 		if _, err := repository.ListPublished(ctx, query); err != nil {
 			t.Fatal(err)

@@ -59,6 +59,9 @@ func TestProcessClaimsRendersAndPublishes(t *testing.T) {
 	if repository.asset.State != domain.Ready || repository.asset.ClaimToken != "" {
 		t.Fatalf("asset=%+v", repository.asset)
 	}
+	if repository.publishedDuration == nil || *repository.publishedDuration != 125.5 {
+		t.Fatalf("published duration=%v", repository.publishedDuration)
+	}
 	assertStrings(t, transcoder.calls, []string{"probe", "render", "thumbnail"})
 	if countCall(repository.calls, "claim") != 1 || countCall(repository.calls, "publish") != 1 || countCall(repository.calls, "requeue") != 0 || countCall(repository.calls, "fail") != 0 {
 		t.Fatalf("repository calls=%v", repository.calls)
@@ -302,7 +305,7 @@ func TestDependencyFailurePassesThroughAndDoesNotBecomeBusinessFailure(t *testin
 func TestLostPublishClaimTouchesNoPublishedBytes(t *testing.T) {
 	t.Parallel()
 	repository := processingRepository(domain.Queued)
-	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		return domain.VideoAsset{}, nil, nil
 	}
 	storage := defaultStorage()
@@ -440,7 +443,7 @@ func processingRepository(state domain.State) *fakeRepository {
 		repository.asset.ClaimToken = token
 		return repository.asset, true, nil
 	}
-	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, _ time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, _ time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		if repository.asset.State != domain.Processing || repository.asset.ClaimToken != token {
 			return domain.VideoAsset{}, nil, nil
 		}
@@ -450,6 +453,7 @@ func processingRepository(state domain.State) *fakeRepository {
 		repository.asset.State = domain.Ready
 		repository.asset.ClaimToken = ""
 		repository.asset.Renditions = renditions
+		repository.publishedDuration = durationSeconds
 		return repository.asset, nil, nil
 	}
 	repository.requeue = func(_ context.Context, _ string, token domain.ClaimToken, _ time.Time) error {
@@ -475,7 +479,7 @@ func processingRepository(state domain.State) *fakeRepository {
 func defaultTranscoder() *fakeTranscoder {
 	return &fakeTranscoder{
 		probe: func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
-			return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: domain.CodecAAC}, nil
+			return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: domain.CodecAAC, DurationSeconds: 125.5}, nil
 		},
 		render:    func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error { return nil },
 		thumbnail: func(context.Context, domain.StorageKey, domain.StorageKey) error { return nil },

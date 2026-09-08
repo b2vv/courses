@@ -168,6 +168,7 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("R38 concurrent mints map either unique collision", harness.testConcurrentMints)
 	t.Run("lifecycle writes lock policy guard and advance", harness.testLifecycleWrites)
 	t.Run("B06 a third ready generation evicts and reaps the oldest", harness.testPublishEvictsOldest)
+	t.Run("B30 publish persists only usable duration atomically", harness.testPublishDuration)
 	t.Run("B14 an orphan remains retryable until its purge succeeds", harness.testOrphanSweepOrdering)
 	t.Run("C1-C4 sweep candidates are state agnostic and bounded", harness.testSweepCandidateClasses)
 	t.Run("C6 recovery bumps only stale queued attempts", harness.testQueuedRecovery)
@@ -474,7 +475,7 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 	h.insertAsset(t, mediaAssetTwo, mediaLessonOne, 2, domain.Ready, mediaNow.Add(time.Hour), nil)
 	h.insertAsset(t, mediaAssetThree, mediaLessonOne, 3, domain.Processing, mediaNow.Add(time.Hour), nil)
 	policyFailure := errors.New("publish bytes failed")
-	if _, _, err := h.repository.Publish(h.ctx, mediaAssetThree, mediaClaimA, []domain.Rendition{domain.Rendition360p}, mediaNow, func(domain.VideoAsset) error {
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetThree, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, func(domain.VideoAsset) error {
 		return policyFailure
 	}); !errors.Is(err, policyFailure) {
 		t.Fatalf("publish policy error=%v", err)
@@ -494,6 +495,7 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 		mediaAssetThree,
 		mediaClaimA,
 		[]domain.Rendition{domain.Rendition360p, domain.Rendition720p},
+		nil,
 		mediaNow,
 		func(locked domain.VideoAsset) error {
 			policyCalls++
@@ -526,6 +528,44 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 	}
 	assertSweepKeys(t, storage.calls, mediaAssetOne)
 	h.assertAssetCount(t, mediaAssetOne, 0)
+}
+
+func (h *mediaHarness) testPublishDuration(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
+	zeroDuration := (domain.SourceProbe{DurationSeconds: 0}).UsableDurationSeconds()
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, zeroDuration, mediaNow, func(domain.VideoAsset) error {
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var durationIsNull bool
+	if err := h.pool.QueryRow(h.ctx, `SELECT duration_seconds IS NULL FROM video_assets WHERE id=$1`, mediaAssetOne).Scan(&durationIsNull); err != nil || !durationIsNull {
+		t.Fatalf("zero duration null=%t err=%v", durationIsNull, err)
+	}
+
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
+	durationSeconds := 125.5
+	policyFailure := errors.New("publish bytes failed")
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, func(domain.VideoAsset) error {
+		return policyFailure
+	}); !errors.Is(err, policyFailure) {
+		t.Fatalf("publish policy error=%v", err)
+	}
+	if err := h.pool.QueryRow(h.ctx, `SELECT duration_seconds IS NULL FROM video_assets WHERE id=$1`, mediaAssetOne).Scan(&durationIsNull); err != nil || !durationIsNull {
+		t.Fatalf("rolled-back duration null=%t err=%v", durationIsNull, err)
+	}
+
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, func(domain.VideoAsset) error {
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var persisted float64
+	if err := h.pool.QueryRow(h.ctx, `SELECT duration_seconds FROM video_assets WHERE id=$1`, mediaAssetOne).Scan(&persisted); err != nil || persisted != durationSeconds {
+		t.Fatalf("duration=%v err=%v", persisted, err)
+	}
 }
 
 func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
@@ -641,7 +681,7 @@ func (h *mediaHarness) testRecoveredClaimCannotPublish(t *testing.T) {
 		t.Fatalf("claimed=%+v ok=%t err=%v", claimed, ok, err)
 	}
 	policyCalled := false
-	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, mediaNow.Add(2*time.Second), func(domain.VideoAsset) error {
+	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow.Add(2*time.Second), func(domain.VideoAsset) error {
 		policyCalled = true
 		return nil
 	})

@@ -22,21 +22,22 @@ const (
 )
 
 type fakeRepository struct {
-	calls           []string
-	asset           domain.VideoAsset
-	mint            func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
-	appendChunk     func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
-	cancel          func(context.Context, string, time.Time) error
-	list            func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
-	load            func(context.Context, string) (domain.VideoAsset, error)
-	claim           func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
-	publish         func(context.Context, string, domain.ClaimToken, []domain.Rendition, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
-	requeue         func(context.Context, string, domain.ClaimToken, time.Time) error
-	fail            func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
-	retry           func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
-	sweepCandidates func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
-	deleteSwept     func(context.Context, string) error
-	recover         func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	calls             []string
+	asset             domain.VideoAsset
+	mint              func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
+	appendChunk       func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
+	cancel            func(context.Context, string, time.Time) error
+	list              func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
+	load              func(context.Context, string) (domain.VideoAsset, error)
+	claim             func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
+	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publishedDuration *float64
+	requeue           func(context.Context, string, domain.ClaimToken, time.Time) error
+	fail              func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
+	retry             func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
+	sweepCandidates   func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	deleteSwept       func(context.Context, string) error
+	recover           func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
 }
 
 func (repository *fakeRepository) Mint(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string, expiresAt, now time.Time) (domain.VideoAsset, error) {
@@ -69,9 +70,9 @@ func (repository *fakeRepository) Claim(ctx context.Context, id string, token do
 	return repository.claim(ctx, id, token, now)
 }
 
-func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, now time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, now time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "publish")
-	return repository.publish(ctx, id, token, renditions, now, policy)
+	return repository.publish(ctx, id, token, renditions, durationSeconds, now, policy)
 }
 
 func (repository *fakeRepository) Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error {

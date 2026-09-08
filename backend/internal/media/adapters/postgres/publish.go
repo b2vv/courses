@@ -17,6 +17,7 @@ func (repository *Repository) Publish(
 	id string,
 	token domain.ClaimToken,
 	renditions []domain.Rendition,
+	durationSeconds *float64,
 	now time.Time,
 	policy ports.PublishPolicy,
 ) (domain.VideoAsset, *domain.VideoAsset, error) {
@@ -66,10 +67,11 @@ func (repository *Repository) Publish(
 		storedRenditions[index] = string(rendition)
 	}
 	published, err := scanAsset(tx.QueryRow(ctx, `UPDATE video_assets AS assets
-		SET state='ready', claim_token=NULL, failure_reason=NULL, renditions=$3, updated_at=$4
+		SET state='ready', claim_token=NULL, failure_reason=NULL, renditions=$3,
+			duration_seconds=$4, updated_at=$5
 		WHERE id=$1::text::uuid AND state='processing'
 		  AND claim_token=$2::text::uuid AND evicted_at IS NULL
-		RETURNING `+mediaAssetColumns, id, token, storedRenditions, now))
+		RETURNING `+mediaAssetColumns, id, token, storedRenditions, durationSeconds, now))
 	if err != nil {
 		return domain.VideoAsset{}, nil, persistenceError(err)
 	}

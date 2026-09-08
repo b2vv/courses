@@ -28,7 +28,7 @@ type AssetRepository interface {
 
 	Claim(ctx context.Context, id string, token domain.ClaimToken, now time.Time) (domain.VideoAsset, bool, error)
 	Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition,
-		now time.Time, policy PublishPolicy) (published domain.VideoAsset, evicted *domain.VideoAsset, err error)
+		durationSeconds *float64, now time.Time, policy PublishPolicy) (published domain.VideoAsset, evicted *domain.VideoAsset, err error)
 	Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error
 	Fail(ctx context.Context, id string, from domain.State, token domain.ClaimToken,
 		reason domain.FailureReason, now time.Time) error

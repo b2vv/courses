@@ -19,6 +19,16 @@ type SourceProbe struct {
 	DurationSeconds float64
 }
 
+// UsableDurationSeconds returns no duration when the probe did not produce a
+// positive value.
+func (probe SourceProbe) UsableDurationSeconds() *float64 {
+	if probe.DurationSeconds <= 0 {
+		return nil
+	}
+	duration := probe.DurationSeconds
+	return &duration
+}
+
 func AcceptContainer(head []byte) error {
 	if len(head) < ContainerSniffBytes {
 		return ErrUnsupportedSource
