@@ -43,13 +43,18 @@ export default defineConfig({
       // 30/180 cadence cannot show without two minutes of playback. The profile project
       // recreates api at 2/6 and the teardown puts the documented defaults back, so
       // docker-compose.yml keeps 30/180 for development and for every other project.
-      dependencies: ['media', 'playback-profile'],
+      dependencies: ['playback-profile'],
       teardown: 'playback-profile-teardown',
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // Depends on `media` so the whole chain is serial: setup, chromium, media, then this.
+      // Without an edge here the project ran beside `setup`, and recreating api mid-login gave
+      // nginx no upstream: the student captured its state in 3s, the instructor got 502 in 68ms.
+      // The dependency is what orders the restart, not the absence of `fullyParallel`.
       name: 'playback-profile',
       testMatch: '**/playback.setup.ts',
+      dependencies: ['media'],
     },
     {
       name: 'playback-profile-teardown',

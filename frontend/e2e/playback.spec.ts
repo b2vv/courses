@@ -173,6 +173,11 @@ async function openAndPlay(page: Page, targetLessonID = lessonID): Promise<Playb
   await page.getByRole('button', { name: 'Відтворити' }).click();
   const response = await minted;
   expect(response.status()).toBe(201);
+  // `videoTime > 0` alone does not mean playback started: the player restores a saved position
+  // on ready, so a resumed lesson satisfies that guard before `play()` has resolved. The pause
+  // label appears only once `setPlaying(true)` has run, which is the observable that playback
+  // actually began - without it a helper returns success and the caller fails somewhere else.
+  await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
   await expect.poll(() => videoTime(page)).toBeGreaterThan(0);
   return playbackSession(await response.json());
 }
@@ -355,89 +360,6 @@ SQL`,
   test.describe('as a student', () => {
     test.use({ storageState: authStatePath('student') });
 
-    test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
-      page,
-    }) => {
-      const firstHeartbeat = page.waitForResponse((response) => {
-        const position = heartbeatPosition(response, lessonID);
-        return position !== null && position > 0 && position < 285;
-      });
-      await openAndPlay(page);
-      const firstHeartbeatResponse = await firstHeartbeat;
-      const firstPosition = heartbeatPosition(firstHeartbeatResponse, lessonID);
-      if (firstPosition === null) throw new Error('First heartbeat position was not captured');
-      // The exact equality below races the 2s cadence: a second heartbeat landing before the
-      // read would raise the stored position and fail the test on correct behaviour. Pausing
-      // stops the cadence at its source - the heartbeat effect is gated on `playing` and its
-      // cleanup clears the timer - so the comparison stays strict instead of being loosened.
-      await page.getByRole('button', { name: 'Пауза' }).click();
-      const firstRead = await page.request.get(`/api/v1/learn/courses/${namespace}`);
-      expect(firstRead.status()).toBe(200);
-      expect(learningLessonPosition(await firstRead.json(), lessonID)).toBe(firstPosition);
-
-      const completedHeartbeat = page.waitForResponse((response) => {
-        const position = heartbeatPosition(response, lessonID);
-        return position !== null && position >= 285;
-      });
-      // Seeking alone sends nothing: `seekTo` only moves the element and local state. Resuming
-      // is what carries the new position, because pressing play heartbeats before it plays.
-      await setPosition(page, 290);
-      await page.getByRole('button', { name: 'Відтворити' }).click();
-      await completedHeartbeat;
-
-      let learningReads = 0;
-      page.on('request', (request) => {
-        if (
-          request.method() === 'GET' &&
-          new URL(request.url()).pathname === `/api/v1/learn/courses/${namespace}`
-        )
-          learningReads += 1;
-      });
-      await page.goto(`/courses/${namespace}`);
-      await page.getByRole('link', { name: 'Почати навчання' }).click();
-
-      await expect(page).toHaveURL(`/learn/${namespace}/${secondLessonID}`);
-      const outline = page.getByRole('navigation', { name: 'Зміст курсу' });
-      const lessons = outline.getByRole('link');
-      await expect(lessons).toHaveCount(4);
-      await expect(lessons.nth(0)).toContainText('Переглянуто');
-      await expect(lessons.nth(0)).not.toHaveAttribute('aria-current', 'page');
-      await expect(lessons.nth(1)).toHaveAttribute('aria-current', 'page');
-      await expect(lessons.nth(1)).toContainText('Поточний урок');
-      // Without these three the row does not exclude an outline that marks every lesson
-      // watched, which is what reading the course's `completed` instead of the lesson's would
-      // produce. All five assertions above pass in that case; these are the ones that do not.
-      await expect(lessons.nth(1)).not.toContainText('Переглянуто');
-      await expect(lessons.nth(2)).not.toContainText('Переглянуто');
-      await expect(lessons.nth(3)).not.toContainText('Переглянуто');
-      expect(learningReads).toBe(1);
-    });
-
-    test('R37 clamps an oversized heartbeat to the known 300-second duration', async ({ page }) => {
-      await page.goto(`/learn/${namespace}/${thirdLessonID}`);
-      const origin = new URL(page.url()).origin;
-      const minted = await page.request.post('/api/v1/playback/sessions', {
-        data: { lessonId: thirdLessonID },
-        headers: { Origin: origin },
-      });
-      expect(minted.status()).toBe(201);
-      const session = playbackSession(await minted.json());
-      const heartbeat = await page.request.post('/api/v1/playback/heartbeat', {
-        data: {
-          playbackId: session.playbackId,
-          lessonId: thirdLessonID,
-          positionSeconds: 100_000,
-          clientSeq: session.clientSeq + 1,
-          reason: 'seek',
-        },
-        headers: { Origin: origin },
-      });
-      expect(heartbeat.status()).toBe(204);
-      const learning = await page.request.get(`/api/v1/learn/courses/${namespace}`);
-      expect(learning.status()).toBe(200);
-      expect(learningLessonPosition(await learning.json(), thirdLessonID)).toBe(300);
-    });
-
     test('P01 P09 P10 plays real HLS, selects a rung and seeks into unloaded media', async ({
       page,
     }) => {
@@ -600,6 +522,95 @@ SQL`,
       await page.getByRole('button', { name: 'Відтворити' }).click();
       const nextSession = playbackSession(await (await next).json());
       expect(nextSession.mediaPath).not.toContain(`/hls/${oldVideo}/`);
+    });
+
+    // Ordered here on purpose. P02 completes lesson 1, and the player resumes a saved
+    // position on mount, so every T7 test that opens lesson 1 afterwards starts ten
+    // seconds from its end - too little runway for P08's thirty-second view, and enough
+    // to leave B39 waiting forever for a play that never resolves. Lessons 2 and 4 carry
+    // no video, so there is no other lesson to move this onto; the block runs after the
+    // T7 tests and before R04, which archives the course irreversibly.
+    test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
+      page,
+    }) => {
+      const firstHeartbeat = page.waitForResponse((response) => {
+        const position = heartbeatPosition(response, lessonID);
+        return position !== null && position > 0 && position < 285;
+      });
+      await openAndPlay(page);
+      const firstHeartbeatResponse = await firstHeartbeat;
+      const firstPosition = heartbeatPosition(firstHeartbeatResponse, lessonID);
+      if (firstPosition === null) throw new Error('First heartbeat position was not captured');
+      // The exact equality below races the 2s cadence: a second heartbeat landing before the
+      // read would raise the stored position and fail the test on correct behaviour. Pausing
+      // stops the cadence at its source - the heartbeat effect is gated on `playing` and its
+      // cleanup clears the timer - so the comparison stays strict instead of being loosened.
+      await page.getByRole('button', { name: 'Пауза' }).click();
+      const firstRead = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(firstRead.status()).toBe(200);
+      expect(learningLessonPosition(await firstRead.json(), lessonID)).toBe(firstPosition);
+
+      const completedHeartbeat = page.waitForResponse((response) => {
+        const position = heartbeatPosition(response, lessonID);
+        return position !== null && position >= 285;
+      });
+      // Seeking alone sends nothing: `seekTo` only moves the element and local state. Resuming
+      // is what carries the new position, because pressing play heartbeats before it plays.
+      await setPosition(page, 290);
+      await page.getByRole('button', { name: 'Відтворити' }).click();
+      await completedHeartbeat;
+
+      let learningReads = 0;
+      page.on('request', (request) => {
+        if (
+          request.method() === 'GET' &&
+          new URL(request.url()).pathname === `/api/v1/learn/courses/${namespace}`
+        )
+          learningReads += 1;
+      });
+      await page.goto(`/courses/${namespace}`);
+      await page.getByRole('link', { name: 'Почати навчання' }).click();
+
+      await expect(page).toHaveURL(`/learn/${namespace}/${secondLessonID}`);
+      const outline = page.getByRole('navigation', { name: 'Зміст курсу' });
+      const lessons = outline.getByRole('link');
+      await expect(lessons).toHaveCount(4);
+      await expect(lessons.nth(0)).toContainText('Переглянуто');
+      await expect(lessons.nth(0)).not.toHaveAttribute('aria-current', 'page');
+      await expect(lessons.nth(1)).toHaveAttribute('aria-current', 'page');
+      await expect(lessons.nth(1)).toContainText('Поточний урок');
+      // Without these three the row does not exclude an outline that marks every lesson
+      // watched, which is what reading the course's `completed` instead of the lesson's would
+      // produce. All five assertions above pass in that case; these are the ones that do not.
+      await expect(lessons.nth(1)).not.toContainText('Переглянуто');
+      await expect(lessons.nth(2)).not.toContainText('Переглянуто');
+      await expect(lessons.nth(3)).not.toContainText('Переглянуто');
+      expect(learningReads).toBe(1);
+    });
+
+    test('R37 clamps an oversized heartbeat to the known 300-second duration', async ({ page }) => {
+      await page.goto(`/learn/${namespace}/${thirdLessonID}`);
+      const origin = new URL(page.url()).origin;
+      const minted = await page.request.post('/api/v1/playback/sessions', {
+        data: { lessonId: thirdLessonID },
+        headers: { Origin: origin },
+      });
+      expect(minted.status()).toBe(201);
+      const session = playbackSession(await minted.json());
+      const heartbeat = await page.request.post('/api/v1/playback/heartbeat', {
+        data: {
+          playbackId: session.playbackId,
+          lessonId: thirdLessonID,
+          positionSeconds: 100_000,
+          clientSeq: session.clientSeq + 1,
+          reason: 'seek',
+        },
+        headers: { Origin: origin },
+      });
+      expect(heartbeat.status()).toBe(204);
+      const learning = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(learning.status()).toBe(200);
+      expect(learningLessonPosition(await learning.json(), thirdLessonID)).toBe(300);
     });
 
     test('R04 archive stops a started student view', async ({ page, browser, baseURL }) => {
