@@ -241,6 +241,27 @@ async function segmentCovering(
   throw new Error(`No ${rendition} segment covers ${positionSeconds}s`);
 }
 
+// Both statements live at module level on purpose, and the reason is not tidiness. A heredoc
+// terminator must sit in column zero, but it lives inside a template literal, where JavaScript
+// indentation is free and nothing guards it: lint, typecheck and the formatter all see mere
+// characters in a string. Nested inside a describe, the terminator moves the moment anyone adds
+// a level of nesting or relocates the block - which is exactly how it broke once already. The
+// top level cannot be indented by test nesting, so the mine cannot be laid again.
+//
+// psql interpolates `:'name'` only while parsing its own input, never inside `-c`, so the
+// statement is fed on stdin.
+const deleteCourseStatement = `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DELETE FROM courses WHERE id = :'course_id';
+SQL`;
+
+const resetLessonProgressStatement = `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DELETE FROM lesson_progress WHERE lesson_id IN (
+  SELECT lessons.id FROM course_lessons AS lessons
+  JOIN course_modules AS modules ON modules.id = lessons.module_id
+  WHERE modules.course_id = :'course_id'
+);
+SQL`;
+
 test.describe('T7 playback milestone', () => {
   test.describe.configure({ mode: 'serial', timeout: 420_000 });
 
@@ -345,11 +366,7 @@ test.describe('T7 playback milestone', () => {
         'sh',
         '-eu',
         '-c',
-        // psql interpolates `:'name'` only while parsing its own input, never inside `-c`,
-        // so the statement is fed on stdin.
-        `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
-DELETE FROM courses WHERE id = :'course_id';
-SQL`,
+        deleteCourseStatement,
         'playback-cleanup',
         course.id,
       ],
@@ -559,13 +576,7 @@ SQL`,
             'sh',
             '-eu',
             '-c',
-            `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
-DELETE FROM lesson_progress WHERE lesson_id IN (
-  SELECT lessons.id FROM course_lessons AS lessons
-  JOIN course_modules AS modules ON modules.id = lessons.module_id
-  WHERE modules.course_id = :'course_id'
-);
-SQL`,
+            resetLessonProgressStatement,
             'playback-progress-reset',
             course.id,
           ],
