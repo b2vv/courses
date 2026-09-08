@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed seed-identities format format-check lint typecheck test integration build e2e smoke generate check-generated check
+.PHONY: env up down dev logs migrate seed seed-identities format format-check lint typecheck test integration build e2e e2e-local smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -43,6 +43,14 @@ build:
 	docker compose build
 e2e:
 	cd frontend && npm run e2e
+# Run this, not bare `e2e`, for a standalone browser run. `e2e` is the low-level target the
+# `check` chain composes; on its own it neither raises the stack nor restores the disposable
+# fixtures, so it fails against an api that is still starting (503) or a `delete-me` user a
+# previous run consumed - and because chromium gates media and playback, one consumed fixture
+# stops the playback block from running at all. Both rules were written down and both were
+# then bypassed within an hour, because the cheap path was the wrong one. This makes the
+# cheap path correct by construction instead of by memory.
+e2e-local: up seed-identities seed e2e
 smoke:
 	sh infrastructure/tests/smoke.sh
 generate:
