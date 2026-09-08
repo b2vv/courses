@@ -3,7 +3,7 @@ set -eu
 
 run_hex="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 playback_id="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
-course_id=10000000-0000-4000-8000-000000000001
+course_id="10000000-0000-4000-8000-$run_hex"
 module_id="60000000-0000-4000-8001-$run_hex"
 lesson_id="60000000-0000-4000-8002-$run_hex"
 video_id="60000000-0000-4000-8003-$run_hex"
@@ -14,7 +14,8 @@ outsider_email="playback-outsider-$run_hex@courseforge.local"
 http_port="${HTTP_PORT:-8080}"
 origin="http://127.0.0.1:${http_port}"
 cookie_jar="$(mktemp /tmp/courses-t1-cookie.XXXXXX)"
-chmod 600 "$cookie_jar"
+outsider_cookie_jar="$(mktemp /tmp/courses-t1-outsider-cookie.XXXXXX)"
+chmod 600 "$cookie_jar" "$outsider_cookie_jar"
 
 restore() {
   set +e
@@ -29,15 +30,16 @@ restore() {
     attempts=$((attempts + 1))
     sleep 1
   done
-  docker compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli DEL "$1" >/dev/null' sh "playback:owner:$admin_id" >/dev/null 2>&1
+  docker compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli DEL "$1" "$2" >/dev/null' sh "playback:owner:$admin_id" "playback:owner:$outsider_id" >/dev/null 2>&1
   docker compose exec -T media-worker sh -c 'rm -rf "$1"' sh "/media/hls/$video_id" >/dev/null 2>&1
   docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1 <<SQL
 DELETE FROM video_assets WHERE id='$video_id';
 DELETE FROM course_lessons WHERE id='$lesson_id';
 DELETE FROM course_modules WHERE id='$module_id';
+DELETE FROM courses WHERE id='$course_id';
 DELETE FROM users WHERE id IN ('$admin_id','$outsider_id');
 SQL
-  rm -f "$cookie_jar"
+  rm -f "$cookie_jar" "$outsider_cookie_jar"
 }
 trap restore EXIT
 trap 'exit 130' INT
@@ -69,6 +71,46 @@ assert_status() {
   printf '%s status=%s\n' "$name" "$actual"
 }
 
+assert_denied() {
+  name="$1"
+  shift
+  actual="$(curl --path-as-is -sS -o /dev/null -w '%{http_code}' "$@")"
+  case "$actual" in
+    403|404) ;;
+    *)
+      echo "$name: expected 403 or 404, got $actual" >&2
+      exit 1
+      ;;
+  esac
+  printf '%s status=%s\n' "$name" "$actual"
+}
+
+mint_playback() {
+  jar="$1"
+  curl -fsS -b "$jar" -X POST \
+    -H 'Content-Type: application/json' -H 'Origin: http://localhost:8080' \
+    --data "{\"lessonId\":\"$lesson_id\"}" \
+    "$origin/api/v1/playback/sessions"
+}
+
+json_string() {
+  key="$1"
+  sed -n "s/.*\"$key\":\"\([^\"]*\)\".*/\1/p"
+}
+
+set_course_status() {
+  status="$1"
+  published_at="published_at"
+  if [ "$status" = draft ]; then
+    published_at=NULL
+  elif [ "$status" = published ]; then
+    published_at='COALESCE(published_at,now())'
+  fi
+  docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null <<SQL
+UPDATE courses SET status='$status',published_at=$published_at,updated_at=now() WHERE id='$course_id';
+SQL
+}
+
 docker compose exec -T nginx nginx -t
 nginx_container="$(docker compose ps -q nginx)"
 if [ -z "$nginx_container" ]; then
@@ -89,15 +131,14 @@ INSERT INTO users(id,email,display_name,role,password_hash)
 VALUES ('$admin_id','$admin_email','Playback benchmark admin','admin','\$argon2id\$v=19\$m=65536,t=3,p=2\$YWRtaW4tZGVtby1zZWVkIQ\$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0');
 INSERT INTO users(id,email,display_name,role,password_hash)
 VALUES ('$outsider_id','$outsider_email','Playback authorization outsider','student','\$argon2id\$v=19\$m=65536,t=3,p=2\$YWRtaW4tZGVtby1zZWVkIQ\$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0');
+INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
+VALUES ('$course_id','$admin_id','playback-$run_hex','Playback authorization','Playback authorization summary','Playback authorization description','published',now());
 INSERT INTO course_modules(id,course_id,title,position)
-VALUES ('$module_id','$course_id','Playback benchmark',999)
-ON CONFLICT (id) DO UPDATE SET course_id=EXCLUDED.course_id,title=EXCLUDED.title,position=EXCLUDED.position,updated_at=now();
+VALUES ('$module_id','$course_id','Playback benchmark',0);
 INSERT INTO course_lessons(id,module_id,title,description,position)
-VALUES ('$lesson_id','$module_id','Authorize benchmark','',0)
-ON CONFLICT (id) DO UPDATE SET module_id=EXCLUDED.module_id,title=EXCLUDED.title,description=EXCLUDED.description,position=EXCLUDED.position,updated_at=now();
+VALUES ('$lesson_id','$module_id','Authorize benchmark','',0);
 INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
-VALUES ('$video_id','$lesson_id',1,'ready',1,1,'benchmark.mp4',ARRAY['360p'],now()+interval '1 day',now(),now())
-ON CONFLICT (id) DO UPDATE SET lesson_id=EXCLUDED.lesson_id,state='ready',declared_bytes=1,received_bytes=1,renditions=ARRAY['360p'],evicted_at=NULL,updated_at=now();
+VALUES ('$video_id','$lesson_id',1,'ready',1,1,'benchmark.mp4',ARRAY['360p'],now()+interval '1 day',now(),now());
 SQL
 
 docker compose exec -T media-worker sh <<SH
@@ -116,6 +157,76 @@ printf '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nv0/index.m3u8\n' > "\$directory/
   printf '#EXT-X-ENDLIST\n'
 } > "\$directory/v0/index.m3u8"
 SH
+
+curl -fsS -o /dev/null -c "$cookie_jar" -X POST \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:8080' \
+  --data "{\"email\":\"$admin_email\",\"password\":\"courseforge-admin-demo\"}" \
+  "$origin/api/v1/auth/login"
+curl -fsS -o /dev/null -c "$outsider_cookie_jar" -X POST \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:8080' \
+  --data "{\"email\":\"$outsider_email\",\"password\":\"courseforge-admin-demo\"}" \
+  "$origin/api/v1/auth/login"
+
+draft_play="$(mint_playback "$outsider_cookie_jar")"
+draft_playback_id="$(printf '%s' "$draft_play" | json_string playbackId)"
+draft_media_path="$(printf '%s' "$draft_play" | json_string mediaPath)"
+if [ -z "$draft_playback_id" ] || [ -z "$draft_media_path" ]; then
+  echo 'R02/R07: play response did not contain playbackId and mediaPath' >&2
+  exit 1
+fi
+set_course_status draft
+matching_ownership="$(docker compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli GET "$1"' sh "playback:owner:$outsider_id" | tr -d '\r')"
+case "$matching_ownership" in
+  *"\"playbackId\":\"$draft_playback_id\""*"\"videoId\":\"$video_id\""*) ;;
+  *)
+    echo "R07: ownership did not match the inaccessible course video" >&2
+    exit 1
+    ;;
+esac
+assert_status R02 403 -b "$outsider_cookie_jar" "$origin$draft_media_path"
+assert_status R07 403 -b "$outsider_cookie_jar" "$origin$draft_media_path"
+set_course_status published
+
+archived_play="$(mint_playback "$outsider_cookie_jar")"
+archived_media_path="$(printf '%s' "$archived_play" | json_string mediaPath)"
+set_course_status archived
+assert_status R03 403 -b "$outsider_cookie_jar" "$origin$archived_media_path"
+set_course_status published
+
+admin_play="$(mint_playback "$cookie_jar")"
+admin_playback_id="$(printf '%s' "$admin_play" | json_string playbackId)"
+admin_media_path="$(printf '%s' "$admin_play" | json_string mediaPath)"
+assert_status R06 403 -b "$outsider_cookie_jar" "$origin$admin_media_path"
+
+for closed_path in \
+  "/media/source/$video_id/original" \
+  "/media/thumbnails/$video_id/poster.jpg" \
+  "/media/temporary/$video_id/work"; do
+  assert_status R08 403 -b "$cookie_jar" "$origin$closed_path"
+done
+
+for bypass_path in \
+  "/media/p/$admin_playback_id/hls/$video_id/../source/original" \
+  "/media/p/$admin_playback_id/hls/$video_id/%2e%2e/source/original" \
+  "/media/p/$admin_playback_id/hls/$video_id/%252e%252e/source/original"; do
+  assert_denied R09 -b "$cookie_jar" "$origin$bypass_path"
+done
+
+ttl_play="$(mint_playback "$cookie_jar")"
+ttl_media_path="$(printf '%s' "$ttl_play" | json_string mediaPath)"
+ownership_ttl="$(printf '%s' "$ttl_play" | sed -n 's/.*"ownershipTtlSeconds":\([0-9][0-9]*\).*/\1/p')"
+if [ -z "$ownership_ttl" ]; then
+  echo 'R05: play response did not contain ownershipTtlSeconds' >&2
+  exit 1
+fi
+sleep "$((ownership_ttl + 1))"
+assert_status R05 403 -b "$cookie_jar" "$origin$ttl_media_path"
+
+logout_play="$(mint_playback "$cookie_jar")"
+logout_media_path="$(printf '%s' "$logout_play" | json_string mediaPath)"
+assert_status R27-before 200 -b "$cookie_jar" "$origin$logout_media_path"
+curl -fsS -o /dev/null -b "$cookie_jar" -X POST -H 'Origin: http://localhost:8080' "$origin/api/v1/auth/logout"
+assert_status R27 403 -b "$cookie_jar" "$origin$logout_media_path"
 
 ownership="{\"playbackId\":\"$playback_id\",\"videoId\":\"$video_id\",\"lessonId\":\"$lesson_id\"}"
 docker compose exec -T redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli SET "$1" "$2" EX 900 >/dev/null' sh "playback:owner:$admin_id" "$ownership"
@@ -334,4 +445,4 @@ docker compose start postgres >/dev/null
 wait_for_exec postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 wait_for_exec api curl -fsS http://127.0.0.1:8080/readyz
 
-printf '%s\n' 'PASS B12 B13 B14 B37 B38 R01 R10 R11 R12 R13 R20 R29 and measurements M1-M4'
+printf '%s\n' 'PASS B12 B13 B14 B37 B38 R01-R03 R05-R13 R20 R27 R29 and measurements M1-M4'

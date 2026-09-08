@@ -116,6 +116,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 
 	now := time.Date(2026, time.September, 8, 16, 0, 0, 0, time.UTC)
 	sessions := application.NewSessions(
+		playbackpostgres.NewLessonPlaybackReader(pool),
 		playbackredis.NewOwnershipWriter(redisConnection),
 		playbackpostgres.NewProgressWriter(pool),
 		3*time.Minute,
@@ -126,6 +127,24 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		playbackpostgres.NewVideoAccessReader(pool, authorizationCounter{}),
 	)
 	actor := domain.Actor{UserID: userID}
+
+	t.Run("B17 B31 repeated play takes a fresh id and preserves saved sequence", func(t *testing.T) {
+		first, err := sessions.Play(ctx, actor, lessonID, playbackID)
+		if err != nil || first.VideoID != videoID || first.ClientSequence != 1 {
+			t.Fatalf("first play=%+v err=%v", first, err)
+		}
+		const replacementPlaybackID = "22222222222222222222222222222222"
+		second, err := sessions.Play(ctx, actor, lessonID, replacementPlaybackID)
+		if err != nil || second != first {
+			t.Fatalf("second play=%+v err=%v", second, err)
+		}
+		if err := authorizer.Authorize(ctx, actor, playbackID, videoID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("old playback after repeat: %v", err)
+		}
+		if err := authorizer.Authorize(ctx, actor, replacementPlaybackID, videoID); err != nil {
+			t.Fatalf("new playback after repeat: %v", err)
+		}
+	})
 
 	t.Run("B13 ownership taken by the playback session authorizes its video", func(t *testing.T) {
 		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
@@ -161,6 +180,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 
 	t.Run("B13 expired ownership is denied", func(t *testing.T) {
 		expiringSessions := application.NewSessions(
+			nil,
 			playbackredis.NewOwnershipWriter(redisConnection),
 			playbackpostgres.NewProgressWriter(pool),
 			2*time.Second,
@@ -230,6 +250,31 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		}
 	})
 
+	t.Run("R15 R16 taken over heartbeat neither writes nor renews foreign ownership", func(t *testing.T) {
+		const replacementPlaybackID = "33333333333333333333333333333333"
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: replacementPlaybackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		key := "playback:owner:" + userID
+		before, err := redisConnection.PTTL(ctx, key).Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(30, 3)); !errors.Is(err, domain.ErrPlaybackTakenOver) {
+			t.Fatalf("heartbeat: %v", err)
+		}
+		after, err := redisConnection.PTTL(ctx, key).Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after > before {
+			t.Fatalf("foreign TTL renewed: before=%v after=%v", before, after)
+		}
+		if position, sequence := readProgress(); position != 10 || sequence != 1 {
+			t.Fatalf("position=%v sequence=%d", position, sequence)
+		}
+	})
+
 	t.Run("owner renews and writes progress", func(t *testing.T) {
 		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
 			t.Fatal(err)
@@ -248,6 +293,30 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		}
 		if position, sequence := readProgress(); position != 20 || sequence != 2 {
 			t.Fatalf("position=%v sequence=%d", position, sequence)
+		}
+	})
+
+	t.Run("B44 position beyond duration is clamped instead of rejected", func(t *testing.T) {
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(120, 3)); err != nil {
+			t.Fatal(err)
+		}
+		if position, sequence := readProgress(); position != 100 || sequence != 3 {
+			t.Fatalf("position=%v sequence=%d", position, sequence)
+		}
+	})
+
+	t.Run("R32 heartbeat on a deleted lesson is not found", func(t *testing.T) {
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM course_lessons WHERE id=$1`, lessonID); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(100, 4)); !errors.Is(err, domain.ErrLessonNotFound) {
+			t.Fatalf("heartbeat: %v", err)
 		}
 	})
 }

@@ -9,6 +9,7 @@ const (
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrInvalidProgress        Error = "invalid_progress"
 	ErrLessonNotFound         Error = "lesson_not_found"
+	ErrVideoNotReady          Error = "video_not_ready"
 	ErrPlaybackTakenOver      Error = "playback_taken_over"
 	ErrPlaybackSessionExpired Error = "playback_session_expired"
 )

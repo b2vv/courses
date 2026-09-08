@@ -41,6 +41,20 @@ type progressWriter struct {
 	err      error
 }
 
+type playbackReader struct {
+	playback domain.LessonPlayback
+	err      error
+	calls    int
+	userID   string
+	lessonID string
+}
+
+func (reader *playbackReader) LoadLessonPlayback(_ context.Context, userID, lessonID string) (domain.LessonPlayback, error) {
+	reader.calls++
+	reader.userID, reader.lessonID = userID, lessonID
+	return reader.playback, reader.err
+}
+
 func (writer *progressWriter) Save(_ context.Context, userID, lessonID string, update domain.ProgressUpdate, now time.Time) error {
 	writer.saved, writer.userID, writer.lessonID, writer.update, writer.now = true, userID, lessonID, update, now
 	return writer.err
@@ -50,7 +64,7 @@ func TestTakeUnconditionallyStoresTheNewOwnership(t *testing.T) {
 	t.Parallel()
 	ownerships := &ownershipWriter{}
 	progress := &progressWriter{}
-	service := application.NewSessions(ownerships, progress, 3*time.Minute, time.Now)
+	service := application.NewSessions(nil, ownerships, progress, 3*time.Minute, time.Now)
 	want := domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}
 
 	if err := service.Take(context.Background(), userID, want); err != nil {
@@ -61,12 +75,57 @@ func TestTakeUnconditionallyStoresTheNewOwnership(t *testing.T) {
 	}
 }
 
+func TestPlayChecksLessonAndPolicyBeforeTakingOwnership(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		playback domain.LessonPlayback
+		loadErr  error
+		actor    domain.Actor
+		wantErr  error
+		wantTake bool
+	}{
+		{name: "missing lesson", loadErr: domain.ErrLessonNotFound, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrLessonNotFound},
+		{name: "video not ready", loadErr: domain.ErrVideoNotReady, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrVideoNotReady},
+		{name: "draft denied to student", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrForbidden},
+		{name: "published allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID}, wantTake: true},
+		{name: "draft allowed to owner", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: userID, Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantTake: true},
+		{name: "archived allowed to admin", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}}, actor: domain.Actor{UserID: userID, Administrator: true}, wantTake: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			reader := &playbackReader{playback: test.playback, err: test.loadErr}
+			ownerships := &ownershipWriter{}
+			service := application.NewSessions(reader, ownerships, &progressWriter{}, 3*time.Minute, time.Now)
+
+			got, err := service.Play(context.Background(), test.actor, lessonID, playbackID)
+
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("err=%v, want %v", err, test.wantErr)
+			}
+			if reader.calls != 1 || reader.userID != test.actor.UserID || reader.lessonID != lessonID {
+				t.Fatalf("lookup calls=%d user=%q lesson=%q", reader.calls, reader.userID, reader.lessonID)
+			}
+			if (ownerships.takeUserID != "") != test.wantTake {
+				t.Fatalf("take user=%q, wantTake=%t", ownerships.takeUserID, test.wantTake)
+			}
+			if test.wantTake {
+				wantOwnership := domain.Ownership{PlaybackID: playbackID, VideoID: test.playback.VideoID, LessonID: lessonID}
+				if ownerships.taken != wantOwnership || got != test.playback {
+					t.Fatalf("ownership=%+v playback=%+v", ownerships.taken, got)
+				}
+			}
+		})
+	}
+}
+
 func TestHeartbeatRenewsBeforeSavingProgress(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, time.September, 8, 13, 0, 0, 0, time.UTC)
 	ownerships := &ownershipWriter{renewal: domain.OwnershipRenewed}
 	progress := &progressWriter{}
-	service := application.NewSessions(ownerships, progress, 3*time.Minute, func() time.Time { return now })
+	service := application.NewSessions(nil, ownerships, progress, 3*time.Minute, func() time.Time { return now })
 	update, err := domain.NewProgressUpdate(42, 7, "pause")
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +159,7 @@ func TestHeartbeatRefusalsNeverWriteProgress(t *testing.T) {
 			t.Parallel()
 			ownerships := &ownershipWriter{renewal: test.outcome, renewErr: test.err}
 			progress := &progressWriter{}
-			service := application.NewSessions(ownerships, progress, 3*time.Minute, time.Now)
+			service := application.NewSessions(nil, ownerships, progress, 3*time.Minute, time.Now)
 			update, err := domain.NewProgressUpdate(42, 7, "tick")
 			if err != nil {
 				t.Fatal(err)
@@ -116,6 +175,7 @@ func TestHeartbeatRefusalsNeverWriteProgress(t *testing.T) {
 func TestProgressDependencyFailureIsPreserved(t *testing.T) {
 	t.Parallel()
 	service := application.NewSessions(
+		nil,
 		&ownershipWriter{renewal: domain.OwnershipRenewed},
 		&progressWriter{err: domain.ErrDependencyUnavailable},
 		3*time.Minute,

@@ -24,6 +24,12 @@ type VideoCourse struct {
 	Status  CourseStatus
 }
 
+type LessonPlayback struct {
+	VideoID        string
+	ClientSequence int64
+	Course         VideoCourse
+}
+
 func (course VideoCourse) CanBeViewedBy(actor Actor) bool {
 	return actor.Administrator || actor.UserID == course.OwnerID || course.Status == Published
 }

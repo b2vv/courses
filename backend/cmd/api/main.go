@@ -38,7 +38,8 @@ func main() {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
 	}
-	if _, err := playbackhttp.ConfigFromEnvironment(os.Getenv); err != nil {
+	playbackConfig, err := playbackhttp.ConfigFromEnvironment(os.Getenv)
+	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
 	}
@@ -62,9 +63,19 @@ func main() {
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
 		mediaHandler := mediahttp.NewHandler(mediaTickets)
 		playbackOwnership := playbackredis.NewOwnershipReader(dependencies.Redis)
+		playbackOwnershipWriter := playbackredis.NewOwnershipWriter(dependencies.Redis)
 		playbackAccess := playbackpostgres.NewVideoAccessReader(dependencies.Database, dependencies.Metrics.PlaybackDatabaseChecks)
+		playbackLessonReader := playbackpostgres.NewLessonPlaybackReader(dependencies.Database)
+		playbackProgress := playbackpostgres.NewProgressWriter(dependencies.Database)
+		playbackSessions := playbackapplication.NewSessions(
+			playbackLessonReader,
+			playbackOwnershipWriter,
+			playbackProgress,
+			time.Duration(playbackConfig.OwnershipTTLSeconds())*time.Second,
+			time.Now,
+		)
 		playbackAuthorizer := playbackapplication.NewAuthorizer(playbackOwnership, playbackAccess)
-		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer)
+		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer, playbackSessions, playbackConfig)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
@@ -73,7 +84,7 @@ func main() {
 				identityHandler.Register(mux)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
-				playbackHandler.Register(mux, identityHandler.Authenticate)
+				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 			},
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))

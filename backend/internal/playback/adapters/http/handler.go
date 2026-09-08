@@ -1,27 +1,132 @@
 package http
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
+	"net/url"
+	"strings"
+	"unicode/utf8"
 
 	"courses/internal/playback/domain"
 	"courses/platform/httpserver"
 )
 
+const maximumPlaybackBody = 8 * 1024
+
+var errInvalidRequest = errors.New("invalid playback request")
+
 type authorizationService interface {
 	Authorize(context.Context, domain.Actor, string, string) error
 }
 
-type Handler struct{ authorization authorizationService }
-
-func NewHandler(authorization authorizationService) *Handler {
-	return &Handler{authorization: authorization}
+type sessionService interface {
+	Play(context.Context, domain.Actor, string, string) (domain.LessonPlayback, error)
+	Heartbeat(context.Context, string, string, string, domain.ProgressUpdate) error
 }
 
-func (handler *Handler) Register(mux *http.ServeMux, authenticate func(http.Handler) http.Handler) {
+type Handler struct {
+	authorization authorizationService
+	sessions      sessionService
+	config        Config
+}
+
+func NewHandler(authorization authorizationService, sessions sessionService, config Config) *Handler {
+	return &Handler{authorization: authorization, sessions: sessions, config: config}
+}
+
+func (handler *Handler) Register(mux *http.ServeMux, authenticate, requireSameOrigin func(http.Handler) http.Handler) {
 	endpoint := authenticate(http.HandlerFunc(handler.authorize))
 	mux.Handle("GET /internal/playback/authorize", normalizeAuthenticationDenial(endpoint))
+	mux.Handle("POST /api/v1/playback/sessions", requireSameOrigin(authenticate(http.HandlerFunc(handler.play))))
+	mux.Handle("POST /api/v1/playback/heartbeat", requireSameOrigin(authenticate(http.HandlerFunc(handler.heartbeat))))
+}
+
+type playRequest struct{ LessonID string }
+
+type heartbeatRequest struct {
+	PlaybackID      string
+	LessonID        string
+	PositionSeconds float64
+	ClientSequence  int64
+	Reason          string
+}
+
+type playResponse struct {
+	PlaybackID          string `json:"playbackId"`
+	MediaPath           string `json:"mediaPath"`
+	ClientSequence      int64  `json:"clientSeq"`
+	HeartbeatSeconds    int    `json:"heartbeatSeconds"`
+	OwnershipTTLSeconds int    `json:"ownershipTtlSeconds"`
+}
+
+func (handler *Handler) play(w http.ResponseWriter, r *http.Request) {
+	playbackHeaders(w)
+	if !emptyPlaybackQuery(r.URL.RawQuery) {
+		writePlayError(w, r, errInvalidRequest)
+		return
+	}
+	actor, ok := playbackActor(r)
+	if !ok {
+		writePlayError(w, r, domain.ErrForbidden)
+		return
+	}
+	request, err := decodePlay(w, r)
+	if err != nil || !validUUID(request.LessonID) {
+		writePlayError(w, r, errInvalidRequest)
+		return
+	}
+	playbackID, err := freshPlaybackID()
+	if err != nil {
+		writePlayError(w, r, err)
+		return
+	}
+	playback, err := handler.sessions.Play(r.Context(), actor, request.LessonID, playbackID)
+	if err != nil {
+		writePlayError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, playResponse{
+		PlaybackID:          playbackID,
+		MediaPath:           "/media/p/" + playbackID + "/hls/" + playback.VideoID + "/master.m3u8",
+		ClientSequence:      playback.ClientSequence,
+		HeartbeatSeconds:    handler.config.HeartbeatSeconds(),
+		OwnershipTTLSeconds: handler.config.OwnershipTTLSeconds(),
+	})
+}
+
+func (handler *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
+	playbackHeaders(w)
+	if !emptyPlaybackQuery(r.URL.RawQuery) {
+		writePlaybackError(w, r, errInvalidRequest)
+		return
+	}
+	actor, ok := playbackActor(r)
+	if !ok {
+		writePlaybackError(w, r, domain.ErrForbidden)
+		return
+	}
+	request, err := decodeHeartbeat(w, r)
+	if err != nil || !validPlaybackID(request.PlaybackID) || !validUUID(request.LessonID) {
+		writePlaybackError(w, r, errInvalidRequest)
+		return
+	}
+	update, err := domain.NewProgressUpdate(request.PositionSeconds, request.ClientSequence, request.Reason)
+	if err != nil {
+		writePlaybackError(w, r, err)
+		return
+	}
+	if err := handler.sessions.Heartbeat(r.Context(), actor.UserID, request.PlaybackID, request.LessonID, update); err != nil {
+		writePlaybackError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *Handler) authorize(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +155,143 @@ func writeAuthorizationError(w http.ResponseWriter, r *http.Request, status int)
 		return
 	}
 	httpserver.WriteError(w, r, status, "dependency_unavailable", "Playback authorization is temporarily unavailable")
+}
+
+func decodePlay(w http.ResponseWriter, r *http.Request) (playRequest, error) {
+	var result playRequest
+	err := decodePlaybackObject(w, r, map[string]func(*json.Decoder) error{
+		"lessonId": func(decoder *json.Decoder) error { return decoder.Decode(&result.LessonID) },
+	})
+	if err != nil || result.LessonID == "" {
+		return playRequest{}, errInvalidRequest
+	}
+	return result, nil
+}
+
+func decodeHeartbeat(w http.ResponseWriter, r *http.Request) (heartbeatRequest, error) {
+	var (
+		result   heartbeatRequest
+		position *float64
+		sequence *int64
+	)
+	err := decodePlaybackObject(w, r, map[string]func(*json.Decoder) error{
+		"playbackId":      func(decoder *json.Decoder) error { return decoder.Decode(&result.PlaybackID) },
+		"lessonId":        func(decoder *json.Decoder) error { return decoder.Decode(&result.LessonID) },
+		"positionSeconds": func(decoder *json.Decoder) error { return decoder.Decode(&position) },
+		"clientSeq":       func(decoder *json.Decoder) error { return decoder.Decode(&sequence) },
+		"reason":          func(decoder *json.Decoder) error { return decoder.Decode(&result.Reason) },
+	})
+	if err != nil || result.PlaybackID == "" || result.LessonID == "" || position == nil || sequence == nil || result.Reason == "" {
+		return heartbeatRequest{}, errInvalidRequest
+	}
+	result.PositionSeconds, result.ClientSequence = *position, *sequence
+	return result, nil
+}
+
+func decodePlaybackObject(w http.ResponseWriter, r *http.Request, fields map[string]func(*json.Decoder) error) error {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return errInvalidRequest
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maximumPlaybackBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil || !utf8.Valid(body) {
+		return errInvalidRequest
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return errInvalidRequest
+	}
+	seen := make(map[string]struct{}, len(fields))
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		decode, known := fields[key]
+		if err != nil || !ok || !known {
+			return errInvalidRequest
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return errInvalidRequest
+		}
+		seen[key] = struct{}{}
+		if err := decode(decoder); err != nil {
+			return errInvalidRequest
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || len(seen) != len(fields) || decoder.Decode(&struct{}{}) != io.EOF {
+		return errInvalidRequest
+	}
+	return nil
+}
+
+func playbackActor(r *http.Request) (domain.Actor, bool) {
+	actor, ok := httpserver.ActorFromContext(r.Context())
+	if !ok || actor.UserID == "" {
+		return domain.Actor{}, false
+	}
+	return domain.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin"}, true
+}
+
+func freshPlaybackID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, value); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value), nil
+}
+
+func validPlaybackID(value string) bool {
+	if len(value) != 32 || strings.ToLower(value) != value {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 16
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' || strings.ToLower(value) != value || value == "00000000-0000-0000-0000-000000000000" {
+		return false
+	}
+	decoded, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
+	return err == nil && len(decoded) == 16
+}
+
+func emptyPlaybackQuery(raw string) bool {
+	query, err := url.ParseQuery(raw)
+	return err == nil && len(query) == 0
+}
+
+func playbackHeaders(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
+
+func writePlayError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, domain.ErrPlaybackTakenOver) || errors.Is(err, domain.ErrPlaybackSessionExpired) {
+		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
+		return
+	}
+	writePlaybackError(w, r, err)
+}
+
+func writePlaybackError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, errInvalidRequest), errors.Is(err, domain.ErrInvalidProgress):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
+	case errors.Is(err, domain.ErrForbidden):
+		httpserver.WriteError(w, r, http.StatusForbidden, "playback_forbidden", "Playback is not authorized")
+	case errors.Is(err, domain.ErrLessonNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
+	case errors.Is(err, domain.ErrVideoNotReady):
+		httpserver.WriteError(w, r, http.StatusNotFound, "video_not_ready", "Lesson video is not ready")
+	case errors.Is(err, domain.ErrPlaybackTakenOver):
+		httpserver.WriteError(w, r, http.StatusConflict, "playback_taken_over", "Playback continued on another device")
+	case errors.Is(err, domain.ErrPlaybackSessionExpired):
+		httpserver.WriteError(w, r, http.StatusGone, "playback_session_expired", "Playback session expired")
+	case errors.Is(err, domain.ErrDependencyUnavailable):
+		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Playback is temporarily unavailable")
+	default:
+		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
+	}
 }
 
 func normalizeAuthenticationDenial(next http.Handler) http.Handler {
