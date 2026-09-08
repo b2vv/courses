@@ -3,6 +3,19 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   retries: 0,
+  // Pinned, not tuned. Left unset, Playwright takes half the machine's cores, which makes the
+  // suite's parallelism a property of the hardware: the same commit passes on one host and
+  // fails on another, and each failure reads as a flake in the newest change. Measured here on
+  // 2026-09-08 - five workers under a host at load 22 produced five failures across four spec
+  // files, while the server answered /courses in 0.108s and the API in 0.010s, so the
+  // contention was in the browsers, not the application.
+  //
+  // The cost is small and one-sided: only `chromium` holds several files, and the single-file
+  // projects (media, playback, recovery) are unaffected by this number at all.
+  //
+  // The trade is named so it can be revisited deliberately: a large CI runner will leave
+  // capacity unused. That is the price of a suite that behaves the same everywhere.
+  workers: 2,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
     locale: 'uk-UA',
