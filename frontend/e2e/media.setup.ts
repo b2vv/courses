@@ -27,6 +27,16 @@ async function compose(...args: string[]) {
 // ПЕРЕДУМОВА, за якої дренаж безпечний: важкі гейти цього репо запускає рівно одна сесія за
 // раз (домовленість між сесіями, 2026-09-08). Конкурентного прогону, чию легітимну задачу
 // можна знести, немає. **Якщо це зміниться — цей дренаж прибрати першим.**
+//
+// `export` тут несучий, а не стиль. Префікс `VAR=cmd` ставить змінну лише для першої команди,
+// тож другий `redis-cli` у пайпі її не успадкував би — і пароль довелося б передати через `-a`,
+// тобто в argv, де його видно з `ps` і `docker top`. Саме це забороняє `docker-compose.yml:29-30`
+// для самого сервера. Через оточення його підхоплюють обидва виклики, і глушник
+// `--no-auth-warning` стає непотрібним: попереджати нема про що.
+//
+// Патерн б'є рівно по чергах воркера (`Queues: {"media": 1}`, `cmd/media-worker/main.go:70`).
+// Ширший `asynq:*` зніс би ще й `asynq:servers:*` та `asynq:workers` — реєстрацію для
+// моніторингу, а не задачі.
 async function drainTranscodeQueue() {
   await compose(
     'exec',
@@ -34,8 +44,8 @@ async function drainTranscodeQueue() {
     'redis',
     'sh',
     '-c',
-    'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --scan --pattern "asynq:*" | ' +
-      'xargs -r -n 100 redis-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL > /dev/null',
+    'export REDISCLI_AUTH="$REDIS_PASSWORD"; ' +
+      'redis-cli --scan --pattern "asynq:{media}:*" | xargs -r -n 100 redis-cli DEL > /dev/null',
   );
 }
 
