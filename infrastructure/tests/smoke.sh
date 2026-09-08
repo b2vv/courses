@@ -53,17 +53,23 @@ if(adminLogout.status!==204) throw Error(`admin smoke logout: expected 204, got 
 const status=await fetch('http://media-worker:8081/status').then(r=>r.json());
 if(status.stage!=='media'||!Array.isArray(status.handlers)||status.handlers.length!==1||status.handlers[0]!=='media:transcode') throw Error('Unexpected worker status');
 const metrics=await fetch('http://media-worker:8081/metrics').then(r=>r.text());
+// The claim is that the worker REGISTERS every label combination at startup, rather than
+// creating a series lazily on first use - a counter that appears only after the first failure
+// blinds a dashboard exactly when it is needed. Matching a trailing ' 0' stated that through
+// the value instead, which is true only on a worker that has never run a job: on CI the stack
+// is always fresh, so the hidden precondition held there and failed every local `make check`
+// that followed an e2e run. The trailing space keeps this anchored to the end of the labels.
 for(const series of [
-  'courses_transcoding_job_duration_seconds_count{outcome="ready"} 0',
-  'courses_transcoding_job_duration_seconds_count{outcome="failed"} 0',
-  'courses_transcoding_job_duration_seconds_count{outcome="cancelled"} 0',
-  'courses_transcoding_failures_total{reason="unsupported_source"} 0',
-  'courses_transcoding_failures_total{reason="probe_failed"} 0',
-  'courses_transcoding_failures_total{reason="render_failed"} 0',
-  'courses_transcoding_failures_total{reason="publish_failed"} 0',
-  'courses_transcoding_failures_total{reason="storage_unavailable"} 0',
+  'courses_transcoding_job_duration_seconds_count{outcome="ready"} ',
+  'courses_transcoding_job_duration_seconds_count{outcome="failed"} ',
+  'courses_transcoding_job_duration_seconds_count{outcome="cancelled"} ',
+  'courses_transcoding_failures_total{reason="unsupported_source"} ',
+  'courses_transcoding_failures_total{reason="probe_failed"} ',
+  'courses_transcoding_failures_total{reason="render_failed"} ',
+  'courses_transcoding_failures_total{reason="publish_failed"} ',
+  'courses_transcoding_failures_total{reason="storage_unavailable"} ',
 ]) {
-  if(!metrics.includes(series)) throw Error(`Missing zero-value worker metric: ${series}`);
+  if(!metrics.includes(series)) throw Error(`Worker metric series is not registered: ${series}`);
 }
 const burst=await Promise.all(Array.from({length:60},()=>fetch(origin+'/api/v1/not-found').then(r=>r.status)));
 if(!burst.includes(429)) throw Error('API rate limit not enforced');

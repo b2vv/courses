@@ -560,12 +560,12 @@ SQL`,
             '-eu',
             '-c',
             `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
-  DELETE FROM lesson_progress WHERE lesson_id IN (
-    SELECT lessons.id FROM course_lessons AS lessons
-    JOIN course_modules AS modules ON modules.id = lessons.module_id
-    WHERE modules.course_id = :'course_id'
-  );
-  SQL`,
+DELETE FROM lesson_progress WHERE lesson_id IN (
+  SELECT lessons.id FROM course_lessons AS lessons
+  JOIN course_modules AS modules ON modules.id = lessons.module_id
+  WHERE modules.course_id = :'course_id'
+);
+SQL`,
             'playback-progress-reset',
             course.id,
           ],
