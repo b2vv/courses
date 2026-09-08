@@ -1,3 +1,18 @@
+# Handoff — `courses`, Phase 5 close (SUPERSEDED 2026-09-08)
+
+> **Do not act on this file as current state.** It was written at the close of Phase 5 and
+> committed a day later without re-reading the repository, by which time **Phase 6 was well
+> under way**: `docs/playback/` holds its spec, plan (edition 6) and a closed GATE 2, and
+> `work/tasks.md` carries its task queue. Two of its instructions are already wrong — Phase 6
+> is not unplanned, and **backlog B-2 has been taken** (`frontend/rstest.config.ts` now runs
+> adapter tests under a `node` project beside the `happy-dom` one).
+>
+> Current state lives in `work/tasks.md`, `docs/playback/`, and `work/backlog.md`. What is
+> still worth reading below: the working model with Codex, the traps, and the methodological
+> lesson — none of which is phase-specific.
+
+---
+
 # Handoff — `courses`, Phase 5 closed, Phase 6 unplanned
 
 Written 2026-09-07. Everything durable is in the repository; this file carries only what is
