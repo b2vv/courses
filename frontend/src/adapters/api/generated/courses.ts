@@ -33,6 +33,8 @@ import type {
   Instructor,
   InternalErrorResponse,
   InvalidRequestResponse,
+  LearningCourse,
+  LearningForbiddenResponse,
   LessonNotFoundResponse,
   ListAdminCoursesParams,
   ListAdminUsersParams,
@@ -1347,7 +1349,7 @@ export type loginResponse401 = {
 }
 
 export type loginResponse403 = {
-  data: OriginForbiddenResponse
+  data: PlaybackForbiddenResponse
   status: 403
 }
 
@@ -1612,6 +1614,82 @@ const res = await fetch(getCreatePlaybackSessionUrl(),
 
 
 
+export type getLearningCourseResponse200 = {
+  data: LearningCourse
+  status: 200
+}
+
+export type getLearningCourseResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getLearningCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLearningCourseResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getLearningCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getLearningCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getLearningCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLearningCourseResponseSuccess = (getLearningCourseResponse200) & {
+  headers: Headers;
+};
+export type getLearningCourseResponseError = (getLearningCourseResponse400 | getLearningCourseResponse401 | getLearningCourseResponse403 | getLearningCourseResponse404 | getLearningCourseResponse500 | getLearningCourseResponse503) & {
+  headers: Headers;
+};
+
+export type getLearningCourseResponse = (getLearningCourseResponseSuccess | getLearningCourseResponseError)
+
+export const getGetLearningCourseUrl = (slug: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${slug}`
+}
+
+/**
+ * Returns the ordered course program with module and lesson ids, the currently playable video state, and caller-specific progress. Missing progress is represented by concrete zero values. Draft and archived courses are visible only to their owner or an admin.
+ * @summary Get an authenticated course learning model
+ */
+export const getLearningCourse = async (slug: string, options?: RequestInit): Promise<getLearningCourseResponse> => {
+
+  const res = await fetch(getGetLearningCourseUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLearningCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLearningCourseResponse
+}
+
+
+
 export type heartbeatPlaybackResponse204 = {
   data: void
   status: 204
@@ -1628,7 +1706,7 @@ export type heartbeatPlaybackResponse401 = {
 }
 
 export type heartbeatPlaybackResponse403 = {
-  data: OriginForbiddenResponse
+  data: PlaybackForbiddenResponse
   status: 403
 }
 

@@ -90,8 +90,9 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 	defer pool.Close()
 
 	const (
-		courseID = "12000000-0000-4000-8000-000000000001"
-		moduleID = "62000000-0000-4000-8000-000000000001"
+		courseID            = "12000000-0000-4000-8000-000000000001"
+		moduleID            = "62000000-0000-4000-8000-000000000001"
+		restrictedStudentID = "42000000-0000-4000-8000-000000000002"
 	)
 	fixtures := []struct {
 		query string
@@ -99,6 +100,8 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 	}{
 		{`INSERT INTO users(id,email,display_name,role,password_hash)
 		 VALUES($1,'sessions@playback.test','Sessions owner','instructor','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')`, []any{userID}},
+		{`INSERT INTO users(id,email,display_name,role,password_hash)
+		 VALUES($1,'restricted@playback.test','Restricted student','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')`, []any{restrictedStudentID}},
 		{`INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
 		 VALUES($1,$2,'playback-sessions-test','Playback sessions','Playback sessions summary','Playback sessions description','published',now())`, []any{courseID, userID}},
 		{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1,$2,'Module',0)`, []any{moduleID, courseID}},
@@ -230,7 +233,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if err := redisConnection.Del(ctx, "playback:owner:"+userID).Err(); err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(20, 2)); !errors.Is(err, domain.ErrPlaybackSessionExpired) {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(20, 2)); !errors.Is(err, domain.ErrPlaybackSessionExpired) {
 			t.Fatalf("heartbeat: %v", err)
 		}
 		if position, sequence := readProgress(); position != 10 || sequence != 1 {
@@ -242,7 +245,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: "22222222222222222222222222222222", VideoID: videoID, LessonID: lessonID}); err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(20, 2)); !errors.Is(err, domain.ErrPlaybackTakenOver) {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(20, 2)); !errors.Is(err, domain.ErrPlaybackTakenOver) {
 			t.Fatalf("heartbeat: %v", err)
 		}
 		if position, sequence := readProgress(); position != 10 || sequence != 1 {
@@ -260,7 +263,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(30, 3)); !errors.Is(err, domain.ErrPlaybackTakenOver) {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(30, 3)); !errors.Is(err, domain.ErrPlaybackTakenOver) {
 			t.Fatalf("heartbeat: %v", err)
 		}
 		after, err := redisConnection.PTTL(ctx, key).Result()
@@ -279,7 +282,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(20, 2)); err != nil {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(20, 2)); err != nil {
 			t.Fatal(err)
 		}
 		if position, sequence := readProgress(); position != 20 || sequence != 2 {
@@ -300,11 +303,36 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(120, 3)); err != nil {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(120, 3)); err != nil {
 			t.Fatal(err)
 		}
 		if position, sequence := readProgress(); position != 100 || sequence != 3 {
 			t.Fatalf("position=%v sequence=%d", position, sequence)
+		}
+	})
+
+	t.Run("R17 inaccessible course heartbeat is forbidden without progress", func(t *testing.T) {
+		if err := sessions.Take(ctx, restrictedStudentID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE courses SET status='archived',updated_at=now() WHERE id=$1`, courseID); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if _, err := pool.Exec(context.Background(), `UPDATE courses SET status='published',updated_at=now() WHERE id=$1`, courseID); err != nil {
+				t.Errorf("restore published course: %v", err)
+			}
+		})
+		student := domain.Actor{UserID: restrictedStudentID}
+		if err := sessions.Heartbeat(ctx, student, playbackID, lessonID, update(30, 4)); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("heartbeat: %v", err)
+		}
+		var rows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM lesson_progress WHERE user_id=$1 AND lesson_id=$2`, restrictedStudentID, lessonID).Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 0 {
+			t.Fatalf("denied heartbeat created %d progress rows", rows)
 		}
 	})
 
@@ -315,7 +343,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		if _, err := pool.Exec(ctx, `DELETE FROM course_lessons WHERE id=$1`, lessonID); err != nil {
 			t.Fatal(err)
 		}
-		if err := sessions.Heartbeat(ctx, userID, playbackID, lessonID, update(100, 4)); !errors.Is(err, domain.ErrLessonNotFound) {
+		if err := sessions.Heartbeat(ctx, actor, playbackID, lessonID, update(100, 4)); !errors.Is(err, domain.ErrLessonNotFound) {
 			t.Fatalf("heartbeat: %v", err)
 		}
 	})

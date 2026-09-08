@@ -25,12 +25,9 @@ func (sessions *Sessions) Take(ctx context.Context, userID string, ownership dom
 }
 
 func (sessions *Sessions) Play(ctx context.Context, actor domain.Actor, lessonID, playbackID string) (domain.LessonPlayback, error) {
-	playback, err := sessions.playback.LoadLessonPlayback(ctx, actor.UserID, lessonID)
+	playback, err := sessions.loadViewablePlayback(ctx, actor, lessonID)
 	if err != nil {
 		return domain.LessonPlayback{}, err
-	}
-	if !playback.Course.CanBeViewedBy(actor) {
-		return domain.LessonPlayback{}, domain.ErrForbidden
 	}
 	err = sessions.Take(ctx, actor.UserID, domain.Ownership{
 		PlaybackID: playbackID,
@@ -45,10 +42,15 @@ func (sessions *Sessions) Play(ctx context.Context, actor domain.Actor, lessonID
 
 func (sessions *Sessions) Heartbeat(
 	ctx context.Context,
-	userID, playbackID, lessonID string,
+	actor domain.Actor,
+	playbackID, lessonID string,
 	update domain.ProgressUpdate,
 ) error {
-	renewal, err := sessions.ownership.Renew(ctx, userID, playbackID, sessions.ttl)
+	_, err := sessions.loadViewablePlayback(ctx, actor, lessonID)
+	if err != nil {
+		return err
+	}
+	renewal, err := sessions.ownership.Renew(ctx, actor.UserID, playbackID, sessions.ttl)
 	if err != nil {
 		return err
 	}
@@ -58,8 +60,19 @@ func (sessions *Sessions) Heartbeat(
 	case domain.OwnershipTakenOver:
 		return domain.ErrPlaybackTakenOver
 	case domain.OwnershipRenewed:
-		return sessions.progress.Save(ctx, userID, lessonID, update, sessions.now())
+		return sessions.progress.Save(ctx, actor.UserID, lessonID, update, sessions.now())
 	default:
 		return domain.ErrDependencyUnavailable
 	}
+}
+
+func (sessions *Sessions) loadViewablePlayback(ctx context.Context, actor domain.Actor, lessonID string) (domain.LessonPlayback, error) {
+	playback, err := sessions.playback.LoadLessonPlayback(ctx, actor.UserID, lessonID)
+	if err != nil {
+		return domain.LessonPlayback{}, err
+	}
+	if !playback.Course.CanBeViewedBy(actor) {
+		return domain.LessonPlayback{}, domain.ErrForbidden
+	}
+	return playback, nil
 }

@@ -538,7 +538,7 @@ paths:
               schema: { $ref: '#/components/schemas/AuthenticatedUser' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '403': { $ref: '#/components/responses/PlaybackForbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/auth/me:
@@ -607,6 +607,38 @@ paths:
         '404': { $ref: '#/components/responses/PlaybackNotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{slug}:
+    get:
+      operationId: getLearningCourse
+      summary: Get an authenticated course learning model
+      description: >-
+        Returns the ordered course program with module and lesson ids, the currently playable
+        video state, and caller-specific progress. Missing progress is represented by concrete
+        zero values. Draft and archived courses are visible only to their owner or an admin.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+            pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      responses:
+        '200':
+          description: Ordered learning content and caller-specific progress.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LearningCourse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/LearningForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/playback/heartbeat:
     post:
       operationId: heartbeatPlayback
@@ -629,7 +661,7 @@ paths:
             Cache-Control: { $ref: '#/components/headers/NoStore' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/OriginForbidden' }
+        '403': { $ref: '#/components/responses/PlaybackForbidden' }
         '404': { $ref: '#/components/responses/LessonNotFound' }
         '409': { $ref: '#/components/responses/PlaybackTakenOver' }
         '410': { $ref: '#/components/responses/PlaybackExpired' }
@@ -684,6 +716,53 @@ components:
         positionSeconds: { type: number, format: double, minimum: 0 }
         clientSeq: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
         reason: { type: string, enum: [tick, pause, seek, hide, nav, ended] }
+    LearningLesson:
+      type: object
+      additionalProperties: false
+      required: [id, title, videoState, position, completed, clientSeq]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        videoState:
+          type: string
+          nullable: true
+          enum: [processing, ready, failed]
+        position: { type: number, format: double, minimum: 0 }
+        completed: { type: boolean }
+        clientSeq: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
+    LearningModule:
+      type: object
+      additionalProperties: false
+      required: [id, title, lessons]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        lessons:
+          type: array
+          maxItems: 120
+          items: { $ref: '#/components/schemas/LearningLesson' }
+    LearningCourse:
+      type: object
+      additionalProperties: false
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, modules, continueLessonId]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, minLength: 1, maxLength: 20000 }
+        status: { type: string, enum: [draft, published, archived] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+        modules:
+          type: array
+          maxItems: 40
+          items: { $ref: '#/components/schemas/LearningModule' }
+        continueLessonId:
+          type: string
+          format: uuid
+          nullable: true
     Course:
       type: object
       additionalProperties: false
@@ -982,6 +1061,14 @@ components:
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    LearningForbidden:
+      description: The authenticated actor cannot view the requested course.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     PlaybackForbidden:
       description: The Origin is not allowed or the authenticated actor cannot view the lesson's course.
       headers:

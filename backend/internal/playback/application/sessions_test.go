@@ -55,6 +55,13 @@ func (reader *playbackReader) LoadLessonPlayback(_ context.Context, userID, less
 	return reader.playback, reader.err
 }
 
+func viewablePlaybackReader() *playbackReader {
+	return &playbackReader{playback: domain.LessonPlayback{
+		VideoID: videoID,
+		Course:  domain.VideoCourse{OwnerID: "owner", Status: domain.Published},
+	}}
+}
+
 func (writer *progressWriter) Save(_ context.Context, userID, lessonID string, update domain.ProgressUpdate, now time.Time) error {
 	writer.saved, writer.userID, writer.lessonID, writer.update, writer.now = true, userID, lessonID, update, now
 	return writer.err
@@ -125,13 +132,13 @@ func TestHeartbeatRenewsBeforeSavingProgress(t *testing.T) {
 	now := time.Date(2026, time.September, 8, 13, 0, 0, 0, time.UTC)
 	ownerships := &ownershipWriter{renewal: domain.OwnershipRenewed}
 	progress := &progressWriter{}
-	service := application.NewSessions(nil, ownerships, progress, 3*time.Minute, func() time.Time { return now })
+	service := application.NewSessions(viewablePlaybackReader(), ownerships, progress, 3*time.Minute, func() time.Time { return now })
 	update, err := domain.NewProgressUpdate(42, 7, "pause")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := service.Heartbeat(context.Background(), userID, playbackID, lessonID, update); err != nil {
+	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update); err != nil {
 		t.Fatal(err)
 	}
 	if ownerships.renewUserID != userID || ownerships.renewPlayback != playbackID || ownerships.renewTTL != 3*time.Minute {
@@ -139,6 +146,29 @@ func TestHeartbeatRenewsBeforeSavingProgress(t *testing.T) {
 	}
 	if !progress.saved || progress.userID != userID || progress.lessonID != lessonID || progress.update.ClientSequence() != 7 || !progress.now.Equal(now) {
 		t.Fatalf("progress=%+v", progress)
+	}
+}
+
+func TestR17HeartbeatChecksCourseVisibilityBeforeRenewalAndProgress(t *testing.T) {
+	t.Parallel()
+	reader := &playbackReader{playback: domain.LessonPlayback{
+		VideoID: videoID,
+		Course:  domain.VideoCourse{OwnerID: "owner", Status: domain.Archived},
+	}}
+	ownerships := &ownershipWriter{renewal: domain.OwnershipRenewed}
+	progress := &progressWriter{}
+	service := application.NewSessions(reader, ownerships, progress, 3*time.Minute, time.Now)
+	update, err := domain.NewProgressUpdate(42, 7, "tick")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update)
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("error=%v", err)
+	}
+	if reader.calls != 1 || ownerships.renewUserID != "" || progress.saved {
+		t.Fatalf("reader calls=%d renew user=%q progress saved=%t", reader.calls, ownerships.renewUserID, progress.saved)
 	}
 }
 
@@ -159,12 +189,12 @@ func TestHeartbeatRefusalsNeverWriteProgress(t *testing.T) {
 			t.Parallel()
 			ownerships := &ownershipWriter{renewal: test.outcome, renewErr: test.err}
 			progress := &progressWriter{}
-			service := application.NewSessions(nil, ownerships, progress, 3*time.Minute, time.Now)
+			service := application.NewSessions(viewablePlaybackReader(), ownerships, progress, 3*time.Minute, time.Now)
 			update, err := domain.NewProgressUpdate(42, 7, "tick")
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = service.Heartbeat(context.Background(), userID, playbackID, lessonID, update)
+			err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update)
 			if !errors.Is(err, test.want) || progress.saved {
 				t.Fatalf("err=%v saved=%t, want %v and no save", err, progress.saved, test.want)
 			}
@@ -175,7 +205,7 @@ func TestHeartbeatRefusalsNeverWriteProgress(t *testing.T) {
 func TestProgressDependencyFailureIsPreserved(t *testing.T) {
 	t.Parallel()
 	service := application.NewSessions(
-		nil,
+		viewablePlaybackReader(),
 		&ownershipWriter{renewal: domain.OwnershipRenewed},
 		&progressWriter{err: domain.ErrDependencyUnavailable},
 		3*time.Minute,
@@ -185,7 +215,7 @@ func TestProgressDependencyFailureIsPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Heartbeat(context.Background(), userID, playbackID, lessonID, update); !errors.Is(err, domain.ErrDependencyUnavailable) {
+	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update); !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("got %v, want dependency unavailable", err)
 	}
 }

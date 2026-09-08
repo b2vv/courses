@@ -28,7 +28,7 @@ type authorizationService interface {
 
 type sessionService interface {
 	Play(context.Context, domain.Actor, string, string) (domain.LessonPlayback, error)
-	Heartbeat(context.Context, string, string, string, domain.ProgressUpdate) error
+	Heartbeat(context.Context, domain.Actor, string, string, domain.ProgressUpdate) error
 }
 
 type Handler struct {
@@ -122,7 +122,7 @@ func (handler *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 		writePlaybackError(w, r, err)
 		return
 	}
-	if err := handler.sessions.Heartbeat(r.Context(), actor.UserID, request.PlaybackID, request.LessonID, update); err != nil {
+	if err := handler.sessions.Heartbeat(r.Context(), actor, request.PlaybackID, request.LessonID, update); err != nil {
 		writePlaybackError(w, r, err)
 		return
 	}

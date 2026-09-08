@@ -54,9 +54,9 @@ func (service *sessions) Play(_ context.Context, actor domain.Actor, lessonID, p
 	return service.playback, service.playErr
 }
 
-func (service *sessions) Heartbeat(_ context.Context, userID, playbackID, lessonID string, update domain.ProgressUpdate) error {
+func (service *sessions) Heartbeat(_ context.Context, actor domain.Actor, playbackID, lessonID string, update domain.ProgressUpdate) error {
 	service.heartbeatCalls++
-	service.actor.UserID, service.playbackID, service.lessonID, service.update = userID, playbackID, lessonID, update
+	service.actor, service.playbackID, service.lessonID, service.update = actor, playbackID, lessonID, update
 	return service.heartbeatErr
 }
 
@@ -355,6 +355,7 @@ func TestPublicPlaybackHTTPMatchesOpenAPI(t *testing.T) {
 	}{
 		{name: "play", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `"}`, service: &sessions{playback: domain.LessonPlayback{VideoID: videoID}}, wantStatus: http.StatusCreated},
 		{name: "heartbeat", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{}, wantStatus: http.StatusNoContent},
+		{name: "R17 heartbeat forbidden", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrForbidden}, wantStatus: http.StatusForbidden},
 		{name: "heartbeat taken over", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrPlaybackTakenOver}, wantStatus: http.StatusConflict},
 		{name: "heartbeat expired", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrPlaybackSessionExpired}, wantStatus: http.StatusGone},
 	}

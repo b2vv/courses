@@ -52,8 +52,10 @@ func main() {
 		defer dependencies.Close()
 		courseRepository := coursepostgres.NewRepository(dependencies.Database)
 		catalog := courseapplication.NewCatalog(courseRepository)
+		learning := courseapplication.NewLearning(courseRepository)
 		authoring := courseapplication.NewAuthoring(courseRepository, time.Now)
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
+		learningHandler := coursehttp.NewLearningHandler(learning)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
@@ -82,6 +84,7 @@ func main() {
 			Register: func(mux *http.ServeMux) {
 				courseHandler.Register(mux)
 				identityHandler.Register(mux)
+				learningHandler.Register(mux, identityHandler.Authenticate)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

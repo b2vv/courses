@@ -12,6 +12,10 @@ type CourseRepository interface {
 	GetPublished(context.Context, string) (domain.CourseDetail, error)
 }
 
+type LearningRepository interface {
+	GetLearningCourse(context.Context, string, string) (domain.LearningCourse, error)
+}
+
 type AuthoringRepository interface {
 	List(context.Context, domain.Actor, domain.Query, domain.Status) (domain.AuthoringPage, error)
 	Load(context.Context, string) (domain.CourseTree, error)
