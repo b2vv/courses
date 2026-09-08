@@ -524,12 +524,46 @@ SQL`,
       expect(nextSession.mediaPath).not.toContain(`/hls/${oldVideo}/`);
     });
 
-    // Ordered here on purpose. P02 completes lesson 1, and the player resumes a saved
-    // position on mount, so every T7 test that opens lesson 1 afterwards starts ten
-    // seconds from its end - too little runway for P08's thirty-second view, and enough
-    // to leave B39 waiting forever for a play that never resolves. Lessons 2 and 4 carry
-    // no video, so there is no other lesson to move this onto; the block runs after the
-    // T7 tests and before R04, which archives the course irreversibly.
+    // Saved progress makes a lesson shared state between tests: the player restores
+    // `lesson.position` on ready, so whoever seeks furthest decides where the next test
+    // starts. Four tests seek on lesson 1 - 80, 298, 290, 120 - and the two near the end
+    // are fatal, because a resumed lesson two seconds from its finish never resolves
+    // `play()` and the caller waits out its whole timeout.
+    //
+    // Order cannot fix this: both directions poison the other. Run this block first and
+    // B39 inherits 290; run it last and it inherits 298 from B40 - and then the P02
+    // assertion that lesson 1 is watched would be satisfied by B40's seek rather than by
+    // the chain P02 exists to prove, which is a green main assertion resting on nothing.
+    //
+    // So the block starts from a known state instead of a hoped-for one. Lessons 2 and 4
+    // carry no video, so there is no other lesson to move onto; this runs before R04,
+    // which archives the course irreversibly.
+    test.beforeAll(async () => {
+      if (course === undefined) throw new Error('Playback course was not created');
+      await execute(
+        'docker',
+        [
+          'compose',
+          'exec',
+          '-T',
+          'postgres',
+          'sh',
+          '-eu',
+          '-c',
+          `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DELETE FROM lesson_progress WHERE lesson_id IN (
+  SELECT lessons.id FROM course_lessons AS lessons
+  JOIN course_modules AS modules ON modules.id = lessons.module_id
+  WHERE modules.course_id = :'course_id'
+);
+SQL`,
+          'playback-progress-reset',
+          course.id,
+        ],
+        { cwd: repositoryRoot, timeout: 60_000 },
+      );
+    });
+
     test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
       page,
     }) => {
