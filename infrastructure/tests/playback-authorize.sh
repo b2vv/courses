@@ -9,6 +9,8 @@ lesson_id="60000000-0000-4000-8002-$run_hex"
 video_id="60000000-0000-4000-8003-$run_hex"
 admin_id="40000000-0000-4000-8004-$run_hex"
 admin_email="playback-$run_hex@courseforge.local"
+outsider_id="40000000-0000-4000-8005-$run_hex"
+outsider_email="playback-outsider-$run_hex@courseforge.local"
 http_port="${HTTP_PORT:-8080}"
 origin="http://127.0.0.1:${http_port}"
 cookie_jar="$(mktemp /tmp/courses-t1-cookie.XXXXXX)"
@@ -33,7 +35,7 @@ restore() {
 DELETE FROM video_assets WHERE id='$video_id';
 DELETE FROM course_lessons WHERE id='$lesson_id';
 DELETE FROM course_modules WHERE id='$module_id';
-DELETE FROM users WHERE id='$admin_id';
+DELETE FROM users WHERE id IN ('$admin_id','$outsider_id');
 SQL
   rm -f "$cookie_jar"
 }
@@ -68,12 +70,25 @@ assert_status() {
 }
 
 docker compose exec -T nginx nginx -t
+nginx_container="$(docker compose ps -q nginx)"
+if [ -z "$nginx_container" ]; then
+  echo 'B12: nginx container is not running' >&2
+  exit 1
+fi
+nginx_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$nginx_container")"
+if [ "$nginx_health" != healthy ]; then
+  echo "B12: expected nginx health=healthy, got $nginx_health" >&2
+  exit 1
+fi
 docker compose exec -T nginx sh -c 'test -z "$(find /var/cache/nginx -mindepth 1 -print -quit)"'
+printf '%s\n' 'B12 nginx_config=valid container=healthy cache_entries=0'
 printf '%s\n' 'B37 nginx_config=valid cache_entries=0'
 
 docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<SQL
 INSERT INTO users(id,email,display_name,role,password_hash)
 VALUES ('$admin_id','$admin_email','Playback benchmark admin','admin','\$argon2id\$v=19\$m=65536,t=3,p=2\$YWRtaW4tZGVtby1zZWVkIQ\$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0');
+INSERT INTO users(id,email,display_name,role,password_hash)
+VALUES ('$outsider_id','$outsider_email','Playback authorization outsider','student','\$argon2id\$v=19\$m=65536,t=3,p=2\$YWRtaW4tZGVtby1zZWVkIQ\$obXgLD59DMQsNm2cOgKWcl050QIrNheSnkrYE3HUvT0');
 INSERT INTO course_modules(id,course_id,title,position)
 VALUES ('$module_id','$course_id','Playback benchmark',999)
 ON CONFLICT (id) DO UPDATE SET course_id=EXCLUDED.course_id,title=EXCLUDED.title,position=EXCLUDED.position,updated_at=now();
@@ -122,6 +137,15 @@ const login = await fetch(edge + '/api/v1/auth/login', {
 if (login.status !== 200) throw Error(\`login: expected 200, got \${login.status}\`);
 const cookie = login.headers.get('set-cookie')?.split(';', 1)[0];
 if (!cookie?.startsWith('courseforge_session=')) throw Error('login returned no session cookie');
+
+const outsiderLogin = await fetch(edge + '/api/v1/auth/login', {
+  method: 'POST',
+  headers: {'Content-Type':'application/json', Origin:'http://localhost:8080'},
+  body: JSON.stringify({email:'$outsider_email', password:'courseforge-admin-demo'}),
+});
+if (outsiderLogin.status !== 200) throw Error(\`outsider login: expected 200, got \${outsiderLogin.status}\`);
+const outsiderCookie = outsiderLogin.headers.get('set-cookie')?.split(';', 1)[0];
+if (!outsiderCookie?.startsWith('courseforge_session=')) throw Error('outsider login returned no session cookie');
 
 const metric = async (name) => {
   const body = await fetch(api + '/metrics').then((response) => response.text());
@@ -207,6 +231,35 @@ console.log('B38 ' + JSON.stringify({...b38, pacing_ms_between_batches:200}));
 console.log('M3 ' + JSON.stringify({false_403_or_503:falseDenials, requests:400}));
 if (falseDenials !== 0) throw Error(\`M3 saw \${falseDenials} false denials\`);
 
+const b13Paths = [
+  \`/media/p/\${playbackId}/hls/\${videoId}/master.m3u8\`,
+  \`/media/p/\${playbackId}/hls/\${videoId}/v0/segment_000.m4s\`,
+  \`/media/p/\${playbackId}/hls/\${videoId}/v0/segment_001.m4s\`,
+];
+const b13Before = await authorizeCount();
+for (const path of b13Paths) {
+  const response = await fetch(edge + path, {headers:{Cookie:cookie}});
+  await response.arrayBuffer();
+  if (response.status !== 200) throw Error(\`B13 \${path}: expected 200, got \${response.status}\`);
+}
+const b13After = await authorizeCount();
+if (b13After - b13Before !== 3) throw Error(\`B13 expected 3 authorize calls, got \${b13After-b13Before}\`);
+console.log('B13 media_requests=3 authorize_calls=3');
+
+const deniedURL = edge + b13Paths[1];
+const anonymousResponse = await fetch(deniedURL);
+const anonymousBody = new Uint8Array(await anonymousResponse.arrayBuffer());
+if (anonymousResponse.status !== 403) throw Error(\`B14 expected anonymous 403, got \${anonymousResponse.status}\`);
+console.log('B14 allowed_then_anonymous_same_url=403');
+
+const outsiderResponse = await fetch(deniedURL, {headers:{Cookie:outsiderCookie}});
+const outsiderBody = new Uint8Array(await outsiderResponse.arrayBuffer());
+const equalDeniedBodies = anonymousBody.length === outsiderBody.length && anonymousBody.every((byte, index) => byte === outsiderBody[index]);
+if (outsiderResponse.status !== anonymousResponse.status || !equalDeniedBodies) {
+  throw Error(\`R29 distinguishable denials: anonymous=\${anonymousResponse.status}/\${anonymousBody.length}B outsider=\${outsiderResponse.status}/\${outsiderBody.length}B equal=\${equalDeniedBodies}\`);
+}
+console.log(\`R29 status=\${anonymousResponse.status} bodies_equal=true bytes=\${anonymousBody.length}\`);
+
 const invalidBefore = await authorizeCount();
 for (const path of [
   \`/media/p/\${playbackId}/hls/not-a-uuid/x.m4s\`,
@@ -251,6 +304,8 @@ if (internal.status !== 404) throw Error(\`R10 expected 404, got \${internal.sta
 console.log('R10 status=404');
 const logout = await fetch(edge + '/api/v1/auth/logout', {method:'POST', headers:{Cookie:cookie, Origin:'http://localhost:8080'}});
 if (logout.status !== 204) throw Error(\`benchmark logout: expected 204, got \${logout.status}\`);
+const outsiderLogout = await fetch(edge + '/api/v1/auth/logout', {method:'POST', headers:{Cookie:outsiderCookie, Origin:'http://localhost:8080'}});
+if (outsiderLogout.status !== 204) throw Error(\`outsider logout: expected 204, got \${outsiderLogout.status}\`);
 JS
 
 curl -fsS -o /dev/null -c "$cookie_jar" -X POST \
@@ -279,4 +334,4 @@ docker compose start postgres >/dev/null
 wait_for_exec postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 wait_for_exec api curl -fsS http://127.0.0.1:8080/readyz
 
-printf '%s\n' 'PASS B37 B38 R01 R10 R11 R12 R13 R20 and measurements M1-M4'
+printf '%s\n' 'PASS B12 B13 B14 B37 B38 R01 R10 R11 R12 R13 R20 R29 and measurements M1-M4'

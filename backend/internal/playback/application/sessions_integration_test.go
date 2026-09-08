@@ -24,7 +24,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestSessionsOwnershipFailuresCannotWriteProgress(t *testing.T) {
+type authorizationCounter struct{}
+
+func (authorizationCounter) Inc() {}
+
+func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	redisContainer, err := testcontainers.Run(
@@ -117,6 +121,73 @@ func TestSessionsOwnershipFailuresCannotWriteProgress(t *testing.T) {
 		3*time.Minute,
 		func() time.Time { return now },
 	)
+	authorizer := application.NewAuthorizer(
+		playbackredis.NewOwnershipReader(redisConnection),
+		playbackpostgres.NewVideoAccessReader(pool, authorizationCounter{}),
+	)
+	actor := domain.Actor{UserID: userID}
+
+	t.Run("B13 ownership taken by the playback session authorizes its video", func(t *testing.T) {
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizer.Authorize(ctx, actor, playbackID, videoID); err != nil {
+			t.Fatalf("authorize taken ownership: %v", err)
+		}
+	})
+
+	t.Run("B13 displaced playback id is denied", func(t *testing.T) {
+		const replacementPlaybackID = "22222222222222222222222222222222"
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: replacementPlaybackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizer.Authorize(ctx, actor, playbackID, videoID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("authorize displaced playback: %v", err)
+		}
+	})
+
+	t.Run("B13 ownership does not authorize a different video", func(t *testing.T) {
+		const foreignVideoID = "50000000-0000-4000-8000-000000000003"
+		if err := sessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizer.Authorize(ctx, actor, playbackID, foreignVideoID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("authorize foreign video: %v", err)
+		}
+	})
+
+	t.Run("B13 expired ownership is denied", func(t *testing.T) {
+		expiringSessions := application.NewSessions(
+			playbackredis.NewOwnershipWriter(redisConnection),
+			playbackpostgres.NewProgressWriter(pool),
+			2*time.Second,
+			func() time.Time { return now },
+		)
+		if err := expiringSessions.Take(ctx, userID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizer.Authorize(ctx, actor, playbackID, videoID); err != nil {
+			t.Fatalf("authorize before expiry: %v", err)
+		}
+
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			err := authorizer.Authorize(ctx, actor, playbackID, videoID)
+			if errors.Is(err, domain.ErrForbidden) {
+				break
+			}
+			if err != nil {
+				t.Fatalf("authorize while waiting for expiry: %v", err)
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("ownership remained authorized after its Redis TTL")
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+	})
 	readProgress := func() (float64, int64) {
 		t.Helper()
 		var position float64
