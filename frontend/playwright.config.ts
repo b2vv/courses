@@ -15,7 +15,18 @@ export default defineConfig({
   //
   // The trade is named so it can be revisited deliberately: a large CI runner will leave
   // capacity unused. That is the price of a suite that behaves the same everywhere.
-  workers: 2,
+  // One worker, not two, and the reason is isolation rather than speed. `fullyParallel: false`
+  // orders tests inside a file; separate files still run side by side, and the public catalogue
+  // is global state that several of them share. `admin.spec` publishes a course mid-scenario
+  // with published_at = now, which sorts ahead of every seeded course, so a catalogue test
+  // reading offset=1 concurrently gets the wrong row - measured 2026-09-09, twice, and the
+  // interleaved completion order shows the overlap. Serialising the project costs a couple of
+  // minutes only in `chromium`; media, playback and recovery hold one file each and are
+  // unaffected by this number at all.
+  //
+  // The trade stays named: a large CI runner will leave capacity unused. That is the price of a
+  // suite whose result depends on the code rather than on which tests happened to overlap.
+  workers: 1,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
     locale: 'uk-UA',
