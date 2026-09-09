@@ -375,6 +375,37 @@ test.describe('T7 playback milestone', () => {
   });
 
   test.describe('as a student', () => {
+    // Every test in this block starts from a declared state, not from what its neighbours
+    // left. The player restores a saved position on ready, so four T7 tests were sharing one
+    // lesson: 80 from P01, then P08's thirty seconds, then B39, and B40 arrived with barely two
+    // minutes of runway left - which is why it went red once the admin upload it waits on took
+    // longer than the remainder of the video.
+    //
+    // beforeEach, not beforeAll. beforeAll removes what happened BEFORE the block and would run
+    // once, on state that is already clean; the coupling here is between siblings INSIDE it.
+    // Resetting only before B40 would have treated the symptom and left the first three coupled.
+    const resetLessonProgress = async () => {
+      if (course === undefined) throw new Error('Playback course was not created');
+      await execute(
+        'docker',
+        [
+          'compose',
+          'exec',
+          '-T',
+          'postgres',
+          'sh',
+          '-eu',
+          '-c',
+          resetLessonProgressStatement,
+          'playback-progress-reset',
+          course.id,
+        ],
+        { cwd: repositoryRoot, timeout: 60_000 },
+      );
+    };
+
+    test.beforeEach(resetLessonProgress);
+
     test.use({ storageState: authStatePath('student') });
 
     test('P01 P09 P10 plays real HLS, selects a rung and seeks into unloaded media', async ({
@@ -555,38 +586,9 @@ test.describe('T7 playback milestone', () => {
     // So the block starts from a known state instead of a hoped-for one. Lessons 2 and 4
     // carry no video, so there is no other lesson to move onto; this runs before R04,
     // which archives the course irreversibly.
-    // A nested describe, because Playwright scopes hooks to the enclosing describe rather
-    // than to where they sit in the file. Declared one level up, the reset ran once before
-    // P01 and once after R04 - so P02 still met lesson 1 exactly as B40 left it, at 298, and
-    // R04 was never protected from P02 at all. Serial mode is inherited from the configure
-    // above, so nothing else changes.
+    // Grouping only: the progress reset now runs before every test in the block above, so
+    // these rows need no hooks of their own.
     test.describe('progress, the outline and the clamp', () => {
-      // Cleaning on entry protects the block that cleans; only cleaning on exit protects the
-      // tests that come after it. R04 opens lesson 1 too, and would inherit 290 from P02 - the
-      // very state B39 hung on - so the reset runs on both sides and the order stops mattering.
-      const resetLessonProgress = async () => {
-        if (course === undefined) throw new Error('Playback course was not created');
-        await execute(
-          'docker',
-          [
-            'compose',
-            'exec',
-            '-T',
-            'postgres',
-            'sh',
-            '-eu',
-            '-c',
-            resetLessonProgressStatement,
-            'playback-progress-reset',
-            course.id,
-          ],
-          { cwd: repositoryRoot, timeout: 60_000 },
-        );
-      };
-
-      test.beforeAll(resetLessonProgress);
-      test.afterAll(resetLessonProgress);
-
       test('P02 P03 persists real progress, marks the outline, and enters at the server-selected lesson', async ({
         page,
       }) => {
