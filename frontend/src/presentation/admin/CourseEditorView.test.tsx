@@ -199,6 +199,11 @@ describe('course editor', () => {
     },
   );
 
+  // 40 modules of 3 lessons rendered, walked by keyboard and then audited by axe: measured at
+  // roughly five seconds of work against a five-second default that nobody chose for it. Run
+  // alone on an idle machine it failed once in three. The budget is stated here rather than
+  // inherited, and nothing about what the test asserts changes - raising it does not weaken a
+  // single assertion, while leaving it makes a green run a matter of scheduling luck.
   it('B09 keeps a maximal module list keyboard reachable and free of axe violations', async () => {
     const deepTree: CourseTree = {
       ...tree,
@@ -245,7 +250,7 @@ describe('course editor', () => {
     expect(lessonTitles).toHaveLength(120);
     for (const field of [...moduleTitles, ...lessonTitles]) expect(field.tabIndex).toBe(0);
     expect((await axe.run(container)).violations).toEqual([]);
-  });
+  }, 20_000);
 
   it('R28 replaces a conflicted edit with the refetched stored tree and neutral replay copy', async () => {
     const browser = userEvent.setup();
