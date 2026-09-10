@@ -49,10 +49,10 @@ async function drainTranscodeQueue() {
   );
 }
 
-test('generate the four media fixtures with the worker ffmpeg', async () => {
+test('generate the five media fixtures with the worker ffmpeg', async () => {
   // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
-  // so the budget covers all four encodes plus streaming the bytes out.
-  test.setTimeout(600_000);
+  // so the budget covers all five encodes plus streaming the bytes out.
+  test.setTimeout(720_000);
   await drainTranscodeQueue();
   await mkdir(fixtureDirectory, { recursive: true });
   await compose(
@@ -97,10 +97,39 @@ test('generate the four media fixtures with the worker ffmpeg', async () => {
     '-y',
     '/tmp/e2e-1280x720-5min.mp4',
   );
+  await compose(
+    'exec',
+    '-T',
+    'media-worker',
+    'ffmpeg',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=1280x720:rate=15',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440',
+    '-t',
+    '100',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '32',
+    '-c:a',
+    'aac',
+    '-y',
+    '/tmp/e2e-1280x720-100s.mp4',
+  );
 
   // `docker compose cp` cannot read from the worker's `/tmp`, which is a tmpfs mount rather
   // than part of the container filesystem, so the bytes are streamed out through exec instead.
-  for (const name of [...shortSizes, '1280x720-5min'] as const) {
+  for (const name of [...shortSizes, '1280x720-5min', '1280x720-100s'] as const) {
     const destination = path.join(fixtureDirectory, `e2e-${name}.mp4`);
     const { stdout } = await execute(
       'docker',

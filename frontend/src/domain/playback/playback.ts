@@ -34,12 +34,14 @@ export type PlaybackSession = {
   readonly ownershipTtlSeconds: number;
 };
 
+export type PlaybackHeartbeatReason = 'tick' | 'pause' | 'seek' | 'hide' | 'nav' | 'ended';
+
 export type PlaybackHeartbeat = {
   readonly playbackId: string;
   readonly lessonId: string;
   readonly positionSeconds: number;
   readonly clientSeq: number;
-  readonly reason: 'tick';
+  readonly reason: PlaybackHeartbeatReason;
 };
 
 export type PlaybackErrorCode =

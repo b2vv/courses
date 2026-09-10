@@ -11,6 +11,7 @@ import {
 import type {
   LearningLesson,
   PlaybackHeartbeat,
+  PlaybackHeartbeatReason,
   PlaybackResult,
   PlaybackSession,
 } from '../../domain/playback/playback';
@@ -54,6 +55,8 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
   const mediaRetryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mintRetryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mintRetryResolveRef = useRef<(() => void) | undefined>(undefined);
+  const heartbeatQueueRef = useRef<Promise<'continue' | 'stop'>>(Promise.resolve('continue'));
+  const heartbeatStoppedRef = useRef(false);
   const heartbeatBackoffRef = useRef(initialHeartbeatBackoffMs);
   const mintRetriesRef = useRef(0);
   const mediaRetriesRef = useRef(0);
@@ -81,6 +84,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
 
   const terminalFailure = useCallback(
     (next: Exclude<PlayerFailure, null>, refresh: boolean) => {
+      heartbeatStoppedRef.current = true;
       stop();
       setFailure(next);
       if (refresh) void actions.refresh();
@@ -121,6 +125,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
           mintRetriesRef.current = 0;
           sessionRef.current = result.value;
           clientSeqRef.current = result.value.clientSeq + 1;
+          heartbeatStoppedRef.current = false;
           mediaRef.current?.load(result.value.mediaPath);
           return;
         }
@@ -208,64 +213,113 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     };
   }, [createMedia, handleMediaError, lesson.videoState]);
 
-  const heartbeatNow = useCallback(async (): Promise<'continue' | 'stop'> => {
-    const session = sessionRef.current;
-    const video = videoRef.current;
-    if (session === undefined || video === null) return 'stop';
-    const result = await actions.heartbeat({
-      playbackId: session.playbackId,
-      lessonId: lesson.id,
-      positionSeconds: finiteTime(video.currentTime),
-      clientSeq: clientSeqRef.current,
-      reason: 'tick',
-    });
-    if (result.ok) {
-      clientSeqRef.current += 1;
-      heartbeatBackoffRef.current = initialHeartbeatBackoffMs;
-      return 'continue';
-    }
-    const directive = heartbeatFailureDirective(result.error.code, heartbeatBackoffRef.current);
-    switch (directive.kind) {
-      case 'remint': {
-        const resumeAt = finiteTime(video.currentTime);
-        mediaRef.current?.stopLoad();
-        await loadSession(resumeAt, 'expired');
+  const heartbeatNow = useCallback(
+    async (reason: PlaybackHeartbeatReason): Promise<'continue' | 'stop'> => {
+      if (heartbeatStoppedRef.current) return 'stop';
+      const session = sessionRef.current;
+      if (session === undefined) return 'stop';
+      const video = videoRef.current;
+      const result = await actions.heartbeat({
+        playbackId: session.playbackId,
+        lessonId: lesson.id,
+        positionSeconds: finiteTime(video?.currentTime ?? positionRef.current),
+        clientSeq: clientSeqRef.current,
+        reason,
+      });
+      if (result.ok) {
+        clientSeqRef.current += 1;
+        heartbeatBackoffRef.current = initialHeartbeatBackoffMs;
         return 'continue';
       }
-      case 'taken-over':
-        terminalFailure('taken-over', false);
-        return 'stop';
-      case 'denied':
-        terminalFailure('denied', directive.refresh);
-        return 'stop';
-      case 'unavailable':
-        terminalFailure('unavailable', directive.refresh);
-        return 'stop';
-      case 'retry':
-        heartbeatBackoffRef.current = directive.delayMs;
-        return 'continue';
-    }
-  }, [actions, lesson.id, loadSession, terminalFailure]);
+      const directive = heartbeatFailureDirective(result.error.code, heartbeatBackoffRef.current);
+      switch (directive.kind) {
+        case 'remint': {
+          const resumeAt = finiteTime(video?.currentTime ?? positionRef.current);
+          mediaRef.current?.stopLoad();
+          await loadSession(resumeAt, 'expired');
+          return 'continue';
+        }
+        case 'taken-over':
+          terminalFailure('taken-over', false);
+          return 'stop';
+        case 'denied':
+          terminalFailure('denied', directive.refresh);
+          return 'stop';
+        case 'unavailable':
+          terminalFailure('unavailable', directive.refresh);
+          return 'stop';
+        case 'retry':
+          heartbeatBackoffRef.current = directive.delayMs;
+          return 'continue';
+      }
+    },
+    [actions, lesson.id, loadSession, terminalFailure],
+  );
+
+  const queueHeartbeat = useCallback(
+    (reason: PlaybackHeartbeatReason): Promise<'continue' | 'stop'> => {
+      const run = () => heartbeatNow(reason);
+      const queued = heartbeatQueueRef.current.then(run, run);
+      heartbeatQueueRef.current = queued;
+      return queued;
+    },
+    [heartbeatNow],
+  );
+  const queueHeartbeatRef = useRef(queueHeartbeat);
+
+  useEffect(() => {
+    queueHeartbeatRef.current = queueHeartbeat;
+  }, [queueHeartbeat]);
 
   useEffect(() => {
     if (!playing || sessionRef.current === undefined) return;
     let cancelled = false;
-    const schedule = (delay: number) => {
+    const cadenceMs = sessionRef.current.heartbeatSeconds * 1_000;
+    let nextHeartbeatAt = Date.now() + cadenceMs;
+    const schedule = () => {
+      const delay = Math.max(0, nextHeartbeatAt - Date.now());
       heartbeatTimerRef.current = setTimeout(() => {
-        void heartbeatNow().then((outcome) => {
+        const scheduledAt = nextHeartbeatAt;
+        void queueHeartbeat('tick').then((outcome) => {
           if (cancelled || outcome === 'stop') return;
           const session = sessionRef.current;
-          if (session !== undefined)
-            schedule(nextHeartbeatDelayMs(session.heartbeatSeconds, heartbeatBackoffRef.current));
+          if (session === undefined) return;
+          const nextDelay = nextHeartbeatDelayMs(
+            session.heartbeatSeconds,
+            heartbeatBackoffRef.current,
+          );
+          nextHeartbeatAt =
+            heartbeatBackoffRef.current === initialHeartbeatBackoffMs
+              ? scheduledAt + nextDelay
+              : Date.now() + nextDelay;
+          schedule();
         });
       }, delay);
     };
-    schedule(sessionRef.current.heartbeatSeconds * 1_000);
+    schedule();
     return () => {
       cancelled = true;
       if (heartbeatTimerRef.current !== undefined) clearTimeout(heartbeatTimerRef.current);
     };
-  }, [heartbeatNow, playing]);
+  }, [playing, queueHeartbeat]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return;
+      videoRef.current?.pause();
+      setPlaying(false);
+      void queueHeartbeat('hide');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [queueHeartbeat]);
+
+  useEffect(
+    () => () => {
+      void queueHeartbeatRef.current('nav');
+    },
+    [lesson.id],
+  );
 
   useEffect(() => {
     if (restartAt === null || mediaRef.current === undefined) return;
@@ -300,13 +354,17 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
 
   const qualityOptions = [
     { id: 'auto', label: t('learn.video.qualityAuto') },
-    ...qualities.map((quality) => ({ id: String(quality.id), label: quality.label })),
+    ...qualities.map((quality) => ({
+      id: String(quality.id),
+      label: quality.label,
+    })),
   ];
   const seekTo = (next: number) => {
     const bounded = Math.max(0, Math.min(Math.max(1, duration), next));
     if (videoRef.current !== null) videoRef.current.currentTime = bounded;
     positionRef.current = bounded;
     setPosition(bounded);
+    void queueHeartbeat('seek');
   };
 
   return (
@@ -328,7 +386,12 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
             mediaRetriesRef.current = 0;
             setPosition(positionRef.current);
           }}
-          onEnded={() => setPlaying(false)}
+          onEnded={(event) => {
+            positionRef.current = finiteTime(event.currentTarget.currentTime);
+            setPosition(positionRef.current);
+            setPlaying(false);
+            void queueHeartbeat('ended');
+          }}
           playsInline
         />
       </div>
@@ -340,16 +403,14 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
             if (playing) {
               videoRef.current?.pause();
               setPlaying(false);
+              void queueHeartbeat('pause');
               return;
             }
             if (sessionRef.current === undefined) {
               void loadSession(position, 'initial');
               return;
             }
-            void heartbeatNow().then((outcome) => {
-              if (outcome === 'continue')
-                void videoRef.current?.play().then(() => setPlaying(true));
-            });
+            void videoRef.current?.play().then(() => setPlaying(true));
           }}
         >
           {starting

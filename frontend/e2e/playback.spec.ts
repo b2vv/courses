@@ -39,6 +39,22 @@ type PlaybackSession = {
   readonly heartbeatSeconds: number;
   readonly ownershipTtlSeconds: number;
 };
+type HeartbeatPayload = {
+  readonly positionSeconds: number;
+  readonly clientSeq: number;
+  readonly reason: 'tick' | 'pause' | 'seek' | 'hide' | 'nav' | 'ended';
+};
+
+function isHeartbeatReason(value: unknown): value is HeartbeatPayload['reason'] {
+  return (
+    value === 'tick' ||
+    value === 'pause' ||
+    value === 'seek' ||
+    value === 'hide' ||
+    value === 'nav' ||
+    value === 'ended'
+  );
+}
 
 let course: CourseToken | undefined;
 let finishRequestTracking = () => Promise.resolve();
@@ -72,7 +88,13 @@ function playbackSession(payload: unknown): PlaybackSession {
     typeof ownershipTtlSeconds !== 'number'
   )
     throw new Error('Playback session response is incomplete');
-  return { playbackId, mediaPath, clientSeq, heartbeatSeconds, ownershipTtlSeconds };
+  return {
+    playbackId,
+    mediaPath,
+    clientSeq,
+    heartbeatSeconds,
+    ownershipTtlSeconds,
+  };
 }
 
 function videoID(payload: unknown): string {
@@ -85,7 +107,7 @@ async function adminContext(browser: Browser, baseURL: string): Promise<BrowserC
   return browser.newContext({ baseURL, storageState: authStatePath('admin') });
 }
 
-function heartbeatPosition(response: Response, expectedLessonID: string): number | null {
+function heartbeatPayload(response: Response, expectedLessonID: string): HeartbeatPayload | null {
   if (
     response.status() !== 204 ||
     new URL(response.url()).pathname !== '/api/v1/playback/heartbeat'
@@ -94,9 +116,24 @@ function heartbeatPosition(response: Response, expectedLessonID: string): number
   const body: unknown = response.request().postDataJSON();
   if (typeof body !== 'object' || body === null) return null;
   const position = Reflect.get(body, 'positionSeconds');
-  return Reflect.get(body, 'lessonId') === expectedLessonID && typeof position === 'number'
-    ? position
-    : null;
+  const clientSeq = Reflect.get(body, 'clientSeq');
+  const reason = Reflect.get(body, 'reason');
+  if (
+    Reflect.get(body, 'lessonId') !== expectedLessonID ||
+    typeof position !== 'number' ||
+    typeof clientSeq !== 'number' ||
+    !isHeartbeatReason(reason)
+  )
+    return null;
+  return {
+    positionSeconds: position,
+    clientSeq,
+    reason,
+  };
+}
+
+function heartbeatPosition(response: Response, expectedLessonID: string): number | null {
+  return heartbeatPayload(response, expectedLessonID)?.positionSeconds ?? null;
 }
 
 function learningLessonPosition(payload: unknown, expectedLessonID: string): number {
@@ -124,8 +161,12 @@ async function uploadReady(
   target: UploadTarget = { lessonID, moduleNumber: 1, lessonNumber: 1 },
 ): Promise<string> {
   await page.goto(`/admin/courses/${course?.id ?? 'missing'}`);
-  const module = page.getByRole('group', { name: `Модуль ${target.moduleNumber}` });
-  const lesson = module.getByRole('group', { name: `Урок ${target.lessonNumber}` });
+  const module = page.getByRole('group', {
+    name: `Модуль ${target.moduleNumber}`,
+  });
+  const lesson = module.getByRole('group', {
+    name: `Урок ${target.lessonNumber}`,
+  });
   const minted = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/admin/lessons/${target.lessonID}/video` &&
@@ -335,6 +376,11 @@ test.describe('T7 playback milestone', () => {
         moduleNumber: 2,
         lessonNumber: 1,
       });
+      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'), {
+        lessonID: fourthLessonID,
+        moduleNumber: 2,
+        lessonNumber: 2,
+      });
       const published = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
         data: { status: 'published', expectedUpdatedAt: course.updatedAt },
         headers: { Origin: new URL(baseURL).origin },
@@ -455,14 +501,150 @@ test.describe('T7 playback milestone', () => {
       expect(await videoTime(page)).toBeGreaterThan(25);
     });
 
+    test('P04 restores the position after a reload', async ({ page }) => {
+      await openAndPlay(page);
+      const saved = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'seek' && heartbeat.positionSeconds === 40;
+      });
+      await setPosition(page, 40);
+      await saved;
+
+      await page.reload();
+      await openAndPlay(page);
+      const restored = await videoTime(page);
+      expect(restored).toBeGreaterThanOrEqual(39);
+      expect(restored).toBeLessThanOrEqual(41);
+    });
+
+    test('P05 restores the position in another browser context', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      await openAndPlay(page);
+      const saved = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'seek' && heartbeat.positionSeconds === 40;
+      });
+      await setPosition(page, 40);
+      await saved;
+
+      const secondContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      try {
+        const secondPage = await secondContext.newPage();
+        await openAndPlay(secondPage);
+        const restored = await videoTime(secondPage);
+        expect(restored).toBeGreaterThanOrEqual(39);
+        expect(restored).toBeLessThanOrEqual(41);
+      } finally {
+        await secondContext.close();
+      }
+    });
+
+    test('P06 marks the dedicated 100-second lesson at its proportional 95% threshold', async ({
+      page,
+    }) => {
+      await openAndPlay(page, fourthLessonID);
+      const duration = Number(
+        await page.getByRole('slider', { name: 'Позиція відтворення' }).getAttribute('max'),
+      );
+      expect(duration).toBeGreaterThanOrEqual(99);
+      expect(duration).toBeLessThanOrEqual(101);
+      const completed = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, fourthLessonID);
+        return heartbeat?.reason === 'seek' && heartbeat.positionSeconds === 95;
+      });
+      await setPosition(page, 95);
+      await completed;
+
+      await page.reload();
+      const outline = page.getByRole('navigation', { name: 'Зміст курсу' });
+      const lessons = outline.getByRole('link');
+      await expect(lessons).toHaveCount(4);
+      await expect(lessons.nth(3)).toContainText('Переглянуто');
+      await expect(lessons.nth(0)).not.toContainText('Переглянуто');
+    });
+
+    test('P07 completes its own lesson and reopens it from zero', async ({ page }) => {
+      await openAndPlay(page);
+      const completed = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'seek' && heartbeat.positionSeconds >= 285;
+      });
+      await setPosition(page, 285);
+      await completed;
+
+      await page.reload();
+      await expect(page.getByRole('slider', { name: 'Позиція відтворення' })).toHaveValue('0');
+      await openAndPlay(page);
+      expect(await videoTime(page)).toBeLessThanOrEqual(1);
+    });
+
+    test('B18 keeps the last recorded position across a network break', async ({ page }) => {
+      await openAndPlay(page);
+      const saved = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'seek' && heartbeat.positionSeconds === 40;
+      });
+      await setPosition(page, 40);
+      await saved;
+      await page.getByRole('button', { name: 'Пауза' }).click();
+
+      const failed = page.waitForEvent('requestfailed', (request) => {
+        return new URL(request.url()).pathname === '/api/v1/playback/heartbeat';
+      });
+      await page.context().setOffline(true);
+      await setPosition(page, 80);
+      await failed;
+      await page.context().setOffline(false);
+
+      const recoveredPage = await page.context().newPage();
+      try {
+        await openAndPlay(recoveredPage);
+        const restored = await videoTime(recoveredPage);
+        expect(restored).toBeGreaterThanOrEqual(39);
+        expect(restored).toBeLessThanOrEqual(41);
+      } finally {
+        await recoveredPage.close();
+      }
+    });
+
     test('B39 O1 remints after 410 without takeover and prints browser measurements', async ({
       page,
     }) => {
       const active = new Set<Request>();
       let activeAtMint = -1;
       let playRequests = 0;
+      let gateExpiredHeartbeat = false;
+      let markHeldSegmentStarted: (() => void) | undefined;
+      let allowExpiredHeartbeat: (() => void) | undefined;
+      const heldSegmentStarted = new Promise<void>((resolve) => {
+        markHeldSegmentStarted = resolve;
+      });
+      const heartbeatMayContinue = new Promise<void>((resolve) => {
+        allowExpiredHeartbeat = resolve;
+      });
+      await page.route('**/api/v1/playback/heartbeat', async (route) => {
+        if (!gateExpiredHeartbeat) {
+          await route.continue();
+          return;
+        }
+        gateExpiredHeartbeat = false;
+        await heldSegmentStarted;
+        await heartbeatMayContinue;
+        await route.continue();
+      });
       page.on('request', (request) => {
-        if (isMediaRequest(request)) active.add(request);
+        if (isMediaRequest(request)) {
+          active.add(request);
+          if (gateExpiredHeartbeat && new URL(request.url()).pathname.endsWith('.m4s'))
+            markHeldSegmentStarted?.();
+        }
         if (new URL(request.url()).pathname === '/api/v1/playback/sessions') {
           playRequests += 1;
           if (playRequests === 2) activeAtMint = active.size;
@@ -473,7 +655,7 @@ test.describe('T7 playback milestone', () => {
       page.on('requestfailed', settle);
       const session = await openAndPlay(page);
       await page.getByRole('button', { name: 'Пауза' }).click();
-      const before = await page.locator('video').evaluate((video) => {
+      await page.locator('video').evaluate((video) => {
         if (!(video instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
         const descriptor = Object.getOwnPropertyDescriptor(
           HTMLMediaElement.prototype,
@@ -489,18 +671,51 @@ test.describe('T7 playback milestone', () => {
           configurable: true,
           get: () => Reflect.apply(getCurrentTime, video, []),
           set: (assigned: number) => {
-            writes.push({ before: Reflect.apply(getCurrentTime, video, []), assigned });
+            writes.push({
+              before: Reflect.apply(getCurrentTime, video, []),
+              assigned,
+            });
             Reflect.apply(setCurrentTime, video, [assigned]);
           },
         });
-        return Reflect.apply(getCurrentTime, video, []);
       });
       await page.waitForTimeout((session.ownershipTtlSeconds + 1) * 1_000);
+      const devtools = await page.context().newCDPSession(page);
+      await devtools.send('Network.enable');
+      await devtools.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: 100,
+        downloadThroughput: 1_024,
+        uploadThroughput: 1024 * 1024,
+      });
+      gateExpiredHeartbeat = true;
+      await setPosition(page, 150);
+      await heldSegmentStarted;
+      const preRemint = await videoTime(page);
       const activeImmediatelyBeforeRemint = active.size;
-      await page.getByRole('button', { name: 'Відтворити' }).click();
+      allowExpiredHeartbeat?.();
       await expect.poll(() => playRequests).toBe(2);
+      await devtools.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: 0,
+        downloadThroughput: -1,
+        uploadThroughput: -1,
+      });
+      await devtools.detach();
       await expect(page.getByText('Відео відтворюється на іншому пристрої.')).toHaveCount(0);
-      await expect.poll(() => videoTime(page)).toBeGreaterThan(before);
+      await expect
+        .poll(() =>
+          page.locator('video').evaluate((video, target) => {
+            const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
+            if (!Array.isArray(value)) return false;
+            return value.some((entry, index) => {
+              if (index === 0 || typeof entry !== 'object' || entry === null) return false;
+              const assigned: unknown = Reflect.get(entry, 'assigned');
+              return typeof assigned === 'number' && Math.abs(assigned - target) <= 1;
+            });
+          }, preRemint),
+        )
+        .toBe(true);
       const writes = await page.locator('video').evaluate((video) => {
         const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
         if (!Array.isArray(value)) return [];
@@ -513,7 +728,9 @@ test.describe('T7 playback milestone', () => {
             : [];
         });
       });
-      const restoreWrite = writes.at(-1);
+      const restoreWrite = writes.find(
+        ({ assigned }, index) => index > 0 && Math.abs(assigned - preRemint) <= 1,
+      );
       const stopLoadObservation =
         activeImmediatelyBeforeRemint === 0
           ? 'inconclusive: no old request was in flight immediately before remint'
@@ -526,10 +743,13 @@ test.describe('T7 playback milestone', () => {
       console.log(`O1 hls.js in-flight when mint request began after stopLoad: ${activeAtMint}`);
       console.log(`O1 stopLoad cleared old in-flight requests before mint: ${stopLoadObservation}`);
       console.log(
-        `O1 currentTime before explicit restore: ${restoreWrite?.before ?? 'not observed'}; assigned restore: ${restoreWrite?.assigned ?? 'not observed'}; pre-remint: ${before}`,
+        `O1 currentTime before explicit restore: ${restoreWrite?.before ?? 'not observed'}; assigned restore: ${restoreWrite?.assigned ?? 'not observed'}; pre-remint: ${preRemint}`,
       );
-      expect(activeAtMint).toBeGreaterThanOrEqual(0);
-      expect(restoreWrite).toBeDefined();
+      expect(activeImmediatelyBeforeRemint).toBeGreaterThan(0);
+      expect(activeAtMint).toBe(0);
+      expect(restoreWrite?.assigned).toBeGreaterThanOrEqual(preRemint - 1);
+      expect(restoreWrite?.assigned).toBeLessThanOrEqual(preRemint + 1);
+      await expect.poll(() => videoTime(page)).toBeGreaterThanOrEqual(preRemint - 1);
     });
 
     test('B40 finishes the retained generation and sees replacement on next opening', async ({
@@ -600,23 +820,30 @@ test.describe('T7 playback milestone', () => {
         const firstHeartbeatResponse = await firstHeartbeat;
         const firstPosition = heartbeatPosition(firstHeartbeatResponse, lessonID);
         if (firstPosition === null) throw new Error('First heartbeat position was not captured');
-        // The exact equality below races the 2s cadence: a second heartbeat landing before the
-        // read would raise the stored position and fail the test on correct behaviour. Pausing
-        // stops the cadence at its source - the heartbeat effect is gated on `playing` and its
-        // cleanup clears the timer - so the comparison stays strict instead of being loosened.
+        expect(firstPosition).toBeGreaterThan(0);
+        // The exact equality below races the 2s cadence. Pausing stops that cadence and now owns
+        // its required exit write, so the read is compared with the observed pause heartbeat,
+        // not with the earlier tick that the pause is allowed to supersede.
+        const paused = page.waitForResponse((response) => {
+          const heartbeat = heartbeatPayload(response, lessonID);
+          return heartbeat?.reason === 'pause';
+        });
         await page.getByRole('button', { name: 'Пауза' }).click();
+        const pausedHeartbeat = heartbeatPayload(await paused, lessonID);
+        if (pausedHeartbeat === null) throw new Error('Pause heartbeat was not captured');
         const firstRead = await page.request.get(`/api/v1/learn/courses/${namespace}`);
         expect(firstRead.status()).toBe(200);
-        expect(learningLessonPosition(await firstRead.json(), lessonID)).toBe(firstPosition);
+        expect(learningLessonPosition(await firstRead.json(), lessonID)).toBe(
+          pausedHeartbeat.positionSeconds,
+        );
 
         const completedHeartbeat = page.waitForResponse((response) => {
-          const position = heartbeatPosition(response, lessonID);
-          return position !== null && position >= 285;
+          const heartbeat = heartbeatPayload(response, lessonID);
+          return heartbeat?.reason === 'seek' && heartbeat.positionSeconds >= 285;
         });
-        // Seeking alone sends nothing: `seekTo` only moves the element and local state. Resuming
-        // is what carries the new position, because pressing play heartbeats before it plays.
+        // T9 makes seek itself the exit write; resuming here would add an unrelated heartbeat and
+        // weaken the row's claim about which event persisted completion.
         await setPosition(page, 290);
-        await page.getByRole('button', { name: 'Відтворити' }).click();
         await completedHeartbeat;
 
         let learningReads = 0;
@@ -697,7 +924,9 @@ test.describe('T7 playback milestone', () => {
       await setPosition(page, 120);
       await deniedSegment;
       await expect(
-        page.getByRole('heading', { name: 'Перегляд зупинено. Курс більше недоступний.' }),
+        page.getByRole('heading', {
+          name: 'Перегляд зупинено. Курс більше недоступний.',
+        }),
       ).toBeVisible();
     });
   });

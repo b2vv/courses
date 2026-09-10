@@ -311,6 +311,29 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		}
 	})
 
+	t.Run("B29 a new session seeds its first write from the saved client sequence", func(t *testing.T) {
+		if _, err := pool.Exec(ctx, `INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at)
+			VALUES($1,$2,80,12,now())
+			ON CONFLICT (user_id,lesson_id) DO UPDATE
+			SET position_seconds=EXCLUDED.position_seconds,completed_at=NULL,client_seq=EXCLUDED.client_seq,updated_at=EXCLUDED.updated_at`, userID, lessonID); err != nil {
+			t.Fatal(err)
+		}
+		const newSessionPlaybackID = "44444444444444444444444444444444"
+		playback, err := sessions.Play(ctx, actor, lessonID, newSessionPlaybackID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if playback.ClientSequence != 12 {
+			t.Fatalf("play client sequence=%d, want 12", playback.ClientSequence)
+		}
+		if err := sessions.Heartbeat(ctx, actor, newSessionPlaybackID, lessonID, update(81, playback.ClientSequence+1)); err != nil {
+			t.Fatal(err)
+		}
+		if position, sequence := readProgress(); position != 81 || sequence != 13 {
+			t.Fatalf("first write position=%v sequence=%d, want 81/13", position, sequence)
+		}
+	})
+
 	t.Run("R17 inaccessible course heartbeat is forbidden without progress", func(t *testing.T) {
 		if err := sessions.Take(ctx, restrictedStudentID, domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}); err != nil {
 			t.Fatal(err)

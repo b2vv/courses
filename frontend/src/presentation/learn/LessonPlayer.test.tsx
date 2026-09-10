@@ -94,7 +94,10 @@ describe('lesson player states', () => {
     let callbacks: PlaybackMediaCallbacks | undefined;
     const createMedia: CreatePlaybackMedia = (video, registeredCallbacks) => {
       callbacks = registeredCallbacks;
-      Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+      Object.defineProperty(video, 'duration', {
+        configurable: true,
+        value: 100,
+      });
       const media: PlaybackMedia = {
         kind: 'hls',
         load(source) {
@@ -195,7 +198,11 @@ describe('lesson player states', () => {
 
   it('continues heartbeats after an expired session is silently reminted', async () => {
     rstest.useFakeTimers();
-    const expiringSession = { ...session, heartbeatSeconds: 1, ownershipTtlSeconds: 3 };
+    const expiringSession = {
+      ...session,
+      heartbeatSeconds: 1,
+      ownershipTtlSeconds: 3,
+    };
     let plays = 0;
     let heartbeats = 0;
     const playerActions = actions({
@@ -272,7 +279,9 @@ describe('lesson player states', () => {
 
     expect(loads).toBe(4);
     expect(
-      screen.getByRole('heading', { name: 'This video is unavailable right now.' }),
+      screen.getByRole('heading', {
+        name: 'This video is unavailable right now.',
+      }),
     ).toBeTruthy();
   });
 
@@ -352,5 +361,150 @@ describe('lesson player states', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start playback again' }));
     await waitFor(() => expect(plays).toBe(2));
     expect(loads).toEqual([session.mediaPath]);
+  });
+
+  it('B09 sends exactly three tick heartbeats across 90 seconds of continuous playback', async () => {
+    rstest.useFakeTimers();
+    const heartbeats: PlaybackHeartbeat[] = [];
+    const cadenceSession = { ...session, clientSeq: 12 };
+    const playerActions = actions({
+      play: async () => ({ ok: true, value: cadenceSession }),
+      heartbeat: async (heartbeat) => {
+        heartbeats.push(heartbeat);
+        await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+        return { ok: true, value: undefined };
+      },
+    });
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {},
+      };
+    };
+    renderPlayer('ready', playerActions, createMedia);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+
+    await act(async () => rstest.advanceTimersByTimeAsync(90_000));
+
+    expect(heartbeats).toHaveLength(3);
+    expect(heartbeats.map(({ reason }) => reason)).toEqual(['tick', 'tick', 'tick']);
+    expect(heartbeats.map(({ clientSeq }) => clientSeq)).toEqual([13, 14, 15]);
+  });
+
+  it('B10 writes pause, seek, hide, nav and ended exits and hidden time does not tick', async () => {
+    rstest.useFakeTimers();
+    const heartbeats: PlaybackHeartbeat[] = [];
+    const playerActions = actions({
+      heartbeat: async (heartbeat) => {
+        heartbeats.push(heartbeat);
+        return { ok: true, value: undefined };
+      },
+    });
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      Object.defineProperty(video, 'pause', {
+        configurable: true,
+        value: () => {},
+      });
+      Object.defineProperty(video, 'duration', {
+        configurable: true,
+        value: 100,
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {},
+      };
+    };
+    const rendered = renderPlayer('ready', playerActions, createMedia);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Playback position' }), {
+      target: { value: '40' },
+    });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    fireEvent(document, new Event('visibilitychange'));
+    await act(async () => rstest.advanceTimersByTimeAsync(90_000));
+    const video = rendered.container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
+    fireEvent.ended(video);
+    await act(async () => {});
+    rendered.unmount();
+    await act(async () => {});
+    Reflect.deleteProperty(document, 'visibilityState');
+
+    expect(heartbeats.map(({ reason }) => reason).filter((reason) => reason !== 'tick')).toEqual([
+      'seek',
+      'pause',
+      'hide',
+      'ended',
+      'nav',
+    ]);
+    expect(heartbeats.filter(({ reason }) => reason === 'tick')).toHaveLength(0);
+  });
+
+  it('R28 stops scheduling and sending heartbeats after a 409 takeover', async () => {
+    rstest.useFakeTimers();
+    let heartbeats = 0;
+    const playerActions = actions({
+      heartbeat: async () => {
+        heartbeats += 1;
+        return { ok: false, error: { code: 'playback_taken_over' } };
+      },
+    });
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {},
+      };
+    };
+    renderPlayer('ready', playerActions, createMedia);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+
+    await act(async () => rstest.advanceTimersByTimeAsync(30_000));
+    await act(async () => rstest.advanceTimersByTimeAsync(90_000));
+
+    expect(heartbeats).toBe(1);
+    expect(
+      screen.getByRole('heading', {
+        name: 'This video is playing on another device.',
+      }),
+    ).toBeTruthy();
   });
 });
