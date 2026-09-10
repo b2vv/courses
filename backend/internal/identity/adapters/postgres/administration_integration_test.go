@@ -47,7 +47,7 @@ func TestAdministrationRepositoryAgainstPostgreSQL(t *testing.T) {
 		postgrescontainer.WithDatabase("administration_test"),
 		postgrescontainer.WithUsername("courses"),
 		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(time.Minute)),
+		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)

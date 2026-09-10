@@ -36,7 +36,7 @@ import (
 func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("identity_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(time.Minute)))
+	container, err := postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("identity_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}

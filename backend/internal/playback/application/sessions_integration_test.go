@@ -35,7 +35,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		ctx,
 		"redis:7.4-bookworm",
 		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(time.Minute)),
+		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
 		t.Fatalf("sessions integration requires Docker Redis: %v", err)
@@ -56,7 +56,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		postgrescontainer.WithDatabase("playback_sessions_test"),
 		postgrescontainer.WithUsername("courses"),
 		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(time.Minute)),
+		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
 		t.Fatalf("sessions integration requires Docker PostgreSQL: %v", err)

@@ -20,7 +20,7 @@ func TestRenewOwnershipLuaAgainstRedis(t *testing.T) {
 		ctx,
 		"redis:7.4-bookworm",
 		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(time.Minute)),
+		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
 	)
 	if err != nil {
 		t.Fatalf("Redis integration requires Docker: %v", err)
