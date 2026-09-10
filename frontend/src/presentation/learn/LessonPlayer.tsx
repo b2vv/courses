@@ -48,7 +48,11 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
   const mediaRef = useRef<PlaybackMedia | undefined>(undefined);
   const sessionRef = useRef<PlaybackSession | undefined>(undefined);
   const clientSeqRef = useRef(lesson.clientSeq + 1);
-  const pendingTimeRef = useRef(lesson.position);
+  // A finished lesson reopens from the beginning (A25). The saved position stays in
+  // `lesson_progress` - it is what marked the lesson complete - but resuming two seconds from
+  // the end would hand the student a video that ends before it starts.
+  const resumeFrom = lesson.completed ? 0 : lesson.position;
+  const pendingTimeRef = useRef(resumeFrom);
   const reloadModeRef = useRef<PlaybackReloadMode>('initial');
   const mintRef = useRef<Promise<void> | undefined>(undefined);
   const heartbeatTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -60,14 +64,14 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
   const heartbeatBackoffRef = useRef(initialHeartbeatBackoffMs);
   const mintRetriesRef = useRef(0);
   const mediaRetriesRef = useRef(0);
-  const positionRef = useRef(lesson.position);
+  const positionRef = useRef(resumeFrom);
   const [mediaKind, setMediaKind] = useState<'hls' | 'native'>('native');
   const [qualities, setQualities] = useState<readonly PlaybackQuality[]>([]);
   const [failure, setFailure] = useState<PlayerFailure>(null);
   const [starting, setStarting] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
-  const [position, setPosition] = useState(lesson.position);
+  const [position, setPosition] = useState(resumeFrom);
   const [restartAt, setRestartAt] = useState<number | null>(null);
 
   const stop = useCallback(() => {
