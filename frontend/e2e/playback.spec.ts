@@ -595,12 +595,16 @@ test.describe('T7 playback milestone', () => {
       await saved;
       await page.getByRole('button', { name: 'Пауза' }).click();
 
-      const failed = page.waitForEvent('requestfailed', (request) => {
-        return new URL(request.url()).pathname === '/api/v1/playback/heartbeat';
-      });
+      // The break has to be observable, or an offline toggle that changed nothing would pass.
+      // It shows up as the player's unavailable state: losing the network exhausts the media
+      // retries, and `LessonPlayer.tsx:338` then replaces the whole player - controls included.
+      //
+      // Which is why this row does not seek while offline. That assumed the player stays
+      // operable through a break; it does not, and it is right not to. The row's claim is that
+      // the recorded position survives the break, not that the player keeps taking input during
+      // one - a failed write moving the saved position is B11's subject, at the datastore.
       await page.context().setOffline(true);
-      await setPosition(page, 80);
-      await failed;
+      await expect(page.getByText('Відео зараз недоступне.')).toBeVisible({ timeout: 60_000 });
       await page.context().setOffline(false);
 
       const recoveredPage = await page.context().newPage();
