@@ -662,6 +662,15 @@ test.describe('T7 playback milestone', () => {
           if (playRequests === 2) activeAtMint = active.size;
         }
       });
+      // Every denied media request with its address. When the player ends in an error state the
+      // question is always which prefix the 403 carried against the one in use, and neither the
+      // Playwright trace nor the server log answers it - the trace truncates under the fixture's
+      // upload polling, and the server sees paths, not which session the client thought it had.
+      const deniedMedia: string[] = [];
+      page.on('response', (response) => {
+        if (response.status() === 403 && isMediaRequest(response.request()))
+          deniedMedia.push(new URL(response.url()).pathname);
+      });
       const settle = (request: Request) => active.delete(request);
       page.on('requestfinished', settle);
       page.on('requestfailed', settle);
@@ -722,7 +731,11 @@ test.describe('T7 playback milestone', () => {
       if ((await page.locator('video').count()) === 0) {
         const shown = await page.locator('main, body').first().innerText();
         throw new Error(
-          `Player left no <video> after the remint. On screen: ${shown.replace(/\s+/g, ' ').slice(0, 300)}`,
+          [
+            `Player left no <video> after the remint. On screen: ${shown.replace(/\s+/g, ' ').slice(0, 300)}`,
+            `First session media path: ${session.mediaPath}`,
+            `Media requests answered 403: ${deniedMedia.length === 0 ? 'none' : deniedMedia.join(', ')}`,
+          ].join('\n'),
         );
       }
 
