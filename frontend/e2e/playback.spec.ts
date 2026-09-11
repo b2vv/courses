@@ -715,6 +715,17 @@ test.describe('T7 playback milestone', () => {
       });
       await devtools.detach();
       await expect(page.getByText('Відео відтворюється на іншому пристрої.')).toHaveCount(0);
+      // If the player has fallen into any error state its whole subtree is replaced, `<video>`
+      // included - and every locator after this point then waits out the full test timeout
+      // while saying nothing about why. Seven minutes of silence for a state the page is
+      // displaying in plain text. Fail here instead, carrying that text.
+      if ((await page.locator('video').count()) === 0) {
+        const shown = await page.locator('main, body').first().innerText();
+        throw new Error(
+          `Player left no <video> after the remint. On screen: ${shown.replace(/\s+/g, ' ').slice(0, 300)}`,
+        );
+      }
+
       // Read and print the measurements BEFORE asserting on them. This test exists to produce
       // numbers; printing them after the assertion hid them on exactly the runs where they were
       // needed - the same failure shape as evidence that disappears when a container restarts.
