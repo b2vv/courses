@@ -931,11 +931,33 @@ test.describe('T7 playback milestone', () => {
       const session = await openAndPlay(page);
       await firstTick;
 
+      // R39. Stopping the cadence is only half of it: the pause has to record the exit as well,
+      // or a student who pauses from the browser's media hub and closes the tab loses everything
+      // since the last beat. Read the position before and after - the write alone proves nothing
+      // without what preceded it.
+      const before = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(before.status()).toBe(200);
+      const positionBeforePause = learningLessonPosition(await before.json(), lessonID);
+      // Let playback advance past the tick that was just written, so a recorded pause is
+      // distinguishable from it by value and not only by count.
+      await page.waitForTimeout(1_000);
+
+      const pauseWritten = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'pause';
+      });
       await page.locator('video').evaluate((node) => {
         if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
         node.pause();
       });
       await expect(page.getByRole('button', { name: 'Відтворити' })).toBeVisible();
+      await pauseWritten;
+
+      const after = await page.request.get(`/api/v1/learn/courses/${namespace}`);
+      expect(after.status()).toBe(200);
+      expect(learningLessonPosition(await after.json(), lessonID)).toBeGreaterThan(
+        positionBeforePause,
+      );
       const heartbeatsAtPause = successfulHeartbeats;
       await page.waitForTimeout(session.heartbeatSeconds * 2_000 + 250);
       expect(successfulHeartbeats).toBe(heartbeatsAtPause);
