@@ -946,11 +946,17 @@ test.describe('T7 playback milestone', () => {
     test('R04 archive stops a started student view', async ({ page, browser, baseURL }) => {
       if (baseURL === undefined || course === undefined)
         throw new Error('Playback course fixture is unavailable');
+      // Remember a segment the edge served while the course was public. Asking for that exact
+      // path again after the archive is what proves the bytes are cut - stronger than waiting
+      // for the player to happen to request one, and independent of what it does next.
+      let servedSegment: string | undefined;
+      page.on('response', (response) => {
+        const path = new URL(response.url()).pathname;
+        if (response.status() === 200 && path.endsWith('.m4s')) servedSegment ??= path;
+      });
       await openAndPlay(page);
       await page.waitForTimeout(31_000);
-      const deniedSegment = page.waitForResponse(
-        (response) => isMediaRequest(response.request()) && response.status() === 403,
-      );
+      if (servedSegment === undefined) throw new Error('No segment was served before the archive');
       const context = await adminContext(browser, baseURL);
       try {
         const archived = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
@@ -963,7 +969,13 @@ test.describe('T7 playback milestone', () => {
         await context.close();
       }
       await setPosition(page, 120);
-      await deniedSegment;
+      // The same path the edge served a moment ago now refuses. Waiting for the player to catch
+      // a 403 itself no longer works and should not: a seek queues a heartbeat, that heartbeat
+      // is refused first, and the player tears itself down before any segment goes out. Stopping
+      // sooner is better behaviour - but it left this row watching for something that had
+      // stopped happening, which is how a real guarantee quietly loses its proof.
+      const refused = await page.request.get(servedSegment);
+      expect(refused.status()).toBe(403);
       await expect(
         page.getByRole('heading', {
           name: 'Перегляд зупинено. Курс більше недоступний.',
