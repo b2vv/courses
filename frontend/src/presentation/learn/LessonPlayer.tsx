@@ -151,6 +151,8 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
         mediaRetriesRef.current,
         reloadModeRef.current,
         mintRef.current !== undefined,
+        error.url,
+        sessionRef.current?.mediaPath,
       );
       if (directive.kind === 'ignore') return;
       if (directive.kind === 'denied') {

@@ -27,8 +27,9 @@ function createHlsMedia(video: HTMLVideoElement, callbacks: PlaybackMediaCallbac
   });
   hls.on(Events.ERROR, (_event, data: ErrorData) => {
     const status = data.response?.code;
-    if (status !== undefined) callbacks.onError({ status, retryable: status === 503 });
-    else if (data.fatal) callbacks.onError({ status: undefined, retryable: false });
+    const url = data.url ?? data.frag?.url;
+    if (status !== undefined) callbacks.onError({ status, retryable: status === 503, url });
+    else if (data.fatal) callbacks.onError({ status: undefined, retryable: false, url });
   });
   return {
     kind: 'hls',
@@ -52,7 +53,8 @@ function createNativeMedia(
   callbacks: PlaybackMediaCallbacks,
 ): PlaybackMedia {
   const ready = () => callbacks.onReady();
-  const failed = () => callbacks.onError({ status: undefined, retryable: true });
+  // The native branch never learns which request failed - the element reports only that it did.
+  const failed = () => callbacks.onError({ status: undefined, retryable: true, url: undefined });
   video.addEventListener('loadedmetadata', ready);
   video.addEventListener('error', failed);
   return {

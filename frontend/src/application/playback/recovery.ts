@@ -69,14 +69,35 @@ export type MediaFailureDirective =
   | { readonly kind: 'retry-media'; readonly delayMs: number; readonly nextRetryCount: number }
   | { readonly kind: 'unavailable'; readonly refresh: boolean };
 
+// `/media/p/<32 hex>/...` - the playback id the bytes were requested under. Undefined for a URL
+// that carries none, including the native branch, which never learns which request failed.
+function playbackPrefix(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  return /\/media\/p\/([0-9a-f]{32})\//.exec(url)?.[1];
+}
+
 export function mediaFailureDirective(
   status: number | undefined,
   retryable: boolean,
   retryCount: number,
   reloadMode: PlaybackReloadMode,
   mintInFlight: boolean,
+  failedUrl?: string,
+  currentMediaPath?: string,
 ): MediaFailureDirective {
   if (status === 403) {
+    // A 403 says the course is closed to this student only when it came from the prefix the
+    // player is using now. A request issued on a prefix that has since been replaced answers
+    // about a session that no longer exists, and treating it as denial shows "the course is no
+    // longer available" to someone whose access is intact.
+    //
+    // `mintInFlight` alone was the wrong key. It goes false the moment the mint resolves, while
+    // a request already on the wire from the old prefix can land afterwards - which is exactly
+    // what the O1 measurement caught, by holding one in flight on purpose.
+    const failedPrefix = playbackPrefix(failedUrl);
+    const currentPrefix = playbackPrefix(currentMediaPath);
+    if (failedPrefix !== undefined && currentPrefix !== undefined && failedPrefix !== currentPrefix)
+      return { kind: 'ignore' };
     return reloadMode === 'expired' && mintInFlight
       ? { kind: 'ignore' }
       : { kind: 'denied', refresh: true };

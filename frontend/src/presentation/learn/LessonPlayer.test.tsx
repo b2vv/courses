@@ -271,10 +271,10 @@ describe('lesson player states', () => {
     if (callbacks === undefined) throw new Error('Media callbacks were not registered');
 
     for (const delay of [500, 1_000, 2_000]) {
-      callbacks.onError({ status: 503, retryable: true });
+      callbacks.onError({ status: 503, retryable: true, url: undefined });
       await act(async () => rstest.advanceTimersByTimeAsync(delay));
     }
-    callbacks.onError({ status: 503, retryable: true });
+    callbacks.onError({ status: 503, retryable: true, url: undefined });
     await act(async () => {});
 
     expect(loads).toBe(4);

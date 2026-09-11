@@ -29,6 +29,19 @@ test('maps exact media statuses and bounds consecutive retries', () => {
     refresh: true,
   });
   expect(mediaFailureDirective(403, false, 0, 'expired', true)).toEqual({ kind: 'ignore' });
+  // A 403 from a prefix the player has already replaced is ignored whatever the mint is doing.
+  // Keying this on "a mint is in flight" was not enough: that flag clears the moment the mint
+  // resolves, while a request already on the wire from the old prefix lands afterwards - and the
+  // student, whose access is intact, was shown that the course is no longer available.
+  const oldPrefix = '/media/p/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hls/v/master.m3u8';
+  const currentPrefix = '/media/p/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/hls/v/master.m3u8';
+  expect(mediaFailureDirective(403, false, 0, 'initial', false, oldPrefix, currentPrefix)).toEqual({
+    kind: 'ignore',
+  });
+  // The same 403 on the prefix in use is a genuine denial and must still stop playback.
+  expect(
+    mediaFailureDirective(403, false, 0, 'initial', false, currentPrefix, currentPrefix),
+  ).toEqual({ kind: 'denied', refresh: true });
   expect(mediaFailureDirective(404, false, 0, 'initial', false)).toEqual({
     kind: 'reload-course',
     nextRetryCount: 1,
