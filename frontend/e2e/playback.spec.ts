@@ -715,19 +715,9 @@ test.describe('T7 playback milestone', () => {
       });
       await devtools.detach();
       await expect(page.getByText('Відео відтворюється на іншому пристрої.')).toHaveCount(0);
-      await expect
-        .poll(() =>
-          page.locator('video').evaluate((video, target) => {
-            const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
-            if (!Array.isArray(value)) return false;
-            return value.some((entry, index) => {
-              if (index === 0 || typeof entry !== 'object' || entry === null) return false;
-              const assigned: unknown = Reflect.get(entry, 'assigned');
-              return typeof assigned === 'number' && Math.abs(assigned - target) <= 1;
-            });
-          }, preRemint),
-        )
-        .toBe(true);
+      // Read and print the measurements BEFORE asserting on them. This test exists to produce
+      // numbers; printing them after the assertion hid them on exactly the runs where they were
+      // needed - the same failure shape as evidence that disappears when a container restarts.
       const writes = await page.locator('video').evaluate((video) => {
         const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
         if (!Array.isArray(value)) return [];
@@ -757,6 +747,21 @@ test.describe('T7 playback milestone', () => {
       console.log(
         `O1 currentTime before explicit restore: ${restoreWrite?.before ?? 'not observed'}; assigned restore: ${restoreWrite?.assigned ?? 'not observed'}; pre-remint: ${preRemint}`,
       );
+      await expect
+        .poll(
+          () =>
+            page.locator('video').evaluate((video, target) => {
+              const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
+              if (!Array.isArray(value)) return false;
+              return value.some((entry, index) => {
+                if (index === 0 || typeof entry !== 'object' || entry === null) return false;
+                const assigned: unknown = Reflect.get(entry, 'assigned');
+                return typeof assigned === 'number' && Math.abs(assigned - target) <= 1;
+              });
+            }, preRemint),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
       expect(activeImmediatelyBeforeRemint).toBeGreaterThan(0);
       expect(activeAtMint).toBe(0);
       expect(restoreWrite?.assigned).toBeGreaterThanOrEqual(preRemint - 1);
