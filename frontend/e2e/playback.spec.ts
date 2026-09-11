@@ -893,6 +893,11 @@ test.describe('T7 playback milestone', () => {
       console.log(
         `O1 currentTime before explicit restore: ${restoreWrite?.before ?? 'not observed'}; assigned restore: ${restoreWrite?.assigned ?? 'not observed'}; pre-remint: ${preRemint}`,
       );
+      // Every write, not only the one being looked for. "Not observed" says a match was absent;
+      // it does not say what was there instead, and that difference has cost three runs today.
+      console.log(
+        `O1 every currentTime write: ${writes.length === 0 ? 'none' : writes.map(({ before: from, assigned }) => `${from}->${assigned}`).join(', ')}`,
+      );
       await expect
         .poll(
           () =>
