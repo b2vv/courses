@@ -127,13 +127,23 @@ describe('lesson player states', () => {
     const { container } = renderPlayer('ready', playerActions, createMedia);
     const video = container.querySelector('video');
     if (video === null) throw new Error('Ready lesson did not render a video element');
+    // The stub has to carry `paused` as the element does. The player refuses to raise its
+    // "this pause is ours" flag for media that is already paused - otherwise a pause that fires
+    // no event leaves the flag up and swallows the next real one - and a stub whose `pause()`
+    // never changes `paused` reports a state no element is ever in.
+    let paused = true;
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
     Object.defineProperty(video, 'play', {
       configurable: true,
-      value: () => Promise.resolve(),
+      value: () => {
+        paused = false;
+        return Promise.resolve();
+      },
     });
     Object.defineProperty(video, 'pause', {
       configurable: true,
       value: () => {
+        paused = true;
         pauses += 1;
       },
     });
@@ -448,13 +458,18 @@ describe('lesson player states', () => {
     await act(async () => rstest.advanceTimersByTimeAsync(30_000));
     expect(heartbeats).toHaveLength(1);
 
+    // A pause from outside our controls does two things, and both matter. It stops the cadence,
+    // so ownership is no longer renewed by a tab that plays nothing - that is B-7. And it writes
+    // the exit itself, because nobody else will: the button's write lives in the button, so
+    // without this the student loses everything watched since the last beat - that is R39.
     fireEvent.pause(video);
     await act(async () => rstest.advanceTimersByTimeAsync(60_000));
-    expect(heartbeats).toHaveLength(1);
+    expect(heartbeats).toHaveLength(2);
+    expect(heartbeats[1]?.reason).toBe('pause');
 
     fireEvent.playing(video);
     await act(async () => rstest.advanceTimersByTimeAsync(30_000));
-    expect(heartbeats).toHaveLength(2);
+    expect(heartbeats).toHaveLength(3);
   });
 
   it('B10 writes pause, seek, hide, nav and ended exits and hidden time does not tick', async () => {
@@ -467,13 +482,23 @@ describe('lesson player states', () => {
       },
     });
     const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      // `paused` is modelled for the same reason as in B24: the player will not flag a pause as
+      // its own on media that is already paused.
+      let paused = true;
+      Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
       Object.defineProperty(video, 'play', {
         configurable: true,
-        value: () => Promise.resolve(),
+        value: () => {
+          paused = false;
+          return Promise.resolve();
+        },
       });
       Object.defineProperty(video, 'pause', {
         configurable: true,
-        value: () => video.dispatchEvent(new Event('pause')),
+        value: () => {
+          paused = true;
+          video.dispatchEvent(new Event('pause'));
+        },
       });
       Object.defineProperty(video, 'duration', {
         configurable: true,

@@ -70,13 +70,28 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
   const [failure, setFailure] = useState<PlayerFailure>(null);
   const [starting, setStarting] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // Raised immediately before a pause we cause ourselves, and read by the pause listener. The
+  // listener must run for every pause - that is the point: the state follows the element, so a
+  // pause from the browser's media hub also stops renewing ownership. But the exit write belongs
+  // to whoever initiated it, with its own reason; without this flag the visibility handler would
+  // record `hide` and `pause` about one event, and teardown would record a pause while shutting
+  // down.
+  //
+  // Only raised when the element is actually playing. `pause()` on already-paused media fires
+  // nothing, the flag would stay up, and the next genuine external pause would be swallowed.
+  const selfPausedRef = useRef(false);
+  const pauseSelf = useCallback(() => {
+    const video = videoRef.current;
+    if (video === null || video.paused) return;
+    selfPausedRef.current = true;
+    video.pause();
+  }, []);
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(resumeFrom);
   const [restartAt, setRestartAt] = useState<number | null>(null);
 
   const stop = useCallback(() => {
-    const video = videoRef.current;
-    if (video !== null) video.pause();
+    pauseSelf();
     mediaRef.current?.stopLoad();
     setPlaying(false);
     if (heartbeatTimerRef.current !== undefined) clearTimeout(heartbeatTimerRef.current);
@@ -84,7 +99,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     if (mintRetryTimerRef.current !== undefined) clearTimeout(mintRetryTimerRef.current);
     mintRetryResolveRef.current?.();
     mintRetryResolveRef.current = undefined;
-  }, []);
+  }, [pauseSelf]);
 
   const terminalFailure = useCallback(
     (next: Exclude<PlayerFailure, null>, refresh: boolean) => {
@@ -323,18 +338,18 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
       cancelled = true;
       if (heartbeatTimerRef.current !== undefined) clearTimeout(heartbeatTimerRef.current);
     };
-  }, [playing, queueHeartbeat]);
+  }, [pauseSelf, playing, queueHeartbeat]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'hidden') return;
-      videoRef.current?.pause();
+      pauseSelf();
       setPlaying(false);
       void queueHeartbeat('hide');
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [queueHeartbeat]);
+  }, [pauseSelf, queueHeartbeat]);
 
   useEffect(
     () => () => {
@@ -408,7 +423,17 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
             mediaRetriesRef.current = 0;
             setPosition(positionRef.current);
           }}
-          onPause={() => setPlaying(false)}
+          onPause={() => {
+            setPlaying(false);
+            // A pause we caused has already recorded its own reason. One from anywhere else -
+            // the media hub, picture-in-picture, a media key - is an exit like any other, and
+            // without a write the student loses everything watched since the last beat.
+            if (selfPausedRef.current) {
+              selfPausedRef.current = false;
+              return;
+            }
+            void queueHeartbeatRef.current('pause');
+          }}
           onPlaying={() => setPlaying(true)}
           onEnded={(event) => {
             positionRef.current = finiteTime(event.currentTarget.currentTime);
@@ -425,7 +450,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
           isDisabled={starting}
           onPress={() => {
             if (playing) {
-              videoRef.current?.pause();
+              pauseSelf();
               void queueHeartbeat('pause');
               return;
             }
