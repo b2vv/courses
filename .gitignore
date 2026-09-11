@@ -19,3 +19,6 @@ playwright-report/
 CLAUDE.local.md
 # Added by code-review-graph
 .code-review-graph/
+
+# Робочий артефакт: перелік чужих контейнерів, зупинених на час гейту.
+work/foreign-containers.txt
