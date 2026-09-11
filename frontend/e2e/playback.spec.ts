@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,7 @@ const execute = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fixtures');
 const namespace = `e2e-playback-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const crossCourseNamespace = `${namespace}-cross-course`;
 const adminID = '40000000-0000-4000-8000-000000000003';
 const moduleID = randomUUID();
 const lessonID = randomUUID();
@@ -25,6 +26,8 @@ const secondLessonID = randomUUID();
 const secondModuleID = randomUUID();
 const thirdLessonID = randomUUID();
 const fourthLessonID = randomUUID();
+const crossCourseModuleID = randomUUID();
+const crossCourseLessonID = randomUUID();
 
 type CourseToken = { readonly id: string; readonly updatedAt: string };
 type UploadTarget = {
@@ -57,6 +60,7 @@ function isHeartbeatReason(value: unknown): value is HeartbeatPayload['reason'] 
 }
 
 let course: CourseToken | undefined;
+let crossCourse: CourseToken | undefined;
 let finishRequestTracking = () => Promise.resolve();
 
 function object(payload: unknown, name: string): object {
@@ -158,9 +162,14 @@ function learningLessonPosition(payload: unknown, expectedLessonID: string): num
 async function uploadReady(
   page: Page,
   file: string,
-  target: UploadTarget = { lessonID, moduleNumber: 1, lessonNumber: 1 },
+  target: UploadTarget & { readonly courseID?: string } = {
+    lessonID,
+    moduleNumber: 1,
+    lessonNumber: 1,
+  },
 ): Promise<string> {
-  await page.goto(`/admin/courses/${course?.id ?? 'missing'}`);
+  const targetCourseID = target.courseID ?? course?.id ?? 'missing';
+  await page.goto(`/admin/courses/${targetCourseID}`);
   const module = page.getByRole('group', {
     name: `Модуль ${target.moduleNumber}`,
   });
@@ -182,9 +191,7 @@ async function uploadReady(
   await expect
     .poll(
       async () => {
-        const listed = await page.request.get(
-          `/api/v1/admin/courses/${course?.id ?? 'missing'}/videos`,
-        );
+        const listed = await page.request.get(`/api/v1/admin/courses/${targetCourseID}/videos`);
         if (listed.status() !== 200) return `http ${listed.status()}`;
         const body: unknown = await listed.json();
         if (typeof body !== 'object' || body === null || !('items' in body)) return 'no items';
@@ -203,9 +210,13 @@ async function uploadReady(
   return id;
 }
 
-async function openAndPlay(page: Page, targetLessonID = lessonID): Promise<PlaybackSession> {
+async function openAndPlay(
+  page: Page,
+  targetLessonID = lessonID,
+  targetNamespace = namespace,
+): Promise<PlaybackSession> {
   if (course === undefined) throw new Error('Playback course was not created');
-  await page.goto(`/learn/${namespace}/${targetLessonID}`);
+  await page.goto(`/learn/${targetNamespace}/${targetLessonID}`);
   const minted = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/api/v1/playback/sessions' &&
@@ -216,11 +227,66 @@ async function openAndPlay(page: Page, targetLessonID = lessonID): Promise<Playb
   expect(response.status()).toBe(201);
   // `videoTime > 0` alone does not mean playback started: the player restores a saved position
   // on ready, so a resumed lesson satisfies that guard before `play()` has resolved. The pause
-  // label appears only once `setPlaying(true)` has run, which is the observable that playback
-  // actually began - without it a helper returns success and the caller fails somewhere else.
+  // The label appears only after the video element emits `playing`, which is the observable that
+  // playback actually began - without it a helper returns success and the caller fails elsewhere.
   await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
   await expect.poll(() => videoTime(page)).toBeGreaterThan(0);
   return playbackSession(await response.json());
+}
+
+async function playFromAPIContainer(
+  baseURL: string,
+  cookieHeader: string,
+  targetLessonID: string,
+): Promise<PlaybackSession> {
+  const stdout = await new Promise<string>((resolve, reject) => {
+    const child = spawn(
+      'docker',
+      [
+        'compose',
+        'exec',
+        '-T',
+        'api',
+        'curl',
+        '-sS',
+        '-w',
+        '\n%{http_code}',
+        '-X',
+        'POST',
+        'http://nginx:8080/api/v1/playback/sessions',
+        '-H',
+        `Origin: ${new URL(baseURL).origin}`,
+        '-H',
+        'Content-Type: application/json',
+        '-H',
+        '@-',
+        '--data',
+        JSON.stringify({ lessonId: targetLessonID }),
+      ],
+      { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000 },
+    );
+    let output = '';
+    let errorOutput = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      output += chunk;
+    });
+    child.stderr.on('data', (chunk: string) => {
+      errorOutput += chunk;
+    });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      if (code === 0) resolve(output);
+      else reject(new Error(`Container playback request failed (${code}): ${errorOutput.trim()}`));
+    });
+    child.stdin.end(`Cookie: ${cookieHeader}\n`);
+  });
+  const lines = stdout.trimEnd().split('\n');
+  const status = lines.pop();
+  expect(status).toBe('201');
+  const body: unknown = JSON.parse(lines.join('\n'));
+  return playbackSession(body);
 }
 
 function isMediaRequest(request: Request): boolean {
@@ -387,6 +453,60 @@ test.describe('T7 playback milestone', () => {
       });
       expect(published.status()).toBe(200);
       course = courseToken(await published.json());
+
+      const crossCourseDraft = {
+        slug: crossCourseNamespace,
+        title: `T10 cross-course ${namespace}`,
+        summary: 'A second course for the account-wide ownership limit.',
+        description: 'Run-scoped cross-course playback fixture.',
+        instructorId: adminID,
+      };
+      const crossCourseCreated = await context.request.post('/api/v1/admin/courses', {
+        data: crossCourseDraft,
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(crossCourseCreated.status()).toBe(201);
+      crossCourse = courseToken(await crossCourseCreated.json());
+      const crossCourseSaved = await context.request.put(
+        `/api/v1/admin/courses/${crossCourse.id}`,
+        {
+          data: {
+            expectedUpdatedAt: crossCourse.updatedAt,
+            course: crossCourseDraft,
+            modules: [
+              {
+                id: crossCourseModuleID,
+                title: `Cross-course module ${namespace}`,
+                lessons: [
+                  {
+                    id: crossCourseLessonID,
+                    title: `Cross-course lesson ${namespace}`,
+                    description: 'Proves ownership is not scoped to a course.',
+                  },
+                ],
+              },
+            ],
+          },
+          headers: { Origin: new URL(baseURL).origin },
+        },
+      );
+      expect(crossCourseSaved.status()).toBe(200);
+      crossCourse = courseToken(await crossCourseSaved.json());
+      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'), {
+        courseID: crossCourse.id,
+        lessonID: crossCourseLessonID,
+        moduleNumber: 1,
+        lessonNumber: 1,
+      });
+      const crossCoursePublished = await context.request.post(
+        `/api/v1/admin/courses/${crossCourse.id}/status`,
+        {
+          data: { status: 'published', expectedUpdatedAt: crossCourse.updatedAt },
+          headers: { Origin: new URL(baseURL).origin },
+        },
+      );
+      expect(crossCoursePublished.status()).toBe(200);
+      crossCourse = courseToken(await crossCoursePublished.json());
     } finally {
       await context.close();
     }
@@ -401,23 +521,25 @@ test.describe('T7 playback milestone', () => {
   });
 
   test.afterAll(async () => {
-    if (course === undefined) return;
-    await execute(
-      'docker',
-      [
-        'compose',
-        'exec',
-        '-T',
-        'postgres',
-        'sh',
-        '-eu',
-        '-c',
-        deleteCourseStatement,
-        'playback-cleanup',
-        course.id,
-      ],
-      { cwd: repositoryRoot, timeout: 60_000 },
-    );
+    for (const fixtureCourse of [course, crossCourse]) {
+      if (fixtureCourse === undefined) continue;
+      await execute(
+        'docker',
+        [
+          'compose',
+          'exec',
+          '-T',
+          'postgres',
+          'sh',
+          '-eu',
+          '-c',
+          deleteCourseStatement,
+          'playback-cleanup',
+          fixtureCourse.id,
+        ],
+        { cwd: repositoryRoot, timeout: 60_000 },
+      );
+    }
   });
 
   test.describe('as a student', () => {
@@ -791,6 +913,211 @@ test.describe('T7 playback milestone', () => {
       expect(restoreWrite?.assigned).toBeGreaterThanOrEqual(preRemint - 1);
       expect(restoreWrite?.assigned).toBeLessThanOrEqual(preRemint + 1);
       await expect.poll(() => videoTime(page)).toBeGreaterThanOrEqual(preRemint - 1);
+    });
+
+    test('B-7 a pause outside the button stops ownership renewal', async ({ page }) => {
+      let successfulHeartbeats = 0;
+      page.on('response', (response) => {
+        if (
+          response.status() === 204 &&
+          new URL(response.url()).pathname === '/api/v1/playback/heartbeat'
+        )
+          successfulHeartbeats += 1;
+      });
+      const firstTick = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'tick';
+      });
+      const session = await openAndPlay(page);
+      await firstTick;
+
+      await page.locator('video').evaluate((node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        node.pause();
+      });
+      await expect(page.getByRole('button', { name: 'Відтворити' })).toBeVisible();
+      const heartbeatsAtPause = successfulHeartbeats;
+      await page.waitForTimeout(session.heartbeatSeconds * 2_000 + 250);
+      expect(successfulHeartbeats).toBe(heartbeatsAtPause);
+
+      const resumedTick = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, lessonID);
+        return heartbeat?.reason === 'tick';
+      });
+      await page.locator('video').evaluate(async (node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        await node.play();
+      });
+      await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
+      await resumedTick;
+      expect(successfulHeartbeats).toBeGreaterThan(heartbeatsAtPause);
+    });
+
+    test('P13 B15 B32 takeover stops the first device and denies the same segment immediately', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const served = page.waitForResponse(
+        (response) =>
+          response.status() === 200 &&
+          isMediaRequest(response.request()) &&
+          new URL(response.url()).pathname.endsWith('.m4s'),
+      );
+      await openAndPlay(page);
+      const segmentPath = new URL((await served).url()).pathname;
+      const beforeTakeover = await page.request.get(segmentPath);
+      expect(beforeTakeover.status()).toBe(200);
+
+      const secondContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      try {
+        const secondPage = await secondContext.newPage();
+        await openAndPlay(secondPage);
+        const afterTakeover = await page.request.get(segmentPath);
+        expect(afterTakeover.status()).toBe(403);
+        await expect(
+          page.getByRole('heading', {
+            name: 'Відео відтворюється на іншому пристрої.',
+          }),
+        ).toBeVisible();
+        await expect(secondPage.getByRole('button', { name: 'Пауза' })).toBeVisible();
+      } finally {
+        await secondContext.close();
+      }
+    });
+
+    test('P14 takeover is account-wide across two courses', async ({ page, browser, baseURL }) => {
+      if (baseURL === undefined || crossCourse === undefined)
+        throw new Error('Cross-course playback fixture is unavailable');
+      const firstSession = await openAndPlay(page);
+      const secondContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      try {
+        const secondPage = await secondContext.newPage();
+        const secondSession = await openAndPlay(
+          secondPage,
+          crossCourseLessonID,
+          crossCourseNamespace,
+        );
+        expect(secondSession.mediaPath).not.toBe(firstSession.mediaPath);
+        await expect(
+          page.getByRole('heading', {
+            name: 'Відео відтворюється на іншому пристрої.',
+          }),
+        ).toBeVisible();
+        await expect(secondPage.getByRole('button', { name: 'Пауза' })).toBeVisible();
+      } finally {
+        await secondContext.close();
+      }
+    });
+
+    test('B33 two tabs in one browser displace each other', async ({ page }) => {
+      await openAndPlay(page);
+      const secondPage = await page.context().newPage();
+      try {
+        await openAndPlay(secondPage);
+        await expect(
+          page.getByRole('heading', {
+            name: 'Відео відтворюється на іншому пристрої.',
+          }),
+        ).toBeVisible();
+        await expect(secondPage.getByRole('button', { name: 'Пауза' })).toBeVisible();
+      } finally {
+        await secondPage.close();
+      }
+    });
+
+    test('R25 two accounts behind one IP keep playing simultaneously', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const studentSession = await openAndPlay(page);
+      const studentTimeBefore = await videoTime(page);
+      const context = await adminContext(browser, baseURL);
+      try {
+        const adminPage = await context.newPage();
+        await openAndPlay(adminPage);
+        await page.waitForTimeout(studentSession.heartbeatSeconds * 1_000 + 250);
+        await expect(
+          page.getByRole('heading', {
+            name: 'Відео відтворюється на іншому пристрої.',
+          }),
+        ).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
+        await expect(adminPage.getByRole('button', { name: 'Пауза' })).toBeVisible();
+        expect(await videoTime(page)).toBeGreaterThan(studentTimeBefore);
+        expect(await videoTime(adminPage)).toBeGreaterThan(0);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test('R26 the same account from another network address still takes over', async ({
+      page,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const firstSession = await openAndPlay(page);
+      const cookies = await page.context().cookies(baseURL);
+      const cookieHeader = cookies.map(({ name, value }) => `${name}=${value}`).join('; ');
+      if (cookieHeader === '') throw new Error('Student session cookie is unavailable');
+
+      const secondSession = await playFromAPIContainer(baseURL, cookieHeader, lessonID);
+      expect(secondSession.playbackId).not.toBe(firstSession.playbackId);
+      await expect(
+        page.getByRole('heading', {
+          name: 'Відео відтворюється на іншому пристрої.',
+        }),
+      ).toBeVisible();
+    });
+
+    test('B16 an abandoned session does not delay play on another device', async ({
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+      const origin = new URL(baseURL).origin;
+      const abandonedContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      let abandonedSession: PlaybackSession;
+      try {
+        const abandoned = await abandonedContext.request.post('/api/v1/playback/sessions', {
+          data: { lessonId: lessonID },
+          headers: { Origin: origin },
+        });
+        expect(abandoned.status()).toBe(201);
+        abandonedSession = playbackSession(await abandoned.json());
+      } finally {
+        await abandonedContext.close();
+      }
+
+      const nextContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      try {
+        const next = await nextContext.request.post('/api/v1/playback/sessions', {
+          data: { lessonId: lessonID },
+          headers: { Origin: origin },
+        });
+        expect(next.status()).toBe(201);
+        const nextSession = playbackSession(await next.json());
+        expect(nextSession.playbackId).not.toBe(abandonedSession.playbackId);
+        const media = await nextContext.request.get(nextSession.mediaPath);
+        expect(media.status()).toBe(200);
+      } finally {
+        await nextContext.close();
+      }
     });
 
     test('B40 finishes the retained generation and sees replacement on next opening', async ({

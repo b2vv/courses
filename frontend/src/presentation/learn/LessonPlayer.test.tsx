@@ -146,6 +146,7 @@ describe('lesson player states', () => {
     await waitFor(() => expect(plays).toBe(1));
     expect(loads).toEqual([session.mediaPath]);
     expect(video.currentTime).toBe(12);
+    fireEvent.playing(video);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy());
     await user.keyboard('{Enter}');
     expect(pauses).toBe(1);
@@ -232,9 +233,12 @@ describe('lesson player states', () => {
         destroy() {},
       };
     };
-    renderPlayer('ready', playerActions, createMedia);
+    const { container } = renderPlayer('ready', playerActions, createMedia);
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
+    fireEvent.playing(video);
     expect(plays).toBe(1);
 
     await act(async () => rstest.advanceTimersByTimeAsync(1_000));
@@ -313,9 +317,12 @@ describe('lesson player states', () => {
         destroy() {},
       };
     };
-    renderPlayer('ready', playerActions, createMedia);
+    const { container } = renderPlayer('ready', playerActions, createMedia);
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
+    fireEvent.playing(video);
     expect(plays).toBe(1);
     expect(loads).toEqual([]);
 
@@ -390,15 +397,64 @@ describe('lesson player states', () => {
         destroy() {},
       };
     };
-    renderPlayer('ready', playerActions, createMedia);
+    const { container } = renderPlayer('ready', playerActions, createMedia);
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
+    fireEvent.playing(video);
 
     await act(async () => rstest.advanceTimersByTimeAsync(90_000));
 
     expect(heartbeats).toHaveLength(3);
     expect(heartbeats.map(({ reason }) => reason)).toEqual(['tick', 'tick', 'tick']);
     expect(heartbeats.map(({ clientSeq }) => clientSeq)).toEqual([13, 14, 15]);
+  });
+
+  it('B-7 follows native playing and pause events for ownership cadence', async () => {
+    rstest.useFakeTimers();
+    const heartbeats: PlaybackHeartbeat[] = [];
+    const playerActions = actions({
+      heartbeat: async (heartbeat) => {
+        heartbeats.push(heartbeat);
+        return { ok: true, value: undefined };
+      },
+    });
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {},
+      };
+    };
+    const { container } = renderPlayer('ready', playerActions, createMedia);
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+    await act(async () => rstest.advanceTimersByTimeAsync(30_000));
+    expect(heartbeats).toHaveLength(0);
+
+    fireEvent.playing(video);
+    await act(async () => rstest.advanceTimersByTimeAsync(30_000));
+    expect(heartbeats).toHaveLength(1);
+
+    fireEvent.pause(video);
+    await act(async () => rstest.advanceTimersByTimeAsync(60_000));
+    expect(heartbeats).toHaveLength(1);
+
+    fireEvent.playing(video);
+    await act(async () => rstest.advanceTimersByTimeAsync(30_000));
+    expect(heartbeats).toHaveLength(2);
   });
 
   it('B10 writes pause, seek, hide, nav and ended exits and hidden time does not tick', async () => {
@@ -417,7 +473,7 @@ describe('lesson player states', () => {
       });
       Object.defineProperty(video, 'pause', {
         configurable: true,
-        value: () => {},
+        value: () => video.dispatchEvent(new Event('pause')),
       });
       Object.defineProperty(video, 'duration', {
         configurable: true,
@@ -434,8 +490,11 @@ describe('lesson player states', () => {
       };
     };
     const rendered = renderPlayer('ready', playerActions, createMedia);
+    const video = rendered.container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
+    fireEvent.playing(video);
 
     fireEvent.change(screen.getByRole('slider', { name: 'Playback position' }), {
       target: { value: '40' },
@@ -451,8 +510,6 @@ describe('lesson player states', () => {
     });
     fireEvent(document, new Event('visibilitychange'));
     await act(async () => rstest.advanceTimersByTimeAsync(90_000));
-    const video = rendered.container.querySelector('video');
-    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.ended(video);
     await act(async () => {});
     rendered.unmount();
@@ -493,9 +550,12 @@ describe('lesson player states', () => {
         destroy() {},
       };
     };
-    renderPlayer('ready', playerActions, createMedia);
+    const { container } = renderPlayer('ready', playerActions, createMedia);
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
+    fireEvent.playing(video);
 
     await act(async () => rstest.advanceTimersByTimeAsync(30_000));
     await act(async () => rstest.advanceTimersByTimeAsync(90_000));

@@ -218,7 +218,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
         positionRef.current = finiteTime(video.currentTime);
         setPosition(positionRef.current);
         reloadModeRef.current = 'initial';
-        void video.play().then(() => setPlaying(true));
+        void video.play();
       },
       onLevels: setQualities,
       onError: handleMediaError,
@@ -408,6 +408,8 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
             mediaRetriesRef.current = 0;
             setPosition(positionRef.current);
           }}
+          onPause={() => setPlaying(false)}
+          onPlaying={() => setPlaying(true)}
           onEnded={(event) => {
             positionRef.current = finiteTime(event.currentTarget.currentTime);
             setPosition(positionRef.current);
@@ -424,7 +426,6 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
           onPress={() => {
             if (playing) {
               videoRef.current?.pause();
-              setPlaying(false);
               void queueHeartbeat('pause');
               return;
             }
@@ -432,7 +433,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
               void loadSession(position, 'initial');
               return;
             }
-            void videoRef.current?.play().then(() => setPlaying(true));
+            void videoRef.current?.play();
           }}
         >
           {starting
