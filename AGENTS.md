@@ -2,8 +2,8 @@
 
 ## Scope and delivery
 - Read the repository briefing first: [work/CTO-RESEARCH.md](work/CTO-RESEARCH.md). It caches primary sources; where it disagrees with the code, the code wins and the briefing is rewritten.
-- Foundation, public catalog, identity and admin course management (Phases 1–4) are complete. Current delivery: media upload and transcoding (Phase 5).
-- Phase 6 and later remain roadmap work; do not claim working playback, payments, comment threads, student progress or an instructor workspace. Uploads and transcoding are in flight in Phase 5 — claim only what the phase report records as measured. The phase roadmap lives in `work/PRODUCT-BRIEF.md` §21/§24; the current move ranking in `work/AGENDA.md`.
+- Foundation, public catalog, identity, admin course management and media upload/transcoding (Phases 1–5) are complete. Current delivery: playback (Phase 6). T1–T10 are done behind a green `make check`; T11 (a11y, localisation, themes, zoom), T12 (the AV1 probe) and T13 (the phase gate and report) remain.
+- Playback, the learning outline, watched marks and student progress work and are measured — do not undersell them either. What does not exist is payments, comment threads, transcripts, an instructor workspace and a production deployment; none of those may be claimed. Phase 7 and later remain roadmap work. Claim only what the phase report records as measured. The phase roadmap lives in `work/PRODUCT-BRIEF.md` §21/§24; the current move ranking in `work/AGENDA.md`.
 - Read the current phase's `docs/<phase>/plan.md` and `work/tasks.md`; execute one logical slice at a time.
 - Preserve existing work. Never commit secrets, `.env`, media bytes or dependency caches.
 - Use small logical commits and record current-phase verification, limitations and next task in the current phase's `docs/<phase>/report.md`.
@@ -16,7 +16,7 @@
 - Generated sqlc/Orval models stay in adapters and map explicitly to domain entities.
 - Ports require an actual external dependency. Document future seams before adding unused interfaces.
 - No global mutable clients/stores. SSR dependencies and Query caches are request scoped.
-- Nginx serves media bytes; Go and SSR never proxy them. Foundation media access is denied until authorization exists.
+- Nginx serves media bytes; Go and SSR never proxy them. Bytes are reachable only under `/media/p/<playbackId>/`, and only through an `auth_request` subrequest the playback module answers per request; every other path under `/media/` is refused outright. The transcoder writes the tree `0750`/`0640`, so nginx reads it by group membership rather than by the tree being world-readable.
 
 ## TypeScript
 - Strict TypeScript; no `any` or assertions that disguise unsafe input. Validate external data.
