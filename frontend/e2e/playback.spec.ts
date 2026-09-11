@@ -633,13 +633,21 @@ test.describe('T7 playback milestone', () => {
       const heartbeatMayContinue = new Promise<void>((resolve) => {
         allowExpiredHeartbeat = resolve;
       });
+      // The gate stays open until the segment has actually started. Clearing it on entry
+      // deadlocked the test: `seekTo` queues the heartbeat right after assigning currentTime,
+      // so the heartbeat reaches this handler before hls.js has reacted to the seek - the flag
+      // went false, the request listener below then ignored the segment, and nothing was left
+      // to resolve the promise this handler awaits. A separate latch keeps the handler
+      // one-shot without closing the window the listener needs.
+      let heartbeatAlreadyHeld = false;
       await page.route('**/api/v1/playback/heartbeat', async (route) => {
-        if (!gateExpiredHeartbeat) {
+        if (!gateExpiredHeartbeat || heartbeatAlreadyHeld) {
           await route.continue();
           return;
         }
-        gateExpiredHeartbeat = false;
+        heartbeatAlreadyHeld = true;
         await heldSegmentStarted;
+        gateExpiredHeartbeat = false;
         await heartbeatMayContinue;
         await route.continue();
       });
