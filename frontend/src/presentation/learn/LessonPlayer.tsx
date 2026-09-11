@@ -143,6 +143,10 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     [actions, terminalFailure],
   );
 
+  const queueHeartbeatRef = useRef<
+    (reason: PlaybackHeartbeatReason) => Promise<'continue' | 'stop'>
+  >(() => Promise.resolve('stop'));
+
   const handleMediaError = useCallback(
     (error: PlaybackMediaError) => {
       const directive = mediaFailureDirective(
@@ -155,8 +159,21 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
         sessionRef.current?.mediaPath,
       );
       if (directive.kind === 'ignore') return;
-      if (directive.kind === 'denied') {
-        terminalFailure('denied', directive.refresh);
+      if (directive.kind === 'await-verdict') {
+        // A refused segment says only "not now" - the edge gives the same 403 to an expired
+        // session, an evicted one and a revoked course (A7). Stop loading and let the heartbeat
+        // answer, since it is the only place those three are distinguishable.
+        mediaRef.current?.stopLoad();
+        const ownedBefore = sessionRef.current?.playbackId;
+        // Through the ref, because `queueHeartbeat` is declared below this handler and the
+        // queue also keeps this out of the way of a cadence beat already in flight.
+        void queueHeartbeatRef.current('tick').then((outcome) => {
+          // A remint answers 'continue' too, and it has already reloaded the source - the slot
+          // was merely expired and playback goes on. Only an unchanged session means the
+          // heartbeat found nothing wrong, and then the refusal really was about access.
+          if (outcome === 'continue' && sessionRef.current?.playbackId === ownedBefore)
+            terminalFailure('denied', true);
+        });
         return;
       }
       const video = videoRef.current;
@@ -271,7 +288,6 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     },
     [heartbeatNow],
   );
-  const queueHeartbeatRef = useRef(queueHeartbeat);
 
   useEffect(() => {
     queueHeartbeatRef.current = queueHeartbeat;

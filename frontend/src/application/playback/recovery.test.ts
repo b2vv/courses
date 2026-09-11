@@ -24,9 +24,11 @@ test('maps ownership outcomes without allowing a terminal refusal to remint', ()
 });
 
 test('maps exact media statuses and bounds consecutive retries', () => {
+  // A refused segment no longer decides on its own. The edge answers 403 the same way to an
+  // expired session, an evicted one and a revoked course (A7, pinned by R29), so the player asks
+  // the heartbeat, which is the only place those three differ.
   expect(mediaFailureDirective(403, false, 0, 'initial', false)).toEqual({
-    kind: 'denied',
-    refresh: true,
+    kind: 'await-verdict',
   });
   expect(mediaFailureDirective(403, false, 0, 'expired', true)).toEqual({ kind: 'ignore' });
   // A 403 from a prefix the player has already replaced is ignored whatever the mint is doing.
@@ -41,7 +43,7 @@ test('maps exact media statuses and bounds consecutive retries', () => {
   // The same 403 on the prefix in use is a genuine denial and must still stop playback.
   expect(
     mediaFailureDirective(403, false, 0, 'initial', false, currentPrefix, currentPrefix),
-  ).toEqual({ kind: 'denied', refresh: true });
+  ).toEqual({ kind: 'await-verdict' });
   expect(mediaFailureDirective(404, false, 0, 'initial', false)).toEqual({
     kind: 'reload-course',
     nextRetryCount: 1,

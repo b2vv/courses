@@ -64,7 +64,11 @@ export function mintFailureDirective(
 
 export type MediaFailureDirective =
   | { readonly kind: 'ignore' }
-  | { readonly kind: 'denied'; readonly refresh: true }
+  // The edge answers 403 identically to an anonymous request, an evicted session and an expired
+  // one - A7 requires that, and R29 pins it. So a refused segment cannot tell the player which
+  // of those happened, and it must not decide alone. Only the heartbeat separates them: 410
+  // expired, 409 taken over, 403 revoked.
+  | { readonly kind: 'await-verdict' }
   | { readonly kind: 'reload-course'; readonly nextRetryCount: number }
   | { readonly kind: 'retry-media'; readonly delayMs: number; readonly nextRetryCount: number }
   | { readonly kind: 'unavailable'; readonly refresh: boolean };
@@ -100,7 +104,7 @@ export function mediaFailureDirective(
       return { kind: 'ignore' };
     return reloadMode === 'expired' && mintInFlight
       ? { kind: 'ignore' }
-      : { kind: 'denied', refresh: true };
+      : { kind: 'await-verdict' };
   }
   if (status === 404) {
     return retryCount > 0
