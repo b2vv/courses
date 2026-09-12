@@ -193,3 +193,48 @@ The practical form is cheap. Anything that carries a count, a date, a commit or 
 gets recomputed the first time you rely on it, not the first time it is questioned — and a
 document that claims to rank or summarise work says which commit it was built at, so the
 distance is visible without reading it.
+
+## Three things the four questions did not catch (2026-09-12, later)
+
+### The third question does not protect the person who wrote it
+
+«Under what conditions was this measured?» was written into this file at half past twelve.
+An hour later the session that wrote it shipped `R30` measured on a full checkout, into a gate
+that runs Go tests inside a container mounting **only `backend/`** (`Makefile:3`). From there
+`../../../infrastructure/nginx/nginx.conf` does not exist, so the nginx half of the check
+**fails always**, whatever the config says — the mirror of an always-true check, and its
+mutation proof means nothing in the gate, where it is red without any mutation.
+
+The repository already knew. `infrastructure/tests/integration.sh:11-13` says it outright:
+"The Go tests cannot assert this — their container mounts only `backend/`, so the repository
+root is invisible from inside them," which is why G37 checks root files on the host, before
+`docker run`. The rule was written, delivered and unread at the moment it applied.
+
+**The reviewer missed it too, and the shape of that miss is the lesson.** Asked whether the
+moved test needed its mutations re-measured, the review verified four conditions — the file
+was restored byte-for-byte, the package was unchanged, paths resolve from the package
+directory rather than the file, the assertion does not depend on location — and every one of
+them was true. None of them asked in **what runtime the gate runs the test**. A correct answer
+inside the wrong frame reads exactly like a correct answer.
+
+So the third question has a second half that is easy to skip: ask it of the **check**, not
+only of the claim. Where does this run in the gate, and has it ever run there?
+
+### A prohibition in a brief loses to an instruction in a skill
+
+Both briefs forbade Codex to touch git, in §3, among the other "do not"s. In T11 Codex
+resolved the conflict in favour of the brief; in T14 the `implement` skill won and it reached
+`git commit`. What stopped it was not the rule but the sandbox —
+`fatal: Unable to create '.git/index.lock': Operation not permitted`. It then reported
+honestly and did not work around it, but the guard that held was **accidental**: another
+machine, other permissions, and the finding would have arrived as a commit in the history.
+
+Write the prohibition as the first line of §4 with its **reason** — the commit is made by the
+reviewing session after a Docker gate you do not have. A reason is a consequence; a skill
+does not override a consequence the way it overrides a bare rule.
+
+### A filter that names a task also names its watcher
+
+`pkill -f 'brief-t14'` killed the monitor watching that task, because the monitor's own script
+carried the string. Anything matching on a task's name matches the things observing it.
+
