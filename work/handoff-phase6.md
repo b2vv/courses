@@ -325,3 +325,34 @@ The general form is worth more than the fix. A filter over processes is a filter
 includes the filter's own invocation**, so "does anything match X" is nearly always "does anything
 other than me match X" — and the bracket trick answers only half of that.
 
+
+## The document about the failure triggered the detector for it (2026-09-13)
+
+A monitor watching a Codex run for `low on memory|out of memory` across the whole log reported
+OOM while the process was alive and the report was still growing. The match was at line 2577,
+in the middle: the text of the recovery recipe **in this file**, which the brief told the agent
+to read. An agent's log contains everything the agent reads, so a document describing a failure
+becomes a source of that failure's signature.
+
+The property is self-reinforcing, and that is the uncomfortable part. The more carefully we
+write down how a failure looks — the exact harness wording, the exact error text — the more
+often a detector grepping for that wording fires on the writing rather than the failure. Good
+documentation makes naive detection worse.
+
+Two rules, and neither costs anything:
+
+- **Liveness is a PID question, not a text question.** Record the pid at launch and use
+  `kill -0`. Nothing in a log proves a process is alive or dead.
+- **Failure signatures belong to the tail, after death.** The harness prints its verdict at the
+  end; the contents of files the agent read sit in the middle. Search the last lines, and only
+  once the process is gone.
+
+It is the same disease as the `pgrep` entry above, one level out. There the filter's input
+included the filter's own command line; here it includes everything the subject read. Both are
+"grep over a stream that carries more than the thing you meant to observe", and both fail
+silently in the direction of a confident wrong answer.
+
+Worth checking in one's own tools rather than assuming: a gate check written as
+`grep -c "FAIL\|Error"` over a build log has exactly this shape and is only correct while no
+benign line carries either word.
+
