@@ -122,3 +122,35 @@ found by the implementer, at the first moment something had to actually run.
 When a decision says "inside the same transaction", the port table owes a **signature**, not
 a name. And a section written to repair one defect deserves the same adversarial reading as
 the plan it repairs — §2.1 produced three.
+
+## What Phase 6 added to that lesson (2026-09-12)
+
+Nine times in one day a check turned out to prove less than it claimed, and not once did
+reading the diff find it. Three questions did, and they are different questions:
+
+- **"What does this actually prove?"** — six cases. The discriminant compared against a
+  baseline taken *before* a control seek that deliberately moved it, so it could never be
+  false. `axeAudit` mapped `id` and `target` but not `messageKey`, so pinning one node would
+  have swallowed a real finding on the same node. `pgrep` proved a process existed, which is
+  exactly what a hung launch also proved. An SSR test guarded a route where SSR was already
+  off. B25 measured contrast over a `<video>` that never loaded — and the old brief's
+  prediction that controls over video would raise `incomplete` was never reproducible in that
+  fixture at all.
+- **"What happens if the product does better than I demand?"** — two. Asserting that another
+  720p fragment must be requested before the downswitch would have gone red on a player that
+  dropped the level sooner. The counter varied 15 and 5 across two runs while the thing being
+  claimed grew by exactly 1 in both. An over-constraint is invisible on the run where it did
+  not bite, which is what makes it worse than a flaky check.
+- **"Under what conditions was this measured?"** — one, and it was the one neither brief had.
+  Ownership and heartbeat are proven at 2/6 because the `playback-profile` project recreates
+  api there; the product ships 30/180. The invariant `h*3 <= ttl` holds in both, so the
+  timings were compressed, not the logic — but "proven" without the cadence says more than was
+  measured.
+
+The same day produced the mirror image, twice, in one file. `work/tasks.md` carried `planned`
+on a task already in history — a claim *weaker* than the work — and nearly carried `done` on
+T13 while the phase gate it ran had failed, a claim *stronger*. The next session picks work
+from that table, so both mislead, and both are caught by asking what stands behind the words.
+
+And the count in a plan header is a claim like any other: §8 said 94 rows through four GATE 2
+rounds. It has 102. Nobody recounted it until a report had to be written against it.
