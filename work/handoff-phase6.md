@@ -302,3 +302,26 @@ quantifier underneath it. Neither is caught by asking what the test asserts — 
 exactly what it says. It is caught by asking **what world could satisfy this and still be
 broken**, which for a collection is usually "the empty one" or "the uniform one".
 
+
+## A pattern that matches its own command line (2026-09-13)
+
+`pgrep -f 'codex exe[c]'` is the standard trick: the bracket stops the pattern from matching the
+`pgrep` process itself. It protects the pattern and nothing else. A wait loop written as
+
+    while pgrep -f 'codex exe[c]'; do sleep 30; done; echo "no codex exec left"
+
+never exits, because the `echo` in the *same command line* contains the literal string the pattern
+looks for. The same holds for a comment, a path, or any text in a heredoc that happens to carry it.
+
+It also matched two shells from an unrelated project whose argv began `/bin/zsh -c … codex exec -c
+approval_policy=…` — tool wrappers, not the agent — and a desktop ChatGPT-Codex process named
+`codex`, which is why `pgrep -x codex` would have matched forever instead.
+
+Anchor to the start of argv: `pgrep -f '^codex exec'`. A real CLI launch begins with those words;
+wrappers begin with the shell, and the desktop app begins with its bundle path. Measured on this
+host: one match, the foreign agent, and nothing else.
+
+The general form is worth more than the fix. A filter over processes is a filter over **text that
+includes the filter's own invocation**, so "does anything match X" is nearly always "does anything
+other than me match X" — and the bracket trick answers only half of that.
+
