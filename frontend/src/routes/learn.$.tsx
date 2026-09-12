@@ -28,6 +28,7 @@ export const Route = createFileRoute('/learn/$')({
     }
     const lessonRoute = parseLessonRoute(params._splat);
     if (lessonRoute === null) return { lessonRoute: null };
+    context.learn.primeAv1Probe();
     const course = await ensureRouteQuery(
       context.queryClient,
       context.learn.course(lessonRoute.slug),

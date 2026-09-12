@@ -83,6 +83,7 @@ export * from './playbackHeartbeatRequestReason.ts';
 export * from './playbackNotFoundResponse.ts';
 export * from './playbackSession.ts';
 export * from './playbackSessionRequest.ts';
+export * from './playbackSessionRequestAv1Support.ts';
 export * from './playbackTakenOverResponse.ts';
 export * from './programLesson.ts';
 export * from './programModule.ts';

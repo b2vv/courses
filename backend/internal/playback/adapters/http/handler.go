@@ -35,10 +35,11 @@ type Handler struct {
 	authorization authorizationService
 	sessions      sessionService
 	config        Config
+	observeAV1    func(string)
 }
 
-func NewHandler(authorization authorizationService, sessions sessionService, config Config) *Handler {
-	return &Handler{authorization: authorization, sessions: sessions, config: config}
+func NewHandler(authorization authorizationService, sessions sessionService, config Config, observeAV1 func(string)) *Handler {
+	return &Handler{authorization: authorization, sessions: sessions, config: config, observeAV1: observeAV1}
 }
 
 func (handler *Handler) Register(mux *http.ServeMux, authenticate, requireSameOrigin func(http.Handler) http.Handler) {
@@ -48,7 +49,10 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, requireSameOr
 	mux.Handle("POST /api/v1/playback/heartbeat", requireSameOrigin(authenticate(http.HandlerFunc(handler.heartbeat))))
 }
 
-type playRequest struct{ LessonID string }
+type playRequest struct {
+	LessonID   string
+	AV1Support *string
+}
 
 type heartbeatRequest struct {
 	PlaybackID      string
@@ -81,6 +85,9 @@ func (handler *Handler) play(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !validUUID(request.LessonID) {
 		writePlayError(w, r, errInvalidRequest)
 		return
+	}
+	if request.AV1Support != nil {
+		handler.observeAV1(*request.AV1Support)
 	}
 	playbackID, err := freshPlaybackID()
 	if err != nil {
@@ -161,8 +168,17 @@ func decodePlay(w http.ResponseWriter, r *http.Request) (playRequest, error) {
 	var result playRequest
 	err := decodePlaybackObject(w, r, map[string]func(*json.Decoder) error{
 		"lessonId": func(decoder *json.Decoder) error { return decoder.Decode(&result.LessonID) },
+	}, map[string]func(*json.Decoder) error{
+		"av1Support": func(decoder *json.Decoder) error {
+			var value *string
+			if err := decoder.Decode(&value); err != nil || value == nil {
+				return errInvalidRequest
+			}
+			result.AV1Support = value
+			return nil
+		},
 	})
-	if err != nil || result.LessonID == "" {
+	if err != nil || result.LessonID == "" || !validAV1Support(result.AV1Support) {
 		return playRequest{}, errInvalidRequest
 	}
 	return result, nil
@@ -180,7 +196,7 @@ func decodeHeartbeat(w http.ResponseWriter, r *http.Request) (heartbeatRequest, 
 		"positionSeconds": func(decoder *json.Decoder) error { return decoder.Decode(&position) },
 		"clientSeq":       func(decoder *json.Decoder) error { return decoder.Decode(&sequence) },
 		"reason":          func(decoder *json.Decoder) error { return decoder.Decode(&result.Reason) },
-	})
+	}, nil)
 	if err != nil || result.PlaybackID == "" || result.LessonID == "" || position == nil || sequence == nil || result.Reason == "" {
 		return heartbeatRequest{}, errInvalidRequest
 	}
@@ -188,7 +204,11 @@ func decodeHeartbeat(w http.ResponseWriter, r *http.Request) (heartbeatRequest, 
 	return result, nil
 }
 
-func decodePlaybackObject(w http.ResponseWriter, r *http.Request, fields map[string]func(*json.Decoder) error) error {
+func validAV1Support(value *string) bool {
+	return value == nil || *value == "supported" || *value == "unsupported" || *value == "probe_failed"
+}
+
+func decodePlaybackObject(w http.ResponseWriter, r *http.Request, required, optional map[string]func(*json.Decoder) error) error {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
 		return errInvalidRequest
@@ -203,11 +223,14 @@ func decodePlaybackObject(w http.ResponseWriter, r *http.Request, fields map[str
 	if err != nil || opening != json.Delim('{') {
 		return errInvalidRequest
 	}
-	seen := make(map[string]struct{}, len(fields))
+	seen := make(map[string]struct{}, len(required)+len(optional))
 	for decoder.More() {
 		token, err := decoder.Token()
 		key, ok := token.(string)
-		decode, known := fields[key]
+		decode, known := required[key]
+		if !known {
+			decode, known = optional[key]
+		}
 		if err != nil || !ok || !known {
 			return errInvalidRequest
 		}
@@ -220,8 +243,13 @@ func decodePlaybackObject(w http.ResponseWriter, r *http.Request, fields map[str
 		}
 	}
 	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') || len(seen) != len(fields) || decoder.Decode(&struct{}{}) != io.EOF {
+	if err != nil || closing != json.Delim('}') || decoder.Decode(&struct{}{}) != io.EOF {
 		return errInvalidRequest
+	}
+	for key := range required {
+		if _, ok := seen[key]; !ok {
+			return errInvalidRequest
+		}
 	}
 	return nil
 }

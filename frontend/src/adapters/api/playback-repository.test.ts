@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
+import { QueryClient } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { primeAv1Probe, takeAv1ProbeResult } from '../../app/composition/av1-probe';
 import { apiOrigin } from './api-origin';
 import { createApiPlaybackRepository } from './playback-repository';
 
@@ -43,8 +45,23 @@ const session = {
 } as const;
 
 const server = setupServer();
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalMediaSource = Object.getOwnPropertyDescriptor(globalThis, 'MediaSource');
+
+function restoreGlobal(name: 'window' | 'MediaSource', descriptor: PropertyDescriptor | undefined) {
+  if (descriptor === undefined) {
+    Reflect.deleteProperty(globalThis, name);
+    return;
+  }
+  Object.defineProperty(globalThis, name, descriptor);
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  restoreGlobal('window', originalWindow);
+  restoreGlobal('MediaSource', originalMediaSource);
+});
 afterAll(() => server.close());
 
 test('maps the authenticated learning model and validates the requested slug', async () => {
@@ -90,6 +107,59 @@ test('mints only after an explicit play action and maps the exact session', asyn
   expect(requestBody).toBeUndefined();
   expect(await repository.play(lessonId)).toEqual({ ok: true, value: session });
   expect(requestBody).toEqual({ lessonId });
+});
+
+test('P12 carries the real page-scope probe on a denied mint without repeating it on retry', async () => {
+  const requestBodies: unknown[] = [];
+  let mintAttempts = 0;
+  let probeCalls = 0;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { origin: 'http://api.test' } },
+  });
+  Object.defineProperty(globalThis, 'MediaSource', {
+    configurable: true,
+    value: {
+      isTypeSupported: () => {
+        probeCalls += 1;
+        return true;
+      },
+    },
+  });
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/playback/sessions`, async ({ request }) => {
+      requestBodies.push(await request.json());
+      mintAttempts += 1;
+      if (mintAttempts === 1) {
+        return HttpResponse.json(
+          {
+            error: {
+              code: 'playback_forbidden',
+              message: 'Playback is not authorized',
+              requestId: 'test',
+            },
+          },
+          { status: 403 },
+        );
+      }
+      return HttpResponse.json(session, { status: 201 });
+    }),
+  );
+  const queryClient = new QueryClient();
+  primeAv1Probe(queryClient);
+  const repository = createApiPlaybackRepository({}, () => takeAv1ProbeResult(queryClient));
+
+  expect(await repository.play(lessonId)).toEqual({
+    ok: false,
+    error: { code: 'playback_forbidden' },
+  });
+  expect(await repository.play(lessonId)).toEqual({ ok: true, value: session });
+
+  expect(probeCalls).toBe(1);
+  expect(requestBodies, `P12 mint request bodies: ${JSON.stringify(requestBodies)}`).toEqual([
+    { lessonId, av1Support: 'supported' },
+    { lessonId },
+  ]);
 });
 
 test.each([

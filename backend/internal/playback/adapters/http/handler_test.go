@@ -16,9 +16,11 @@ import (
 	playbackhttp "courses/internal/playback/adapters/http"
 	"courses/internal/playback/domain"
 	"courses/platform/httpserver"
+	"courses/platform/observability"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/legacy"
+	dto "github.com/prometheus/client_model/go"
 )
 
 const (
@@ -69,7 +71,17 @@ func testConfig(t *testing.T) playbackhttp.Config {
 	return config
 }
 
+func counterValue(t *testing.T, counter interface{ Write(*dto.Metric) error }) float64 {
+	t.Helper()
+	metric := &dto.Metric{}
+	if err := counter.Write(metric); err != nil {
+		t.Fatal(err)
+	}
+	return metric.GetCounter().GetValue()
+}
+
 func passThrough(next http.Handler) http.Handler { return next }
+func ignoreAV1Probe(string)                      {}
 
 func (service *authorizer) Authorize(_ context.Context, actor domain.Actor, playbackID, videoID string) error {
 	service.calls++
@@ -113,7 +125,7 @@ func TestAuthorizeReturnsOnlyForbiddenOrUnavailableForFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			service := &authorizer{err: test.failure}
-			adapter := playbackhttp.NewHandler(service, nil, testConfig(t))
+			adapter := playbackhttp.NewHandler(service, nil, testConfig(t), ignoreAV1Probe)
 			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 				adapter.Register(mux, test.authenticate, passThrough)
 			}})
@@ -137,7 +149,7 @@ func TestAuthorizeReturnsOnlyForbiddenOrUnavailableForFailures(t *testing.T) {
 func TestAuthorizeReturnsNoContentForAnAllowedMediaRequest(t *testing.T) {
 	t.Parallel()
 	service := &authorizer{}
-	adapter := playbackhttp.NewHandler(service, nil, testConfig(t))
+	adapter := playbackhttp.NewHandler(service, nil, testConfig(t), ignoreAV1Probe)
 	handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		adapter.Register(mux, authenticated(httpserver.Actor{UserID: "40000000-0000-4000-8000-000000000001", Role: "student"}), passThrough)
 	}})
@@ -159,7 +171,7 @@ func TestAuthorizeReturnsNoContentForAnAllowedMediaRequest(t *testing.T) {
 func TestPlayMintsServerSelectedSession(t *testing.T) {
 	t.Parallel()
 	service := &sessions{playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12}}
-	adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+	adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 	handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 	}})
@@ -194,17 +206,79 @@ func TestPlayMintsServerSelectedSession(t *testing.T) {
 	}
 }
 
+func TestP12ValidAV1ProbeIncrementsTheBoundedMetricOnce(t *testing.T) {
+	t.Parallel()
+	for _, result := range []string{"supported", "unsupported", "probe_failed"} {
+		t.Run(result, func(t *testing.T) {
+			metrics := observability.NewMetrics()
+			counter := metrics.PlaybackAV1Probe.WithLabelValues(result)
+			before := counterValue(t, counter)
+			observed := ""
+			service := &sessions{playback: domain.LessonPlayback{VideoID: videoID}}
+			adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), func(result string) {
+				observed = result
+				counter.Inc()
+			})
+			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+				adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
+			}})
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/sessions", strings.NewReader(`{"lessonId":"`+lessonID+`","av1Support":"`+result+`"}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+			after := counterValue(t, counter)
+			t.Logf("P12 measurement: av1Support=%q counter before=%g after=%g", observed, before, after)
+
+			if response.Code != http.StatusCreated || service.playCalls != 1 || observed != result || after-before != 1 {
+				t.Fatalf("status=%d calls=%d av1Support=%q counter before=%g after=%g body=%s", response.Code, service.playCalls, observed, before, after, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestP12ValidAV1ProbeIsCountedWhenMintIsForbidden(t *testing.T) {
+	t.Parallel()
+	metrics := observability.NewMetrics()
+	counter := metrics.PlaybackAV1Probe.WithLabelValues("supported")
+	before := counterValue(t, counter)
+	observed := ""
+	service := &sessions{playErr: domain.ErrForbidden}
+	adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), func(result string) {
+		observed = result
+		counter.Inc()
+	})
+	handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+		adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
+	}})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/sessions", strings.NewReader(`{"lessonId":"`+lessonID+`","av1Support":"supported"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+	after := counterValue(t, counter)
+	t.Logf("P12 denied-mint measurement: av1Support=%q counter before=%g after=%g", observed, before, after)
+
+	if response.Code != http.StatusForbidden || service.playCalls != 1 || observed != "supported" || after-before != 1 {
+		t.Fatalf("status=%d calls=%d av1Support=%q counter before=%g after=%g body=%s", response.Code, service.playCalls, observed, before, after, response.Body.String())
+	}
+}
+
 func TestPlayRejectsAnythingButOneValidLessonID(t *testing.T) {
 	t.Parallel()
 	for _, body := range []string{
 		`{}`,
 		`{"lessonId":"not-a-uuid"}`,
+		`{"lessonId":"` + lessonID + `","av1Support":""}`,
+		`{"lessonId":"` + lessonID + `","av1Support":"unknown"}`,
+		`{"lessonId":"` + lessonID + `","av1Support":null}`,
+		`{"lessonId":"` + lessonID + `","av1Support":1}`,
 		`{"lessonId":"` + lessonID + `","videoId":"` + videoID + `"}`,
 		`{"lessonId":"` + lessonID + `","lessonId":"` + lessonID + `"}`,
 		`{"lessonId":"` + lessonID + `"} {}`,
 	} {
 		service := &sessions{}
-		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 		}})
@@ -233,7 +307,7 @@ func TestPlayMapsPolicyFailuresWithoutConflict(t *testing.T) {
 	}
 	for _, test := range tests {
 		service := &sessions{playErr: test.err}
-		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 		}})
@@ -262,7 +336,7 @@ func TestHeartbeatMapsDistinctOwnershipOutcomes(t *testing.T) {
 	}
 	for _, test := range tests {
 		service := &sessions{heartbeatErr: test.err}
-		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 		}})
@@ -287,6 +361,8 @@ func TestHeartbeatRejectsInvalidBodiesBeforeApplication(t *testing.T) {
 	t.Parallel()
 	validPrefix := `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `",`
 	for _, body := range []string{
+		`{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":7}`,
+		validPrefix + `"positionSeconds":1,"clientSeq":7,"reason":"tick","reason":"tick"}`,
 		validPrefix + `"positionSeconds":-1,"clientSeq":7,"reason":"tick"}`,
 		validPrefix + `"positionSeconds":"NaN","clientSeq":7,"reason":"tick"}`,
 		validPrefix + `"positionSeconds":1,"clientSeq":2147483648,"reason":"tick"}`,
@@ -295,7 +371,7 @@ func TestHeartbeatRejectsInvalidBodiesBeforeApplication(t *testing.T) {
 		validPrefix + `"positionSeconds":1,"clientSeq":7,"reason":"tick","extra":true}`,
 	} {
 		service := &sessions{}
-		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 		}})
@@ -320,7 +396,7 @@ func TestPublicPlaybackRejectsQueryParameters(t *testing.T) {
 	}
 	for _, test := range tests {
 		service := &sessions{}
-		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 		}})
@@ -354,6 +430,7 @@ func TestPublicPlaybackHTTPMatchesOpenAPI(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "play", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `"}`, service: &sessions{playback: domain.LessonPlayback{VideoID: videoID}}, wantStatus: http.StatusCreated},
+		{name: "P12 play with AV1 probe", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `","av1Support":"unsupported"}`, service: &sessions{playback: domain.LessonPlayback{VideoID: videoID}}, wantStatus: http.StatusCreated},
 		{name: "heartbeat", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{}, wantStatus: http.StatusNoContent},
 		{name: "R17 heartbeat forbidden", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrForbidden}, wantStatus: http.StatusForbidden},
 		{name: "heartbeat taken over", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrPlaybackTakenOver}, wantStatus: http.StatusConflict},
@@ -373,7 +450,7 @@ func TestPublicPlaybackHTTPMatchesOpenAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			request.Body = io.NopCloser(strings.NewReader(test.body))
-			adapter := playbackhttp.NewHandler(&authorizer{}, test.service, testConfig(t))
+			adapter := playbackhttp.NewHandler(&authorizer{}, test.service, testConfig(t), ignoreAV1Probe)
 			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 				adapter.Register(mux, authenticated(httpserver.Actor{UserID: userID, Role: "student"}), passThrough)
 			}})
@@ -410,7 +487,7 @@ func TestPublicPlaybackMutationsRequireSameOriginBeforeAuthentication(t *testing
 				next.ServeHTTP(w, r)
 			})
 		}
-		adapter := playbackhttp.NewHandler(&authorizer{}, &sessions{}, testConfig(t))
+		adapter := playbackhttp.NewHandler(&authorizer{}, &sessions{}, testConfig(t), ignoreAV1Probe)
 		handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 			adapter.Register(mux, authenticate, requireSameOrigin)
 		}})

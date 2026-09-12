@@ -5,7 +5,9 @@
  * Public catalog, session authentication, protected administration and playback-session control. Purchases and the learning player are not implemented.
  * OpenAPI spec version: 1.0.0
  */
+import type { PlaybackSessionRequestAv1Support } from './playbackSessionRequestAv1Support.ts';
 
 export interface PlaybackSessionRequest {
   lessonId: string;
+  av1Support?: PlaybackSessionRequestAv1Support;
 }

@@ -1,4 +1,5 @@
 import type {
+  Av1ProbeResult,
   LearningCourse,
   PlaybackErrorCode,
   PlaybackHeartbeat,
@@ -34,7 +35,10 @@ function namedError(
 }
 
 /** One repository per browser/SSR request scope; generated transport never escapes this adapter. */
-export function createApiPlaybackRepository(options: TransportOptions = {}): PlaybackRepository {
+export function createApiPlaybackRepository(
+  options: TransportOptions = {},
+  takeAv1ProbeResult: () => Av1ProbeResult | undefined = () => undefined,
+): PlaybackRepository {
   const send = createApiTransport(options);
   return {
     async getCourse(slug, signal) {
@@ -80,9 +84,14 @@ export function createApiPlaybackRepository(options: TransportOptions = {}): Pla
       return { ok: true, value: course };
     },
     async play(lessonId, signal) {
+      const av1Support = takeAv1ProbeResult();
       const outcome = await send(
         'playback.play',
-        (init) => createPlaybackSession({ lessonId }, init),
+        (init) =>
+          createPlaybackSession(
+            av1Support === undefined ? { lessonId } : { lessonId, av1Support },
+            init,
+          ),
         201,
         signal,
       );

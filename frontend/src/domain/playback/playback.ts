@@ -36,6 +36,8 @@ export type PlaybackSession = {
 
 export type PlaybackHeartbeatReason = 'tick' | 'pause' | 'seek' | 'hide' | 'nav' | 'ended';
 
+export type Av1ProbeResult = 'supported' | 'unsupported' | 'probe_failed';
+
 export type PlaybackHeartbeat = {
   readonly playbackId: string;
   readonly lessonId: string;

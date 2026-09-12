@@ -694,6 +694,7 @@ components:
       required: [lessonId]
       properties:
         lessonId: { type: string, format: uuid }
+        av1Support: { type: string, enum: [supported, unsupported, probe_failed] }
     PlaybackSession:
       type: object
       additionalProperties: false

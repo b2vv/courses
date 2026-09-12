@@ -17,6 +17,7 @@ type Metrics struct {
 	DatabaseDuration       *prometheus.HistogramVec
 	QueueDepth             *prometheus.GaugeVec
 	PlaybackDatabaseChecks prometheus.Counter
+	PlaybackAV1Probe       *prometheus.CounterVec
 	TranscodingJobDuration *prometheus.HistogramVec
 	TranscodingFailures    *prometheus.CounterVec
 }
@@ -29,16 +30,20 @@ func NewMetrics() *Metrics {
 		DatabaseDuration:       prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "courses_database_query_duration_seconds", Help: "Database query latency without SQL text.", Buckets: prometheus.DefBuckets}, []string{"outcome"}),
 		QueueDepth:             prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "courses_queue_depth", Help: "Asynq tasks by state; -1 means inspection failed."}, []string{"queue", "state"}),
 		PlaybackDatabaseChecks: prometheus.NewCounter(prometheus.CounterOpts{Name: "courses_playback_authorization_database_checks_total", Help: "Playback authorization checks that reached PostgreSQL."}),
+		PlaybackAV1Probe:       prometheus.NewCounterVec(prometheus.CounterOpts{Name: "courses_playback_av1_probe_total", Help: "Browsers whose bounded AV1 decoder probe reached the playback-session mint endpoint, including denied mints."}, []string{"result"}),
 		TranscodingJobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "courses_transcoding_job_duration_seconds", Help: "Media transcoding job duration.", Buckets: prometheus.ExponentialBuckets(1, 2, 12)}, []string{"outcome"}),
 		TranscodingFailures:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "courses_transcoding_failures_total", Help: "Media transcoding failures by bounded reason."}, []string{"reason"}),
 	}
 	for _, outcome := range []string{"ready", "failed", "cancelled"} {
 		metrics.TranscodingJobDuration.WithLabelValues(outcome)
 	}
+	for _, result := range []string{"supported", "unsupported", "probe_failed"} {
+		metrics.PlaybackAV1Probe.WithLabelValues(result)
+	}
 	for _, reason := range []string{"unsupported_source", "probe_failed", "render_failed", "publish_failed", "storage_unavailable"} {
 		metrics.TranscodingFailures.WithLabelValues(reason)
 	}
-	metrics.registry.MustRegister(metrics.Requests, metrics.Duration, metrics.DatabaseDuration, metrics.QueueDepth, metrics.PlaybackDatabaseChecks, metrics.TranscodingJobDuration, metrics.TranscodingFailures, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	metrics.registry.MustRegister(metrics.Requests, metrics.Duration, metrics.DatabaseDuration, metrics.QueueDepth, metrics.PlaybackDatabaseChecks, metrics.PlaybackAV1Probe, metrics.TranscodingJobDuration, metrics.TranscodingFailures, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	return metrics
 }
 

@@ -77,7 +77,9 @@ func main() {
 			time.Now,
 		)
 		playbackAuthorizer := playbackapplication.NewAuthorizer(playbackOwnership, playbackAccess)
-		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer, playbackSessions, playbackConfig)
+		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer, playbackSessions, playbackConfig, func(result string) {
+			dependencies.Metrics.PlaybackAV1Probe.WithLabelValues(result).Inc()
+		})
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),

@@ -22,7 +22,7 @@ export function getRouter() {
       admin: createAdminDependencies(),
       catalog: createCatalogDependencies(),
       identityDependencies: createIdentityDependencies(),
-      learn: createLearnDependencies(),
+      learn: createLearnDependencies(queryClient),
     },
     defaultPreload: 'intent',
     parseSearch: parseUrlSearch,

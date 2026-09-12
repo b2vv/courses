@@ -167,6 +167,7 @@ function createTestRouter(
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
       learn: {
         ...createLearnQueries(playbackRepository),
+        primeAv1Probe: () => undefined,
         createMedia: () => {
           throw new Error('Playback media is not used by route guard tests');
         },
