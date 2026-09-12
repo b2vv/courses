@@ -72,7 +72,19 @@ not, plus pointers. `main` = `cd2f20b`, pushed, tree clean, task queue empty.
     what the hung launch also proved. The observable that separates "running" from "working" is
     `work/report-<task>.md` growing — the brief requires an append before the first tool call,
     so a launch that has not written that line within a minute is stuck, not thinking.
-- Resume for an answer or a correction: `codex exec ... resume --last "<answer>"`.
+- Resume for an answer or a correction: `codex exec -s workspace-write --skip-git-repo-check
+  resume <SESSION_ID> - < prompt.md`.
+  - **Not `--last`.** Its help says "the most recent **recorded** session" — recorded, not
+    running, and `~/.codex/session_index.jsonl` carries no `cwd`, so the pick is global by
+    recency across every project on the host. With another repository's Codex recorded more
+    recently, a resume lands your correction in an agent writing a different repository, and
+    it looks like a successful resume. Measured 2026-09-12: two T12 resumes went to the right
+    session by luck, not by design.
+  - The id is the first `session id:` line of the launch log. Pass the prompt as `-` from a
+    file: stdin ends by itself, so this also avoids the `< /dev/null` hang above.
+  - Watch it by PID written at launch (`kill -0`), not by `pgrep -f`. With the prompt on
+    stdin the brief name is not in the process arguments at all, so a name filter reports
+    "finished" immediately — and a filter on the session id matches the watcher too.
   - **Also the recovery path when the run dies mid-step.** Measured 2026-09-12: a T12 run was
     killed with "stopped because the system is running low on memory" — this host carries other
     projects' stacks, and it sat at 31G used / 76M free with 14G in the compressor while two
