@@ -33,7 +33,9 @@ Rows not verified at the planned outcome are **B07, B08, B20, B21, B21a, B22, B2
 B31, B36, R23, R30 and R34**. A green aggregate gate is not substituted for a missing
 assertion.
 
-The reviewer ran the committed T11+T12 tree through the ordered `make check` on 2026-09-12:
+The reviewer ran the ordered `make check` on 2026-09-12 against the tree that became `0959fca`
+(T12) and `efc9851` (T11) — the gate preceded those commits and saw that content, not the
+committed state:
 `GATE_EXIT=0`; format-check, lint and typecheck passed; frontend unit tests were **379 passed,
 0 failed**; Go `-race ./...` reported **48 packages ok**; integration, generated-code check,
 build, Compose startup, both seed steps and smoke passed; e2e was **60 passed, 0 failed,
