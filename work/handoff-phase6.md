@@ -154,3 +154,42 @@ from that table, so both mislead, and both are caught by asking what stands behi
 
 And the count in a plan header is a claim like any other: §8 said 94 rows through four GATE 2
 rounds. It has 102. Nobody recounted it until a report had to be written against it.
+
+## A fourth question, and it catches something else (2026-09-12)
+
+The three above catch a **weak check** — something that runs and proves less than it claims.
+The day ended with a different failure that none of them would have found, because nothing was
+checked at all.
+
+- **"Is this a source or a copy, and when was it last reconciled with what it describes?"**
+
+Three instances, and they are the same shape:
+
+- **A count in a plan header.** §8 said 94 rows through four GATE 2 rounds. It has 102. Eight
+  live rows sat outside the ledger, and carrying 94 into the phase report would have made the
+  phase look better verified than it was.
+- **A column in an acceptance table.** The `level` column reads as a fact about where a row's
+  proof lives. For B20, B21, B22, B28 and R23 it was an assumption: they need an allowed media
+  segment with real bytes, and `backend/sql/seed.sql` inserts courses only — no lesson, no
+  video, no media. The level was never checked against the fixtures that would have to satisfy
+  it. Anyone taking those rows plans a test and hits a decision instead.
+- **The read-first chain itself.** `AGENTS.md` said T11–T13 remained after all thirteen were
+  committed; it sends the reader first to a briefing built at 126 commits (the repository has
+  266) whose live P0 is the delivered Phase 6 specification, and to a ranking 208 commits
+  behind that recommends the delivered Phase 4. A session following the instructions exactly
+  would have started work that was already in the history.
+
+None of the three was a reasoning error, and none would survive five minutes of checking. They
+survived because each was treated as the thing you check *against*. A source is only a source
+until the code moves past it, and nothing announces when that happened.
+
+One clarification, because it is tempting to file it here: the discriminant compared against
+the wrong baseline belongs to **"what does this prove"**, not to this question. That baseline
+was read correctly and meant what it said — the fault was that the comparison could not fail.
+Widening this category to hold it would blunt it. The test for this question is narrower:
+**nobody looked**.
+
+The practical form is cheap. Anything that carries a count, a date, a commit or a "current"
+gets recomputed the first time you rely on it, not the first time it is questioned — and a
+document that claims to rank or summarise work says which commit it was built at, so the
+distance is visible without reading it.
