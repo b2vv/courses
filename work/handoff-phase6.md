@@ -277,3 +277,28 @@ This is the same failure as the fourth question one level out. There the uncheck
 count, a column, a pointer; here it is a recipe. A recipe is a claim about how the world works,
 and it goes stale the same silent way.
 
+
+## Quantifiers prove less than the sentence reads (2026-09-12)
+
+Two checks from the same afternoon, both green, both proving less than their names claim — and
+the gap is in the quantifier rather than in the predicate.
+
+**"Every X is fine" is true when there are no X.** The R30 scanner validated every `access_log`
+directive it found in `nginx.conf`. Delete the only one and it finds nothing, validates nothing
+and passes — while nginx, given no `access_log` at all, falls back to `combined`, which carries
+`$request` with the URI. The check's own subject can be removed and the check stays green. The
+missing half is **the set is non-empty**: at least one `access_log` must exist and name `safe`.
+
+**"Some X is fine" says nothing about the rest.** B23 asserted `statuses.includes(429)` over 720
+requests to the media zone. That passes when a burst is correctly limited, and passes equally
+when the zone is misconfigured to reject everything — a rate of 1r/s would satisfy it. The
+missing half is the other form: `includes(403)` proves requests below the burst still reach
+authorization, which is also what makes the phase ordering observable at all. The measured
+healthy shape is 403 × 245 and 429 × 475; the assertion pinned neither number.
+
+The pair is one failure: a universal is vacuous on the empty set, an existential is silent about
+the complement, and in both cases the English reading of the test name is stronger than the
+quantifier underneath it. Neither is caught by asking what the test asserts — the assertion is
+exactly what it says. It is caught by asking **what world could satisfy this and still be
+broken**, which for a collection is usually "the empty one" or "the uniform one".
+
