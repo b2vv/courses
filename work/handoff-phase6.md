@@ -250,3 +250,30 @@ does not override a consequence the way it overrides a bare rule.
 `pkill -f 'brief-t14'` killed the monitor watching that task, because the monitor's own script
 carried the string. Anything matching on a task's name matches the things observing it.
 
+
+## Four observers that trusted a shape instead of measuring it (2026-09-12)
+
+Every one of these was a correct recipe that quietly stopped being correct when the conditions
+around it changed. None failed loudly; each reported something plausible.
+
+| Observer | Believed | Actually |
+|---|---|---|
+| `pgrep -f 'brief-<task>'` | the process exists ⇒ the agent is working | a launch hung on stdin proves the process exists just as well. And once the prompt moves to stdin, the brief name leaves the argv entirely, so the same filter reports "finished" at the moment of start |
+| `codex exec resume --last` | the most recent session is mine | "most recent **recorded**" is global: `~/.codex/session_index.jsonl` carries no `cwd`, so another project's Codex, already finished, can receive the correction — and it reads as a successful resume |
+| "the agent appends at the end" | new lines arrive at the tail | Codex appended after *its own* previous last line, so reviewer blocks stayed at the tail and a tail-watcher saw them instead of the new records |
+| `tail -F` on a run log | the file I opened is the log | a new run truncates or replaces it; a stale `GATE_EXIT=2` from the previous run arrived a minute into the next one |
+
+The common shape: the observer asserts a **property of the thing watched** — a name in argv, a
+session's recency, an append position, a file identity — and that property is incidental, not
+guaranteed. It holds until someone changes how the work is launched, and then the observer
+keeps reporting with the same confidence.
+
+The cheap fixes all replace an inferred property with a recorded one: a PID written at launch
+and `kill -0`; an explicit session id taken from the launch log; a diff of snapshots rather
+than a tail; a log path unique per run. None is cleverer than what it replaces — each just
+measures instead of assuming.
+
+This is the same failure as the fourth question one level out. There the unchecked record was a
+count, a column, a pointer; here it is a recipe. A recipe is a claim about how the world works,
+and it goes stale the same silent way.
+
