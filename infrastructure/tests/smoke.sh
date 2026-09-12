@@ -10,6 +10,7 @@ case "$ffmpeg_version" in
   *) echo "Unexpected worker ffmpeg version" >&2; exit 1 ;;
 esac
 docker compose exec -T frontend node --input-type=module <<'JS'
+import {writeFile} from 'node:fs/promises';
 const origin = 'http://nginx:8080';
 for (const [path, expected] of [['/healthz',200],['/',200],['/metrics',404],['/readyz',404]]) {
   const response = await fetch(origin+path);
@@ -48,8 +49,6 @@ for(const path of ['/media','/media/','/media/x/master.m3u8']) {
     if(response.status!==403) throw Error(`${path}: expected 403, got ${response.status}`);
   }
 }
-const adminLogout=await fetch(origin+'/api/v1/auth/logout',{method:'POST',headers:{Cookie:adminCookie,Origin:'http://localhost:8080'}});
-if(adminLogout.status!==204) throw Error(`admin smoke logout: expected 204, got ${adminLogout.status}`);
 const status=await fetch('http://media-worker:8081/status').then(r=>r.json());
 if(status.stage!=='media'||!Array.isArray(status.handlers)||status.handlers.length!==1||status.handlers[0]!=='media:transcode') throw Error('Unexpected worker status');
 const metrics=await fetch('http://media-worker:8081/metrics').then(r=>r.text());
@@ -83,5 +82,111 @@ if(logins.filter(s=>s===429).length<logins.length-10) throw Error('Login budget 
 // own budget or the catalog is an unmetered path into PostgreSQL.
 const pages=await Promise.all(Array.from({length:400},()=>fetch(origin+'/').then(r=>r.status)));
 if(!pages.includes(429)) throw Error('SSR rate limit not enforced');
+await writeFile('/tmp/courses-smoke-media-cookie',adminCookie,{mode:0o600});
 console.log('PASS readiness, upload proxy/body cap, private media/metrics, worker handler/metrics and API, login and SSR rate limits');
+JS
+
+redis_stopped=false
+media_session_created=true
+wait_for_media_policy() {
+  docker compose exec -T frontend node --input-type=module <<'JS'
+import {readFile} from 'node:fs/promises';
+const mediaPath='http://nginx:8080/media/p/10000000000040008000000000000001/hls/10000000-0000-4000-8000-000000000001/v0/segment_000.m4s';
+const cookie=await readFile('/tmp/courses-smoke-media-cookie','utf8');
+const deadline=Date.now()+30000;
+let lastStatus='no response';
+while(Date.now()<deadline) {
+  try {
+    lastStatus=(await fetch(mediaPath,{headers:{Cookie:cookie}})).status;
+    if(lastStatus===403) {
+      console.log('PASS Redis recovery restored media authorization policy (503 -> 403)');
+      process.exit(0);
+    }
+  } catch(error) {
+    lastStatus=error instanceof Error?error.message:String(error);
+  }
+  await new Promise(resolve=>setTimeout(resolve,250));
+}
+throw Error(`Redis recovery did not restore media policy within 30s; last result: ${lastStatus}`);
+JS
+}
+restore_redis() {
+  docker compose start redis > /dev/null
+  wait_for_media_policy
+}
+close_media_session() {
+  docker compose exec -T frontend node --input-type=module <<'JS'
+import {readFile,unlink} from 'node:fs/promises';
+const cookiePath='/tmp/courses-smoke-media-cookie';
+let cookie;
+try {
+  cookie=await readFile(cookiePath,'utf8');
+} catch(error) {
+  if(error && typeof error==='object' && 'code' in error && error.code==='ENOENT') process.exit(0);
+  throw error;
+}
+let logoutError;
+try {
+  const response=await fetch('http://api:8080/api/v1/auth/logout',{method:'POST',headers:{Cookie:cookie,Origin:'http://localhost:8080'}});
+  if(response.status!==204) logoutError=Error(`admin smoke logout: expected 204, got ${response.status}`);
+} catch(error) {
+  logoutError=error;
+}
+await unlink(cookiePath);
+if(logoutError) throw logoutError;
+JS
+}
+restore_smoke_state_on_exit() {
+  original_status=$?
+  trap - EXIT HUP INT TERM
+  set +e
+  restore_status=0
+  session_status=0
+  if [ "$redis_stopped" = true ]; then
+    restore_redis
+    restore_status=$?
+  fi
+  if [ "$media_session_created" = true ]; then
+    close_media_session
+    session_status=$?
+  fi
+  if [ "$original_status" -ne 0 ]; then
+    exit "$original_status"
+  fi
+  if [ "$restore_status" -ne 0 ]; then
+    exit "$restore_status"
+  fi
+  exit "$session_status"
+}
+
+trap restore_smoke_state_on_exit EXIT HUP INT TERM
+redis_stopped=true
+docker compose stop redis > /dev/null
+docker compose exec -T frontend node --input-type=module <<'JS'
+import {readFile} from 'node:fs/promises';
+const mediaPath='http://nginx:8080/media/p/10000000000040008000000000000001/hls/10000000-0000-4000-8000-000000000001/v0/segment_000.m4s';
+const cookie=await readFile('/tmp/courses-smoke-media-cookie','utf8');
+// This request uses an unknown playbackId, so no media exists regardless of Redis state.
+// Proof of "no media bytes" moved to e2e T16 by user decision 2026-09-12.
+const response=await fetch(mediaPath,{headers:{Cookie:cookie}});
+if(response.status!==503) throw Error(`media with Redis unavailable: expected 503, got ${response.status}`);
+if(response.headers.get('retry-after')===null) throw Error('media with Redis unavailable: Retry-After is missing');
+console.log('PASS unavailable Redis returns 503 with Retry-After');
+JS
+restore_redis
+redis_stopped=false
+close_media_session
+media_session_created=false
+trap - EXIT HUP INT TERM
+
+docker compose exec -T frontend node --input-type=module <<'JS'
+const origin='http://nginx:8080';
+const mediaPath='/media/p/10000000000040008000000000000001/hls/10000000-0000-4000-8000-000000000001/v0/segment_000.m4s';
+// The media zone admits a burst of 240 and refills at 120 requests/second. Sending
+// three bursts at once requires four seconds of refill to avoid a rejection.
+const statuses=await Promise.all(Array.from({length:720},()=>fetch(origin+mediaPath).then(response=>response.status)));
+// Requiring both statuses proves the limit sheds only excess requests before authorization instead of rejecting every request.
+if(!statuses.includes(429)) throw Error('Media rate limit not enforced');
+if(!statuses.includes(403)) throw Error('Media rate limit did not admit a request to authorization');
+console.log('PASS media rate limit');
 JS

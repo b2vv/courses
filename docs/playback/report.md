@@ -33,6 +33,8 @@ Rows not verified at the planned outcome are **B07, B08, B20, B21, B21a, B22, B2
 B31, B36, R23, R30 and R34**. A green aggregate gate is not substituted for a missing
 assertion.
 
+**Update 2026-09-12, after T14 — ordered `make check` EXIT=0.** B23 and R30 are now verified, so the evidence supports **91/102**. B36 is verified in part: 503 and `Retry-After` in smoke; its "no media bytes" clause moved to e2e together with six rows whose proof level changed (`docs/playback/plan.md`, amendment `8cc1d72`), and that clause stays open. Rows still not verified at the planned outcome: **B07, B08, B20, B21, B21a, B22, B28, B31, R23 and R34**, plus the open clause of **B36**. B07 turned out to be a product gap, not missing evidence: the learning read returns the stored position without bounding it by the current video's duration. The paragraph above is kept as the record at T13. The gate ran before the T14 commit, on the content that commit records.
+
 The reviewer ran the ordered `make check` on 2026-09-12 against the tree that became `0959fca`
 (T12) and `efc9851` (T11) — the gate preceded those commits and saw that content, not the
 committed state:
@@ -83,7 +85,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B21 | Three ranges cause three authorizations | No row-specific smoke proof was found | **not verified** |
 | B21a | Generated playlists contain no `EXT-X-BYTERANGE` | No named integration assertion was found | **not verified** |
 | B22 | Media responses carry no-store and security headers | Smoke requests `/media`, `/media/` and `/media/x/master.m3u8` — all refusal paths. It never requests an allowed segment, so headers on a 200 are outside what it asserts | **not verified** |
-| B23 | Media rate limiting returns 429 | Smoke measures 429 in the API, login and SSR zones; there is no media zone in it, and its own PASS line names only those three | **not verified** |
+| B23 | Media rate limiting returns 429 | T14 smoke: 720 concurrent requests under `/media/p/` must yield both 429 (the media zone sheds the excess) and 403 (admitted requests reach authorization, so the limit sits before it and does not reject everything); gate line `PASS media rate limit`. Diagnostic run on the same stack: 403 × 245, 429 × 475 | **verified** (T14) |
 | B24 | Player is keyboard-operable and has no axe violations | T7 component/axe tests; frontend gate | matched |
 | B24a | Focus is visible and controls are at least 44 px | T11 real-engine e2e in light/dark and before zoom; gate | matched |
 | B25 | Contrast and 200% layout pass | T11 real-engine e2e; gate, with `readyState=0`, width/height 0/0 | matched only over empty video; see §6 |
@@ -97,7 +99,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B33 | Two tabs displace one another | T10 same-browser e2e; T10 59/59 and gate | matched |
 | B34 | Restore alone cannot complete after a shorter replacement | Same scenario and proof as duplicate B41: T3 domain/T5 PostgreSQL; Go/integration gate | matched |
 | B35 | `clientSeq=2^62` returns 400 without a write | T3/T5 validation and integration evidence; Go/integration gate | matched |
-| B36 | Redis failure returns 503 with `Retry-After` and no bytes | T1 proves 503/no bytes but does not record `Retry-After` | **not verified** |
+| B36 | Redis failure returns 503 with `Retry-After` and no bytes | T14 smoke: with Redis stopped, a media request gets 503 with `Retry-After`; recovery back to 403 is asserted. "No bytes" cannot be shown in smoke — the request uses an unknown `playbackId`, so no media exists under any Redis state — and moved to e2e (T16, `8cc1d72`) | **partly verified** — 503 and `Retry-After` (T14); no media bytes open |
 | B37 | Edge starts healthy with an empty cache | T1 smoke; final smoke gate | matched |
 | B38 | Paced 400-request parallel run is 400/400 HTTP 200 | T1 measured 400/400, no false 403/429; final smoke gate | matched |
 | B39 | Expiry remints silently rather than reporting takeover | T7/T9 e2e; gate | matched |
@@ -138,7 +140,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | R27 | Logout changes the same segment from 200 to 403 | T5 real-mint smoke; smoke gate | matched |
 | R28 | A displaced client stops sending progress | T9 frontend recovery test; frontend gate | matched |
 | R29 | Anonymous and non-owner receive byte-identical 403 bodies | T4 smoke; smoke gate | matched |
-| R30 | Nginx/Go safe logs cannot acquire request URI | Safe configuration exists, but no named unit/lint assertion was found | **not verified** |
+| R30 | Nginx/Go safe logs cannot acquire request URI | T14: a host-side scanner in `infrastructure/tests/integration.sh` allowlists the variables of `log_format safe` and requires every `access_log` to name `safe` or be `off`, with at least one naming `safe`; the Go AST test `backend/platform/architecture/safe_request_logs_test.go` requires `"route", route`. Mutations went red in the conditions the gate runs them in. Limit: the scanner reads `nginx.conf` only, not `include`d files | **verified** (T14) |
 | R31 | Unknown playback ID heartbeat returns 410 | T3 Redis/integration evidence; integration gate | matched |
 | R32 | Deleted lesson heartbeat returns 404 without FK error | T5 application/HTTP/integration evidence; Go/integration gate | matched |
 | R33 | Displaced heartbeat cannot write progress | T3/T5 Redis/PostgreSQL integration; integration gate | matched |
