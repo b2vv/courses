@@ -601,6 +601,116 @@ test.describe('T7 playback milestone', () => {
       expect(await videoTime(page)).toBeGreaterThan(70);
     });
 
+    test('R35 hls.js automatically switches from 720p to 360p on a narrowed channel', async ({
+      page,
+    }) => {
+      const renditionRequests: string[] = [];
+      const renditionRequestCount = (rendition: '360p' | '720p') =>
+        renditionRequests.filter((pathname) => pathname.includes(`/${rendition}/`)).length;
+      page.on('request', (request) => {
+        const pathname = new URL(request.url()).pathname;
+        if (pathname.endsWith('.m4s')) renditionRequests.push(pathname);
+      });
+      const session = await openAndPlay(page);
+      const quality = page.getByRole('button', { name: /Якість/ });
+      await expect(quality).toContainText('Автоматично');
+      const master = await page.request.get(new URL(session.mediaPath, page.url()).toString());
+      expect(master.status()).toBe(200);
+      const masterLines = (await master.text())
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line !== '');
+      const streams = masterLines.flatMap((line, index) => {
+        if (!line.startsWith('#EXT-X-STREAM-INF:')) return [];
+        const match = /(?:^|[:,])BANDWIDTH=(\d+)(?:,|$)/.exec(line);
+        const variant = masterLines[index + 1];
+        if (match?.[1] === undefined || variant === undefined || variant.startsWith('#'))
+          throw new Error('Each EXT-X-STREAM-INF must carry BANDWIDTH and a variant URI');
+        return [{ bandwidth: Number.parseInt(match[1], 10), variant }];
+      });
+      expect(streams.map(({ variant }) => variant).sort()).toEqual([
+        '360p/index.m3u8',
+        '720p/index.m3u8',
+      ]);
+      const bandwidth360 = streams.find(({ variant }) => variant === '360p/index.m3u8')?.bandwidth;
+      const bandwidth720 = streams.find(({ variant }) => variant === '720p/index.m3u8')?.bandwidth;
+      if (bandwidth360 === undefined || bandwidth720 === undefined)
+        throw new Error('R35 requires 360p and 720p BANDWIDTH values');
+      const throttleBitsPerSecond = Math.sqrt(bandwidth360 * bandwidth720);
+      const throttleBytesPerSecond = Math.round(throttleBitsPerSecond / 8);
+      expect(throttleBitsPerSecond).toBeGreaterThan(bandwidth360);
+      expect(throttleBitsPerSecond).toBeLessThan(bandwidth720);
+      await expect
+        .poll(() => renditionRequests.some((pathname) => pathname.includes('/720p/')), {
+          timeout: 60_000,
+        })
+        .toBe(true);
+
+      const highRequestsBeforeControlSeek = renditionRequestCount('720p');
+      await setPosition(page, 100);
+      await expect
+        .poll(() => renditionRequestCount('720p'), { timeout: 30_000 })
+        .toBeGreaterThan(highRequestsBeforeControlSeek);
+      const lowRequestsBeforeThrottle = renditionRequestCount('360p');
+      const highRequestsBeforeThrottle = renditionRequestCount('720p');
+      const requestIndexBeforeThrottle = renditionRequests.length;
+      const devtools = await page.context().newCDPSession(page);
+      await devtools.send('Network.enable');
+      try {
+        // O1's 1 KB/s must stall every rung; R35 needs a master-derived midpoint where 360p is
+        // viable and 720p is not, otherwise hls.js has no useful lower level to switch to.
+        await devtools.send('Network.emulateNetworkConditions', {
+          offline: false,
+          latency: 100,
+          downloadThroughput: throttleBytesPerSecond,
+          uploadThroughput: 1024 * 1024,
+        });
+        const lowerRenditionRequest = page.waitForRequest(
+          (request) => {
+            const pathname = new URL(request.url()).pathname;
+            return pathname.endsWith('.m4s') && pathname.includes('/360p/');
+          },
+          { timeout: 60_000 },
+        );
+        await setPosition(page, 150);
+        await lowerRenditionRequest.then(
+          () => true,
+          () => false,
+        );
+        const lowRequestsAfterThrottle = renditionRequestCount('360p');
+        const highRequestsAfterThrottle = renditionRequestCount('720p');
+        const requestsAfterThrottle = renditionRequests.slice(requestIndexBeforeThrottle);
+        console.log(
+          `R35 master BANDWIDTH: 360p=${bandwidth360} bit/s, 720p=${bandwidth720} bit/s; derived throttle=${throttleBytesPerSecond} B/s (${Math.round(throttleBitsPerSecond)} bit/s)`,
+        );
+        console.log(
+          `R35 baselines before throttle: 360p=${lowRequestsBeforeThrottle}, 720p=${highRequestsBeforeThrottle}`,
+        );
+        console.log(
+          `R35 counts after throttle: 360p=${lowRequestsAfterThrottle}, 720p=${highRequestsAfterThrottle}`,
+        );
+        console.log(
+          `R35 rendition requests after throttle: ${requestsAfterThrottle.length === 0 ? 'none' : requestsAfterThrottle.join(', ')}`,
+        );
+        // The 720p counts stay printed, never asserted. Whether another high fragment is requested
+        // before the downswitch is timing, not the claim: if hls.js drops the level before the seek
+        // pulls anything, the player did better than required and this row must not go red for it.
+        // What R35 claims is the lower rung being reached on a narrowed channel, and that is the
+        // 360p growth alone. The printed pair still separates "ABR had nothing to abandon" from
+        // "ABR abandoned and stepped down" when this row fails.
+        expect(lowRequestsAfterThrottle).toBeGreaterThan(lowRequestsBeforeThrottle);
+        await expect(quality).toContainText('Автоматично');
+      } finally {
+        await devtools.send('Network.emulateNetworkConditions', {
+          offline: false,
+          latency: 0,
+          downloadThroughput: -1,
+          uploadThroughput: -1,
+        });
+        await devtools.detach();
+      }
+    });
+
     test('P08 renews ownership at least four times during a 30-second view', async ({ page }) => {
       let heartbeats = 0;
       let deniedSegments = 0;

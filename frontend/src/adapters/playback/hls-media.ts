@@ -78,6 +78,8 @@ function createNativeMedia(
 }
 
 export const createPlaybackMedia: CreatePlaybackMedia = (video, callbacks) => {
+  // This order is load-bearing: Chromium reports native HLS as "maybe" even though hls.js is
+  // the branch that provides working playback, quality selection and HTTP error status there.
   if (Hls.isSupported()) return createHlsMedia(video, callbacks);
   if (video.canPlayType(hlsMimeType) !== '') return createNativeMedia(video, callbacks);
   return createNativeMedia(video, callbacks);

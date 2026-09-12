@@ -61,10 +61,29 @@ not, plus pointers. `main` = `cd2f20b`, pushed, tree clean, task queue empty.
 - **Codex writes code; this session plans, briefs, verifies, commits.** Codex's sandbox has
   no Docker, so **every gate is re-run here before any commit, without exception.**
 - Launch detached: `nohup codex exec -s workspace-write --skip-git-repo-check "Read
-  work/brief-<task>.md and execute it exactly..." > <scratchpad>/codex-<task>.log 2>&1 &
-  disown`, then a persistent `Monitor` on `pgrep -f "brief-<task>"`. The harness kills its
-  own foreground commands; detached survives.
+  work/brief-<task>.md and execute it exactly..." < /dev/null > <scratchpad>/codex-<task>.log
+  2>&1 & disown`. The harness kills its own foreground commands; detached survives.
+  - **`< /dev/null` is load-bearing** — measured 2026-09-12, a T12 launch stood two minutes
+    doing nothing. `nohup` does not close stdin, and detached it is neither a TTY nor a closed
+    pipe, so `codex` blocks on `Reading additional input from stdin...` even when the whole
+    prompt came in as an argument. Invisible in a TTY, silent in the background: no log past
+    that line, no working file, `git status` byte-identical to before.
+  - **Watch the working file, not the pid.** `pgrep` proves a process exists, which is exactly
+    what the hung launch also proved. The observable that separates "running" from "working" is
+    `work/report-<task>.md` growing — the brief requires an append before the first tool call,
+    so a launch that has not written that line within a minute is stuck, not thinking.
 - Resume for an answer or a correction: `codex exec ... resume --last "<answer>"`.
+  - **Also the recovery path when the run dies mid-step.** Measured 2026-09-12: a T12 run was
+    killed with "stopped because the system is running low on memory" — this host carries other
+    projects' stacks, and it sat at 31G used / 76M free with 14G in the compressor while two
+    agents worked. Resume, never relaunch: say the work was not stopped by a decision, that the
+    edits on disk are kept, and quote the run's own last `ДАЛІ:` back to it so it continues
+    instead of restarting.
+  - **Tell the two failures apart before choosing a recipe.** OOM: the working file is
+    non-empty and the tree carries edits, cut off mid-step. The stdin hang above: zero entries
+    and `git status` byte-identical to before.
+  - **One Codex at a time on this host.** Two concurrent runs is what the memory ceiling
+    actually bit on; the gain was never worth it, since neither can run a Docker gate anyway.
 - **Two channels, and the second one is where the value was:** stop on a missing contract;
   **open a `## Discussion` for an inaccuracy that would cause a bug, even when the
   instruction could be followed as written.** Fourteen items were raised in Phase 5 and all

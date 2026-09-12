@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import axe from 'axe-core';
 import { authFixtures, authStatePath, recordRequest, trackPageRequests } from './auth';
 declare global {
@@ -8,6 +8,119 @@ declare global {
 }
 
 let finishRequestTracking = () => Promise.resolve();
+
+async function axeAudit(page: Page, scope: 'wcag' | 'contrast') {
+  return page.evaluate(async (auditScope) => {
+    const results =
+      auditScope === 'contrast'
+        ? await window.axe.run(document, {
+            runOnly: { type: 'rule', values: ['color-contrast'] },
+          })
+        : await window.axe.run(document, {
+            runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'],
+          });
+    const findings = (items: typeof results.violations) =>
+      items.flatMap((item) =>
+        item.nodes.map((node) => {
+          const rawMessageKey = [...node.any, ...node.all, ...node.none].flatMap((check) => {
+            const checkData: unknown = check.data;
+            if (typeof checkData !== 'object' || checkData === null) return [];
+            const messageKey: unknown = Reflect.get(checkData, 'messageKey');
+            return typeof messageKey === 'string' ? [messageKey] : [];
+          })[0];
+          return {
+            id: item.id,
+            messageKey: typeof rawMessageKey === 'string' ? rawMessageKey : null,
+            target: node.target.join(' '),
+          };
+        }),
+      );
+    return { violations: findings(results.violations), incomplete: findings(results.incomplete) };
+  }, scope);
+}
+
+type AxeFinding = Awaited<ReturnType<typeof axeAudit>>['incomplete'][number];
+
+function expectOnlySelectChevronIncomplete(incomplete: AxeFinding[]) {
+  // Axe declines a verdict for Select's decorative non-BMP chevron. Remove this pin when axe can
+  // evaluate that glyph or when the UI-kit markup changes and makes the selector suffix obsolete.
+  const isSelectChevron = ({ id, messageKey, target }: AxeFinding) =>
+    id === 'color-contrast' &&
+    messageKey === 'nonBmp' &&
+    target.endsWith('span[aria-hidden="true"]');
+  expect(incomplete).toHaveLength(1);
+  expect(incomplete.filter(isSelectChevron)).toHaveLength(1);
+}
+
+async function expectVisibleFocus(control: Locator, controls: Locator) {
+  await expect(control).toBeFocused();
+  const ring = await control.evaluate(
+    (node, controlsElement) => {
+      const style = getComputedStyle(node);
+      const controlsStyle = getComputedStyle(controlsElement);
+      return {
+        background: controlsStyle.backgroundColor,
+        color: style.outlineColor,
+        style: style.outlineStyle,
+        width: Number.parseFloat(style.outlineWidth),
+      };
+    },
+    await controls.elementHandle(),
+  );
+  expect(ring.style).not.toBe('none');
+  expect(ring.width).toBeGreaterThanOrEqual(3);
+  expect(ring.color).not.toBe('transparent');
+  expect(ring.color).not.toBe('rgba(0, 0, 0, 0)');
+  expect(ring.color).not.toBe(ring.background);
+}
+
+async function expectPlaybackLayout(page: Page, controls: Locator, playbackControls: Locator[]) {
+  const controlsBox = await controls.boundingBox();
+  if (controlsBox === null) throw new Error('Lesson playback controls are not rendered');
+  for (const control of playbackControls) {
+    const box = await control.boundingBox();
+    if (box === null) throw new Error('Lesson playback control is not rendered');
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.x).toBeGreaterThanOrEqual(controlsBox.x - 1);
+    expect(box.y).toBeGreaterThanOrEqual(controlsBox.y - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(controlsBox.x + controlsBox.width + 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(controlsBox.y + controlsBox.height + 1);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+  ).toBe(true);
+  const layoutFailures = await controls.evaluate((container) => {
+    const children = Array.from(container.children).map((element) => ({
+      label: element.textContent?.trim() ?? element.tagName,
+      rectangle: element.getBoundingClientRect(),
+    }));
+    const overlaps = children.flatMap((left, index) =>
+      children.slice(index + 1).flatMap((right) => {
+        const horizontal =
+          Math.min(left.rectangle.right, right.rectangle.right) -
+          Math.max(left.rectangle.left, right.rectangle.left);
+        const vertical =
+          Math.min(left.rectangle.bottom, right.rectangle.bottom) -
+          Math.max(left.rectangle.top, right.rectangle.top);
+        return horizontal > 1 && vertical > 1 ? [`overlap: ${left.label}/${right.label}`] : [];
+      }),
+    );
+    const clippedText = Array.from(container.querySelectorAll('*')).flatMap((element) => {
+      const hasDirectText = Array.from(element.childNodes).some(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '',
+      );
+      if (!hasDirectText) return [];
+      const clippedHorizontally = element.scrollWidth > element.clientWidth + 1;
+      const clippedVertically = element.scrollHeight > element.clientHeight + 1;
+      return clippedHorizontally || clippedVertically
+        ? [`clipped: ${element.tagName}.${element.className}`]
+        : [];
+    });
+    return [...overlaps, ...clippedText];
+  });
+  expect(layoutFailures).toEqual([]);
+}
 
 test.beforeEach(({ page }) => {
   finishRequestTracking = trackPageRequests(page);
@@ -26,11 +139,7 @@ test('catalog keyboard navigation and accessible labels', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
   await page.addScriptTag({ content: axe.source });
-  const violations = await page.evaluate(async () => {
-    const results = await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'] });
-    return results.violations.map((item) => ({ id: item.id, impact: item.impact }));
-  });
-  expect(violations).toEqual([]);
+  expect(await axeAudit(page, 'wcag')).toEqual({ violations: [], incomplete: [] });
 });
 
 test('locale switch updates copy, html lang and persists across SSR navigation', async ({
@@ -208,62 +317,75 @@ test.describe('with a stored student session', () => {
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await page.goto(`/learn/layout-course/${lessonId}`);
     await page.addScriptTag({ content: axe.source });
-    const contrastViolations = () =>
-      page.evaluate(async () => {
-        const result = await window.axe.run(document, {
-          runOnly: { type: 'rule', values: ['color-contrast'] },
-        });
-        return result.violations.map((violation) => violation.id);
-      });
-    expect(await contrastViolations()).toEqual([]);
-    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-    expect(await contrastViolations()).toEqual([]);
-    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-
-    const play = page.getByRole('button', { name: 'Відтворити' });
-    const seek = page.getByRole('slider', { name: 'Позиція відтворення' });
+    const controls = page.locator('.lesson-player-controls');
+    const play = page.getByRole('button', { name: 'Відтворити', exact: true });
+    const seek = page.getByRole('slider', { name: 'Позиція відтворення', exact: true });
     const quality = page.getByRole('button', { name: /Якість/ });
-    await expect(play).toBeVisible();
-    await expect(seek).toBeVisible();
-    await expect(quality).toBeVisible();
+    const playbackControls = [play, seek, quality];
+    for (const control of playbackControls) await expect(control).toBeVisible();
+    await expectPlaybackLayout(page, controls, playbackControls);
+
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    const lightAppearance = await controls.evaluate((element) => ({
+      colorScheme: getComputedStyle(document.documentElement).colorScheme,
+      surface: getComputedStyle(element).backgroundColor,
+    }));
+    expect(lightAppearance.colorScheme).toBe('light');
+
     for (
       let index = 0;
       index < 12 && !(await play.evaluate((node) => node === document.activeElement));
       index += 1
     )
       await page.keyboard.press('Tab');
-    await expect(play).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(seek).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(quality).toBeFocused();
-
-    const focusRing = await quality.evaluate((node) => {
-      const style = getComputedStyle(node);
-      return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
-    });
-    expect(focusRing.style).not.toBe('none');
-    expect(focusRing.width).toBeGreaterThanOrEqual(3);
-
-    for (const control of [play, seek, quality]) {
-      const box = await control.boundingBox();
-      if (box === null) throw new Error('Lesson playback control is not rendered');
-      expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
+    for (const [index, control] of playbackControls.entries()) {
+      if (index > 0) await page.keyboard.press('Tab');
+      await expectVisibleFocus(control, controls);
     }
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
-    ).toBe(true);
-    const overlap = await page.locator('.lesson-player-controls').evaluate((controls) => {
-      const items = Array.from(controls.children).map((element) => element.getBoundingClientRect());
-      return items.some((left, index) =>
-        items.slice(index + 1).some((right) => {
-          const horizontal = Math.min(left.right, right.right) - Math.max(left.left, right.left);
-          const vertical = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
-          return horizontal > 1 && vertical > 1;
-        }),
-      );
+    const auditedVideoState = await page.locator('video').evaluate((video) => {
+      if (!(video instanceof HTMLVideoElement)) throw new Error('Expected the lesson video');
+      return {
+        readyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+      };
     });
-    expect(overlap).toBe(false);
+    console.log(
+      `B25 video at contrast audit: readyState=${auditedVideoState.readyState}, videoWidth=${auditedVideoState.videoWidth}, videoHeight=${auditedVideoState.videoHeight}`,
+    );
+    expect(auditedVideoState).toEqual({ readyState: 0, videoWidth: 0, videoHeight: 0 });
+    const lightContrast = await axeAudit(page, 'contrast');
+    expect(lightContrast.violations).toEqual([]);
+    expectOnlySelectChevronIncomplete(lightContrast.incomplete);
+    await expectPlaybackLayout(page, controls, playbackControls);
+
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    const darkAppearance = await controls.evaluate((element) => ({
+      colorScheme: getComputedStyle(document.documentElement).colorScheme,
+      surface: getComputedStyle(element).backgroundColor,
+    }));
+    expect(darkAppearance.colorScheme).toBe('dark');
+    expect(darkAppearance.surface).not.toBe(lightAppearance.surface);
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    for (const [index, control] of playbackControls.entries()) {
+      if (index > 0) await page.keyboard.press('Tab');
+      await expectVisibleFocus(control, controls);
+    }
+    const darkContrast = await axeAudit(page, 'contrast');
+    expect(darkContrast.violations).toEqual([]);
+    expectOnlySelectChevronIncomplete(darkContrast.incomplete);
+    await expectPlaybackLayout(page, controls, playbackControls);
+
+    await page.getByRole('button', { name: 'EN' }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    const englishControls = [
+      page.getByRole('button', { name: 'Play', exact: true }),
+      page.getByRole('slider', { name: 'Playback position', exact: true }),
+      page.getByRole('button', { name: /Quality/ }),
+    ];
+    for (const control of englishControls) await expect(control).toBeVisible();
+    await expectPlaybackLayout(page, controls, englishControls);
   });
 });
 
