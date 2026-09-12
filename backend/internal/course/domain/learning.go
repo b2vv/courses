@@ -22,6 +22,15 @@ type LearningLesson struct {
 	ClientSequence int64
 }
 
+// NewLearningLesson applies the playback position bound at the read boundary. ApplyProgress
+// deliberately repeats the same bound at the write boundary; both use only a ready asset.
+func NewLearningLesson(input LearningLesson, durationSeconds *float64) LearningLesson {
+	if input.VideoState == VideoReady && durationSeconds != nil && input.Position > *durationSeconds {
+		input.Position = *durationSeconds
+	}
+	return input
+}
+
 type LearningModule struct {
 	ID      string
 	Title   string

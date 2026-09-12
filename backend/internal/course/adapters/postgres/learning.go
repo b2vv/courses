@@ -30,6 +30,7 @@ const getLearningCourse = `SELECT
     END,
     ''
   ),
+  current_video.duration_seconds,
   COALESCE(progress.position_seconds, 0)::double precision,
   (progress.completed_at IS NOT NULL),
   COALESCE(progress.client_seq, 0)
@@ -37,7 +38,7 @@ FROM courses
 LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
 LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 LEFT JOIN LATERAL (
-  SELECT assets.state
+  SELECT assets.state, assets.duration_seconds
   FROM video_assets AS assets
   WHERE assets.lesson_id = lessons.id AND assets.evicted_at IS NULL
   ORDER BY CASE WHEN assets.state = 'ready' THEN 0 ELSE 1 END, assets.generation DESC, assets.id
@@ -67,6 +68,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 		var (
 			courseRow                                                      learningCourseRow
 			storedModuleID, moduleTitle, lessonID, lessonTitle, videoState string
+			duration                                                       pgtype.Numeric
 			position                                                       float64
 			completed                                                      bool
 			clientSequence                                                 int64
@@ -75,7 +77,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			&courseRow.id, &courseRow.slug, &courseRow.title, &courseRow.summary, &courseRow.description, &courseRow.status,
 			&courseRow.createdAt, &courseRow.updatedAt, &courseRow.publishedAt, &courseRow.instructorID,
 			&storedModuleID, &moduleTitle, &lessonID, &lessonTitle, &videoState,
-			&position, &completed, &clientSequence,
+			&duration, &position, &completed, &clientSequence,
 		); err != nil {
 			return domain.LearningCourse{}, persistenceError(err)
 		}
@@ -95,10 +97,19 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			moduleID = storedModuleID
 		}
 		if lessonID != "" {
-			result.Modules[len(result.Modules)-1].Lessons = append(result.Modules[len(result.Modules)-1].Lessons, domain.LearningLesson{
+			durationValue, err := duration.Float64Value()
+			if err != nil {
+				return domain.LearningCourse{}, persistenceError(err)
+			}
+			var durationSeconds *float64
+			if durationValue.Valid {
+				durationSeconds = &durationValue.Float64
+			}
+			lesson := domain.NewLearningLesson(domain.LearningLesson{
 				ID: lessonID, Title: lessonTitle, VideoState: domain.LearningVideoState(videoState),
 				Position: position, Completed: completed, ClientSequence: clientSequence,
-			})
+			}, durationSeconds)
+			result.Modules[len(result.Modules)-1].Lessons = append(result.Modules[len(result.Modules)-1].Lessons, lesson)
 		}
 	}
 	if err := rows.Err(); err != nil {

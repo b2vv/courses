@@ -64,6 +64,42 @@ func TestB27MissingProgressUsesConcreteZeroValues(t *testing.T) {
 	}
 }
 
+func TestLearningLessonPositionUsesReadyAssetDuration(t *testing.T) {
+	durationSeconds := 480.0
+	lesson := learningLesson(firstLessonID, false, coursedomain.VideoReady)
+	lesson.Position = 2050
+
+	got := coursedomain.NewLearningLesson(lesson, &durationSeconds)
+
+	if got.Position != 480 {
+		t.Fatalf("position=%v want 480", got.Position)
+	}
+}
+
+func TestLearningLessonPositionIsUnchangedWithoutReadyDuration(t *testing.T) {
+	durationSeconds := 480.0
+	for _, test := range []struct {
+		name            string
+		state           coursedomain.LearningVideoState
+		durationSeconds *float64
+	}{
+		{name: "no asset", state: coursedomain.VideoAbsent, durationSeconds: nil},
+		{name: "processing asset with duration", state: coursedomain.VideoProcessing, durationSeconds: &durationSeconds},
+		{name: "ready asset with null duration", state: coursedomain.VideoReady, durationSeconds: nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			lesson := learningLesson(firstLessonID, false, test.state)
+			lesson.Position = 2050
+
+			got := coursedomain.NewLearningLesson(lesson, test.durationSeconds)
+
+			if got.Position != 2050 {
+				t.Fatalf("position=%v want 2050", got.Position)
+			}
+		})
+	}
+}
+
 func TestO4CourseVisibilityUsesSharedCases(t *testing.T) {
 	for _, test := range coursevisibility.Cases() {
 		t.Run(test.Name, func(t *testing.T) {

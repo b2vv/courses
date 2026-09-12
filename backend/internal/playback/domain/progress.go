@@ -60,6 +60,8 @@ func ApplyProgress(saved Progress, update ProgressUpdate, durationSeconds *float
 	}
 
 	positionSeconds := update.positionSeconds
+	// NewLearningLesson deliberately repeats this bound at the course read boundary; both use
+	// only the duration of a ready asset.
 	if durationSeconds != nil && positionSeconds > *durationSeconds {
 		positionSeconds = *durationSeconds
 	}
