@@ -35,6 +35,23 @@ assertion.
 
 **Update 2026-09-12, after T14 — ordered `make check` EXIT=0.** B23 and R30 are now verified, so the evidence supports **91/102**. B36 is verified in part: 503 and `Retry-After` in smoke; its "no media bytes" clause moved to e2e together with six rows whose proof level changed (`docs/playback/plan.md`, amendment `8cc1d72`), and that clause stays open. Rows still not verified at the planned outcome: **B07, B08, B20, B21, B21a, B22, B28, B31, R23 and R34**, plus the open clause of **B36**. B07 turned out to be a product gap, not missing evidence: the learning read returns the stored position without bounding it by the current video's duration. The paragraph above is kept as the record at T13. The gate ran before the T14 commit, on the content that commit records.
 
+**Update 2026-09-13, after B07 — the row was a defect, and it is fixed.** B07 is now verified, so the
+evidence supports **92/102**. The write path bounded a saved position by the current asset's duration and
+the read path did not, so replacing a 34:10 video with an 8:00 one left the lesson opening at its end and
+unable to advance on its own; one manual seek backwards still recovered it. The bound now lives beside the
+existing position validation in the course domain, duration is passed in and not stored — `LearningLesson`
+keeps its shape, so `openapi.yaml` and the generated models are untouched — and both boundaries read only a
+`ready` asset, matching `loadLessonDuration`, so the two deliberate copies of the policy cannot disagree
+about which asset defines the duration. Fixed and gated in `819dcac`; tracked as its own row in
+`work/tasks.md` rather than inside T15, which did not do it.
+
+Measured on the tree of `819dcac`: the ordered `make check` was green through `integration`, including
+`courses/internal/course/adapters/postgres` **ok 14.982s** — the level B07's row assigns — and then killed by
+the host running out of memory during `e2e`. The tail was rerun as `seed-identities → seed → smoke → e2e`,
+**60 passed**, because a killed browser run had already consumed a disposable identity fixture and rerunning
+`e2e` alone reported that consumption as a failure. Stated that way rather than as a green `make check`: the
+tree was unchanged between the two runs, the database was not.
+
 The reviewer ran the ordered `make check` on 2026-09-12 against the tree that became `0959fca`
 (T12) and `efc9851` (T11) — the gate preceded those commits and saw that content, not the
 committed state:
@@ -68,7 +85,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B04 | Failed video has an explicit state | T7 component test; frontend gate | matched |
 | B05 | 95.0 completes and 94.9 does not | T3 domain boundary tests; Go gate | matched |
 | B06 | NULL duration saves position without completion or clamp | T3 domain and PostgreSQL integration; Go/integration gate | matched |
-| B07 | Shorter replacement clamps a saved position | No task report contains the required integration observation | **not verified** |
+| B07 | Shorter replacement clamps a saved position | `work/report-b07.md`; the course postgres integration package green against real PostgreSQL, fix in `819dcac` | verified (gate) |
 | B08 | Replacing video preserves the watched mark | T2 explicitly did not close it; no later report supplies the integration observation | **not verified** |
 | B09 | 90 s of playing time produces exactly three writes | T9 frontend cadence test; frontend gate | matched |
 | B10 | Pause, seek, hide and navigation each write | T9 frontend event tests; frontend gate | matched |
