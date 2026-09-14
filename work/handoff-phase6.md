@@ -356,3 +356,37 @@ Worth checking in one's own tools rather than assuming: a gate check written as
 `grep -c "FAIL\|Error"` over a build log has exactly this shape and is only correct while no
 benign line carries either word.
 
+
+## Between a claim and what justifies it, the world moves (2026-09-14)
+
+Four statements from two sessions, each true of something narrower than what it said:
+
+| Said | Measured | Gap |
+|---|---|---|
+| "the host is free" | `grep -c '[c]odex exec'` in **my own** session returned 0 | scope: the host holds other projects' processes I never looked for |
+| "the tree has not changed, so the rest of the gate still holds" | `git status` was clean | invariant: the *database* had changed — a killed run had already consumed a disposable fixture |
+| "launching T15, the host is mine now" | nothing yet — the guard had not run | order: the guard then refused, because a foreign Codex was running |
+| "the gate is already running" | nothing yet — sent in parallel with the launch | order: the launch refused in the same moment |
+
+Two distinct mistakes, and they need different fixes.
+
+**Wrong scope.** A claim about a shared resource must be measured at the scope of the resource.
+"Nothing of mine is running" is not "nothing is running", and "the files are unchanged" is not
+"the state is unchanged". Ask what the claim would have to be false about, then measure *that*.
+
+**Claim before evidence.** A statement about the outcome of an action cannot be composed in
+parallel with the action. It depends on the result by its nature, so it must be written after
+seeing the output — not after starting the thing that produces it. This is cheap to obey and
+silent to violate: the message reads identically whether the launch succeeded or refused.
+
+Both are the discipline we apply to tests, turned on our own reporting. A test that asserts
+before the effect lands is a flake; a claim that asserts before the evidence lands is a false
+report, and it costs more, because the reader has no run to re-read.
+
+### A smaller one, same day: zsh does not split an unquoted variable
+
+`docker stop $ids` with twenty-one ids passed them as a **single argument** and stopped nothing.
+The Bash tool runs commands under zsh, which — unlike sh and bash — performs no word splitting
+on unquoted parameter expansion. Scripts invoked as `sh script.sh` are unaffected; only inline
+commands are. Use a pipeline into `xargs`, or `${=ids}` to ask zsh for splitting explicitly.
+
