@@ -467,22 +467,31 @@ read `$?` immediately; a log is for reading afterwards, never for deciding wheth
 passed.
 
 
-## An empty variable promotes a path to its parent (2026-09-14)
+## Two guards, two different failure modes (2026-09-14)
 
-B28 is a destructive row: it empties an asset's HLS directory to prove the edge answers 404 when
+B28 is a destructive row: it empties an asset's HLS directory to prove the edge answers 404 while
 the database still says `ready`. The path is assembled from an id — `/media/hls/<videoId>` — and
-Codex, reviewing its own patch, added a canonical-UUID check immediately before the `rm`.
+two separate guards ended up in front of the `rm`, for two separate reasons.
 
-Without it an empty `videoId` yields `/media/hls/`, and the command clears **every** asset on the
-volume. Nothing would have failed loudly: the test would pass, and every later test needing media
-would fail for reasons that look unrelated — in a serial project, as a cascade with no obvious
-first cause.
+**Preconditions** — `test -d`, `test -f "$1/master.m3u8"`, non-empty listing, under `sh -eu` — were
+asked for so the deletion could prove the directory *was* an asset beforehand. They also happen to
+stop an **empty** id: `/media/hls//master.m3u8` does not exist, so the script exits before `rm`.
 
-The rule is narrow and worth keeping: **a path built by interpolation must validate its variable
-immediately before the destructive call**, not upstream where the value was obtained. Upstream
-validation protects the value; only the call site protects the path. The two are different
-because an empty string is a legal value almost everywhere and a catastrophic path exactly here.
+**Canonical id form**, checked immediately before the `rm`, is what the preconditions cannot give.
+An id like `../<another videoId>` satisfies every precondition — that directory is a real asset,
+with a real `master.m3u8` — and the deletion lands on the wrong one. Only validating the shape of
+the id at the call site rules that out.
 
-Worth noting where it came from: not from review, and not from the brief, which asked for the
-deletion without saying how to bound it. The agent found it re-reading its own patch.
+So the rule holds but needs its reason stated precisely: **a path built by interpolation validates
+its variable at the destructive call**, because upstream checks constrain what the directory *is*,
+never which directory it *is*.
 
+An earlier version of this entry claimed the empty-id catastrophe was what the id check prevented.
+That was wrong: by then the preconditions already stopped it. Worth keeping the correction visible,
+because the interesting part is what it reveals — the empty-id path was closed **accidentally**, by
+a requirement written for an unrelated purpose. Accident is not design, and recording it as design
+would have left the next destructive test believing it inherits a protection nobody wrote.
+
+Provenance, corrected as well: the id-form check came from neither review nor the brief, which
+asked for the deletion without bounding it. The preconditions came from review, for another reason
+entirely.
