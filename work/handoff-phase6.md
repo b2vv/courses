@@ -423,3 +423,33 @@ Worth remembering the next time closing acceptance rows looks like bookkeeping. 
 rows were not bookkeeping at all, and the only thing that distinguished them from the other
 eleven was that someone sat down to make them observable.
 
+
+## A line number is a measurement; a symbol name is a property (2026-09-14)
+
+Four citations rotted in two days, and the last one rotted inside a conversation:
+
+- `work/report-t10.md:240` cited `LessonPlayer.tsx:411-412` for the B-7 fix. The handlers are at
+  426 and 437 now; the report was written before the file moved.
+- T14's mutation evidence cited `boundaries_test.go:72`. R30 was then moved to
+  `safe_request_logs_test.go`, so the coordinates point at the layer-boundary rule instead.
+- `work/backlog.md`'s B-3 entry cited `openapi.yaml:633` and `:653` for the lesson and module
+  caps. They are at 743 and 761; the divergence it describes is still real, but nobody following
+  the reference would find it.
+- And this session cited `:118` and `:361` to a peer while an agent was editing that very file.
+  They were true when read and wrong nine added lines later — minutes, not days.
+
+A line number records where something sat when someone looked. A symbol name — `pendingTimeRef`
+inside `loadSession`, the effect whose dependencies are `[loadSession, restartAt]`,
+`CanBeViewedBy` — is a property of the code and survives every edit that does not change the
+thing being cited. When it *does* change, the name stops resolving, which is a loud failure
+rather than a silent misdirection.
+
+The perishability is not uniform, and the worst case is the one we keep creating: **a brief
+written for an agent that is about to edit the file it cites**. Those coordinates are stale
+before the work is reviewed. Cite the symbol, and treat any line number as a convenience that
+carries a date.
+
+Note also that our register reconciliation checked only whether entries were *closed*, never
+whether their references still resolved. Registers rot along two independent axes, and we
+verified one.
+
