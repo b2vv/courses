@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phases 6–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phase 6 завершено 2026-09-14 за приймальними рядками: **102/102**, упорядкований `make check` exit 0 (380 фронт-тестів, 48 Go-пакетів, e2e 65/65), звіт `docs/playback/report.md`. Phases 7–8 не починалися.
 
 ## Phase 3 — Identity
 

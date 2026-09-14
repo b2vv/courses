@@ -306,15 +306,18 @@ remain readable UI states rather than blank pages.
   observation is lost. This narrow loss window avoids double counting when a response is lost.
 - **P12 has no single wire-crossing test.** Frontend proves the field is sent on a denied mint;
   backend proves a received field increments the series; shared `openapi.yaml` binds the two.
-- **Thirteen planned observations remain unverified:** B07, B08, B20, B21, B21a, B22, B23,
-  B28, B31, B36, R23, R30 and R34. Their exact missing evidence is recorded in §2.
+- **All 102 planned observations are verified as of 2026-09-14** (T14–T16 and B07, recorded in the dated
+  updates of §2). At T13 thirteen were not: B07, B08, B20, B21, B21a, B22, B23, B28, B31, B36, R23, R30 and R34.
+  Two of those, B07 and B31, were product defects rather than missing tests, and six were moved to `e2e` by
+  amendment `8cc1d72`. The limitations in this section are unaffected by that closure.
 - **One audio rendition only; no AV1 rendition.** Multi-language audio delivery is not built,
   and the AV1 work is telemetry/probe only.
 - **Still out of scope:** payments, orders and enrolment; transcripts; comments/discussions;
   instructor workspace; “my courses”; notes, bookmarks, search, offline mode and certificates;
   frontend observability; TLS/S01/S02; and production deployment. None is claimed here.
 
-The next task is to rebuild the stale 2026-09-05 `work/AGENDA.md` against this phase close,
-then take the selected Phase 7 slice through `spec-flow`. The roadmap currently names
+The phase is closed by its rows. The next task is to rebuild `work/AGENDA.md` and
+`work/CTO-RESEARCH.md` — both last rebuilt on `b913e81`, before the close, and both still calling
+the phase open — then take the selected Phase 7 slice through `spec-flow`. The roadmap currently names
 transcripts and synchronized document links, with student video comment threads added by
 `work/PRODUCT-BRIEF.md` §24.4; none of that roadmap work is delivered by this phase.
