@@ -466,3 +466,23 @@ verdict is read, the command must not be piped, or `pipefail` must be set. Redir
 read `$?` immediately; a log is for reading afterwards, never for deciding whether something
 passed.
 
+
+## An empty variable promotes a path to its parent (2026-09-14)
+
+B28 is a destructive row: it empties an asset's HLS directory to prove the edge answers 404 when
+the database still says `ready`. The path is assembled from an id — `/media/hls/<videoId>` — and
+Codex, reviewing its own patch, added a canonical-UUID check immediately before the `rm`.
+
+Without it an empty `videoId` yields `/media/hls/`, and the command clears **every** asset on the
+volume. Nothing would have failed loudly: the test would pass, and every later test needing media
+would fail for reasons that look unrelated — in a serial project, as a cascade with no obvious
+first cause.
+
+The rule is narrow and worth keeping: **a path built by interpolation must validate its variable
+immediately before the destructive call**, not upstream where the value was obtained. Upstream
+validation protects the value; only the call site protects the path. The two are different
+because an empty string is a legal value almost everywhere and a catastrophic path exactly here.
+
+Worth noting where it came from: not from review, and not from the brief, which asked for the
+deletion without saying how to bound it. The agent found it re-reading its own patch.
+
