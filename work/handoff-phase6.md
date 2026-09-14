@@ -453,3 +453,16 @@ Note also that our register reconciliation checked only whether entries were *cl
 whether their references still resolved. Registers rot along two independent axes, and we
 verified one.
 
+
+### Postscript to the observers: a pipeline reports the last command's status
+
+A gate verification run through `| tail` showed `EXIT=0` while the command inside had failed.
+Measured here rather than assumed: `(exit 7) | tail -1; echo $?` prints **0**; the same command
+without the pipe prints **7**; with `set -o pipefail` the pipe prints **7** again.
+
+It belongs with the others because it is the same shape once more — the thing observing the run
+stands between you and the run's own answer, and it answers in its own voice. Anywhere a gate's
+verdict is read, the command must not be piped, or `pipefail` must be set. Redirect to a file and
+read `$?` immediately; a log is for reading afterwards, never for deciding whether something
+passed.
+
