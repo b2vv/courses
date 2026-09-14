@@ -135,6 +135,37 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("B08 completed mark survives video replacement", func(t *testing.T) {
+		var oldGenerationEvicted bool
+		var currentGeneration int
+		if err := pool.QueryRow(ctx, `
+			SELECT old_asset.evicted_at IS NOT NULL, current_asset.generation
+			FROM video_assets AS old_asset
+			JOIN video_assets AS current_asset ON current_asset.lesson_id=old_asset.lesson_id
+			WHERE old_asset.lesson_id=$1 AND old_asset.generation=1
+				AND current_asset.generation=2 AND current_asset.evicted_at IS NULL`, learningB08Lesson).Scan(&oldGenerationEvicted, &currentGeneration); err != nil {
+			t.Fatal(err)
+		}
+		if !oldGenerationEvicted || currentGeneration != 2 {
+			t.Fatalf("B08 replacement fixture oldEvicted=%v currentGeneration=%d", oldGenerationEvicted, currentGeneration)
+		}
+
+		course, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-b08")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(course.Modules) != 1 || len(course.Modules[0].Lessons) != 1 {
+			t.Fatalf("B08 program=%+v", course.Modules)
+		}
+		lesson := course.Modules[0].Lessons[0]
+		if lesson.ID != learningB08Lesson {
+			t.Fatalf("B08 replacement lesson=%+v", lesson)
+		}
+		if !lesson.Completed {
+			t.Fatalf("B08 replacement completed=%v want true", lesson.Completed)
+		}
+	})
+
 	t.Run("non-ready asset duration does not clamp", func(t *testing.T) {
 		course, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-b07")
 		if err != nil {
@@ -194,9 +225,11 @@ const (
 	learningEmptyCourseID         = "51000000-0000-4000-8000-000000000002"
 	learningArchiveCourse         = "51000000-0000-4000-8000-000000000003"
 	learningB07Course             = "51000000-0000-4000-8000-000000000004"
+	learningB08Course             = "51000000-0000-4000-8000-000000000005"
 	learningModuleID              = "61000000-0000-4000-8000-000000000001"
 	learningArchiveModule         = "61000000-0000-4000-8000-000000000002"
 	learningB07Module             = "61000000-0000-4000-8000-000000000003"
+	learningB08Module             = "61000000-0000-4000-8000-000000000004"
 	learningLessonOne             = "71000000-0000-4000-8000-000000000001"
 	learningLessonTwo             = "71000000-0000-4000-8000-000000000002"
 	learningLessonThree           = "71000000-0000-4000-8000-000000000003"
@@ -205,6 +238,7 @@ const (
 	learningB07ShortLesson        = "71000000-0000-4000-8000-000000000006"
 	learningB07ProcessingLesson   = "71000000-0000-4000-8000-000000000007"
 	learningB07NullDurationLesson = "71000000-0000-4000-8000-000000000008"
+	learningB08Lesson             = "71000000-0000-4000-8000-000000000009"
 )
 
 func learningFixtures() []string {
@@ -246,5 +280,16 @@ func learningFixtures() []string {
 			('82000000-0000-4000-8000-000000000002','` + learningB07ShortLesson + `',2,'ready',1,1,'short-new.mp4',ARRAY['360p'],NULL,now()+interval '1 day',NULL,now(),now(),480),
 			('82000000-0000-4000-8000-000000000003','` + learningB07ProcessingLesson + `',1,'processing',1,1,'processing.mp4','{}',NULL,now()+interval '1 day',NULL,now(),now(),480),
 			('82000000-0000-4000-8000-000000000004','` + learningB07NullDurationLesson + `',1,'ready',1,1,'unknown.mp4',ARRAY['360p'],NULL,now()+interval '1 day',NULL,now(),now(),NULL)`,
+		`INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at) VALUES
+			('` + learningB08Course + `','` + learningOwnerID + `','learning-b08','Learning B08','Learning B08 summary','Learning B08 description','published',now())`,
+		`INSERT INTO course_modules(id,course_id,title,position) VALUES
+			('` + learningB08Module + `','` + learningB08Course + `','B08 module',0)`,
+		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES
+			('` + learningB08Lesson + `','` + learningB08Module + `','Watched replacement','',0)`,
+		`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES
+			('` + learningViewerID + `','` + learningB08Lesson + `',95,now()-interval '2 hours',8,now()-interval '2 hours')`,
+		`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,failure_reason,expires_at,evicted_at,created_at,updated_at,duration_seconds) VALUES
+			('83000000-0000-4000-8000-000000000001','` + learningB08Lesson + `',1,'ready',1,1,'watched-old.mp4',ARRAY['360p'],NULL,now()+interval '1 day',now()-interval '1 hour',now()-interval '3 hours',now()-interval '1 hour',100),
+			('83000000-0000-4000-8000-000000000002','` + learningB08Lesson + `',2,'ready',1,1,'replacement-new.mp4',ARRAY['360p'],NULL,now()+interval '1 day',NULL,now()-interval '1 hour',now()-interval '1 hour',100)`,
 	}
 }

@@ -20,6 +20,7 @@ const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fi
 const namespace = `e2e-playback-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const crossCourseNamespace = `${namespace}-cross-course`;
 const adminID = '40000000-0000-4000-8000-000000000003';
+const instructorID = '40000000-0000-4000-8000-000000000002';
 const moduleID = randomUUID();
 const lessonID = randomUUID();
 const secondLessonID = randomUUID();
@@ -28,6 +29,49 @@ const thirdLessonID = randomUUID();
 const fourthLessonID = randomUUID();
 const crossCourseModuleID = randomUUID();
 const crossCourseLessonID = randomUUID();
+
+const primaryCourseDraft = {
+  slug: namespace,
+  title: `T7 playback ${namespace}`,
+  summary: 'A real HLS playback fixture.',
+  description: 'Run-scoped course for the T7 browser recovery table.',
+  instructorId: adminID,
+};
+
+const primaryCourseModules = [
+  {
+    id: moduleID,
+    title: `Module one ${namespace}`,
+    lessons: [
+      {
+        id: lessonID,
+        title: `First lesson ${namespace}`,
+        description: 'HLS ownership and recovery.',
+      },
+      {
+        id: secondLessonID,
+        title: `Second lesson ${namespace}`,
+        description: 'The next curriculum step.',
+      },
+    ],
+  },
+  {
+    id: secondModuleID,
+    title: `Module two ${namespace}`,
+    lessons: [
+      {
+        id: thirdLessonID,
+        title: `Third lesson ${namespace}`,
+        description: 'A later curriculum step.',
+      },
+      {
+        id: fourthLessonID,
+        title: `Fourth lesson ${namespace}`,
+        description: 'The final curriculum step.',
+      },
+    ],
+  },
+];
 
 type CourseToken = { readonly id: string; readonly updatedAt: string };
 type UploadTarget = {
@@ -379,16 +423,9 @@ test.describe('T7 playback milestone', () => {
     if (baseURL === undefined) throw new Error('Playwright baseURL is required');
     const context = await adminContext(browser, baseURL);
     const page = await context.newPage();
-    const draft = {
-      slug: namespace,
-      title: `T7 playback ${namespace}`,
-      summary: 'A real HLS playback fixture.',
-      description: 'Run-scoped course for the T7 browser recovery table.',
-      instructorId: adminID,
-    };
     try {
       const created = await context.request.post('/api/v1/admin/courses', {
-        data: draft,
+        data: primaryCourseDraft,
         headers: { Origin: new URL(baseURL).origin },
       });
       expect(created.status()).toBe(201);
@@ -396,41 +433,8 @@ test.describe('T7 playback milestone', () => {
       const saved = await context.request.put(`/api/v1/admin/courses/${course.id}`, {
         data: {
           expectedUpdatedAt: course.updatedAt,
-          course: draft,
-          modules: [
-            {
-              id: moduleID,
-              title: `Module one ${namespace}`,
-              lessons: [
-                {
-                  id: lessonID,
-                  title: `First lesson ${namespace}`,
-                  description: 'HLS ownership and recovery.',
-                },
-                {
-                  id: secondLessonID,
-                  title: `Second lesson ${namespace}`,
-                  description: 'The next curriculum step.',
-                },
-              ],
-            },
-            {
-              id: secondModuleID,
-              title: `Module two ${namespace}`,
-              lessons: [
-                {
-                  id: thirdLessonID,
-                  title: `Third lesson ${namespace}`,
-                  description: 'A later curriculum step.',
-                },
-                {
-                  id: fourthLessonID,
-                  title: `Fourth lesson ${namespace}`,
-                  description: 'The final curriculum step.',
-                },
-              ],
-            },
-          ],
+          course: primaryCourseDraft,
+          modules: primaryCourseModules,
         },
         headers: { Origin: new URL(baseURL).origin },
       });
@@ -1090,7 +1094,7 @@ test.describe('T7 playback milestone', () => {
       expect(successfulHeartbeats).toBeGreaterThan(heartbeatsAtPause);
     });
 
-    test('P13 B15 B32 takeover stops the first device and denies the same segment immediately', async ({
+    test('P13 B15 B31 B32 takeover stops the first device and lets it retake the slot', async ({
       page,
       browser,
       baseURL,
@@ -1102,7 +1106,7 @@ test.describe('T7 playback milestone', () => {
           isMediaRequest(response.request()) &&
           new URL(response.url()).pathname.endsWith('.m4s'),
       );
-      await openAndPlay(page);
+      const firstSession = await openAndPlay(page);
       const segmentPath = new URL((await served).url()).pathname;
       const beforeTakeover = await page.request.get(segmentPath);
       expect(beforeTakeover.status()).toBe(200);
@@ -1113,7 +1117,13 @@ test.describe('T7 playback milestone', () => {
       });
       try {
         const secondPage = await secondContext.newPage();
-        await openAndPlay(secondPage);
+        const secondSession = await openAndPlay(secondPage);
+        const secondSegmentPath = segmentPath.replace(
+          firstSession.playbackId,
+          secondSession.playbackId,
+        );
+        const beforeRetake = await secondPage.request.get(secondSegmentPath);
+        expect(beforeRetake.status()).toBe(200);
         const afterTakeover = await page.request.get(segmentPath);
         expect(afterTakeover.status()).toBe(403);
         await expect(
@@ -1122,6 +1132,32 @@ test.describe('T7 playback milestone', () => {
           }),
         ).toBeVisible();
         await expect(secondPage.getByRole('button', { name: 'Пауза' })).toBeVisible();
+
+        const reminted = page.waitForResponse(
+          (response) =>
+            new URL(response.url()).pathname === '/api/v1/playback/sessions' &&
+            response.request().method() === 'POST',
+        );
+        await page.getByRole('button', { name: 'Почати перегляд знову' }).click();
+        const remintedResponse = await reminted;
+        expect(remintedResponse.status()).toBe(201);
+        const retakenSession = playbackSession(await remintedResponse.json());
+
+        await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
+        const retakenSegmentPath = segmentPath.replace(
+          firstSession.playbackId,
+          retakenSession.playbackId,
+        );
+        const afterRetake = await page.request.get(retakenSegmentPath);
+        expect(afterRetake.status()).toBe(200);
+
+        await expect(
+          secondPage.getByRole('heading', {
+            name: 'Відео відтворюється на іншому пристрої.',
+          }),
+        ).toBeVisible();
+        const displacedSegment = await secondPage.request.get(secondSegmentPath);
+        expect(displacedSegment.status()).toBe(403);
       } finally {
         await secondContext.close();
       }
@@ -1445,6 +1481,58 @@ test.describe('T7 playback milestone', () => {
           name: 'Перегляд зупинено. Курс більше недоступний.',
         }),
       ).toBeVisible();
+    });
+  });
+
+  test.describe('as the course instructor', () => {
+    test.use({ storageState: authStatePath('instructor') });
+
+    test('R34 a non-admin owner plays the archived course while another non-admin is refused', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
+      if (baseURL === undefined || course === undefined)
+        throw new Error('Playback course fixture is unavailable');
+      const origin = new URL(baseURL).origin;
+      const context = await adminContext(browser, baseURL);
+      try {
+        const reassigned = await context.request.put(`/api/v1/admin/courses/${course.id}`, {
+          data: {
+            expectedUpdatedAt: course.updatedAt,
+            course: { ...primaryCourseDraft, instructorId: instructorID },
+            modules: primaryCourseModules,
+          },
+          headers: { Origin: origin },
+        });
+        expect(reassigned.status()).toBe(200);
+        course = courseToken(await reassigned.json());
+      } finally {
+        await context.close();
+      }
+
+      const segment = page.waitForResponse(
+        (response) =>
+          isMediaRequest(response.request()) &&
+          /\.m4s$/.test(new URL(response.url()).pathname) &&
+          response.status() === 200,
+      );
+      await openAndPlay(page);
+      expect((await segment).status()).toBe(200);
+
+      const otherContext = await browser.newContext({
+        baseURL,
+        storageState: authStatePath('student'),
+      });
+      try {
+        const refused = await otherContext.request.post('/api/v1/playback/sessions', {
+          data: { lessonId: lessonID },
+          headers: { Origin: origin },
+        });
+        expect([403, 404]).toContain(refused.status());
+      } finally {
+        await otherContext.close();
+      }
     });
   });
 

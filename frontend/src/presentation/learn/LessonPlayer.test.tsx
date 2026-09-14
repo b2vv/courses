@@ -551,6 +551,88 @@ describe('lesson player states', () => {
     expect(heartbeats.filter(({ reason }) => reason === 'tick')).toHaveLength(0);
   });
 
+  it('B31 recreates media on the remounted video before retrying after takeover', async () => {
+    rstest.useFakeTimers();
+    const takeoverSession = {
+      ...session,
+      heartbeatSeconds: 1,
+      ownershipTtlSeconds: 3,
+    };
+    const createdVideos: HTMLVideoElement[] = [];
+    const playedVideos: HTMLVideoElement[] = [];
+    const destroyedVideos: HTMLVideoElement[] = [];
+    let plays = 0;
+    const playerActions = actions({
+      play: async () => {
+        plays += 1;
+        return { ok: true, value: takeoverSession };
+      },
+      heartbeat: async () => ({ ok: false, error: { code: 'playback_taken_over' } }),
+    });
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      createdVideos.push(video);
+      Object.defineProperty(video, 'duration', {
+        configurable: true,
+        value: 100,
+      });
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => {
+          playedVideos.push(video);
+          return Promise.resolve();
+        },
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {
+          destroyedVideos.push(video);
+        },
+      };
+    };
+    const rendered = renderPlayer('ready', playerActions, createMedia);
+    const firstVideo = rendered.container.querySelector('video');
+    if (firstVideo === null) throw new Error('Ready lesson did not render a video element');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+    // Widened on purpose: as the literal type 47 the guard below is a TS2367 error, and removing
+    // it lets a later fixture edit turn the position assertion into 12 === 12 without notice.
+    const resumePosition: number = 47;
+    if (resumePosition === 0 || resumePosition === lesson('ready').position)
+      throw new Error(
+        'B31 resume position equals the fixture start point; the position assertion would be vacuous',
+      );
+    firstVideo.currentTime = resumePosition;
+    fireEvent.timeUpdate(firstVideo);
+    const positionControl = screen.getByRole('slider', { name: 'Playback position' });
+    if (!(positionControl instanceof HTMLInputElement))
+      throw new Error('Playback position is not an input');
+    expect(positionControl.value).toBe(String(resumePosition));
+    fireEvent.playing(firstVideo);
+    await act(async () => rstest.advanceTimersByTimeAsync(1_000));
+    screen.getByRole('heading', {
+      name: 'This video is playing on another device.',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start playback again' }));
+    await act(async () => {});
+    const remountedVideo = rendered.container.querySelector('video');
+    if (remountedVideo === null || remountedVideo === firstVideo)
+      throw new Error('Retry did not remount a new video element');
+
+    expect(createdVideos).toHaveLength(2);
+    expect(createdVideos[1]).toBe(remountedVideo);
+    expect(destroyedVideos).toEqual([firstVideo]);
+    expect(playedVideos).toEqual([firstVideo, remountedVideo]);
+    expect(plays).toBe(2);
+    expect(remountedVideo.currentTime).toBe(resumePosition);
+  });
+
   it('R28 stops scheduling and sending heartbeats after a 409 takeover', async () => {
     rstest.useFakeTimers();
     let heartbeats = 0;

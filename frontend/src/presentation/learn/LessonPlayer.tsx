@@ -45,6 +45,11 @@ function finiteTime(value: number): number {
 export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: LessonPlayerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const attachVideo = useCallback((video: HTMLVideoElement | null) => {
+    videoRef.current = video;
+    setVideoElement(video);
+  }, []);
   const mediaRef = useRef<PlaybackMedia | undefined>(undefined);
   const sessionRef = useRef<PlaybackSession | undefined>(undefined);
   const clientSeqRef = useRef(lesson.clientSeq + 1);
@@ -219,7 +224,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
   );
 
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoElement;
     if (lesson.videoState !== 'ready' || video === null) return;
     const media = createMedia(video, {
       onReady() {
@@ -249,7 +254,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
       media.destroy();
       mediaRef.current = undefined;
     };
-  }, [createMedia, handleMediaError, lesson.videoState]);
+  }, [createMedia, handleMediaError, lesson.videoState, videoElement]);
 
   const heartbeatNow = useCallback(
     async (reason: PlaybackHeartbeatReason): Promise<'continue' | 'stop'> => {
@@ -362,7 +367,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     if (restartAt === null || mediaRef.current === undefined) return;
     setRestartAt(null);
     void loadSession(restartAt, 'initial');
-  }, [loadSession, restartAt]);
+  }, [loadSession, restartAt, videoElement]);
 
   if (lesson.videoState === null) return <EmptyState title={t('learn.video.noVideo')} />;
   if (lesson.videoState === 'processing') return <EmptyState title={t('learn.video.processing')} />;
@@ -415,7 +420,7 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
       <div className="lesson-player-frame">
         {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- T7 has no caption source contract; an empty track would be misleading. */}
         <video
-          ref={videoRef}
+          ref={attachVideo}
           aria-label={lesson.title}
           onDurationChange={(event) => setDuration(finiteTime(event.currentTarget.duration))}
           onTimeUpdate={(event) => {

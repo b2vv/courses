@@ -52,6 +52,34 @@ the host running out of memory during `e2e`. The tail was rerun as `seed-identit
 `e2e` alone reported that consumption as a failure. Stated that way rather than as a green `make check`: the
 tree was unchanged between the two runs, the database was not.
 
+**Update 2026-09-14, after T15 — B08, B31 and R34 are verified; B31 was a defect, and it is fixed.** The
+evidence supports **95/102**. Rows still not verified at the planned outcome: **B20, B21, B21a, B22, B28 and
+R23**, plus the open "no media bytes" clause of **B36** — the set T16 carries.
+
+- **B08** — `learning_integration_test.go`, subtest `B08 completed mark survives video replacement`, against
+  PostgreSQL; its precondition asserts the first asset evicted and the second active before the mark is read.
+- **R34** — `playback.spec.ts`, `R34 a non-admin owner plays the archived course while another non-admin is
+  refused`: the archived course is reassigned to a non-admin instructor, the owner receives segment 200, and a
+  student minting the same lesson is refused. Unlike P11, the player here is not an administrator.
+- **B31** — the extended `P13 B15 B31 B32 takeover …`: the displaced device retakes the slot, its segment
+  returns 200, and the device it displaced is refused. The first gate with this assertion was **red on the
+  product**: retry after any error state minted a new session — taking the slot and displacing the other
+  device — while the media stayed bound to the `<video>` unmounted with the error state, so the player stayed
+  dead until reload. `LessonPlayer` now attaches the element through a callback ref, and both the media effect
+  and the retry effect follow the mounted element. A component test fails without the fix (`length 2 but got
+  1`) and asserts media on the remounted element, exactly two mints, and the position after retry: 47 s against
+  a fixture start of 12 s, so neither a reset nor a stale start point passes (a mutation restoring from 0 fails
+  with `expected +0 to be 47`). A race between media creation and the new mint cannot arise: `onReady` follows
+  only `load`, which runs inside the mint after `loadSession` has written the resume point.
+
+The ordered `make check` ran on the T15 tree before one later test-only change: `GATE_EXIT=0`; frontend unit
+tests **380 passed, 0 failed**; Go `-race` **48 packages ok**, including `courses/internal/course/adapters/postgres`
+**ok 11.890s**; e2e **61 passed, 0 failed** (R34 is the one row added since T14). After the gate a guard was added
+to the B31 component test, failing with its own message if the test's position ever equals the fixture start
+point (set to 12 s, it fails with that message), and checked with `format:check`, `lint`, `typecheck` and the
+full unit suite; the other targets cannot see
+it, because a unit test file is not part of the Go, generated-code, production build or browser graphs.
+
 The reviewer ran the ordered `make check` on 2026-09-12 against the tree that became `0959fca`
 (T12) and `efc9851` (T11) — the gate preceded those commits and saw that content, not the
 committed state:
@@ -86,7 +114,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B05 | 95.0 completes and 94.9 does not | T3 domain boundary tests; Go gate | matched |
 | B06 | NULL duration saves position without completion or clamp | T3 domain and PostgreSQL integration; Go/integration gate | matched |
 | B07 | Shorter replacement clamps a saved position | `work/report-b07.md`; the course postgres integration package green against real PostgreSQL, fix in `819dcac` | verified (gate) |
-| B08 | Replacing video preserves the watched mark | T2 explicitly did not close it; no later report supplies the integration observation | **not verified** |
+| B08 | Replacing video preserves the watched mark | T15 PostgreSQL integration: the completed mark survives eviction of the first asset (precondition asserted) | **verified** |
 | B09 | 90 s of playing time produces exactly three writes | T9 frontend cadence test; frontend gate | matched |
 | B10 | Pause, seek, hide and navigation each write | T9 frontend event tests; frontend gate | matched |
 | B11 | Stale `clientSeq` cannot rewind progress | T9 PostgreSQL integration; integration gate | matched |
@@ -111,7 +139,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B28 | DB `ready` with missing files gives edge 404 and visible error | T5 delegated this to T7; T7 proves only the UI 404 directive, not the edge/filesystem precondition | **not verified** |
 | B29 | A new session writes on its first heartbeat | T9 PostgreSQL/integration sequence seeding; integration gate | matched |
 | B30 | Zero probe duration persists NULL and cannot complete | T2 worker/PostgreSQL integration; integration gate | matched |
-| B31 | Returning caller retakes the slot and the displaced UI stops | T5 Redis/PostgreSQL integration proves fresh ID and old-denied/new-allowed backend semantics, but no browser test proves the displaced UI stops | **not verified at the planned e2e level** |
+| B31 | Returning caller retakes the slot and the displaced UI stops | T15 e2e extension of P13: retake mints, segment 200 for the returning device, 403 for the displaced one; the retry defect it exposed is fixed with a component regression | **verified** |
 | B32 | Takeover removes byte access immediately | T10 same-segment e2e; T10 59/59 and gate | matched |
 | B33 | Two tabs displace one another | T10 same-browser e2e; T10 59/59 and gate | matched |
 | B34 | Restore alone cannot complete after a shorter replacement | Same scenario and proof as duplicate B41: T3 domain/T5 PostgreSQL; Go/integration gate | matched |
@@ -161,7 +189,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | R31 | Unknown playback ID heartbeat returns 410 | T3 Redis/integration evidence; integration gate | matched |
 | R32 | Deleted lesson heartbeat returns 404 without FK error | T5 application/HTTP/integration evidence; Go/integration gate | matched |
 | R33 | Displaced heartbeat cannot write progress | T3/T5 Redis/PostgreSQL integration; integration gate | matched |
-| R34 | Course owner plays their own archived course and receives segments | T6 proves shared policy, application and PostgreSQL read; it explicitly records no segment-200 e2e. T7 P11 is admin, not owner | **not verified** |
+| R34 | Course owner plays their own archived course and receives segments | T15 e2e: a non-admin owner receives segment 200 on the archived course; another non-admin is refused on the same lesson | **verified** |
 | R35 | hls.js ABR steps down under a narrowed channel | T11 e2e; two reviewer runs and gate | matched only as one step; see diagnostics and §6 |
 | R36 | `/learn` leads to the catalog | T8 behavior e2e; T8 47/47 and gate | matched |
 | R37 | Huge position clamps to the known 300 s duration | T8 dedicated e2e; T8 47/47 and gate | matched |
