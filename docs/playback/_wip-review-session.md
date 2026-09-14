@@ -1,6 +1,9 @@
 # Живий журнал реценз-сесії (Courses 1) — фолбек за `CLAUDE.local.md`
 
-Obsidian MCP недоступний від початку сесії (`ConnectionRefused`), тож нотатка тут.
+**Перенесено у vault 2026-09-14:** `1 - Notes/Sessions/2026-09-14 courses — Phase 6 closed by
+acceptance rows`. Obsidian був недоступний (`ConnectionRefused`) від початку сесії до того моменту,
+тож цей файл вів роль живої ноти; далі він лишається як запис для репозиторію.
+
 Не дублює докази — вони в `docs/playback/report.md`, `work/report-*.md` і `work/handoff-phase6.md`.
 Тут лише те, що інакше існує **тільки в міжсесійних повідомленнях** і зникне разом із сесією.
 
