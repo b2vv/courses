@@ -80,6 +80,37 @@ point (set to 12 s, it fails with that message), and checked with `format:check`
 full unit suite; the other targets cannot see
 it, because a unit test file is not part of the Go, generated-code, production build or browser graphs.
 
+**Update 2026-09-14, after T16 — the six rows moved to e2e and the open clause of B36 are verified.** The
+evidence supports **102/102**; no row of `docs/playback/plan.md` §8 is open. All seven proofs live in
+`frontend/e2e/playback.spec.ts`, in the serial `playback` project, placed before R04 in this order: B20/B21/B21a/B22,
+R23, B36 (which restores Redis in `finally`), and B28 last, because it empties the directory of an asset that is
+uploaded afresh by every run and that no later test reads.
+
+- **R23 measures against what flowed, not what is stored.** The denominator is the sum of 200 `.m4s` bodies the
+  browser received in the window, not the asset's files on disk: the disk holds every ABR rung and the player takes
+  mostly one, and nginx authorizes every media request through the api, so the api's output grows with the number of
+  segments fetched. Delivered in this run: `360p=1 of 17, audio=17 of 17, 720p=16 of 17`, 41 successful
+  authorizations. The comparison is deliberately asymmetric — interface bytes with headers against bodies without
+  headers or init segments — and both asymmetries make the bound stricter. "Whole lesson" means the session went from
+  the start to `ended`; at 16× it does not mean every segment of every rung was fetched.
+- **The two baselines are taken at different moments on purpose.** The api's precedes the page load, because the
+  mint, heartbeats and per-segment authorizations belong to playback; the frontend's follows it. The first gate took
+  both before `page.goto`, and the frontend then sent 458,999 bytes — the weight of the SSR page, constant against a
+  denominator that scales with the asset, so the bound would have turned red on a shorter lesson or a heavier bundle
+  with no media passing through SSR at all. With the frontend baseline after the page load, the frontend sent
+  **132 bytes** during playback and the api **70,800**, against 17,208,719 bytes of delivered segments.
+- **B28 guards its destructive path twice.** Preconditions prove the directory is an asset before anything is
+  removed; a canonical UUID check at the call site proves which asset it is, because a path that names another real
+  asset passes every precondition.
+
+Ordered `make check` on the T16 tree, run in two parts in the same target order so that a memory kill in `e2e` would
+not cost the earlier targets (no tail target calls `up`): `HEAD_EXIT=0` for `format-check` through `up`, `TAIL_EXIT=0`
+for `seed-identities seed smoke e2e`, `GATE_EXIT=0`. Frontend unit tests **380 passed, 0 failed**; Go `-race`
+**48 packages ok**; e2e **65 passed, 0 failed** — the four added tests carry the seven proofs. The frontend
+baseline in R23 was then moved after the page load, and only the tail was rerun on that change — `TAIL_EXIT=0`, e2e
+**65 passed, 0 failed** — after `format:check`, `lint`, `typecheck` and the unit suite; no head target reads an e2e
+specification.
+
 The reviewer ran the ordered `make check` on 2026-09-12 against the tree that became `0959fca`
 (T12) and `efc9851` (T11) — the gate preceded those commits and saw that content, not the
 committed state:
@@ -126,17 +157,17 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B17 | Repeated play gives the caller the fresh slot | T5 Redis/PostgreSQL integration; integration gate | matched |
 | B18 | Network loss retains the last saved position | T9 e2e; T9 52/52 and gate | matched |
 | B19 | The 120-lesson boundary renders all rows | T8 unit fixture; frontend gate | matched for rendering only |
-| B20 | A 1,024-byte range returns 206 and exactly 1,024 bytes | No row-specific smoke proof was found | **not verified** |
-| B21 | Three ranges cause three authorizations | No row-specific smoke proof was found | **not verified** |
-| B21a | Generated playlists contain no `EXT-X-BYTERANGE` | No named integration assertion was found | **not verified** |
-| B22 | Media responses carry no-store and security headers | Smoke requests `/media`, `/media/` and `/media/x/master.m3u8` — all refusal paths. It never requests an allowed segment, so headers on a 200 are outside what it asserts | **not verified** |
+| B20 | A 1,024-byte range returns 206 and exactly 1,024 bytes | T16 e2e: a served segment longer than 1,024 bytes answers `Range: bytes=0-1023` with 206, exactly 1,024 bytes and a matching `Content-Range` | **verified** |
+| B21 | Three ranges cause three authorizations | T16 e2e: after pause and three quiet 500 ms counter intervals, three distinct ranges moved `courses_http_requests_total{route="GET /internal/playback/authorize"}` by +3 successful and 0 rejected (1400 → 1403, 7 → 7) | **verified** |
+| B21a | Generated playlists contain no `EXT-X-BYTERANGE` | T16 e2e: both variant playlists of a published asset are non-empty, have no `#EXT-X-BYTERANGE`, and every `#EXTINF` is followed by its own distinct segment URI | **verified** |
+| B22 | Media responses carry no-store and security headers | T16 e2e: a 200 on an allowed segment carries `Cache-Control: private, no-store`, `nosniff`, `strict-origin-when-cross-origin` and `DENY`, compared by value | **verified** |
 | B23 | Media rate limiting returns 429 | T14 smoke: 720 concurrent requests under `/media/p/` must yield both 429 (the media zone sheds the excess) and 403 (admitted requests reach authorization, so the limit sits before it and does not reject everything); gate line `PASS media rate limit`. Diagnostic run on the same stack: 403 × 245, 429 × 475 | **verified** (T14) |
 | B24 | Player is keyboard-operable and has no axe violations | T7 component/axe tests; frontend gate | matched |
 | B24a | Focus is visible and controls are at least 44 px | T11 real-engine e2e in light/dark and before zoom; gate | matched |
 | B25 | Contrast and 200% layout pass | T11 real-engine e2e; gate, with `readyState=0`, width/height 0/0 | matched only over empty video; see §6 |
 | B26 | Locale base keys/forms agree and values are non-empty | T8 locale unit traversal; frontend gate | matched |
 | B27 | Missing progress reads as concrete zero values | T6 domain/HTTP/PostgreSQL evidence; Go/integration gate | matched |
-| B28 | DB `ready` with missing files gives edge 404 and visible error | T5 delegated this to T7; T7 proves only the UI 404 directive, not the edge/filesystem precondition | **not verified** |
+| B28 | DB `ready` with missing files gives edge 404 and visible error | T16 e2e: the asset directory is emptied from `media-worker` (existence and a `master.m3u8` proven before, an empty directory after); mint 201, edge 404 on master, and the named error state is visible | **verified** |
 | B29 | A new session writes on its first heartbeat | T9 PostgreSQL/integration sequence seeding; integration gate | matched |
 | B30 | Zero probe duration persists NULL and cannot complete | T2 worker/PostgreSQL integration; integration gate | matched |
 | B31 | Returning caller retakes the slot and the displaced UI stops | T15 e2e extension of P13: retake mints, segment 200 for the returning device, 403 for the displaced one; the retry defect it exposed is fixed with a component regression | **verified** |
@@ -144,7 +175,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B33 | Two tabs displace one another | T10 same-browser e2e; T10 59/59 and gate | matched |
 | B34 | Restore alone cannot complete after a shorter replacement | Same scenario and proof as duplicate B41: T3 domain/T5 PostgreSQL; Go/integration gate | matched |
 | B35 | `clientSeq=2^62` returns 400 without a write | T3/T5 validation and integration evidence; Go/integration gate | matched |
-| B36 | Redis failure returns 503 with `Retry-After` and no bytes | T14 smoke: with Redis stopped, a media request gets 503 with `Retry-After`; recovery back to 403 is asserted. "No bytes" cannot be shown in smoke — the request uses an unknown `playbackId`, so no media exists under any Redis state — and moved to e2e (T16, `8cc1d72`) | **partly verified** — 503 and `Retry-After` (T14); no media bytes open |
+| B36 | Redis failure returns 503 with `Retry-After` and no bytes | T14 smoke: 503 with `Retry-After`. T16 e2e: a real served segment (299,957 bytes) is requested again with Redis stopped — 503 `text/html`, 592 bytes, containing neither of two 64-byte media windows proven present in the reference; recovery in `finally`, the same segment back to 200 | **verified** |
 | B37 | Edge starts healthy with an empty cache | T1 smoke; final smoke gate | matched |
 | B38 | Paced 400-request parallel run is 400/400 HTTP 200 | T1 measured 400/400, no false 403/429; final smoke gate | matched |
 | B39 | Expiry remints silently rather than reporting takeover | T7/T9 e2e; gate | matched |
@@ -178,7 +209,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | R20 | Malformed edge IDs return 403 without calling Go | T1 smoke counter; smoke gate | matched |
 | R21 | Anonymous public course response exposes no lesson IDs | T6 HTTP contract test; Go gate | matched |
 | R22 | Malformed heartbeat fields return 400 without changing progress | T5 HTTP/application/PostgreSQL evidence; Go/integration gate | matched |
-| R23 | API and SSR network output stay far below video size | No `docker stats` byte-volume measurement was found | **not verified** |
+| R23 | API and SSR network output stay far below video size | T16 e2e: a 100-second lesson played from 0.098 s to `ended` at 16× rate; raw `tx_bytes` of the same api and frontend containers against 17,208,719 bytes of delivered segment bodies — api +70,800 from before the page load, frontend +132 from after it | **verified** |
 | R24 | The generated route set contains no “my courses” route | T8 exact route-set unit test plus generated check; frontend/generated gate | matched |
 | R25 | Two accounts behind one IP play together | T10 e2e; T10 59/59 and gate | matched |
 | R26 | One account from two network addresses still takes over | T10 mixed browser/container request using nginx source address; gate | matched |

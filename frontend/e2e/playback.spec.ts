@@ -91,6 +91,16 @@ type HeartbeatPayload = {
   readonly clientSeq: number;
   readonly reason: 'tick' | 'pause' | 'seek' | 'hide' | 'nav' | 'ended';
 };
+type AuthorizeCounts = {
+  readonly observed: boolean;
+  readonly successful: number;
+  readonly rejected: number;
+  readonly total: number;
+};
+type ContainerNetworkSnapshot = {
+  readonly id: string;
+  readonly txBytes: bigint;
+};
 
 function isHeartbeatReason(value: unknown): value is HeartbeatPayload['reason'] {
   return (
@@ -105,6 +115,8 @@ function isHeartbeatReason(value: unknown): value is HeartbeatPayload['reason'] 
 
 let course: CourseToken | undefined;
 let crossCourse: CourseToken | undefined;
+let fourthLessonVideoID: string | undefined;
+let crossCourseVideoID: string | undefined;
 let finishRequestTracking = () => Promise.resolve();
 
 function object(payload: unknown, name: string): object {
@@ -333,6 +345,80 @@ async function playFromAPIContainer(
   return playbackSession(body);
 }
 
+async function composeOutput(args: string[], timeout = 30_000): Promise<string> {
+  const { stdout } = await execute('docker', ['compose', ...args], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    timeout,
+  });
+  return stdout.trim();
+}
+
+async function authorizeCounts(): Promise<AuthorizeCounts> {
+  const metrics = await composeOutput([
+    'exec',
+    '-T',
+    'api',
+    'curl',
+    '-sS',
+    'http://127.0.0.1:8080/metrics',
+  ]);
+  let observed = false;
+  let successful = 0;
+  let rejected = 0;
+  for (const match of metrics.matchAll(/^courses_http_requests_total\{([^}]*)\}\s+([^\s]+)$/gm)) {
+    const labels = match[1];
+    const rawValue = match[2];
+    if (
+      labels === undefined ||
+      rawValue === undefined ||
+      !labels.includes('method="GET"') ||
+      !labels.includes('route="GET /internal/playback/authorize"')
+    )
+      continue;
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) throw new Error(`Invalid authorize metric value: ${rawValue}`);
+    observed = true;
+    if (labels.includes('status="204"')) successful += value;
+    else rejected += value;
+  }
+  return { observed, successful, rejected, total: successful + rejected };
+}
+
+async function waitForAuthorizeSilence(page: Page): Promise<AuthorizeCounts> {
+  let previous = await authorizeCounts();
+  let stableIntervals = 0;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.waitForTimeout(500);
+    const current = await authorizeCounts();
+    if (current.total === previous.total) {
+      stableIntervals += 1;
+      if (stableIntervals === 3) return current;
+    } else {
+      stableIntervals = 0;
+    }
+    previous = current;
+  }
+  throw new Error(
+    'B21 could not observe three consecutive quiet 500ms authorize intervals within 15 seconds',
+  );
+}
+
+async function containerNetworkSnapshot(service: 'api' | 'frontend') {
+  const id = await composeOutput(['ps', '-q', service]);
+  if (id === '') throw new Error(`Container ${service} is not running`);
+  const rawTxBytes = await composeOutput([
+    'exec',
+    '-T',
+    service,
+    'cat',
+    '/sys/class/net/eth0/statistics/tx_bytes',
+  ]);
+  if (!/^\d+$/.test(rawTxBytes))
+    throw new Error(`Container ${service} returned invalid tx_bytes: ${rawTxBytes}`);
+  return { id, txBytes: BigInt(rawTxBytes) } satisfies ContainerNetworkSnapshot;
+}
+
 function isMediaRequest(request: Request): boolean {
   return new URL(request.url()).pathname.startsWith('/media/p/');
 }
@@ -446,11 +532,15 @@ test.describe('T7 playback milestone', () => {
         moduleNumber: 2,
         lessonNumber: 1,
       });
-      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'), {
-        lessonID: fourthLessonID,
-        moduleNumber: 2,
-        lessonNumber: 2,
-      });
+      fourthLessonVideoID = await uploadReady(
+        page,
+        path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'),
+        {
+          lessonID: fourthLessonID,
+          moduleNumber: 2,
+          lessonNumber: 2,
+        },
+      );
       const published = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
         data: { status: 'published', expectedUpdatedAt: course.updatedAt },
         headers: { Origin: new URL(baseURL).origin },
@@ -496,12 +586,16 @@ test.describe('T7 playback milestone', () => {
       );
       expect(crossCourseSaved.status()).toBe(200);
       crossCourse = courseToken(await crossCourseSaved.json());
-      await uploadReady(page, path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'), {
-        courseID: crossCourse.id,
-        lessonID: crossCourseLessonID,
-        moduleNumber: 1,
-        lessonNumber: 1,
-      });
+      crossCourseVideoID = await uploadReady(
+        page,
+        path.join(fixtureDirectory, 'e2e-1280x720-100s.mp4'),
+        {
+          courseID: crossCourse.id,
+          lessonID: crossCourseLessonID,
+          moduleNumber: 1,
+          lessonNumber: 1,
+        },
+      );
       const crossCoursePublished = await context.request.post(
         `/api/v1/admin/courses/${crossCourse.id}/status`,
         {
@@ -1441,6 +1535,321 @@ test.describe('T7 playback milestone', () => {
         expect(learning.status()).toBe(200);
         expect(learningLessonPosition(await learning.json(), thirdLessonID)).toBe(300);
       });
+    });
+
+    test('B20 B21 B21a B22 serves independent ranged segments with one authorization each', async ({
+      page,
+    }) => {
+      const served = page.waitForResponse(
+        (response) =>
+          response.status() === 200 &&
+          isMediaRequest(response.request()) &&
+          new URL(response.url()).pathname.endsWith('.m4s'),
+      );
+      const session = await openAndPlay(page, crossCourseLessonID, crossCourseNamespace);
+      const segmentPath = new URL((await served).url()).pathname;
+
+      const fullSegment = await page.request.get(segmentPath);
+      expect(fullSegment.status()).toBe(200);
+      const fullSegmentBytes = await fullSegment.body();
+      expect(fullSegmentBytes.byteLength).toBeGreaterThan(1_024);
+
+      const headers = fullSegment.headers();
+      expect(headers['cache-control']).toBe('private, no-store');
+      expect(headers['x-content-type-options']).toBe('nosniff');
+      expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+      expect(headers['x-frame-options']).toBe('DENY');
+
+      const ranged = await page.request.get(segmentPath, {
+        headers: { Range: 'bytes=0-1023' },
+      });
+      expect(ranged.status()).toBe(206);
+      expect((await ranged.body()).byteLength).toBe(1_024);
+      expect(ranged.headers()['content-range']).toBe(`bytes 0-1023/${fullSegmentBytes.byteLength}`);
+
+      const masterURL = new URL(session.mediaPath, page.url());
+      const master = await page.request.get(masterURL.toString());
+      expect(master.status()).toBe(200);
+      const masterLines = (await master.text()).split(/\r?\n/).map((line) => line.trim());
+      const variantURLs = masterLines.flatMap((line, index) => {
+        if (!line.startsWith('#EXT-X-STREAM-INF:')) return [];
+        const variant = masterLines[index + 1];
+        if (variant === undefined || variant === '' || variant.startsWith('#'))
+          throw new Error('Each EXT-X-STREAM-INF must be followed by a variant URI');
+        return [new URL(variant, masterURL)];
+      });
+      expect(variantURLs).toHaveLength(2);
+      const generatedSegmentPaths: string[] = [];
+      for (const variantURL of variantURLs) {
+        const variant = await page.request.get(variantURL.toString());
+        expect(variant.status()).toBe(200);
+        const playlist = await variant.text();
+        expect(playlist).not.toContain('#EXT-X-BYTERANGE');
+        const lines = playlist.split(/\r?\n/).map((line) => line.trim());
+        const segmentURIs = lines.flatMap((line, index) => {
+          if (!line.startsWith('#EXTINF:')) return [];
+          const segment = lines[index + 1];
+          if (segment === undefined || segment === '' || segment.startsWith('#'))
+            throw new Error(`EXTINF in ${variantURL.pathname} must be followed by a segment URI`);
+          return [segment];
+        });
+        expect(segmentURIs.length).toBeGreaterThan(0);
+        expect(new Set(segmentURIs).size).toBe(segmentURIs.length);
+        generatedSegmentPaths.push(
+          ...segmentURIs.map((segment) => new URL(segment, variantURL).pathname),
+        );
+      }
+      expect(new Set(generatedSegmentPaths).size).toBe(generatedSegmentPaths.length);
+
+      const pauseWritten = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, crossCourseLessonID);
+        return heartbeat?.reason === 'pause';
+      });
+      await page.locator('video').evaluate((node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        node.pause();
+      });
+      await expect(page.getByRole('button', { name: 'Відтворити' })).toBeVisible();
+      await pauseWritten;
+      const before = await waitForAuthorizeSilence(page);
+      if (!before.observed)
+        throw new Error('B21 authorize metric series is absent after serving a real segment');
+
+      for (const range of ['bytes=0-0', 'bytes=1-1', 'bytes=2-2']) {
+        const response = await page.request.get(segmentPath, { headers: { Range: range } });
+        expect(response.status()).toBe(206);
+      }
+      const after = await authorizeCounts();
+      console.log(
+        `B21 authorize counters: before success=${before.successful} rejected=${before.rejected}; after success=${after.successful} rejected=${after.rejected}`,
+      );
+      expect(after.observed).toBe(true);
+      expect(
+        after.successful - before.successful,
+        'B21 expected exactly three successful authorizations. If the delta exceeds 3, first check whether silence was established and hls.js buffered after pause (see the printed counters); only then investigate duplicate auth_request calls.',
+      ).toBe(3);
+      expect(after.rejected - before.rejected).toBe(0);
+    });
+
+    test('R23 a complete 100-second lesson sends at least ten times fewer bytes through Go and SSR', async ({
+      page,
+    }) => {
+      if (fourthLessonVideoID === undefined)
+        throw new Error('The dedicated 100-second playback asset is unavailable');
+      const deliveredBodies: Array<Promise<{ readonly bytes: number; readonly pathname: string }>> =
+        [];
+      page.on('response', (response) => {
+        const pathname = new URL(response.url()).pathname;
+        if (response.status() !== 200 || !pathname.endsWith('.m4s')) return;
+        deliveredBodies.push(
+          response.body().then((body) => ({ bytes: body.byteLength, pathname })),
+        );
+      });
+      const apiBefore = await containerNetworkSnapshot('api');
+      const authorizeBefore = await authorizeCounts();
+      const endedHeartbeat = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, fourthLessonID);
+        return heartbeat?.reason === 'ended';
+      });
+      const session = await openAndPlay(page, fourthLessonID);
+      const startPosition = await videoTime(page);
+      expect(
+        startPosition,
+        'R23 must start the measured 100-second lesson at or before 2 seconds',
+      ).toBeLessThanOrEqual(2);
+      // The frontend baseline follows the page load on purpose, unlike the api's: taken before
+      // `page.goto`, its delta is the weight of the SSR page, which is constant, so the bound would
+      // turn red on a shorter asset or a heavier bundle with no media passing through SSR at all.
+      const frontendBefore = await containerNetworkSnapshot('frontend');
+      await page.locator('video').evaluate((node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        node.playbackRate = 16;
+      });
+      await expect.poll(() => videoEnded(page), { timeout: 60_000 }).toBe(true);
+      await endedHeartbeat;
+      const terminal = await page.locator('video').evaluate((node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        return { currentTime: node.currentTime, duration: node.duration, ended: node.ended };
+      });
+      await page.waitForTimeout(250);
+      const delivered = await Promise.all(deliveredBodies);
+      const apiAfter = await containerNetworkSnapshot('api');
+      const authorizeAfter = await authorizeCounts();
+      const frontendAfter = await containerNetworkSnapshot('frontend');
+      const apiDelta = apiAfter.txBytes - apiBefore.txBytes;
+      const frontendDelta = frontendAfter.txBytes - frontendBefore.txBytes;
+      const successfulAuthorizeDelta = authorizeAfter.successful - authorizeBefore.successful;
+      const rejectedAuthorizeDelta = authorizeAfter.rejected - authorizeBefore.rejected;
+      const deliveredBytes = delivered.reduce(
+        (total, segment) => total + BigInt(segment.bytes),
+        0n,
+      );
+      const renditionSegments = new Map<string, Set<string>>();
+      for (const segment of delivered) {
+        const relative = segment.pathname.split(`/hls/${fourthLessonVideoID}/`)[1];
+        const [rendition] = relative?.split('/') ?? [];
+        if (rendition === undefined || rendition === '')
+          throw new Error(`R23 could not identify rendition for ${segment.pathname}`);
+        const paths = renditionSegments.get(rendition) ?? new Set<string>();
+        paths.add(segment.pathname);
+        renditionSegments.set(rendition, paths);
+      }
+      expect(renditionSegments.size).toBeGreaterThan(0);
+      const masterURL = new URL(session.mediaPath, page.url());
+      const coverage: string[] = [];
+      for (const [rendition, paths] of renditionSegments) {
+        const playlist = await page.request.get(
+          new URL(`${rendition}/index.m3u8`, masterURL).toString(),
+        );
+        expect(playlist.status()).toBe(200);
+        const playlistSegments = (await playlist.text())
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line !== '' && !line.startsWith('#') && line.endsWith('.m4s'));
+        expect(playlistSegments.length).toBeGreaterThan(0);
+        coverage.push(`${rendition}=${paths.size} of ${playlistSegments.length}`);
+      }
+      console.log(
+        `R23 delivered segments: ${coverage.join(', ')}; bodies=${delivered.length}; bytes=${deliveredBytes}`,
+      );
+      console.log(
+        `R23 positions: start=${startPosition}; currentTime=${terminal.currentTime}; duration=${terminal.duration}; ended=${terminal.ended}; playbackRate=16`,
+      );
+      console.log(`R23 raw tx bytes: api delta=${apiDelta}; frontend delta=${frontendDelta}`);
+      console.log(
+        `R23 authorize counters: before observed=${authorizeBefore.observed} success=${authorizeBefore.successful} rejected=${authorizeBefore.rejected}; after observed=${authorizeAfter.observed} success=${authorizeAfter.successful} rejected=${authorizeAfter.rejected}; deltas success=${successfulAuthorizeDelta} rejected=${rejectedAuthorizeDelta}`,
+      );
+      expect(delivered.length).toBeGreaterThan(0);
+      expect(deliveredBytes).toBeGreaterThan(0n);
+      expect(terminal.ended).toBe(true);
+      expect(terminal.duration).toBeGreaterThan(0);
+      expect(terminal.currentTime).toBeGreaterThanOrEqual(terminal.duration - 0.25);
+      expect(apiAfter.id, 'R23 api container changed during the measurement').toBe(apiBefore.id);
+      expect(frontendAfter.id, 'R23 frontend container changed during the measurement').toBe(
+        frontendBefore.id,
+      );
+      expect(apiDelta, 'R23 api tx delta must prove the measurement occurred').toBeGreaterThan(0n);
+      // Asymmetric on purpose: the left side is interface bytes, headers and TCP included; the right
+      // side is 200 `.m4s` bodies only, without headers or init segments. Both lean towards a stricter
+      // bound, so "aligning" them - adding headers or init to the denominator - weakens the proof silently.
+      expect(apiDelta * 10n).toBeLessThan(deliveredBytes);
+      expect(frontendDelta * 10n).toBeLessThan(deliveredBytes);
+    });
+
+    test('B36 unavailable Redis returns no bytes from a previously served segment and always recovers', async ({
+      page,
+    }) => {
+      const served = page.waitForResponse(
+        (response) =>
+          response.status() === 200 &&
+          isMediaRequest(response.request()) &&
+          new URL(response.url()).pathname.endsWith('.m4s'),
+      );
+      await openAndPlay(page, crossCourseLessonID, crossCourseNamespace);
+      const segmentPath = new URL((await served).url()).pathname;
+      const anchor = await page.request.get(segmentPath);
+      expect(anchor.status()).toBe(200);
+      const mediaBytes = await anchor.body();
+      const windowSize = 64;
+      expect(mediaBytes.byteLength).toBeGreaterThanOrEqual(windowSize * 2);
+      const middlePosition = Math.floor((mediaBytes.byteLength - windowSize) / 2);
+      const referenceWindows = [
+        { name: 'first', position: 0, bytes: mediaBytes.subarray(0, windowSize) },
+        {
+          name: 'middle',
+          position: middlePosition,
+          bytes: mediaBytes.subarray(middlePosition, middlePosition + windowSize),
+        },
+      ];
+      for (const window of referenceWindows) {
+        expect(window.bytes.byteLength).toBe(windowSize);
+        expect(
+          mediaBytes.indexOf(window.bytes),
+          `B36 ${window.name} reference window must occur at its source position`,
+        ).toBe(window.position);
+      }
+
+      const pauseWritten = page.waitForResponse((response) => {
+        const heartbeat = heartbeatPayload(response, crossCourseLessonID);
+        return heartbeat?.reason === 'pause';
+      });
+      await page.locator('video').evaluate((node) => {
+        if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
+        node.pause();
+      });
+      await pauseWritten;
+
+      let recoveredStatus: number | undefined;
+      try {
+        await composeOutput(['stop', 'redis'], 60_000);
+        const unavailable = await page.request.get(segmentPath);
+        expect(unavailable.status()).toBe(503);
+        const unavailableBytes = await unavailable.body();
+        console.log(
+          `B36 bodies: healthy content-type=${anchor.headers()['content-type'] ?? 'missing'} bytes=${mediaBytes.byteLength}; unavailable content-type=${unavailable.headers()['content-type'] ?? 'missing'} bytes=${unavailableBytes.byteLength}`,
+        );
+        for (const window of referenceWindows) {
+          expect(
+            unavailableBytes.indexOf(window.bytes),
+            `B36 503 body must not contain the ${window.name} 64-byte media window`,
+          ).toBe(-1);
+        }
+      } finally {
+        await composeOutput(['start', 'redis'], 60_000);
+        await expect
+          .poll(
+            async () => {
+              const recovered = await page.request.get(segmentPath);
+              recoveredStatus = recovered.status();
+              return recoveredStatus;
+            },
+            { timeout: 30_000, intervals: [250] },
+          )
+          .not.toBe(503);
+        console.log(`B36 Redis recovery: same segment changed from 503 to ${recoveredStatus}`);
+      }
+    });
+
+    test('B28 a ready asset with no files returns edge 404 and a named player error', async ({
+      page,
+    }) => {
+      if (crossCourseVideoID === undefined)
+        throw new Error('The destructive B28 asset is unavailable');
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(crossCourseVideoID)
+      )
+        throw new Error(`B28 refuses a non-canonical video id: ${crossCourseVideoID}`);
+      const assetPath = `/media/hls/${crossCourseVideoID}`;
+      await composeOutput([
+        'exec',
+        '-T',
+        'media-worker',
+        'sh',
+        '-eu',
+        '-c',
+        'test -d "$1"; test -f "$1/master.m3u8"; [ -n "$(ls -A "$1")" ]; rm -rf -- "$1"/* "$1"/.[!.]* "$1"/..?*; test -d "$1"; [ -z "$(ls -A "$1")" ]',
+        'b28-remove-ready-asset',
+        assetPath,
+      ]);
+
+      await page.goto(`/learn/${crossCourseNamespace}/${crossCourseLessonID}`);
+      const minted = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/playback/sessions' &&
+          response.request().method() === 'POST',
+      );
+      const missingMaster = page.waitForResponse((response) =>
+        new URL(response.url()).pathname.endsWith(`/hls/${crossCourseVideoID}/master.m3u8`),
+      );
+      await page.getByRole('button', { name: 'Відтворити' }).click();
+      const mintedResponse = await minted;
+      expect(mintedResponse.status()).toBe(201);
+      const session = playbackSession(await mintedResponse.json());
+      expect(session.mediaPath).toContain(`/hls/${crossCourseVideoID}/master.m3u8`);
+      const edgeResponse = await missingMaster;
+      expect(edgeResponse.status()).toBe(404);
+      console.log(`B28 ready asset ${crossCourseVideoID}: edge status=${edgeResponse.status()}`);
+      await expect(page.getByText('Відео зараз недоступне.')).toBeVisible({ timeout: 60_000 });
     });
 
     test('R04 archive stops a started student view', async ({ page, browser, baseURL }) => {
