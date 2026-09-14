@@ -390,3 +390,36 @@ The Bash tool runs commands under zsh, which — unlike sh and bash — performs
 on unquoted parameter expansion. Scripts invoked as `sh script.sh` are unaffected; only inline
 commands are. Use a pipeline into `xargs`, or `${=ids}` to ask zsh for splitting explicitly.
 
+
+## Verification catches exactly where you point it (2026-09-14)
+
+The T15 brief made three claims about behaviour the product was said to already have: B08's
+watched mark survives a replacement, R34 lets an owning instructor view an archived course, and
+B31's retry already re-mints and resumes. Two were checked against code the same day — the
+progress tables carry no cascade that clears `completed_at`, and `CanBeViewedBy` admits the owner
+at any status. The third was not.
+
+The third was the false one, and it was false in the expensive direction: retry did take the
+playback slot, evicting the viewer's other device, and then played nothing, because the media was
+still bound to a `<video>` element React had already unmounted.
+
+The point is not that someone was careless. The same session applied the same discipline to the
+other two claims within the same hour. **A brief's own premises are records like any other**, and
+the fourth question applies to them: *is this a source or a copy, and when was it last reconciled
+with what it describes?* "The product already does X" is a copy of its author's belief. Two were
+reconciled, one was not, and the gap decided which one was wrong.
+
+The practical form is narrow enough to obey: when a brief says the product already behaves some
+way, that sentence needs a `file:line` before the brief is handed to anyone.
+
+### Both product defects of this phase were found by writing a test, not by reading code
+
+B07 and B31 were each filed as missing coverage — rows that needed an assertion, nothing more.
+Each turned out to be a defect, and neither was visible in review: B07's read path had no
+duration in sight to compare against, and B31's effect dependencies look correct until you ask
+what happens to an element that unmounts without the component unmounting.
+
+Worth remembering the next time closing acceptance rows looks like bookkeeping. Two of thirteen
+rows were not bookkeeping at all, and the only thing that distinguished them from the other
+eleven was that someone sat down to make them observable.
+
