@@ -7,6 +7,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"courses/internal/course/domain"
+	transcriptdomain "courses/internal/transcript/domain"
 )
 
 // Backlog B-3 left the course-wide lesson ceiling out of the contract, because a sum over
@@ -61,6 +62,11 @@ func TestContractCeilingsEqualTheDomainConstants(t *testing.T) {
 		{schema: "AdminCourseSaveRequest", property: "modules", want: domain.MaximumModules, owner: "domain.MaximumModules"},
 		{schema: "LearningCourse", property: "modules", want: domain.MaximumModules, owner: "domain.MaximumModules"},
 		{schema: "CourseDetail", property: "program", want: domain.MaximumModules, owner: "domain.MaximumModules"},
+		// The transcript ceilings arrive with the phase that owns them. They are the same shape
+		// as the ones above - a flat array in one schema - unlike the course-wide lesson total,
+		// which is a sum across nested arrays and therefore inexpressible here.
+		{schema: "LessonTranscript", property: "segments", want: transcriptdomain.MaximumSegments, owner: "transcriptdomain.MaximumSegments"},
+		{schema: "TranscriptSegment", property: "documents", want: transcriptdomain.MaximumSegmentDocuments, owner: "transcriptdomain.MaximumSegmentDocuments"},
 	} {
 		t.Run(test.schema+"."+test.property, func(t *testing.T) {
 			t.Parallel()
@@ -81,6 +87,24 @@ func TestContractCeilingsEqualTheDomainConstants(t *testing.T) {
 		}
 		if got := *field.Value.MaxLength; got != uint64(domain.MaximumLessonDescription) {
 			t.Fatalf("AdminLesson.description maxLength=%d, domain.MaximumLessonDescription=%d", got, domain.MaximumLessonDescription)
+		}
+	})
+
+	// TranscriptSegment.text is counted in RUNES on both sides: OpenAPI maxLength counts
+	// characters, and so does the domain constant. The byte budgets derived from it (the request
+	// body limit, and nginx's client_max_body_size above it) are a different unit and are pinned
+	// elsewhere — OpenAPI cannot express bytes at all.
+	t.Run("TranscriptSegment.text", func(t *testing.T) {
+		t.Parallel()
+		field, ok := document.Components.Schemas["TranscriptSegment"].Value.Properties["text"]
+		if !ok {
+			t.Fatal("TranscriptSegment has no text property")
+		}
+		if field.Value.MaxLength == nil {
+			t.Fatal("TranscriptSegment.text declares no maxLength")
+		}
+		if got := *field.Value.MaxLength; got != uint64(transcriptdomain.MaximumTextRunes) {
+			t.Fatalf("TranscriptSegment.text maxLength=%d, transcriptdomain.MaximumTextRunes=%d: the contract and the domain disagree about the same ceiling", got, transcriptdomain.MaximumTextRunes)
 		}
 	})
 

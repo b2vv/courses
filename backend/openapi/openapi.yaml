@@ -639,6 +639,46 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/lessons/{lessonId}/transcript:
+    get:
+      operationId: getLessonTranscript
+      summary: Get a lesson transcript
+      description: >-
+        Returns the whole transcript of one lesson in a single response. It is deliberately not
+        paginated: search runs on the client over what it was given, so a partial payload would
+        make a miss indistinguishable from an absent word. The visibility rule is the one that
+        governs watching the lesson - a transcript is not a second way into a course. Staleness is
+        derived, not stored: the response says whether the text was written against a video the
+        player would no longer pick. Omitting the language returns the only transcript when one
+        exists, and the first by normalised code when several do.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 35
+            pattern: '^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$'
+      responses:
+        '200':
+          description: The whole transcript of the lesson.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LessonTranscript' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/LearningForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/playback/heartbeat:
     post:
       operationId: heartbeatPlayback
@@ -717,6 +757,45 @@ components:
         positionSeconds: { type: number, format: double, minimum: 0 }
         clientSeq: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
         reason: { type: string, enum: [tick, pause, seek, hide, nav, ended] }
+    LessonTranscript:
+      type: object
+      additionalProperties: false
+      required: [lessonId, language, stale, segments]
+      properties:
+        lessonId: { type: string, format: uuid }
+        language: { type: string, minLength: 2, maxLength: 35 }
+        stale:
+          type: boolean
+          description: >-
+            Derived at read time by comparing the generation the text was written against with the
+            generation the player would pick now. A lesson with no ready video is never stale.
+        segments:
+          type: array
+          maxItems: 5000
+          items: { $ref: '#/components/schemas/TranscriptSegment' }
+    TranscriptSegment:
+      type: object
+      additionalProperties: false
+      required: [id, startMs, endMs, text, documents]
+      properties:
+        id: { type: string, format: uuid }
+        startMs: { type: integer, format: int64, minimum: 0 }
+        endMs: { type: integer, format: int64, minimum: 0 }
+        text: { type: string, minLength: 1, maxLength: 1000 }
+        speaker: { type: string, nullable: true, minLength: 1, maxLength: 100 }
+        confidence: { type: number, format: double, nullable: true, minimum: 0, maximum: 1 }
+        documents:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/TranscriptDocumentLink' }
+    TranscriptDocumentLink:
+      type: object
+      additionalProperties: false
+      required: [id, label, url]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, minLength: 1, maxLength: 200 }
+        url: { type: string, minLength: 1, maxLength: 2000 }
     LearningLesson:
       type: object
       additionalProperties: false
@@ -1063,7 +1142,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

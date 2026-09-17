@@ -6,6 +6,7 @@ import (
 
 	coursedomain "courses/internal/course/domain"
 	playbackdomain "courses/internal/playback/domain"
+	transcriptdomain "courses/internal/transcript/domain"
 )
 
 // Two product rules exist twice each, once per module, and both duplications are deliberate: a
@@ -21,8 +22,8 @@ import (
 // `InstructorID` on the other. So this pins BEHAVIOUR: one truth table per rule, every copy
 // asked the same question, every copy required to answer the same way.
 //
-// When a third module needs either rule - the transcript read needs the access predicate - it
-// adds its copy and a row here, and the table is what keeps the three honest.
+// The third module arrived: the transcript read needs the access predicate, so it carries its
+// own copy and a column here. Three copies now, and the table is what keeps them honest.
 
 func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 	t.Parallel()
@@ -77,9 +78,14 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 				Status:  playbackdomain.CourseStatus(test.status),
 			}.CanBeViewedBy(playbackdomain.Actor{UserID: test.actor, Administrator: test.administrator})
 
-			if viaCourse != test.want || viaPlayback != test.want {
-				t.Fatalf("course=%v playback=%v want=%v: the two copies of the access rule disagree, or one of them changed alone",
-					viaCourse, viaPlayback, test.want)
+			viaTranscript := transcriptdomain.Course{
+				OwnerID: test.courseOwner,
+				Status:  transcriptdomain.Status(test.status),
+			}.CanBeViewedBy(transcriptdomain.Actor{UserID: test.actor, Administrator: test.administrator})
+
+			if viaCourse != test.want || viaPlayback != test.want || viaTranscript != test.want {
+				t.Fatalf("course=%v playback=%v transcript=%v want=%v: the copies of the access rule disagree, or one of them changed alone",
+					viaCourse, viaPlayback, viaTranscript, test.want)
 			}
 		})
 	}

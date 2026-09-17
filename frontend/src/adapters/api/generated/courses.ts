@@ -30,12 +30,14 @@ import type {
   CoursePage,
   CourseVideos,
   ForbiddenResponse,
+  GetLessonTranscriptParams,
   Instructor,
   InternalErrorResponse,
   InvalidRequestResponse,
   LearningCourse,
   LearningForbiddenResponse,
   LessonNotFoundResponse,
+  LessonTranscript,
   ListAdminCoursesParams,
   ListAdminUsersParams,
   ListPublishedCoursesParams,
@@ -1686,6 +1688,91 @@ export const getLearningCourse = async (slug: string, options?: RequestInit): Pr
 
   const data: getLearningCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getLearningCourseResponse
+}
+
+
+
+export type getLessonTranscriptResponse200 = {
+  data: LessonTranscript
+  status: 200
+}
+
+export type getLessonTranscriptResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getLessonTranscriptResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLessonTranscriptResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getLessonTranscriptResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getLessonTranscriptResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getLessonTranscriptResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLessonTranscriptResponseSuccess = (getLessonTranscriptResponse200) & {
+  headers: Headers;
+};
+export type getLessonTranscriptResponseError = (getLessonTranscriptResponse400 | getLessonTranscriptResponse401 | getLessonTranscriptResponse403 | getLessonTranscriptResponse404 | getLessonTranscriptResponse500 | getLessonTranscriptResponse503) & {
+  headers: Headers;
+};
+
+export type getLessonTranscriptResponse = (getLessonTranscriptResponseSuccess | getLessonTranscriptResponseError)
+
+export const getGetLessonTranscriptUrl = (lessonId: string,
+    params?: GetLessonTranscriptParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript`
+}
+
+/**
+ * Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do.
+ * @summary Get a lesson transcript
+ */
+export const getLessonTranscript = async (lessonId: string,
+    params?: GetLessonTranscriptParams, options?: RequestInit): Promise<getLessonTranscriptResponse> => {
+
+  const res = await fetch(getGetLessonTranscriptUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLessonTranscriptResponse
 }
 
 
