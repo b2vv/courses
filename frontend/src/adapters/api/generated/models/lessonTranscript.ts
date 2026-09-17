@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration and playback-session control. Purchases and the learning player are not implemented.
  * OpenAPI spec version: 1.0.0
  */
+import type { TranscriptDocumentLink } from './transcriptDocumentLink.ts';
 import type { TranscriptSegment } from './transcriptSegment.ts';
 
 export interface LessonTranscript {
@@ -18,4 +19,9 @@ export interface LessonTranscript {
   stale: boolean;
   /** @maxItems 5000 */
   segments: TranscriptSegment[];
+  /**
+     * Every document referenced by any segment, carried once. A document belongs to the course library and is stored once per course, so inlining it into each of up to 5000 segments would send the same bytes back up to 15000 times: measured on the declared maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id.
+     * @maxItems 200
+     */
+  documents: TranscriptDocumentLink[];
 }

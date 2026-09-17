@@ -7,6 +7,14 @@ func (e Error) Error() string { return string(e) }
 const (
 	ErrInvalidRequest Error = "invalid_request"
 
+	// ErrForbidden is the answer when the access rule refuses, and it is the SAME answer whether
+	// the lesson has a transcript or not: an absent transcript must not confirm that a course
+	// the caller may not see exists.
+	ErrForbidden Error = "forbidden"
+	ErrNotFound  Error = "not_found"
+
+	ErrDependencyUnavailable Error = "dependency_unavailable"
+
 	// ErrSegmentLimit and ErrTextLimit are named rather than folded into invalid_request
 	// because the ceilings they guard are expressible in the contract and a client that hits
 	// one can act on it. B-3 is the record of what a nameless refusal costs.

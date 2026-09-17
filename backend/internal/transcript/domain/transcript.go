@@ -95,7 +95,11 @@ type Segment struct {
 	Text       string
 	Speaker    string
 	Confidence *float64
-	Documents  []DocumentLink
+
+	// DocumentIDs references the course library rather than inlining it. A document is stored
+	// once per course (Q6), so inlining it into each of up to 5000 segments would send the same
+	// bytes back up to 15000 times — measured on the declared maxima, 75 MiB against 13 MiB.
+	DocumentIDs []string
 }
 
 // Active reports whether the segment covers the position. The interval is HALF-OPEN, so a
@@ -124,29 +128,28 @@ func NewSegment(input Segment) (Segment, error) {
 	if input.Confidence != nil && (*input.Confidence < 0 || *input.Confidence > 1 || *input.Confidence != *input.Confidence) {
 		return Segment{}, ErrInvalidRequest
 	}
-	if len(input.Documents) > MaximumSegmentDocuments {
+	if len(input.DocumentIDs) > MaximumSegmentDocuments {
 		return Segment{}, ErrDocumentLimit
 	}
 
-	documents := make([]DocumentLink, 0, len(input.Documents))
-	seen := make(map[string]struct{}, len(input.Documents))
-	for _, link := range input.Documents {
+	documentIDs := make([]string, 0, len(input.DocumentIDs))
+	seen := make(map[string]struct{}, len(input.DocumentIDs))
+	for _, documentID := range input.DocumentIDs {
 		// The duplicate is refused before the ceiling so that the same document twice never
 		// reaches the primary key and surfaces as a 500 instead of a named code.
-		if _, duplicate := seen[link.ID]; duplicate {
+		if _, duplicate := seen[documentID]; duplicate {
 			return Segment{}, ErrInvalidRequest
 		}
-		seen[link.ID] = struct{}{}
-		valid, err := NewDocumentLink(link)
-		if err != nil {
-			return Segment{}, err
+		seen[documentID] = struct{}{}
+		if !validID(documentID) {
+			return Segment{}, ErrInvalidRequest
 		}
-		documents = append(documents, valid)
+		documentIDs = append(documentIDs, documentID)
 	}
 	return Segment{
 		ID: input.ID, StartMs: input.StartMs, EndMs: input.EndMs,
 		Text: input.Text, Speaker: input.Speaker, Confidence: input.Confidence,
-		Documents: documents,
+		DocumentIDs: documentIDs,
 	}, nil
 }
 
@@ -154,6 +157,9 @@ type Transcript struct {
 	LessonID string
 	Language Language
 	Segments []Segment
+
+	// Documents are the library entries the segments reference, carried once each.
+	Documents []DocumentLink
 
 	// AuthoredAgainstGeneration is the generation of the ready asset the author wrote against.
 	// Staleness is DERIVED by comparing it with the generation the player would pick, so there
@@ -172,6 +178,9 @@ func NewTranscript(input Transcript) (Transcript, error) {
 	if len(input.Segments) > MaximumSegments {
 		return Transcript{}, ErrSegmentLimit
 	}
+	if len(input.Documents) > MaximumCourseDocuments {
+		return Transcript{}, ErrDocumentLimit
+	}
 	if input.AuthoredAgainstGeneration < 0 {
 		return Transcript{}, ErrInvalidRequest
 	}
@@ -189,9 +198,18 @@ func NewTranscript(input Transcript) (Transcript, error) {
 		}
 		segments = append(segments, segment)
 	}
+	documents := make([]DocumentLink, 0, len(input.Documents))
+	for _, raw := range input.Documents {
+		link, err := NewDocumentLink(raw)
+		if err != nil {
+			return Transcript{}, err
+		}
+		documents = append(documents, link)
+	}
 	return Transcript{
 		LessonID: input.LessonID, Language: input.Language,
-		Segments: segments, AuthoredAgainstGeneration: input.AuthoredAgainstGeneration,
+		Segments: segments, Documents: documents,
+		AuthoredAgainstGeneration: input.AuthoredAgainstGeneration,
 	}, nil
 }
 
@@ -216,6 +234,15 @@ func (transcript Transcript) ActiveSegment(positionMs int64) int {
 		}
 	}
 	return -1
+}
+
+// ValidateID is exported so that transport and application share this module's one definition
+// of an identifier instead of each writing a weaker check of its own.
+func ValidateID(value string) error {
+	if !validID(value) {
+		return ErrInvalidRequest
+	}
+	return nil
 }
 
 func validID(value string) bool {

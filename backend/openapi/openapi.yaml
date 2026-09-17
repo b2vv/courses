@@ -760,7 +760,7 @@ components:
     LessonTranscript:
       type: object
       additionalProperties: false
-      required: [lessonId, language, stale, segments]
+      required: [lessonId, language, stale, segments, documents]
       properties:
         lessonId: { type: string, format: uuid }
         language: { type: string, minLength: 2, maxLength: 35 }
@@ -773,10 +773,19 @@ components:
           type: array
           maxItems: 5000
           items: { $ref: '#/components/schemas/TranscriptSegment' }
+        documents:
+          type: array
+          maxItems: 200
+          description: >-
+            Every document referenced by any segment, carried once. A document belongs to the
+            course library and is stored once per course, so inlining it into each of up to 5000
+            segments would send the same bytes back up to 15000 times: measured on the declared
+            maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id.
+          items: { $ref: '#/components/schemas/TranscriptDocumentLink' }
     TranscriptSegment:
       type: object
       additionalProperties: false
-      required: [id, startMs, endMs, text, documents]
+      required: [id, startMs, endMs, text, documentIds]
       properties:
         id: { type: string, format: uuid }
         startMs: { type: integer, format: int64, minimum: 0 }
@@ -784,10 +793,10 @@ components:
         text: { type: string, minLength: 1, maxLength: 1000 }
         speaker: { type: string, nullable: true, minLength: 1, maxLength: 100 }
         confidence: { type: number, format: double, nullable: true, minimum: 0, maximum: 1 }
-        documents:
+        documentIds:
           type: array
           maxItems: 3
-          items: { $ref: '#/components/schemas/TranscriptDocumentLink' }
+          items: { type: string, format: uuid }
     TranscriptDocumentLink:
       type: object
       additionalProperties: false

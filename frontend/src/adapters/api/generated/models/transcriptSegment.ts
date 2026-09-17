@@ -5,7 +5,6 @@
  * Public catalog, session authentication, protected administration and playback-session control. Purchases and the learning player are not implemented.
  * OpenAPI spec version: 1.0.0
  */
-import type { TranscriptDocumentLink } from './transcriptDocumentLink.ts';
 
 export interface TranscriptSegment {
   id: string;
@@ -31,5 +30,5 @@ export interface TranscriptSegment {
      */
   confidence?: number | null;
   /** @maxItems 3 */
-  documents: TranscriptDocumentLink[];
+  documentIds: string[];
 }

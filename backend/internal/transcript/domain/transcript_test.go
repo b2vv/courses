@@ -57,18 +57,18 @@ func TestSegmentBoundsAreNamedNotGeneric(t *testing.T) {
 		t.Fatalf("text exactly at the ceiling was refused: %v", err)
 	}
 
-	links := make([]DocumentLink, 0, MaximumSegmentDocuments+1)
+	links := make([]string, 0, MaximumSegmentDocuments+1)
 	for index := 0; index <= MaximumSegmentDocuments; index++ {
-		links = append(links, DocumentLink{ID: id("0" + string(rune('1'+index))), Label: "d", URL: "https://example.test/a"})
+		links = append(links, id("0"+string(rune('1'+index))))
 	}
-	if _, err := NewSegment(Segment{ID: id("01"), StartMs: 0, EndMs: 1, Text: "t", Documents: links}); err != ErrDocumentLimit {
+	if _, err := NewSegment(Segment{ID: id("01"), StartMs: 0, EndMs: 1, Text: "t", DocumentIDs: links}); err != ErrDocumentLimit {
 		t.Fatalf("documents over the ceiling err = %v; want transcript_document_limit", err)
 	}
 
 	// The duplicate must lose before the ceiling, or the primary key answers with a 500 where a
 	// named code was promised.
-	same := DocumentLink{ID: id("01"), Label: "d", URL: "https://example.test/a"}
-	if _, err := NewSegment(Segment{ID: id("01"), StartMs: 0, EndMs: 1, Text: "t", Documents: []DocumentLink{same, same}}); err != ErrInvalidRequest {
+	same := id("01")
+	if _, err := NewSegment(Segment{ID: id("01"), StartMs: 0, EndMs: 1, Text: "t", DocumentIDs: []string{same, same}}); err != ErrInvalidRequest {
 		t.Fatalf("duplicate document err = %v; want invalid_request", err)
 	}
 }

@@ -66,7 +66,10 @@ func TestContractCeilingsEqualTheDomainConstants(t *testing.T) {
 		// as the ones above - a flat array in one schema - unlike the course-wide lesson total,
 		// which is a sum across nested arrays and therefore inexpressible here.
 		{schema: "LessonTranscript", property: "segments", want: transcriptdomain.MaximumSegments, owner: "transcriptdomain.MaximumSegments"},
-		{schema: "TranscriptSegment", property: "documents", want: transcriptdomain.MaximumSegmentDocuments, owner: "transcriptdomain.MaximumSegmentDocuments"},
+		{schema: "TranscriptSegment", property: "documentIds", want: transcriptdomain.MaximumSegmentDocuments, owner: "transcriptdomain.MaximumSegmentDocuments"},
+		// The course-library ceiling had nothing to pin while documents were inlined per segment;
+		// carrying them once gave it an array of its own, so it stopped being an unwatched number.
+		{schema: "LessonTranscript", property: "documents", want: transcriptdomain.MaximumCourseDocuments, owner: "transcriptdomain.MaximumCourseDocuments"},
 	} {
 		t.Run(test.schema+"."+test.property, func(t *testing.T) {
 			t.Parallel()
