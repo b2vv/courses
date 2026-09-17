@@ -32,7 +32,7 @@ are kept as the record of how the count moved there — 89 at T13, then 91, 92 a
 rewritten.
 
 The header below §8 in the plan says **94**, but the three tables actually contain **102
-unique rows**: P01–P14, B01–B47 plus B21a, and R01–R39. The evidence supports **89/102**.
+unique rows**: P01–P14, B01–B47 plus B21a and B24a, and R01–R39. The evidence supports **89/102**.
 Rows not verified at the planned outcome are **B07, B08, B20, B21, B21a, B22, B23, B28,
 B31, B36, R23, R30 and R34**. A green aggregate gate is not substituted for a missing
 assertion.
