@@ -15,17 +15,24 @@ export default defineConfig({
   //
   // The trade is named so it can be revisited deliberately: a large CI runner will leave
   // capacity unused. That is the price of a suite that behaves the same everywhere.
-  // One worker, not two, and the reason is isolation rather than speed. `fullyParallel: false`
-  // orders tests inside a file; separate files still run side by side, and the public catalogue
-  // is global state that several of them share. `admin.spec` publishes a course mid-scenario
-  // with published_at = now, which sorts ahead of every seeded course, so a catalogue test
-  // reading offset=1 concurrently gets the wrong row - measured 2026-09-09, twice, and the
-  // interleaved completion order shows the overlap. Serialising the project costs a couple of
-  // minutes only in `chromium`; media, playback and recovery hold one file each and are
-  // unaffected by this number at all.
+  // This number once had two reasons, and only the one above is still live. The second was
+  // isolation: `fullyParallel: false` orders tests inside a file, separate files still ran side
+  // by side, and the public catalogue is global state several of them touch. `admin.spec`
+  // publishes a course mid-scenario with published_at = now, which sorts ahead of every seeded
+  // course, so a catalogue test reading global offset=1 concurrently got the wrong row -
+  // measured 2026-09-09, twice (backlog B-13).
   //
-  // The trade stays named: a large CI runner will leave capacity unused. That is the price of a
-  // suite whose result depends on the code rather than on which tests happened to overlap.
+  // That reason is closed as of 2026-09-17: `catalog.spec` no longer reads a global offset
+  // window. It scopes the window with `q`, which no run-scoped fixture matches, so a sibling
+  // publish cannot move what it asserts - proven by publishing a course at position zero and
+  // running the file red on the old assertion and green on the new one (`work/report-b13.md`).
+  // Nothing else asserts a position-sensitive catalogue window; the other files that open
+  // `/courses` do not depend on which course sits where.
+  //
+  // So raising this number is now a question about host capacity alone, which is what the
+  // measurement above answers - and it answers "not on this host". Whoever revisits it should
+  // re-measure browser contention rather than re-derive isolation: that half is no longer the
+  // obstacle. The trade stays named: a large CI runner will leave capacity unused.
   workers: 1,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',

@@ -26,9 +26,37 @@ test('catalog and detail include PostgreSQL course data in initial HTML', async 
   await context.close();
 });
 
+// B-13: this test used to read the second card of the *global* catalog - `?limit=1&offset=1`
+// - and name the course it expected there. Any sibling file that publishes a course takes
+// position zero with `published_at = now` and shifts that window by one, which is not a product
+// defect: `docs/foundation/assumptions.md:21` says offset pagination may shift between requests
+// during publication. So the assertion demanded stability the product never promised, and
+// `workers: 1` was the only thing holding it up.
+//
+// The window is now scoped with `q`, and the scope is what makes it deterministic: no
+// run-scoped fixture matches `React` or `Go` in its title or summary (the catalog searches both,
+// `courses.sql.go:355-356`), so the claim holds whatever else the catalog contains. Row H04 asks
+// that reopening a q/sort/limit/offset URL show the same filtered order - which is what is
+// asserted here - not that a particular course sit at a particular global offset.
+//
+// `workers: 1` stays, and not for this reason: five workers under load produced browser timeouts
+// and 504s (`playwright.config.ts:9`). That measurement is untouched by this change, so the
+// number keeps its own independent cause.
 test('search and pagination live in the URL and recover from an empty page', async ({ page }) => {
-  await page.goto('/courses?limit=1&offset=1&sort=recent');
+  await page.goto('/courses?q=React&limit=1&offset=0&sort=recent');
   await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
+  // The limit is honoured, not merely accepted: the scope holds exactly one course, and one card
+  // is what the page renders.
+  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(1);
+
+  // Offset one past the end of a scoped result is the empty page, and the recovery link works
+  // from there - the same claim the ceiling case makes, on a boundary a fixture can reach.
+  await page.goto('/courses?q=React&limit=1&offset=1&sort=recent');
+  await expect(page.getByText('На цій сторінці немає курсів')).toBeVisible();
+  await page.getByRole('link', { name: 'На першу сторінку' }).click();
+  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+
+  await page.goto('/courses?q=React&limit=1&offset=1&sort=recent');
   await page.getByLabel('Знайти курс').fill('Go');
   await page.getByRole('button', { name: 'Знайти', exact: true }).click();
   await expect(
@@ -36,6 +64,7 @@ test('search and pagination live in the URL and recover from an empty page', asy
   ).toBeVisible();
   expect(Number(new URL(page.url()).searchParams.get('offset') ?? 0)).toBe(0);
   expect(new URL(page.url()).searchParams.get('q')).toBe('Go');
+
   await page.goto('/courses?limit=1&offset=10000');
   await expect(page.getByText('На цій сторінці немає курсів')).toBeVisible();
   await page.getByRole('link', { name: 'На першу сторінку' }).click();
