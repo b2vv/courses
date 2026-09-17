@@ -544,6 +544,8 @@ func writeAdminError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "invalid_status_transition", "Course status transition is invalid")
 	case errors.Is(err, domain.ErrCourseNotDeletable):
 		httpserver.WriteError(w, r, http.StatusConflict, "course_not_deletable", "Only draft courses can be deleted")
+	case errors.Is(err, domain.ErrLessonLimit):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "lesson_limit", "A course accepts at most 120 lessons across all of its modules")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Course authoring is temporarily unavailable")
 	default:

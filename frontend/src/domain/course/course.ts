@@ -54,6 +54,7 @@ export type AuthoringErrorCode =
   | 'invalid_status_transition'
   | 'course_not_deletable'
   | 'course_modified'
+  | 'lesson_limit'
   | 'course_not_found'
   | 'dependency_unavailable'
   | 'invalid_response'

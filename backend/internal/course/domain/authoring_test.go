@@ -173,12 +173,6 @@ func TestCourseTreeBoundsAndIdentity(t *testing.T) {
 				tree.Modules = append(tree.Modules, domain.Module{ID: nodeID(1000 + position), Title: "Module", Position: position})
 			}
 		}},
-		{name: "121 lessons", change: func(tree *domain.CourseTree) {
-			tree.Modules[0].Lessons = nil
-			for position := range domain.MaximumLessons + 1 {
-				tree.Modules[0].Lessons = append(tree.Modules[0].Lessons, domain.Lesson{ID: nodeID(2000 + position), Title: "Lesson", Position: position})
-			}
-		}},
 		{name: "lesson description over 1000", change: func(tree *domain.CourseTree) {
 			tree.Modules[0].Lessons[0].Description = strings.Repeat("ї", domain.MaximumLessonDescription+1)
 		}},
@@ -226,6 +220,64 @@ func TestCourseTreeAcceptsBoundsAndEmptyLessonDescription(t *testing.T) {
 	tree.Modules[0].Lessons[0].Description = ""
 	if err := domain.ValidateCourseTree(tree); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The ceiling is a course-wide sum, not a per-module allowance, and it is refused by its own
+// name. openapi.yaml cannot express the sum (backlog B-3), so this is the only place the rule
+// is enforced, and the split cases are the ones the schema calls valid.
+func TestCourseTreeLessonCeilingIsCourseWideAndNamed(t *testing.T) {
+	t.Parallel()
+
+	lessons := func(start, count int) []domain.Lesson {
+		built := make([]domain.Lesson, 0, count)
+		for position := range count {
+			built = append(built, domain.Lesson{ID: nodeID(start + position), Title: "Lesson", Position: position})
+		}
+		return built
+	}
+	tree := func(counts ...int) domain.CourseTree {
+		built := validAuthoringTree()
+		built.Modules = nil
+		start := 2000
+		for modulePosition, count := range counts {
+			built.Modules = append(built.Modules, domain.Module{
+				ID: nodeID(1000 + modulePosition), Title: "Module", Position: modulePosition,
+				Lessons: lessons(start, count),
+			})
+			start += count
+		}
+		return built
+	}
+
+	for _, test := range []struct {
+		name string
+		tree domain.CourseTree
+		want error
+	}{
+		{name: "120 in one module", tree: tree(domain.MaximumLessons), want: nil},
+		{name: "120 split across two modules", tree: tree(60, 60), want: nil},
+		{name: "121 in one module", tree: tree(domain.MaximumLessons + 1), want: domain.ErrLessonLimit},
+		{name: "121 split across two modules", tree: tree(60, 61), want: domain.ErrLessonLimit},
+		{name: "121 split across three modules", tree: tree(1, 60, 60), want: domain.ErrLessonLimit},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			err := domain.ValidateCourseTree(test.tree)
+			if test.want == nil {
+				if err != nil {
+					t.Fatalf("got %v, want accepted", err)
+				}
+				return
+			}
+			if !errors.Is(err, test.want) {
+				t.Fatalf("got %v, want %v", err, test.want)
+			}
+			// The generic code would leave the client unable to name the reason.
+			if errors.Is(err, domain.ErrInvalidRequest) {
+				t.Fatal("the ceiling must be refused by its own name, not as an invalid request")
+			}
+		})
 	}
 }
 

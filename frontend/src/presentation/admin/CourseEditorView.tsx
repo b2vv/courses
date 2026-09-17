@@ -160,6 +160,8 @@ function errorMessage(code: AuthoringErrorCode, t: ReturnType<typeof useTranslat
       return t('administration.error.invalidStatusTransition');
     case 'course_not_deletable':
       return t('administration.error.courseNotDeletable');
+    case 'lesson_limit':
+      return t('administration.error.lessonLimit');
     case 'course_modified':
       return t('administration.conflict');
     case 'course_not_found':

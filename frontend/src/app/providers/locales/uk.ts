@@ -214,6 +214,7 @@ export const uk = {
         invalidOwner: 'Оберіть доступного власника курсу.',
         invalidStatusTransition: 'Ця зміна статусу недоступна.',
         courseNotDeletable: 'Видалити можна лише чернетку.',
+        lessonLimit: 'Курс вміщає щонайбільше 120 уроків у всіх модулях разом.',
         courseNotFound: 'Цього курсу більше немає.',
         invalidRequest: 'Перевірте введені відомості про курс.',
         requestCancelled: 'Запит скасовано.',

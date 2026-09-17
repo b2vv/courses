@@ -77,6 +77,9 @@ const failures: readonly {
 }[] = [
   { operation: 'create', status: 400, code: 'invalid_request', expected: 'invalid_request' },
   { operation: 'create', status: 400, code: 'invalid_owner', expected: 'invalid_owner' },
+  // The course-wide lesson ceiling arrives named, not as a generic invalid request, so the
+  // editor can say which rule was broken (backlog B-3).
+  { operation: 'save', status: 400, code: 'lesson_limit', expected: 'lesson_limit' },
   {
     operation: 'list',
     status: 401,

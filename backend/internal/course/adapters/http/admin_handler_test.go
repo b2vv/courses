@@ -528,18 +528,23 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 		}
 	})
 
+	// B06 asks that a tree over a ceiling be refused and leave the stored tree untouched; it
+	// does not name the code. The lesson ceiling now answers with its own code (backlog B-3),
+	// so the expectation moved with it while the row's claim - refused, unchanged, repository
+	// untouched - is asserted exactly as before.
 	t.Run("B06 invalid tree ceilings leave the tree unchanged", func(t *testing.T) {
 		cases := []struct {
 			name   string
 			mutate func(*domain.CourseTree)
+			code   string
 		}{
-			{name: "41 modules", mutate: func(tree *domain.CourseTree) {
+			{name: "41 modules", code: "invalid_request", mutate: func(tree *domain.CourseTree) {
 				tree.Modules = makeModules(41, 0, 0)
 			}},
-			{name: "121 lessons", mutate: func(tree *domain.CourseTree) {
+			{name: "121 lessons", code: "lesson_limit", mutate: func(tree *domain.CourseTree) {
 				tree.Modules = makeModules(1, 121, 0)
 			}},
-			{name: "1001 character lesson description", mutate: func(tree *domain.CourseTree) {
+			{name: "1001 character lesson description", code: "invalid_request", mutate: func(tree *domain.CourseTree) {
 				tree.Modules = makeModules(1, 1, 1001)
 			}},
 		}
@@ -556,7 +561,7 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 				if response.Code != http.StatusBadRequest {
 					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 				}
-				assertAdminError(t, response, "invalid_request")
+				assertAdminError(t, response, test.code)
 				if repository.loadCalls != 0 || repository.saveCalls != 0 || !reflect.DeepEqual(repository.courses[adminCourseID], before) {
 					t.Fatalf("invalid payload reached repository or changed tree: load=%d save=%d", repository.loadCalls, repository.saveCalls)
 				}
@@ -626,6 +631,53 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 				assertAdminError(t, response, "invalid_request")
 			})
 		}
+	})
+
+	// B-3: the ceiling is a sum over sibling arrays, and JSON Schema cannot bound a sum. Both
+	// halves of that are asserted here rather than described: a course that splits 121 lessons
+	// across two modules is contract-valid and domain-invalid at once, while the same 121 in one
+	// module never reaches the server because the per-module maxItems does catch it. That pair is
+	// the whole of what the schema can and cannot own. If a later edition finds a way to express
+	// the sum, the first case fails at request validation and names which half moved.
+	t.Run("B-3 the course-wide ceiling is refused by name where the schema cannot see it", func(t *testing.T) {
+		overCeiling := func(t *testing.T, counts ...int) (*httptest.ResponseRecorder, *http.Request, *adminRepository) {
+			t.Helper()
+			repository := seededAdminWriteRepository(domain.Draft, instructorUserID)
+			input := cloneCourseTree(repository.courses[adminCourseID])
+			input.Modules = nil
+			serial := 0
+			for modulePosition, count := range counts {
+				module := domain.Module{ID: treeNodeID(20000 + modulePosition), Title: "Module", Position: modulePosition}
+				for lessonPosition := range count {
+					module.Lessons = append(module.Lessons, domain.Lesson{ID: treeNodeID(30000 + serial), Title: "Lesson", Position: lessonPosition})
+					serial++
+				}
+				input.Modules = append(input.Modules, module)
+			}
+			identity := &adminIdentity{}
+			handler := adminReadHandler(t, repository, identity)
+			response, request := serveAdminJSON(t, handler, identity, identityUser(identitydomain.Admin), http.MethodPut, "/api/v1/admin/courses/"+adminCourseID, saveCourseBody(input, formatTestTime(input.UpdatedAt)))
+			return response, request, repository
+		}
+
+		t.Run("121 across two modules passes the schema and is refused as lesson_limit", func(t *testing.T) {
+			response, request, repository := overCeiling(t, 60, 61)
+			assertAdminHTTPContract(t, request, response, true)
+			if response.Code != http.StatusBadRequest || repository.saveCalls != 0 {
+				t.Fatalf("status=%d save=%d body=%s", response.Code, repository.saveCalls, response.Body.String())
+			}
+			assertAdminError(t, response, "lesson_limit")
+		})
+
+		t.Run("121 in one module is stopped by the per-module maxItems", func(t *testing.T) {
+			response, request, repository := overCeiling(t, domain.MaximumLessons+1)
+			assertAdminRequestSchema(t, request, false)
+			assertAdminHTTPContract(t, request, response, false)
+			if response.Code != http.StatusBadRequest || repository.saveCalls != 0 {
+				t.Fatalf("status=%d save=%d body=%s", response.Code, repository.saveCalls, response.Body.String())
+			}
+			assertAdminError(t, response, "lesson_limit")
+		})
 	})
 
 	t.Run("B12 read token round-trips and a lesson-only save retires it", func(t *testing.T) {
@@ -1439,6 +1491,35 @@ func adminCourseTree(ownerID string) domain.CourseTree {
 			Lessons: []domain.Lesson{{ID: "30000000-0000-4000-8000-000000000001", Title: "First lesson", Description: "Lesson text", Position: 0}},
 		}},
 	}
+}
+
+// assertAdminRequestSchema states whether openapi.yaml itself accepts this request body, which
+// is the half of backlog B-3 that no server behaviour can show.
+func assertAdminRequestSchema(t *testing.T, request *http.Request, wantValid bool) {
+	t.Helper()
+	document, err := openapi3.NewLoader().LoadFromFile(filepath.Join("..", "..", "..", "..", "openapi", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, err := legacy.NewRouter(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, parameters, err := router.FindRoute(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = openapi3filter.ValidateRequest(context.Background(), &openapi3filter.RequestValidationInput{Request: request, PathParams: parameters, Route: route})
+	if wantValid && err != nil {
+		t.Fatalf("the contract refuses a body it should accept: %v", err)
+	}
+	if !wantValid && err == nil {
+		t.Fatal("the contract accepts a body it should refuse")
+	}
+}
+
+func treeNodeID(number int) string {
+	return fmt.Sprintf("30000000-0000-4000-8000-%012d", number)
 }
 
 func assertAdminError(t *testing.T, response *httptest.ResponseRecorder, code string) {

@@ -28,6 +28,7 @@ export const ErrorResponseErrorCode = {
   invalid_status_transition: 'invalid_status_transition',
   course_not_deletable: 'course_not_deletable',
   course_modified: 'course_modified',
+  lesson_limit: 'lesson_limit',
   cannot_target_self: 'cannot_target_self',
   admin_immutable: 'admin_immutable',
   last_admin: 'last_admin',

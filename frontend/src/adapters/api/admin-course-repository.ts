@@ -39,6 +39,7 @@ function wireError(response: WireResponse): AuthoringError {
     switch (parsed.data.error.code) {
       case 'invalid_request':
       case 'invalid_owner':
+      case 'lesson_limit':
         if (response.status === 400) return { code: parsed.data.error.code };
         break;
       case 'authentication_required':

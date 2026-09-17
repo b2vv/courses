@@ -16,8 +16,18 @@ const (
 	ErrInvalidStatusTransition Error = "invalid_status_transition"
 	ErrCourseNotDeletable      Error = "course_not_deletable"
 	ErrCourseModified          Error = "course_modified"
+	ErrLessonLimit             Error = "lesson_limit"
 )
 
+// The domain owns these ceilings; the contract derives from them and does not restate them as
+// a second truth (backlog B-3). MaximumModules and MaximumLessonDescription map onto a single
+// JSON Schema keyword each, so openapi.yaml can enforce them. MaximumLessons cannot: it counts
+// lessons cumulatively across every module, and JSON Schema has no way to bound a sum over
+// sibling arrays. A schema that declared it per module would read as a course ceiling of
+// 40*120 and enforce nothing, so the per-module maxItems stays at MaximumLessons - one module
+// may legitimately hold every lesson - the course-wide rule is documented in the schema, and a
+// request that breaks it is refused by name through ErrLessonLimit rather than as a generic
+// invalid request.
 const (
 	MaximumModules           = 40
 	MaximumLessons           = 120
@@ -182,7 +192,7 @@ func validateModules(modules []Module) error {
 		}
 		lessonCount += len(module.Lessons)
 		if lessonCount > MaximumLessons {
-			return ErrInvalidRequest
+			return ErrLessonLimit
 		}
 		for lessonPosition, lesson := range module.Lessons {
 			if !validNode(lesson.ID, lesson.Title, lesson.Position, lessonPosition, seenIDs) || !validOptionalText(lesson.Description, MaximumLessonDescription) {

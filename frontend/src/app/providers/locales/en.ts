@@ -209,6 +209,7 @@ export const en = {
         invalidOwner: 'Choose an eligible course owner.',
         invalidStatusTransition: 'This status change is not allowed.',
         courseNotDeletable: 'Only a draft can be deleted.',
+        lessonLimit: 'A course holds at most 120 lessons across all of its modules.',
         courseNotFound: 'This course no longer exists.',
         invalidRequest: 'Check the entered course information.',
         requestCancelled: 'The request was cancelled.',
