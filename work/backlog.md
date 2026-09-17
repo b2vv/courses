@@ -166,8 +166,9 @@ still call it. Previously only the browser branch ran anywhere.
 
 | Джерело | Що дозволяє |
 |---|---|
-| `backend/openapi/openapi.yaml:633` | `maxItems: 120` **на модуль** |
-| `backend/openapi/openapi.yaml:653` | `maxItems: 40` модулів |
+| `backend/openapi/openapi.yaml:743` | `maxItems: 120` **на модуль** (координати оновлено 2026-09-17: були `:633`) |
+| `backend/openapi/openapi.yaml:761` | `maxItems: 40` модулів (були `:653`) |
+| Та сама пара ще тричі | `:798`/`:818`, `:913`/`:932`, плюс `:953` — стеля продубльована по схемах, тож «одне число в одному місці» коштує більше, ніж обіцяв цей запис |
 | **Разом за контрактом** | **4800 уроків на курс** |
 | `backend/internal/course/domain/authoring.go:174-185` | `lessonCount` рахується **кумулятивно по всіх модулях**, `MaximumLessons = 120` |
 | **Разом за доменом** | **120 уроків на курс** |
