@@ -27,6 +27,19 @@ instructor workspace or a production deployment.
 
 ## 2. Acceptance scenarios
 
+**Amendment 2026-09-17 — «48 packages» is a double count; the runs are unchanged.** Every
+place in this report that says Go `-race` **48 packages ok** (§2 and the P12 row) reports the
+number of `ok` lines, not the number of packages. The head of the gate runs Go **twice** —
+`make test` → `go test -race ./...`, and `infrastructure/tests/integration.sh` →
+`go test -count=1 -tags=integration ./...` — and each prints its own `ok` lines, so packages
+that run in both are counted twice. Measured on this phase's own gate logs
+(`work/make-check-final2.log`, `work/make-check-final3.log`): **48 `ok` lines, 26 unique
+packages** — 22 from the race run plus 4 that only `-tags=integration` adds. The runs
+happened as recorded and no row's evidence weakens; only the word «packages» was wrong, and
+it read as roughly twice the coverage actually exercised. Found by the parallel session while
+auditing its own identical claim. Class: a number read off a log without checking what the
+log counts.
+
 **Current status: 102/102 verified**, as of the update after T16 below. The paragraphs that follow
 are kept as the record of how the count moved there — 89 at T13, then 91, 92 and 95 — and are not
 rewritten.
