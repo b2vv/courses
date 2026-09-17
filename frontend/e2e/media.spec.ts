@@ -11,7 +11,14 @@ import {
   type Page,
 } from '@playwright/test';
 import { promisify } from 'node:util';
+import type {
+  AdminCourseTree,
+  ErrorResponse,
+  ErrorResponseError,
+  MediaUploadTicket,
+} from '../src/adapters/api/generated/models';
 import { authStatePath, trackPageRequests } from './auth';
+import { contractField } from './contract';
 
 const execute = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -47,8 +54,8 @@ async function worker(...args: string[]): Promise<string> {
 function courseToken(payload: unknown): CourseToken {
   if (typeof payload !== 'object' || payload === null)
     throw new Error('Admin course response must be an object');
-  const id = Reflect.get(payload, 'id');
-  const updatedAt = Reflect.get(payload, 'updatedAt');
+  const id = contractField<AdminCourseTree>(payload, 'id');
+  const updatedAt = contractField<AdminCourseTree>(payload, 'updatedAt');
   if (typeof id !== 'string' || typeof updatedAt !== 'string')
     throw new Error('Admin course response must carry id and updatedAt');
   return { id, updatedAt };
@@ -57,16 +64,16 @@ function courseToken(payload: unknown): CourseToken {
 function videoID(payload: unknown): string {
   if (typeof payload !== 'object' || payload === null)
     throw new Error('Media ticket response must be an object');
-  const id = Reflect.get(payload, 'videoId');
+  const id = contractField<MediaUploadTicket>(payload, 'videoId');
   if (typeof id !== 'string') throw new Error('Media ticket response must carry videoId');
   return id;
 }
 
 function errorCode(payload: unknown): string | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined;
-  const error = Reflect.get(payload, 'error');
+  const error = contractField<ErrorResponse>(payload, 'error');
   if (typeof error !== 'object' || error === null) return undefined;
-  const code = Reflect.get(error, 'code');
+  const code = contractField<ErrorResponseError>(error, 'code');
   return typeof code === 'string' ? code : undefined;
 }
 

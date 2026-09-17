@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type BrowserContext, type Locator } from '@playwright/test';
+import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authFixtures, authStatePath, trackPageRequests } from './auth';
+import { contractField } from './contract';
 
 const runNamespace = `e2e-admin-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const adminID = '40000000-0000-4000-8000-000000000003';
@@ -34,8 +36,8 @@ async function fillDraft(dialog: Locator, draft: Draft) {
 function createdCourse(payload: unknown): CreatedCourse {
   if (typeof payload !== 'object' || payload === null)
     throw new Error('Admin create response must be an object');
-  const id = Reflect.get(payload, 'id');
-  const updatedAt = Reflect.get(payload, 'updatedAt');
+  const id = contractField<AdminCourseTree>(payload, 'id');
+  const updatedAt = contractField<AdminCourseTree>(payload, 'updatedAt');
   if (typeof id !== 'string' || typeof updatedAt !== 'string')
     throw new Error('Admin create response must carry id and updatedAt');
   return { id, updatedAt };

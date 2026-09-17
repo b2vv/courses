@@ -12,7 +12,17 @@ import {
   type Response,
 } from '@playwright/test';
 import { promisify } from 'node:util';
+import type {
+  AdminCourseTree,
+  LearningCourse as LearningCourseContract,
+  LearningLesson,
+  LearningModule,
+  MediaUploadTicket,
+  PlaybackHeartbeatRequest,
+  PlaybackSession as PlaybackSessionContract,
+} from '../src/adapters/api/generated/models';
 import { authStatePath, trackPageRequests } from './auth';
+import { contractField } from './contract';
 
 const execute = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -126,8 +136,8 @@ function object(payload: unknown, name: string): object {
 
 function courseToken(payload: unknown): CourseToken {
   const record = object(payload, 'Admin course response');
-  const id = Reflect.get(record, 'id');
-  const updatedAt = Reflect.get(record, 'updatedAt');
+  const id = contractField<AdminCourseTree>(record, 'id');
+  const updatedAt = contractField<AdminCourseTree>(record, 'updatedAt');
   if (typeof id !== 'string' || typeof updatedAt !== 'string')
     throw new Error('Admin course response must carry id and updatedAt');
   return { id, updatedAt };
@@ -135,11 +145,11 @@ function courseToken(payload: unknown): CourseToken {
 
 function playbackSession(payload: unknown): PlaybackSession {
   const record = object(payload, 'Playback session');
-  const playbackId = Reflect.get(record, 'playbackId');
-  const mediaPath = Reflect.get(record, 'mediaPath');
-  const clientSeq = Reflect.get(record, 'clientSeq');
-  const heartbeatSeconds = Reflect.get(record, 'heartbeatSeconds');
-  const ownershipTtlSeconds = Reflect.get(record, 'ownershipTtlSeconds');
+  const playbackId = contractField<PlaybackSessionContract>(record, 'playbackId');
+  const mediaPath = contractField<PlaybackSessionContract>(record, 'mediaPath');
+  const clientSeq = contractField<PlaybackSessionContract>(record, 'clientSeq');
+  const heartbeatSeconds = contractField<PlaybackSessionContract>(record, 'heartbeatSeconds');
+  const ownershipTtlSeconds = contractField<PlaybackSessionContract>(record, 'ownershipTtlSeconds');
   if (
     typeof playbackId !== 'string' ||
     typeof mediaPath !== 'string' ||
@@ -158,7 +168,7 @@ function playbackSession(payload: unknown): PlaybackSession {
 }
 
 function videoID(payload: unknown): string {
-  const id = Reflect.get(object(payload, 'Media ticket'), 'videoId');
+  const id = contractField<MediaUploadTicket>(object(payload, 'Media ticket'), 'videoId');
   if (typeof id !== 'string') throw new Error('Media ticket response must carry videoId');
   return id;
 }
@@ -175,11 +185,11 @@ function heartbeatPayload(response: Response, expectedLessonID: string): Heartbe
     return null;
   const body: unknown = response.request().postDataJSON();
   if (typeof body !== 'object' || body === null) return null;
-  const position = Reflect.get(body, 'positionSeconds');
-  const clientSeq = Reflect.get(body, 'clientSeq');
-  const reason = Reflect.get(body, 'reason');
+  const position = contractField<PlaybackHeartbeatRequest>(body, 'positionSeconds');
+  const clientSeq = contractField<PlaybackHeartbeatRequest>(body, 'clientSeq');
+  const reason = contractField<PlaybackHeartbeatRequest>(body, 'reason');
   if (
-    Reflect.get(body, 'lessonId') !== expectedLessonID ||
+    contractField<PlaybackHeartbeatRequest>(body, 'lessonId') !== expectedLessonID ||
     typeof position !== 'number' ||
     typeof clientSeq !== 'number' ||
     !isHeartbeatReason(reason)
@@ -197,16 +207,19 @@ function heartbeatPosition(response: Response, expectedLessonID: string): number
 }
 
 function learningLessonPosition(payload: unknown, expectedLessonID: string): number {
-  const modules = Reflect.get(object(payload, 'Learning course'), 'modules');
+  const modules = contractField<LearningCourseContract>(
+    object(payload, 'Learning course'),
+    'modules',
+  );
   if (!Array.isArray(modules)) throw new Error('Learning course modules must be an array');
   for (const module of modules) {
     if (typeof module !== 'object' || module === null) continue;
-    const lessons = Reflect.get(module, 'lessons');
+    const lessons = contractField<LearningModule>(module, 'lessons');
     if (!Array.isArray(lessons)) continue;
     for (const lesson of lessons) {
       if (typeof lesson !== 'object' || lesson === null) continue;
-      if (Reflect.get(lesson, 'id') !== expectedLessonID) continue;
-      const position = Reflect.get(lesson, 'position');
+      if (contractField<LearningLesson>(lesson, 'id') !== expectedLessonID) continue;
+      const position = contractField<LearningLesson>(lesson, 'position');
       if (typeof position !== 'number')
         throw new Error('Learning lesson must carry numeric position');
       return position;
