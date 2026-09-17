@@ -41,12 +41,54 @@ awk '
     print "nginx access_log must use safe format or be off: " text
     invalid = 1
   }
+  # A block is identified by its opening statement: "http", "server", "location ^~ /api/".
+  function block_name(joined, slot) {
+    joined = ""
+    for (slot = 1; slot <= token_count; slot++) joined = joined (slot > 1 ? " " : "") tokens[slot]
+    return joined
+  }
+  function inside(name, slot) {
+    for (slot = 1; slot <= depth; slot++) if (block[slot] == name) return 1
+    return 0
+  }
+  # nginx writes sizes with k/m/g suffixes and the domain writes bytes, so one side has to be
+  # converted before they can be compared at all.
+  function to_bytes(size, number, suffix) {
+    number = size + 0
+    suffix = tolower(substr(size, length(size), 1))
+    if (suffix == "k") return number * 1024
+    if (suffix == "m") return number * 1024 * 1024
+    if (suffix == "g") return number * 1024 * 1024 * 1024
+    return number
+  }
+  function validate_body_size(text) {
+    if (token_count < 2) return
+    if (block[depth] == "location ^~ /api/") {
+      api_body_size = to_bytes(tokens[2])
+      return
+    }
+    if (block[depth] == "http") http_body_size = to_bytes(tokens[2])
+  }
+  # gzip in http{} would reach the page routes, which stream with proxy_buffering off, and the
+  # media locations, whose bytes are already compressed. It belongs to /api/ and nowhere else.
+  function validate_gzip(text) {
+    if (block[depth] == "location ^~ /api/") {
+      gzip_in_api[tokens[1]] = 1
+      return
+    }
+    print "nginx " tokens[1] " must live in location ^~ /api/, not in " block[depth] ": " text
+    invalid = 1
+  }
   function finish_statement() {
     finish_token()
     if (token_count >= 2 && tokens[1] == "log_format" && tokens[2] == "safe") {
       validate_log_format(statement)
     } else if (token_count >= 1 && tokens[1] == "access_log") {
       validate_access_log(statement)
+    } else if (token_count >= 1 && tokens[1] == "client_max_body_size") {
+      validate_body_size(statement)
+    } else if (token_count >= 1 && tokens[1] ~ /^gzip/) {
+      validate_gzip(statement)
     }
     reset_statement()
   }
@@ -91,9 +133,19 @@ awk '
         in_braced_variable = 1
       } else if (!in_single && !in_double && character == "}" && in_braced_variable) {
         in_braced_variable = 0
-      } else if (!in_single && !in_double && !in_braced_variable &&
-                 (character == "{" || character == "}")) {
+      } else if (!in_single && !in_double && !in_braced_variable && character == "{") {
         finish_token()
+        # The statement before a brace names the block, so /api/ can be told from http{} and
+        # from /uploads/. Without this the scanner saw three client_max_body_size directives and
+        # could not say which belonged where - it reset on every brace and kept no context.
+        depth++
+        block[depth] = block_name()
+        reset_statement()
+        continue
+      } else if (!in_single && !in_double && !in_braced_variable && character == "}") {
+        finish_token()
+        block[depth] = ""
+        depth--
         reset_statement()
         continue
       } else if (!in_single && !in_double && character ~ /[[:space:]]/) {
@@ -112,6 +164,10 @@ awk '
     allowed["$request_method"] = 1
     allowed["$status"] = 1
     allowed["$request_time"] = 1
+    gzip_required["gzip"] = 1
+    gzip_required["gzip_proxied"] = 1
+    gzip_required["gzip_types"] = 1
+    gzip_required["gzip_vary"] = 1
   }
   {
     scan_line($0)
@@ -130,6 +186,30 @@ awk '
     if (!safe_access_log_found) {
       print "nginx requires an access_log using safe; otherwise it defaults to combined and logs URI"
       invalid = 1
+    }
+    if (depth != 0) {
+      print "nginx configuration blocks do not balance; the scanner cannot say which block a directive is in"
+      invalid = 1
+    }
+    # Inherited is not declared. /api/ carrying no ceiling of its own means its limit is whatever
+    # http{} happens to say, three screens away, and the transcript write path has to raise it
+    # deliberately rather than discover it.
+    if (api_body_size == 0) {
+      print "nginx location ^~ /api/ must declare client_max_body_size explicitly rather than inherit it from http{}"
+      invalid = 1
+    }
+    if (api_body_size > 0 && api_body_size < http_body_size) {
+      print "nginx client_max_body_size for /api/ (" api_body_size " B) is below the http{} default (" http_body_size " B), so the narrower path is the API"
+      invalid = 1
+    }
+    # gzip_proxied defaults to off and everything under /api/ is proxied; gzip_types defaults to
+    # text/html alone; gzip_vary defaults to off. Each absent one is a compression that silently
+    # does not happen, or a cache that serves gzip to a client that did not ask.
+    for (required in gzip_required) {
+      if (!(required in gzip_in_api)) {
+        print "nginx location ^~ /api/ has gzip but not " required ", whose default undoes it"
+        invalid = 1
+      }
     }
     if (invalid) exit 1
   }

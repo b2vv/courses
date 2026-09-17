@@ -83,6 +83,31 @@ if(logins.filter(s=>s===429).length<logins.length-10) throw Error('Login budget 
 const pages=await Promise.all(Array.from({length:400},()=>fetch(origin+'/').then(r=>r.status)));
 if(!pages.includes(429)) throw Error('SSR rate limit not enforced');
 await writeFile('/tmp/courses-smoke-media-cookie',adminCookie,{mode:0o600});
+// G2: compression is enabled for /api/ only, and both halves of that are asserted. The header
+// is the contract - that nginx compresses JSON when the client offers gzip, and leaves it alone
+// when the client does not - while `Vary` is what keeps a shared cache from handing a gzip body
+// to a client that never asked.
+//
+// The page route carries the other half. It streams with `proxy_buffering off`, so compressing
+// it would buffer the stream to compress it, and the assertion that it is NOT compressed is
+// what proves the directives sit in `location ^~ /api/` rather than in `http{}`. A placement
+// this test cannot see would look identical in the config and behave differently here.
+//
+// Deliberately absent: the media half. At this point in the gate no HLS exists on the volume,
+// so every /media/ request answers 403, and an assertion that a 403 carries no
+// `Content-Encoding` passes under any configuration at all - green while blind. It belongs where
+// real bytes exist, which is e2e.
+const compressed = await fetch(origin+'/api/v1/courses?limit=20', {headers:{'Accept-Encoding':'gzip'}});
+if(compressed.status!==200) throw Error(`gzip probe: expected 200, got ${compressed.status}`);
+if(compressed.headers.get('content-encoding')!=='gzip') throw Error(`/api/ did not compress JSON for a client offering gzip: content-encoding=${compressed.headers.get('content-encoding')}`);
+if(!(compressed.headers.get('vary')??'').toLowerCase().includes('accept-encoding')) throw Error('/api/ compressed without Vary: Accept-Encoding, so a shared cache can serve gzip to a client that did not ask');
+const identity = await fetch(origin+'/api/v1/courses?limit=20', {headers:{'Accept-Encoding':'identity'}});
+if(identity.status!==200) throw Error(`identity probe: expected 200, got ${identity.status}`);
+if(identity.headers.get('content-encoding')!==null) throw Error(`/api/ compressed for a client that asked for identity: ${identity.headers.get('content-encoding')}`);
+const page = await fetch(origin+'/', {headers:{'Accept-Encoding':'gzip'}});
+if(page.status!==200) throw Error(`page probe: expected 200, got ${page.status}`);
+if(page.headers.get('content-encoding')!==null) throw Error('the streamed page route is compressed, so gzip is not confined to location ^~ /api/');
+console.log('PASS gzip on /api/ JSON with Vary, absent for identity, and absent on the streamed page route');
 console.log('PASS readiness, upload proxy/body cap, private media/metrics, worker handler/metrics and API, login and SSR rate limits');
 JS
 
