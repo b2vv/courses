@@ -763,7 +763,16 @@ components:
       required: [lessonId, language, stale, segments, documents]
       properties:
         lessonId: { type: string, format: uuid }
-        language: { type: string, minLength: 2, maxLength: 35 }
+        language:
+          type: string
+          nullable: true
+          minLength: 2
+          maxLength: 35
+          description: >-
+            Null when the lesson has no transcript. An absent transcript is a state of the lesson,
+            not a missing resource, so the read answers 200 with an empty body rather than 404 —
+            404 would be answered identically for a lesson that does not exist, which is the one
+            thing this read must not leak.
         stale:
           type: boolean
           description: >-

@@ -23,6 +23,9 @@ import (
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	playbackredis "courses/internal/playback/adapters/redis"
 	playbackapplication "courses/internal/playback/application"
+	transcripthttp "courses/internal/transcript/adapters/http"
+	transcriptpostgres "courses/internal/transcript/adapters/postgres"
+	transcriptapplication "courses/internal/transcript/application"
 
 	"courses/platform/httpserver"
 	"courses/platform/observability"
@@ -56,6 +59,8 @@ func main() {
 		authoring := courseapplication.NewAuthoring(courseRepository, time.Now)
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
 		learningHandler := coursehttp.NewLearningHandler(learning)
+		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
+		transcriptHandler := transcripthttp.NewHandler(transcriptReading)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
@@ -87,6 +92,7 @@ func main() {
 				courseHandler.Register(mux)
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
+				transcriptHandler.Register(mux, identityHandler.Authenticate)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

@@ -11,10 +11,12 @@ import type { TranscriptSegment } from './transcriptSegment.ts';
 export interface LessonTranscript {
   lessonId: string;
   /**
+     * Null when the lesson has no transcript. An absent transcript is a state of the lesson, not a missing resource, so the read answers 200 with an empty body rather than 404 — 404 would be answered identically for a lesson that does not exist, which is the one thing this read must not leak.
      * @minLength 2
      * @maxLength 35
+     * @nullable
      */
-  language: string;
+  language: string | null;
   /** Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale. */
   stale: boolean;
   /** @maxItems 5000 */
