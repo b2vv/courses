@@ -616,6 +616,20 @@ Rows that stay manual: **none**.
 
 Mutation rows assume a valid `Origin` header unless the row is about `Origin` (D-1, NB-8).
 
+**Amendment 2026-09-17 (backlog B-3) — one code in one row, requirement unchanged.** Row **B06**
+bundles three bounds and expects `400 invalid_request` for all of them. The lesson ceiling now
+answers with its own code: **`121 lessons` expects `400 lesson_limit`**, while `41 modules` and a
+`1001-character lesson description` stay `400 invalid_request`. Everything else in the row holds
+verbatim, including the following `GET` showing the tree unchanged.
+
+Why the row changed rather than the code: the course-wide lesson ceiling is a sum over
+`modules[*].lessons`, which JSON Schema cannot bound, so the contract declares a course of 4800
+lessons valid while the domain refuses it. With a generic `invalid_request` the client could not
+name which rule it broke. The number now lives once, in the domain, and the refusal carries
+`lesson_limit`. Evidence: `work/report-b3.md`; the boundary is pinned in both directions in
+`admin_handler_test.go` (the schema accepts `60+61` and the server refuses it; the schema itself
+refuses `121` in one module).
+
 ### Happy path
 
 | # | Scenario | Precondition | Action | Observable result | Evidence | Owner |

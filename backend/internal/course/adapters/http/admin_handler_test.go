@@ -528,10 +528,11 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 		}
 	})
 
-	// B06 asks that a tree over a ceiling be refused and leave the stored tree untouched; it
-	// does not name the code. The lesson ceiling now answers with its own code (backlog B-3),
-	// so the expectation moved with it while the row's claim - refused, unchanged, repository
-	// untouched - is asserted exactly as before.
+	// B06 expects 400 invalid_request for all three bounds (docs/admin/plan.md:654). The lesson
+	// ceiling now answers with its own code, so one of the three cases changed - dated in that
+	// plan's §8 amendment of 2026-09-17 and in docs/admin/report.md, because the row belongs to
+	// a closed phase and the change has to be recorded where the row lives, not only here. The
+	// rest of the row is asserted exactly as before: refused, repository untouched, tree equal.
 	t.Run("B06 invalid tree ceilings leave the tree unchanged", func(t *testing.T) {
 		cases := []struct {
 			name   string
