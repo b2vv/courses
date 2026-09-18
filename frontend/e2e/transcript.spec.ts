@@ -1,0 +1,151 @@
+import { randomUUID } from 'node:crypto';
+import { expect, test, type APIRequestContext, type Browser } from '@playwright/test';
+import type { AdminCourseTree } from '../src/adapters/api/generated/models';
+import { authStatePath } from './auth';
+import { contractField } from './contract';
+
+// Scoped by a per-run token so the catalog window this test reads cannot contain another run's
+// publications: offset pagination is documented as unstable during publishing, so asserting a
+// name at a global position would be asserting something the product never promised (B-13).
+const runNamespace = `e2e-transcript-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const adminID = '40000000-0000-4000-8000-000000000003';
+
+const moduleID = randomUUID();
+const lessonID = randomUUID();
+const firstSegment = randomUUID();
+const secondSegment = randomUUID();
+
+// instructorId belongs to the draft itself, not only to the create call: the tree save validates
+// the owner too, and omitting it there answers invalid_owner.
+const draft = {
+  slug: `${runNamespace}`,
+  title: `Транскрипт ${runNamespace}`,
+  summary: 'Курс для браузерної перевірки транскрипту.',
+  description: 'Повний опис курсу, створеного браузерною подорожжю транскрипту.',
+  instructorId: adminID,
+};
+
+function token(payload: object): { id: string; updatedAt: string } {
+  const id = contractField<AdminCourseTree>(payload, 'id');
+  const updatedAt = contractField<AdminCourseTree>(payload, 'updatedAt');
+  if (typeof id !== 'string' || typeof updatedAt !== 'string') {
+    throw new Error('Admin response must carry id and updatedAt');
+  }
+  return { id, updatedAt };
+}
+
+async function origin(baseURL: string) {
+  return { Origin: new URL(baseURL).origin };
+}
+
+/**
+ * Everything this journey needs is created through the product's own API — course, module, lesson
+ * and transcript. Writing rows behind the API's back would prove reading of data the product
+ * cannot produce.
+ *
+ * Deliberately no video: the transcript surface does not depend on one, and a lesson without a
+ * video keeps this spec out of the media chain, where a single fixture costs a five-minute
+ * transcode. The player renders its empty state beside a fully working transcript.
+ */
+async function seed(request: APIRequestContext, baseURL: string) {
+  const headers = await origin(baseURL);
+  const created = await request.post('/api/v1/admin/courses', {
+    data: draft,
+    headers,
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const course = token((await created.json()) as object);
+
+  const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
+    data: {
+      expectedUpdatedAt: course.updatedAt,
+      course: draft,
+      modules: [
+        {
+          id: moduleID,
+          title: `Модуль ${runNamespace}`,
+          lessons: [{ id: lessonID, title: `Урок ${runNamespace}`, description: '' }],
+        },
+      ],
+    },
+    headers,
+  });
+  // The body travels into the failure message: a bare status tells you the seed broke but not
+  // which rule it broke, and this seed has four steps that all answer 400 the same way.
+  expect(saved.status(), await saved.text()).toBe(200);
+  const tree = token((await saved.json()) as object);
+
+  const published = await request.post(`/api/v1/admin/courses/${course.id}/status`, {
+    data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
+    headers,
+  });
+  expect(published.status(), await published.text()).toBe(200);
+
+  const transcript = await request.put(`/api/v1/admin/lessons/${lessonID}/transcript`, {
+    data: {
+      language: 'uk',
+      segments: [
+        {
+          id: firstSegment,
+          startMs: 0,
+          endMs: 5_000,
+          text: `Перша репліка ${runNamespace} про канали`,
+          documentIds: [],
+        },
+        {
+          id: secondSegment,
+          startMs: 65_000,
+          endMs: 70_000,
+          text: `Друга репліка ${runNamespace} про горутини`,
+          documentIds: [],
+        },
+      ],
+    },
+    headers,
+  });
+  expect(transcript.status(), await transcript.text()).toBe(200);
+  return course;
+}
+
+test.describe('with a stored admin session', () => {
+  test.use({ storageState: authStatePath('admin') });
+
+  test('an author writes a transcript and a student reads it on the lesson', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    await seed(page.request, baseURL);
+
+    // The student rides the SHARED session: the login budget is already at its ceiling, so a new
+    // form login here would break B19 for every other spec in the run.
+    const context = await openStudent(browser, baseURL);
+    try {
+      const studentPage = await context.newPage();
+      await studentPage.goto(`/learn/${draft.slug}/${lessonID}`);
+
+      const transcript = studentPage.getByRole('region', { name: 'Транскрипт' });
+      await expect(transcript.getByRole('listitem').first()).toContainText('Перша репліка');
+      await expect(transcript.getByRole('button', { name: 'Перейти до 01:05' })).toBeVisible();
+
+      // No video means no known duration, so seeking is unavailable rather than silently landing
+      // in the first second.
+      await expect(transcript.getByRole('button', { name: 'Перейти до 00:00' })).toBeDisabled();
+
+      // Search runs over the whole lesson because the read is never paginated.
+      await transcript.getByRole('searchbox').fill('горутини');
+      await expect(transcript.getByRole('listitem')).toHaveCount(1);
+      await expect(transcript.getByRole('listitem').first()).toContainText('Друга репліка');
+
+      await transcript.getByRole('searchbox').fill('слова-якого-немає');
+      await expect(transcript.getByText('Нічого не знайдено.')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+async function openStudent(browser: Browser, baseURL: string) {
+  return browser.newContext({ baseURL, storageState: authStatePath('student') });
+}
