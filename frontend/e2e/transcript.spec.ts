@@ -24,6 +24,12 @@ const shortVideo = path.join(
   'e2e-640x360.mp4',
 );
 
+// Published courses live on after the test that made them, and the public catalog counts them.
+// A recovery assertion elsewhere pins that count to the seed, so a journey that publishes and
+// walks away breaks a test it never touches. Archiving removes a course from the catalog; a
+// published course cannot be deleted at all (only drafts can), so archiving is the whole cleanup.
+const published: { id: string; updatedAt: string }[] = [];
+
 const moduleID = randomUUID();
 const videoLessonID = randomUUID();
 const videoModuleID = randomUUID();
@@ -91,11 +97,12 @@ async function seed(request: APIRequestContext, baseURL: string) {
   expect(saved.status(), await saved.text()).toBe(200);
   const tree = token((await saved.json()) as object);
 
-  const published = await request.post(`/api/v1/admin/courses/${course.id}/status`, {
+  const publishedResponse = await request.post(`/api/v1/admin/courses/${course.id}/status`, {
     data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
     headers,
   });
-  expect(published.status(), await published.text()).toBe(200);
+  expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
+  published.push(token((await publishedResponse.json()) as object));
 
   const transcript = await request.put(`/api/v1/admin/lessons/${lessonID}/transcript`, {
     data: {
@@ -142,6 +149,21 @@ async function transcriptAxe(page: Page) {
     return { violations: names(results.violations), incomplete: names(results.incomplete) };
   });
 }
+
+test.afterAll(async ({ browser, baseURL }) => {
+  if (baseURL === undefined || published.length === 0) return;
+  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
+  try {
+    for (const course of published) {
+      await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
+        headers: { Origin: new URL(baseURL).origin },
+      });
+    }
+  } finally {
+    await context.close();
+  }
+});
 
 test.describe('with a stored admin session', () => {
   test.use({ storageState: authStatePath('admin') });
@@ -275,11 +297,12 @@ test.describe('with a real two-second video', () => {
       )
       .toBe('ready');
 
-    const published = await page.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+    const publishedResponse = await page.request.post(`/api/v1/admin/courses/${course.id}/status`, {
       data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
       headers,
     });
-    expect(published.status(), await published.text()).toBe(200);
+    expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
+    published.push(token((await publishedResponse.json()) as object));
 
     const written = await page.request.put(`/api/v1/admin/lessons/${videoLessonID}/transcript`, {
       data: {
