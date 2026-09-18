@@ -1,6 +1,9 @@
 import { expect, test } from '@rstest/core';
+import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
 import {
   captureDirective,
+  forgetOtherAuthors,
+  foreignSnapshotKeys,
   recoveryOffer,
   transcriptHistoryKey,
   type TranscriptDraftLine,
@@ -115,4 +118,49 @@ test('the key separates authors, lessons and languages', () => {
     transcriptHistoryKey(parts),
   );
   expect(transcriptHistoryKey({ ...parts, language: 'en' })).not.toBe(transcriptHistoryKey(parts));
+});
+
+test('a change of viewer sweeps what is not theirs, and signing out sweeps everything', async () => {
+  // Keying by author stops one person being OFFERED another's text. It does not remove the text,
+  // and on a shared machine "not offered" is not the same as "not there".
+  const keys = ['author-1:lesson-1:uk', 'author-1:lesson-2:en', 'author-2:lesson-1:uk'];
+  expect(foreignSnapshotKeys(keys, 'author-1')).toEqual(['author-2:lesson-1:uk']);
+  expect(foreignSnapshotKeys(keys, 'author-2')).toEqual([
+    'author-1:lesson-1:uk',
+    'author-1:lesson-2:en',
+  ]);
+  // Nobody is viewing: everything goes. Signing out is a change of viewer like any other.
+  expect(foreignSnapshotKeys(keys, null)).toEqual(keys);
+  // A prefix that merely starts the same is a different author, not the same one.
+  expect(foreignSnapshotKeys(['author-10:lesson-1:uk'], 'author-1')).toEqual([
+    'author-10:lesson-1:uk',
+  ]);
+});
+
+test('the sweep removes exactly the foreign keys and survives a store that refuses', async () => {
+  const store = createMemoryTranscriptHistory();
+  const snapshotFor = (key: string) => ({
+    key,
+    capturedAt: 1,
+    expectedUpdatedAt: undefined,
+    lines: [line()],
+  });
+  await store.write(snapshotFor('author-1:lesson-1:uk'));
+  await store.write(snapshotFor('author-2:lesson-1:uk'));
+
+  await forgetOtherAuthors(store, 'author-1');
+  expect(await store.keys()).toEqual(['author-1:lesson-1:uk']);
+
+  await forgetOtherAuthors(store, null);
+  expect(await store.keys()).toEqual([]);
+
+  // Best-effort: a refusal costs a stale snapshot on disk and must never surface as a failure of
+  // whatever page the person is actually on.
+  const refusing = {
+    read: () => Promise.reject(new Error('blocked')),
+    write: () => Promise.reject(new Error('blocked')),
+    clear: () => Promise.reject(new Error('blocked')),
+    keys: () => Promise.reject(new Error('blocked')),
+  };
+  await expect(forgetOtherAuthors(refusing, 'author-1')).resolves.toBeUndefined();
 });

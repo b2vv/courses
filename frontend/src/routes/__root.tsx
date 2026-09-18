@@ -10,9 +10,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { forgetOtherAuthors } from '../application/transcript/recovery';
 import { sessionQueryKey } from '../app/composition/identity-queries';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../presentation/identity/IdentityHeader';
 import { Toast } from '../presentation/ui';
@@ -23,6 +25,7 @@ type RootRouteContext = RootIdentityContext & {
   admin: AdminDependencies;
   catalog: ReturnType<typeof createCatalogDependencies>;
   learn: LearnDependencies;
+  transcriptHistory: TranscriptHistoryStore;
 };
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
@@ -83,11 +86,24 @@ function Document({ children }: { children: ReactNode }) {
 
 function Layout() {
   const { t } = useTranslation();
-  const { identityDependencies } = Route.useRouteContext();
+  const { identityDependencies, transcriptHistory } = Route.useRouteContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [signOutFailed, setSignOutFailed] = useState(false);
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
+
+  // Unsaved editor lines are kept locally so a reload cannot lose them, and they outlive the
+  // session on disk. The author is in their key, so nobody is ever OFFERED another person's text
+  // - but on a shared machine "not offered" is not "not there", so a change of viewer removes
+  // the rest. Signing out is a change of viewer too, which is why this is not tied to signing in.
+  //
+  // Only a SETTLED identity may do this. A pending or failed query leaves `data` undefined, and
+  // acting on that would let one flaky request delete work the author has not saved.
+  const viewerId = session.isSuccess ? (session.data?.id ?? null) : undefined;
+  useEffect(() => {
+    if (viewerId === undefined) return;
+    void forgetOtherAuthors(transcriptHistory, viewerId);
+  }, [viewerId, transcriptHistory]);
   const signOut = useMutation({
     mutationFn: () =>
       identityDependencies.session.logOut().then((result) => identityDependencies.unwrap(result)),

@@ -214,6 +214,7 @@ test('a store that refuses everything costs an offer, never the save', async () 
     read: () => Promise.reject(new Error('blocked')),
     write: () => Promise.reject(new Error('quota')),
     clear: () => Promise.reject(new Error('blocked')),
+    keys: () => Promise.reject(new Error('blocked')),
   };
   let saved = false;
   editor(

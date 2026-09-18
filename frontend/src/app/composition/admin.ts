@@ -10,7 +10,6 @@ import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
 import { createAdminVideoQueries } from './admin-video-queries';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
-import { createTranscriptHistory } from './transcript-history';
 import { createTranscriptQueries } from './transcript-queries';
 
 const requestOptions = createIsomorphicFn()
@@ -27,10 +26,7 @@ export function createAdminDependencies() {
     createLessonVideos(createApiLessonVideoRepository(options)),
   );
   const transcripts = createTranscriptQueries(createApiTranscriptRepository());
-  // Created here, never at module scope: SSR renders many requests in one process, and a shared
-  // store would carry one author's unsaved lines into another author's page.
-  const transcriptHistory = createTranscriptHistory();
-  return { ...courses, users, videos, transcripts, transcriptHistory };
+  return { ...courses, users, videos, transcripts };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

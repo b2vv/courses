@@ -1,3 +1,5 @@
+import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+
 /**
  * Local recovery for the transcript editor. The editor holds its lines in component state, so a
  * reload loses them - and Phase 8 makes that worse rather than better, because recognition takes
@@ -123,6 +125,43 @@ export function captureDirective(
  * All three parts are server-constrained (two UUIDs and a validated BCP-47 tag), so none can
  * contain the delimiter.
  */
+/**
+ * Which stored snapshots must go, given who the viewer now is.
+ *
+ * A snapshot outlives the session on disk. Keying it by author stops one person being OFFERED
+ * another's text, but it does not remove the text, and on a shared machine "not offered" is not
+ * the same as "not there". So the arrival of a different viewer - including no viewer at all,
+ * after a sign-out - is what sweeps the rest away.
+ *
+ * `null` means the viewer is known to be nobody, not that the session is still loading: a
+ * pending or failed identity query must never reach this, or a transient network error would
+ * delete work the author has not saved.
+ */
+export function foreignSnapshotKeys(
+  keys: readonly string[],
+  viewer: string | null,
+): readonly string[] {
+  if (viewer === null) return keys;
+  return keys.filter((key) => key.slice(0, key.indexOf(':')) !== viewer);
+}
+
+/**
+ * Sweep what the current viewer must not keep. Best-effort, like everything else that touches
+ * this store: a refusal costs a stale snapshot on disk, and must never interrupt the page the
+ * person is actually on.
+ */
+export async function forgetOtherAuthors(
+  store: TranscriptHistoryStore,
+  viewer: string | null,
+): Promise<void> {
+  try {
+    const foreign = foreignSnapshotKeys(await store.keys(), viewer);
+    await Promise.all(foreign.map((key) => store.clear(key)));
+  } catch {
+    // Nothing to report: the viewer did not ask for this, and it is not their task that failed.
+  }
+}
+
 export function transcriptHistoryKey(parts: {
   readonly userId: string;
   readonly lessonId: string;

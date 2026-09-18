@@ -80,5 +80,9 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
     write: (snapshot) =>
       run<IDBValidKey>('readwrite', (store) => store.put(snapshot)).then(() => undefined),
     clear: (key) => run<undefined>('readwrite', (store) => store.delete(key)),
+    keys: () =>
+      run<IDBValidKey[]>('readonly', (store) => store.getAllKeys()).then((values) =>
+        values.map(String),
+      ),
   };
 }

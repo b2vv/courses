@@ -13,4 +13,10 @@ export interface TranscriptHistoryStore {
   read(key: string): Promise<TranscriptSnapshot | null>;
   write(snapshot: TranscriptSnapshot): Promise<void>;
   clear(key: string): Promise<void>;
+  /**
+   * Every key held, so that a change of viewer can sweep what is no longer theirs. The store
+   * returns keys and nothing else: which of them are foreign is a decision, and it lives in
+   * `application/transcript/recovery.ts` where it can be read and tested without a browser.
+   */
+  keys(): Promise<readonly string[]>;
 }

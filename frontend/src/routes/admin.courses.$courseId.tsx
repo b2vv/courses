@@ -189,7 +189,7 @@ function AdminOwnerEditor({
   onAuthenticationRequired: () => void;
   video: CourseEditorVideo;
 }) {
-  const { admin } = Route.useRouteContext();
+  const { admin, transcriptHistory } = Route.useRouteContext();
   const transcripts = admin.transcripts;
   const instructors = useQuery(admin.instructors());
   const queryClient = useQueryClient();
@@ -217,7 +217,7 @@ function AdminOwnerEditor({
         // each, and the editor needs exactly one of them at a time.
         useLessonTranscript,
         documents: documents.data ?? [],
-        history: { store: admin.transcriptHistory, authorId: actor.id },
+        history: { store: transcriptHistory, authorId: actor.id },
         library: {
           add: async (document) => {
             const result = await transcripts.transcript.addCourseDocument(course.id, document);

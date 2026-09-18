@@ -490,5 +490,36 @@ test.describe('the transcript editor, with a stored admin session', () => {
       'Правка, яку ніхто не зберіг',
     );
     await expect(page.getByRole('button', { name: 'Відновити зміни' })).toHaveCount(0);
+
+    // A snapshot outlives the session on disk, so a change of viewer must remove what is no
+    // longer theirs. Proved by PLANTING a foreign snapshot rather than by signing out: this spec
+    // rides the shared admin session, and signing out would revoke it for every other spec in the
+    // run. Planting exercises the same sweep on the same real store.
+    await page.evaluate(
+      ([foreignKey, ownKey]) =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open('courses-transcript-history');
+          request.addEventListener('error', () => {
+            reject(request.error ?? new Error('open failed'));
+          });
+          request.addEventListener('success', () => {
+            const transaction = request.result.transaction('snapshots', 'readwrite');
+            const store = transaction.objectStore('snapshots');
+            for (const key of [foreignKey, ownKey]) {
+              store.put({ key, capturedAt: 1, expectedUpdatedAt: undefined, lines: [] });
+            }
+            transaction.addEventListener('complete', () => {
+              resolve();
+            });
+            transaction.addEventListener('error', () => {
+              reject(transaction.error ?? new Error('plant failed'));
+            });
+          });
+        }),
+      ['40000000-0000-4000-8000-000000000009:other-lesson:uk', `${adminID}:other-lesson:uk`],
+    );
+
+    await page.reload();
+    await expect.poll(() => storedSnapshotKeys(page)).toEqual([`${adminID}:other-lesson:uk`]);
   });
 });
