@@ -18,6 +18,10 @@ export type CourseEditorTranscripts = {
     readonly isLoading: boolean;
   };
   readonly documents: readonly TranscriptDocument[];
+  readonly library: {
+    add(document: TranscriptDocument): Promise<TranscriptErrorCode | null>;
+    remove(documentId: string): Promise<TranscriptErrorCode | null>;
+  };
   readonly save: (
     lessonId: string,
     language: string,

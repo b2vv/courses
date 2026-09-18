@@ -15,6 +15,7 @@ import type {
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
 import { LessonVideoField } from './LessonVideoField';
+import { DocumentLibrary } from './DocumentLibrary';
 import { LessonTranscriptField } from './LessonTranscriptField';
 import type { CourseEditorTranscripts } from './LessonTranscriptField';
 import type { CourseEditorVideo } from './LessonVideoField';
@@ -543,6 +544,9 @@ export function CourseEditorView({
             <OwnerField form={form} actor={actor} options={ownerOptions} />
           </div>
         </section>
+        {transcripts !== undefined && (
+          <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
+        )}
         <ModuleFields
           form={form}
           savedLessonIds={savedLessonIds}

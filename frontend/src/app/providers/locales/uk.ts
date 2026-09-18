@@ -104,6 +104,23 @@ export const uk = {
       },
     },
     administration: {
+      documentLibrary: {
+        heading: 'Матеріали курсу',
+        empty: 'Матеріалів ще немає.',
+        label: 'Назва матеріалу',
+        url: 'Посилання',
+        add: 'Додати матеріал',
+        remove: 'Видалити матеріал «{{label}}»',
+        errors: {
+          invalid_request: 'Посилання має починатися з http:// або https:// і не вести в медіа.',
+          transcript_document_limit: 'Забагато матеріалів: щонайбільше 200 на курс.',
+          transcript_document_referenced:
+            'Матеріал використано в транскрипті. Спершу відв’яжіть його від реплік.',
+          transcript_document_exists: 'Такий матеріал уже є.',
+          course_forbidden: 'Немає прав на редагування цього курсу.',
+          unavailable: 'Сервіс недоступний. Спробуйте ще раз.',
+        },
+      },
       transcriptEditor: {
         heading: 'Транскрипт уроку',
         language: 'Мова транскрипту',

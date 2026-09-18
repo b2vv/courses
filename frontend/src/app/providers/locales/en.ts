@@ -101,6 +101,24 @@ export const en = {
       },
     },
     administration: {
+      documentLibrary: {
+        heading: 'Course materials',
+        empty: 'No materials yet.',
+        label: 'Material name',
+        url: 'Link',
+        add: 'Add a material',
+        remove: 'Remove material "{{label}}"',
+        errors: {
+          invalid_request:
+            'The link must start with http:// or https:// and must not point into media.',
+          transcript_document_limit: 'Too many materials: 200 per course at most.',
+          transcript_document_referenced:
+            'The material is used by the transcript. Unlink it from the lines first.',
+          transcript_document_exists: 'That material already exists.',
+          course_forbidden: 'You may not edit this course.',
+          unavailable: 'The service is unavailable. Try again.',
+        },
+      },
       transcriptEditor: {
         heading: 'Lesson transcript',
         language: 'Transcript language',

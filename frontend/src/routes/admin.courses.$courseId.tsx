@@ -192,7 +192,10 @@ function AdminOwnerEditor({
   const { admin } = Route.useRouteContext();
   const transcripts = admin.transcripts;
   const instructors = useQuery(admin.instructors());
-  const documents = useQuery(transcripts.documents(course.id));
+  const queryClient = useQueryClient();
+  const documentsQuery = transcripts.documents(course.id);
+  const documentsKey = documentsQuery.queryKey;
+  const documents = useQuery(documentsQuery);
   // Declared as a hook because it is one: it runs inside the field's render, and a name that hid
   // that would also hide it from the rules that verify hook usage.
   function useLessonTranscript(lessonId: string) {
@@ -214,6 +217,18 @@ function AdminOwnerEditor({
         // each, and the editor needs exactly one of them at a time.
         useLessonTranscript,
         documents: documents.data ?? [],
+        library: {
+          add: async (document) => {
+            const result = await transcripts.transcript.addCourseDocument(course.id, document);
+            if (result.ok) await queryClient.invalidateQueries({ queryKey: documentsKey });
+            return result.ok ? null : result.error.code;
+          },
+          remove: async (documentId) => {
+            const result = await transcripts.transcript.removeCourseDocument(course.id, documentId);
+            if (result.ok) await queryClient.invalidateQueries({ queryKey: documentsKey });
+            return result.ok ? null : result.error.code;
+          },
+        },
         save: async (lessonId, language, expectedUpdatedAt, segments) => {
           const result = await transcripts.transcript.saveLessonTranscript(lessonId, {
             language,
