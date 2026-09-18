@@ -41,7 +41,9 @@ test('a lesson without a transcript says so instead of showing an empty list', (
 });
 
 test('exactly one line is current, and it follows the position', () => {
-  const { rerender } = render(<TranscriptPanel transcript={transcript} positionMs={1_000} />);
+  const { rerender } = render(
+    <TranscriptPanel transcript={transcript} positionMs={1_000} onSeek={() => undefined} />,
+  );
   expect(
     screen.getAllByRole('listitem').filter((item) => item.getAttribute('aria-current')),
   ).toHaveLength(1);
@@ -52,7 +54,9 @@ test('exactly one line is current, and it follows the position', () => {
       ?.getAttribute('aria-current'),
   ).toBe('true');
 
-  rerender(<TranscriptPanel transcript={transcript} positionMs={66_000} />);
+  rerender(
+    <TranscriptPanel transcript={transcript} positionMs={66_000} onSeek={() => undefined} />,
+  );
   expect(
     screen
       .getByRole('button', { name: 'Перейти до 01:05' })
@@ -77,13 +81,14 @@ test('clicking a line seeks to its start', () => {
   expect(seeks).toEqual([65_000]);
 });
 
-test('lines are not clickable while the player cannot seek', () => {
-  // Before the first play the duration is unknown, and a seek would be clamped into the first
-  // second — a click that silently goes somewhere else is worse than one that is unavailable.
+test('without a seek a line is text, not a dead control', () => {
+  // Before the first play the duration is unknown and a seek would land in the first second. A
+  // DISABLED button would be worse than no button: it drops out of keyboard traversal, so the
+  // text itself would stop being reachable for exactly the readers a transcript is for.
   render(<TranscriptPanel transcript={transcript} positionMs={0} />);
-  expect(screen.getByRole('button', { name: 'Перейти до 00:00' }).hasAttribute('disabled')).toBe(
-    true,
-  );
+  expect(screen.queryByRole('button', { name: 'Перейти до 00:00' })).toBeNull();
+  expect(screen.getByText('Перша репліка про канали')).toBeTruthy();
+  expect(screen.getByText('00:00')).toBeTruthy();
 });
 
 test('search narrows to matching lines and names the empty result', () => {

@@ -106,18 +106,35 @@ export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPa
               className={isActive ? 'transcript-line transcript-line-active' : 'transcript-line'}
               aria-current={isActive ? 'true' : undefined}
             >
-              <button
-                type="button"
-                disabled={onSeek === undefined}
-                aria-label={t('learn.transcript.seek', { time: timestamp(segment.startMs) })}
-                onClick={() => onSeek?.(segment.startMs)}
-              >
-                <time>{timestamp(segment.startMs)}</time>
-                {segment.speaker === undefined ? null : (
-                  <span className="transcript-speaker">{segment.speaker}</span>
-                )}
-                <span className="transcript-text">{segment.text}</span>
-              </button>
+              {/*
+                A line is a BUTTON only while seeking is possible. A disabled button is removed
+                from keyboard traversal, so rendering one would make the text itself unreachable
+                for anyone not using a mouse — the transcript exists precisely for those readers.
+                Without a seek the same content is plain text: readable, reachable, and not a dead
+                control that invites a click which does nothing.
+              */}
+              {onSeek === undefined ? (
+                <p className="transcript-line-body">
+                  <time>{timestamp(segment.startMs)}</time>
+                  {segment.speaker === undefined ? null : (
+                    <span className="transcript-speaker">{segment.speaker}</span>
+                  )}
+                  <span className="transcript-text">{segment.text}</span>
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="transcript-line-body"
+                  aria-label={t('learn.transcript.seek', { time: timestamp(segment.startMs) })}
+                  onClick={() => onSeek(segment.startMs)}
+                >
+                  <time>{timestamp(segment.startMs)}</time>
+                  {segment.speaker === undefined ? null : (
+                    <span className="transcript-speaker">{segment.speaker}</span>
+                  )}
+                  <span className="transcript-text">{segment.text}</span>
+                </button>
+              )}
               {documents.length === 0 ? null : (
                 <ul className="transcript-documents" aria-label={t('learn.transcript.documents')}>
                   {documents.map((document) => (

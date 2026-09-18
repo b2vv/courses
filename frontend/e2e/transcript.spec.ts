@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Browser } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
+import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
@@ -107,6 +108,26 @@ async function seed(request: APIRequestContext, baseURL: string) {
   return course;
 }
 
+declare global {
+  interface Window {
+    axe: typeof axe;
+  }
+}
+
+async function transcriptAxe(page: Page) {
+  await page.addScriptTag({ content: axe.source });
+  return page.evaluate(async () => {
+    const region = document.querySelector('.transcript');
+    if (region === null) return { violations: ['the transcript region is absent'], incomplete: [] };
+    const results = await window.axe.run(region, {
+      runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'],
+    });
+    const names = (items: typeof results.violations) =>
+      items.flatMap((item) => item.nodes.map((node) => `${item.id} ${node.target.join(' ')}`));
+    return { violations: names(results.violations), incomplete: names(results.incomplete) };
+  });
+}
+
 test.describe('with a stored admin session', () => {
   test.use({ storageState: authStatePath('admin') });
 
@@ -127,11 +148,8 @@ test.describe('with a stored admin session', () => {
 
       const transcript = studentPage.getByRole('region', { name: 'Транскрипт' });
       await expect(transcript.getByRole('listitem').first()).toContainText('Перша репліка');
-      await expect(transcript.getByRole('button', { name: 'Перейти до 01:05' })).toBeVisible();
-
-      // No video means no known duration, so seeking is unavailable rather than silently landing
-      // in the first second.
-      await expect(transcript.getByRole('button', { name: 'Перейти до 00:00' })).toBeDisabled();
+      // Timestamps are rendered for every line, whether or not seeking is possible.
+      await expect(transcript.getByText('01:05')).toBeVisible();
 
       // Search runs over the whole lesson because the read is never paginated.
       await transcript.getByRole('searchbox').fill('горутини');
@@ -140,6 +158,26 @@ test.describe('with a stored admin session', () => {
 
       await transcript.getByRole('searchbox').fill('слова-якого-немає');
       await expect(transcript.getByText('Нічого не знайдено.')).toBeVisible();
+      await transcript.getByRole('searchbox').fill('');
+
+      // A25-A27 measured on the real surface rather than on a component in isolation: the panel
+      // shares a page with the player, and contrast and focus are properties of that page.
+      expect(await transcriptAxe(studentPage)).toEqual({ violations: [], incomplete: [] });
+
+      // Without a video there is no seek, so a line is TEXT rather than a disabled button: a
+      // disabled control drops out of keyboard traversal and would make the text itself
+      // unreachable for exactly the readers a transcript exists for. Asserting the absence of a
+      // dead control is the honest measurement here; the keyboard journey over real lines belongs
+      // where a video makes seeking possible.
+      await expect(transcript.getByRole('button', { name: /Перейти до/ })).toHaveCount(0);
+      await expect(transcript.getByText('Перша репліка')).toBeVisible();
+
+      // Dark theme and 200% text zoom must not cut the lines off or overlap them.
+      await studentPage.emulateMedia({ colorScheme: 'dark' });
+      await studentPage.setViewportSize({ width: 640, height: 720 });
+      await studentPage.addStyleTag({ content: 'html { font-size: 200%; }' });
+      await expect(transcript.getByRole('listitem').first()).toBeVisible();
+      expect(await transcriptAxe(studentPage)).toEqual({ violations: [], incomplete: [] });
 
       // The WebVTT anchor is NOT here, and that is a finding rather than an omission: this
       // journey deliberately has no video so it stays out of the media chain, and a caption track
