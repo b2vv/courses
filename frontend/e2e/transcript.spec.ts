@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
@@ -11,7 +12,21 @@ import { contractField } from './contract';
 const runNamespace = `e2e-transcript-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const adminID = '40000000-0000-4000-8000-000000000003';
 
+// The SHORTEST fixture the media setup generates: two seconds, so a real transcode costs seconds
+// rather than the five minutes the playback journey pays. Two open measurements — the browser
+// parsing our WebVTT, and keyboard traversal over real lines — both need a <video>, which only
+// exists when a lesson has one. This is the cheapest lesson that truly has one.
+const shortVideo = path.join(
+  import.meta.dirname,
+  '..',
+  'playwright',
+  '.fixtures',
+  'e2e-640x360.mp4',
+);
+
 const moduleID = randomUUID();
+const videoLessonID = randomUUID();
+const videoModuleID = randomUUID();
 const lessonID = randomUUID();
 const firstSegment = randomUUID();
 const secondSegment = randomUUID();
@@ -194,3 +209,125 @@ test.describe('with a stored admin session', () => {
 async function openStudent(browser: Browser, baseURL: string) {
   return browser.newContext({ baseURL, storageState: authStatePath('student') });
 }
+
+test.describe('with a real two-second video', () => {
+  test.use({ storageState: authStatePath('admin') });
+
+  test('the browser parses our WebVTT, and lines are reachable by keyboard', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(300_000);
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const headers = { Origin: new URL(baseURL).origin };
+    const slug = `${runNamespace}-video`;
+
+    const created = await page.request.post('/api/v1/admin/courses', {
+      data: { ...draft, slug, title: `Субтитри ${runNamespace}` },
+      headers,
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const course = token((await created.json()) as object);
+
+    const saved = await page.request.put(`/api/v1/admin/courses/${course.id}`, {
+      data: {
+        expectedUpdatedAt: course.updatedAt,
+        course: { ...draft, slug, title: `Субтитри ${runNamespace}` },
+        modules: [
+          {
+            id: videoModuleID,
+            title: `Модуль ${runNamespace}`,
+            lessons: [
+              { id: videoLessonID, title: `Урок з відео ${runNamespace}`, description: '' },
+            ],
+          },
+        ],
+      },
+      headers,
+    });
+    expect(saved.status(), await saved.text()).toBe(200);
+    const tree = token((await saved.json()) as object);
+
+    // Uploaded through the editor, the way an author does it — the upload contract belongs to
+    // Phase 5 and this journey must not invent a second way into it.
+    await page.goto(`/admin/courses/${course.id}`);
+    const minted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/admin/lessons/${videoLessonID}/video` &&
+        response.request().method() === 'POST',
+    );
+    await page
+      .getByRole('group', { name: 'Модуль 1' })
+      .getByRole('group', { name: 'Урок 1' })
+      .locator('input[type="file"]')
+      .setInputFiles(shortVideo);
+    expect((await minted).status()).toBe(201);
+    await expect
+      .poll(
+        async () => {
+          const listed = await page.request.get(`/api/v1/admin/courses/${course.id}/videos`);
+          if (listed.status() !== 200) return `http ${listed.status()}`;
+          const body = (await listed.json()) as { items?: { state?: unknown }[] };
+          return body.items?.[0]?.state ?? 'absent';
+        },
+        { timeout: 240_000, intervals: [1_000] },
+      )
+      .toBe('ready');
+
+    const published = await page.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+      data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
+      headers,
+    });
+    expect(published.status(), await published.text()).toBe(200);
+
+    const written = await page.request.put(`/api/v1/admin/lessons/${videoLessonID}/transcript`, {
+      data: {
+        language: 'uk',
+        segments: [
+          // Spaced across a second boundary: both lines inside the first second would render the
+          // same 00:00 label, and the assertion below would then be ambiguous rather than wrong.
+          { id: randomUUID(), startMs: 0, endMs: 900, text: 'Перша секунда', documentIds: [] },
+          { id: randomUUID(), startMs: 1000, endMs: 1900, text: 'Друга секунда', documentIds: [] },
+        ],
+      },
+      headers,
+    });
+    expect(written.status(), await written.text()).toBe(200);
+
+    const context = await openStudent(browser, baseURL);
+    try {
+      const studentPage = await context.newPage();
+      await studentPage.goto(`/learn/${slug}/${videoLessonID}`);
+      const transcript = studentPage.getByRole('region', { name: 'Транскрипт' });
+      await expect(transcript.getByText('Перша секунда')).toBeVisible();
+
+      // THE EXTERNAL ANCHOR. A round trip through our own parser proves only that we agree with
+      // ourselves; here the browser parses the file, so the judge is not our code. This is the one
+      // measurement in the phase that passes through none of it.
+      const captions = await studentPage.evaluate(async () => {
+        const video = document.querySelector('video');
+        if (video === null) return { tracks: 0, cues: 0, kind: '' };
+        const track = video.textTracks[0];
+        if (track === undefined) return { tracks: video.textTracks.length, cues: 0, kind: '' };
+        track.mode = 'showing';
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        return { tracks: video.textTracks.length, cues: track.cues?.length ?? 0, kind: track.kind };
+      });
+      expect(captions.tracks, 'the video carries a caption track').toBe(1);
+      expect(captions.kind).toBe('captions');
+      expect(captions.cues, 'the browser parsed our WebVTT into cues').toBe(2);
+
+      // Seeking becomes possible once the duration is known, and only then does a line become a
+      // control. Keyboard traversal over real lines is measurable exactly here.
+      await studentPage.getByRole('button', { name: 'Відтворити' }).click();
+      const firstLine = transcript.getByRole('button', { name: 'Перейти до 00:00' });
+      await expect(firstLine).toBeVisible();
+      await transcript.getByRole('searchbox').focus();
+      await studentPage.keyboard.press('Tab');
+      await expect(studentPage.locator(':focus')).toHaveAttribute('aria-label', /Перейти до/);
+    } finally {
+      await context.close();
+    }
+  });
+});
