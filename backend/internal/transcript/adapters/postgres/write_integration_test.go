@@ -127,3 +127,84 @@ func runWriteTests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, author
 		}
 	})
 }
+
+func runLibraryTests(t *testing.T, ctx context.Context, library *application.Library, authoring *application.Authoring) {
+	owner := domain.Actor{UserID: ownerAccount}
+	stranger := domain.Actor{UserID: strangerAccount}
+	const courseID = "10000000-0000-4000-8000-0000000000c1"
+	const docA = "61000000-0000-4000-8000-000000000001"
+	const docB = "61000000-0000-4000-8000-000000000002"
+
+	t.Run("only someone who may edit sees or changes the library", func(t *testing.T) {
+		// Reading the library is an authoring surface, not a watching one: a student never picks
+		// documents, and a published course is watchable by everyone signed in.
+		if _, err := library.List(ctx, stranger, courseID); err != domain.ErrForbidden {
+			t.Fatalf("stranger listing err = %v; want forbidden", err)
+		}
+		if err := library.Add(ctx, stranger, courseID, domain.DocumentLink{
+			ID: docA, Label: "Чуже", URL: "https://example.test/x",
+		}); err != domain.ErrForbidden {
+			t.Fatalf("stranger adding err = %v; want forbidden", err)
+		}
+	})
+
+	t.Run("a link that is not http(s), or points into the media tree, never enters", func(t *testing.T) {
+		for _, raw := range []string{
+			"javascript:alert(1)",
+			"data:text/html,<script>",
+			"https://example.test/media/p/abc/hls/x.m3u8",
+		} {
+			if err := library.Add(ctx, owner, courseID, domain.DocumentLink{
+				ID: docA, Label: "Погане", URL: raw,
+			}); err != domain.ErrInvalidRequest {
+				t.Fatalf("url %q err = %v; want invalid_request", raw, err)
+			}
+		}
+	})
+
+	t.Run("a document is added, listed, and cannot be removed while a line points at it", func(t *testing.T) {
+		if err := library.Add(ctx, owner, courseID, domain.DocumentLink{
+			ID: docA, Label: "Довідка", URL: "https://example.test/a",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		listed, listErr := library.List(ctx, owner, courseID)
+		if listErr != nil || len(listed) == 0 {
+			t.Fatalf("list after add: %d entries, err=%v", len(listed), listErr)
+		}
+
+		token, err := authoring.Save(ctx, owner, application.SaveRequest{
+			LessonID: bareLesson, Language: "pl",
+			Segments: []domain.Segment{segment(newSegmentID(1), "з лінком", 0, 100, docA)},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := library.Remove(ctx, owner, courseID, docA); err != domain.ErrDocumentReferenced {
+			t.Fatalf("removing a referenced document err = %v; want transcript_document_referenced", err)
+		}
+
+		// Unlinking is what frees it — and that is the path out of a full library, so it is
+		// measured rather than assumed.
+		if _, err := authoring.Save(ctx, owner, application.SaveRequest{
+			LessonID: bareLesson, Language: "pl",
+			ExpectedUpdatedAt: token,
+			Segments:          []domain.Segment{segment(newSegmentID(2), "без лінка", 0, 100)},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := library.Remove(ctx, owner, courseID, docA); err != nil {
+			t.Fatalf("removing an unreferenced document: %v", err)
+		}
+	})
+
+	t.Run("a duplicate id is named, not a 500", func(t *testing.T) {
+		link := domain.DocumentLink{ID: docB, Label: "Дубль", URL: "https://example.test/b"}
+		if err := library.Add(ctx, owner, courseID, link); err != nil {
+			t.Fatal(err)
+		}
+		if err := library.Add(ctx, owner, courseID, link); err != domain.ErrDocumentExists {
+			t.Fatalf("duplicate err = %v; want transcript_document_exists", err)
+		}
+	})
+}

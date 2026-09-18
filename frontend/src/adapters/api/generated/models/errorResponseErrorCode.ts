@@ -29,6 +29,8 @@ export const ErrorResponseErrorCode = {
   course_not_deletable: 'course_not_deletable',
   course_modified: 'course_modified',
   lesson_limit: 'lesson_limit',
+  transcript_document_referenced: 'transcript_document_referenced',
+  transcript_document_exists: 'transcript_document_exists',
   transcript_segment_limit: 'transcript_segment_limit',
   transcript_text_limit: 'transcript_text_limit',
   transcript_document_limit: 'transcript_document_limit',

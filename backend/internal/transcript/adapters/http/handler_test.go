@@ -44,6 +44,22 @@ func (stub *stubRepository) GetLessonTranscript(_ context.Context, _ string, lan
 	return stub.result, stub.err
 }
 
+func (stub *stubRepository) CourseOfID(context.Context, string) (domain.Course, error) {
+	return stub.result.Course, stub.err
+}
+
+func (stub *stubRepository) CourseDocuments(context.Context, string) ([]domain.DocumentLink, error) {
+	return nil, stub.err
+}
+
+func (stub *stubRepository) AddCourseDocument(context.Context, string, domain.DocumentLink) error {
+	return stub.saveErr
+}
+
+func (stub *stubRepository) RemoveCourseDocument(context.Context, string, string) error {
+	return stub.saveErr
+}
+
 func (stub *stubRepository) LessonCourse(context.Context, string) (domain.Course, error) {
 	return stub.result.Course, stub.err
 }

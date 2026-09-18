@@ -45,6 +45,22 @@ type TranscriptRepository interface {
 	// so authorization does not depend on whether any text exists yet.
 	LessonCourse(ctx context.Context, lessonID string) (domain.Course, error)
 
+	// CourseDocuments lists the library of one course, ordered deterministically.
+	CourseDocuments(ctx context.Context, courseID string) ([]domain.DocumentLink, error)
+
+	// AddCourseDocument refuses with ErrDocumentLimit when the library is full. The ceiling is
+	// checked inside the same transaction as the insert, or two concurrent additions both see
+	// room and both take it.
+	AddCourseDocument(ctx context.Context, courseID string, link domain.DocumentLink) error
+
+	// RemoveCourseDocument refuses with ErrDocumentReferenced while any segment still points at
+	// it. Deleting a course still cascades: this rule governs the author's action, not the
+	// cascade, or saving a course tree would start failing on a flow that already works.
+	RemoveCourseDocument(ctx context.Context, courseID, documentID string) error
+
+	// CourseOfID returns the course facts for authorisation of library operations.
+	CourseOfID(ctx context.Context, courseID string) (domain.Course, error)
+
 	// SaveLessonTranscript replaces the transcript in one transaction and stamps the generation
 	// of the ready asset it was written against. It returns the new token.
 	SaveLessonTranscript(ctx context.Context, save SaveTranscript) (string, error)

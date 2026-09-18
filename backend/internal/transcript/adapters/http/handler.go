@@ -132,6 +132,10 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_text_limit", "A segment accepts at most 1000 characters")
 	case errors.Is(err, domain.ErrDocumentLimit):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_document_limit", "A segment accepts at most 3 documents")
+	case errors.Is(err, domain.ErrDocumentReferenced):
+		httpserver.WriteError(w, r, http.StatusConflict, "transcript_document_referenced", "The document is still referenced by a transcript line")
+	case errors.Is(err, domain.ErrDocumentExists):
+		httpserver.WriteError(w, r, http.StatusConflict, "transcript_document_exists", "A document with that id already exists")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
 	default:

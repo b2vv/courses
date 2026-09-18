@@ -39,6 +39,7 @@ import type {
   LessonTranscript,
   ListAdminCoursesParams,
   ListAdminUsersParams,
+  ListCourseDocuments200,
   ListPublishedCoursesParams,
   LoginRequest,
   MediaBadRequestResponse,
@@ -58,6 +59,7 @@ import type {
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TranscriptConflictResponse,
+  TranscriptDocumentLink,
   UnauthenticatedResponse,
   UnavailableResponse,
   UploadConflictResponse,
@@ -1775,6 +1777,253 @@ export const getLessonTranscript = async (lessonId: string,
 
   const data: getLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getLessonTranscriptResponse
+}
+
+
+
+export type listCourseDocumentsResponse200 = {
+  data: ListCourseDocuments200
+  status: 200
+}
+
+export type listCourseDocumentsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listCourseDocumentsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listCourseDocumentsResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type listCourseDocumentsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listCourseDocumentsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listCourseDocumentsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listCourseDocumentsResponseSuccess = (listCourseDocumentsResponse200) & {
+  headers: Headers;
+};
+export type listCourseDocumentsResponseError = (listCourseDocumentsResponse400 | listCourseDocumentsResponse401 | listCourseDocumentsResponse403 | listCourseDocumentsResponse404 | listCourseDocumentsResponse500 | listCourseDocumentsResponse503) & {
+  headers: Headers;
+};
+
+export type listCourseDocumentsResponse = (listCourseDocumentsResponseSuccess | listCourseDocumentsResponseError)
+
+export const getListCourseDocumentsUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
+}
+
+/**
+ * The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it.
+ * @summary List the course document library
+ */
+export const listCourseDocuments = async (courseId: string, options?: RequestInit): Promise<listCourseDocumentsResponse> => {
+
+  const res = await fetch(getListCourseDocumentsUrl(courseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCourseDocumentsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listCourseDocumentsResponse
+}
+
+
+
+export type addCourseDocumentResponse201 = {
+  data: void
+  status: 201
+}
+
+export type addCourseDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type addCourseDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type addCourseDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type addCourseDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type addCourseDocumentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type addCourseDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type addCourseDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type addCourseDocumentResponseSuccess = (addCourseDocumentResponse201) & {
+  headers: Headers;
+};
+export type addCourseDocumentResponseError = (addCourseDocumentResponse400 | addCourseDocumentResponse401 | addCourseDocumentResponse403 | addCourseDocumentResponse404 | addCourseDocumentResponse409 | addCourseDocumentResponse500 | addCourseDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type addCourseDocumentResponse = (addCourseDocumentResponseSuccess | addCourseDocumentResponseError)
+
+export const getAddCourseDocumentUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
+}
+
+/**
+ * Only http(s) is accepted, and a path under /media/ is refused outright: a transcript must not become a second way to name media bytes.
+ * @summary Add a document to the course library
+ */
+export const addCourseDocument = async (courseId: string,
+    transcriptDocumentLink: TranscriptDocumentLink, options?: RequestInit): Promise<addCourseDocumentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getAddCourseDocumentUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transcriptDocumentLink)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as addCourseDocumentResponse
+}
+
+
+
+export type removeCourseDocumentResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeCourseDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type removeCourseDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type removeCourseDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type removeCourseDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type removeCourseDocumentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type removeCourseDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type removeCourseDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type removeCourseDocumentResponseSuccess = (removeCourseDocumentResponse204) & {
+  headers: Headers;
+};
+export type removeCourseDocumentResponseError = (removeCourseDocumentResponse400 | removeCourseDocumentResponse401 | removeCourseDocumentResponse403 | removeCourseDocumentResponse404 | removeCourseDocumentResponse409 | removeCourseDocumentResponse500 | removeCourseDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type removeCourseDocumentResponse = (removeCourseDocumentResponseSuccess | removeCourseDocumentResponseError)
+
+export const getRemoveCourseDocumentUrl = (courseId: string,
+    documentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents/${documentId}`
+}
+
+/**
+ * Refused while any segment still references it, so a reference can never point at nothing. This governs the author's action only; deleting the course still cascades.
+ * @summary Remove a document from the course library
+ */
+export const removeCourseDocument = async (courseId: string,
+    documentId: string, options?: RequestInit): Promise<removeCourseDocumentResponse> => {
+
+  const res = await fetch(getRemoveCourseDocumentUrl(courseId,documentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeCourseDocumentResponse
 }
 
 

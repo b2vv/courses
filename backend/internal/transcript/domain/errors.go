@@ -25,6 +25,12 @@ const (
 	// one course library.
 	ErrDocumentLimit Error = "transcript_document_limit"
 
+	// ErrDocumentReferenced is the refusal that keeps a segment from pointing at nothing. Named
+	// rather than generic because the editor can then tell the author to unlink it first.
+	ErrDocumentReferenced Error = "transcript_document_referenced"
+
+	ErrDocumentExists Error = "transcript_document_exists"
+
 	// ErrTranscriptModified is the optimistic-lock refusal (D-9). The same shape as
 	// course.ErrCourseModified, because the expectation it sets for the author is the same.
 	ErrTranscriptModified Error = "transcript_modified"

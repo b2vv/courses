@@ -62,6 +62,7 @@ export * from './listAdminCoursesParams.ts';
 export * from './listAdminCoursesStatus.ts';
 export * from './listAdminUsersParams.ts';
 export * from './listAdminUsersStatus.ts';
+export * from './listCourseDocuments200.ts';
 export * from './listPublishedCoursesParams.ts';
 export * from './listPublishedCoursesSort.ts';
 export * from './loginRequest.ts';

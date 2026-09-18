@@ -254,6 +254,7 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 	})
 
 	runWriteTests(t, ctx, pool, authoring, reading)
+	runLibraryTests(t, ctx, application.NewLibrary(repository), authoring)
 }
 
 var segmentIDs = [...]string{

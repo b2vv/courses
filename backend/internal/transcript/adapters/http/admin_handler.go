@@ -18,10 +18,13 @@ import (
 // refusal below would be unreachable.
 const maximumTranscriptBody = 4 * 1024 * 1024
 
-type AdminHandler struct{ authoring *application.Authoring }
+type AdminHandler struct {
+	authoring *application.Authoring
+	library   *application.Library
+}
 
-func NewAdminHandler(authoring *application.Authoring) *AdminHandler {
-	return &AdminHandler{authoring: authoring}
+func NewAdminHandler(authoring *application.Authoring, library *application.Library) *AdminHandler {
+	return &AdminHandler{authoring: authoring, library: library}
 }
 
 func (handler *AdminHandler) RegisterAdmin(
@@ -31,6 +34,86 @@ func (handler *AdminHandler) RegisterAdmin(
 ) {
 	mux.Handle("PUT /api/v1/admin/lessons/{lessonId}/transcript",
 		authenticate(sameOrigin(http.HandlerFunc(handler.save))))
+	mux.Handle("GET /api/v1/admin/courses/{courseId}/documents",
+		authenticate(http.HandlerFunc(handler.listDocuments)))
+	mux.Handle("POST /api/v1/admin/courses/{courseId}/documents",
+		authenticate(sameOrigin(http.HandlerFunc(handler.addDocument))))
+	mux.Handle("DELETE /api/v1/admin/courses/{courseId}/documents/{documentId}",
+		authenticate(sameOrigin(http.HandlerFunc(handler.removeDocument))))
+}
+
+const maximumDocumentBody = 8 * 1024
+
+func (handler *AdminHandler) adminActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
+	transportActor, ok := httpserver.ActorFromContext(r.Context())
+	if !ok {
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+		return domain.Actor{}, false
+	}
+	return domain.Actor{
+		UserID: transportActor.UserID, Administrator: transportActor.Role == "admin",
+	}, true
+}
+
+func (handler *AdminHandler) listDocuments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	actor, ok := handler.adminActor(w, r)
+	if !ok {
+		return
+	}
+	documents, err := handler.library.List(r.Context(), actor, r.PathValue("courseId"))
+	if err != nil {
+		writeTranscriptError(w, r, err)
+		return
+	}
+	mapped := make([]documentDTO, 0, len(documents))
+	for _, link := range documents {
+		mapped = append(mapped, documentDTO{ID: link.ID, Label: link.Label, URL: link.URL})
+	}
+	httpserver.WriteJSON(w, http.StatusOK, struct {
+		Documents []documentDTO `json:"documents"`
+	}{Documents: mapped})
+}
+
+func (handler *AdminHandler) addDocument(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	actor, ok := handler.adminActor(w, r)
+	if !ok {
+		return
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maximumDocumentBody))
+	decoder.DisallowUnknownFields()
+	var request documentDTO
+	if err := decoder.Decode(&request); err != nil {
+		writeTranscriptError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		writeTranscriptError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	err := handler.library.Add(r.Context(), actor, r.PathValue("courseId"), domain.DocumentLink{
+		ID: request.ID, Label: request.Label, URL: request.URL,
+	})
+	if err != nil {
+		writeTranscriptError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (handler *AdminHandler) removeDocument(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	actor, ok := handler.adminActor(w, r)
+	if !ok {
+		return
+	}
+	err := handler.library.Remove(r.Context(), actor, r.PathValue("courseId"), r.PathValue("documentId"))
+	if err != nil {
+		writeTranscriptError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type saveSegmentRequest struct {

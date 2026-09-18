@@ -61,8 +61,10 @@ func main() {
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)
+		transcriptRepository := transcriptpostgres.NewRepository(dependencies.Database)
 		transcriptAdminHandler := transcripthttp.NewAdminHandler(
-			transcriptapplication.NewAuthoring(transcriptpostgres.NewRepository(dependencies.Database)),
+			transcriptapplication.NewAuthoring(transcriptRepository),
+			transcriptapplication.NewLibrary(transcriptRepository),
 		)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
