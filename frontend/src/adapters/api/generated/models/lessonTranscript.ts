@@ -17,6 +17,11 @@ export interface LessonTranscript {
      * @nullable
      */
   language: string | null;
+  /**
+     * The optimistic-lock token to send back when saving, null when the lesson has no transcript. Without it on the read an author could never obtain the token the write demands, and the editing loop could not close.
+     * @nullable
+     */
+  updatedAt: string | null;
   /** Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale. */
   stale: boolean;
   /** @maxItems 5000 */

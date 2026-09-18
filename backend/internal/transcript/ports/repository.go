@@ -14,6 +14,10 @@ type LessonTranscript struct {
 	Course     domain.Course
 	Transcript domain.Transcript
 
+	// UpdatedAt is the optimistic-lock token. Without it on the read, an author has no way to
+	// obtain the token the write demands — the editing loop would be impossible to close.
+	UpdatedAt string
+
 	// ReadyGeneration is the generation of the asset the player would pick, and zero when the
 	// lesson has no ready asset. Only a ready asset counts: a lesson whose first video is still
 	// uploading, or whose transcode failed, must not read as stale.

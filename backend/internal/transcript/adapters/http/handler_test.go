@@ -81,7 +81,7 @@ func published(segments []domain.Segment, documents []domain.DocumentLink, gener
 		panic(err)
 	}
 	return ports.LessonTranscript{
-		Found: true, ReadyGeneration: ready,
+		Found: true, ReadyGeneration: ready, UpdatedAt: "2026-09-18T00:00:00Z",
 		Course:     domain.Course{OwnerID: ownerID, Status: domain.Published},
 		Transcript: transcript,
 	}
@@ -129,10 +129,11 @@ func TestTranscriptReadMatchesOpenAPI(t *testing.T) {
 	assertContract(t, r, response, true)
 
 	var body struct {
-		LessonID string  `json:"lessonId"`
-		Language *string `json:"language"`
-		Stale    bool    `json:"stale"`
-		Segments []struct {
+		LessonID  string  `json:"lessonId"`
+		Language  *string `json:"language"`
+		UpdatedAt *string `json:"updatedAt"`
+		Stale     bool    `json:"stale"`
+		Segments  []struct {
 			DocumentIDs []string `json:"documentIds"`
 		} `json:"segments"`
 		Documents []struct {
@@ -144,6 +145,11 @@ func TestTranscriptReadMatchesOpenAPI(t *testing.T) {
 	}
 	if body.Language == nil || *body.Language != "uk" {
 		t.Fatalf("language = %v; want uk", body.Language)
+	}
+	// Without the token on the read, an author could never obtain what the write demands: the
+	// editing loop would not close, and every save would look like a first write.
+	if body.UpdatedAt == nil || *body.UpdatedAt == "" {
+		t.Fatal("the read does not carry the optimistic-lock token")
 	}
 	// The segment references; the library travels once. This is the shape that keeps the
 	// worst case at ~13 MiB instead of ~75 MiB, so it is asserted, not assumed.

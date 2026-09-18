@@ -15,6 +15,8 @@ import type {
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
 import { LessonVideoField } from './LessonVideoField';
+import { LessonTranscriptField } from './LessonTranscriptField';
+import type { CourseEditorTranscripts } from './LessonTranscriptField';
 import type { CourseEditorVideo } from './LessonVideoField';
 
 type CourseFormValues = {
@@ -43,6 +45,7 @@ type CourseEditorViewProps = {
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
   video?: CourseEditorVideo;
+  transcripts?: CourseEditorTranscripts;
 };
 
 type CourseCreateDialogProps = {
@@ -218,11 +221,13 @@ function LessonFields({
   moduleIndex,
   savedLessonIds,
   video,
+  transcripts,
 }: {
   form: UseFormReturn<CourseFormValues>;
   moduleIndex: number;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
+  transcripts: CourseEditorTranscripts | undefined;
 }) {
   const { t } = useTranslation();
   const lessons = useFieldArray({
@@ -264,6 +269,9 @@ function LessonFields({
               isSaved={savedLessonIds.has(lesson.id)}
               {...video}
             />
+          )}
+          {transcripts !== undefined && savedLessonIds.has(lesson.id) && (
+            <LessonTranscriptField lessonId={lesson.id} {...transcripts} />
           )}
           <div className="admin-row-actions">
             <Button
@@ -313,10 +321,12 @@ function ModuleFields({
   form,
   savedLessonIds,
   video,
+  transcripts,
 }: {
   form: UseFormReturn<CourseFormValues>;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
+  transcripts: CourseEditorTranscripts | undefined;
 }) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
@@ -346,6 +356,7 @@ function ModuleFields({
               moduleIndex={moduleIndex}
               savedLessonIds={savedLessonIds}
               video={video}
+              transcripts={transcripts}
             />
             <div className="admin-row-actions">
               <Button
@@ -400,6 +411,7 @@ export function CourseEditorView({
   onDelete,
   onAuthenticationRequired,
   video,
+  transcripts,
 }: CourseEditorViewProps) {
   const { t } = useTranslation();
   const [message, setMessage] = useState<string>();
@@ -531,7 +543,12 @@ export function CourseEditorView({
             <OwnerField form={form} actor={actor} options={ownerOptions} />
           </div>
         </section>
-        <ModuleFields form={form} savedLessonIds={savedLessonIds} video={video} />
+        <ModuleFields
+          form={form}
+          savedLessonIds={savedLessonIds}
+          video={video}
+          transcripts={transcripts}
+        />
         <div className="admin-editor-save">
           <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
             {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}

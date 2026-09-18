@@ -37,6 +37,7 @@ type segmentDTO struct {
 type transcriptDTO struct {
 	LessonID  string        `json:"lessonId"`
 	Language  *string       `json:"language"`
+	UpdatedAt *string       `json:"updatedAt"`
 	Stale     bool          `json:"stale"`
 	Segments  []segmentDTO  `json:"segments"`
 	Documents []documentDTO `json:"documents"`
@@ -78,7 +79,7 @@ func (handler *Handler) get(w http.ResponseWriter, r *http.Request) {
 		// caller may see it. 404 would be answered identically for a lesson that does not exist,
 		// which is the one thing the read must not leak.
 		httpserver.WriteJSON(w, http.StatusOK, transcriptDTO{
-			LessonID: r.PathValue("lessonId"), Language: nil, Stale: false,
+			LessonID: r.PathValue("lessonId"), Language: nil, UpdatedAt: nil, Stale: false,
 			Segments: []segmentDTO{}, Documents: []documentDTO{},
 		})
 		return
@@ -108,8 +109,9 @@ func mapTranscript(transcript application.Transcript) transcriptDTO {
 		documents = append(documents, documentDTO{ID: link.ID, Label: link.Label, URL: link.URL})
 	}
 	language := string(transcript.Language)
+	updatedAt := transcript.UpdatedAt
 	return transcriptDTO{
-		LessonID: transcript.LessonID, Language: &language,
+		LessonID: transcript.LessonID, Language: &language, UpdatedAt: &updatedAt,
 		Stale: transcript.Stale, Segments: segments, Documents: documents,
 	}
 }

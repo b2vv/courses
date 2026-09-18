@@ -21,7 +21,10 @@ type Transcript struct {
 	Stale    bool
 	LessonID string
 	Language domain.Language
-	Segments []domain.Segment
+
+	// UpdatedAt is the token an author must send back when saving. Empty when no transcript.
+	UpdatedAt string
+	Segments  []domain.Segment
 
 	// Documents are the library entries the segments reference, each carried once.
 	Documents []domain.DocumentLink
@@ -65,6 +68,7 @@ func (reading *Reading) Get(ctx context.Context, actor domain.Actor, lessonID, r
 		Stale:     found.Transcript.Stale(found.ReadyGeneration),
 		LessonID:  found.Transcript.LessonID,
 		Language:  found.Transcript.Language,
+		UpdatedAt: found.UpdatedAt,
 		Segments:  found.Transcript.Segments,
 		Documents: found.Transcript.Documents,
 	}, nil

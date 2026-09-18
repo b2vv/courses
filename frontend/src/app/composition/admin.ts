@@ -9,6 +9,8 @@ import { createUserAdministration } from '../../application/admin/users';
 import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
 import { createAdminVideoQueries } from './admin-video-queries';
+import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
+import { createTranscriptQueries } from './transcript-queries';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -23,7 +25,8 @@ export function createAdminDependencies() {
   const videos = createAdminVideoQueries(
     createLessonVideos(createApiLessonVideoRepository(options)),
   );
-  return { ...courses, users, videos };
+  const transcripts = createTranscriptQueries(createApiTranscriptRepository());
+  return { ...courses, users, videos, transcripts };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

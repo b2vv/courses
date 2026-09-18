@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"courses/internal/transcript/domain"
 	"courses/internal/transcript/ports"
@@ -35,7 +36,7 @@ WHERE lessons.id = $1::text::uuid`
 // An empty language selects the only transcript, or the first by normalised code when several
 // exist. The order is on the stored, already normalised value, so the choice is deterministic
 // rather than whatever the planner returns first.
-const getTranscript = `SELECT language, authored_against_generation
+const getTranscript = `SELECT language, authored_against_generation, updated_at
 FROM transcripts
 WHERE lesson_id = $1::text::uuid AND ($2 = '' OR language = $2)
 ORDER BY language
@@ -74,7 +75,9 @@ func (repository *Repository) GetLessonTranscript(ctx context.Context, lessonID 
 
 	var storedLanguage string
 	var generation int32
-	err = repository.pool.QueryRow(ctx, getTranscript, lessonID, string(language)).Scan(&storedLanguage, &generation)
+	var updatedAt time.Time
+	err = repository.pool.QueryRow(ctx, getTranscript, lessonID, string(language)).
+		Scan(&storedLanguage, &generation, &updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, nil
 	}
@@ -99,6 +102,7 @@ func (repository *Repository) GetLessonTranscript(ctx context.Context, lessonID 
 	}
 	result.Found = true
 	result.Transcript = transcript
+	result.UpdatedAt = updatedAt.UTC().Format(time.RFC3339Nano)
 	return result, nil
 }
 

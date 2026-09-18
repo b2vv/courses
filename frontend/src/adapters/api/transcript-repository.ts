@@ -70,6 +70,7 @@ export function createApiTranscriptRepository(
       const transcript: LessonTranscript = {
         lessonId: parsed.data.lessonId,
         language: parsed.data.language,
+        updatedAt: parsed.data.updatedAt,
         stale: parsed.data.stale,
         segments: parsed.data.segments.map((segment) => ({
           id: segment.id,

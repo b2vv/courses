@@ -190,7 +190,15 @@ function AdminOwnerEditor({
   video: CourseEditorVideo;
 }) {
   const { admin } = Route.useRouteContext();
+  const transcripts = admin.transcripts;
   const instructors = useQuery(admin.instructors());
+  const documents = useQuery(transcripts.documents(course.id));
+  // Declared as a hook because it is one: it runs inside the field's render, and a name that hid
+  // that would also hide it from the rules that verify hook usage.
+  function useLessonTranscript(lessonId: string) {
+    const query = useQuery(transcripts.lesson(lessonId));
+    return { data: query.data, isLoading: query.isLoading };
+  }
   return (
     <CourseEditorView
       course={course}
@@ -201,6 +209,20 @@ function AdminOwnerEditor({
       onDelete={onDelete}
       onAuthenticationRequired={onAuthenticationRequired}
       video={video}
+      transcripts={{
+        // Loaded per lesson rather than per course: a course may hold 120 lessons of 5000 lines
+        // each, and the editor needs exactly one of them at a time.
+        useLessonTranscript,
+        documents: documents.data ?? [],
+        save: async (lessonId, language, expectedUpdatedAt, segments) => {
+          const result = await transcripts.transcript.saveLessonTranscript(lessonId, {
+            language,
+            ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+            segments,
+          });
+          return result.ok ? null : result.error.code;
+        },
+      }}
     />
   );
 }

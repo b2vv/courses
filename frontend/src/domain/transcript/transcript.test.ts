@@ -72,6 +72,7 @@ describe('documentsOf', () => {
   const transcript: LessonTranscript = {
     lessonId: 'l',
     language: 'uk',
+    updatedAt: '2026-09-18T00:00:00Z',
     stale: false,
     segments: [],
     documents: [{ id: 'a', label: 'A', url: 'https://example.test/a' }],

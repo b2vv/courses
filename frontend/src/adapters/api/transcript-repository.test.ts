@@ -11,6 +11,7 @@ const route = `${apiOrigin()}/api/v1/learn/lessons/:lessonId/transcript`;
 const body = {
   lessonId,
   language: 'uk',
+  updatedAt: '2026-09-18T00:00:00Z',
   stale: false,
   segments: [
     {
@@ -54,13 +55,22 @@ test('a transcript reads with its library carried once', async () => {
 test('an absent transcript is a value, not an error', async () => {
   server.use(
     http.get(route, () =>
-      HttpResponse.json({ lessonId, language: null, stale: false, segments: [], documents: [] }),
+      HttpResponse.json({
+        lessonId,
+        language: null,
+        updatedAt: null,
+        stale: false,
+        segments: [],
+        documents: [],
+      }),
     ),
   );
   const result = await createApiTranscriptRepository().getLessonTranscript(lessonId);
   expect(result.ok).toBe(true);
   if (!result.ok) return;
   expect(result.value.language).toBeNull();
+  // No transcript means no token: an author cannot hold a lock on something that is not there.
+  expect(result.value.updatedAt).toBeNull();
   expect(result.value.segments).toHaveLength(0);
 });
 

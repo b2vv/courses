@@ -18,6 +18,8 @@ export type LessonTranscript = {
   readonly lessonId: string;
   /** Null when the lesson has no transcript: an absent transcript is a state, not a failure. */
   readonly language: string | null;
+  /** The optimistic-lock token to send back when saving; null when there is no transcript. */
+  readonly updatedAt: string | null;
   readonly stale: boolean;
   readonly segments: readonly TranscriptSegment[];
   /** Referenced library entries, carried once each rather than inlined into every segment. */

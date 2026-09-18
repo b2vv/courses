@@ -925,7 +925,7 @@ components:
     LessonTranscript:
       type: object
       additionalProperties: false
-      required: [lessonId, language, stale, segments, documents]
+      required: [lessonId, language, updatedAt, stale, segments, documents]
       properties:
         lessonId: { type: string, format: uuid }
         language:
@@ -938,6 +938,14 @@ components:
             not a missing resource, so the read answers 200 with an empty body rather than 404 —
             404 would be answered identically for a lesson that does not exist, which is the one
             thing this read must not leak.
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            The optimistic-lock token to send back when saving, null when the lesson has no
+            transcript. Without it on the read an author could never obtain the token the write
+            demands, and the editing loop could not close.
         stale:
           type: boolean
           description: >-

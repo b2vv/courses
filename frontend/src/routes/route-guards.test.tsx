@@ -20,6 +20,16 @@ import { createSessionQueries, sessionQueryKey } from '../app/composition/identi
 import { createLearnQueries } from '../app/composition/learn-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
+
+// Route guards never touch transcripts; a proxy keeps this stub from drifting every time the port
+// grows a method.
+const transcriptStub = new Proxy({} as TranscriptRepository, {
+  get() {
+    return () => {
+      throw new Error('Transcripts are not used by route guard tests');
+    };
+  },
+});
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
 import { asBrandedId } from '../domain/course/course';
@@ -164,22 +174,13 @@ function createTestRouter(
         ...createAdminQueries(createAuthoring(adminRepository)),
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
         videos: createAdminVideoQueries(createLessonVideos(lessonVideoRepository)),
+        transcripts: createTranscriptQueries(transcriptStub),
       },
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
       learn: {
         ...createLearnQueries(playbackRepository),
-        ...createTranscriptQueries(
-          new Proxy({} as TranscriptRepository, {
-            get() {
-              // Route guards never touch transcripts; a proxy keeps this stub from drifting every
-              // time the port grows a method.
-              return () => {
-                throw new Error('Transcripts are not used by route guard tests');
-              };
-            },
-          }),
-        ),
+        ...createTranscriptQueries(transcriptStub),
         primeAv1Probe: () => undefined,
         createMedia: () => {
           throw new Error('Playback media is not used by route guard tests');

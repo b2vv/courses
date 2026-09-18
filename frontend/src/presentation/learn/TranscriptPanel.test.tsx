@@ -8,6 +8,7 @@ const documentId = '60000000-0000-4000-8000-000000000001';
 const transcript: LessonTranscript = {
   lessonId: '30000000-0000-4000-8000-000000000001',
   language: 'uk',
+  updatedAt: '2026-09-18T00:00:00Z',
   stale: false,
   segments: [
     {

@@ -18,6 +18,15 @@ export function lessonTranscriptQueryKey(lessonId: string, language?: string) {
 export function createTranscriptQueries(transcript: TranscriptRepository) {
   return {
     transcript,
+    documents: (courseId: string) =>
+      queryOptions({
+        queryKey: ['admin', 'transcript-documents', courseId] as const,
+        queryFn: async ({ signal }) => {
+          const result = await transcript.listCourseDocuments(courseId, signal);
+          if (!result.ok) throw new TranscriptQueryError(result.error.code);
+          return result.value;
+        },
+      }),
     lesson: (lessonId: string, language?: string) =>
       queryOptions({
         queryKey: lessonTranscriptQueryKey(lessonId, language),

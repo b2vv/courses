@@ -17,6 +17,7 @@ export const lessonTranscriptSchema = z
       .max(35)
       .regex(/^[a-z][a-z0-9]{1,7}(?:-[a-z0-9]{1,8})*$/)
       .nullable(),
+    updatedAt: z.string().min(1).nullable(),
     stale: z.boolean(),
     segments: z
       .array(
