@@ -217,6 +217,7 @@ function AdminOwnerEditor({
         // each, and the editor needs exactly one of them at a time.
         useLessonTranscript,
         documents: documents.data ?? [],
+        history: { store: admin.transcriptHistory, authorId: actor.id },
         library: {
           add: async (document) => {
             const result = await transcripts.transcript.addCourseDocument(course.id, document);

@@ -1,9 +1,11 @@
+import { transcriptHistoryKey } from '../../application/transcript/recovery';
 import type {
   LessonTranscript,
   TranscriptDocument,
   TranscriptErrorCode,
   TranscriptSegment,
 } from '../../domain/transcript/transcript';
+import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
 import { TranscriptEditor } from './TranscriptEditor';
 
 export type CourseEditorTranscripts = {
@@ -16,6 +18,15 @@ export type CourseEditorTranscripts = {
     readonly isLoading: boolean;
   };
   readonly documents: readonly TranscriptDocument[];
+  /**
+   * Where unsaved lines survive a reload, and whose they are. The author is part of the key
+   * because a snapshot outlives the session on disk: on a shared machine, a key without them
+   * would offer the next person a course they do not own.
+   */
+  readonly history: {
+    readonly store: TranscriptHistoryStore;
+    readonly authorId: string;
+  };
   readonly library: {
     add(document: TranscriptDocument): Promise<TranscriptErrorCode | null>;
     remove(documentId: string): Promise<TranscriptErrorCode | null>;
@@ -36,6 +47,7 @@ export function LessonTranscriptField({
   lessonId,
   useLessonTranscript,
   documents,
+  history,
   save,
 }: LessonTranscriptFieldProps) {
   const { data, isLoading } = useLessonTranscript(lessonId);
@@ -62,6 +74,10 @@ export function LessonTranscriptField({
       {...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt })}
       segments={data?.segments ?? []}
       documents={documents}
+      history={{
+        store: history.store,
+        key: transcriptHistoryKey({ userId: history.authorId, lessonId, language }),
+      }}
       actions={{
         save: (nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments),
       }}

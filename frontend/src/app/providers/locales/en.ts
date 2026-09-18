@@ -128,6 +128,15 @@ export const en = {
         end: 'Line {{line}} end, ms',
         text: 'Line {{line}} text',
         documents: 'Line {{line}} materials',
+        recovery: {
+          heading: 'Unsaved changes',
+          staleHeading: 'Unsaved changes over text that has moved on',
+          description: 'Changes you never saved are still on this device. Restore them here?',
+          staleDescription:
+            'Changes you never saved are still on this device, but the transcript on the server has changed since. Restoring and saving will overwrite the newer text.',
+          restore: 'Restore changes',
+          discard: 'Discard',
+        },
         save: 'Save the transcript',
         saved: 'Transcript saved.',
         empty: 'No lines yet.',
