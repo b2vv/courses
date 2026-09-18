@@ -1,11 +1,9 @@
-import { useTranslation } from 'react-i18next';
 import type {
   LessonTranscript,
   TranscriptDocument,
   TranscriptErrorCode,
   TranscriptSegment,
 } from '../../domain/transcript/transcript';
-import { Skeleton } from '../ui';
 import { TranscriptEditor } from './TranscriptEditor';
 
 export type CourseEditorTranscripts = {
@@ -40,10 +38,14 @@ export function LessonTranscriptField({
   documents,
   save,
 }: LessonTranscriptFieldProps) {
-  const { t } = useTranslation();
   const { data, isLoading } = useLessonTranscript(lessonId);
 
-  if (isLoading) return <Skeleton label={t('administration.transcriptEditor.heading')} />;
+  // Nothing while loading, deliberately NOT a skeleton. `Skeleton` renders an <output>, whose
+  // implicit role is `status` — and the course editor already owns a status region for "changes
+  // saved". Two status elements on one page make that message ambiguous to a screen reader and to
+  // any test that asks the page for its status. A field that appears when it is ready costs the
+  // author nothing here: the editor is far below the fold of the lesson they just saved.
+  if (isLoading) return null;
 
   // A lesson with no transcript yet still gets an editor: the author is expected to receive a
   // machine-made draft and correct it, but nothing stops them writing the first lines by hand
