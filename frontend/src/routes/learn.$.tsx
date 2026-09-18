@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
@@ -7,6 +7,7 @@ import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import { lessonInCourse } from '../domain/playback/playback';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
+import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
 import { LearnEmptyState } from './learn';
 
 export const Route = createFileRoute('/learn/$')({
@@ -77,6 +78,21 @@ function LessonRoutePlayer({
     }),
     [learn, lessonId, queryClient, slug],
   );
+  // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
+  // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
+  const { data: transcript } = useQuery(learn.lesson(lessonId));
+  const [channel, setChannel] = useState<{
+    positionMs: number;
+    seek: ((positionMs: number) => void) | null;
+  }>({ positionMs: 0, seek: null });
+  const onPlaybackChannel = useCallback(
+    (next: { positionMs: number; seek: ((positionMs: number) => void) | null }) => {
+      setChannel((current) =>
+        current.positionMs === next.positionMs && current.seek === next.seek ? current : next,
+      );
+    },
+    [],
+  );
   return (
     <CourseLearningView course={course} currentLessonId={lessonId}>
       <LessonPlayer
@@ -84,7 +100,15 @@ function LessonRoutePlayer({
         lesson={found.value}
         actions={actions}
         createMedia={learn.createMedia}
+        onPlaybackChannel={onPlaybackChannel}
       />
+      {transcript === undefined ? null : (
+        <TranscriptPanel
+          transcript={transcript}
+          positionMs={channel.positionMs}
+          {...(channel.seek === null ? {} : { onSeek: channel.seek })}
+        />
+      )}
     </CourseLearningView>
   );
 }

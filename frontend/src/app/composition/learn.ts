@@ -2,9 +2,11 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiPlaybackRepository } from '../../adapters/api/playback-repository';
+import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
 import { createPlaybackMedia } from '../../adapters/playback/hls-media';
 import { primeAv1Probe, takeAv1ProbeResult } from './av1-probe';
 import { createLearnQueries } from './learn-queries';
+import { createTranscriptQueries } from './transcript-queries';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -15,6 +17,7 @@ export function createLearnDependencies(queryClient: QueryClient) {
     ...createLearnQueries(
       createApiPlaybackRepository(requestOptions(), () => takeAv1ProbeResult(queryClient)),
     ),
+    ...createTranscriptQueries(createApiTranscriptRepository(requestOptions())),
     createMedia: createPlaybackMedia,
     primeAv1Probe: () => primeAv1Probe(queryClient),
   };

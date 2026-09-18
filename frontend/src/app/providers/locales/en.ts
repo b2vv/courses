@@ -64,6 +64,22 @@ export const en = {
       outline: 'Course contents',
       completed: 'Completed',
       current: 'Current lesson',
+      transcript: {
+        heading: 'Transcript',
+        none: 'This lesson has no transcript yet.',
+        stale:
+          'The video was replaced after this transcript was written — the timings may not match.',
+        search: 'Search the transcript',
+        searchPlaceholder: 'Word or phrase',
+        noMatches: 'Nothing found.',
+        matches: 'Matching lines: {{count}}',
+        clear: 'Clear search',
+        seek: 'Jump to {{time}}',
+        follow: 'Follow playback',
+        following: 'Following playback',
+        paused: 'Following paused — you scrolled the list',
+        documents: 'Line materials',
+      },
       video: {
         noVideo: 'This lesson has no video yet.',
         processing: 'The video is being prepared.',

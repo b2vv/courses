@@ -34,6 +34,18 @@ type LessonPlayerProps = {
   readonly lesson: LearningLesson;
   readonly actions: LessonPlayerActions;
   readonly createMedia: CreatePlaybackMedia;
+  /**
+   * The channel the transcript needs, handed out rather than read from the outside.
+   *
+   * `seek` is null until the duration is known, because before the first play `duration` is 0 and
+   * `seekTo` clamps every request into the first second — a jump that silently lands somewhere
+   * else is worse than one that is unavailable. Position travels through a ref-style callback so
+   * that a transcript re-rendering on every frame cannot re-render the player with it.
+   */
+  readonly onPlaybackChannel?: (channel: {
+    readonly positionMs: number;
+    readonly seek: ((positionMs: number) => void) | null;
+  }) => void;
 };
 
 type PlayerFailure = 'denied' | 'taken-over' | 'unavailable' | null;
@@ -42,7 +54,13 @@ function finiteTime(value: number): number {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
-export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: LessonPlayerProps) {
+export function LessonPlayer({
+  courseTitle,
+  lesson,
+  actions,
+  createMedia,
+  onPlaybackChannel,
+}: LessonPlayerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
@@ -369,6 +387,30 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
     void loadSession(restartAt, 'initial');
   }, [loadSession, restartAt, videoElement]);
 
+  // Published after every render so the transcript sees the current position and learns the
+  // moment seeking becomes possible. This sits ABOVE the early returns below: a lesson with no
+  // video still renders, and hooks may not be skipped for it.
+  // One definition, above the early returns, so the control and the transcript seek identically
+  // and hooks are never skipped for a lesson that renders an empty state instead of a player.
+  const seekTo = useCallback(
+    (next: number) => {
+      const bounded = Math.max(0, Math.min(Math.max(1, duration), next));
+      if (videoRef.current !== null) videoRef.current.currentTime = bounded;
+      positionRef.current = bounded;
+      setPosition(bounded);
+      void queueHeartbeat('seek');
+    },
+    [duration, queueHeartbeat],
+  );
+  const seekMs = useCallback((positionMs: number) => seekTo(positionMs / 1000), [seekTo]);
+
+  useEffect(() => {
+    onPlaybackChannel?.({
+      positionMs: position * 1000,
+      seek: duration > 0 ? seekMs : null,
+    });
+  });
+
   if (lesson.videoState === null) return <EmptyState title={t('learn.video.noVideo')} />;
   if (lesson.videoState === 'processing') return <EmptyState title={t('learn.video.processing')} />;
   if (lesson.videoState === 'failed') return <ErrorState title={t('learn.video.failed')} />;
@@ -401,13 +443,6 @@ export function LessonPlayer({ courseTitle, lesson, actions, createMedia }: Less
       label: quality.label,
     })),
   ];
-  const seekTo = (next: number) => {
-    const bounded = Math.max(0, Math.min(Math.max(1, duration), next));
-    if (videoRef.current !== null) videoRef.current.currentTime = bounded;
-    positionRef.current = bounded;
-    setPosition(bounded);
-    void queueHeartbeat('seek');
-  };
 
   return (
     <section className="lesson-player" aria-labelledby="lesson-player-title">
