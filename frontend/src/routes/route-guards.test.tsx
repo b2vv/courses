@@ -19,6 +19,7 @@ import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries } from '../app/composition/learn-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
+import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
 import { asBrandedId } from '../domain/course/course';
@@ -168,11 +169,17 @@ function createTestRouter(
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
       learn: {
         ...createLearnQueries(playbackRepository),
-        ...createTranscriptQueries({
-          getLessonTranscript: () => {
-            throw new Error('Transcripts are not used by route guard tests');
-          },
-        }),
+        ...createTranscriptQueries(
+          new Proxy({} as TranscriptRepository, {
+            get() {
+              // Route guards never touch transcripts; a proxy keeps this stub from drifting every
+              // time the port grows a method.
+              return () => {
+                throw new Error('Transcripts are not used by route guard tests');
+              };
+            },
+          }),
+        ),
         primeAv1Probe: () => undefined,
         createMedia: () => {
           throw new Error('Playback media is not used by route guard tests');

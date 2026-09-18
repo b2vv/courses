@@ -30,6 +30,13 @@ export type TranscriptErrorCode =
   | 'authentication_required'
   | 'invalid_request'
   | 'dependency_unavailable'
+  | 'transcript_modified'
+  | 'transcript_exists'
+  | 'transcript_segment_limit'
+  | 'transcript_text_limit'
+  | 'transcript_document_limit'
+  | 'transcript_document_referenced'
+  | 'transcript_document_exists'
   | 'unavailable';
 
 export type TranscriptResult<T> =

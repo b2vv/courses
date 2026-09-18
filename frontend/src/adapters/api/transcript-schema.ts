@@ -44,3 +44,13 @@ export const lessonTranscriptSchema = z
   .strict();
 
 export const transcriptErrorSchema = z.object({ error: z.object({ code: z.string() }) }).loose();
+
+export const savedTranscriptSchema = z.object({ updatedAt: z.string().min(1) }).loose();
+
+export const courseDocumentsSchema = z
+  .object({
+    documents: z
+      .array(z.object({ id, label: z.string().min(1).max(200), url: z.url() }).strict())
+      .max(200),
+  })
+  .strict();

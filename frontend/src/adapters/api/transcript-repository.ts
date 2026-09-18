@@ -4,8 +4,19 @@ import type {
   TranscriptResult,
 } from '../../domain/transcript/transcript';
 import type { TranscriptRepository } from '../../ports/TranscriptRepository';
-import { getLessonTranscript } from './generated/courses';
-import { lessonTranscriptSchema, transcriptErrorSchema } from './transcript-schema';
+import {
+  addCourseDocument,
+  getLessonTranscript,
+  listCourseDocuments,
+  removeCourseDocument,
+  saveLessonTranscript,
+} from './generated/courses';
+import {
+  courseDocumentsSchema,
+  lessonTranscriptSchema,
+  savedTranscriptSchema,
+  transcriptErrorSchema,
+} from './transcript-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 
@@ -77,5 +88,98 @@ export function createApiTranscriptRepository(
       };
       return { ok: true, value: transcript };
     },
+
+    async saveLessonTranscript(lessonId, draft, signal) {
+      const outcome = await send(
+        'learn.transcript.save',
+        (init) =>
+          saveLessonTranscript(
+            lessonId,
+            {
+              language: draft.language,
+              ...(draft.expectedUpdatedAt === undefined
+                ? {}
+                : { expectedUpdatedAt: draft.expectedUpdatedAt }),
+              segments: draft.segments.map((segment) => ({
+                id: segment.id,
+                startMs: segment.startMs,
+                endMs: segment.endMs,
+                text: segment.text,
+                speaker: segment.speaker ?? null,
+                confidence: segment.confidence ?? null,
+                documentIds: [...segment.documentIds],
+              })),
+            },
+            init,
+          ),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TranscriptErrorCode);
+      if (outcome.status !== 200) return failure(namedError(outcome, writeRefusals));
+      const parsed = savedTranscriptSchema.safeParse(outcome.data);
+      if (!parsed.success) return failure('invalid_request');
+      return { ok: true, value: { updatedAt: parsed.data.updatedAt } };
+    },
+
+    async listCourseDocuments(courseId, signal) {
+      const outcome = await send(
+        'learn.transcript.documents',
+        (init) => listCourseDocuments(courseId, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TranscriptErrorCode);
+      if (outcome.status !== 200) return failure(namedError(outcome, writeRefusals));
+      const parsed = courseDocumentsSchema.safeParse(outcome.data);
+      if (!parsed.success) return failure('invalid_request');
+      return { ok: true, value: parsed.data.documents };
+    },
+
+    async addCourseDocument(courseId, document, signal) {
+      const outcome = await send(
+        'learn.transcript.documents.add',
+        (init) => addCourseDocument(courseId, document, init),
+        201,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TranscriptErrorCode);
+      if (outcome.status !== 201) return failure(namedError(outcome, writeRefusals));
+      return { ok: true, value: undefined };
+    },
+
+    async removeCourseDocument(courseId, documentId, signal) {
+      const outcome = await send(
+        'learn.transcript.documents.remove',
+        (init) => removeCourseDocument(courseId, documentId, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TranscriptErrorCode);
+      if (outcome.status !== 204) return failure(namedError(outcome, writeRefusals));
+      return { ok: true, value: undefined };
+    },
   };
 }
+
+// Every refusal the write surface can name. A code outside this map degrades to the status-derived
+// one rather than being shown to the author as itself: an unnamed code is a contract drift, and
+// rendering it as a message would make the drift look like a product state.
+const writeRefusals: Readonly<Record<number, readonly TranscriptErrorCode[]>> = {
+  400: [
+    'invalid_request',
+    'transcript_segment_limit',
+    'transcript_text_limit',
+    'transcript_document_limit',
+  ],
+  401: ['authentication_required'],
+  403: ['course_forbidden'],
+  404: ['lesson_not_found'],
+  409: [
+    'transcript_modified',
+    'transcript_exists',
+    'transcript_document_referenced',
+    'transcript_document_exists',
+  ],
+  503: ['dependency_unavailable'],
+};
