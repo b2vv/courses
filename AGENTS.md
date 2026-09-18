@@ -29,7 +29,8 @@
 
 ## Decisions
 
-Added 2026-09-18 after Phase 7a, where four defects of these shapes reached the tree and two of
+Added by the repository owner's decision, 2026-09-18, after Phase 7a, where four defects of
+these shapes reached the tree and two of
 them turned the full ordered gate red. Each rule costs a sentence or two, and only on decisions
 that close an alternative — not on every commit.
 
