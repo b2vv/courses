@@ -254,7 +254,7 @@ paths:
         '400': { $ref: '#/components/responses/AdminWriteBadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/AdminMutationForbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses/{id}:
@@ -320,7 +320,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/AdminMutationForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
     delete:
@@ -352,7 +352,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/AdminMutationForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses/{id}/status:
@@ -389,7 +389,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/AdminMutationForbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/lessons/{lessonId}/video:
@@ -679,6 +679,48 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{lessonId}/transcript:
+    put:
+      operationId: saveLessonTranscript
+      summary: Replace a lesson transcript
+      description: >-
+        Authenticated same-origin mutation, scoped to the course owner or an admin. The write
+        REPLACES the transcript of one lesson in one language: the author edits a document, not a
+        set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt
+        is the optimistic-lock token and is omitted when the author believes no transcript exists;
+        a second writer racing into the same empty lesson is refused with transcript_exists rather
+        than appending to the first one's work.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveTranscriptRequest' }
+      responses:
+        '200':
+          description: The transcript was replaced.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [updatedAt]
+                properties:
+                  updatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/LearningForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/playback/heartbeat:
     post:
       operationId: heartbeatPlayback
@@ -757,6 +799,35 @@ components:
         positionSeconds: { type: number, format: double, minimum: 0 }
         clientSeq: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
         reason: { type: string, enum: [tick, pause, seek, hide, nav, ended] }
+    SaveTranscriptRequest:
+      type: object
+      additionalProperties: false
+      required: [language, segments]
+      properties:
+        language:
+          type: string
+          minLength: 2
+          maxLength: 35
+          pattern: '^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$'
+        expectedUpdatedAt: { type: string, format: date-time }
+        segments:
+          type: array
+          maxItems: 5000
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, startMs, endMs, text, documentIds]
+            properties:
+              id: { type: string, format: uuid }
+              startMs: { type: integer, format: int64, minimum: 0 }
+              endMs: { type: integer, format: int64, minimum: 0 }
+              text: { type: string, minLength: 1, maxLength: 1000 }
+              speaker: { type: string, nullable: true, minLength: 1, maxLength: 100 }
+              confidence: { type: number, format: double, nullable: true, minimum: 0, maximum: 1 }
+              documentIds:
+                type: array
+                maxItems: 3
+                items: { type: string, format: uuid }
     LessonTranscript:
       type: object
       additionalProperties: false
@@ -1222,6 +1293,16 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     LessonNotFound:
       description: The lesson is unknown.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TranscriptConflict:
+      description: >-
+        The transcript changed under the author, or a second writer reached the same empty lesson
+        first. Named so the editor can say which of the two happened.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
         Cache-Control: { $ref: '#/components/headers/NoStore' }

@@ -20,10 +20,32 @@ type LessonTranscript struct {
 	ReadyGeneration int32
 }
 
+// SaveTranscript is the whole transcript of one lesson in one language: the write replaces, it
+// does not merge. A partial write would need a merge rule nobody asked for, and the author edits
+// a document, not a set of rows.
+type SaveTranscript struct {
+	LessonID string
+	Language domain.Language
+	Segments []domain.Segment
+
+	// ExpectedUpdatedAt is the optimistic-lock token, empty when the author believes no
+	// transcript exists yet. Two tabs, or an author against an import, otherwise overwrite each
+	// other silently — the same expectation course authoring already sets with course_modified.
+	ExpectedUpdatedAt string
+}
+
 type TranscriptRepository interface {
 	// GetLessonTranscript returns the transcript of one lesson. An absent transcript is not an
 	// error: a lesson simply may not have one yet, and the caller renders that as a state.
 	// Language may be empty, in which case the repository picks the only one, or the first by
 	// normalised code when several exist.
 	GetLessonTranscript(ctx context.Context, lessonID string, language domain.Language) (LessonTranscript, error)
+
+	// LessonCourse returns the course facts the write rule needs without reading the transcript,
+	// so authorization does not depend on whether any text exists yet.
+	LessonCourse(ctx context.Context, lessonID string) (domain.Course, error)
+
+	// SaveLessonTranscript replaces the transcript in one transaction and stamps the generation
+	// of the ready asset it was written against. It returns the new token.
+	SaveLessonTranscript(ctx context.Context, save SaveTranscript) (string, error)
 }

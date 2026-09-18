@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	owner    = "30000000-0000-4000-8000-0000000000a1"
-	stranger = "30000000-0000-4000-8000-0000000000a2"
+	ownerAccount    = "30000000-0000-4000-8000-0000000000a1"
+	strangerAccount = "30000000-0000-4000-8000-0000000000a2"
 
 	publishedLesson = "40000000-0000-4000-8000-0000000000b1"
 	draftLesson     = "40000000-0000-4000-8000-0000000000b2"
@@ -37,14 +37,14 @@ const (
 func fixtures() []string {
 	return []string{
 		`INSERT INTO users (id,email,display_name,role,password_hash) VALUES
-		 ('` + owner + `','owner@t.local','O','instructor','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
-		 ('` + stranger + `','stranger@t.local','S','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`,
+		 ('` + ownerAccount + `','owner@t.local','O','instructor','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+		 ('` + strangerAccount + `','stranger@t.local','S','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`,
 		// A published course must carry published_at (00001_courses.sql:14), and it must fall
 		// between created_at and updated_at (:13) — the fixture obeys the real constraints
 		// rather than a convenient version of them.
 		`INSERT INTO courses (id,slug,title,summary,description,status,instructor_id,published_at) VALUES
-		 ('10000000-0000-4000-8000-0000000000c1','pub','P','S','D','published','` + owner + `',now()),
-		 ('10000000-0000-4000-8000-0000000000c2','draft','D','S','D','draft','` + owner + `',NULL)`,
+		 ('10000000-0000-4000-8000-0000000000c1','pub','P','S','D','published','` + ownerAccount + `',now()),
+		 ('10000000-0000-4000-8000-0000000000c2','draft','D','S','D','draft','` + ownerAccount + `',NULL)`,
 		`INSERT INTO course_modules (id,course_id,title,position) VALUES
 		 ('20000000-0000-4000-8000-0000000000d1','10000000-0000-4000-8000-0000000000c1','M',0),
 		 ('20000000-0000-4000-8000-0000000000d2','10000000-0000-4000-8000-0000000000c2','M',0)`,
@@ -148,9 +148,11 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 
-	reading := application.NewReading(transcriptpostgres.NewRepository(pool))
-	student := domain.Actor{UserID: stranger}
-	courseOwner := domain.Actor{UserID: owner}
+	repository := transcriptpostgres.NewRepository(pool)
+	reading := application.NewReading(repository)
+	authoring := application.NewAuthoring(repository)
+	student := domain.Actor{UserID: strangerAccount}
+	courseOwner := domain.Actor{UserID: ownerAccount}
 
 	t.Run("a transcript reads whole, with its documents", func(t *testing.T) {
 		got, err := reading.Get(ctx, student, publishedLesson, "")
@@ -250,4 +252,16 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 			t.Fatal("a language that was never written was found")
 		}
 	})
+
+	runWriteTests(t, ctx, pool, authoring, reading)
 }
+
+var segmentIDs = [...]string{
+	"", "71000000-0000-4000-8000-000000000001", "71000000-0000-4000-8000-000000000002",
+	"71000000-0000-4000-8000-000000000003", "71000000-0000-4000-8000-000000000004",
+	"71000000-0000-4000-8000-000000000005", "71000000-0000-4000-8000-000000000006",
+	"71000000-0000-4000-8000-000000000007", "71000000-0000-4000-8000-000000000008",
+	"71000000-0000-4000-8000-000000000009",
+}
+
+func newSegmentID(n int) string { return segmentIDs[n] }

@@ -122,6 +122,16 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_forbidden", "Course is not available to this account")
 	case errors.Is(err, domain.ErrNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
+	case errors.Is(err, domain.ErrTranscriptModified):
+		httpserver.WriteError(w, r, http.StatusConflict, "transcript_modified", "The transcript changed since it was read")
+	case errors.Is(err, domain.ErrTranscriptExists):
+		httpserver.WriteError(w, r, http.StatusConflict, "transcript_exists", "This lesson already has a transcript in that language")
+	case errors.Is(err, domain.ErrSegmentLimit):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_segment_limit", "A transcript accepts at most 5000 segments")
+	case errors.Is(err, domain.ErrTextLimit):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_text_limit", "A segment accepts at most 1000 characters")
+	case errors.Is(err, domain.ErrDocumentLimit):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_document_limit", "A segment accepts at most 3 documents")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
 	default:

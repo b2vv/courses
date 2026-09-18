@@ -61,6 +61,9 @@ func main() {
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)
+		transcriptAdminHandler := transcripthttp.NewAdminHandler(
+			transcriptapplication.NewAuthoring(transcriptpostgres.NewRepository(dependencies.Database)),
+		)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
@@ -93,6 +96,7 @@ func main() {
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
+				transcriptAdminHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

@@ -170,3 +170,27 @@ func TestTranscriptRefusesDuplicateSegmentIDs(t *testing.T) {
 		t.Fatalf("duplicate segment id err = %v; want invalid_request", err)
 	}
 }
+
+func TestWritingIsNotTheSameRuleAsReading(t *testing.T) {
+	// A published course is readable by anyone signed in. If writing shared that rule, every
+	// student could rewrite the lecture, so this pair is pinned as a pair.
+	published := Course{OwnerID: id("aa"), Status: Published}
+	student := Actor{UserID: id("bb")}
+	owner := Actor{UserID: id("aa")}
+	admin := Actor{UserID: id("cc"), Administrator: true}
+
+	if !published.CanBeViewedBy(student) {
+		t.Fatal("a signed-in student cannot read a published course")
+	}
+	if published.CanBeEditedBy(student) {
+		t.Fatal("a student can write the transcript of a published course")
+	}
+	if !published.CanBeEditedBy(owner) || !published.CanBeEditedBy(admin) {
+		t.Fatal("the owner or an admin cannot write")
+	}
+	// An empty actor must not read as the owner of an ownerless course on the WRITE path. The
+	// read path records that it does and relies on the schema; writing cannot afford that.
+	if (Course{}).CanBeEditedBy(Actor{}) {
+		t.Fatal("an anonymous actor writes an ownerless course")
+	}
+}

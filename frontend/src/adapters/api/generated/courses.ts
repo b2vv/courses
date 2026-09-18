@@ -25,7 +25,6 @@ import type {
   AdminWriteBadRequestResponse,
   AuthenticatedUser,
   BadRequestResponse,
-  ConflictResponse,
   CourseDetail,
   CoursePage,
   CourseVideos,
@@ -56,6 +55,9 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
+  SaveLessonTranscript200,
+  SaveTranscriptRequest,
+  TranscriptConflictResponse,
   UnauthenticatedResponse,
   UnavailableResponse,
   UploadConflictResponse,
@@ -628,7 +630,7 @@ export type createAdminCourseResponse403 = {
 }
 
 export type createAdminCourseResponse409 = {
-  data: ConflictResponse
+  data: TranscriptConflictResponse
   status: 409
 }
 
@@ -791,7 +793,7 @@ export type saveAdminCourseResponse404 = {
 }
 
 export type saveAdminCourseResponse409 = {
-  data: ConflictResponse
+  data: TranscriptConflictResponse
   status: 409
 }
 
@@ -879,7 +881,7 @@ export type deleteAdminCourseResponse404 = {
 }
 
 export type deleteAdminCourseResponse409 = {
-  data: ConflictResponse
+  data: TranscriptConflictResponse
   status: 409
 }
 
@@ -967,7 +969,7 @@ export type transitionAdminCourseResponse404 = {
 }
 
 export type transitionAdminCourseResponse409 = {
-  data: ConflictResponse
+  data: TranscriptConflictResponse
   status: 409
 }
 
@@ -1773,6 +1775,94 @@ export const getLessonTranscript = async (lessonId: string,
 
   const data: getLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getLessonTranscriptResponse
+}
+
+
+
+export type saveLessonTranscriptResponse200 = {
+  data: SaveLessonTranscript200
+  status: 200
+}
+
+export type saveLessonTranscriptResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type saveLessonTranscriptResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type saveLessonTranscriptResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type saveLessonTranscriptResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type saveLessonTranscriptResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type saveLessonTranscriptResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type saveLessonTranscriptResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type saveLessonTranscriptResponseSuccess = (saveLessonTranscriptResponse200) & {
+  headers: Headers;
+};
+export type saveLessonTranscriptResponseError = (saveLessonTranscriptResponse400 | saveLessonTranscriptResponse401 | saveLessonTranscriptResponse403 | saveLessonTranscriptResponse404 | saveLessonTranscriptResponse409 | saveLessonTranscriptResponse500 | saveLessonTranscriptResponse503) & {
+  headers: Headers;
+};
+
+export type saveLessonTranscriptResponse = (saveLessonTranscriptResponseSuccess | saveLessonTranscriptResponseError)
+
+export const getSaveLessonTranscriptUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcript`
+}
+
+/**
+ * Authenticated same-origin mutation, scoped to the course owner or an admin. The write REPLACES the transcript of one lesson in one language: the author edits a document, not a set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt is the optimistic-lock token and is omitted when the author believes no transcript exists; a second writer racing into the same empty lesson is refused with transcript_exists rather than appending to the first one's work.
+ * @summary Replace a lesson transcript
+ */
+export const saveLessonTranscript = async (lessonId: string,
+    saveTranscriptRequest: SaveTranscriptRequest, options?: RequestInit): Promise<saveLessonTranscriptResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getSaveLessonTranscriptUrl(lessonId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveTranscriptRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveLessonTranscriptResponse
 }
 
 

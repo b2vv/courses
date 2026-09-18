@@ -26,6 +26,14 @@ type Course struct {
 	Status  Status
 }
 
+// CanBeEditedBy answers who may write one. Deliberately NOT the same rule as reading: a published
+// course is readable by everyone signed in, and if writing shared that rule every student could
+// rewrite the lecture. Ownership-scoped mutations are the model Phase 4a established — admin or
+// the course owner, and no super_admin above them.
+func (course Course) CanBeEditedBy(actor Actor) bool {
+	return actor.Administrator || (actor.UserID != "" && actor.UserID == course.OwnerID)
+}
+
 // CanBeViewedBy answers who may read a transcript, and it must answer exactly as the other two
 // copies do: a transcript is not a second way into a course (A6).
 func (course Course) CanBeViewedBy(actor Actor) bool {

@@ -34,11 +34,26 @@ type stubRepository struct {
 	// gotLanguage records what the handler passed down, so the query parameter is proven to
 	// reach the read rather than being accepted and dropped.
 	gotLanguage domain.Language
+
+	saved   *ports.SaveTranscript
+	saveErr error
 }
 
 func (stub *stubRepository) GetLessonTranscript(_ context.Context, _ string, language domain.Language) (ports.LessonTranscript, error) {
 	stub.gotLanguage = language
 	return stub.result, stub.err
+}
+
+func (stub *stubRepository) LessonCourse(context.Context, string) (domain.Course, error) {
+	return stub.result.Course, stub.err
+}
+
+func (stub *stubRepository) SaveLessonTranscript(_ context.Context, save ports.SaveTranscript) (string, error) {
+	stub.saved = &save
+	if stub.saveErr != nil {
+		return "", stub.saveErr
+	}
+	return "2026-09-18T00:00:00Z", nil
 }
 
 func published(segments []domain.Segment, documents []domain.DocumentLink, generation, ready int32) ports.LessonTranscript {
