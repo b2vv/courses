@@ -27,6 +27,31 @@
 - No fetch in presentation/routes, no server state in Zustand. Add dependencies only when used.
 - Semantic design tokens; keyboard navigation, visible focus, >=44px controls, light/dark, 200% text zoom.
 
+## Decisions
+
+Added 2026-09-18 after Phase 7a, where four defects of these shapes reached the tree and two of
+them turned the full ordered gate red. Each rule costs a sentence or two, and only on decisions
+that close an alternative — not on every commit.
+
+- **A limitation that closes an alternative carries either a magnitude or a mechanism.** A
+  magnitude means a number with its unit and the method that produced it, so a reader can
+  repeat it; a mechanism means something a reviewer can try to build. This covers "we will not
+  do X" and "X can only be done this way" alike — both foreclose. A sentence with neither is a
+  hypothesis in the costume of a limitation, and it cancels no work. The cheapest refutation is
+  almost always cheaper than the work being avoided: "this needs a five-minute transcode" cost
+  a journey until someone ran `ls` on the fixtures and found a two-second one.
+- **Whoever adds an instance of something globally counted cleans up after itself; whoever
+  reads such a thing scopes its selection** instead of asserting a name at a position. Published
+  courses, Redis keys, metric series, `role="status"` on a page — all are counted or looked up
+  by uniqueness somewhere. A change can be locally correct and still break a relationship no
+  one holds, and neither review nor attention catches that: the reviewer shares the author's
+  blind spot, which is the edge of the diff. Only a gate that runs to the end does not share it.
+- **A decision that closes an alternative is an artefact:** it carries a date, an author and a
+  named way to check it, whether it is taken in the plan or in the middle of a slice. Written
+  when it is taken, not in the retrospective — by then it has been lived rather than reviewed.
+  A decision that exists only as work not done is not a decision; it was skipped, and nobody can
+  open it later because there is nothing to open.
+
 ## Verification
 - `make format-check`, `make lint`, `make typecheck`, `make test`, `make integration`, `make build`, `make e2e` in that order.
 - Unit tests at domain/application boundaries; repository tests against isolated Postgres; contract tests at HTTP; browser tests against Compose.
