@@ -81,3 +81,38 @@ export function documentsOf(
     .map((id) => transcript.documents.find((document) => document.id === id))
     .filter((document): document is TranscriptDocument => document !== undefined);
 }
+
+function cueTime(ms: number): string {
+  const clamped = Math.max(0, Math.floor(ms));
+  const hours = Math.floor(clamped / 3_600_000);
+  const minutes = Math.floor((clamped % 3_600_000) / 60_000);
+  const seconds = Math.floor((clamped % 60_000) / 1000);
+  const millis = clamped % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(
+    seconds,
+  ).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+}
+
+/**
+ * Serialise segments as WebVTT.
+ *
+ * The output is deliberately plain: no STYLE, no REGION, no positioning. Cue text is written as
+ * text, never as markup — the same rule the rendered transcript obeys, for the same reason, and
+ * here it matters twice because a browser parses this file itself.
+ *
+ * A zero-length segment is skipped: WebVTT requires the end to be strictly after the start, so
+ * emitting one would make the whole file unparseable rather than lose one line. The domain
+ * permits such a segment (it is simply never active), so the format is where it stops.
+ */
+export function toWebVTT(segments: readonly TranscriptSegment[]): string {
+  const cues = segments
+    .filter((segment) => segment.endMs > segment.startMs)
+    .map((segment) => {
+      // A blank line inside cue text terminates the cue, so a payload containing one would shift
+      // every following cue's meaning. Collapsing it keeps one segment as one cue.
+      const text = segment.text.replace(/\r?\n\s*\r?\n/g, '\n').trim();
+      const speaker = segment.speaker === undefined ? '' : `<v ${segment.speaker}>`;
+      return `${cueTime(segment.startMs)} --> ${cueTime(segment.endMs)}\n${speaker}${text}`;
+    });
+  return `WEBVTT\n\n${cues.join('\n\n')}${cues.length === 0 ? '' : '\n'}`;
+}

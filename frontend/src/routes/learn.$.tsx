@@ -8,6 +8,7 @@ import { lessonInCourse } from '../domain/playback/playback';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
+import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
 
 export const Route = createFileRoute('/learn/$')({
@@ -81,6 +82,13 @@ function LessonRoutePlayer({
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
   const { data: transcript } = useQuery(learn.lesson(lessonId));
+  const captions = useMemo(
+    () =>
+      transcript === undefined || transcript.segments.length === 0
+        ? undefined
+        : toWebVTT(transcript.segments),
+    [transcript],
+  );
   const [channel, setChannel] = useState<{
     positionMs: number;
     seek: ((positionMs: number) => void) | null;
@@ -100,6 +108,8 @@ function LessonRoutePlayer({
         lesson={found.value}
         actions={actions}
         createMedia={learn.createMedia}
+        {...(captions === undefined ? {} : { captions })}
+        {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
         onPlaybackChannel={onPlaybackChannel}
       />
       {transcript === undefined ? null : (

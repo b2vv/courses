@@ -140,6 +140,13 @@ test.describe('with a stored admin session', () => {
 
       await transcript.getByRole('searchbox').fill('слова-якого-немає');
       await expect(transcript.getByText('Нічого не знайдено.')).toBeVisible();
+
+      // The WebVTT anchor is NOT here, and that is a finding rather than an omission: this
+      // journey deliberately has no video so it stays out of the media chain, and a caption track
+      // lives on the <video> element, which the player does not render for a lesson without one.
+      // Measuring cues therefore requires a real transcode, so the anchor belongs to a lesson that
+      // already pays for one. Asserting it here would mean asserting against an element that does
+      // not exist — the serialiser would stay unjudged by anything but our own parser.
     } finally {
       await context.close();
     }

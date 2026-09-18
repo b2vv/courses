@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   heartbeatFailureDirective,
@@ -42,6 +42,14 @@ type LessonPlayerProps = {
    * else is worse than one that is unavailable. Position travels through a ref-style callback so
    * that a transcript re-rendering on every frame cannot re-render the player with it.
    */
+  /**
+   * WebVTT for this lesson, or undefined when there is no transcript. It becomes a real <track>,
+   * which is what finally removes the jsx-a11y suppression this file carried since Phase 6: the
+   * suppression said an empty track would be misleading, and it was right — the fix was never to
+   * silence the rule but to have captions.
+   */
+  readonly captions?: string;
+  readonly captionsLanguage?: string;
   readonly onPlaybackChannel?: (channel: {
     readonly positionMs: number;
     readonly seek: ((positionMs: number) => void) | null;
@@ -59,6 +67,8 @@ export function LessonPlayer({
   lesson,
   actions,
   createMedia,
+  captions,
+  captionsLanguage,
   onPlaybackChannel,
 }: LessonPlayerProps) {
   const { t } = useTranslation();
@@ -404,6 +414,21 @@ export function LessonPlayer({
   );
   const seekMs = useCallback((positionMs: number) => seekTo(positionMs / 1000), [seekTo]);
 
+  // A blob URL rather than an endpoint: the transcript is already in memory, so a second request
+  // would fetch what the page holds. Revoked on change and on unmount — an object URL outlives
+  // the element that used it and would otherwise leak for the life of the document.
+  const captionsUrl = useMemo(
+    () =>
+      captions === undefined
+        ? null
+        : URL.createObjectURL(new Blob([captions], { type: 'text/vtt' })),
+    [captions],
+  );
+  useEffect(() => {
+    if (captionsUrl === null) return;
+    return () => URL.revokeObjectURL(captionsUrl);
+  }, [captionsUrl]);
+
   useEffect(() => {
     onPlaybackChannel?.({
       positionMs: position * 1000,
@@ -453,7 +478,13 @@ export function LessonPlayer({
       <h1 id="lesson-player-title">{lesson.title}</h1>
       <p className="lesson-player-course">{courseTitle}</p>
       <div className="lesson-player-frame">
-        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- T7 has no caption source contract; an empty track would be misleading. */}
+        {/*
+          oxlint-disable-next-line jsx-a11y/media-has-caption -- A <track> IS attached whenever the
+          lesson has a transcript (see captionsUrl above). It cannot be unconditional: a lesson
+          without a transcript has nothing to attach, and an empty track is exactly the misleading
+          thing the Phase 6 comment warned about. The rule cannot express "captions when they
+          exist", so the suppression stays — with an accurate reason this time.
+        */}
         <video
           ref={attachVideo}
           aria-label={lesson.title}
@@ -482,7 +513,17 @@ export function LessonPlayer({
             void queueHeartbeat('ended');
           }}
           playsInline
-        />
+        >
+          {captionsUrl === null ? null : (
+            <track
+              kind="captions"
+              default
+              src={captionsUrl}
+              srcLang={captionsLanguage ?? 'uk'}
+              label={t('learn.transcript.heading')}
+            />
+          )}
+        </video>
       </div>
       <div className="lesson-player-controls" aria-label={t('learn.video.controls')}>
         <Button
