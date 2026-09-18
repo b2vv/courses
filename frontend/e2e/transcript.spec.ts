@@ -354,3 +354,141 @@ test.describe('with a real two-second video', () => {
     }
   });
 });
+
+// --- the author's own surface: the editor, and the local copy under it ----------------------
+// Until now no browser journey reached the transcript EDITOR: every spec above writes the
+// transcript through the API and then reads it as a student. That left two things unmeasured —
+// the editor itself, and the IndexedDB adapter behind its crash recovery, which unit tests
+// exercise only through the in-memory store. Both need a real browser, so both live here.
+
+const editorSlug = `${runNamespace}-editor`;
+const editorModuleID = randomUUID();
+const editorLessonID = randomUUID();
+const editorSegment = randomUUID();
+
+const editorDraft = {
+  slug: editorSlug,
+  title: `Редактор ${runNamespace}`,
+  summary: 'Курс для браузерної перевірки редактора транскрипту.',
+  description: 'Повний опис курсу, створеного браузерною подорожжю редактора.',
+  instructorId: adminID,
+};
+
+/**
+ * A DRAFT course, never published: the editor is an authoring surface, and leaving this one out
+ * of the catalog keeps the published-course count that `recovery.spec` pins untouched.
+ */
+async function seedDraftCourse(request: APIRequestContext, baseURL: string) {
+  const headers = await origin(baseURL);
+  const created = await request.post('/api/v1/admin/courses', { data: editorDraft, headers });
+  expect(created.status(), await created.text()).toBe(201);
+  const course = token((await created.json()) as object);
+
+  const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
+    data: {
+      expectedUpdatedAt: course.updatedAt,
+      course: editorDraft,
+      modules: [
+        {
+          id: editorModuleID,
+          title: `Модуль ${runNamespace}`,
+          lessons: [{ id: editorLessonID, title: `Урок ${runNamespace}`, description: '' }],
+        },
+      ],
+    },
+    headers,
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+
+  const transcript = await request.put(`/api/v1/admin/lessons/${editorLessonID}/transcript`, {
+    data: {
+      language: 'uk',
+      segments: [
+        { id: editorSegment, startMs: 0, endMs: 5_000, text: 'Серверний текст', documentIds: [] },
+      ],
+    },
+    headers,
+  });
+  expect(transcript.status(), await transcript.text()).toBe(200);
+  return course;
+}
+
+/** What the recovery adapter actually put on disk, read from the page's own origin. */
+async function storedSnapshotKeys(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const request = indexedDB.open('courses-transcript-history');
+        request.addEventListener('error', () => {
+          reject(request.error ?? new Error('open failed'));
+        });
+        request.addEventListener('success', () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains('snapshots')) {
+            resolve([]);
+            return;
+          }
+          const keys = database
+            .transaction('snapshots', 'readonly')
+            .objectStore('snapshots')
+            .getAllKeys();
+          keys.addEventListener('success', () => {
+            resolve(keys.result.map(String));
+          });
+          keys.addEventListener('error', () => {
+            reject(keys.error ?? new Error('read failed'));
+          });
+        });
+      }),
+  );
+}
+
+test.describe('the transcript editor, with a stored admin session', () => {
+  test.use({ storageState: authStatePath('admin') });
+
+  test('unsaved lines survive a reload and are offered back, then a save clears them', async ({
+    page,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const course = await seedDraftCourse(page.request, baseURL);
+
+    await page.goto(`/admin/courses/${course.id}`);
+    const text = page.getByRole('textbox', { name: 'Текст репліки 1' });
+    await expect(text).toHaveValue('Серверний текст');
+
+    // Type, then leave the field. Leaving is what captures — the author is most likely to leave
+    // the page next.
+    await text.fill('Правка, яку ніхто не зберіг');
+    await text.blur();
+
+    // The adapter really wrote, and the key carries the author, the lesson and the language. This
+    // is the assertion the unit tests cannot make: they run against the in-memory store.
+    await expect.poll(() => storedSnapshotKeys(page)).toEqual([`${adminID}:${editorLessonID}:uk`]);
+
+    // The reload that used to lose the work without a word.
+    await page.reload();
+
+    // The server's text is what the editor shows: recovery OFFERS, it never restores by itself.
+    await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
+      'Серверний текст',
+    );
+    await page.getByRole('button', { name: 'Відновити зміни' }).click();
+    await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
+      'Правка, яку ніхто не зберіг',
+    );
+
+    await page.getByRole('button', { name: 'Зберегти транскрипт' }).click();
+    await expect(page.getByText('Транскрипт збережено.')).toBeVisible();
+
+    // Only a save the server accepted drops the local copy — and it drops it for real, not just
+    // out of the prompt.
+    await expect.poll(() => storedSnapshotKeys(page)).toEqual([]);
+
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
+      'Правка, яку ніхто не зберіг',
+    );
+    await expect(page.getByRole('button', { name: 'Відновити зміни' })).toHaveCount(0);
+  });
+});
