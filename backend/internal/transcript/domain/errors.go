@@ -38,4 +38,14 @@ const (
 	// ErrTranscriptExists is what a second writer sees when no updatedAt token exists yet,
 	// which is the case for the very first write into a lesson (D-9).
 	ErrTranscriptExists Error = "transcript_exists"
+
+	// ErrDraftSuperseded is what a finishing recognition job hears when the draft it claimed is
+	// no longer the draft on the row: the video was replaced while it ran, and a newer
+	// generation owns the lesson now (C09).
+	//
+	// It is NAMED rather than folded into invalid_request because the caller must act on it,
+	// and act in the direction that is not obvious: this is a SUCCESS for the task. Retrying
+	// would recognise an asset nobody will read, three times, at tens of minutes a go. The same
+	// reasoning makes `media` answer a vanished lesson with processDone rather than an error.
+	ErrDraftSuperseded Error = "asr_draft_superseded"
 )
