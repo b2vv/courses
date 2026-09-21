@@ -17,6 +17,7 @@ const (
 	timeoutConstant   = 300 * time.Second
 
 	pendingLimit = 50
+	recoverLimit = 50
 )
 
 type Clock func() time.Time
@@ -170,6 +171,35 @@ func (r *Recognize) EnqueuePending(ctx context.Context) error {
 				slog.String("lessonId", p.LessonID), slog.Any("error", err))
 			continue
 		}
+	}
+	return nil
+}
+
+func (r *Recognize) Recover(ctx context.Context) error {
+	now := r.timestamp()
+	drafts, err := r.drafts.Recover(ctx, now, recoverLimit)
+	if err != nil {
+		return err
+	}
+	for _, d := range drafts {
+		err := r.drafts.Complete(ctx, domain.TranscriptDraft{
+			LessonID:   d.Draft.LessonID,
+			AssetID:    d.Draft.AssetID,
+			Generation: d.Draft.Generation,
+			State:      domain.DraftFailed,
+			Failure:    "timeout",
+		}, d.Token, r.timestamp())
+		if errors.Is(err, domain.ErrDraftSuperseded) || errors.Is(err, domain.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			r.logger.Error("failed to recover draft",
+				slog.String("lessonId", d.Draft.LessonID), slog.Any("error", err))
+			continue
+		}
+		r.logger.Info("recovered timed-out draft",
+			slog.String("lessonId", d.Draft.LessonID),
+			slog.Int("generation", int(d.Draft.Generation)))
 	}
 	return nil
 }

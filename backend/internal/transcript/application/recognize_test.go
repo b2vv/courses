@@ -52,6 +52,8 @@ type fakeDrafts struct {
 	completeErr    error
 	pendingResult  []ports.PendingRecognition
 	pendingErr     error
+	recoverResult  []ports.RecoveredDraft
+	recoverErr     error
 	completedDraft domain.TranscriptDraft
 	completedToken string
 	claimCalls     int
@@ -82,8 +84,8 @@ func (f *fakeDrafts) Complete(_ context.Context, draft domain.TranscriptDraft, t
 	return f.completeErr
 }
 
-func (f *fakeDrafts) Recover(context.Context, time.Time, int) ([]domain.TranscriptDraft, error) {
-	return nil, nil
+func (f *fakeDrafts) Recover(context.Context, time.Time, int) ([]ports.RecoveredDraft, error) {
+	return f.recoverResult, f.recoverErr
 }
 
 type fakeTranscriber struct {
@@ -601,6 +603,143 @@ func (c *countingQueue) Enqueue(ctx context.Context, job ports.RecognitionJob, t
 		return err
 	}
 	return c.inner.Enqueue(ctx, job, timeout)
+}
+
+// --- Recover tests ---
+
+func TestRecoverFailsTimedOutDraft(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{
+		recoverResult: []ports.RecoveredDraft{
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+		},
+	}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	if err := r.Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if drafts.completeCalls != 1 {
+		t.Fatalf("complete calls=%d want=1", drafts.completeCalls)
+	}
+	if drafts.completedDraft.State != domain.DraftFailed {
+		t.Fatalf("state=%s want=failed", drafts.completedDraft.State)
+	}
+	if drafts.completedDraft.Failure != "timeout" {
+		t.Fatalf("failure=%s want=timeout", drafts.completedDraft.Failure)
+	}
+	if drafts.completedToken != claimToken {
+		t.Fatalf("token=%s want=%s", drafts.completedToken, claimToken)
+	}
+}
+
+func TestRecoverNoDrafts(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	if err := r.Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if drafts.completeCalls != 0 {
+		t.Fatal("Complete must not be called when no drafts recovered")
+	}
+}
+
+func TestRecoverRepositoryError(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{recoverErr: domain.ErrDependencyUnavailable}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	err := r.Recover(context.Background())
+	if !errors.Is(err, domain.ErrDependencyUnavailable) {
+		t.Fatalf("err=%v want=dependency_unavailable", err)
+	}
+}
+
+func TestRecoverSupersededIsSilent(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{
+		recoverResult: []ports.RecoveredDraft{
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+		},
+		completeErr: domain.ErrDraftSuperseded,
+	}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	if err := r.Recover(context.Background()); err != nil {
+		t.Fatalf("superseded must not propagate: err=%v", err)
+	}
+}
+
+func TestRecoverNotFoundIsSilent(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{
+		recoverResult: []ports.RecoveredDraft{
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+		},
+		completeErr: domain.ErrNotFound,
+	}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	if err := r.Recover(context.Background()); err != nil {
+		t.Fatalf("not-found must not propagate: err=%v", err)
+	}
+}
+
+func TestRecoverContinuesOnCompleteError(t *testing.T) {
+	t.Parallel()
+	secondLesson := "33333333-3333-4333-8333-333333333333"
+	secondAsset := "44444444-4444-4444-8444-444444444444"
+	completeCallCount := 0
+	drafts := &fakeDrafts{
+		recoverResult: []ports.RecoveredDraft{
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: 1, State: domain.DraftRunning}, Token: "tok1"},
+			{Draft: domain.TranscriptDraft{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, State: domain.DraftRunning}, Token: "tok2"},
+		},
+	}
+	errOnce := &errorOnceDrafts{
+		inner: drafts,
+		onComplete: func() error {
+			completeCallCount++
+			if completeCallCount == 1 {
+				return domain.ErrDependencyUnavailable
+			}
+			return nil
+		},
+	}
+	r := NewRecognize(errOnce, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+
+	if err := r.Recover(context.Background()); err != nil {
+		t.Fatalf("must not propagate transient Complete error: err=%v", err)
+	}
+	if completeCallCount != 2 {
+		t.Fatalf("complete calls=%d want=2 (must continue after first error)", completeCallCount)
+	}
+}
+
+type errorOnceDrafts struct {
+	inner      *fakeDrafts
+	onComplete func() error
+}
+
+func (e *errorOnceDrafts) GetLessonDraft(ctx context.Context, id string) (ports.LessonDraft, error) {
+	return e.inner.GetLessonDraft(ctx, id)
+}
+func (e *errorOnceDrafts) PendingRecognitions(ctx context.Context, limit int) ([]ports.PendingRecognition, error) {
+	return e.inner.PendingRecognitions(ctx, limit)
+}
+func (e *errorOnceDrafts) Claim(ctx context.Context, l, a string, g int32, now time.Time) (ports.ClaimedDraft, error) {
+	return e.inner.Claim(ctx, l, a, g, now)
+}
+func (e *errorOnceDrafts) SaveDraft(ctx context.Context, d domain.TranscriptDraft, t string, now time.Time) (string, error) {
+	return e.inner.SaveDraft(ctx, d, t, now)
+}
+func (e *errorOnceDrafts) Complete(ctx context.Context, d domain.TranscriptDraft, t string, now time.Time) error {
+	return e.onComplete()
+}
+func (e *errorOnceDrafts) Recover(ctx context.Context, now time.Time, limit int) ([]ports.RecoveredDraft, error) {
+	return e.inner.Recover(ctx, now, limit)
 }
 
 // --- TaskTimeout tests ---

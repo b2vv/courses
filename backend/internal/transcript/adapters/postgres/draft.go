@@ -207,25 +207,29 @@ func (repository *Repository) Complete(ctx context.Context, draft domain.Transcr
 	return nil
 }
 
-func (repository *Repository) Recover(ctx context.Context, olderThan time.Time, limit int) ([]domain.TranscriptDraft, error) {
+func (repository *Repository) Recover(ctx context.Context, now time.Time, limit int) ([]ports.RecoveredDraft, error) {
 	rows, err := repository.pool.Query(ctx, `
-		SELECT lesson_id::text, asset_id::text, generation
-		FROM asr_drafts
-		WHERE state = 'running' AND updated_at < $1
-		ORDER BY updated_at
-		LIMIT $2`, olderThan, limit)
+		SELECT d.lesson_id::text, d.asset_id::text, d.generation, d.updated_at
+		FROM asr_drafts d
+		JOIN video_assets va ON va.id = d.asset_id
+		WHERE d.state = 'running'
+		  AND d.updated_at < $1 - (COALESCE(va.duration_seconds, 0) * interval '1 second' + interval '300 seconds')
+		ORDER BY d.updated_at
+		LIMIT $2`, now, limit)
 	if err != nil {
 		return nil, persistenceError(err)
 	}
 	defer rows.Close()
 
-	var drafts []domain.TranscriptDraft
+	var drafts []ports.RecoveredDraft
 	for rows.Next() {
-		var d domain.TranscriptDraft
-		if err := rows.Scan(&d.LessonID, &d.AssetID, &d.Generation); err != nil {
+		var d ports.RecoveredDraft
+		var updatedAt time.Time
+		if err := rows.Scan(&d.Draft.LessonID, &d.Draft.AssetID, &d.Draft.Generation, &updatedAt); err != nil {
 			return nil, persistenceError(err)
 		}
-		d.State = domain.DraftRunning
+		d.Draft.State = domain.DraftRunning
+		d.Token = updatedAt.UTC().Format(time.RFC3339Nano)
 		drafts = append(drafts, d)
 	}
 	return drafts, rows.Err()

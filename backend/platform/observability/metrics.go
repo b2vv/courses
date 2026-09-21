@@ -50,7 +50,7 @@ func NewMetrics() *Metrics {
 	for _, outcome := range []string{"ready", "failed", "cancelled", "no_speech"} {
 		metrics.RecognitionJobDuration.WithLabelValues(outcome)
 	}
-	for _, reason := range []string{"source_not_found", "segment_limit", "engine_error", "invalid_output", "audio_extraction_failed", "unknown_duration"} {
+	for _, reason := range []string{"source_not_found", "segment_limit", "engine_error", "invalid_output", "audio_extraction_failed", "unknown_duration", "timeout"} {
 		metrics.RecognitionFailures.WithLabelValues(reason)
 	}
 	metrics.registry.MustRegister(metrics.Requests, metrics.Duration, metrics.DatabaseDuration, metrics.QueueDepth, metrics.PlaybackDatabaseChecks, metrics.PlaybackAV1Probe, metrics.TranscodingJobDuration, metrics.TranscodingFailures, metrics.RecognitionJobDuration, metrics.RecognitionFailures, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))

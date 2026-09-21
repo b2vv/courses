@@ -55,6 +55,15 @@ type ClaimedDraft struct {
 	Token string
 }
 
+// RecoveredDraft is a running draft whose P-3 timeout has elapsed, returned by Recover so the
+// caller can fail it. Token is the row's updated_at at the moment of recovery — the same value
+// Complete expects, so a concurrent re-Claim (new generation or re-enqueue) is visible as
+// ErrDraftSuperseded rather than silently overwritten.
+type RecoveredDraft struct {
+	Draft domain.TranscriptDraft
+	Token string
+}
+
 type DraftRepository interface {
 	// GetLessonDraft returns the draft of one lesson. Absence is a state, not an error: a
 	// lesson simply may not have been recognised yet.
@@ -115,9 +124,8 @@ type DraftRepository interface {
 	// current one is refused as superseded.
 	Complete(ctx context.Context, draft domain.TranscriptDraft, claimToken string, now time.Time) error
 
-	// Recover returns drafts abandoned in `running` by a worker that died, so the caller can
-	// requeue them or fail them with a named cause (P-5). It mirrors media's recovery, which is
-	// state in the database rather than a signal the process must survive to receive: a deploy
-	// mid-task is the ordinary case, not the exception, when a task runs for tens of minutes.
-	Recover(ctx context.Context, olderThan time.Time, limit int) ([]domain.TranscriptDraft, error)
+	// Recover returns drafts abandoned in `running` whose per-row P-3 timeout has elapsed, so the
+	// caller can fail them with a named cause (P-5). `now` is the reference time; the implementation
+	// derives the per-row threshold from video_assets.duration_seconds via the P-3 formula.
+	Recover(ctx context.Context, now time.Time, limit int) ([]RecoveredDraft, error)
 }
