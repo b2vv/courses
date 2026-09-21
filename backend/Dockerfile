@@ -60,5 +60,6 @@ RUN /opt/whisper/bin/python3 -c \
     chmod -R a+rX /opt/whisper
 USER 10001:10001
 COPY --from=build /out/asr-worker /app/asr-worker
+COPY internal/transcript/adapters/whisper/transcribe.py /opt/whisper/transcribe.py
 EXPOSE 8083
 ENTRYPOINT ["/app/asr-worker"]
