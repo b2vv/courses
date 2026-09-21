@@ -60,6 +60,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	)
 	audio := asrmedia.NewAudio(mediaRoot, os.TempDir())
 	recognize := application.NewRecognize(repository, engine, audio, queue, time.Now, logger)
+	if err := recognize.Recover(ctx); err != nil {
+		return errors.New("asr recovery failed")
+	}
 
 	var queueHealthy atomic.Bool
 	queueHealthy.Store(true)
