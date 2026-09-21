@@ -71,7 +71,7 @@ e2e-local: up seed-identities seed e2e
 # legitimate task this could remove. If that changes, remove this step first - it cannot tell a
 # stale task from a live one.
 drain-queue: env
-	@docker compose exec -T redis sh -c 'export REDISCLI_AUTH="$$REDIS_PASSWORD"; 		before=$$(redis-cli --scan --pattern "asynq:{media}:*" | wc -l); 		redis-cli --scan --pattern "asynq:{media}:*" | xargs -r -n 100 redis-cli DEL > /dev/null; 		after=$$(redis-cli --scan --pattern "asynq:{media}:*" | wc -l); 		echo "drain-queue: asynq:{media}:* keys before=$$before after=$$after"; 		test "$$after" -eq 0'
+	@docker compose exec -T redis sh -c 'export REDISCLI_AUTH="$$REDIS_PASSWORD"; 		before=$$(redis-cli --scan --pattern "asynq:{media}:*" | wc -l); 		redis-cli --scan --pattern "asynq:{media}:*" | xargs -r -n 100 redis-cli DEL > /dev/null; 		after=$$(redis-cli --scan --pattern "asynq:{media}:*" | wc -l); 		echo "drain-queue: asynq:{media}:* keys before=$$before after=$$after"; 		test "$$after" -eq 0; 		before=$$(redis-cli --scan --pattern "asynq:{asr}:*" | wc -l); 		redis-cli --scan --pattern "asynq:{asr}:*" | xargs -r -n 100 redis-cli DEL > /dev/null; 		after=$$(redis-cli --scan --pattern "asynq:{asr}:*" | wc -l); 		echo "drain-queue: asynq:{asr}:* keys before=$$before after=$$after"; 		test "$$after" -eq 0'
 smoke:
 	sh infrastructure/tests/smoke.sh
 generate:

@@ -8,7 +8,8 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/media-worker ./cmd/media-worker && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/upload ./cmd/upload && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/asr-worker ./cmd/asr-worker
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
@@ -43,3 +44,21 @@ USER 10001:10001
 COPY --from=build /out/media-worker /app/media-worker
 EXPOSE 8081
 ENTRYPOINT ["/app/media-worker"]
+
+FROM runtime AS asr-worker
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg python3 python3-pip python3-venv && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /media/source /media/hls /media/thumbnails /media/temporary && \
+    chown -R 10001:10001 /media
+RUN python3 -m venv /opt/whisper && \
+    /opt/whisper/bin/pip install --no-cache-dir faster-whisper==1.2.1
+ENV HF_HOME=/opt/whisper/models
+RUN /opt/whisper/bin/python3 -c \
+    "from faster_whisper import WhisperModel; WhisperModel('large-v3-turbo', device='cpu', compute_type='int8')" && \
+    chmod -R a+rX /opt/whisper
+USER 10001:10001
+COPY --from=build /out/asr-worker /app/asr-worker
+EXPOSE 8083
+ENTRYPOINT ["/app/asr-worker"]

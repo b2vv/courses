@@ -3,12 +3,28 @@ set -eu
 docker compose exec -T api curl -fsS http://127.0.0.1:8080/readyz > /dev/null
 docker compose exec -T media-worker curl -fsS http://127.0.0.1:8081/readyz > /dev/null
 docker compose exec -T upload curl -fsS http://127.0.0.1:8082/readyz > /dev/null
+docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/readyz > /dev/null
 ffmpeg_version="$(docker compose exec -T media-worker ffmpeg -version | sed -n '1p')"
 printf '%s\n' "$ffmpeg_version"
 case "$ffmpeg_version" in
   'ffmpeg version 5.1.'*) ;;
   *) echo "Unexpected worker ffmpeg version" >&2; exit 1 ;;
 esac
+# C20: asr-worker image carries ffmpeg, Python with faster-whisper, model weights; runs as 10001
+asr_ffmpeg="$(docker compose exec -T asr-worker ffmpeg -version | sed -n '1p')"
+case "$asr_ffmpeg" in
+  'ffmpeg version 5.1.'*) ;;
+  *) echo "Unexpected asr-worker ffmpeg version: $asr_ffmpeg" >&2; exit 1 ;;
+esac
+asr_uid="$(docker compose exec -T asr-worker id -u)"
+case "$asr_uid" in
+  10001*) ;;
+  *) echo "asr-worker runs as uid $asr_uid, expected 10001" >&2; exit 1 ;;
+esac
+docker compose exec -T asr-worker /opt/whisper/bin/python3 -c "import faster_whisper" > /dev/null
+docker compose exec -T asr-worker test -d /opt/whisper/models
+asr_status="$(docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/status)"
+printf 'asr-worker status: %s\n' "$asr_status"
 docker compose exec -T frontend node --input-type=module <<'JS'
 import {writeFile} from 'node:fs/promises';
 const origin = 'http://nginx:8080';
@@ -70,6 +86,10 @@ for(const series of [
 ]) {
   if(!metrics.includes(series)) throw Error(`Worker metric series is not registered: ${series}`);
 }
+// C15: asr queue visible in courses_queue_depth as a label value, media still present
+const asrMetrics=await fetch('http://asr-worker:8083/metrics').then(r=>r.text());
+if(!asrMetrics.includes('courses_queue_depth{queue="asr"')) throw Error('C15: courses_queue_depth missing queue="asr" label');
+if(!metrics.includes('courses_queue_depth{queue="media"')) throw Error('C15: courses_queue_depth lost queue="media" after asr-worker added');
 const burst=await Promise.all(Array.from({length:60},()=>fetch(origin+'/api/v1/not-found').then(r=>r.status)));
 if(!burst.includes(429)) throw Error('API rate limit not enforced');
 // Login is metered far below the API rate because each attempt costs an
