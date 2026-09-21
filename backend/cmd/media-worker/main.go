@@ -89,7 +89,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	monitorDone := make(chan struct{})
 	go func() {
 		defer close(monitorDone)
-		redisinfrastructure.MonitorQueue(monitor, inspector, dependencies.Metrics, logger)
+		redisinfrastructure.MonitorQueue(monitor, inspector, dependencies.Metrics, logger, "media")
 	}()
 	defer func() { stopMonitor(); <-monitorDone }()
 	handler := httpserver.NewHandler(httpserver.Options{

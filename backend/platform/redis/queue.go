@@ -26,29 +26,29 @@ func (l QueueLogger) Fatal(...interface{}) {
 }
 
 // MonitorQueue updates gauges in a background loop, never by blocking metrics scrapes.
-func MonitorQueue(ctx context.Context, inspector *asynq.Inspector, metrics *observability.Metrics, logger *slog.Logger) {
+func MonitorQueue(ctx context.Context, inspector *asynq.Inspector, metrics *observability.Metrics, logger *slog.Logger, queue string) {
 	update := func() {
 		// GetQueueInfo does not wrap its missing-queue error with the public
 		// ErrQueueNotFound sentinel. List first to distinguish absent from failed.
 		queues, err := inspector.Queues()
 		info := &asynq.QueueInfo{}
 		if err == nil {
-			for _, queue := range queues {
-				if queue == "media" {
-					info, err = inspector.GetQueueInfo(queue)
+			for _, q := range queues {
+				if q == queue {
+					info, err = inspector.GetQueueInfo(q)
 					break
 				}
 			}
 		}
 		if err != nil {
 			for _, state := range []string{"pending", "active", "scheduled", "retry", "archived"} {
-				metrics.QueueDepth.WithLabelValues("media", state).Set(-1)
+				metrics.QueueDepth.WithLabelValues(queue, state).Set(-1)
 			}
 			logger.Error("queue inspection failed")
 			return
 		}
 		for state, count := range map[string]int{"pending": info.Pending, "active": info.Active, "scheduled": info.Scheduled, "retry": info.Retry, "archived": info.Archived} {
-			metrics.QueueDepth.WithLabelValues("media", state).Set(float64(count))
+			metrics.QueueDepth.WithLabelValues(queue, state).Set(float64(count))
 		}
 	}
 	update()

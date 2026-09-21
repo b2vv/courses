@@ -8,28 +8,36 @@
 | Фаза | 8 — розпізнавання мовлення |
 | Спирається на | `spec.md` (гейт 1 пройдено 2026-09-19; `A1` закрито 2026-09-21 за §6.10) |
 | Рантайм | `faster-whisper` (CTranslate2, int8) + `large-v3-turbo`, **без нарізки** — §6.10 |
-| Гейт 2 | **не пройдено.** Цей план ще не бачив ні `plan-critique`, ні `plan-defense` |
+| Гейт 2 | **пройдено 2026-09-21.** plan-critique: 4/4 лінзи, 8 blocking внесено, 0 лишилось. plan-defense: 5/5, 1 дірка закрита §9 |
 
 ---
 
 ## 1. Розміщення
 
-Новий модуль `asr` і новий виконуваний файл. Форма скопійована з `media`, бо фаза має ту саму
-природу: важка робота з власним часом, власними падіннями й власною вагою на диску.
+Код воркера живе в модулі `transcript` (рішення A7, спека §9.6). Окремий **контейнер** — так,
+окремий **модуль** — ні: `asr` мав би одного клієнта без перспективи другого (§9.4), і
+відтворив би крос-модульний запис, який `D-3` заборонила. Форма скопійована з `media`: окремий
+виконуваний файл, черга, композиційний корінь.
+
+**Реалізовано A03 (`8fe3a21`):** міграція, домен, порти. Нижче — повне дерево з тим, що вже є
+і що додається.
 
 ```
-backend/cmd/asr-worker/main.go            композиційний корінь, дзеркало media-worker
-backend/internal/asr/
-  domain/        draft.go, errors.go      чернетка як стан; мова й сегменти НЕ свої — див. §2
-  application/   transcribe.go            Process, Recover, Sweep
-  ports/         repository.go, engine.go, media.go, queue.go
+backend/cmd/asr-worker/main.go                     композиційний корінь, дзеркало media-worker
+backend/internal/transcript/
+  domain/        draft.go ✓, draft_test.go ✓, errors.go ✓     чернетка; мова й сегменти — ті самі, §2
+  application/   transcribe.go                                 Process, Recover (без Sweep — §1a)
+  ports/         draft.go ✓, transcriber.go ✓                  DraftRepository, Transcriber, AudioSource
   adapters/
-    postgres/    repository.go            один рядок на урок (D8-11)
-    python/      engine.go                виклик faster-whisper через підпроцес
-    asynq/       queue.go, handler.go     черга `asr`
-    http/        handler.go               стан чернетки для редактора
-backend/migrations/00008_asr.sql          наступний вільний номер (перевірено: до 00007)
+    postgres/    (існує) + draft queries                        один рядок на урок (D8-11)
+    whisper/     engine.go                                      виклик faster-whisper через підпроцес
+    media/       audio.go                                       AudioSource: ffmpeg extract через порт до media
+    asynq/       queue.go, handler.go                           черга `asr`
+    http/        (існує) + draft handler                        стан чернетки для редактора
+backend/migrations/00008_asr.sql ✓                              реалізовано A03
 ```
+
+✓ = реалізовано A03; без позначки = ще потрібно.
 
 **Чому окремий виконуваний файл, а не хендлер у `media-worker`.** Не через layering, а через
 ресурс: `D8-14a` дає образу Python, CTranslate2 і ваги `large-v3-turbo`, а `mem_limit` росте до
@@ -38,6 +46,13 @@ backend/migrations/00008_asr.sql          наступний вільний но
 **Чому Python у образі, а не сервіс.** Рушій викликається підпроцесом із того самого контейнера.
 Мережевий сервіс додав би відмову, ретрай і контракт там, де їх зараз немає, а `D8-6` уже дає
 ідемпотентність на рівні задачі.
+
+### 1a. Sweep не потрібен чернеткам
+
+У `media` Sweep чистить файлові артефакти (HLS-сегменти, мініатюри), до яких `ON DELETE CASCADE`
+не дотягується. Чернетка — один рядок у БД із JSONB; обидва каскади (`lesson_id`,
+`asset_id`) прибирають його автоматично. Витягнуте аудіо — тимчасовий файл, який `AudioSource`
+прибирає `release()` у межах задачі. Sweep без призначення копіює форму, а не причину.
 
 ## 2. Reuse-first
 
@@ -52,13 +67,20 @@ backend/migrations/00008_asr.sql          наступний вільний но
 | `asynq` server + `MonitorQueue` | `platform/redis/queue.go` | черга `asr` поряд із `media` |
 | `media` порт до розкладки сховища | `internal/media` | `D8-3`: шлях до джерела береться **через порт**, розкладка не дублюється |
 
-### Нове, і чому наявне не підійшло
+### Реалізовано A03 / A04
 
-| Що | Чому не підійшло наявне |
-|---|---|
-| `asr_drafts` — один рядок на урок | `transcript_segments` має ordinal, індекс і sqlc-запити під пошук і синхронізацію плеєра. `D8-11` цього не потребує: чернетка — непрозорий документ, у неї не ходять пошуком |
-| Порт `Engine` | нічого схожого в дереві немає; `media` викликає `ffmpeg` своїм портом, ця фаза викликає рушій своїм |
-| `MonitorQueue(queue string)` | зараз ім'я `"media"` **зашите двічі** — у циклі вибору черги й у `WithLabelValues("media", state)` (`platform/redis/queue.go`). `D8-13` вимагає параметра, інакше `asr` або не видно, або він витісняє `media` з метрик |
+| Що | Де | Статус |
+|---|---|---|
+| `asr_drafts` — один рядок на урок | `migrations/00008_asr.sql` | ✓ A03 |
+| Порт `Transcriber` + `AudioSource` | `transcript/ports/transcriber.go` | ✓ A03 |
+| Порт `DraftRepository` | `transcript/ports/draft.go` | ✓ A03 |
+| Домен чернетки: `TranscriptDraft`, стани, `Stale()`, валідація | `transcript/domain/draft.go` | ✓ A03 |
+| `MonitorQueue(queue string)` | `platform/redis/queue.go` | ✓ A04 |
+
+**Поправка:** план називав порт `Engine`; A03 реалізував `Transcriber` + `AudioSource` (два порти
+в одному файлі). Тип результату — `Recognition` із `SpeechSeconds`, не `Result` з `DurationAfterVAD`.
+Відокремлений `token` у міграції **видалено**: замок — `updated_at`, як у транскрипта (коментар
+у `00008_asr.sql`).
 
 ## 3. Рішення дизайну
 
@@ -77,9 +99,16 @@ backend/migrations/00008_asr.sql          наступний вільний но
 
 ### P-2. Один рядок, непрозорий документ ⟵ `D8-11`
 
+**Реалізовано A03** (`00008_asr.sql`). Авторитетна схема — міграція; нижче — скорочений вигляд.
+
 ```
-asr_drafts(lesson_id PK, asset_id, generation, state, language, segments jsonb, token, updated_at)
+asr_drafts(lesson_id PK, asset_id, generation, state, language, segments jsonb,
+           failure, created_at, updated_at)
 ```
+
+`updated_at` — оптимістичний замок (як у транскрипта). Окремий `token` **видалено**: D8-10
+публікує через наявний `SaveLessonTranscript`, який замикає на `expectedUpdatedAt`; другий
+механізм для тієї самої роботи — зайвий.
 
 `segments` — той самий формат, що віддає редактор, щоб публікація не мала перекладача. Валідація
 на вході в модуль (`D8-12`), не на публікації: зациклений вивід моделі має падати тут, а не через
@@ -97,10 +126,14 @@ RTF ~3.2 на 6 CPU, тобто година аудіо ≈ 19 хв; множн�
 
 ### P-4. Рушій викликається підпроцесом, вивід читається зі stdout
 
-Порт `Engine.Transcribe(ctx, path, language) (Result, error)`, де `Result` несе сегменти **і**
-`DurationAfterVAD`. Адаптер запускає Python, віддає JSON зі stdout, `stderr` іде в лог без тексту
-розпізнаного. Контекст скасування вбиває процес — `exec.CommandContext` із `WaitDelay`, як у
-`media/adapters/ffmpeg`.
+Порт `Transcriber.Transcribe(ctx, audioPath, languageHint) (Recognition, error)`, де `Recognition`
+несе сегменти **і** `SpeechSeconds`. Адаптер запускає Python, віддає JSON зі stdout. Контекст
+скасування вбиває процес — `exec.CommandContext` із `WaitDelay`, як у `media/adapters/ffmpeg`.
+
+**stderr** збирається в обмежений буфер (не в pipe, що читається лише після виходу) і пишеться
+в лог без тексту розпізнаного. `faster-whisper` логує завантаження моделі, прогрес і попередження
+в stderr; без паралельного читання stdout і stderr виникає deadlock на 64 KiB буфері pipe.
+Рішення: `cmd.Stderr = &boundedWriter{}` або окрема горутина, як у `ffmpeg` адаптері.
 
 **`vad_filter=True` — обов'язковий, не опція** (§4.5, замір A01). Без нього модель декодує тишу
 й вигадує текст («Thank you.» на кімнатному тоні), а `no_speech_prob` цього не ловить — на
@@ -123,26 +156,47 @@ RTF ~3.2 на 6 CPU, тобто година аудіо ≈ 19 хв; множн�
 
 ### P-6. Мова: `auto` живе тільки в UI ⟵ `D8-8`
 
+**Реалізовано A03** у `draft.go:93-104` — `auto` відмовляється доменним конструктором.
+
 Селект пропонує локалі продукту (`en`, `uk`). `auto` — стан селекта, у поле `language` не
 потрапляє ніколи. Коли автор лишив `auto`, у рушій іде порожня мова, і модель визначає її сама;
 у чернетку пишеться те, що вона повернула, вже як значення.
 
+### P-7. Claim при існуючій чернетці іншої генерації ⟵ plan-critique B6
+
+PK = `lesson_id`, одна чернетка на урок. Коли з'являється нова генерація, `PendingRecognitions`
+побачить «ready-ассет без чернетки **цієї** генерації» — і запустить Claim. Але старий рядок
+існує (можливо в `running` від попередньої генерації).
+
+**Рішення:** Claim — UPSERT. Коли чернетка для того самого уроку існує з іншим `(assetID,
+generation)`, Claim **замінює** її — включно з `running`. Заміна змінює `updated_at` (токен),
+тож воркер на старій генерації отримає `ErrDraftSuperseded` при `Complete`. Це рівно C09.
+
+### P-8. TaskID для черги `asr` ⟵ plan-critique B7
+
+Без `TaskID` sweep кожні 60 с ставить нову задачу на той самий урок, і вони накопичуються
+в pending. Медіа використовує `assetID + ":" + attempt`; ASR використовує **`lessonID + ":" +
+generation`** (ключ ідемпотентності D8-6). `ErrTaskIDConflict` ковтається мовчки — видима
+відмова живе на рівні `Claim`, а не enqueue.
+
+### P-9. Диспозиція `ErrSegmentLimit` ⟵ plan-critique B5
+
+`AcceptSource` не перевіряє тривалість; ліміт байтовий (2 ГіБ). Лекція на 3+ години легально
+проходить завантаження і дає >5000 сегментів. Домен (`draft.go`) кидає `ErrSegmentLimit`, і
+застосунок мусить знати, що з ним робити.
+
+**Рішення:** permanent failure з названою причиною (`segment_limit`). Не retry: той самий вхід
+дасть той самий результат. Паттерн — `dispositionOf` із `media`, де `Permanent()` зупиняє ретрай.
+
 ## 4. Міграція `00008_asr.sql`
 
-```sql
-CREATE TABLE asr_drafts (
-    lesson_id   uuid PRIMARY KEY REFERENCES course_lessons(id) ON DELETE CASCADE,
-    asset_id    uuid NOT NULL REFERENCES video_assets(id) ON DELETE CASCADE,
-    generation  integer NOT NULL,
-    state       text NOT NULL CHECK (state IN ('queued','running','ready','failed','no_speech')),
-    language    text,
-    segments    jsonb NOT NULL DEFAULT '[]'::jsonb,
-    failure     text,
-    token       text NOT NULL,
-    updated_at  timestamptz NOT NULL
-);
-CREATE INDEX asr_drafts_running ON asr_drafts (updated_at) WHERE state = 'running';
-```
+**Реалізовано A03.** Авторитетний текст — `backend/migrations/00008_asr.sql`. Ключові
+відмінності від початкового скетча цього плану, внесені при рев'ю:
+
+- `token` **видалено** — замок на `updated_at`, як у транскрипта;
+- додано `created_at`, `failure`, CHECK `generation >= 1`, CHECK `ready → segments > 0 AND
+  language IS NOT NULL`, CHECK `failed ↔ failure IS NOT NULL`, CHECK `segments` array ≤ 5000;
+- каскади на `lesson_id` і `asset_id` — D8-15.
 
 `ON DELETE CASCADE` на уроці — це `C08` (урок зник під час роботи → чернетка зникає каскадом), на
 ассеті — `D8-4`. Частковий індекс обслуговує лише відновлення (P-5), не читання.
@@ -197,11 +251,11 @@ CREATE INDEX asr_drafts_running ON asr_drafts (updated_at) WHERE state = 'runnin
 | A01 | ~~**Замір порога `no_speech`**~~ — **зроблено 2026-09-21**; механізм замінено, §4.5 | 1h | — |
 | A02 | ~~Звірка рівнів доказу `C01…C20` з фікстурами~~ — **зроблено 2026-09-21**, `spec.md` §12.1 | 0.5h | — |
 | A03 | ~~Міграція `00008`, домен чернетки, порти~~ — **зроблено 2026-09-21**; рев'ю Codex + колеги дало 6 правок, `D8-15`, `C21`, `C22` | 1.5h | A02 |
-| A04 | `MonitorQueue(queue)` + `media-worker` на новій сигнатурі | 0.5h | — |
-| A05 | Адаптер рушія: підпроцес, JSON, скасування | 1.5h | A03 |
-| A06 | `application.Transcribe`: Process, ідемпотентність `assetID:generation` (`D8-6`), диспозиції (`D8-7`) | 2h | A03, A05 |
-| A07 | `Recover`/`Sweep` (`D8-5`) + таймаут (`D8-9`) | 1h | A06 |
-| A08 | `cmd/asr-worker`, образ, compose, `/readyz` без ваг (`C16`) | 1.5h | A06, A04 |
+| A04 | ~~`MonitorQueue(queue)` + `media-worker` на новій сигнатурі~~ — **зроблено 2026-09-21** Courses 2; `format-check`, `lint` зелені | 0.5h | — |
+| A05 | Адаптери рушія **і AudioSource**: `transcript/adapters/whisper/` (підпроцес, JSON, stderr strategy, скасування) + `transcript/adapters/media/` (ffmpeg extract, release) | 2h | A03 |
+| A06 | `application.Transcribe`: Process + polling/enqueue (P-1, P-8), ідемпотентність (D8-6), диспозиції (D8-7), `ErrSegmentLimit` → permanent (P-9), Claim UPSERT (P-7) | 2h | A03, A05 |
+| A07 | `Recover` (`D8-5`) + таймаут (`D8-9`). Sweep **не потрібен** чернеткам (§1a) | 0.75h | A06 |
+| A08 | `cmd/asr-worker`, образ, compose, `/readyz` без ваг (`C16`) | 1.5h | A04, A06, A07 |
 | A09 | HTTP: стан чернетки, перегенерація | 1h | A06 |
 | A10 | Фронтенд: стан, селект (`D8-8`), пропозиція підвантажити (`D8-1`) | 2h | A09 |
 | A11 | Публікація наявним `SaveLessonTranscript` (`D8-10`), конфлікт токена (`C05`) | 1h | A09 |
@@ -226,6 +280,33 @@ CC BY 4.0) — на ньому вперше в цій фазі можна рах
    Phase 6 повторилась частково — поїхали два рядки з двадцяти, а не шість. Але звірка знайшла
    те, чого Phase 6 не знала: `C20` мав **мертвий зміст**, а не хибний рівень, і провалився б
    на правильному образі.
+
+## 8a. Plan-defense (2026-09-21)
+
+| # | Питання | Закрито рядком | Вердикт |
+|---|---|---|---|
+| 1 | кривий інпут | P-3 (`NULL` duration → failed), P-6 + D8-12 (domain validation), P-9 (`ErrSegmentLimit` → permanent), §4 CHECK constraints, A10 (UI показує `failure`) | закрито |
+| 2 | відмова залежності | P-3/P-4 (таймаут похідний, контекст вбиває процес), P-5 (Recover на старті), A06 → D8-7 (`dispositionOf`), A08 → C16 (`/readyz` без ваг) | закрито |
+| 3 | гонка й повтор | P-7 (Claim UPSERT, `ErrDraftSuperseded`), P-8 (TaskID = `lessonID:generation`), D8-6 (ідемпотентність), D8-11 (PK = `lesson_id`), `updated_at` optimistic lock | закрито |
+| 4 | порожні / граничні | P-4a (`< 1 с` → `no_speech`), P-9 (segment ceiling), P-3 (`NULL`), D8-12 (`MaximumSegments`, `MaximumTextRunes`), §4 CHECK `generation ≥ 1`, `ready → segments > 0` | закрито |
+| 5 | rollback | **§9** (додано цим defense) | закрито |
+
+Дірок: **0**. Гейт зелений.
+
+## 9. Відкат
+
+Фаза додає **одну таблицю** (`asr_drafts`) і **один контейнер** (`asr-worker`). Зовнішніх
+ефектів немає (ні email, ні webhook, ні третіх сервісів).
+
+**Контейнер:** зупинити сервіс у compose або повернути образ — чернетки перестануть генеруватися,
+наявні лишаться читабельними. Опубліковані транскрипти живуть у `lesson_transcripts` (Phase 7a)
+і від відкату не залежать.
+
+**Міграція:** `goose down` виконає `DROP TABLE asr_drafts` (рядок 82–83 у `00008_asr.sql`). Дані
+губляться, але це машинні чернетки, не авторський текст; кожна регенерується повторним запуском.
+
+**Незворотне:** нічого. Публікація з чернетки йде через наявний `SaveLessonTranscript` (D8-10),
+тобто пише в таблицю, яка існувала до цієї фази. `goose down` не торкається `lesson_transcripts`.
 
 ## 8. Ризики
 
