@@ -20,6 +20,8 @@ type Metrics struct {
 	PlaybackAV1Probe       *prometheus.CounterVec
 	TranscodingJobDuration *prometheus.HistogramVec
 	TranscodingFailures    *prometheus.CounterVec
+	RecognitionJobDuration *prometheus.HistogramVec
+	RecognitionFailures    *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -33,6 +35,8 @@ func NewMetrics() *Metrics {
 		PlaybackAV1Probe:       prometheus.NewCounterVec(prometheus.CounterOpts{Name: "courses_playback_av1_probe_total", Help: "Browsers whose bounded AV1 decoder probe reached the playback-session mint endpoint, including denied mints."}, []string{"result"}),
 		TranscodingJobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "courses_transcoding_job_duration_seconds", Help: "Media transcoding job duration.", Buckets: prometheus.ExponentialBuckets(1, 2, 12)}, []string{"outcome"}),
 		TranscodingFailures:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "courses_transcoding_failures_total", Help: "Media transcoding failures by bounded reason."}, []string{"reason"}),
+		RecognitionJobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "courses_recognition_job_duration_seconds", Help: "ASR recognition job duration.", Buckets: prometheus.ExponentialBuckets(1, 2, 14)}, []string{"outcome"}),
+		RecognitionFailures:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "courses_recognition_failures_total", Help: "ASR recognition failures by bounded reason."}, []string{"reason"}),
 	}
 	for _, outcome := range []string{"ready", "failed", "cancelled"} {
 		metrics.TranscodingJobDuration.WithLabelValues(outcome)
@@ -43,7 +47,13 @@ func NewMetrics() *Metrics {
 	for _, reason := range []string{"unsupported_source", "probe_failed", "render_failed", "publish_failed", "storage_unavailable"} {
 		metrics.TranscodingFailures.WithLabelValues(reason)
 	}
-	metrics.registry.MustRegister(metrics.Requests, metrics.Duration, metrics.DatabaseDuration, metrics.QueueDepth, metrics.PlaybackDatabaseChecks, metrics.PlaybackAV1Probe, metrics.TranscodingJobDuration, metrics.TranscodingFailures, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	for _, outcome := range []string{"ready", "failed", "cancelled", "no_speech"} {
+		metrics.RecognitionJobDuration.WithLabelValues(outcome)
+	}
+	for _, reason := range []string{"source_not_found", "segment_limit", "engine_error", "invalid_output", "audio_extraction_failed", "unknown_duration"} {
+		metrics.RecognitionFailures.WithLabelValues(reason)
+	}
+	metrics.registry.MustRegister(metrics.Requests, metrics.Duration, metrics.DatabaseDuration, metrics.QueueDepth, metrics.PlaybackDatabaseChecks, metrics.PlaybackAV1Probe, metrics.TranscodingJobDuration, metrics.TranscodingFailures, metrics.RecognitionJobDuration, metrics.RecognitionFailures, collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	return metrics
 }
 
