@@ -11,11 +11,21 @@ import (
 	"syscall"
 	"time"
 
+	asrasynq "courses/internal/transcript/adapters/asynq"
+	asrmedia "courses/internal/transcript/adapters/media"
+	asrpostgres "courses/internal/transcript/adapters/postgres"
+	asrwhisper "courses/internal/transcript/adapters/whisper"
+	"courses/internal/transcript/application"
 	"courses/platform/httpserver"
 	"courses/platform/observability"
 	redisinfrastructure "courses/platform/redis"
 	"courses/platform/runtime"
 	"github.com/hibiken/asynq"
+)
+
+const (
+	mediaRoot    = "/media"
+	pollInterval = 60 * time.Second
 )
 
 func main() {
@@ -39,15 +49,29 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+
+	repository := asrpostgres.NewRepository(dependencies.Database)
+	queue := asrasynq.NewQueue(dependencies.Redis)
+	engine := asrwhisper.NewEngine(
+		envOr("WHISPER_PYTHON", "/opt/whisper/bin/python3"),
+		envOr("WHISPER_SCRIPT", "/opt/whisper/transcribe.py"),
+		envOr("WHISPER_MODEL_DIR", "/opt/whisper/models"),
+		logger,
+	)
+	audio := asrmedia.NewAudio(mediaRoot, os.TempDir())
+	recognize := application.NewRecognize(repository, engine, audio, queue, time.Now, logger)
+
 	var queueHealthy atomic.Bool
 	queueHealthy.Store(true)
 	server := asynq.NewServer(queueOption, asynq.Config{
 		Concurrency: 1, Queues: map[string]int{"asr": 1}, ShutdownTimeout: 10 * time.Second,
 		Logger:              redisinfrastructure.QueueLogger{Logger: logger},
+		ErrorHandler:        asrasynq.NewErrorHandler(logger),
 		HealthCheckInterval: 5 * time.Second,
 		HealthCheckFunc:     func(err error) { queueHealthy.Store(err == nil) },
 	})
 	mux := asynq.NewServeMux()
+	mux.Handle(asrasynq.TaskTypeRecognize, asrasynq.NewHandler(recognize.Process, dependencies.Metrics))
 	if err := server.Start(mux); err != nil {
 		return errors.New("queue startup failed")
 	}
@@ -65,6 +89,15 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		redisinfrastructure.MonitorQueue(monitor, inspector, dependencies.Metrics, logger, "asr")
 	}()
 	defer func() { stopMonitor(); <-monitorDone }()
+
+	pollCtx, stopPoll := context.WithCancel(ctx)
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		runPolling(pollCtx, recognize, logger)
+	}()
+	defer func() { stopPoll(); <-pollDone }()
+
 	handler := httpserver.NewHandler(httpserver.Options{
 		Service: "asr-worker", Logger: logger, Metrics: dependencies.Metrics,
 		Tracer: dependencies.Tracing.Tracer("http"),
@@ -83,19 +116,34 @@ func run(ctx context.Context, logger *slog.Logger) error {
 					Service  string   `json:"service"`
 					Stage    string   `json:"stage"`
 					Handlers []string `json:"handlers"`
-				}{Service: "asr-worker", Stage: "asr", Handlers: []string{}})
+				}{Service: "asr-worker", Stage: "asr", Handlers: []string{asrasynq.TaskTypeRecognize}})
 			})
 		},
 	})
-	logger.Info("worker starting", "address", runtime.Address(":8083"))
+	logger.Info("worker starting", "address", runtime.Address(":8083"), "registeredHandlers", 1)
 	return httpserver.Run(ctx, runtime.Address(":8083"), handler)
 }
 
-func modelReady() error {
-	dir := os.Getenv("WHISPER_MODEL_DIR")
-	if dir == "" {
-		dir = "/opt/whisper/models"
+func runPolling(ctx context.Context, recognize *application.Recognize, logger *slog.Logger) {
+	if err := recognize.EnqueuePending(ctx); err != nil {
+		logger.Error("initial poll failed", "error", err.Error())
 	}
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := recognize.EnqueuePending(ctx); err != nil {
+				logger.Error("poll failed", "error", err.Error())
+			}
+		}
+	}
+}
+
+func modelReady() error {
+	dir := envOr("WHISPER_MODEL_DIR", "/opt/whisper/models")
 	info, err := os.Stat(dir)
 	if err != nil {
 		return errors.New("model weights not available")
@@ -104,4 +152,11 @@ func modelReady() error {
 		return errors.New("model path is not a directory")
 	}
 	return nil
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
