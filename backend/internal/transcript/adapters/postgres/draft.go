@@ -213,7 +213,7 @@ func (repository *Repository) Recover(ctx context.Context, now time.Time, limit 
 		FROM asr_drafts d
 		JOIN video_assets va ON va.id = d.asset_id
 		WHERE d.state = 'running'
-		  AND d.updated_at < $1 - (COALESCE(va.duration_seconds, 0) * interval '1 second' + interval '300 seconds')
+		  AND d.updated_at < $1::timestamptz - (COALESCE(va.duration_seconds, 0) * interval '1 second' + interval '300 seconds')
 		ORDER BY d.updated_at
 		LIMIT $2`, now, limit)
 	if err != nil {
