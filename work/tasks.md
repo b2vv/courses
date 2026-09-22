@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phase 6 завершено 2026-09-14 за приймальними рядками: **102/102**, упорядкований `make check` exit 0 (380 фронт-тестів, 48 Go-пакетів, e2e 65/65), звіт `docs/playback/report.md`. Phases 7–8 не починалися.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phase 6 завершено 2026-09-14 за приймальними рядками: **102/102**, упорядкований `make check` exit 0 (380 фронт-тестів, 48 Go-пакетів, e2e 65/65), звіт `docs/playback/report.md`. Phase 7a (transcript editor) завершено 2026-09-18 (`work/handoff-7a.md`). Phase 8 (ASR): A01–A12 завершено 2026-09-22, **17/22** рядків, 5 чекають на e2e; звіт `docs/asr/report.md`.
 
 ## Phase 3 — Identity
 
@@ -170,3 +170,26 @@ Compose і фікстур, тобто не може бігти раніше за
 | B07 | **Продуктова правка:** читання обмежує позицію тривалістю поточного `ready`-ассета | — | T13 | **done** — `819dcac`; `courses/internal/course/adapters/postgres` **ok**, хвіст гейта `seed-identities → seed → smoke → e2e` **60/60** на тому самому дереві | Не брак доказу, а дефект: запис обрізав (`playback/domain/progress.go:63`), читання ні (`learning.go:33`). Обмеження в домені `course`, тривалість — вхід, що не зберігається, тож контракт не зачеплено. Обидві межі беруть **лише `ready`**-ассет, як `loadLessonDuration` |
 | T15 | Приймальні рядки фази: B08, B31, R34 | — | T14, B07 | **done** — упорядкований `make check` EXIT=0, e2e **61/61**, 380 юніт, 48 Go-пакетів; B31 виявився дефектом продукту (медіа на розмонтованому `<video>`), виправлено callback-ref | B07 закрито окремим слайсом (`819dcac`); його тести лежать у тому самому `learning_integration_test.go`, куди йде B08 |
 | T16 | Рядки, перенесені на e2e: B20, B21, B21a, B22, B28, R23; клаузула B36 «жодного байта медіа» | — | T15 | **done** — упорядкований `make check` двома частинами, GATE_EXIT=0, e2e **65/65**, 380 юніт, 48 Go-пакетів; фаза **102/102** | поправка плану `8cc1d72`: рівень змінено, вимоги ні |
+
+## Phase 8 — ASR (speech recognition)
+
+Джерело scope: [spec](../docs/asr/spec.md), [plan](../docs/asr/plan.md).
+Звіт: [`docs/asr/report.md`](../docs/asr/report.md).
+
+Дві паралельні сесії: Courses 1 (product slice: A05→A06→A07→A09→A10) і Courses 2
+(infrastructure: A04, A08, integration tests, A11). A01–A03 зроблено спільно 2026-09-21.
+
+| ID | Назва | Est | Depends | Status | Result |
+|---|---|---:|---|---|---|
+| A01 | Замір порога `no_speech` | 1h | — | done | механізм замінено (Silero VAD), §4.5 |
+| A02 | Звірка рівнів доказу C01…C20 | 0.5h | — | done | spec.md §12.1 |
+| A03 | Міграція 00008, домен, порти | 1.5h | A02 | done | D8-15, C21, C22 |
+| A04 | MonitorQueue + media-worker | 0.5h | — | done (Courses 2) | format-check, lint зелені |
+| A05 | Адаптери рушія і AudioSource | 2h | A03 | done | whisper + media adapters |
+| A06 | application.Transcribe | 2h | A03, A05 | done | Process + EnqueuePending + Recover |
+| A07 | Recover + таймаут | 0.75h | A06 | done | `da83a4d`, `ff4b01e` |
+| A08 | asr-worker, compose, /readyz | 1.5h | A04, A06, A07 | done (Courses 2) | `def2585` |
+| A09 | HTTP: стан чернетки, перегенерація | 1h | A06 | done | `ba6a096` |
+| A10 | Фронтенд: стан, селект, load-draft | 2h | A09 | done | `2f38064`; 464 фронт-тестів |
+| A11 | Publish draft, token conflict | 1h | A09 | done (Courses 2) | `5892174` |
+| A12 | Приймальні рядки, гейт, звіт | 1.5h | усі | done | `docs/asr/report.md`; 17/22, 5 на e2e |
