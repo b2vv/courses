@@ -235,6 +235,27 @@ func (repository *Repository) Recover(ctx context.Context, now time.Time, limit 
 	return drafts, rows.Err()
 }
 
+func (repository *Repository) LessonAsset(ctx context.Context, lessonID string) (*ports.PendingRecognition, error) {
+	var p ports.PendingRecognition
+	var duration pgtype.Float8
+	err := repository.pool.QueryRow(ctx, `
+		SELECT id::text, generation, duration_seconds
+		FROM video_assets
+		WHERE lesson_id = $1::text::uuid AND state = 'ready' AND evicted_at IS NULL`,
+		lessonID).Scan(&p.AssetID, &p.Generation, &duration)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	p.LessonID = lessonID
+	if duration.Valid {
+		p.DurationSeconds = &duration.Float64
+	}
+	return &p, nil
+}
+
 type storedSegment struct {
 	ID         string   `json:"id"`
 	StartMs    int64    `json:"startMs"`

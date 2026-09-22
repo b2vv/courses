@@ -128,4 +128,8 @@ type DraftRepository interface {
 	// caller can fail them with a named cause (P-5). `now` is the reference time; the implementation
 	// derives the per-row threshold from video_assets.duration_seconds via the P-3 formula.
 	Recover(ctx context.Context, now time.Time, limit int) ([]RecoveredDraft, error)
+
+	// LessonAsset returns the current ready asset for a lesson, or nil when no ready asset exists.
+	// Regeneration uses it to enqueue a new recognition task for a specific lesson.
+	LessonAsset(ctx context.Context, lessonID string) (*PendingRecognition, error)
 }

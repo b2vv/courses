@@ -88,6 +88,10 @@ func (f *fakeDrafts) Recover(context.Context, time.Time, int) ([]ports.Recovered
 	return f.recoverResult, f.recoverErr
 }
 
+func (f *fakeDrafts) LessonAsset(context.Context, string) (*ports.PendingRecognition, error) {
+	return nil, nil
+}
+
 type fakeTranscriber struct {
 	result ports.Recognition
 	err    error
@@ -740,6 +744,9 @@ func (e *errorOnceDrafts) Complete(ctx context.Context, d domain.TranscriptDraft
 }
 func (e *errorOnceDrafts) Recover(ctx context.Context, now time.Time, limit int) ([]ports.RecoveredDraft, error) {
 	return e.inner.Recover(ctx, now, limit)
+}
+func (e *errorOnceDrafts) LessonAsset(ctx context.Context, id string) (*ports.PendingRecognition, error) {
+	return e.inner.LessonAsset(ctx, id)
 }
 
 // --- TaskTimeout tests ---

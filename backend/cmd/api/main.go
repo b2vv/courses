@@ -23,6 +23,7 @@ import (
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	playbackredis "courses/internal/playback/adapters/redis"
 	playbackapplication "courses/internal/playback/application"
+	transcriptasynq "courses/internal/transcript/adapters/asynq"
 	transcripthttp "courses/internal/transcript/adapters/http"
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
 	transcriptapplication "courses/internal/transcript/application"
@@ -66,6 +67,9 @@ func main() {
 			transcriptapplication.NewAuthoring(transcriptRepository),
 			transcriptapplication.NewLibrary(transcriptRepository),
 		)
+		recognitionQueue := transcriptasynq.NewQueue(dependencies.Redis)
+		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
+		draftHandler := transcripthttp.NewDraftHandler(drafting)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
@@ -99,6 +103,7 @@ func main() {
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
 				transcriptAdminHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				draftHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
