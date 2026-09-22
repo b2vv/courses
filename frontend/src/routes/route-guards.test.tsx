@@ -19,6 +19,7 @@ import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries } from '../app/composition/learn-queries';
 import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
+import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
 
@@ -176,6 +177,23 @@ function createTestRouter(
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
         videos: createAdminVideoQueries(createLessonVideos(lessonVideoRepository)),
         transcripts: createTranscriptQueries(transcriptStub),
+        drafts: createDraftQueries({
+          getDraft: async () => ({
+            ok: true,
+            value: {
+              lessonId: '',
+              state: null,
+              language: null,
+              failure: null,
+              stale: false,
+              updatedAt: null,
+              assetId: null,
+              generation: null,
+              segments: [],
+            },
+          }),
+          regenerate: async () => ({ ok: true, value: undefined }),
+        }),
       },
       // Route guards never open the editor, so the in-memory store is the whole truth here.
       transcriptHistory: createMemoryTranscriptHistory(),

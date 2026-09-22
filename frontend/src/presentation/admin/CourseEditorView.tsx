@@ -14,6 +14,8 @@ import type {
 } from '../../domain/course/course';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
+import { LessonDraftField } from './LessonDraftField';
+import type { CourseEditorDrafts } from './LessonDraftField';
 import { LessonVideoField } from './LessonVideoField';
 import { DocumentLibrary } from './DocumentLibrary';
 import { LessonTranscriptField } from './LessonTranscriptField';
@@ -46,6 +48,7 @@ type CourseEditorViewProps = {
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
   video?: CourseEditorVideo;
+  drafts?: CourseEditorDrafts;
   transcripts?: CourseEditorTranscripts;
 };
 
@@ -222,12 +225,14 @@ function LessonFields({
   moduleIndex,
   savedLessonIds,
   video,
+  drafts,
   transcripts,
 }: {
   form: UseFormReturn<CourseFormValues>;
   moduleIndex: number;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
+  drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
 }) {
   const { t } = useTranslation();
@@ -270,6 +275,9 @@ function LessonFields({
               isSaved={savedLessonIds.has(lesson.id)}
               {...video}
             />
+          )}
+          {drafts !== undefined && savedLessonIds.has(lesson.id) && (
+            <LessonDraftField lessonId={lesson.id} {...drafts} />
           )}
           {transcripts !== undefined && savedLessonIds.has(lesson.id) && (
             <LessonTranscriptField lessonId={lesson.id} {...transcripts} />
@@ -322,11 +330,13 @@ function ModuleFields({
   form,
   savedLessonIds,
   video,
+  drafts,
   transcripts,
 }: {
   form: UseFormReturn<CourseFormValues>;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
+  drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
 }) {
   const { t } = useTranslation();
@@ -357,6 +367,7 @@ function ModuleFields({
               moduleIndex={moduleIndex}
               savedLessonIds={savedLessonIds}
               video={video}
+              drafts={drafts}
               transcripts={transcripts}
             />
             <div className="admin-row-actions">
@@ -412,6 +423,7 @@ export function CourseEditorView({
   onDelete,
   onAuthenticationRequired,
   video,
+  drafts,
   transcripts,
 }: CourseEditorViewProps) {
   const { t } = useTranslation();
@@ -551,6 +563,7 @@ export function CourseEditorView({
           form={form}
           savedLessonIds={savedLessonIds}
           video={video}
+          drafts={drafts}
           transcripts={transcripts}
         />
         <div className="admin-editor-save">

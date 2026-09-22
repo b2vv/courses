@@ -9,7 +9,9 @@ import { createUserAdministration } from '../../application/admin/users';
 import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
 import { createAdminVideoQueries } from './admin-video-queries';
+import { createApiDraftRepository } from '../../adapters/api/draft-repository';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
+import { createDraftQueries } from './admin-draft-queries';
 import { createTranscriptQueries } from './transcript-queries';
 
 const requestOptions = createIsomorphicFn()
@@ -26,7 +28,8 @@ export function createAdminDependencies() {
     createLessonVideos(createApiLessonVideoRepository(options)),
   );
   const transcripts = createTranscriptQueries(createApiTranscriptRepository());
-  return { ...courses, users, videos, transcripts };
+  const drafts = createDraftQueries(createApiDraftRepository(options));
+  return { ...courses, users, videos, transcripts, drafts };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

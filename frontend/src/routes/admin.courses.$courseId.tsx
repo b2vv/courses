@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { DraftQueryError } from '../app/composition/admin-draft-queries';
 import { AuthoringQueryError } from '../app/composition/admin-queries';
 import { VideoQueryError } from '../app/composition/admin-video-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
 import { asBrandedId, validEntityId } from '../domain/course/course';
 import type { CourseId, CourseStatus, CourseTree, CourseTreeEdit } from '../domain/course/course';
+import type { DraftErrorCode } from '../domain/transcript/draft';
 import type { AuthenticatedUser } from '../domain/identity/identity';
 import type {
   VideoErrorCode,
@@ -191,16 +193,34 @@ function AdminOwnerEditor({
 }) {
   const { admin, transcriptHistory } = Route.useRouteContext();
   const transcripts = admin.transcripts;
+  const draftQueries = admin.drafts;
   const instructors = useQuery(admin.instructors());
   const queryClient = useQueryClient();
+  const regenerateDraft = useMutation(draftQueries.regenerate(queryClient));
   const documentsQuery = transcripts.documents(course.id);
   const documentsKey = documentsQuery.queryKey;
   const documents = useQuery(documentsQuery);
-  // Declared as a hook because it is one: it runs inside the field's render, and a name that hid
-  // that would also hide it from the rules that verify hook usage.
   function useLessonTranscript(lessonId: string) {
     const query = useQuery(transcripts.lesson(lessonId));
     return { data: query.data, isLoading: query.isLoading };
+  }
+  function useLessonDraft(lessonId: string) {
+    const query = useQuery(draftQueries.lesson(lessonId));
+    return { data: query.data, isLoading: query.isLoading };
+  }
+  async function draftRegenerate(
+    lessonId: string,
+    language: string | undefined,
+  ): Promise<DraftErrorCode | null> {
+    try {
+      await regenerateDraft.mutateAsync({ lessonId, language });
+      return null;
+    } catch (error) {
+      const code =
+        error instanceof DraftQueryError ? error.code : ('dependency_unavailable' as const);
+      if (code === 'authentication_required') onAuthenticationRequired();
+      return code;
+    }
   }
   return (
     <CourseEditorView
@@ -212,6 +232,10 @@ function AdminOwnerEditor({
       onDelete={onDelete}
       onAuthenticationRequired={onAuthenticationRequired}
       video={video}
+      drafts={{
+        useLessonDraft,
+        actions: { regenerate: draftRegenerate },
+      }}
       transcripts={{
         // Loaded per lesson rather than per course: a course may hold 120 lessons of 5000 lines
         // each, and the editor needs exactly one of them at a time.
