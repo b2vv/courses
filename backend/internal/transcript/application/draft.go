@@ -13,22 +13,28 @@ type CourseReader interface {
 	LessonCourse(ctx context.Context, lessonID string) (domain.Course, error)
 }
 
+type TranscriptPublisher interface {
+	SaveLessonTranscript(ctx context.Context, save ports.SaveTranscript) (string, error)
+}
+
 type Drafting struct {
-	drafts  ports.DraftRepository
-	courses CourseReader
-	queue   ports.RecognitionQueue
-	now     Clock
-	logger  *slog.Logger
+	drafts      ports.DraftRepository
+	courses     CourseReader
+	transcripts TranscriptPublisher
+	queue       ports.RecognitionQueue
+	now         Clock
+	logger      *slog.Logger
 }
 
 func NewDrafting(
 	drafts ports.DraftRepository,
 	courses CourseReader,
+	transcripts TranscriptPublisher,
 	queue ports.RecognitionQueue,
 	now Clock,
 	logger *slog.Logger,
 ) *Drafting {
-	return &Drafting{drafts: drafts, courses: courses, queue: queue, now: now, logger: logger}
+	return &Drafting{drafts: drafts, courses: courses, transcripts: transcripts, queue: queue, now: now, logger: logger}
 }
 
 type DraftStatus struct {
@@ -119,4 +125,47 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		Generation: asset.Generation,
 		Language:   language,
 	}, timeout)
+}
+
+type PublishRequest struct {
+	LessonID          string
+	ExpectedUpdatedAt string
+}
+
+func (d *Drafting) Publish(ctx context.Context, actor domain.Actor, request PublishRequest) (string, error) {
+	if err := domain.ValidateID(request.LessonID); err != nil {
+		return "", err
+	}
+	if err := domain.ValidateID(actor.UserID); err != nil {
+		return "", domain.ErrForbidden
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	course, err := d.courses.LessonCourse(ctx, request.LessonID)
+	if err != nil {
+		return "", err
+	}
+	if !course.CanBeEditedBy(actor) {
+		return "", domain.ErrForbidden
+	}
+
+	lesson, err := d.drafts.GetLessonDraft(ctx, request.LessonID)
+	if err != nil {
+		return "", err
+	}
+	if !lesson.Found {
+		return "", domain.ErrNotFound
+	}
+	if lesson.Draft.State != domain.DraftReady {
+		return "", domain.ErrInvalidRequest
+	}
+
+	return d.transcripts.SaveLessonTranscript(ctx, ports.SaveTranscript{
+		LessonID:          request.LessonID,
+		Language:          lesson.Draft.Language,
+		Segments:          lesson.Draft.Segments,
+		ExpectedUpdatedAt: request.ExpectedUpdatedAt,
+	})
 }

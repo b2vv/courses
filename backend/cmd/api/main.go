@@ -68,7 +68,7 @@ func main() {
 			transcriptapplication.NewLibrary(transcriptRepository),
 		)
 		recognitionQueue := transcriptasynq.NewQueue(dependencies.Redis)
-		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
+		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
 		draftHandler := transcripthttp.NewDraftHandler(drafting)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
 		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
