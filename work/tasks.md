@@ -16,7 +16,7 @@
 | C04 | SSR catalog/course and states | 2h | C03,F04 | done | commit `4d73072`; 53 Rstest + screenshots |
 | C05 | Complete integration, browser and build verification | 1.5h | C04 | done | 14 Playwright + final CI gates; report.md |
 
-Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phase 6 завершено 2026-09-14 за приймальними рядками: **102/102**, упорядкований `make check` exit 0 (380 фронт-тестів, 48 Go-пакетів, e2e 65/65), звіт `docs/playback/report.md`. Phase 7a (transcript editor) завершено 2026-09-18 (`work/handoff-7a.md`). Phase 8 (ASR): A01–A13 завершено 2026-09-24, **19/22** рядків (відкриті C08, C16, C19), `make check` `CHECK_EXIT=0`; звіт `docs/asr/report.md`. Фазу **не** закрито.
+Phases 1–3 завершено. Phase 3 закрито слайсом I06: `make check` проходить у порядку маніфесту, exit 0. Phase 4a завершено: `make check` exit 0 (12 кроків, 243 фронт-тести, e2e 27/27), звіт `docs/admin/report.md`. Phase 4b у роботі (нижче); Phase 5 завершено: `make check` exit 0 (330 фронт-тестів, 38 Go-пакетів, e2e 35/35), звіт `docs/media/report.md`. Phase 6 завершено 2026-09-14 за приймальними рядками: **102/102**, упорядкований `make check` exit 0 (380 фронт-тестів, 48 Go-пакетів, e2e 65/65), звіт `docs/playback/report.md`. Phase 7a (transcript editor) завершено 2026-09-18 (`work/handoff-7a.md`). Phase 8 (ASR) закрито 2026-09-24 за приймальними рядками: **22/22** (A01–A14), упорядкований `make check` `CHECK_EXIT=0` (482 фронт-тести, 34 Go-пакети, e2e 74/74); звіт `docs/asr/report.md`.
 
 ## Phase 3 — Identity
 
@@ -194,3 +194,4 @@ Compose і фікстур, тобто не може бігти раніше за
 | A11 | Publish draft, token conflict | 1h | A09 | done (Courses 2) | `5892174` |
 | A12 | Приймальні рядки, гейт, звіт | 1.5h | усі | done | `docs/asr/report.md`; 17/22, 5 на e2e |
 | A13 | 5 e2e-рядків (C03, C06 e2e-частина, C11 e2e-частина, C13, C17) проти живого `asr-worker` + тест C18 | 2h | A12 | done | 2026-09-24; виправлено 10 дефектів продукту (`docs/asr/report.md` §4); `make check` `CHECK_EXIT=0` (480 фронт, 33 Go-пакети, e2e 74/74); приймання **19/22**, відкриті C08, C16, C19 |
+| A14 | Закрити C08 (integration), C16 (червона гілка `/readyz`), C19 (повідомлення автору + e2e) | 1h | A13 | done | 2026-09-24; `8ecda78` `221b9d3` `3cc8754`; `make check` `CHECK_EXIT=0` (482 фронт, 34 Go-пакети, e2e 74/74); **Phase 8 — 22/22** |
