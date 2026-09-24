@@ -64,12 +64,19 @@ func (repository *Repository) GetLessonDraft(ctx context.Context, lessonID strin
 
 func (repository *Repository) PendingRecognitions(ctx context.Context, limit int) ([]ports.PendingRecognition, error) {
 	rows, err := repository.pool.Query(ctx, `
+		WITH current_assets AS (
+			SELECT DISTINCT ON (assets.lesson_id)
+			       assets.lesson_id, assets.id, assets.generation, assets.duration_seconds
+			FROM video_assets AS assets
+			WHERE assets.lesson_id IS NOT NULL
+			  AND assets.state = 'ready' AND assets.evicted_at IS NULL
+			ORDER BY assets.lesson_id, assets.generation DESC
+		)
 		SELECT assets.lesson_id::text, assets.id::text, assets.generation, assets.duration_seconds,
 		       drafts.updated_at
-		FROM video_assets AS assets
+		FROM current_assets AS assets
 		LEFT JOIN asr_drafts AS drafts ON drafts.lesson_id = assets.lesson_id
-		WHERE assets.state = 'ready' AND assets.evicted_at IS NULL
-		  AND (drafts.lesson_id IS NULL OR drafts.generation <> assets.generation)
+		WHERE drafts.lesson_id IS NULL OR drafts.generation <> assets.generation
 		ORDER BY assets.lesson_id
 		LIMIT $1`, limit)
 	if err != nil {
@@ -251,7 +258,9 @@ func (repository *Repository) LessonAsset(ctx context.Context, lessonID string) 
 	err := repository.pool.QueryRow(ctx, `
 		SELECT id::text, generation, duration_seconds
 		FROM video_assets
-		WHERE lesson_id = $1::text::uuid AND state = 'ready' AND evicted_at IS NULL`,
+		WHERE lesson_id = $1::text::uuid AND state = 'ready' AND evicted_at IS NULL
+		ORDER BY generation DESC
+		LIMIT 1`,
 		lessonID).Scan(&p.AssetID, &p.Generation, &duration)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

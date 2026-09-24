@@ -37,6 +37,9 @@ const (
 	recoverAsset2 = "50000000-0000-4000-8000-000000000002"
 	recoverAsset3 = "50000000-0000-4000-8000-000000000003"
 	recoverAsset4 = "50000000-0000-4000-8000-000000000004"
+	recoverAsset5 = "50000000-0000-4000-8000-000000000005"
+	recoverAsset6 = "50000000-0000-4000-8000-000000000006"
+	recoverAsset7 = "50000000-0000-4000-8000-000000000007"
 )
 
 var draftNow = time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
@@ -176,6 +179,17 @@ func (h *draftHarness) insertAssetWithDuration(t *testing.T, assetID, lessonID s
 	}
 }
 
+func (h *draftHarness) insertOrphanAssetWithDuration(t *testing.T, assetID string, durationSeconds float64) {
+	t.Helper()
+	if _, err := h.pool.Exec(h.ctx, `INSERT INTO video_assets(
+		id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,
+		renditions,duration_seconds,expires_at,created_at,updated_at)
+		VALUES($1,NULL,1,'ready',1024,1024,'orphan.mp4','{720p}',$2,$3,$3,$3)`,
+		assetID, durationSeconds, draftNow); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (h *draftHarness) insertRunningDraft(t *testing.T, lessonID, assetID string, generation int32, updatedAt time.Time) {
 	t.Helper()
 	if _, err := h.pool.Exec(h.ctx, `INSERT INTO asr_drafts(
@@ -310,22 +324,27 @@ func (h *draftHarness) testPendingRecognitionsSelector(t *testing.T) {
 	h.completeReadyDraft(t, recoverLesson2, recoverAsset2, 1, draftNow)
 	h.insertAssetWithDuration(t, recoverAsset3, recoverLesson3, 1, 60)
 	h.insertAssetWithDuration(t, recoverAsset4, recoverLesson3, 2, 60)
-	if _, err := h.pool.Exec(h.ctx, `UPDATE video_assets SET evicted_at=$2 WHERE id=$1::text::uuid`, recoverAsset3, draftNow.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := h.pool.Exec(h.ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,duration_seconds,expires_at,created_at,updated_at)
-		VALUES('50000000-0000-4000-8000-000000000005',$1,3,'uploading',1024,0,'fixture.mp4','{}',60,$2,$2,$2)`, recoverLesson3, draftNow); err != nil {
-		t.Fatal(err)
-	}
+	h.completeReadyDraft(t, recoverLesson3, recoverAsset3, 1, draftNow)
+	h.insertAssetWithDuration(t, recoverAsset5, recoverLesson4, 1, 60)
+	h.insertAssetWithDuration(t, recoverAsset6, recoverLesson4, 2, 60)
+	h.completeReadyDraft(t, recoverLesson4, recoverAsset6, 2, draftNow)
+	h.insertOrphanAssetWithDuration(t, recoverAsset7, 60)
 	pending, err := h.repository.PendingRecognitions(h.ctx, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(pending) != 2 {
-		t.Fatalf("pending=%+v; want ready assets with no current draft only", pending)
+		t.Fatalf("pending=%+v; want lesson1/gen1 and lesson3/gen2 only", pending)
 	}
 	if pending[0].LessonID != recoverLesson1 || pending[1].LessonID != recoverLesson3 || pending[1].Generation != 2 {
 		t.Fatalf("pending=%+v; want lesson1/gen1 and lesson3/gen2", pending)
+	}
+	asset, err := h.repository.LessonAsset(h.ctx, recoverLesson3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asset == nil || asset.AssetID != recoverAsset4 || asset.Generation != 2 {
+		t.Fatalf("current asset=%+v; want asset %s/generation 2", asset, recoverAsset4)
 	}
 }
 
