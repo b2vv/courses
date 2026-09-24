@@ -66,7 +66,7 @@ test('generate the six media fixtures with the worker ffmpeg', async () => {
       'for size in 640x360 1280x720 320x240; do',
       '  ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=$size:rate=15 -f lavfi -i sine=frequency=440 -t 2 -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-$size.mp4',
       'done',
-      "ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i \"flite=text='Welcome to the course. Today we will learn how video transcripts work.':voice=slt\" -shortest -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-speech-640x360.mp4",
+      'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i "flite=text=\'Welcome to the course. Today we will learn how video transcripts work.\':voice=slt" -shortest -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-speech-640x360.mp4',
     ].join('\n'),
   );
   await compose(
