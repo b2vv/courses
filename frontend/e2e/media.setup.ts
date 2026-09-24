@@ -49,7 +49,7 @@ async function drainTranscodeQueue() {
   );
 }
 
-test('generate the five media fixtures with the worker ffmpeg', async () => {
+test('generate the six media fixtures with the worker ffmpeg', async () => {
   // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
   // so the budget covers all five encodes plus streaming the bytes out.
   test.setTimeout(720_000);
@@ -66,6 +66,7 @@ test('generate the five media fixtures with the worker ffmpeg', async () => {
       'for size in 640x360 1280x720 320x240; do',
       '  ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=$size:rate=15 -f lavfi -i sine=frequency=440 -t 2 -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-$size.mp4',
       'done',
+      "ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i \"flite=text='Welcome to the course. Today we will learn how video transcripts work.':voice=slt\" -shortest -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-speech-640x360.mp4",
     ].join('\n'),
   );
   await compose(
@@ -129,7 +130,7 @@ test('generate the five media fixtures with the worker ffmpeg', async () => {
 
   // `docker compose cp` cannot read from the worker's `/tmp`, which is a tmpfs mount rather
   // than part of the container filesystem, so the bytes are streamed out through exec instead.
-  for (const name of [...shortSizes, '1280x720-5min', '1280x720-100s'] as const) {
+  for (const name of [...shortSizes, 'speech-640x360', '1280x720-5min', '1280x720-100s'] as const) {
     const destination = path.join(fixtureDirectory, `e2e-${name}.mp4`);
     const { stdout } = await execute(
       'docker',

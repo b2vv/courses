@@ -59,12 +59,12 @@ def main() -> None:
 
     segments = []
     for seg in raw_segments:
-        # avg_log_prob is a log-probability (negative), not a 0-1 confidence. The domain
+        # avg_logprob is a log-probability (negative), not a 0-1 confidence. The domain
         # rejects values outside [0, 1], so we convert via exp(). A typical value of -0.3
         # becomes ~0.74; values near 0 approach 1.0 (high confidence).
         confidence = None
-        if seg.avg_log_prob is not None:
-            confidence = round(min(1.0, max(0.0, math.exp(seg.avg_log_prob))), 4)
+        if seg.avg_logprob is not None:
+            confidence = round(min(1.0, max(0.0, math.exp(seg.avg_logprob))), 4)
 
         segments.append({
             "id": str(uuid.uuid4()),

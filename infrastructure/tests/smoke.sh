@@ -25,7 +25,8 @@ docker compose exec -T asr-worker /opt/whisper/bin/python3 -c "import faster_whi
 docker compose exec -T asr-worker sh -eu -c 'test -f "$WHISPER_MODEL_DIR/model.bin"'
 docker compose exec -T asr-worker sh -eu <<'SH'
 audio="/tmp/asr-model-smoke-$$.wav"
-trap 'rm -f "$audio"' EXIT
+speech_audio="/tmp/asr-speech-smoke-$$.wav"
+trap 'rm -f "$audio" "$speech_audio"' EXIT
 if ! ffmpeg -nostdin -hide_banner -loglevel error \
   -f lavfi -i 'sine=frequency=440:sample_rate=16000:duration=1' \
   -ac 1 -ar 16000 -c:a pcm_s16le -f wav -y "$audio"; then
@@ -50,6 +51,35 @@ if isinstance(speech_seconds, bool) or not isinstance(speech_seconds, (int, floa
     raise SystemExit("speech_seconds is not numeric")
 '; then
   echo "ASR engine smoke failed: stdout is not valid JSON with numeric speech_seconds" >&2
+  exit 1
+fi
+if ! ffmpeg -nostdin -hide_banner -loglevel error \
+  -f lavfi -i "flite=text='Welcome to the course. Today we will learn how video transcripts work.':voice=slt" \
+  -ar 16000 -ac 1 -y "$speech_audio"; then
+  echo "ASR engine smoke failed: could not generate the speech input" >&2
+  exit 1
+fi
+if ! speech_result="$(/opt/whisper/bin/python3 /opt/whisper/transcribe.py \
+  --model "$WHISPER_MODEL_DIR" --audio "$speech_audio")"; then
+  echo "ASR engine smoke failed: transcribe.py could not recognise speech" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$speech_result" | /opt/whisper/bin/python3 -c '
+import json
+import sys
+
+def reject_non_json_number(value):
+    raise ValueError(f"{value} is not a valid JSON number")
+
+result = json.load(sys.stdin, parse_constant=reject_non_json_number)
+speech_seconds = result.get("speech_seconds")
+segments = result.get("segments")
+if isinstance(speech_seconds, bool) or not isinstance(speech_seconds, (int, float)) or speech_seconds < 1:
+    raise SystemExit("speech_seconds must be at least 1")
+if not isinstance(segments, list) or not any(isinstance(segment, dict) and segment.get("text", "").strip() for segment in segments):
+    raise SystemExit("speech result must contain a non-empty segment")
+'; then
+  echo "ASR engine smoke failed: speech JSON did not contain a non-empty segment" >&2
   exit 1
 fi
 SH
