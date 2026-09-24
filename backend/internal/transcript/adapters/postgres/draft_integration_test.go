@@ -99,6 +99,7 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	t.Run("deadline fails running draft with timeout", h.testProcessDeadlineFailsDraft)
 	t.Run("C21 rejects an asset belonging to another lesson", h.testClaimRejectsForeignAsset)
 	t.Run("C22 deletes a draft when its asset is deleted", h.testAssetDeleteCascadesDraft)
+	t.Run("C08 lesson deletion removes the draft before completion", h.testLessonDeleteCascadesDraft)
 	t.Run("C09 old completion after new claim is superseded", h.testOldCompletionAfterNewClaim)
 	t.Run("C09 delayed old claim cannot overwrite the new draft", h.testDelayedOldClaim)
 	t.Run("re-claiming the same generation succeeds", h.testReclaimSameGeneration)
@@ -245,6 +246,38 @@ func (h *draftHarness) testAssetDeleteCascadesDraft(t *testing.T) {
 	// D8-15 deliberately chooses CASCADE: SET NULL would retain a draft that names no source asset.
 	if drafts != 0 {
 		t.Fatalf("draft rows after asset delete=%d; want 0", drafts)
+	}
+}
+
+func (h *draftHarness) testLessonDeleteCascadesDraft(t *testing.T) {
+	h.reset(t)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
+	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if !claimed.Claimed {
+		t.Fatal("Claim must create a running draft")
+	}
+
+	if _, err := h.pool.Exec(h.ctx, `DELETE FROM course_lessons WHERE id=$1::text::uuid`, recoverLesson1); err != nil {
+		t.Fatalf("DELETE course_lessons: %v", err)
+	}
+	var drafts int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM asr_drafts WHERE lesson_id=$1::text::uuid`, recoverLesson1).Scan(&drafts); err != nil {
+		t.Fatal(err)
+	}
+	if drafts != 0 {
+		t.Fatalf("draft rows after lesson delete=%d; want 0", drafts)
+	}
+
+	err = h.repository.Complete(h.ctx, domain.TranscriptDraft{
+		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1,
+		State: domain.DraftReady, Language: domain.Language("en"),
+		Segments: []domain.Segment{{ID: "60000000-0000-4000-8000-000000000002", EndMs: 1000, Text: "ready"}},
+	}, claimed.Token, draftNow.Add(time.Second))
+	if err != domain.ErrNotFound {
+		t.Fatalf("Complete err=%v; want ErrNotFound", err)
 	}
 }
 
