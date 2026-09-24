@@ -1,5 +1,8 @@
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
@@ -11,6 +14,8 @@ const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fi
 const speechVideo = path.join(fixtureDirectory, 'e2e-speech-640x360.mp4');
 const silentVideo = path.join(fixtureDirectory, 'e2e-640x360.mp4');
 const courses: { id: string; updatedAt: string }[] = [];
+const execute = promisify(execFile);
+const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 type Seed = { id: string; updatedAt: string; lessonID: string };
 
@@ -25,6 +30,38 @@ function token(payload: object): { id: string; updatedAt: string } {
 
 function origin(baseURL: string) {
   return { Origin: new URL(baseURL).origin };
+}
+
+async function pauseRecognition() {
+  await execute(
+    'docker',
+    [
+      'compose',
+      'exec',
+      '-T',
+      'redis',
+      'sh',
+      '-c',
+      'export REDISCLI_AUTH="$REDIS_PASSWORD"; redis-cli SET "asynq:{asr}:paused" "$(date +%s)" > /dev/null',
+    ],
+    { cwd: repositoryRoot, timeout: 30_000 },
+  );
+}
+
+async function resumeRecognition() {
+  await execute(
+    'docker',
+    [
+      'compose',
+      'exec',
+      '-T',
+      'redis',
+      'sh',
+      '-c',
+      'export REDISCLI_AUTH="$REDIS_PASSWORD"; redis-cli DEL "asynq:{asr}:paused" > /dev/null',
+    ],
+    { cwd: repositoryRoot, timeout: 30_000 },
+  );
 }
 
 async function seed(
@@ -256,8 +293,15 @@ test.describe('ASR acceptance with a stored admin session', () => {
     await upload(page, speechVideo);
     await startRecognition(page);
     await waitForDraft(page, 'ready');
-    await upload(page, silentVideo);
-    await expect(page.getByText(/старшого відео|older video/)).toBeVisible({ timeout: 120_000 });
+    // The stale state exists only until the next automatic recognition of the new generation.
+    // Pause that queue so the observable window stays open; the data is still a real replacement.
+    await pauseRecognition();
+    try {
+      await upload(page, silentVideo);
+      await expect(page.getByText(/старшого відео|older video/)).toBeVisible({ timeout: 120_000 });
+    } finally {
+      await resumeRecognition();
+    }
   });
 
   test('C17 keeps editor text mounted and offers the recognized draft', async ({

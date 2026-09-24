@@ -443,6 +443,38 @@ async function storedSnapshotKeys(page: Page): Promise<string[]> {
   );
 }
 
+/** Read the persisted snapshot payload, not just its IndexedDB key. */
+async function storedSnapshotLanguage(page: Page, key: string): Promise<string | undefined> {
+  return page.evaluate(
+    (snapshotKey) =>
+      new Promise<string | undefined>((resolve, reject) => {
+        const request = indexedDB.open('courses-transcript-history');
+        request.addEventListener('error', () => {
+          reject(request.error ?? new Error('open failed'));
+        });
+        request.addEventListener('success', () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains('snapshots')) {
+            resolve(undefined);
+            return;
+          }
+          const snapshot = database
+            .transaction('snapshots', 'readonly')
+            .objectStore('snapshots')
+            .get(snapshotKey);
+          snapshot.addEventListener('success', () => {
+            const value = snapshot.result as { readonly language?: unknown } | undefined;
+            resolve(typeof value?.language === 'string' ? value.language : undefined);
+          });
+          snapshot.addEventListener('error', () => {
+            reject(snapshot.error ?? new Error('read failed'));
+          });
+        });
+      }),
+    key,
+  );
+}
+
 test.describe('the transcript editor, with a stored admin session', () => {
   test.use({ storageState: authStatePath('admin') });
 
@@ -462,9 +494,12 @@ test.describe('the transcript editor, with a stored admin session', () => {
     await text.fill('Правка, яку ніхто не зберіг');
     await text.blur();
 
-    // The adapter really wrote, and the key carries the author, the lesson and the language. This
-    // is the assertion the unit tests cannot make: they run against the in-memory store.
-    await expect.poll(() => storedSnapshotKeys(page)).toEqual([`${adminID}:${editorLessonID}:uk`]);
+    // The adapter really wrote. The key carries the author and lesson; per the 2026-09-24
+    // decision in work/brief-a13-language.md, the language lives in the snapshot itself. This is
+    // the assertion the unit tests cannot make: they run against the in-memory store.
+    const ownSnapshotKey = `${adminID}:${editorLessonID}`;
+    await expect.poll(() => storedSnapshotKeys(page)).toEqual([ownSnapshotKey]);
+    await expect.poll(() => storedSnapshotLanguage(page, ownSnapshotKey)).toBe('uk');
 
     // The reload that used to lose the work without a word.
     await page.reload();
@@ -516,10 +551,10 @@ test.describe('the transcript editor, with a stored admin session', () => {
             });
           });
         }),
-      ['40000000-0000-4000-8000-000000000009:other-lesson:uk', `${adminID}:other-lesson:uk`],
+      ['40000000-0000-4000-8000-000000000009:other-lesson', `${adminID}:other-lesson`],
     );
 
     await page.reload();
-    await expect.poll(() => storedSnapshotKeys(page)).toEqual([`${adminID}:other-lesson:uk`]);
+    await expect.poll(() => storedSnapshotKeys(page)).toEqual([`${adminID}:other-lesson`]);
   });
 });
