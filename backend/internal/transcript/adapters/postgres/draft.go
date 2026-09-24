@@ -123,12 +123,17 @@ func (repository *Repository) Claim(ctx context.Context, lessonID, assetID strin
 			    segments = '[]'::jsonb,
 			    failure = NULL,
 			    updated_at = EXCLUDED.updated_at
+			-- Keep the invariant at the write site so it does not depend on queue ordering (Concurrency 1, FIFO).
+			WHERE asr_drafts.generation <= EXCLUDED.generation
 		RETURNING state, updated_at`,
 		lessonID, assetID, generation, now).Scan(&state, &updatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return ports.ClaimedDraft{}, domain.ErrNotFound
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ports.ClaimedDraft{Claimed: false}, nil
 		}
 		return ports.ClaimedDraft{}, persistenceError(err)
 	}

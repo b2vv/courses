@@ -82,6 +82,37 @@ func TestQueueTaskMarkersSurviveCompletedAndArchivedKeys(t *testing.T) {
 	}
 }
 
+func TestQueueWithoutMarkerIsIdempotent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	container, err := testcontainers.Run(ctx, "redis:7.4-bookworm",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)))
+	if err != nil {
+		t.Fatalf("Redis integration requires Docker: %v", err)
+	}
+	t.Cleanup(func() { _ = container.Terminate(context.Background()) })
+	endpoint, err := container.PortEndpoint(ctx, "6379/tcp", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	redis := redisclient.NewClient(&redisclient.Options{Addr: endpoint})
+	t.Cleanup(func() { _ = redis.Close() })
+
+	queue := NewQueue(redis)
+	job := ports.RecognitionJob{
+		LessonID:   "40000000-0000-4000-8000-000000000001",
+		AssetID:    "50000000-0000-4000-8000-000000000001",
+		Generation: 1,
+	}
+	if err := queue.Enqueue(ctx, job, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.Enqueue(ctx, job, time.Minute); !errors.Is(err, domain.ErrAlreadyRunning) {
+		t.Fatalf("second pass err=%v; want ErrAlreadyRunning", err)
+	}
+}
+
 func waitForTaskState(t *testing.T, ctx context.Context, redis redisclient.UniversalClient, id string, want asynqlib.TaskState) {
 	t.Helper()
 	inspector := asynqlib.NewInspectorFromRedisClient(redis)
