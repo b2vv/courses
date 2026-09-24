@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm, useController } from 'react-hook-form';
 import type { Control, FieldPathByValue, FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -238,6 +238,7 @@ function LessonFields({
   video,
   drafts,
   transcripts,
+  onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
   moduleIndex: number;
@@ -245,6 +246,7 @@ function LessonFields({
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
+  onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
   const lessons = useFieldArray({
@@ -327,6 +329,7 @@ function LessonFields({
                 {...(currentDraftUpdatedAt === undefined
                   ? {}
                   : { draftUpdatedAt: currentDraftUpdatedAt })}
+                onTranscriptKnown={onTranscriptKnown}
                 onDraftOfferHandled={() =>
                   setLoadedDrafts((current) => {
                     if (current[lesson.id] === undefined) return current;
@@ -388,12 +391,14 @@ function ModuleFields({
   video,
   drafts,
   transcripts,
+  onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
+  onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
@@ -425,6 +430,7 @@ function ModuleFields({
               video={video}
               drafts={drafts}
               transcripts={transcripts}
+              onTranscriptKnown={onTranscriptKnown}
             />
             <div className="admin-row-actions">
               <Button
@@ -486,6 +492,7 @@ export function CourseEditorView({
   const [message, setMessage] = useState<string>();
   const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
   const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [transcriptKnowledge, setTranscriptKnowledge] = useState<Record<string, boolean>>({});
   const [savedLessonIds, setSavedLessonIds] = useState(() => lessonIds(course));
   const form = useForm<CourseFormValues>({ defaultValues: formValues(course) });
   const resetVersion = useRef(course.updatedAt);
@@ -495,7 +502,21 @@ export function CourseEditorView({
     resetVersion.current = course.updatedAt;
     form.reset(formValues(course));
     setSavedLessonIds(lessonIds(course));
+    setTranscriptKnowledge({});
   }, [course, form]);
+
+  const onTranscriptKnown = useCallback((lessonId: string, hasTranscript: boolean) => {
+    setTranscriptKnowledge((current) =>
+      current[lessonId] === hasTranscript ? current : { ...current, [lessonId]: hasTranscript },
+    );
+  }, []);
+  const hasTranscriptNotice =
+    course.status === 'draft' &&
+    savedLessonIds.size > 0 &&
+    (transcripts === undefined ||
+      [...savedLessonIds].some(
+        (lessonId) => transcriptKnowledge[lessonId] === undefined || !transcriptKnowledge[lessonId],
+      ));
 
   function showError(error: unknown) {
     const code = errorCode(error);
@@ -621,6 +642,7 @@ export function CourseEditorView({
           video={video}
           drafts={drafts}
           transcripts={transcripts}
+          onTranscriptKnown={onTranscriptKnown}
         />
         <div className="admin-editor-save">
           <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
@@ -633,6 +655,9 @@ export function CourseEditorView({
           <p className="eyebrow">{t('administration.lifecycle')}</p>
           <h2 id="course-lifecycle-heading">{t('administration.courseStatus')}</h2>
         </div>
+        {hasTranscriptNotice && (
+          <output className="admin-editor-message">{t('administration.transcriptsPending')}</output>
+        )}
         <div className="admin-row-actions">
           <Button
             type="button"

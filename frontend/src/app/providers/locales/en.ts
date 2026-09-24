@@ -217,6 +217,8 @@ export const en = {
       restore: 'Restore',
       deleteCourse: 'Delete draft',
       statusChanged: 'Course status updated.',
+      transcriptsPending:
+        'Missing transcripts will appear automatically once speech from the lessons’ videos is recognized.',
       conflict:
         'The course changed since it was loaded. This may have been your own save. The stored version is shown; compare it before saving again.',
       createConflict: 'A course with this slug already exists. The course list was refreshed.',

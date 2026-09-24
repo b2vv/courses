@@ -102,10 +102,15 @@ test.describe('with a stored admin session', () => {
     await page.getByLabel('Назва уроку 1 у модулі 1').fill(lessonTitle);
     await page.getByLabel('Опис уроку').fill('Опис браузерного уроку A14.');
     await page.getByRole('button', { name: 'Зберегти зміни', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('Зміни збережено.');
+    await expect(page.getByRole('status').filter({ hasText: 'Зміни збережено.' })).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: /Відсутні транскрипти/ }),
+    ).toBeVisible();
 
     await page.getByRole('button', { name: 'Опублікувати', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('Статус курсу оновлено.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус курсу оновлено.' }),
+    ).toBeVisible();
     await expect(page.getByText('Опубліковано', { exact: true })).toBeVisible();
 
     await page.goto(`/courses?q=${encodeURIComponent(draft.title)}`);
@@ -122,7 +127,9 @@ test.describe('with a stored admin session', () => {
 
     await page.goto(editorPath);
     await page.getByRole('button', { name: 'Архівувати', exact: true }).click();
-    await expect(page.getByRole('status')).toHaveText('Статус курсу оновлено.');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус курсу оновлено.' }),
+    ).toBeVisible();
     await expect(page.getByText('В архіві', { exact: true })).toBeVisible();
 
     await page.goto(`/courses?q=${encodeURIComponent(draft.title)}`);
@@ -177,7 +184,9 @@ test.describe('with a stored instructor session', () => {
       await expect(page.getByRole('button', { name: /Власник/ })).toHaveCount(0);
       await page.getByLabel('Назва').fill(changedTitle);
       await page.getByRole('button', { name: 'Зберегти зміни', exact: true }).click();
-      await expect(page.getByRole('status')).toHaveText('Зміни збережено.');
+      await expect(page.getByRole('status').filter({ hasText: 'Зміни збережено.' })).toHaveText(
+        'Зміни збережено.',
+      );
       await page.getByRole('button', { name: 'Опублікувати', exact: true }).click();
       await expect(page.getByText('Опубліковано', { exact: true })).toBeVisible();
 

@@ -1,4 +1,5 @@
 import { transcriptHistoryKey } from '../../application/transcript/recovery';
+import { useEffect } from 'react';
 import type {
   LessonTranscript,
   TranscriptDocument,
@@ -46,6 +47,7 @@ type LessonTranscriptFieldProps = CourseEditorTranscripts & {
   readonly draftOffer?: TranscriptDraftOffer;
   readonly draftUpdatedAt?: string;
   readonly onDraftOfferHandled?: () => void;
+  readonly onTranscriptKnown?: (lessonId: string, hasTranscript: boolean) => void;
 };
 
 export function LessonTranscriptField({
@@ -57,8 +59,14 @@ export function LessonTranscriptField({
   draftOffer,
   draftUpdatedAt,
   onDraftOfferHandled,
+  onTranscriptKnown,
 }: LessonTranscriptFieldProps) {
   const { data, isLoading } = useLessonTranscript(lessonId);
+
+  useEffect(() => {
+    if (!isLoading)
+      onTranscriptKnown?.(lessonId, data?.language !== undefined && data.language !== null);
+  }, [data, isLoading, lessonId, onTranscriptKnown]);
 
   // Nothing while loading, deliberately NOT a skeleton. `Skeleton` renders an <output>, whose
   // implicit role is `status` — and the course editor already owns a status region for "changes

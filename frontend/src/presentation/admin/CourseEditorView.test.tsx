@@ -167,6 +167,91 @@ describe('course editor', () => {
     expect(firstEditor.queryByDisplayValue('First old')).toBeNull();
   });
 
+  it('C19 shows the automatic transcript notice without blocking publication', async () => {
+    const lessonId = asBrandedId('20000000-0000-4000-8000-000000000201', 'lesson');
+    const course = {
+      ...tree,
+      modules: [
+        {
+          id: asBrandedId('10000000-0000-4000-8000-000000000201', 'module'),
+          title: 'Module',
+          lessons: [{ id: lessonId, title: 'Lesson', description: '' }],
+        },
+      ],
+    } satisfies CourseTree;
+    const transcripts = {
+      useLessonTranscript: () => ({ data: undefined, isLoading: false }),
+      documents: [],
+      history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+      library: { add: async () => null, remove: async () => null },
+      save: async () => null,
+    };
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+          transcripts={transcripts}
+        />
+      </I18nProvider>,
+    );
+
+    expect((await screen.findByRole('status')).textContent).toContain(
+      'Missing transcripts will appear automatically',
+    );
+    expect(screen.getByRole('button', { name: 'Publish' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('C19 omits the notice when every saved lesson has a transcript', async () => {
+    const lessonId = asBrandedId('20000000-0000-4000-8000-000000000202', 'lesson');
+    const course = {
+      ...tree,
+      modules: [
+        {
+          id: asBrandedId('10000000-0000-4000-8000-000000000202', 'module'),
+          title: 'Module',
+          lessons: [{ id: lessonId, title: 'Lesson', description: '' }],
+        },
+      ],
+    } satisfies CourseTree;
+    const transcript: LessonTranscript = {
+      lessonId,
+      language: 'en',
+      updatedAt: '2026-09-24T11:00:00Z',
+      stale: false,
+      segments: [],
+      documents: [],
+    };
+    const transcripts = {
+      useLessonTranscript: () => ({ data: transcript, isLoading: false }),
+      documents: [],
+      history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+      library: { add: async () => null, remove: async () => null },
+      save: async () => null,
+    };
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+          transcripts={transcripts}
+        />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
   it('P19 saves newly added modules and lessons with the loaded concurrency token', async () => {
     const browser = userEvent.setup();
     let received: { current: CourseTree; edit: CourseTreeEdit } | undefined;
