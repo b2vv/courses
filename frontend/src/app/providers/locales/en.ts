@@ -137,6 +137,12 @@ export const en = {
           restore: 'Restore changes',
           discard: 'Discard',
         },
+        draftOffer: {
+          heading: 'A recognized draft is ready',
+          description: 'Recognition finished. Load its text into the editor?',
+          load: 'Load the draft',
+          dismiss: 'Skip',
+        },
         save: 'Save the transcript',
         saved: 'Transcript saved.',
         empty: 'No lines yet.',

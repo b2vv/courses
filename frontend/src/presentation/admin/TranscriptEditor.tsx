@@ -9,6 +9,7 @@ import type {
 import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
 import { Button, TextArea, TextField } from '../ui';
 import { useTranscriptRecovery } from './use-transcript-recovery';
+import type { TranscriptDraftOffer } from './transcript-draft-offer';
 
 type DraftLine = TranscriptDraftLine;
 
@@ -36,6 +37,18 @@ type TranscriptEditorProps = {
     readonly key: string;
     readonly store: TranscriptHistoryStore;
   };
+  /**
+   * An ASR draft the author asked to load, offered through the SAME accept/dismiss affordance
+   * as crash recovery rather than applied silently: both are "text that is not yet the saved
+   * transcript", and the author must not lose one kind of unsaved text to the other. Shown only
+   * once `recovery.offer` is `none` — an unsaved edit already on screen outranks a draft the
+   * author can ask for again.
+   */
+  readonly draftOffer?: TranscriptDraftOffer;
+  readonly draftUpdatedAt?: string;
+  /** The draft offer was accepted or dismissed: the composition root drops it so a remount (or a
+   * fresh regeneration) does not resurface a handled offer. */
+  readonly onDraftOfferHandled?: () => void;
 };
 
 function toDraft(segment: TranscriptSegment): DraftLine {
@@ -56,18 +69,27 @@ export function TranscriptEditor({
   documents,
   actions,
   history,
+  draftOffer,
+  draftUpdatedAt: suppliedDraftUpdatedAt,
+  onDraftOfferHandled,
 }: TranscriptEditorProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<readonly DraftLine[]>(() => segments.map(toDraft));
+  const [currentLanguage, setCurrentLanguage] = useState(language);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | undefined>(draftOffer?.updatedAt);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<TranscriptErrorCode | null>(null);
 
-  const baseline = useMemo(
-    () => ({ expectedUpdatedAt, lines: segments.map(toDraft) }),
-    [expectedUpdatedAt, segments],
-  );
+  const currentDraftUpdatedAt = suppliedDraftUpdatedAt ?? draftUpdatedAt;
+  const baseline = useMemo(() => {
+    const base = { expectedUpdatedAt, lines: segments.map(toDraft) };
+    return currentDraftUpdatedAt === undefined
+      ? base
+      : { ...base, draftUpdatedAt: currentDraftUpdatedAt };
+  }, [currentDraftUpdatedAt, expectedUpdatedAt, segments]);
   const recovery = useTranscriptRecovery({
-    historyKey: history.key,
+    historyKey:
+      currentLanguage === language ? history.key : history.key.replace(/[^:]+$/, currentLanguage),
     store: history.store,
     baseline,
   });
@@ -171,6 +193,32 @@ export function TranscriptEditor({
         </div>
       )}
 
+      {recovery.offer.kind === 'none' && draftOffer !== undefined && (
+        <div
+          className="transcript-editor-draft-offer"
+          aria-labelledby={`transcript-draft-offer-${lessonId}`}
+        >
+          <h5 id={`transcript-draft-offer-${lessonId}`}>
+            {t('administration.transcriptEditor.draftOffer.heading')}
+          </h5>
+          <p>{t('administration.transcriptEditor.draftOffer.description')}</p>
+          <Button
+            type="button"
+            onPress={() => {
+              setLines(draftOffer.segments.map(toDraft));
+              setCurrentLanguage(draftOffer.language);
+              setDraftUpdatedAt(draftOffer.updatedAt);
+              onDraftOfferHandled?.();
+            }}
+          >
+            {t('administration.transcriptEditor.draftOffer.load')}
+          </Button>
+          <Button type="button" variant="secondary" onPress={() => onDraftOfferHandled?.()}>
+            {t('administration.transcriptEditor.draftOffer.dismiss')}
+          </Button>
+        </div>
+      )}
+
       {lines.length === 0 ? <p>{t('administration.transcriptEditor.empty')}</p> : null}
 
       <ol className="transcript-editor-lines">
@@ -251,7 +299,7 @@ export function TranscriptEditor({
           }
           setStatus('saving');
           setFailure(null);
-          const error = await actions.save(language, expectedUpdatedAt, segmentsToSave);
+          const error = await actions.save(currentLanguage, expectedUpdatedAt, segmentsToSave);
           setStatus(error === null ? 'saved' : 'idle');
           setFailure(error);
           // Only a save the server accepted drops the local copy. A reload must never do it:

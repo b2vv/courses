@@ -7,6 +7,7 @@ import type {
 } from '../../domain/transcript/transcript';
 import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
 import { TranscriptEditor } from './TranscriptEditor';
+import type { TranscriptDraftOffer } from './transcript-draft-offer';
 
 export type CourseEditorTranscripts = {
   /** Loaded lazily per lesson: a course may hold 120 lessons of 5000 lines each, and the editor
@@ -41,6 +42,10 @@ export type CourseEditorTranscripts = {
 
 type LessonTranscriptFieldProps = CourseEditorTranscripts & {
   readonly lessonId: string;
+  /** An ASR draft loaded for this lesson, if the author asked for one — see `TranscriptEditor`. */
+  readonly draftOffer?: TranscriptDraftOffer;
+  readonly draftUpdatedAt?: string;
+  readonly onDraftOfferHandled?: () => void;
 };
 
 export function LessonTranscriptField({
@@ -49,6 +54,9 @@ export function LessonTranscriptField({
   documents,
   history,
   save,
+  draftOffer,
+  draftUpdatedAt,
+  onDraftOfferHandled,
 }: LessonTranscriptFieldProps) {
   const { data, isLoading } = useLessonTranscript(lessonId);
 
@@ -81,6 +89,9 @@ export function LessonTranscriptField({
       actions={{
         save: (nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments),
       }}
+      {...(draftOffer === undefined ? {} : { draftOffer })}
+      {...(draftUpdatedAt === undefined ? {} : { draftUpdatedAt })}
+      {...(onDraftOfferHandled === undefined ? {} : { onDraftOfferHandled })}
     />
   );
 }

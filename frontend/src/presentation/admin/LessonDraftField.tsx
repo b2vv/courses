@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DraftErrorCode, DraftSegment, LessonDraft } from '../../domain/transcript/draft';
 import { Button, ProgressBar, Select } from '../ui';
@@ -18,7 +18,12 @@ export type CourseEditorDrafts = {
 
 type LessonDraftFieldProps = CourseEditorDrafts & {
   readonly lessonId: string;
-  readonly onLoadDraft?: (segments: readonly DraftSegment[], language: string) => void;
+  readonly onLoadDraft?: (
+    segments: readonly DraftSegment[],
+    language: string,
+    updatedAt: string | undefined,
+  ) => void;
+  readonly onDraftTokenChange?: (updatedAt: string | undefined) => void;
 };
 
 const languageOptions: readonly ChoiceOption[] = [
@@ -66,12 +71,17 @@ export function LessonDraftField({
   useLessonDraft,
   actions,
   onLoadDraft,
+  onDraftTokenChange,
 }: LessonDraftFieldProps) {
   const { t } = useTranslation();
   const { data: draft, isLoading } = useLessonDraft(lessonId);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('auto');
   const [isBusy, setIsBusy] = useState(false);
   const [actionError, setActionError] = useState<DraftErrorCode>();
+
+  useEffect(() => {
+    onDraftTokenChange?.(draft?.updatedAt ?? undefined);
+  }, [draft?.updatedAt, onDraftTokenChange]);
 
   async function regenerate() {
     setIsBusy(true);
@@ -115,7 +125,9 @@ export function LessonDraftField({
         <Button
           type="button"
           variant="secondary"
-          onPress={() => onLoadDraft(draft.segments, draft.language ?? 'uk')}
+          onPress={() =>
+            onLoadDraft(draft.segments, draft.language ?? 'uk', draft.updatedAt ?? undefined)
+          }
         >
           {t('administration.asr.loadDraft')}
         </Button>

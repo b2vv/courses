@@ -40,11 +40,15 @@ export type TranscriptSnapshot = {
    * writes while the author is away.
    */
   readonly expectedUpdatedAt: string | undefined;
+  /** The ASR draft generation the lines came from, when they were loaded from a draft. */
+  readonly draftUpdatedAt?: string;
   readonly lines: readonly TranscriptDraftLine[];
 };
 
 export type TranscriptBaseline = {
   readonly expectedUpdatedAt: string | undefined;
+  /** The current ASR draft generation, when the editor's lines came from a draft. */
+  readonly draftUpdatedAt?: string;
   readonly lines: readonly TranscriptDraftLine[];
 };
 
@@ -92,7 +96,10 @@ export function recoveryOffer(
 ): RecoveryOffer {
   if (stored === null || dismissed) return { kind: 'none' };
   if (sameLines(stored.lines, baseline.lines)) return { kind: 'none' };
-  return stored.expectedUpdatedAt === baseline.expectedUpdatedAt
+  const baseMatches = stored.expectedUpdatedAt === baseline.expectedUpdatedAt;
+  const draftMatches =
+    stored.draftUpdatedAt === undefined ? true : stored.draftUpdatedAt === baseline.draftUpdatedAt;
+  return baseMatches && draftMatches
     ? { kind: 'offer', snapshot: stored }
     : { kind: 'offer-stale', snapshot: stored };
 }

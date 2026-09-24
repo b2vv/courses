@@ -242,3 +242,73 @@ test('leaving a field captures what is on screen, including a half-typed time', 
   expect(snapshot?.lines[0]?.startMs).toBe('15');
   expect(snapshot?.expectedUpdatedAt).toBe('2026-09-18T00:00:00Z');
 });
+
+// --- draft offer (C17, C18) -----------------------------------------------------------------
+// An ASR draft the author asked to load goes through the SAME accept/dismiss affordance as
+// crash recovery: it never overwrites what is on screen by itself.
+
+const draftSegments: TranscriptSegment[] = [
+  {
+    id: '80000000-0000-4000-8000-000000000001',
+    startMs: 0,
+    endMs: 900,
+    text: 'Розпізнаний текст',
+    documentIds: [],
+  },
+];
+
+test('a loaded draft is offered, not applied, and the text on screen is unchanged until accepted', () => {
+  editor(async () => null, {
+    draftOffer: { segments: draftSegments, language: 'uk', updatedAt: '2026-09-24T00:00:00Z' },
+  });
+  expect(screen.getByRole('button', { name: 'Завантажити чернетку' })).toBeTruthy();
+  expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe('Перша');
+});
+
+test('accepting the draft offer replaces the lines and reports the offer as handled', () => {
+  let handled = false;
+  editor(async () => null, {
+    draftOffer: { segments: draftSegments, language: 'uk', updatedAt: '2026-09-24T00:00:00Z' },
+    onDraftOfferHandled: () => {
+      handled = true;
+    },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Завантажити чернетку' }));
+  expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe(
+    'Розпізнаний текст',
+  );
+  expect(handled).toBe(true);
+});
+
+test('dismissing the draft offer leaves the lines untouched but still reports it handled', () => {
+  let handled = false;
+  editor(async () => null, {
+    draftOffer: { segments: draftSegments, language: 'uk', updatedAt: '2026-09-24T00:00:00Z' },
+    onDraftOfferHandled: () => {
+      handled = true;
+    },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Не завантажувати' }));
+  expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe('Перша');
+  expect(handled).toBe(true);
+});
+
+test('an unsaved local edit outranks a draft offer: only one prompt shows at a time', async () => {
+  await editorWithSnapshot(
+    {
+      key: 'author:lesson:uk',
+      capturedAt: 1,
+      expectedUpdatedAt: '2026-09-18T00:00:00Z',
+      lines: [storedLine],
+    },
+    {
+      draftOffer: {
+        segments: draftSegments,
+        language: 'uk',
+        updatedAt: '2026-09-24T00:00:00Z',
+      },
+    },
+  );
+  await screen.findByRole('button', { name: 'Відновити зміни' });
+  expect(screen.queryByRole('button', { name: 'Завантажити чернетку' })).toBeNull();
+});

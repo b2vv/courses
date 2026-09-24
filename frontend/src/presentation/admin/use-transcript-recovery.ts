@@ -103,6 +103,9 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
             key: current.historyKey,
             capturedAt: Date.now(),
             expectedUpdatedAt: current.baseline.expectedUpdatedAt,
+            ...(current.baseline.draftUpdatedAt === undefined
+              ? {}
+              : { draftUpdatedAt: current.baseline.draftUpdatedAt }),
             lines,
           });
     write.catch(() => {

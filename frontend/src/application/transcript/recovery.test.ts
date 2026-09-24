@@ -88,6 +88,51 @@ test('a server that moved under the snapshot is a different offer, not the same 
   expect(recoveryOffer(snapshot(), baseline, false).kind).toBe('offer-stale');
 });
 
+test('a draft snapshot stays ordinary when the current draft token is unchanged', () => {
+  const stored = snapshot({ draftUpdatedAt: '2026-09-24T10:00:00Z' });
+  expect(
+    recoveryOffer(
+      stored,
+      {
+        expectedUpdatedAt: stored.expectedUpdatedAt,
+        draftUpdatedAt: '2026-09-24T10:00:00Z',
+        lines: [],
+      },
+      false,
+    ).kind,
+  ).toBe('offer');
+});
+
+test('a regenerated draft makes its local snapshot stale', () => {
+  const stored = snapshot({ draftUpdatedAt: '2026-09-24T10:00:00Z' });
+  expect(
+    recoveryOffer(
+      stored,
+      {
+        expectedUpdatedAt: stored.expectedUpdatedAt,
+        draftUpdatedAt: '2026-09-24T11:00:00Z',
+        lines: [],
+      },
+      false,
+    ).kind,
+  ).toBe('offer-stale');
+});
+
+test('a manual snapshot without a draft token keeps the old comparison', () => {
+  const stored = snapshot();
+  expect(
+    recoveryOffer(
+      stored,
+      {
+        expectedUpdatedAt: stored.expectedUpdatedAt,
+        draftUpdatedAt: '2026-09-24T11:00:00Z',
+        lines: [],
+      },
+      false,
+    ).kind,
+  ).toBe('offer');
+});
+
 test('an absent token is a value, not a missing one', () => {
   // `undefined` means "the author began typing into a lesson with no transcript". A transcript
   // appearing since then is exactly a moved base, so it must be stale rather than plain.

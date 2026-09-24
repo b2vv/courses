@@ -20,9 +20,12 @@ import { createAuthoring } from '../../application/admin/authoring';
 import { AuthoringQueryError, createAdminQueries } from '../../app/composition/admin-queries';
 import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
+import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
 import { asBrandedId } from '../../domain/course/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../domain/course/course';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { LessonDraft } from '../../domain/transcript/draft';
+import type { LessonTranscript } from '../../domain/transcript/transcript';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
 
@@ -57,6 +60,113 @@ function savedTree(current: CourseTree, edit: CourseTreeEdit): CourseTree {
 }
 
 describe('course editor', () => {
+  it('routes a loaded draft to only its lesson transcript editor', async () => {
+    const browser = userEvent.setup();
+    const firstLessonId = asBrandedId('20000000-0000-4000-8000-000000000101', 'lesson');
+    const secondLessonId = asBrandedId('20000000-0000-4000-8000-000000000102', 'lesson');
+    const course = {
+      ...tree,
+      modules: [
+        {
+          id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
+          title: 'Module',
+          lessons: [
+            { id: firstLessonId, title: 'First', description: '' },
+            { id: secondLessonId, title: 'Second', description: '' },
+          ],
+        },
+      ],
+    } satisfies CourseTree;
+    const readyDraft: LessonDraft = {
+      lessonId: firstLessonId,
+      state: 'ready',
+      language: 'en',
+      failure: null,
+      stale: false,
+      updatedAt: '2026-09-24T12:00:00Z',
+      assetId: null,
+      generation: 1,
+      segments: [{ id: 'draft-line', startMs: 0, endMs: 900, text: 'Loaded' }],
+    };
+    const transcripts = new Map<string, LessonTranscript>([
+      [
+        firstLessonId,
+        {
+          lessonId: firstLessonId,
+          language: 'uk',
+          updatedAt: '2026-09-24T11:00:00Z',
+          stale: false,
+          segments: [
+            { id: 'first-line', startMs: 0, endMs: 900, text: 'First old', documentIds: [] },
+          ],
+          documents: [],
+        },
+      ],
+      [
+        secondLessonId,
+        {
+          lessonId: secondLessonId,
+          language: 'uk',
+          updatedAt: '2026-09-24T11:00:00Z',
+          stale: false,
+          segments: [
+            { id: 'second-line', startMs: 0, endMs: 900, text: 'Second old', documentIds: [] },
+          ],
+          documents: [],
+        },
+      ],
+    ]);
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+          drafts={{
+            useLessonDraft: (lessonId) => ({
+              data:
+                lessonId === firstLessonId ? readyDraft : { ...readyDraft, lessonId, segments: [] },
+              isLoading: false,
+            }),
+            actions: { regenerate: async () => null },
+          }}
+          transcripts={{
+            useLessonTranscript: (lessonId) => ({
+              data: transcripts.get(lessonId),
+              isLoading: false,
+            }),
+            documents: [],
+            history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+            library: { add: async () => null, remove: async () => null },
+            save: async () => null,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    await browser.click(screen.getByRole('button', { name: 'Load draft into editor' }));
+    const editors = screen.getAllByRole('heading', { name: 'Lesson transcript' }).map((heading) => {
+      const section = heading.closest('section');
+      if (section === null) throw new Error('transcript editor heading has no section');
+      return within(section);
+    });
+    const firstEditor = editors[0];
+    const secondEditor = editors[1];
+    if (firstEditor === undefined || secondEditor === undefined)
+      throw new Error('both lesson transcript editors must render');
+    expect(firstEditor.getByText('A recognized draft is ready')).toBeTruthy();
+    expect(secondEditor.queryByText('A recognized draft is ready')).toBeNull();
+
+    await browser.click(firstEditor.getByRole('button', { name: 'Load the draft' }));
+    expect(firstEditor.getByDisplayValue('Loaded')).toBeTruthy();
+    expect(secondEditor.getByDisplayValue('Second old')).toBeTruthy();
+    expect(firstEditor.queryByDisplayValue('First old')).toBeNull();
+  });
+
   it('P19 saves newly added modules and lessons with the loaded concurrency token', async () => {
     const browser = userEvent.setup();
     let received: { current: CourseTree; edit: CourseTreeEdit } | undefined;

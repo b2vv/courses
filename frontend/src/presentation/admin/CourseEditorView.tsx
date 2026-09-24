@@ -12,6 +12,7 @@ import type {
   CourseTreeEdit,
   InstructorOption,
 } from '../../domain/course/course';
+import type { DraftSegment } from '../../domain/transcript/draft';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
 import { LessonDraftField } from './LessonDraftField';
@@ -20,6 +21,7 @@ import { LessonVideoField } from './LessonVideoField';
 import { DocumentLibrary } from './DocumentLibrary';
 import { LessonTranscriptField } from './LessonTranscriptField';
 import type { CourseEditorTranscripts } from './LessonTranscriptField';
+import type { TranscriptDraftOffer } from './transcript-draft-offer';
 import type { CourseEditorVideo } from './LessonVideoField';
 
 type CourseFormValues = {
@@ -220,6 +222,15 @@ function OwnerField({
   );
 }
 
+/**
+ * A draft segment carries no `documentIds` — ASR has no way to know about the course's document
+ * library — so a loaded draft always starts with none, exactly like a line the author adds by
+ * hand.
+ */
+function toTranscriptSegment(segment: DraftSegment) {
+  return { ...segment, documentIds: [] };
+}
+
 function LessonFields({
   form,
   moduleIndex,
@@ -245,75 +256,120 @@ function LessonFields({
     .watch('modules')
     .reduce((total, module) => total + module.lessons.length, 0);
 
+  // A draft the author asked to load, keyed by lesson: `LessonDraftField` and
+  // `LessonTranscriptField` are siblings below, and this is the shortest-lived state that can
+  // pass one's callback to the other's prop without either knowing about the other.
+  const [loadedDrafts, setLoadedDrafts] = useState<Record<string, TranscriptDraftOffer>>({});
+  const [draftTokens, setDraftTokens] = useState<Record<string, string | undefined>>({});
+
   return (
     <div className="admin-lessons">
-      {lessons.fields.map((lesson, lessonIndex) => (
-        <fieldset className="admin-lesson" key={lesson.formKey}>
-          <legend>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</legend>
-          <div className="admin-editor-grid">
-            <StringField
-              control={form.control}
-              name={`modules.${moduleIndex}.lessons.${lessonIndex}.title`}
-              label={t('administration.lessonTitle', {
-                lesson: lessonIndex + 1,
-                module: moduleIndex + 1,
-              })}
-              maximum={200}
-              required
-            />
-            <StringField
-              control={form.control}
-              name={`modules.${moduleIndex}.lessons.${lessonIndex}.description`}
-              label={t('administration.lessonDescription')}
-              maximum={1000}
-              multiline
-            />
-          </div>
-          {video !== undefined && (
-            <LessonVideoField
-              lessonId={lesson.id}
-              isSaved={savedLessonIds.has(lesson.id)}
-              {...video}
-            />
-          )}
-          {drafts !== undefined && savedLessonIds.has(lesson.id) && (
-            <LessonDraftField lessonId={lesson.id} {...drafts} />
-          )}
-          {transcripts !== undefined && savedLessonIds.has(lesson.id) && (
-            <LessonTranscriptField lessonId={lesson.id} {...transcripts} />
-          )}
-          <div className="admin-row-actions">
-            <Button
-              type="button"
-              variant="secondary"
-              isDisabled={lessonIndex === 0}
-              onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
-            >
-              {t('administration.moveLessonUp', {
-                lesson: lessonIndex + 1,
-                module: moduleIndex + 1,
-              })}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              isDisabled={lessonIndex === lessons.fields.length - 1}
-              onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
-            >
-              {t('administration.moveLessonDown', {
-                lesson: lessonIndex + 1,
-                module: moduleIndex + 1,
-              })}
-            </Button>
-            <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
-              {t('administration.deleteLesson', {
-                lesson: lessonIndex + 1,
-                module: moduleIndex + 1,
-              })}
-            </Button>
-          </div>
-        </fieldset>
-      ))}
+      {lessons.fields.map((lesson, lessonIndex) => {
+        const draftOffer = loadedDrafts[lesson.id];
+        const currentDraftUpdatedAt = draftTokens[lesson.id];
+        return (
+          <fieldset className="admin-lesson" key={lesson.formKey}>
+            <legend>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</legend>
+            <div className="admin-editor-grid">
+              <StringField
+                control={form.control}
+                name={`modules.${moduleIndex}.lessons.${lessonIndex}.title`}
+                label={t('administration.lessonTitle', {
+                  lesson: lessonIndex + 1,
+                  module: moduleIndex + 1,
+                })}
+                maximum={200}
+                required
+              />
+              <StringField
+                control={form.control}
+                name={`modules.${moduleIndex}.lessons.${lessonIndex}.description`}
+                label={t('administration.lessonDescription')}
+                maximum={1000}
+                multiline
+              />
+            </div>
+            {video !== undefined && (
+              <LessonVideoField
+                lessonId={lesson.id}
+                isSaved={savedLessonIds.has(lesson.id)}
+                {...video}
+              />
+            )}
+            {drafts !== undefined && savedLessonIds.has(lesson.id) && (
+              <LessonDraftField
+                lessonId={lesson.id}
+                {...drafts}
+                onLoadDraft={(segments, language, updatedAt) =>
+                  setLoadedDrafts((current) => ({
+                    ...current,
+                    [lesson.id]: {
+                      segments: segments.map(toTranscriptSegment),
+                      language,
+                      updatedAt,
+                    },
+                  }))
+                }
+                onDraftTokenChange={(updatedAt) =>
+                  setDraftTokens((current) =>
+                    current[lesson.id] === updatedAt
+                      ? current
+                      : { ...current, [lesson.id]: updatedAt },
+                  )
+                }
+              />
+            )}
+            {transcripts !== undefined && savedLessonIds.has(lesson.id) && (
+              <LessonTranscriptField
+                lessonId={lesson.id}
+                {...transcripts}
+                {...(draftOffer === undefined ? {} : { draftOffer })}
+                {...(currentDraftUpdatedAt === undefined
+                  ? {}
+                  : { draftUpdatedAt: currentDraftUpdatedAt })}
+                onDraftOfferHandled={() =>
+                  setLoadedDrafts((current) => {
+                    if (current[lesson.id] === undefined) return current;
+                    const next = { ...current };
+                    delete next[lesson.id];
+                    return next;
+                  })
+                }
+              />
+            )}
+            <div className="admin-row-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                isDisabled={lessonIndex === 0}
+                onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
+              >
+                {t('administration.moveLessonUp', {
+                  lesson: lessonIndex + 1,
+                  module: moduleIndex + 1,
+                })}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                isDisabled={lessonIndex === lessons.fields.length - 1}
+                onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
+              >
+                {t('administration.moveLessonDown', {
+                  lesson: lessonIndex + 1,
+                  module: moduleIndex + 1,
+                })}
+              </Button>
+              <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
+                {t('administration.deleteLesson', {
+                  lesson: lessonIndex + 1,
+                  module: moduleIndex + 1,
+                })}
+              </Button>
+            </div>
+          </fieldset>
+        );
+      })}
       <Button
         type="button"
         variant="secondary"
