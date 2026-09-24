@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -24,8 +25,9 @@ import (
 )
 
 const (
-	mediaRoot    = "/media"
-	pollInterval = 60 * time.Second
+	mediaRoot       = "/media"
+	defaultModelDir = "/opt/whisper/models/large-v3-turbo"
+	pollInterval    = 60 * time.Second
 )
 
 func main() {
@@ -55,7 +57,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	engine := asrwhisper.NewEngine(
 		envOr("WHISPER_PYTHON", "/opt/whisper/bin/python3"),
 		envOr("WHISPER_SCRIPT", "/opt/whisper/transcribe.py"),
-		envOr("WHISPER_MODEL_DIR", "/opt/whisper/models"),
+		envOr("WHISPER_MODEL_DIR", defaultModelDir),
 		logger,
 	)
 	audio := asrmedia.NewAudio(mediaRoot, os.TempDir())
@@ -146,13 +148,10 @@ func runPolling(ctx context.Context, recognize *application.Recognize, logger *s
 }
 
 func modelReady() error {
-	dir := envOr("WHISPER_MODEL_DIR", "/opt/whisper/models")
-	info, err := os.Stat(dir)
-	if err != nil {
+	dir := envOr("WHISPER_MODEL_DIR", defaultModelDir)
+	info, err := os.Stat(filepath.Join(dir, "model.bin"))
+	if err != nil || !info.Mode().IsRegular() {
 		return errors.New("model weights not available")
-	}
-	if !info.IsDir() {
-		return errors.New("model path is not a directory")
 	}
 	return nil
 }

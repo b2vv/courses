@@ -22,7 +22,37 @@ case "$asr_uid" in
   *) echo "asr-worker runs as uid $asr_uid, expected 10001" >&2; exit 1 ;;
 esac
 docker compose exec -T asr-worker /opt/whisper/bin/python3 -c "import faster_whisper" > /dev/null
-docker compose exec -T asr-worker test -d /opt/whisper/models
+docker compose exec -T asr-worker sh -eu -c 'test -f "$WHISPER_MODEL_DIR/model.bin"'
+docker compose exec -T asr-worker sh -eu <<'SH'
+audio="/tmp/asr-model-smoke-$$.wav"
+trap 'rm -f "$audio"' EXIT
+if ! ffmpeg -nostdin -hide_banner -loglevel error \
+  -f lavfi -i 'sine=frequency=440:sample_rate=16000:duration=1' \
+  -ac 1 -ar 16000 -c:a pcm_s16le -f wav -y "$audio"; then
+  echo "ASR engine smoke failed: could not generate the 16 kHz mono input" >&2
+  exit 1
+fi
+if ! result="$(/opt/whisper/bin/python3 /opt/whisper/transcribe.py \
+  --model "$WHISPER_MODEL_DIR" --audio "$audio")"; then
+  echo "ASR engine smoke failed: transcribe.py could not load or run the model" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$result" | /opt/whisper/bin/python3 -c '
+import json
+import sys
+
+def reject_non_json_number(value):
+    raise ValueError(f"{value} is not a valid JSON number")
+
+result = json.load(sys.stdin, parse_constant=reject_non_json_number)
+speech_seconds = result.get("speech_seconds")
+if isinstance(speech_seconds, bool) or not isinstance(speech_seconds, (int, float)):
+    raise SystemExit("speech_seconds is not numeric")
+'; then
+  echo "ASR engine smoke failed: stdout is not valid JSON with numeric speech_seconds" >&2
+  exit 1
+fi
+SH
 asr_status="$(docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/status)"
 printf 'asr-worker status: %s\n' "$asr_status"
 docker compose exec -T frontend node --input-type=module <<'JS'

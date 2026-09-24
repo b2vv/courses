@@ -54,9 +54,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chown -R 10001:10001 /media
 RUN python3 -m venv /opt/whisper && \
     /opt/whisper/bin/pip install --no-cache-dir faster-whisper==1.2.1
-ENV HF_HOME=/opt/whisper/models
+ENV HF_HOME=/opt/whisper/models \
+    WHISPER_MODEL_DIR=/opt/whisper/models/large-v3-turbo
 RUN /opt/whisper/bin/python3 -c \
-    "from faster_whisper import WhisperModel; WhisperModel('large-v3-turbo', device='cpu', compute_type='int8')" && \
+    "from faster_whisper.utils import download_model; download_model('large-v3-turbo', output_dir='$WHISPER_MODEL_DIR')" && \
+    test -f "$WHISPER_MODEL_DIR/model.bin" && \
     chmod -R a+rX /opt/whisper
 USER 10001:10001
 COPY --from=build /out/asr-worker /app/asr-worker

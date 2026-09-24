@@ -109,7 +109,7 @@ services:
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Run make env}
       HTTP_ADDR: ':8083'
-      WHISPER_MODEL_DIR: /opt/whisper/models
+      WHISPER_MODEL_DIR: /opt/whisper/models/large-v3-turbo
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
