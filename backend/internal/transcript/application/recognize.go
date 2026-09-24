@@ -66,12 +66,12 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 	}
 
 	audioPath, release, err := r.audio.Extract(ctx, job.AssetID)
-	if errors.Is(err, domain.ErrNotFound) {
-		return r.fail(ctx, claimed, job, "source_not_found")
-	}
 	if err != nil {
 		if ctx.Err() != nil {
-			return RecognizeOutcome{}, ctx.Err()
+			return r.handleContextFailure(ctx, claimed, job)
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return r.fail(ctx, claimed, job, "source_not_found")
 		}
 		return r.fail(ctx, claimed, job, "audio_extraction_failed")
 	}
@@ -80,7 +80,7 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 	recognition, err := r.transcriber.Transcribe(ctx, audioPath, job.Language)
 	if err != nil {
 		if ctx.Err() != nil {
-			return RecognizeOutcome{}, ctx.Err()
+			return r.handleContextFailure(ctx, claimed, job)
 		}
 		return r.fail(ctx, claimed, job, "engine_error")
 	}
@@ -117,6 +117,15 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 	}
 
 	return r.complete(ctx, claimed, draft)
+}
+
+func (r *Recognize) handleContextFailure(ctx context.Context, claimed ports.ClaimedDraft, job ports.RecognitionJob) (RecognizeOutcome, error) {
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return RecognizeOutcome{}, ctx.Err()
+	}
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return r.fail(writeCtx, claimed, job, "timeout")
 }
 
 func (r *Recognize) complete(ctx context.Context, claimed ports.ClaimedDraft, draft domain.TranscriptDraft) (RecognizeOutcome, error) {
@@ -166,7 +175,11 @@ func (r *Recognize) EnqueuePending(ctx context.Context) error {
 			LessonID:   p.LessonID,
 			AssetID:    p.AssetID,
 			Generation: p.Generation,
+			TaskMarker: p.TaskMarker,
 		}, timeout); err != nil {
+			if errors.Is(err, domain.ErrAlreadyRunning) {
+				continue
+			}
 			r.logger.Error("failed to enqueue recognition",
 				slog.String("lessonId", p.LessonID), slog.Any("error", err))
 			continue

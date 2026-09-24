@@ -176,6 +176,26 @@ func TestRegenerateEnqueues(t *testing.T) {
 	}
 }
 
+func TestRegenerateRunningCurrentDraftIsVisibleAndDoesNotEnqueue(t *testing.T) {
+	t.Parallel()
+	dur := float64(120)
+	drafts := &draftFakeDrafts{
+		lessonAsset: &ports.PendingRecognition{LessonID: lessonID, AssetID: assetID, Generation: 1, DurationSeconds: &dur},
+		lessonDraft: ports.LessonDraft{Found: true, UpdatedAt: claimToken, Draft: domain.TranscriptDraft{
+			LessonID: lessonID, AssetID: assetID, Generation: 1, State: domain.DraftRunning,
+		}},
+	}
+	queue := &fakeQueue{}
+	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, nil, queue, testClock, testLogger)
+
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID, "uk"); !errors.Is(err, domain.ErrAlreadyRunning) {
+		t.Fatalf("err=%v want already_running", err)
+	}
+	if len(queue.jobs) != 0 {
+		t.Fatalf("jobs=%d want=0", len(queue.jobs))
+	}
+}
+
 func TestRegenerateNoAsset(t *testing.T) {
 	t.Parallel()
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, nil, &fakeQueue{}, testClock, testLogger)

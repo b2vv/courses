@@ -118,13 +118,30 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		return domain.ErrDependencyUnavailable
 	}
 
+	draft, err := d.drafts.GetLessonDraft(ctx, lessonID)
+	if err != nil {
+		return err
+	}
+	if draft.Found && draft.Draft.AssetID == asset.AssetID &&
+		draft.Draft.Generation == asset.Generation && draft.Draft.State == domain.DraftRunning {
+		return domain.ErrAlreadyRunning
+	}
+
 	timeout := TaskTimeout(*asset.DurationSeconds)
 	return d.queue.Enqueue(ctx, ports.RecognitionJob{
 		LessonID:   lessonID,
 		AssetID:    asset.AssetID,
 		Generation: asset.Generation,
 		Language:   language,
+		TaskMarker: draftMarker(draft),
 	}, timeout)
+}
+
+func draftMarker(draft ports.LessonDraft) string {
+	if !draft.Found {
+		return ""
+	}
+	return draft.UpdatedAt
 }
 
 type PublishRequest struct {

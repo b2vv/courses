@@ -47,17 +47,18 @@ func testSegments(n int) []domain.Segment {
 // --- fakes ---
 
 type fakeDrafts struct {
-	claimResult    ports.ClaimedDraft
-	claimErr       error
-	completeErr    error
-	pendingResult  []ports.PendingRecognition
-	pendingErr     error
-	recoverResult  []ports.RecoveredDraft
-	recoverErr     error
-	completedDraft domain.TranscriptDraft
-	completedToken string
-	claimCalls     int
-	completeCalls  int
+	claimResult        ports.ClaimedDraft
+	claimErr           error
+	completeErr        error
+	pendingResult      []ports.PendingRecognition
+	pendingErr         error
+	recoverResult      []ports.RecoveredDraft
+	recoverErr         error
+	completedDraft     domain.TranscriptDraft
+	completedToken     string
+	claimCalls         int
+	completeCalls      int
+	completeContextErr error
 }
 
 func (f *fakeDrafts) GetLessonDraft(context.Context, string) (ports.LessonDraft, error) {
@@ -77,10 +78,11 @@ func (f *fakeDrafts) SaveDraft(context.Context, domain.TranscriptDraft, string, 
 	return "", nil
 }
 
-func (f *fakeDrafts) Complete(_ context.Context, draft domain.TranscriptDraft, token string, _ time.Time) error {
+func (f *fakeDrafts) Complete(ctx context.Context, draft domain.TranscriptDraft, token string, _ time.Time) error {
 	f.completeCalls++
 	f.completedDraft = draft
 	f.completedToken = token
+	f.completeContextErr = ctx.Err()
 	return f.completeErr
 }
 
@@ -287,6 +289,44 @@ func TestProcessContextCancelledDuringExtract(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err=%v want=context.Canceled", err)
+	}
+}
+
+func TestProcessDeadlineDuringExtractFailsDraft(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken}}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{err: context.DeadlineExceeded}, &fakeQueue{}, testClock, testLogger)
+
+	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation})
+	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
+		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
+	}
+	if drafts.completedDraft.State != domain.DraftFailed || drafts.completedDraft.Failure != "timeout" {
+		t.Fatalf("draft=%+v want failed/timeout", drafts.completedDraft)
+	}
+	if drafts.completeContextErr != nil {
+		t.Fatalf("terminal write used canceled context: %v", drafts.completeContextErr)
+	}
+}
+
+func TestProcessDeadlineDuringTranscribeFailsDraft(t *testing.T) {
+	t.Parallel()
+	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken}}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	r := NewRecognize(drafts, &fakeTranscriber{err: context.DeadlineExceeded}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
+
+	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation})
+	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
+		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
+	}
+	if drafts.completedDraft.State != domain.DraftFailed || drafts.completedDraft.Failure != "timeout" {
+		t.Fatalf("draft=%+v want failed/timeout", drafts.completedDraft)
+	}
+	if drafts.completeContextErr != nil {
+		t.Fatalf("terminal write used canceled context: %v", drafts.completeContextErr)
 	}
 }
 
@@ -594,6 +634,40 @@ func TestEnqueuePendingContinuesOnQueueError(t *testing.T) {
 	}
 	if callCount != 2 {
 		t.Fatalf("queue calls=%d want=2 (must continue after first error)", callCount)
+	}
+}
+
+func TestEnqueuePendingSkipsAlreadyRunningAndContinues(t *testing.T) {
+	t.Parallel()
+	dur := float64(60)
+	secondLesson := "33333333-3333-4333-8333-333333333333"
+	secondAsset := "44444444-4444-4444-8444-444444444444"
+	drafts := &fakeDrafts{pendingResult: []ports.PendingRecognition{
+		{LessonID: lessonID, AssetID: assetID, Generation: 1, DurationSeconds: &dur},
+		{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, DurationSeconds: &dur},
+	}}
+	queue := &fakeQueue{}
+	callCount := 0
+	queueWithConflict := &countingQueue{
+		inner: queue,
+		onEnqueue: func() error {
+			callCount++
+			if callCount == 1 {
+				return domain.ErrAlreadyRunning
+			}
+			return nil
+		},
+	}
+	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, queueWithConflict, testClock, testLogger)
+
+	if err := r.EnqueuePending(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if callCount != 2 {
+		t.Fatalf("queue calls=%d want=2", callCount)
+	}
+	if len(queue.jobs) != 1 || queue.jobs[0].LessonID != secondLesson {
+		t.Fatalf("jobs=%v want only second pending job", queue.jobs)
 	}
 }
 

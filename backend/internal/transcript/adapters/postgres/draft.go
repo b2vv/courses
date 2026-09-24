@@ -64,7 +64,8 @@ func (repository *Repository) GetLessonDraft(ctx context.Context, lessonID strin
 
 func (repository *Repository) PendingRecognitions(ctx context.Context, limit int) ([]ports.PendingRecognition, error) {
 	rows, err := repository.pool.Query(ctx, `
-		SELECT assets.lesson_id::text, assets.id::text, assets.generation, assets.duration_seconds
+		SELECT assets.lesson_id::text, assets.id::text, assets.generation, assets.duration_seconds,
+		       drafts.updated_at
 		FROM video_assets AS assets
 		LEFT JOIN asr_drafts AS drafts ON drafts.lesson_id = assets.lesson_id
 		WHERE assets.state = 'ready' AND assets.evicted_at IS NULL
@@ -80,11 +81,15 @@ func (repository *Repository) PendingRecognitions(ctx context.Context, limit int
 	for rows.Next() {
 		var p ports.PendingRecognition
 		var duration pgtype.Float8
-		if err := rows.Scan(&p.LessonID, &p.AssetID, &p.Generation, &duration); err != nil {
+		var updatedAt pgtype.Timestamptz
+		if err := rows.Scan(&p.LessonID, &p.AssetID, &p.Generation, &duration, &updatedAt); err != nil {
 			return nil, persistenceError(err)
 		}
 		if duration.Valid {
 			p.DurationSeconds = &duration.Float64
+		}
+		if updatedAt.Valid {
+			p.TaskMarker = updatedAt.Time.UTC().Format(time.RFC3339Nano)
 		}
 		pending = append(pending, p)
 	}

@@ -35,11 +35,12 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 		AssetID:    job.AssetID,
 		Generation: job.Generation,
 		Language:   string(job.Language),
+		TaskMarker: job.TaskMarker,
 	})
 	if err != nil {
 		return domain.ErrDependencyUnavailable
 	}
-	taskID := fmt.Sprintf("%s:%d", job.LessonID, job.Generation)
+	taskID := recognitionTaskID(job)
 	_, err = queue.client.EnqueueContext(ctx, asynqlib.NewTask(TaskTypeRecognize, payload),
 		asynqlib.TaskID(taskID),
 		asynqlib.Queue("asr"),
@@ -48,7 +49,7 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 		asynqlib.Retention(24*time.Hour),
 	)
 	if errors.Is(err, asynqlib.ErrTaskIDConflict) {
-		return nil
+		return domain.ErrAlreadyRunning
 	}
 	if err != nil {
 		return domain.ErrDependencyUnavailable
@@ -56,9 +57,22 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 	return nil
 }
 
+func recognitionTaskID(job ports.RecognitionJob) string {
+	marker := "none"
+	if job.TaskMarker != "" {
+		if parsed, err := time.Parse(time.RFC3339Nano, job.TaskMarker); err == nil {
+			marker = parsed.UTC().Truncate(time.Microsecond).Format("20060102T150405.000000Z")
+		} else {
+			marker = job.TaskMarker
+		}
+	}
+	return fmt.Sprintf("%s:%d:%s", job.AssetID, job.Generation, marker)
+}
+
 type taskPayload struct {
 	LessonID   string `json:"lessonId"`
 	AssetID    string `json:"assetId"`
 	Generation int32  `json:"generation"`
 	Language   string `json:"language,omitempty"`
+	TaskMarker string `json:"taskMarker,omitempty"`
 }

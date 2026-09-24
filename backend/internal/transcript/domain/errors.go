@@ -14,6 +14,7 @@ const (
 	ErrNotFound  Error = "not_found"
 
 	ErrDependencyUnavailable Error = "dependency_unavailable"
+	ErrAlreadyRunning        Error = "already_running"
 
 	// ErrSegmentLimit and ErrTextLimit are named rather than folded into invalid_request
 	// because the ceilings they guard are expressible in the contract and a client that hits

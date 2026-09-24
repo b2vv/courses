@@ -12,6 +12,7 @@ type RecognitionJob struct {
 	AssetID    string
 	Generation int32
 	Language   domain.Language
+	TaskMarker string
 }
 
 type RecognitionQueue interface {

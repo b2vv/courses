@@ -17,7 +17,8 @@ import (
 )
 
 type stubDraftRepository struct {
-	draft ports.LessonDraft
+	draft       ports.LessonDraft
+	lessonAsset *ports.PendingRecognition
 }
 
 func (s *stubDraftRepository) GetLessonDraft(context.Context, string) (ports.LessonDraft, error) {
@@ -39,7 +40,7 @@ func (s *stubDraftRepository) Recover(context.Context, time.Time, int) ([]ports.
 	return nil, nil
 }
 func (s *stubDraftRepository) LessonAsset(context.Context, string) (*ports.PendingRecognition, error) {
-	return nil, nil
+	return s.lessonAsset, nil
 }
 
 type stubCourseReader struct{ course domain.Course }
@@ -158,5 +159,33 @@ func TestPublishSuccessReturnsToken(t *testing.T) {
 	}
 	if body.UpdatedAt != "2026-01-01T00:00:01Z" {
 		t.Fatalf("updatedAt=%s want=2026-01-01T00:00:01Z", body.UpdatedAt)
+	}
+}
+
+func TestRegenerateAlreadyRunningReturnsConflict(t *testing.T) {
+	dur := 60.0
+	const runningAssetID = "22222222-2222-4222-8222-222222222222"
+	drafts := &stubDraftRepository{draft: ports.LessonDraft{
+		Found: true,
+		Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: runningAssetID, Generation: 1, State: domain.DraftRunning},
+	}, lessonAsset: &ports.PendingRecognition{LessonID: lessonID, AssetID: runningAssetID, Generation: 1, DurationSeconds: &dur}}
+	courses := &stubCourseReader{course: domain.Course{OwnerID: ownerID, Status: domain.Draft}}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/admin/lessons/"+lessonID+"/draft/regenerate", nil)
+	r.Header.Set("X-Request-ID", "test-regenerate-running")
+	r = r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: ownerID, Role: "instructor"}))
+	response := serveDraft(t, drafts, courses, &stubPublisher{}, r)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status=%d want=409: %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Error.Code != "already_running" {
+		t.Fatalf("code=%s want already_running", body.Error.Code)
 	}
 }

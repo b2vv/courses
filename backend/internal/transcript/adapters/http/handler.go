@@ -128,6 +128,8 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "transcript_modified", "The transcript changed since it was read")
 	case errors.Is(err, domain.ErrTranscriptExists):
 		httpserver.WriteError(w, r, http.StatusConflict, "transcript_exists", "This lesson already has a transcript in that language")
+	case errors.Is(err, domain.ErrAlreadyRunning):
+		httpserver.WriteError(w, r, http.StatusConflict, "already_running", "Recognition is already running for this asset")
 	case errors.Is(err, domain.ErrSegmentLimit):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_segment_limit", "A transcript accepts at most 5000 segments")
 	case errors.Is(err, domain.ErrTextLimit):

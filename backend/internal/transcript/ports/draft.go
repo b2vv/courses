@@ -32,6 +32,7 @@ type PendingRecognition struct {
 	LessonID   string
 	AssetID    string
 	Generation int32
+	TaskMarker string
 
 	// DurationSeconds is nil when the probe produced none. D8-9 makes the task timeout derive
 	// from it, so an unknown duration is refused BEFORE the job starts rather than running

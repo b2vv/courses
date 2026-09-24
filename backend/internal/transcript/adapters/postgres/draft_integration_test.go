@@ -5,13 +5,16 @@ package postgres_test
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
+	transcriptapplication "courses/internal/transcript/application"
 	"courses/internal/transcript/domain"
+	"courses/internal/transcript/ports"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -90,6 +93,44 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	t.Run("running draft within per-row P-3 timeout is not recovered", h.testFreshDraftNotRecovered)
 	t.Run("recovered draft completed as failed timeout", h.testRecoverThenComplete)
 	t.Run("concurrent re-Claim between Recover and Complete yields ErrDraftSuperseded", h.testRecoverRaceWithReClaim)
+	t.Run("deadline fails running draft with timeout", h.testProcessDeadlineFailsDraft)
+}
+
+type blockingAudio struct{}
+
+func (blockingAudio) Extract(context.Context, string) (string, func(), error) {
+	return "/tmp/audio.wav", func() {}, nil
+}
+
+type blockingTranscriber struct{}
+
+func (blockingTranscriber) Transcribe(ctx context.Context, _ string, _ domain.Language) (ports.Recognition, error) {
+	<-ctx.Done()
+	return ports.Recognition{}, ctx.Err()
+}
+
+func (h *draftHarness) testProcessDeadlineFailsDraft(t *testing.T) {
+	h.reset(t)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 0.01)
+	r := transcriptapplication.NewRecognize(
+		h.repository, blockingTranscriber{}, blockingAudio{}, nil, time.Now, slog.Default())
+	ctx, cancel := context.WithTimeout(h.ctx, 500*time.Millisecond)
+	defer cancel()
+	outcome, err := r.Process(ctx, ports.RecognitionJob{
+		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1,
+	})
+	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
+		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
+	}
+	var state, failure string
+	if err := h.pool.QueryRow(h.ctx,
+		`SELECT state, failure FROM asr_drafts WHERE lesson_id = $1::text::uuid`, recoverLesson1).
+		Scan(&state, &failure); err != nil {
+		t.Fatal(err)
+	}
+	if state != string(domain.DraftFailed) || failure != "timeout" {
+		t.Fatalf("state=%s failure=%s want failed/timeout", state, failure)
+	}
 }
 
 func (h *draftHarness) reset(t *testing.T) {
