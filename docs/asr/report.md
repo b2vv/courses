@@ -1,132 +1,165 @@
 # Phase 8 — ASR (speech recognition): delivery report
 
-Delta to [plan.md](plan.md) and [spec.md](spec.md). Written 2026-09-22 at the close of
-A01–A11 from the code and test evidence. There is no production deployment to check.
+Delta to [plan.md](plan.md) and [spec.md](spec.md). First written 2026-09-22 at the close of
+A01–A12; rewritten 2026-09-24 at the close of A13 from code, test and live-stack evidence.
+There is no production deployment to check.
+
+**Status: 19/22 acceptance rows verified at the level `spec.md` §12 requires. Three rows are
+not: C08, C16 and C19 (§3). The phase is therefore not closed** (AGENTS.md: a phase is closed
+when its rows are).
+
+The previous edition of this report said «17/22 verified». That was wrong twice over: it did
+not count C18, and it counted C08, C10, C14, C19 and — through fakes — C02 and C04 as verified
+when the code broke them or the evidence never took the production path (§4). It is kept in git
+history (`54fc22c`), not here.
 
 ## 1. What was done
 
-An author can generate a speech-recognition draft for any lesson that has a `ready` video
-asset. The chain: the frontend sends a regeneration request (with an optional language
-hint — `auto` maps to empty string and never reaches the `language` field), the API enqueues
-an asynq task keyed by `lessonID:generation` for idempotency, the asr-worker claims the
-draft row via UPSERT, extracts audio with ffmpeg, runs `faster-whisper` through a Python
-subprocess, writes segments back, and completes the draft. The author sees a polling UI
-that transitions through `pending → running → ready` (or `failed` / `no_speech`), with a
-stale indicator when the draft's generation doesn't match the latest ready asset, and a
-"load draft into editor" button when segments are available. Regeneration overwrites the
-draft without touching any published transcript. Publishing a draft goes through the
-existing `SaveLessonTranscript` path with optimistic-lock token conflict detection (C05).
+An author can generate a speech-recognition draft for any lesson with a `ready` video. The
+frontend sends a regeneration request (optional language; `auto` never reaches the `language`
+field); the API enqueues an asynq task; the `asr-worker` claims the draft row, extracts audio
+with ffmpeg, runs `faster-whisper` through a Python subprocess, and completes the draft. The
+author sees the draft move through queued → recognizing → ready (or `failed` with a named reason,
+or `no_speech`), sees it marked stale when the lesson's video is replaced, and can load it into
+the transcript editor without the editor remounting. Unsaved edits over a loaded draft survive a
+reload, and are offered as stale when the draft has been regenerated meanwhile. Publishing a
+draft goes through the existing `SaveLessonTranscript` with optimistic-lock conflict detection.
 
-Recovery on startup re-enqueues or fails timed-out drafts (per-row P-3 timeout derived
-from `duration_seconds`). The asr-worker image carries ffmpeg 5.1.9, Python with
-`faster-whisper`, and model weights, running as uid 10001. The `/readyz` endpoint is red
-until the model directory exists.
+Before A13 none of this worked end to end in the running stack: the engine could not load its
+model, and once it could, it crashed on any real speech (§4). A13 is the slice that made
+recognition actually work and proved it in the browser against real speech.
 
 This phase did not add payments, comment threads, an instructor workspace or a production
 deployment.
 
-## 2. Acceptance scenarios
+## 2. Acceptance rows
 
-22 rows, C01–C22. See `spec.md` §12 for the full matrix. `plan.md` §6 records the
-proof-level amendments (two rows moved, one rewritten, three doubts resolved).
+Level = what `spec.md` §12 requires. Verdict is against that level, not against the strongest
+evidence available.
 
-**Current status: 17/22 verified by the ordered gate** (format-check, lint, typecheck,
-test, integration, build). Five rows require infrastructure the gate does not exercise
-in this run and are listed in §3.
-
-| # | Scenario | Level | Evidence | Verdict |
+| # | Row (short) | Level | Evidence | Verdict |
 |---|---|---|---|---|
-| C01 | Ready asset without its generation's draft → task; repeated pass → no second | integration | `TestEnqueuePendingEnqueuesJobs` (recognize_test.go:518); TaskID = `lessonID:generation` via asynq UniqueOpts | verified |
-| C02 | Draft after success carries text, language and generation | integration | `TestProcessHappyPath` (recognize_test.go:132); `TestGetDraftFound` (draft_test.go:71) | verified |
-| C03 | Author sees "running" from queue to finish; named reason after failure | e2e | Backend: `TestProcessHappyPath`, `TestProcessEngineError` (recognize_test.go); Frontend unit: `LessonDraftField.test.tsx` state badges and progress bar | **not yet verified at e2e** |
-| C04 | Regeneration overwrites draft, doesn't touch transcript | integration | `TestRegenerateEnqueues` (draft_test.go:157); Claim UPSERT in `draft.go:111`; `TestPublishReadyDraft` confirms transcript is separate path | verified |
-| C05 | Publish refuses stale token (`transcript_modified`) | contract | `TestC05PublishRefusesStaleToken` (draft_handler_test.go:78); `TestPublishTokenConflict` (draft_test.go:306) | verified |
-| C06 | Stale draft shown as stale | unit + e2e | Unit: `TestGetDraftStale` (draft_test.go:131), `TestStalenessIsDerivedAndAgreesWithTheTranscriptRule` (domain/draft_test.go:129), `C06 shows stale indicator` (LessonDraftField.test.tsx:161). E2e part not yet exercised | **unit verified; e2e not yet** |
-| C07 | Worker killed mid-task → draft not in running | integration | `TestDraftRecoverAgainstPostgreSQL` with 4 subtests against PostgreSQL (draft_integration_test.go:47); `TestRecoverFailsTimedOutDraft` (recognize_test.go:614) | verified |
-| C08 | Lesson deleted during work → task finishes without retry | integration | `TestProcessNotFoundOnComplete` (recognize_test.go:343); CASCADE `ON DELETE CASCADE` in migration 00008 line 18 | verified |
-| C09 | Video replaced during work → old generation doesn't overwrite new | integration | `TestProcessSupersededOnComplete` (recognize_test.go:325); `ErrDraftSuperseded` in Claim UPSERT | verified |
-| C10 | Second task on same assetID:generation → visible "already running" | integration | `TestRegenerateEnqueues` + asynq `TaskID(lessonID:gen)` dedup (queue.go:43); `TestEnqueuePendingContinuesOnQueueError` (recognize_test.go:568) | verified |
-| C11 | `auto` never reaches `language` field; selector offers only product locales | unit + e2e | Unit: `TestAutoNeverBecomesALanguage` (domain/draft_test.go:57), `TestRegenerateAutoLanguage` (draft_test.go:215), `C11 auto language sends undefined` (LessonDraftField.test.tsx:175). E2e part not yet exercised | **unit verified; e2e not yet** |
-| C12 | Segments pass same domain ceilings; looping output cut at entry | unit | `TestDraftValidatesWithTheSameConstructorsAsTheTranscript` (domain/draft_test.go:24); `TestTheCeilingsAreInclusiveOnBothSidesOfTheBoundary` (domain/draft_test.go:164); `TestProcessSegmentLimitPermanent` (recognize_test.go:293) | verified |
-| C13 | Video without speech → named result, not empty draft | e2e | Backend: `TestProcessNoSpeech` (recognize_test.go:183), `TestProcessNoSpeechOutcomeFlag` (recognize_test.go:432), `TestSilenceCannotLookLikeFinishedWork` (domain/draft_test.go:76). Real model not exercised | **not yet verified at e2e** |
-| C14 | Task longer than timeout → named reason; NULL duration → refusal | integration | `TestTaskTimeout` (recognize_test.go:754), `TestTaskTimeoutShortAudio` (recognize_test.go:763); `TestEnqueuePendingFailsNilDuration` (recognize_test.go:540); `TestRegenerateNilDuration` (draft_test.go:200) | verified |
-| C15 | `asr` queue visible in `courses_queue_depth` metric; `media` still present | smoke | `smoke.sh` lines 89–92: asserts `courses_queue_depth{queue="asr"}` and `courses_queue_depth{queue="media"}` | verified (smoke green) |
-| C16 | `/readyz` red without model directory | integration | `modelReady()` (asr-worker/main.go:148): `os.Stat` on model dir; `smoke.sh` line 6: `asr-worker curl /readyz`; pathway composition in `main.go:107–114` | verified |
-| C17 | Completion while editor open → no remount; load-draft proposal | e2e | Frontend unit: `LessonDraftField.test.tsx` load-draft button test. Full e2e with live editor not exercised | **not yet verified at e2e** |
-| C18 | Local snapshot carries draft token; after regeneration → "stale" recovery | unit + e2e | Design: `onLoadDraft` callback in `LessonDraftField.tsx` passes segments + language to the editor; the editor's existing crash recovery handles the token. Not yet verified at either level | **not yet verified** |
-| C19 | Publication not blocked by absent transcript | e2e | `admin.spec.ts:77` (`P20 creates, authors, publishes, and archives a course`) publishes a course with no transcript | verified |
-| C20 | `asr-worker` image carries ffmpeg, Python with `faster-whisper`, weights; runs as 10001 | smoke | `smoke.sh` lines 13–25: ffmpeg version, uid 10001, `import faster_whisper`, model dir check | verified (smoke green) |
-| C21 | Draft can't name another lesson's asset | integration | `LessonAsset` (draft.go:238) queries by `lesson_id`; Claim writes asset from `LessonAsset` result; the pathway — not a FK — enforces it (spec §12, C21 rationale) | verified |
-| C22 | Deleting `video_assets` removes draft via cascade (D8-15) | integration | Migration 00008 line 35: `asset_id uuid NOT NULL REFERENCES video_assets(id) ON DELETE CASCADE`; comment lines 24–28 explain why this is deliberate | verified |
+| C01 | Ready asset without its draft → task; second pass → no second task | integration | Postgres: selector subtest «C01 selects only ready assets missing their current draft» (`draft_integration_test.go`); Redis/asynq: repeated enqueue with the same marker → `ErrAlreadyRunning` (`queue_integration_test.go`) | verified — **in two parts**; no single test runs `EnqueuePending` through both stores |
+| C02 | Draft after success carries text, language, generation | integration | unit `TestProcessHappyPath`; live: `smoke.sh` real speech through `transcribe.py --model` → ≥1 non-empty segment; e2e C03/C17 reach a ready draft with text | verified |
+| C03 | Author sees in-progress until done; named reason after failure | e2e | `asr.spec.ts` C03 (queued/recognizing observed, then ready). Failure branch: unit `recognize_test.go` named failures, integration C14, unit `LessonDraftField.test.tsx:146`, draft-status contract | verified — failure branch at lower levels by decision (§6) |
+| C04 | Regeneration rewrites the draft, leaves the transcript alone | integration | `queue_integration_test.go`: after a task is really processed (completed) and after it is archived, a new marker enqueues and the old one conflicts; unit `TestRegenerate*` | verified (was broken, §4) |
+| C05 | Publish via `SaveLessonTranscript`, refuses a foreign token | contract | `TestC05PublishRefusesStaleToken` (`draft_handler_test.go`); real CAS: `write_integration_test.go:66` | verified |
+| C06 | Draft from an old generation shown stale | unit + e2e | unit staleness tests; `asr.spec.ts` C06 (replace video → «older video» text) | verified (UI was broken, §4) |
+| C07 | Killed worker leaves no `running` draft after start | integration | `TestDraftRecoverAgainstPostgreSQL` (Recover subtests) | verified at repository level; the startup wiring (`cmd/asr-worker/main.go:63`) is not under test |
+| C08 | Lesson deleted during work → task ends, draft cascades away | integration | unit `TestProcessNotFoundOnComplete` (fake repository); cascade only read from migration 00008 | **not verified** — no integration test deletes a lesson under a running draft |
+| C09 | Replaced video → old generation never overwrites the new draft | integration | «C09 delayed old claim cannot overwrite the new draft», «C09 old completion after new claim is superseded», «re-claiming the same generation succeeds» | verified (was broken at the repository level, §4) |
+| C10 | Second task on the same asset/generation → visible «already running» | integration | `queue_integration_test.go` (same marker → `ErrAlreadyRunning`); contract 409 `already_running`; unit `Regenerate` on a running draft | verified (was broken, §4) |
+| C11 | `auto` never reaches `language`; select offers product locales only | unit + e2e | unit `TestAutoNeverBecomesALanguage`; `asr.spec.ts` C11 (three options; request body without `language` for auto, `en` for English) | verified |
+| C12 | Draft segments pass the domain ceilings | unit | `TestDraftValidatesWithTheSameConstructorsAsTheTranscript`, ceiling tests, `TestProcessSegmentLimitPermanent` | verified |
+| C13 | Video without speech → named result, not an empty ready draft | e2e | `asr.spec.ts` C13 (sine fixture → «No speech detected»); `smoke.sh` sine → `speech_seconds 0` | verified |
+| C14 | Over-timeout task is taken down with a named reason; NULL duration refused | integration | «deadline fails running draft with timeout» (Postgres); `TestEnqueuePendingFailsNilDuration` | verified — with a controlled 500 ms deadline, not the queue-derived one (§7) |
+| C15 | `asr` queue visible in `courses_queue_depth`, `media` still there | smoke | `smoke.sh` | verified |
+| C16 | `/readyz` red while the model file is unavailable | integration | smoke asserts only the positive branch (200 with the model). `modelReady` now stats `model.bin` (`23fe407`) | **not verified** — the red branch is untested; there are no tests in `cmd/asr-worker` |
+| C17 | Completion with the editor open does not remount it; author gets a load proposal | e2e | `asr.spec.ts` C17 | verified (wiring was missing, §4) |
+| C18 | Local snapshot carries the draft token; after regeneration the offer is stale | unit + e2e | unit `recovery.test.ts`, `TranscriptEditor.test.tsx`; `asr.spec.ts` C18 | verified (mechanism was missing, §4) |
+| C19 | Publication not blocked by a missing transcript, but the author sees a message | e2e | `admin.spec.ts` P20 publishes a course with no transcript | **not verified** — the «author sees a message» half is not in the product (no such string or component); only «not blocked» is proven |
+| C20 | Image carries ffmpeg, Python with faster-whisper, weights; runs as 10001 | smoke | `smoke.sh`: ffmpeg, uid, import, `test -f model.bin`, real sine and real speech runs through the production command | verified |
+| C21 | A draft cannot name another lesson's asset | integration | «C21 rejects an asset belonging to another lesson» | verified |
+| C22 | Deleting a `video_assets` row takes its draft (D8-15) | integration | «C22 deletes a draft when its asset is deleted» | verified |
 
-## 3. Rows not yet verified
+## 3. Rows not verified
 
-Five rows require infrastructure the unit/integration gate does not exercise:
-
-| # | Level | What's missing |
+| # | What is missing | Cost to close |
 |---|---|---|
-| C03 | e2e | Browser journey showing pending→running→ready transition with a real draft |
-| C06 | e2e part | Browser test proving stale indicator renders from a live polling draft |
-| C11 | e2e part | Browser test proving `auto` selection sends empty language to the API |
-| C13 | e2e | Real model producing `no_speech` for a silent video fixture |
-| C17 | e2e | Live editor receiving a load-draft proposal without remounting |
+| C08 | An integration test: running draft, delete the lesson, `Complete` → `ErrNotFound`, draft row gone | one Postgres subtest in the existing harness |
+| C16 | A test of the red branch: model file absent → `/readyz` 503 | extract `modelReady` behind a path argument and unit-test it, or an integration test with a temp dir |
+| C19 | The product half: a message to the author when a course with lessons lacking transcripts is published; then its e2e assertion | a small UI change plus one assertion in `admin.spec.ts` |
 
-**C18** is not counted among the five because its design relies on the existing transcript
-editor crash recovery, which is already verified in `transcript.spec.ts`. The draft-specific
-token flow is wired but not yet tested at any level — this is a gap, not a missing
-infrastructure dependency.
+## 4. Defects found and fixed in A13
 
-## 4. Ordered gate
+Every one of these passed the A12 gate green. Each was found by running the real path — the live
+worker, the real stack, the browser — not by reviewing text.
 
-Run on commit `2f38064` (A10, latest on main after A11 `5892174`).
+| # | Defect | Found by | Fix |
+|---|---|---|---|
+| 1 | Engine passed `--model /opt/whisper/models`, an `HF_HOME` cache root without a flat `model.bin`: every recognition failed at model load; `/readyz` stayed green (it stat-ed the directory) | running the engine's own command in the live worker | `23fe407` |
+| 2 | `transcribe.py` read `seg.avg_log_prob`; faster-whisper 1.2.1 names it `avg_logprob`: every recognition with speech crashed → C02 never worked | first real-speech run after #1 | `3b46565` (+ speech smoke, speech fixture) |
+| 3 | C10: task-ID conflict swallowed into a silent 202; key was `lessonID:generation` | code audit of the evidence path | `62f3993` |
+| 4 | C04: asynq keeps a finished task's key (24 h completed, up to 90 days archived), so regeneration after any finished run was a silent no-op | reading asynq v0.26.0 Lua scripts; proven by `queue_integration_test.go` | `62f3993` (marker in the task ID) |
+| 5 | C14: a task past its deadline left the draft `running` until the worker restarted | code audit | `62f3993` |
+| 6 | C09: `Claim` accepted any existing asset row, so a late old-generation task could overwrite a newer draft; safe today only by queue order (Concurrency 1, FIFO) | repository test forcing the order | `9b5c837` (UPSERT guard) |
+| 7 | Selectors took any ready asset, not the current one: after a video replacement the two generations queued each other forever (one lesson recognised five times in the live stack); a manual regenerate could pick the old video | e2e run + live logs | `26ffe07` |
+| 8 | Deleting a lesson leaves its ready asset with `lesson_id` NULL; the selector scanned NULL into a string and every `EnqueuePending` pass failed: one deleted lesson turned automatic recognition off platform-wide | live `asr-worker` log (`poll failed` every minute) | `26ffe07` |
+| 9 | UI stopped polling after 202 (no draft row before `Claim` → `null` → polling off), so no draft ever appeared without a reload; a regenerated ready draft and a replaced video were not picked up either | e2e run | `43faef5` |
+| 10 | C17/C18: load-draft never reached the editor; the draft token never reached the recovery snapshot; a loaded draft's language was dropped, and recovery keyed by language lost unsaved work on reload | code review of the A10 wiring; e2e | `8299e97`, `43faef5` |
+
+## 5. Ordered gate
+
+`make check` (`Makefile:83`), run on the tree that is `915c987`: `43faef5` plus the two e2e-only
+corrections committed as `915c987` (§6). Log `work/make-check-a13.log` (not tracked). **`CHECK_EXIT=0`.**
 
 | Step | Result |
 |---|---|
-| `make format-check` | green |
-| `make lint` | green |
-| `make typecheck` | green |
-| `make test` | green — 464 frontend tests, all Go packages |
-| `make integration` | green — all packages including `transcript/adapters/postgres` |
-| `make build` | `docker compose build` — Go and frontend compile (verified by test + typecheck); container images include asr-worker with model weights |
+| `format-check`, `lint`, `typecheck` | green |
+| `test` | frontend 480/480; Go packages ok |
+| `integration` | ok — 33 unique Go packages across `test` and `integration` (61 `ok` lines: the log holds two Go runs), 0 FAIL |
+| `check-generated`, `build`, `up` | green; images rebuilt, including `asr-worker` and `frontend` |
+| `drain-queue` | `asynq:{media}` 0 → 0, `asynq:{asr}` 14 → 0 |
+| `seed-identities`, `seed`, `smoke` | green — smoke includes real sine and real speech through the production engine command |
+| `e2e` | **74 passed**, 0 failed (11.1 min); B19 login budget total 7, maximum consecutive 3 |
 
-## 5. Task completion
+The first two full runs were red, both on tests, not the product:
+1. `transcript.spec.ts:467` (7a) asserted the recovery key `author:lesson:uk`. The language
+   decision (§6) changed the key to `author:lesson`, and the e2e of other phases was not run after
+   that change. The test now expects the new key and asserts the stored snapshot's language, so it
+   is not weaker than before.
+2. `asr.spec.ts` C06 lost a race with automatic recognition: after a video replacement the worker
+   re-recognises the new generation within one enqueue tick, and «stale» disappears. See §6.
 
-| ID | Status | Commit |
-|---|---|---|
-| A01 | done 2026-09-21 | mechanism change, §4.5 |
-| A02 | done 2026-09-21 | spec.md §12.1 |
-| A03 | done 2026-09-21 | migration 00008, domain, ports |
-| A04 | done 2026-09-21 (Courses 2) | MonitorQueue, media-worker |
-| A05 | done | whisper + media adapters |
-| A06 | done | application.Transcribe |
-| A07 | done | `da83a4d`, `ff4b01e` — Recover + timeout |
-| A08 | done (Courses 2) | `def2585` — asr-worker cmd, compose |
-| A09 | done | `ba6a096` — HTTP draft status + regeneration |
-| A10 | done | `2f38064` — frontend draft status UI |
-| A11 | done (Courses 2) | `5892174` — publish draft, token conflict |
-| A12 | this report | acceptance verification, gate, report |
+The gate leaves two tracked screenshots under `docs/foundation/screenshots/` rewritten; that is
+backlog B-18 and they are not committed.
 
-## 6. Named limitations
+## 6. Decisions
 
-1. **E2e coverage gap.** Five acceptance rows (C03, C06 e2e part, C11 e2e part, C13, C17)
-   require a browser journey against a running asr-worker with real model output. The
-   unit and integration layers verify the mechanism; the e2e layer would verify the product
-   surface. These rows belong to the same infra dependency: a Compose stack with the
-   `asr-worker` image and model weights, which is available in CI but not in every local
-   `make check` run.
+- **C03 failure branch proven below e2e** — Courses 2 (reviewer), 2026-09-24. No honest fixture
+  produces a named failure in the running stack without manipulating the `media-data` volume;
+  the branch is proven by unit, integration and contract tests instead (§2). Check: the listed
+  tests.
+- **Draft language vs transcript language** — proposed by Courses 1 after Courses 2's diagnosis,
+  confirmed by the user 2026-09-24 («Підтверджую»). The recovery key is lesson + author and the
+  snapshot carries language and draft token; loading a draft in another language over an existing
+  transcript is refused instead of silently switching the editor and creating a second
+  transcript. Closes the 7a «lesson + language» recovery key for this phase; revisit when an
+  editor for several languages exists. Full text: `work/brief-a13-language.md`.
+- **C09 held as an invariant, not by queue order** — Courses 2, 2026-09-24:
+  `WHERE asr_drafts.generation <= EXCLUDED.generation`; a late old claim returns `Claimed: false`
+  with no failure metric. Check: the C09 subtests.
+- **The UI polls on an accepted job, capped at 15 minutes of queue wait** — reviewed by
+  Courses 2; the cap bounds waiting before `Claim`, not recognition itself.
+- **C06 holds its window by pausing the `asr` queue** — Courses 1, 2026-09-24; reviewed and
+  accepted by Courses 2. A stale draft is observable only between «the new video is ready» and «the worker
+  re-recognised it» (≤ one enqueue tick); the e2e sets `asynq:{asr}:paused` for the replacement
+  and removes it in `finally`. Nothing is faked: the replacement is a real upload. Precedent:
+  `media.setup.ts` already drains the `media` queue through redis.
 
-2. **C18 token integration.** The draft's `onLoadDraft` callback passes segments and
-   language to the editor, but the editor's crash-recovery IndexedDB adapter doesn't
-   yet distinguish a draft-originated snapshot from a user edit. The recovery prompt
-   will say "unsaved changes" rather than "stale draft." This is a presentation gap,
-   not a data-loss risk.
+## 7. Named limitations
 
-3. **Native HLS unproven.** Inherited from Phase 6: real Safari HLS playback with the
-   ASR-generated transcript overlay has not been tested. The transcript surface is
-   independent of the playback surface, so this limitation does not block ASR closure.
+1. **C14 deadline is controlled.** The integration test uses a 500 ms deadline, not the
+   queue-derived `TaskTimeout` (minimum 300 s); the full asynq deadline path is not exercised.
+2. **Automatic enqueue is not live on an open page.** The UI polls only after the author starts a
+   job; a job the worker enqueues on its own shows after a reload or refetch on focus.
+3. **Manual edits over an existing draft also read as stale after regeneration** — the price of
+   carrying the draft token through a reload (§6).
+4. **C07 startup wiring and C01 end to end** are proven only in parts (§2).
+5. **C03 is not fully e2e.** Only its happy path runs in the browser. The «named reason after a
+   failure» branch is proven by unit (`recognize_test.go`), integration (C14), contract (draft
+   status) and frontend unit (`LessonDraftField.test.tsx:146`) tests — a dated lowering of the
+   proof level (§6), because no honest fixture yields a named failure in the running stack.
+6. **Native HLS in real Safari** — inherited from Phase 6, not closed here.
+7. **Review did not catch a cross-phase break; only the full gate did.** Changing the stored
+   recovery key in step 4g broke a 7a e2e that asserted the old key. Neither author nor reviewer
+   saw it in the diff — the break was outside the diff. It surfaced only in the full `make check`.
+   Any change to shared or persisted state is checked with the full e2e set, not the targeted one.
+8. **Two backlog items found here stay outside the phase:** B-20 (draft endpoints absent from
+   `openapi.yaml`; the frontend uses a hand-written adapter) and B-21 (a read without language
+   picks the first transcript alphabetically, for students too).
 
-## 7. What's next
+## 8. What's next
 
-Phase 8 acceptance rows at e2e level require the asr-worker Compose service with model
-weights. Writing those browser tests is the natural next work item, and it closes the
-five open rows. After that, the phase gate is 22/22.
+Close the three rows in §3; C08 and C16 are one test each, C19 needs its product half first.
+Then the phase is 22/22 and closed. B-20 and B-21 are recorded separately.
