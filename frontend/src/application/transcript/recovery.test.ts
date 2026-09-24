@@ -20,8 +20,9 @@ const line = (overrides: Partial<TranscriptDraftLine> = {}): TranscriptDraftLine
 });
 
 const snapshot = (overrides: Partial<TranscriptSnapshot> = {}): TranscriptSnapshot => ({
-  key: 'user:lesson:uk',
+  key: 'user:lesson',
   capturedAt: 1_700_000_000_000,
+  language: 'uk',
   expectedUpdatedAt: '2026-09-18T10:00:00Z',
   lines: [line()],
   ...overrides,
@@ -154,32 +155,28 @@ test('editing back to the server text clears the snapshot rather than skipping t
   expect(captureDirective([], baseline)).toEqual({ kind: 'write' });
 });
 
-test('the key separates authors, lessons and languages', () => {
-  const parts = { userId: 'user-1', lessonId: 'lesson-1', language: 'uk' };
-  expect(transcriptHistoryKey(parts)).toBe('user-1:lesson-1:uk');
+test('the key separates authors and lessons, not editor languages', () => {
+  const parts = { userId: 'user-1', lessonId: 'lesson-1' };
+  expect(transcriptHistoryKey(parts)).toBe('user-1:lesson-1');
   // A snapshot outlives the session on disk; without the author in the key a shared machine
   // offers the next person a course they do not own.
   expect(transcriptHistoryKey({ ...parts, userId: 'user-2' })).not.toBe(
     transcriptHistoryKey(parts),
   );
-  expect(transcriptHistoryKey({ ...parts, language: 'en' })).not.toBe(transcriptHistoryKey(parts));
+  // Changing the editor language must keep the same recovery bucket; the snapshot carries it.
+  expect(transcriptHistoryKey(parts)).toBe(transcriptHistoryKey(parts));
 });
 
 test('a change of viewer sweeps what is not theirs, and signing out sweeps everything', async () => {
   // Keying by author stops one person being OFFERED another's text. It does not remove the text,
   // and on a shared machine "not offered" is not the same as "not there".
-  const keys = ['author-1:lesson-1:uk', 'author-1:lesson-2:en', 'author-2:lesson-1:uk'];
-  expect(foreignSnapshotKeys(keys, 'author-1')).toEqual(['author-2:lesson-1:uk']);
-  expect(foreignSnapshotKeys(keys, 'author-2')).toEqual([
-    'author-1:lesson-1:uk',
-    'author-1:lesson-2:en',
-  ]);
+  const keys = ['author-1:lesson-1', 'author-1:lesson-2', 'author-2:lesson-1'];
+  expect(foreignSnapshotKeys(keys, 'author-1')).toEqual(['author-2:lesson-1']);
+  expect(foreignSnapshotKeys(keys, 'author-2')).toEqual(['author-1:lesson-1', 'author-1:lesson-2']);
   // Nobody is viewing: everything goes. Signing out is a change of viewer like any other.
   expect(foreignSnapshotKeys(keys, null)).toEqual(keys);
   // A prefix that merely starts the same is a different author, not the same one.
-  expect(foreignSnapshotKeys(['author-10:lesson-1:uk'], 'author-1')).toEqual([
-    'author-10:lesson-1:uk',
-  ]);
+  expect(foreignSnapshotKeys(['author-10:lesson-1'], 'author-1')).toEqual(['author-10:lesson-1']);
 });
 
 test('the sweep removes exactly the foreign keys and survives a store that refuses', async () => {
@@ -190,11 +187,11 @@ test('the sweep removes exactly the foreign keys and survives a store that refus
     expectedUpdatedAt: undefined,
     lines: [line()],
   });
-  await store.write(snapshotFor('author-1:lesson-1:uk'));
-  await store.write(snapshotFor('author-2:lesson-1:uk'));
+  await store.write(snapshotFor('author-1:lesson-1'));
+  await store.write(snapshotFor('author-2:lesson-1'));
 
   await forgetOtherAuthors(store, 'author-1');
-  expect(await store.keys()).toEqual(['author-1:lesson-1:uk']);
+  expect(await store.keys()).toEqual(['author-1:lesson-1']);
 
   await forgetOtherAuthors(store, null);
   expect(await store.keys()).toEqual([]);

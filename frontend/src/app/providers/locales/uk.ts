@@ -146,6 +146,8 @@ export const uk = {
         draftOffer: {
           heading: 'Чернетка розпізнавання готова',
           description: 'Розпізнавання завершилось. Завантажити текст у редактор?',
+          languageMismatch:
+            'Чернетка мовою {{draftLanguage}}, а збережений транскрипт — мовою {{transcriptLanguage}}. Перегенеруйте чернетку мовою {{transcriptLanguage}}.',
           load: 'Завантажити чернетку',
           dismiss: 'Не завантажувати',
         },

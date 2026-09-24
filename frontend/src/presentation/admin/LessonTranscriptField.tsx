@@ -84,8 +84,9 @@ export function LessonTranscriptField({
       documents={documents}
       history={{
         store: history.store,
-        key: transcriptHistoryKey({ userId: history.authorId, lessonId, language }),
+        key: transcriptHistoryKey({ userId: history.authorId, lessonId }),
       }}
+      hasSavedTranscript={data?.language !== undefined && data.language !== null}
       actions={{
         save: (nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments),
       }}

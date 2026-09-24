@@ -8,9 +8,12 @@ import type {
   VideoTransferTarget,
   VideoTransferProgress,
 } from '../../domain/media/video';
+import { lessonDraftQueryKey } from './admin-draft-queries';
 
 export const videoPollMs = 3_000;
 export const adminVideoListKey = ['admin', 'videos', 'list'] as const;
+const readyGenerationSnapshotKey = (courseId: string) =>
+  [...adminVideoListKey, courseId, 'ready-generations'] as const;
 
 export class VideoQueryError extends Error {
   readonly code: VideoError['code'];
@@ -65,7 +68,34 @@ export function createAdminVideoQueries(videos: ReturnType<typeof createLessonVi
     list: (courseId: string, transferInFlightInThisTab = false) =>
       queryOptions({
         queryKey: adminCourseVideosQueryKey(courseId),
-        queryFn: async ({ signal }) => unwrap(await videos.listByCourse(courseId, signal)),
+        queryFn: async ({ client, signal }) => {
+          const previous = client.getQueryData<readonly LessonVideo[]>(
+            adminCourseVideosQueryKey(courseId),
+          );
+          const next = unwrap(await videos.listByCourse(courseId, signal));
+          const snapshotKey = readyGenerationSnapshotKey(courseId);
+          const previousReady =
+            client.getQueryData<Readonly<Record<string, number>>>(snapshotKey) ??
+            Object.fromEntries(
+              (previous ?? [])
+                .filter((row) => row.state === 'ready')
+                .map((row) => [row.lessonId, row.generation]),
+            );
+          const nextReady = { ...previousReady };
+          for (const row of next) {
+            if (row.state !== 'ready') continue;
+            const previousGeneration = previousReady[row.lessonId];
+            if (previousGeneration !== undefined && previousGeneration !== row.generation) {
+              await client.invalidateQueries({
+                queryKey: lessonDraftQueryKey(row.lessonId),
+                exact: true,
+              });
+            }
+            nextReady[row.lessonId] = Math.max(nextReady[row.lessonId] ?? 0, row.generation);
+          }
+          client.setQueryData(snapshotKey, nextReady);
+          return next;
+        },
         refetchInterval: (query) =>
           videoRefetchInterval(query.state.data, transferInFlightInThisTab),
       }),

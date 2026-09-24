@@ -205,7 +205,7 @@ function AdminOwnerEditor({
     return { data: query.data, isLoading: query.isLoading };
   }
   function useLessonDraft(lessonId: string) {
-    const query = useQuery(draftQueries.lesson(lessonId));
+    const query = useQuery(draftQueries.lesson(lessonId, queryClient));
     return { data: query.data, isLoading: query.isLoading };
   }
   async function draftRegenerate(

@@ -80,7 +80,7 @@ describe('course editor', () => {
     const readyDraft: LessonDraft = {
       lessonId: firstLessonId,
       state: 'ready',
-      language: 'en',
+      language: 'uk',
       failure: null,
       stale: false,
       updatedAt: '2026-09-24T12:00:00Z',

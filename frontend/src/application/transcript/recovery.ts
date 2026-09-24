@@ -30,6 +30,8 @@ export type TranscriptDraftLine = {
 export type TranscriptSnapshot = {
   readonly key: string;
   readonly capturedAt: number;
+  /** The editor language at capture time. Older snapshots may omit this field. */
+  readonly language?: string;
   /**
    * The server token the edits were made against. `undefined` is a real value: it means the
    * lesson had no transcript when the author started typing, which is exactly what the write
@@ -46,6 +48,8 @@ export type TranscriptSnapshot = {
 };
 
 export type TranscriptBaseline = {
+  /** The editor language used for newly captured snapshots. */
+  readonly language?: string;
   readonly expectedUpdatedAt: string | undefined;
   /** The current ASR draft generation, when the editor's lines came from a draft. */
   readonly draftUpdatedAt?: string;
@@ -118,7 +122,9 @@ export function captureDirective(
 }
 
 /**
- * The key scopes a snapshot to one author, one lesson and one language.
+ * The key scopes a snapshot to one author and one lesson. The language belongs in the snapshot
+ * because the editor has no language switcher and must restore the language together with its
+ * lines.
  *
  * The user id is the second of the three additions: a snapshot outlives the session on disk, and
  * without it a shared machine offers the next person a course they do not own.
@@ -129,8 +135,7 @@ export function captureDirective(
  * the very crash this mechanism exists to survive. The cost is accepted and named - two tabs on
  * one lesson share a snapshot, and the last capture wins.
  *
- * All three parts are server-constrained (two UUIDs and a validated BCP-47 tag), so none can
- * contain the delimiter.
+ * Both parts are server-constrained UUIDs, so neither can contain the delimiter.
  */
 /**
  * Which stored snapshots must go, given who the viewer now is.
@@ -172,7 +177,6 @@ export async function forgetOtherAuthors(
 export function transcriptHistoryKey(parts: {
   readonly userId: string;
   readonly lessonId: string;
-  readonly language: string;
 }): string {
-  return `${parts.userId}:${parts.lessonId}:${parts.language}`;
+  return `${parts.userId}:${parts.lessonId}`;
 }

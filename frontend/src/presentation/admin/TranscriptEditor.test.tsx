@@ -29,7 +29,7 @@ function editor(
       segments={segments}
       documents={[{ id: documentId, label: 'Довідка', url: 'https://example.test/a' }]}
       actions={{ save }}
-      history={{ key: 'author:lesson:uk', store: createMemoryTranscriptHistory() }}
+      history={{ key: 'author:lesson', store: createMemoryTranscriptHistory() }}
       {...overrides}
     />,
   );
@@ -134,7 +134,7 @@ async function editorWithSnapshot(
   const store = createMemoryTranscriptHistory();
   if (snapshot !== null) await store.write(snapshot);
   const rendered = editor(async () => null, {
-    history: { key: 'author:lesson:uk', store },
+    history: { key: 'author:lesson', store },
     ...overrides,
   });
   return { store, rendered };
@@ -144,7 +144,7 @@ type TranscriptHistoryStoreForTest = ReturnType<typeof createMemoryTranscriptHis
 
 test('unsaved lines left on this device are offered back, never restored on their own', async () => {
   await editorWithSnapshot({
-    key: 'author:lesson:uk',
+    key: 'author:lesson',
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [storedLine],
@@ -167,7 +167,7 @@ test('a snapshot identical to the server is not offered', async () => {
   // Offering a no-op recovery teaches the author to dismiss the prompt without reading it, which
   // disarms it for the one time it matters.
   await editorWithSnapshot({
-    key: 'author:lesson:uk',
+    key: 'author:lesson',
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [{ ...storedLine, text: 'Перша' }],
@@ -180,7 +180,7 @@ test('a snapshot taken against an older server version is offered as an overwrit
   // Phase 8 creates this case deliberately: recognition writes while the author is away, so the
   // base the snapshot was taken against is not the base it would land on.
   await editorWithSnapshot({
-    key: 'author:lesson:uk',
+    key: 'author:lesson',
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-17T00:00:00Z',
     lines: [storedLine],
@@ -194,17 +194,17 @@ test('a snapshot taken against an older server version is offered as an overwrit
 
 test('a save the server accepted drops the local copy; nothing else does', async () => {
   const { store } = await editorWithSnapshot({
-    key: 'author:lesson:uk',
+    key: 'author:lesson',
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [storedLine],
   });
   await screen.findByRole('button', { name: 'Відновити зміни' });
-  expect(await store.read('author:lesson:uk')).not.toBeNull();
+  expect(await store.read('author:lesson')).not.toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
   await screen.findByText('Транскрипт збережено.');
-  expect(await store.read('author:lesson:uk')).toBeNull();
+  expect(await store.read('author:lesson')).toBeNull();
 });
 
 test('a store that refuses everything costs an offer, never the save', async () => {
@@ -222,7 +222,7 @@ test('a store that refuses everything costs an offer, never the save', async () 
       saved = true;
       return null;
     },
-    { history: { key: 'author:lesson:uk', store: refusing } },
+    { history: { key: 'author:lesson', store: refusing } },
   );
   fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Змінено' } });
   fireEvent.blur(screen.getByLabelText('Текст репліки 1'));
@@ -237,10 +237,11 @@ test('leaving a field captures what is on screen, including a half-typed time', 
   const start = screen.getByLabelText('Початок репліки 1, мс');
   fireEvent.change(start, { target: { value: '15' } });
   fireEvent.blur(start);
-  const snapshot = await store.read('author:lesson:uk');
+  const snapshot = await store.read('author:lesson');
   // "15" is text, not a number: a snapshot of parsed segments could not carry this state back.
   expect(snapshot?.lines[0]?.startMs).toBe('15');
   expect(snapshot?.expectedUpdatedAt).toBe('2026-09-18T00:00:00Z');
+  expect(snapshot?.language).toBe('uk');
 });
 
 // --- draft offer (C17, C18) -----------------------------------------------------------------
@@ -265,6 +266,67 @@ test('a loaded draft is offered, not applied, and the text on screen is unchange
   expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe('Перша');
 });
 
+test('a recovery snapshot restores its language after a reload', async () => {
+  let savedLanguage = '';
+  await editorWithSnapshot(
+    {
+      key: 'author:lesson',
+      capturedAt: 1,
+      language: 'en',
+      expectedUpdatedAt: '2026-09-18T00:00:00Z',
+      lines: [storedLine],
+    },
+    {
+      actions: {
+        save: async (nextLanguage) => {
+          savedLanguage = nextLanguage;
+          return null;
+        },
+      },
+    },
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Відновити зміни' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+  await screen.findByText('Транскрипт збережено.');
+  expect(savedLanguage).toBe('en');
+});
+
+test('a draft in another language is explained and cannot replace a saved transcript', () => {
+  editor(async () => null, {
+    hasSavedTranscript: true,
+    draftOffer: { segments: draftSegments, language: 'en', updatedAt: 'T1' },
+  });
+
+  expect(
+    screen.getByText(
+      'Чернетка мовою en, а збережений транскрипт — мовою uk. Перегенеруйте чернетку мовою uk.',
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Завантажити чернетку' })).toBeNull();
+  expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe('Перша');
+});
+
+test('a draft language is accepted when there is no saved transcript', async () => {
+  let savedLanguage = '';
+  editor(
+    async (nextLanguage) => {
+      savedLanguage = nextLanguage;
+      return null;
+    },
+    {
+      hasSavedTranscript: false,
+      segments: [],
+      draftOffer: { segments: draftSegments, language: 'en', updatedAt: 'T1' },
+    },
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Завантажити чернетку' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+  await screen.findByText('Транскрипт збережено.');
+  expect(savedLanguage).toBe('en');
+});
+
 test('accepting the draft offer replaces the lines and reports the offer as handled', () => {
   let handled = false;
   editor(async () => null, {
@@ -278,6 +340,47 @@ test('accepting the draft offer replaces the lines and reports the offer as hand
     'Розпізнаний текст',
   );
   expect(handled).toBe(true);
+});
+
+test('a loaded draft snapshot keeps the loaded generation after regeneration', () => {
+  const store = createMemoryTranscriptHistory();
+  const draftOffer = { segments: draftSegments, language: 'uk', updatedAt: 'T1' };
+  const rendered = render(
+    <TranscriptEditor
+      lessonId={lessonId}
+      language="uk"
+      expectedUpdatedAt="2026-09-18T00:00:00Z"
+      segments={segments}
+      documents={[]}
+      actions={{ save: async () => null }}
+      history={{ key: 'author:lesson', store }}
+      draftOffer={draftOffer}
+      draftUpdatedAt="T1"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Завантажити чернетку' }));
+  fireEvent.change(screen.getByLabelText('Текст репліки 1'), {
+    target: { value: 'Ручна правка після завантаження' },
+  });
+  rendered.rerender(
+    <TranscriptEditor
+      lessonId={lessonId}
+      language="uk"
+      expectedUpdatedAt="2026-09-18T00:00:00Z"
+      segments={segments}
+      documents={[]}
+      actions={{ save: async () => null }}
+      history={{ key: 'author:lesson', store }}
+      draftOffer={draftOffer}
+      draftUpdatedAt="T2"
+    />,
+  );
+  fireEvent.blur(screen.getByLabelText('Текст репліки 1'));
+
+  return store.read('author:lesson').then((snapshot) => {
+    expect(snapshot?.draftUpdatedAt).toBe('T1');
+  });
 });
 
 test('dismissing the draft offer leaves the lines untouched but still reports it handled', () => {
@@ -296,7 +399,7 @@ test('dismissing the draft offer leaves the lines untouched but still reports it
 test('an unsaved local edit outranks a draft offer: only one prompt shows at a time', async () => {
   await editorWithSnapshot(
     {
-      key: 'author:lesson:uk',
+      key: 'author:lesson',
       capturedAt: 1,
       expectedUpdatedAt: '2026-09-18T00:00:00Z',
       lines: [storedLine],

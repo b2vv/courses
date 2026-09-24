@@ -140,6 +140,8 @@ export const en = {
         draftOffer: {
           heading: 'A recognized draft is ready',
           description: 'Recognition finished. Load its text into the editor?',
+          languageMismatch:
+            'The draft is in {{draftLanguage}}, but the saved transcript is in {{transcriptLanguage}}. Regenerate the draft in {{transcriptLanguage}}.',
           load: 'Load the draft',
           dismiss: 'Skip',
         },

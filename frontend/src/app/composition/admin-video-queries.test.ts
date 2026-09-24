@@ -14,9 +14,11 @@ import {
   videoPollMs,
   videoRefetchInterval,
 } from './admin-video-queries';
+import { lessonDraftQueryKey } from './admin-draft-queries';
 
 const courseId = '10000000-0000-4000-8000-000000000001';
 const lessonId = '30000000-0000-4000-8000-000000000001';
+const otherLessonId = '30000000-0000-4000-8000-000000000002';
 const videoId = '50000000-0000-4000-8000-000000000001';
 const updatedAt = '2026-09-06T12:00:00.123456Z';
 const server = setupServer();
@@ -35,6 +37,14 @@ function video(state: LessonVideo['state']): LessonVideo {
     declaredBytes: 12,
     updatedAt,
   };
+}
+
+function videoForLesson(
+  lesson: string,
+  generation: number,
+  state: LessonVideo['state'],
+): LessonVideo {
+  return { ...video(state), lessonId: lesson, generation };
 }
 
 function repository(overrides: Partial<LessonVideoRepository> = {}): LessonVideoRepository {
@@ -118,6 +128,48 @@ describe('admin video query boundary', () => {
     await invalidateAfterVideoWrite(client, courseId);
     expect(client.getQueryState(key)?.isInvalidated).toBe(true);
     expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+  });
+
+  test('invalidates only the lesson draft whose ready video generation changed', async () => {
+    let reads = 0;
+    const queries = createAdminVideoQueries(
+      createLessonVideos(
+        repository({
+          listByCourse: async () => {
+            reads++;
+            return {
+              ok: true,
+              value:
+                reads === 1
+                  ? [
+                      videoForLesson(lessonId, 1, 'ready'),
+                      videoForLesson(otherLessonId, 1, 'ready'),
+                    ]
+                  : reads === 2
+                    ? [
+                        videoForLesson(lessonId, 2, 'processing'),
+                        videoForLesson(otherLessonId, 1, 'ready'),
+                      ]
+                    : [
+                        videoForLesson(lessonId, 2, 'ready'),
+                        videoForLesson(otherLessonId, 1, 'ready'),
+                      ],
+            };
+          },
+        }),
+      ),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(lessonDraftQueryKey(lessonId), null);
+    client.setQueryData(lessonDraftQueryKey(otherLessonId), null);
+    const observer = new QueryObserver(client, queries.list(courseId));
+    await observer.refetch();
+    await observer.refetch();
+    expect(client.getQueryState(lessonDraftQueryKey(lessonId))?.isInvalidated).toBe(false);
+    await observer.refetch();
+
+    expect(client.getQueryState(lessonDraftQueryKey(lessonId))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(lessonDraftQueryKey(otherLessonId))?.isInvalidated).toBe(false);
   });
 
   test('every video mutation exposes the named invalidation boundary', async () => {

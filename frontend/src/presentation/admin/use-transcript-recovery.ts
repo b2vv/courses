@@ -102,6 +102,9 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
         : current.store.write({
             key: current.historyKey,
             capturedAt: Date.now(),
+            ...(current.baseline.language === undefined
+              ? {}
+              : { language: current.baseline.language }),
             expectedUpdatedAt: current.baseline.expectedUpdatedAt,
             ...(current.baseline.draftUpdatedAt === undefined
               ? {}

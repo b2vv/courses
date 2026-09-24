@@ -24,6 +24,8 @@ export type TranscriptEditorActions = {
 type TranscriptEditorProps = {
   readonly lessonId: string;
   readonly language: string;
+  /** Whether the server returned a saved transcript; absent means a first transcript. */
+  readonly hasSavedTranscript?: boolean;
   readonly expectedUpdatedAt?: string;
   readonly segments: readonly TranscriptSegment[];
   readonly documents: readonly TranscriptDocument[];
@@ -64,6 +66,7 @@ function toDraft(segment: TranscriptSegment): DraftLine {
 export function TranscriptEditor({
   lessonId,
   language,
+  hasSavedTranscript = false,
   expectedUpdatedAt,
   segments,
   documents,
@@ -80,16 +83,19 @@ export function TranscriptEditor({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<TranscriptErrorCode | null>(null);
 
-  const currentDraftUpdatedAt = suppliedDraftUpdatedAt ?? draftUpdatedAt;
+  const currentDraftUpdatedAt = draftUpdatedAt ?? suppliedDraftUpdatedAt;
   const baseline = useMemo(() => {
-    const base = { expectedUpdatedAt, lines: segments.map(toDraft) };
+    const base = {
+      language: currentLanguage,
+      expectedUpdatedAt,
+      lines: segments.map(toDraft),
+    };
     return currentDraftUpdatedAt === undefined
       ? base
       : { ...base, draftUpdatedAt: currentDraftUpdatedAt };
-  }, [currentDraftUpdatedAt, expectedUpdatedAt, segments]);
+  }, [currentDraftUpdatedAt, currentLanguage, expectedUpdatedAt, segments]);
   const recovery = useTranscriptRecovery({
-    historyKey:
-      currentLanguage === language ? history.key : history.key.replace(/[^:]+$/, currentLanguage),
+    historyKey: history.key,
     store: history.store,
     baseline,
   });
@@ -182,6 +188,9 @@ export function TranscriptEditor({
             onPress={() => {
               if (recovery.offer.kind === 'none') return;
               setLines(recovery.offer.snapshot.lines);
+              if (recovery.offer.snapshot.language !== undefined) {
+                setCurrentLanguage(recovery.offer.snapshot.language);
+              }
               recovery.accept();
             }}
           >
@@ -201,18 +210,29 @@ export function TranscriptEditor({
           <h5 id={`transcript-draft-offer-${lessonId}`}>
             {t('administration.transcriptEditor.draftOffer.heading')}
           </h5>
-          <p>{t('administration.transcriptEditor.draftOffer.description')}</p>
-          <Button
-            type="button"
-            onPress={() => {
-              setLines(draftOffer.segments.map(toDraft));
-              setCurrentLanguage(draftOffer.language);
-              setDraftUpdatedAt(draftOffer.updatedAt);
-              onDraftOfferHandled?.();
-            }}
-          >
-            {t('administration.transcriptEditor.draftOffer.load')}
-          </Button>
+          {hasSavedTranscript && draftOffer.language !== language ? (
+            <p>
+              {t('administration.transcriptEditor.draftOffer.languageMismatch', {
+                draftLanguage: draftOffer.language,
+                transcriptLanguage: language,
+              })}
+            </p>
+          ) : (
+            <>
+              <p>{t('administration.transcriptEditor.draftOffer.description')}</p>
+              <Button
+                type="button"
+                onPress={() => {
+                  setLines(draftOffer.segments.map(toDraft));
+                  setCurrentLanguage(draftOffer.language);
+                  setDraftUpdatedAt(draftOffer.updatedAt);
+                  onDraftOfferHandled?.();
+                }}
+              >
+                {t('administration.transcriptEditor.draftOffer.load')}
+              </Button>
+            </>
+          )}
           <Button type="button" variant="secondary" onPress={() => onDraftOfferHandled?.()}>
             {t('administration.transcriptEditor.draftOffer.dismiss')}
           </Button>
