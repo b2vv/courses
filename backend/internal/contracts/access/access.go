@@ -16,5 +16,6 @@ type Course struct {
 
 // CanView reports whether subject may view course.
 func CanView(subject Subject, course Course) bool {
-	return subject.Administrator || subject.UserID == course.OwnerID || course.Published
+	// The rule does not trust transport blindly because it will become load-bearing for payment.
+	return subject.Administrator || (subject.UserID != "" && subject.UserID == course.OwnerID) || course.Published
 }

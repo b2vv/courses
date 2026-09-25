@@ -1,5 +1,7 @@
 package domain
 
+import "courses/internal/contracts/access"
+
 type Actor struct {
 	UserID        string
 	Administrator bool
@@ -31,5 +33,5 @@ type LessonPlayback struct {
 }
 
 func (course VideoCourse) CanBeViewedBy(actor Actor) bool {
-	return actor.Administrator || actor.UserID == course.OwnerID || course.Status == Published
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published})
 }

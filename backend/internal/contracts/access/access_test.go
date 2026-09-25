@@ -29,6 +29,7 @@ func TestCanView(t *testing.T) {
 		{name: "stranger draft", subject: access.Subject{UserID: stranger}, course: access.Course{OwnerID: owner}, want: false},
 		{name: "stranger published", subject: access.Subject{UserID: stranger}, course: access.Course{OwnerID: owner, Published: true}, want: true},
 		{name: "stranger archived (Published false)", subject: access.Subject{UserID: stranger}, course: access.Course{OwnerID: owner}, want: false},
+		{name: "empty subject, draft, empty owner", subject: access.Subject{}, course: access.Course{}, want: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

@@ -9,21 +9,10 @@ import (
 	transcriptdomain "courses/internal/transcript/domain"
 )
 
-// Two product rules exist twice each, once per module, and both duplications are deliberate: a
-// module's domain may not import another module's domain (AGENTS.md, enforced by
-// TestDomainAndApplicationDependenciesPointInward), so a shared function has nowhere to live.
-// That makes the copies structural rather than sloppy - and it also means nothing holds them
-// together. The position bound carries a comment in each copy saying the duplication is
-// intended; a comment does not fail. The access predicate carries not even that.
-//
-// A textual pin is impossible here, unlike the numbers in TestContractCeilingsEqualTheDomainConstants:
-// the copies do not share a shape. `playback.Actor` has `Administrator bool` where
-// `course.Actor` has `Role ActorRole`, and the owner is `OwnerID` on one side and
-// `InstructorID` on the other. So this pins BEHAVIOUR: one truth table per rule, every copy
-// asked the same question, every copy required to answer the same way.
-//
-// The third module arrived: the transcript read needs the access predicate, so it carries its
-// own copy and a column here. Three copies now, and the table is what keeps them honest.
+// The table below checks the mapping from each module's own actor/course shapes to the single
+// access.CanView contract. `playback.Actor` has `Administrator bool` where `course.Actor` has
+// `Role ActorRole`, and the owner is `OwnerID` on one side and `InstructorID` on the other; this
+// keeps those mappings aligned without re-testing three local implementations of the rule.
 
 func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 	t.Parallel()
@@ -52,14 +41,9 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 		// reached; neither copy may let it through on an unpublished course.
 		{name: "draft, anonymous", actor: "", courseOwner: owner, status: "draft", want: false},
 		{name: "published, anonymous", actor: "", courseOwner: owner, status: "published", want: true},
-		// Both copies answer TRUE here, and the pin records that rather than wishing otherwise:
-		// `actor.UserID == course.OwnerID` is `"" == ""`, so an anonymous caller reads as the
-		// owner of an ownerless course. Neither predicate defends against it, and neither has
-		// to - `courses.instructor_id` is NOT NULL (migrations/00003_authoring.sql:19), so an
-		// ownerless course cannot exist, and authentication runs before either call site. The
-		// safety lives in the schema, not in the rule. This row is here so that hardening one
-		// copy to reject an empty actor fails the pin and forces the other to match.
-		{name: "draft, empty owner and empty actor: agreed, and unreachable by schema", actor: "", courseOwner: "", status: "draft", want: true},
+		// Earlier, safety lived only in the schema because strengthening one copy meant it
+		// diverged from the others; now the rule is one place and protects this case (ADR 013).
+		{name: "draft, empty owner and empty actor", actor: "", courseOwner: "", status: "draft", want: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

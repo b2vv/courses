@@ -1,6 +1,10 @@
 package domain
 
-import "math"
+import (
+	"math"
+
+	"courses/internal/contracts/access"
+)
 
 const MaximumLearningClientSequence int64 = 1<<31 - 1
 
@@ -78,7 +82,7 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 }
 
 func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
-	return actor.Role == ActorAdmin || actor.UserID == course.InstructorID || course.Status == Published
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published})
 }
 
 func (state LearningVideoState) Valid() bool {
