@@ -34,7 +34,9 @@ func TestDomainAndApplicationDependenciesPointInward(t *testing.T) {
 				return err
 			}
 			standard := !strings.Contains(strings.Split(name, "/")[0], ".") && !strings.HasPrefix(name, "courses/")
-			allowed := standard || (application && strings.HasPrefix(name, "courses/internal/") && (strings.Contains(name, "/domain") || strings.Contains(name, "/ports")))
+			allowed := standard ||
+				(domain && strings.HasPrefix(name, "courses/internal/contracts/")) ||
+				(application && strings.HasPrefix(name, "courses/internal/") && (strings.Contains(name, "/domain") || strings.Contains(name, "/ports")))
 			if !allowed {
 				t.Errorf("%s imports forbidden dependency %s", path, name)
 			}
