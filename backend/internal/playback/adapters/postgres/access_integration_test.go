@@ -6,11 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	"courses/internal/playback/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -100,6 +102,57 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("course=%+v", course)
 	}
 	playbackReader := playbackpostgres.NewLessonPlaybackReader(pool)
+
+	t.Run("R07 SQL facts cover the access truth table", func(t *testing.T) {
+		tableMetric := &counter{}
+		tableReader := playbackpostgres.NewVideoAccessReader(pool, tableMetric)
+		for index, test := range accesstest.TruthTable {
+			t.Run(test.Name, func(t *testing.T) {
+				var courseID, moduleID, lessonID, videoID string
+				slug := fmt.Sprintf("access-table-%d", index)
+				publishedAt := "NULL"
+				if test.Status == "published" {
+					publishedAt = "now()"
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
+					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`) RETURNING id::text`, ownerID, slug, test.Status).Scan(&courseID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
+					VALUES(gen_random_uuid(),$1,1,'ready',1,1,'access.mp4',ARRAY['360p'],now()+interval '1 day',now(),now()) RETURNING id::text`, lessonID).Scan(&videoID); err != nil {
+					t.Fatal(err)
+				}
+
+				actorID := viewerID
+				administrator := false
+				if test.Role == accesstest.Owner {
+					actorID = ownerID
+				} else if test.Role == accesstest.Administrator {
+					administrator = true
+				}
+				course, err := tableReader.LoadVideoCourse(ctx, videoID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := course.CanBeViewedBy(domain.Actor{UserID: actorID, Administrator: administrator}); got != test.Want {
+					t.Fatalf("auth_request facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", course, actorID, got, test.Want)
+				}
+				playback, err := playbackReader.LoadLessonPlayback(ctx, actorID, lessonID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := playback.Course.CanBeViewedBy(domain.Actor{UserID: actorID, Administrator: administrator}); got != test.Want {
+					t.Fatalf("session facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", playback.Course, actorID, got, test.Want)
+				}
+			})
+		}
+	})
 	playback, err := playbackReader.LoadLessonPlayback(ctx, viewerID, lessonID)
 	if err != nil || playback.VideoID != videoID || playback.ClientSequence != 0 || playback.Course != course {
 		t.Fatalf("first playback=%+v err=%v", playback, err)

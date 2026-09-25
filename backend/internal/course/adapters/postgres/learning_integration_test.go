@@ -6,11 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	coursepostgres "courses/internal/course/adapters/postgres"
 	"courses/internal/course/application"
 	"courses/internal/course/domain"
@@ -68,6 +70,46 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	repository := coursepostgres.NewRepository(pool)
+
+	t.Run("R06 SQL facts cover the access truth table", func(t *testing.T) {
+		const tableOwner = "41000000-0000-4000-8000-000000000002"
+		const tableStranger = "41000000-0000-4000-8000-000000000001"
+		for index, test := range accesstest.TruthTable {
+			t.Run(test.Name, func(t *testing.T) {
+				slug := fmt.Sprintf("access-table-%d", index)
+				var courseID, moduleID, lessonID string
+				publishedAt := "NULL"
+				if test.Status == "published" {
+					publishedAt = "now()"
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
+					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`) RETURNING id::text`, tableOwner, slug, test.Status).Scan(&courseID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+					t.Fatal(err)
+				}
+
+				actorID := tableStranger
+				role := domain.ActorStudent
+				if test.Role == accesstest.Owner {
+					actorID, role = tableOwner, domain.ActorInstructor
+				} else if test.Role == accesstest.Administrator {
+					role = domain.ActorAdmin
+				}
+				course, err := repository.GetLearningCourse(ctx, actorID, slug)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := course.CanBeViewedBy(domain.Actor{UserID: actorID, Role: role}); got != test.Want {
+					t.Fatalf("adapter facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", course.Course, actorID, got, test.Want)
+				}
+			})
+		}
+	})
 
 	t.Run("B01 course without lessons", func(t *testing.T) {
 		course, err := repository.GetLearningCourse(ctx, learningViewerID, "empty-learning")

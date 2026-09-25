@@ -5,11 +5,13 @@ package postgres_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
 	"courses/internal/transcript/application"
 	"courses/internal/transcript/domain"
@@ -149,6 +151,44 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 	}
 
 	repository := transcriptpostgres.NewRepository(pool)
+
+	t.Run("R08 SQL facts cover the access truth table", func(t *testing.T) {
+		for index, test := range accesstest.TruthTable {
+			t.Run(test.Name, func(t *testing.T) {
+				slug := fmt.Sprintf("access-table-%d", index)
+				publishedAt := "NULL"
+				if test.Status == "published" {
+					publishedAt = "now()"
+				}
+				var courseID, moduleID, lessonID string
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
+					VALUES(gen_random_uuid(),$1,'Access table','Summary','Description',$2,$3,`+publishedAt+`) RETURNING id::text`, slug, test.Status, ownerAccount).Scan(&courseID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+					t.Fatal(err)
+				}
+
+				actorID := strangerAccount
+				administrator := false
+				if test.Role == accesstest.Owner {
+					actorID = ownerAccount
+				} else if test.Role == accesstest.Administrator {
+					administrator = true
+				}
+				result, err := repository.GetLessonTranscript(ctx, lessonID, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := result.Course.CanBeViewedBy(domain.Actor{UserID: actorID, Administrator: administrator}); got != test.Want {
+					t.Fatalf("facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", result.Course, actorID, got, test.Want)
+				}
+			})
+		}
+	})
 	reading := application.NewReading(repository)
 	authoring := application.NewAuthoring(repository)
 	student := domain.Actor{UserID: strangerAccount}

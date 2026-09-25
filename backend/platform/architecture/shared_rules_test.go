@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	coursedomain "courses/internal/course/domain"
 	playbackdomain "courses/internal/playback/domain"
 	transcriptdomain "courses/internal/transcript/domain"
@@ -20,56 +21,37 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 	const owner = "40000000-0000-4000-8000-000000000002"
 	const stranger = "40000000-0000-4000-8000-000000000009"
 
-	for _, test := range []struct {
-		name          string
-		actor         string
-		administrator bool
-		courseOwner   string
-		status        string
-		want          bool
-	}{
-		{name: "published, stranger", actor: stranger, courseOwner: owner, status: "published", want: true},
-		{name: "published, owner", actor: owner, courseOwner: owner, status: "published", want: true},
-		{name: "published, admin", actor: stranger, administrator: true, courseOwner: owner, status: "published", want: true},
-		{name: "draft, stranger", actor: stranger, courseOwner: owner, status: "draft", want: false},
-		{name: "draft, owner", actor: owner, courseOwner: owner, status: "draft", want: true},
-		{name: "draft, admin", actor: stranger, administrator: true, courseOwner: owner, status: "draft", want: true},
-		{name: "archived, stranger", actor: stranger, courseOwner: owner, status: "archived", want: false},
-		{name: "archived, owner", actor: owner, courseOwner: owner, status: "archived", want: true},
-		{name: "archived, admin", actor: stranger, administrator: true, courseOwner: owner, status: "archived", want: true},
-		// An empty actor is what an unauthenticated caller reduces to before the predicate is
-		// reached; neither copy may let it through on an unpublished course.
-		{name: "draft, anonymous", actor: "", courseOwner: owner, status: "draft", want: false},
-		{name: "published, anonymous", actor: "", courseOwner: owner, status: "published", want: true},
-		// Earlier, safety lived only in the schema because strengthening one copy meant it
-		// diverged from the others; now the rule is one place and protects this case (ADR 013).
-		{name: "draft, empty owner and empty actor", actor: "", courseOwner: "", status: "draft", want: false},
-	} {
-		t.Run(test.name, func(t *testing.T) {
+	for _, test := range accesstest.TruthTable {
+		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
+			actor := stranger
+			administrator := test.Role == accesstest.Administrator
+			if test.Role == accesstest.Owner {
+				actor = owner
+			}
 			role := coursedomain.ActorStudent
-			if test.administrator {
+			if administrator {
 				role = coursedomain.ActorAdmin
 			}
 			viaCourse := coursedomain.LearningCourse{
-				Course:       coursedomain.Course{Status: coursedomain.Status(test.status)},
-				InstructorID: test.courseOwner,
-			}.CanBeViewedBy(coursedomain.Actor{UserID: test.actor, Role: role})
+				Course:       coursedomain.Course{Status: coursedomain.Status(test.Status)},
+				InstructorID: owner,
+			}.CanBeViewedBy(coursedomain.Actor{UserID: actor, Role: role})
 
 			viaPlayback := playbackdomain.VideoCourse{
-				OwnerID: test.courseOwner,
-				Status:  playbackdomain.CourseStatus(test.status),
-			}.CanBeViewedBy(playbackdomain.Actor{UserID: test.actor, Administrator: test.administrator})
+				OwnerID: owner,
+				Status:  playbackdomain.CourseStatus(test.Status),
+			}.CanBeViewedBy(playbackdomain.Actor{UserID: actor, Administrator: administrator})
 
 			viaTranscript := transcriptdomain.Course{
-				OwnerID: test.courseOwner,
-				Status:  transcriptdomain.Status(test.status),
-			}.CanBeViewedBy(transcriptdomain.Actor{UserID: test.actor, Administrator: test.administrator})
+				OwnerID: owner,
+				Status:  transcriptdomain.Status(test.Status),
+			}.CanBeViewedBy(transcriptdomain.Actor{UserID: actor, Administrator: administrator})
 
-			if viaCourse != test.want || viaPlayback != test.want || viaTranscript != test.want {
+			if viaCourse != test.Want || viaPlayback != test.Want || viaTranscript != test.Want {
 				t.Fatalf("course=%v playback=%v transcript=%v want=%v: the copies of the access rule disagree, or one of them changed alone",
-					viaCourse, viaPlayback, viaTranscript, test.want)
+					viaCourse, viaPlayback, viaTranscript, test.Want)
 			}
 		})
 	}
