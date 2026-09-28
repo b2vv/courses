@@ -61,7 +61,7 @@
 
 | Дія | Хто | Відмова |
 |---|---|---|
-| Читати гілки уроку | `CanView` (Q3) | анонім → 401 `authentication_required`; без права → 403 `course_forbidden` (та сама відмова, що в транскрипті, ADR 010); невідомий урок → 404 `lesson_not_found` |
+| Читати гілки уроку | `CanView` (Q3) | анонім → 401 `authentication_required`; без права → 403 `course_forbidden` (та сама відмова, що в транскрипті, ADR 010); невідомий урок → 404 `lesson_not_found`; зіпсований курсор → 400 `comment_cursor_invalid` (додано в D02) |
 | Опублікувати корінь / відповідь | `CanView` | 400 `comment_body_invalid` / `comment_position_invalid` / `comment_parent_invalid`; 403 `origin_forbidden` / `course_forbidden`; 409 `comment_thread_full` — понад 200 не прибраних відповідей на корінь, перевірка атомарна (план X4) |
 | Змінити | лише автор | 403 `comment_forbidden`; 404 `comment_not_found`; 409 `comment_removed` |
 | Прибрати | автор ∨ адмін ∨ власник курсу (Q4) | 403 `comment_forbidden`; 404 `comment_not_found`; повторне прибирання — 204 (ідемпотентно) |

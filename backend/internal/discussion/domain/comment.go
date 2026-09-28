@@ -17,6 +17,7 @@ var (
 	ErrPositionInvalid = errors.New("comment_position_invalid")
 	ErrParentInvalid   = errors.New("comment_parent_invalid")
 	ErrThreadFull      = errors.New("comment_thread_full")
+	ErrInvalidCursor   = errors.New("comment_cursor_invalid")
 )
 
 type Comment struct {

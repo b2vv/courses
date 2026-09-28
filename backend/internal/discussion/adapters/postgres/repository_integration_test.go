@@ -1,0 +1,353 @@
+//go:build integration
+
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"courses/internal/contracts/access/accesstest"
+	"courses/internal/discussion/domain"
+	"courses/internal/discussion/ports"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+	"github.com/testcontainers/testcontainers-go"
+	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+const (
+	discussionOwner   = "30000000-0000-4000-8000-0000000000a1"
+	discussionStudent = "30000000-0000-4000-8000-0000000000a2"
+	discussionLesson  = "40000000-0000-4000-8000-0000000000b1"
+	positiveLesson    = "40000000-0000-4000-8000-0000000000b2"
+	cascadeLesson     = "40000000-0000-4000-8000-0000000000b3"
+	discussionAsset   = "50000000-0000-4000-8000-0000000000c1"
+	positiveAsset     = "50000000-0000-4000-8000-0000000000c3"
+)
+
+func TestDiscussionPostgres(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	container, err := postgrescontainer.Run(ctx, "postgres:17.5",
+		postgrescontainer.WithDatabase("discussion_test"),
+		postgrescontainer.WithUsername("courses"),
+		postgrescontainer.WithPassword("ephemeral-test-only"),
+		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+	)
+	if err != nil {
+		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
+	}
+	t.Cleanup(func() { _ = container.Terminate(context.Background()) })
+	connection, err := container.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	databaseConn, err := sql.Open("pgx", connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer databaseConn.Close()
+	migrations := filepath.Join("..", "..", "..", "..", "migrations")
+	provider, err := goose.NewProvider(goose.DialectPostgres, databaseConn, os.DirFS(migrations), goose.WithDisableGlobalRegistry(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.New(ctx, connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	seedDiscussion(t, pool)
+	repository := NewRepository(pool)
+
+	t.Run("K07 SQL facts cover access truth table", func(t *testing.T) {
+		for index, truth := range accesstest.TruthTable {
+			var courseID, moduleID, lessonID string
+			publishedAt := "NULL"
+			if truth.Status == "published" {
+				publishedAt = "now()"
+			}
+			if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES(gen_random_uuid(),$1,'Access','S','D',$2,$3,`+publishedAt+`) RETURNING id::text`, "access-"+string(rune('a'+index)), truth.Status, discussionOwner).Scan(&courseID); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'M',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'L','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+				t.Fatal(err)
+			}
+			facts, err := repository.LessonFacts(ctx, lessonID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actor := domain.Actor{UserID: discussionStudent, Administrator: truth.Role == accesstest.Administrator}
+			if truth.Role == accesstest.Owner {
+				actor.UserID = discussionOwner
+			}
+			if got := facts.Course.CanBeViewedBy(actor); got != truth.Want {
+				t.Fatalf("%s: access=%v want=%v", truth.Name, got, truth.Want)
+			}
+		}
+	})
+	t.Run("K08 constraints and keyset indexes", func(t *testing.T) {
+		var lessonFK, authorFK, parentFK string
+		rows, err := pool.Query(ctx, `SELECT conname FROM pg_constraint WHERE conrelid='discussion_comments'::regclass AND contype='f' ORDER BY conname`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				t.Fatal(err)
+			}
+			switch {
+			case strings.Contains(name, "lesson"):
+				lessonFK = name
+			case strings.Contains(name, "author"):
+				authorFK = name
+			case strings.Contains(name, "parent"):
+				parentFK = name
+			}
+		}
+		rows.Close()
+		if lessonFK == "" || authorFK == "" || parentFK == "" {
+			t.Fatalf("FKs lesson=%q author=%q parent=%q", lessonFK, authorFK, parentFK)
+		}
+		var rootDef, replyDef string
+		if err := pool.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE indexname='discussion_comments_roots_keyset'`).Scan(&rootDef); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT indexdef FROM pg_indexes WHERE indexname='discussion_comments_replies_keyset'`).Scan(&replyDef); err != nil {
+			t.Fatal(err)
+		}
+		for _, part := range []string{"lesson_id", "created_at DESC", "id DESC", "WHERE (parent_id IS NULL)"} {
+			if !strings.Contains(rootDef, part) {
+				t.Errorf("root index missing %q: %s", part, rootDef)
+			}
+		}
+		for _, part := range []string{"parent_id", "created_at", "id"} {
+			if !strings.Contains(replyDef, part) {
+				t.Errorf("reply index missing %q: %s", part, replyDef)
+			}
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'')`, discussionLesson, discussionStudent); err == nil {
+			t.Fatal("empty body passed the database check")
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body,position_ms) VALUES($1,$2,'x',-1)`, discussionLesson, discussionStudent); err == nil {
+			t.Fatal("negative position passed the database check")
+		}
+		for name, statement := range map[string]string{
+			"live comment with NULL body":         `INSERT INTO discussion_comments(lesson_id,author_id,body,removed_at) VALUES($1,$2,NULL,NULL)`,
+			"removed comment with non-empty body": `INSERT INTO discussion_comments(lesson_id,author_id,body,removed_at) VALUES($1,$2,'still here',now())`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				_, err := pool.Exec(ctx, statement, discussionLesson, discussionStudent)
+				if err == nil {
+					t.Fatal("invalid body/removal state passed the database check")
+				}
+				var postgresError *pgconn.PgError
+				if !errors.As(err, &postgresError) || postgresError.Code != "23514" {
+					t.Fatalf("error=%v want CHECK violation SQLSTATE 23514", err)
+				}
+			})
+		}
+		var cascadeRoot string
+		if err := pool.QueryRow(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'root') RETURNING id::text`, cascadeLesson, discussionStudent).Scan(&cascadeRoot); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,parent_id,body) VALUES($1,$2,$3,'reply')`, cascadeLesson, discussionStudent, cascadeRoot); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM course_lessons WHERE id=$1`, cascadeLesson); err != nil {
+			t.Fatal(err)
+		}
+		var remaining int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comments WHERE lesson_id=$1`, cascadeLesson).Scan(&remaining); err != nil {
+			t.Fatal(err)
+		}
+		if remaining != 0 {
+			t.Fatalf("lesson cascade left %d discussion rows", remaining)
+		}
+	})
+	t.Run("K09 roots cursor replies and removed shape", func(t *testing.T) {
+		first := insertRoot(t, pool, repository, "first")
+		second := insertRoot(t, pool, repository, "second")
+		third := insertRoot(t, pool, repository, "third")
+		base := time.Now().UTC()
+		for index, id := range []string{first.Comment.ID, second.Comment.ID, third.Comment.ID} {
+			if _, err := pool.Exec(ctx, `UPDATE discussion_comments SET created_at=$2 WHERE id=$1::text::uuid`, id, base.Add(time.Duration(index)*time.Second)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		insertReply(t, repository, first.Comment.ID, "reply")
+		if err := repository.Remove(ctx, second.Comment.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		page, err := repository.List(ctx, discussionLesson, "", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page.Threads) != 1 || page.Threads[0].Root.Comment.ID != third.Comment.ID {
+			t.Fatalf("page=%+v", page)
+		}
+		if page.NextCursor == "" {
+			t.Fatal("expected next cursor")
+		}
+		page, err = repository.List(ctx, discussionLesson, page.NextCursor, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page.Threads) != 1 || page.Threads[0].Root.Comment.ID != first.Comment.ID || len(page.Threads[0].Replies) != 1 {
+			t.Fatalf("cursor page=%+v", page)
+		}
+		if err := repository.Remove(ctx, first.Comment.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		page, err = repository.List(ctx, discussionLesson, "", 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page.Threads) != 2 {
+			t.Fatalf("removed root should remain with reply: %+v", page)
+		}
+		var foundRemoved bool
+		for _, thread := range page.Threads {
+			if thread.Root.Comment.ID == first.Comment.ID {
+				foundRemoved = true
+				if thread.Root.Comment.Body != "" || thread.Root.Comment.RemovedAt == nil || thread.Replies[0].Comment.Body != "reply" {
+					t.Fatalf("removed thread=%+v", thread)
+				}
+			}
+		}
+		if !foundRemoved {
+			t.Fatal("removed root with reply missing")
+		}
+	})
+	t.Run("K09a filtered selector and serialized cap", func(t *testing.T) {
+		positiveFacts, err := repository.LessonFacts(ctx, positiveLesson)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if positiveFacts.AssetID != positiveAsset || positiveFacts.Generation != 1 || positiveFacts.DurationSecs == nil || *positiveFacts.DurationSecs != 45 {
+			t.Fatalf("positive selected asset=%s generation=%d duration=%v", positiveFacts.AssetID, positiveFacts.Generation, positiveFacts.DurationSecs)
+		}
+		facts, err := repository.LessonFacts(ctx, discussionLesson)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if facts.AssetID != "" || facts.Generation != 0 {
+			t.Fatalf("selected asset=%s generation=%d", facts.AssetID, facts.Generation)
+		}
+		t.Run("two connections prove the root lock closes the race", func(t *testing.T) {
+			root := insertRoot(t, pool, repository, "locked-cap-root")
+			for i := 0; i < domain.MaximumReplyCount-1; i++ {
+				if _, err := pool.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,parent_id,body) VALUES($1,$2,$3,$4)`, discussionLesson, discussionStudent, root.Comment.ID, "reply"); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			lockedConnection, err := pool.Acquire(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lockedConnection.Release()
+			transaction, err := lockedConnection.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = transaction.Rollback(context.Background()) }()
+			var lockedID string
+			if err := transaction.QueryRow(ctx, `SELECT id::text FROM discussion_comments WHERE id=$1::text::uuid AND parent_id IS NULL FOR UPDATE`, root.Comment.ID).Scan(&lockedID); err != nil {
+				t.Fatal(err)
+			}
+
+			result := make(chan error, 1)
+			goroutineContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			go func() {
+				_, err := repository.InsertReply(goroutineContext, domain.Comment{LessonID: discussionLesson, AuthorID: discussionStudent, ParentID: &root.Comment.ID, Body: "concurrent reply"})
+				result <- err
+			}()
+
+			select {
+			case err := <-result:
+				t.Fatalf("InsertReply returned before tx1 commit: %v", err)
+			case <-time.After(300 * time.Millisecond):
+			}
+			if _, err := transaction.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,parent_id,body) VALUES($1,$2,$3,$4)`, discussionLesson, discussionStudent, root.Comment.ID, "tx1 reply"); err != nil {
+				t.Fatal(err)
+			}
+			if err := transaction.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-result:
+				if !errors.Is(err, domain.ErrThreadFull) {
+					t.Fatalf("InsertReply error=%v want=%v", err, domain.ErrThreadFull)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("InsertReply did not return after tx1 commit")
+			}
+		})
+		root := insertRoot(t, pool, repository, "cap-root")
+		for i := 0; i < domain.MaximumReplyCount; i++ {
+			_, err := pool.Exec(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,parent_id,body) VALUES($1,$2,$3,$4)`, discussionLesson, discussionStudent, root.Comment.ID, "reply")
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := repository.InsertReply(ctx, domain.Comment{LessonID: discussionLesson, AuthorID: discussionStudent, ParentID: &root.Comment.ID, Body: "overflow"}); err != domain.ErrThreadFull {
+			t.Fatalf("cap error=%v", err)
+		}
+	})
+}
+
+func seedDiscussion(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	statements := []string{
+		`INSERT INTO users(id,email,display_name,role,password_hash) VALUES ('` + discussionOwner + `','owner@discussion.test','Owner','instructor','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),('` + discussionStudent + `','student@discussion.test','Student','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`,
+		`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES ('10000000-0000-4000-8000-0000000000d1','discussion','D','S','D','published','` + discussionOwner + `',now())`,
+		`INSERT INTO course_modules(id,course_id,title,position) VALUES ('20000000-0000-4000-8000-0000000000e1','10000000-0000-4000-8000-0000000000d1','M',0)`,
+		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('` + discussionLesson + `','20000000-0000-4000-8000-0000000000e1','L','',0),('` + positiveLesson + `','20000000-0000-4000-8000-0000000000e1','Positive','',1),('` + cascadeLesson + `','20000000-0000-4000-8000-0000000000e1','Cascade','',2)`,
+		`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,original_name,renditions,expires_at,created_at,updated_at,duration_seconds) VALUES ('` + discussionAsset + `','` + discussionLesson + `',1,'ready',10,'a.mp4','{720p}',now()+interval '1 day',now(),now(),120),('50000000-0000-4000-8000-0000000000c2','` + discussionLesson + `',2,'processing',10,'b.mp4','{}',now()+interval '1 day',now(),now(),NULL),('` + positiveAsset + `','` + positiveLesson + `',1,'ready',10,'positive-a.mp4','{720p}',now()+interval '1 day',now(),now(),45),('50000000-0000-4000-8000-0000000000c4','` + positiveLesson + `',2,'ready',10,'positive-b.mp4','{720p}',now()+interval '1 day',now(),now(),90),('50000000-0000-4000-8000-0000000000c5','` + positiveLesson + `',3,'processing',10,'positive-c.mp4','{}',now()+interval '1 day',now(),now(),NULL)`,
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE video_assets SET evicted_at=now() WHERE id = ANY($1::uuid[])`, []string{discussionAsset, "50000000-0000-4000-8000-0000000000c4"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func insertRoot(t *testing.T, pool *pgxpool.Pool, repository *Repository, body string) ports.CommentRecord {
+	t.Helper()
+	result, err := repository.InsertRoot(context.Background(), domain.Comment{LessonID: discussionLesson, AuthorID: discussionStudent, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func insertReply(t *testing.T, repository *Repository, parentID, body string) ports.CommentRecord {
+	t.Helper()
+	result, err := repository.InsertReply(context.Background(), domain.Comment{LessonID: discussionLesson, AuthorID: discussionStudent, ParentID: &parentID, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}

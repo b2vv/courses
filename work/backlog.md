@@ -4,6 +4,23 @@ Items that have been decided as *worth doing* but not placed in a phase. Not an 
 `work/AGENDA.md` ranks the next move and is rebuilt each time. An item leaves here by
 becoming a phase in `work/PRODUCT-BRIEF.md` §21 or a task in `work/tasks.md`.
 
+## B-22 — Duplicated current-video selectors
+
+**Raised:** 2026-09-28, during Phase 7b D02.
+**Shape:** the filtered current-video selector is duplicated in several places: `transcript`
+(`adapters/postgres/repository.go:25`, `adapters/postgres/draft.go:73,262`), `playback`
+(`adapters/postgres/playback.go:18`, `progress.go:22`), `media`
+(`adapters/postgres/generated/media.sql.go:48`, with `NULLS LAST`), and `discussion`
+(`adapters/postgres/repository.go:29`). This list was verified by grep on 2026-09-28.
+`course/adapters/postgres/learning.go:46` carries a deliberately different sorting form for
+learning-state display.
+**Механізм:** keep the filtered copies aligned by review comments and pin the `discussion` copy
+with integration K09a; do not merge closed modules without a phase that owns their seams.
+**Спосіб перевірки:** K09a proves `discussion` selects `state='ready' AND evicted_at IS NULL` at
+the highest generation, including positive and negative ready/upload fixtures.
+**Чого не стверджує:** this does not prove the filtered selectors are globally unified, nor does
+it remove the duplication or claim that the `course` sorting form is equivalent.
+
 ---
 
 ## B-1 — Observability: frontend logging, log aggregation, dashboards

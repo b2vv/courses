@@ -13,7 +13,8 @@ import (
 )
 
 // The generation the player would pick. This is the FILTERED form of the rule, matching
-// playback/adapters/postgres/playback.go and progress.go; course/adapters/postgres/learning.go
+// playback/adapters/postgres/playback.go and progress.go; discussion/adapters/postgres/repository.go
+// uses the same filtered form, while course/adapters/postgres/learning.go
 // carries a third copy that SORTS ready first instead, because it reports the video state rather
 // than only the playable asset. Copying the sorting form here would make a transcript read stale
 // from the moment an upload begins and stay stale after a failed transcode.

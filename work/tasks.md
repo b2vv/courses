@@ -219,8 +219,8 @@ Compose і фікстур, тобто не може бігти раніше за
 
 | ID | Назва | Est | Depends | Status | Result |
 |---|---|---:|---|---|---|
-| D01 | Домен `discussion` + `expectedMethods` 3→4 + `viaDiscussion` і гілка межі мітки в крос-тестах | 2h | — | planned | K01–K06, K05a |
-| D02 | Міграція `00009` + postgres-адаптер, атомарний cap, гейт-тест селектора, борг селектора в беклог | 3h | D01 | planned | K07–K09a |
+| D01 | Домен `discussion` + `expectedMethods` 3→4 + `viaDiscussion` і гілка межі мітки в крос-тестах | 2h | — | done | `2b8c72e`; K01–K06, K05a; make check exit 0, e2e 75/75 |
+| D02 | Міграція `00009` + postgres-адаптер, атомарний cap, гейт-тест селектора, борг селектора в беклог | 3h | D01 | done | K07–K09a; make check exit 0, e2e 75/75; міграція 9 на стенді |
 | D03 | Application + HTTP + OpenAPI/Orval + підключення в `cmd/api` | 2h | D02 | planned | K10–K15 |
 | D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | planned | K16–K18 |
 | D05 | e2e: мітка й перемотка, відповідь, модерація, відмова, a11y | 2h | D04 | planned | K19–K23 |

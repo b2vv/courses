@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// discussion/adapters/postgres/repository.go has its own copy of this filtered selector;
+// course's learning query intentionally uses a sorting selector because it reports UI state.
 const loadLessonDuration = `SELECT (
     SELECT assets.duration_seconds
     FROM video_assets AS assets

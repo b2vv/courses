@@ -38,6 +38,8 @@ FROM courses
 LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
 LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 LEFT JOIN LATERAL (
+  -- This is the sorting form, unlike transcript, playback and discussion, which need only the
+  -- playable ready asset. It reports the best state for the learning UI during an upload.
   SELECT assets.state, assets.duration_seconds
   FROM video_assets AS assets
   WHERE assets.lesson_id = lessons.id AND assets.evicted_at IS NULL
