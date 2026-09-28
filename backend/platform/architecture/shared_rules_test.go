@@ -6,6 +6,7 @@ import (
 
 	"courses/internal/contracts/access/accesstest"
 	coursedomain "courses/internal/course/domain"
+	discussiondomain "courses/internal/discussion/domain"
 	playbackdomain "courses/internal/playback/domain"
 	transcriptdomain "courses/internal/transcript/domain"
 )
@@ -49,9 +50,14 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 				Status:  transcriptdomain.Status(test.Status),
 			}.CanBeViewedBy(transcriptdomain.Actor{UserID: actor, Administrator: administrator})
 
-			if viaCourse != test.Want || viaPlayback != test.Want || viaTranscript != test.Want {
-				t.Fatalf("course=%v playback=%v transcript=%v want=%v: the copies of the access rule disagree, or one of them changed alone",
-					viaCourse, viaPlayback, viaTranscript, test.Want)
+			viaDiscussion := discussiondomain.Course{
+				OwnerID: owner,
+				Status:  discussiondomain.Status(test.Status),
+			}.CanBeViewedBy(discussiondomain.Actor{UserID: actor, Administrator: administrator})
+
+			if viaCourse != test.Want || viaPlayback != test.Want || viaTranscript != test.Want || viaDiscussion != test.Want {
+				t.Fatalf("course=%v playback=%v transcript=%v discussion=%v want=%v: the copies of the access rule disagree, or one of them changed alone",
+					viaCourse, viaPlayback, viaTranscript, viaDiscussion, test.Want)
 			}
 		})
 	}
@@ -94,6 +100,22 @@ func TestThePositionBoundAgreesAcrossModules(t *testing.T) {
 				playbackdomain.Progress{Present: true, PositionSeconds: 0, ClientSequence: 1},
 				update, test.duration, time.Now().UTC(),
 			)
+
+			positionMs := int64(test.position * 1000)
+			_, discussionErr := discussiondomain.NewComment(
+				discussiondomain.Comment{
+					LessonID: "lesson", AuthorID: "author", Body: "comment",
+					PositionMs: &positionMs,
+				}, nil, test.duration,
+			)
+			discussionAccepted := discussionErr == nil
+			if test.duration == nil {
+				if discussionAccepted {
+					t.Fatal("discussion accepted a position without a known duration")
+				}
+			} else if discussionAccepted != (viaCourse == test.position) {
+				t.Fatalf("discussion accepted=%v course read=%v: position bounds disagree", discussionAccepted, viaCourse)
+			}
 
 			if viaCourse != test.want || stored.PositionSeconds != test.want {
 				t.Fatalf("course read=%v playback write=%v want=%v: the two copies of the position bound disagree. B07 was this defect with the read side missing the bound entirely",

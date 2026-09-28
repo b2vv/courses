@@ -16,7 +16,7 @@ func TestEveryCanBeViewedByDelegatesToAccessCanView(t *testing.T) {
 
 	const accessImport = "courses/internal/contracts/access"
 	const methodName = "CanBeViewedBy"
-	const expectedMethods = 3
+	const expectedMethods = 4
 	root := filepath.Join("..", "..", "internal")
 	methods := 0
 
