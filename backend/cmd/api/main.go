@@ -11,6 +11,9 @@ import (
 	coursehttp "courses/internal/course/adapters/http"
 	coursepostgres "courses/internal/course/adapters/postgres"
 	courseapplication "courses/internal/course/application"
+	discussionhttp "courses/internal/discussion/adapters/http"
+	discussionpostgres "courses/internal/discussion/adapters/postgres"
+	discussionapplication "courses/internal/discussion/application"
 	passwords "courses/internal/identity/adapters/argon2id"
 	identityhttp "courses/internal/identity/adapters/http"
 	identitypostgres "courses/internal/identity/adapters/postgres"
@@ -62,6 +65,8 @@ func main() {
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)
+		discussionRepository := discussionpostgres.NewRepository(dependencies.Database)
+		discussionHandler := discussionhttp.NewHandler(discussionapplication.New(discussionRepository, time.Now))
 		transcriptRepository := transcriptpostgres.NewRepository(dependencies.Database)
 		transcriptAdminHandler := transcripthttp.NewAdminHandler(
 			transcriptapplication.NewAuthoring(transcriptRepository),
@@ -102,6 +107,7 @@ func main() {
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
+				discussionHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				transcriptAdminHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				draftHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

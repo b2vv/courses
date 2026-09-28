@@ -911,6 +911,112 @@ paths:
         '404': { $ref: '#/components/responses/LessonNotFound' }
         '409': { $ref: '#/components/responses/TranscriptConflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/lessons/{lessonId}/comments:
+    get:
+      operationId: listLessonComments
+      summary: List lesson discussion threads
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The lesson's discussion threads.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/LearningForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      operationId: publishLessonComment
+      summary: Publish a lesson comment or reply
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishCommentRequest' }
+      responses:
+        '201':
+          description: The comment was published.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/LearningForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/comments/{commentId}:
+    patch:
+      operationId: updateLessonComment
+      summary: Edit an authored lesson comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCommentRequest' }
+      responses:
+        '200':
+          description: The comment was updated.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      operationId: removeLessonComment
+      summary: Remove a lesson comment
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: The comment was removed, or was already removed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/playback/heartbeat:
     post:
       operationId: heartbeatPlayback
@@ -960,6 +1066,59 @@ components:
       required: true
       schema: { type: string }
   schemas:
+    PublishCommentRequest:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        positionMs: { type: integer, format: int64, minimum: 0, nullable: true }
+        parentId: { type: string, format: uuid, nullable: true }
+    UpdateCommentRequest:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+    CommentAuthor:
+      type: object
+      additionalProperties: false
+      required: [displayName]
+      properties:
+        displayName: { type: string, nullable: true }
+    Comment:
+      type: object
+      additionalProperties: false
+      required: [id, author, body, positionMs, createdAt, editedAt, removed, canEdit, canRemove]
+      properties:
+        id: { type: string, format: uuid }
+        author: { $ref: '#/components/schemas/CommentAuthor' }
+        body: { type: string, nullable: true }
+        positionMs: { type: integer, format: int64, minimum: 0, nullable: true }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+        removed: { type: boolean }
+        canEdit: { type: boolean }
+        canRemove: { type: boolean }
+    CommentThread:
+      type: object
+      additionalProperties: false
+      required: [root, replies]
+      properties:
+        root: { $ref: '#/components/schemas/Comment' }
+        replies:
+          type: array
+          items: { $ref: '#/components/schemas/Comment' }
+    CommentPage:
+      type: object
+      additionalProperties: false
+      required: [threads, nextCursor]
+      properties:
+        threads:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/CommentThread' }
+        nextCursor: { type: string }
     PlaybackSessionRequest:
       type: object
       additionalProperties: false
@@ -1490,7 +1649,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

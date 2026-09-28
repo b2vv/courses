@@ -25,6 +25,8 @@ import type {
   AdminWriteBadRequestResponse,
   AuthenticatedUser,
   BadRequestResponse,
+  Comment,
+  CommentPage,
   CourseDetail,
   CoursePage,
   CourseVideos,
@@ -42,6 +44,7 @@ import type {
   ListAdminCoursesParams,
   ListAdminUsersParams,
   ListCourseDocuments200,
+  ListLessonCommentsParams,
   ListPublishedCoursesParams,
   LoginRequest,
   MediaBadRequestResponse,
@@ -58,6 +61,7 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
+  PublishCommentRequest,
   PublishLessonDraft200,
   PublishLessonDraftRequest,
   RegenerateLessonDraftRequest,
@@ -67,6 +71,7 @@ import type {
   TranscriptDocumentLink,
   UnauthenticatedResponse,
   UnavailableResponse,
+  UpdateCommentRequest,
   UploadConflictResponse,
   UserNotFoundResponse,
   VideoNotFoundResponse,
@@ -2354,6 +2359,334 @@ const res = await fetch(getPublishLessonDraftUrl(lessonId),
 
   const data: publishLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as publishLessonDraftResponse
+}
+
+
+
+export type listLessonCommentsResponse200 = {
+  data: CommentPage
+  status: 200
+}
+
+export type listLessonCommentsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listLessonCommentsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listLessonCommentsResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type listLessonCommentsResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type listLessonCommentsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listLessonCommentsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listLessonCommentsResponseSuccess = (listLessonCommentsResponse200) & {
+  headers: Headers;
+};
+export type listLessonCommentsResponseError = (listLessonCommentsResponse400 | listLessonCommentsResponse401 | listLessonCommentsResponse403 | listLessonCommentsResponse404 | listLessonCommentsResponse500 | listLessonCommentsResponse503) & {
+  headers: Headers;
+};
+
+export type listLessonCommentsResponse = (listLessonCommentsResponseSuccess | listLessonCommentsResponseError)
+
+export const getListLessonCommentsUrl = (lessonId: string,
+    params?: ListLessonCommentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/comments?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/comments`
+}
+
+/**
+ * @summary List lesson discussion threads
+ */
+export const listLessonComments = async (lessonId: string,
+    params?: ListLessonCommentsParams, options?: RequestInit): Promise<listLessonCommentsResponse> => {
+
+  const res = await fetch(getListLessonCommentsUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLessonCommentsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listLessonCommentsResponse
+}
+
+
+
+export type publishLessonCommentResponse201 = {
+  data: Comment
+  status: 201
+}
+
+export type publishLessonCommentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type publishLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type publishLessonCommentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type publishLessonCommentResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type publishLessonCommentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type publishLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type publishLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type publishLessonCommentResponseSuccess = (publishLessonCommentResponse201) & {
+  headers: Headers;
+};
+export type publishLessonCommentResponseError = (publishLessonCommentResponse400 | publishLessonCommentResponse401 | publishLessonCommentResponse403 | publishLessonCommentResponse404 | publishLessonCommentResponse409 | publishLessonCommentResponse500 | publishLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type publishLessonCommentResponse = (publishLessonCommentResponseSuccess | publishLessonCommentResponseError)
+
+export const getPublishLessonCommentUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/comments`
+}
+
+/**
+ * @summary Publish a lesson comment or reply
+ */
+export const publishLessonComment = async (lessonId: string,
+    publishCommentRequest: PublishCommentRequest, options?: RequestInit): Promise<publishLessonCommentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPublishLessonCommentUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishCommentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: publishLessonCommentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as publishLessonCommentResponse
+}
+
+
+
+export type updateLessonCommentResponse200 = {
+  data: Comment
+  status: 200
+}
+
+export type updateLessonCommentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type updateLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type updateLessonCommentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type updateLessonCommentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type updateLessonCommentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type updateLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type updateLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type updateLessonCommentResponseSuccess = (updateLessonCommentResponse200) & {
+  headers: Headers;
+};
+export type updateLessonCommentResponseError = (updateLessonCommentResponse400 | updateLessonCommentResponse401 | updateLessonCommentResponse403 | updateLessonCommentResponse404 | updateLessonCommentResponse409 | updateLessonCommentResponse500 | updateLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type updateLessonCommentResponse = (updateLessonCommentResponseSuccess | updateLessonCommentResponseError)
+
+export const getUpdateLessonCommentUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
+}
+
+/**
+ * @summary Edit an authored lesson comment
+ */
+export const updateLessonComment = async (commentId: string,
+    updateCommentRequest: UpdateCommentRequest, options?: RequestInit): Promise<updateLessonCommentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getUpdateLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateCommentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateLessonCommentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as updateLessonCommentResponse
+}
+
+
+
+export type removeLessonCommentResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type removeLessonCommentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type removeLessonCommentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type removeLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type removeLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type removeLessonCommentResponseSuccess = (removeLessonCommentResponse204) & {
+  headers: Headers;
+};
+export type removeLessonCommentResponseError = (removeLessonCommentResponse401 | removeLessonCommentResponse403 | removeLessonCommentResponse404 | removeLessonCommentResponse500 | removeLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type removeLessonCommentResponse = (removeLessonCommentResponseSuccess | removeLessonCommentResponseError)
+
+export const getRemoveLessonCommentUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
+}
+
+/**
+ * @summary Remove a lesson comment
+ */
+export const removeLessonComment = async (commentId: string, options?: RequestInit): Promise<removeLessonCommentResponse> => {
+
+  const res = await fetch(getRemoveLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeLessonCommentResponse
 }
 
 
