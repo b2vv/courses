@@ -92,6 +92,7 @@ function createTestRouter(
   adminOverrides: Partial<AdminCourseRepository> = {},
   adminUsers: readonly AdminUser[] = [],
   adminUserOverrides: Partial<AdminUserRepository> = {},
+  playbackOverrides: Partial<PlaybackRepository> = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -166,6 +167,7 @@ function createTestRouter(
     getCourse: async () => ({ ok: false, error: { code: 'course_not_found' } }),
     play: async () => ({ ok: false, error: { code: 'lesson_not_found' } }),
     heartbeat: async () => ({ ok: false, error: { code: 'playback_session_expired' } }),
+    ...playbackOverrides,
   };
   const router = createRouter({
     routeTree,
@@ -568,6 +570,34 @@ test('G06 applies the parent role matrix to signed-in nested addresses', async (
   await adminRouter.load();
   renderRouter(adminRouter);
   expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeTruthy();
+});
+
+test('R11 renders course access denial instead of a session failure', async () => {
+  const student = user('student');
+  answerWith(student);
+  const router = createTestRouter(
+    '/learn/foreign-draft',
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => ({ ok: false, error: { code: 'course_forbidden' } }),
+    },
+  );
+
+  await router.load();
+  renderRouter(router);
+
+  expect(screen.getByRole('heading', { name: 'Немає доступу до курсу' })).toBeTruthy();
+  expect(screen.getByText('Цей курс недоступний для вашого облікового запису.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Перейти до каталогу' }).getAttribute('href')).toBe(
+    '/courses',
+  );
+  expect(screen.queryByRole('link', { name: 'Спробувати ще раз' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Не вдалося перевірити сеанс' })).toBeNull();
 });
 
 test('G08 shows the route pending state while protected navigation revalidates', async () => {

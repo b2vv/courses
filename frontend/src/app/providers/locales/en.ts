@@ -60,6 +60,8 @@ export const en = {
     learn: {
       title: 'Your learning',
       empty: 'Courses will appear here when learning access opens.',
+      accessDenied: 'Course access unavailable',
+      accessDeniedHint: 'This course is not available to your account.',
       program: 'Course program',
       outline: 'Course contents',
       completed: 'Completed',

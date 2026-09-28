@@ -8,6 +8,7 @@ import { lessonInCourse } from '../domain/playback/playback';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
+import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';
 import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
 
@@ -40,6 +41,7 @@ export const Route = createFileRoute('/learn/$')({
     return { lessonRoute };
   },
   component: LessonRoute,
+  errorComponent: LearnRouteFailure,
 });
 
 function LessonRoute() {
