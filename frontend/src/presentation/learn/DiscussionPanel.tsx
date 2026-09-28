@@ -85,7 +85,11 @@ function CommentCard({
             <span>{t('learn.discussion.edited')}</span>
           )}
         </header>
-        {position === null || onSeek === undefined ? null : (
+        {position === null ? null : onSeek === undefined ? (
+          <time dateTime={`PT${position / 1000}S`} aria-label={timestamp(position)}>
+            {timestamp(position)}
+          </time>
+        ) : (
           <Button variant="secondary" onPress={() => onSeek(position)}>
             {timestamp(position)}
           </Button>

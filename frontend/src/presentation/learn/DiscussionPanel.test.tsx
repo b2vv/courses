@@ -29,7 +29,7 @@ if (rootComment === undefined) throw new Error('Discussion fixture is missing it
 
 type PanelProps = Parameters<typeof DiscussionPanel>[0];
 
-function renderPanel(overrides: Partial<PanelProps> = {}) {
+function renderPanel(overrides: Partial<PanelProps> = {}, withSeek = true) {
   return render(
     <I18nProvider instance={createI18n('en')}>
       <DiscussionPanel
@@ -37,7 +37,7 @@ function renderPanel(overrides: Partial<PanelProps> = {}) {
         isLoading={false}
         onRetry={() => undefined}
         positionMs={9_876}
-        onSeek={() => undefined}
+        {...(withSeek ? { onSeek: () => undefined } : {})}
         onPublish={async () => undefined}
         onUpdate={async () => undefined}
         onRemove={async () => undefined}
@@ -54,6 +54,14 @@ test('timestamp is a seek button and server capabilities control edit/remove act
   expect(seeks).toEqual([12_345]);
   expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+});
+
+test('timestamp stays readable text when seeking is unavailable', () => {
+  renderPanel({}, false);
+  const timestamp = screen.getByText('00:12');
+  expect(timestamp.tagName).toBe('TIME');
+  expect(timestamp.getAttribute('datetime')).toBe('PT12.345S');
+  expect(screen.queryByRole('button', { name: '00:12' })).toBeNull();
 });
 
 test('current moment button uses the player position', async () => {
