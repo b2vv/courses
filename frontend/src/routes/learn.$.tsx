@@ -1,5 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
@@ -8,9 +14,12 @@ import { lessonInCourse } from '../domain/playback/playback';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
+import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
 import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';
 import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
+import { DiscussionQueryError } from '../app/composition/discussion-queries';
+import type { DiscussionErrorCode, DiscussionPage } from '../domain/discussion/discussion';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
@@ -84,6 +93,29 @@ function LessonRoutePlayer({
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
   const { data: transcript } = useQuery(learn.lesson(lessonId));
+  const discussionQuery = useInfiniteQuery(learn.discussion.lesson(lessonId));
+  const [discussionMutationError, setDiscussionMutationError] = useState<DiscussionErrorCode>();
+  const publishDiscussion = useMutation(learn.discussion.publish(queryClient));
+  const updateDiscussion = useMutation(learn.discussion.update(queryClient));
+  const removeDiscussion = useMutation(learn.discussion.remove(queryClient));
+  const discussionPage = useMemo<DiscussionPage | undefined>(() => {
+    const pages = discussionQuery.data?.pages;
+    if (pages === undefined || pages.length === 0) return undefined;
+    return {
+      threads: pages.flatMap((page) => page.threads),
+      nextCursor: pages[pages.length - 1]?.nextCursor ?? null,
+    };
+  }, [discussionQuery.data]);
+  const runDiscussionMutation = useCallback(async (action: () => Promise<unknown>) => {
+    setDiscussionMutationError(undefined);
+    try {
+      await action();
+    } catch (error) {
+      setDiscussionMutationError(
+        error instanceof DiscussionQueryError ? error.code : 'dependency_unavailable',
+      );
+    }
+  }, []);
   const captions = useMemo(
     () =>
       transcript === undefined || transcript.segments.length === 0
@@ -103,6 +135,13 @@ function LessonRoutePlayer({
     },
     [],
   );
+  const discussionError =
+    discussionMutationError ??
+    (discussionQuery.error instanceof DiscussionQueryError
+      ? discussionQuery.error.code
+      : discussionQuery.error === null || discussionQuery.error === undefined
+        ? undefined
+        : 'dependency_unavailable');
   return (
     <CourseLearningView course={course} currentLessonId={lessonId}>
       <LessonPlayer
@@ -121,6 +160,29 @@ function LessonRoutePlayer({
           {...(channel.seek === null ? {} : { onSeek: channel.seek })}
         />
       )}
+      <DiscussionPanel
+        page={discussionPage}
+        {...(discussionError === undefined ? {} : { error: discussionError })}
+        isLoading={discussionQuery.isLoading}
+        isLoadingMore={discussionQuery.isFetchingNextPage}
+        onRetry={() => void discussionQuery.refetch()}
+        {...(discussionQuery.hasNextPage
+          ? { onLoadMore: () => void discussionQuery.fetchNextPage() }
+          : {})}
+        positionMs={channel.positionMs}
+        {...(channel.seek === null ? {} : { onSeek: channel.seek })}
+        onPublish={(input) =>
+          runDiscussionMutation(() => publishDiscussion.mutateAsync({ lessonId, input }))
+        }
+        onUpdate={(commentId, body) =>
+          runDiscussionMutation(() =>
+            updateDiscussion.mutateAsync({ lessonId, input: { commentId, body } }),
+          )
+        }
+        onRemove={(commentId) =>
+          runDiscussionMutation(() => removeDiscussion.mutateAsync({ lessonId, commentId }))
+        }
+      />
     </CourseLearningView>
   );
 }

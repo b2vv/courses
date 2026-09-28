@@ -225,6 +225,12 @@ func TestK12PatchComments(t *testing.T) {
 		{"200 author", discussionComment, actor(discussionAuthor, "student"), nil, http.StatusOK, ""},
 		{"403 other", discussionComment, actor(discussionViewer, "student"), nil, http.StatusForbidden, "comment_forbidden"},
 		{"404 unknown", "70000000-0000-4000-8000-0000000000cc", actor(discussionAuthor, "student"), nil, http.StatusNotFound, "comment_not_found"},
+		{"403 other on removed", discussionComment, actor(discussionViewer, "student"), func(fake *fakeRepository) {
+			now := time.Now()
+			record := fake.comments[discussionComment]
+			record.Comment.RemovedAt = &now
+			fake.comments[discussionComment] = record
+		}, http.StatusForbidden, "comment_forbidden"},
 		{"409 removed", discussionComment, actor(discussionAuthor, "student"), func(fake *fakeRepository) {
 			now := time.Now()
 			record := fake.comments[discussionComment]

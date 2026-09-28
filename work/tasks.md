@@ -222,6 +222,6 @@ Compose і фікстур, тобто не може бігти раніше за
 | D01 | Домен `discussion` + `expectedMethods` 3→4 + `viaDiscussion` і гілка межі мітки в крос-тестах | 2h | — | done | `2b8c72e`; K01–K06, K05a; make check exit 0, e2e 75/75 |
 | D02 | Міграція `00009` + postgres-адаптер, атомарний cap, гейт-тест селектора, борг селектора в беклог | 3h | D01 | done | K07–K09a; make check exit 0, e2e 75/75; міграція 9 на стенді |
 | D03 | Application + HTTP + OpenAPI/Orval + підключення в `cmd/api` | 2h | D02 | done | K10–K15; 33 contract-підтести, assertContract на кожній відповіді; make check exit 0, e2e 75/75 |
-| D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | planned | K16–K18 |
+| D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | done | K16–K18; 3 дефекти продукту знайдено й закрито в слайсі; make check exit 0, e2e 75/75 (B39 → B-23) |
 | D05 | e2e: мітка й перемотка, відповідь, модерація, відмова, a11y | 2h | D04 | planned | K19–K23 |
 | D06 | Упорядкований `make check`, звіт K01–K23 по одному | 1h | D01–D05 | planned | — |

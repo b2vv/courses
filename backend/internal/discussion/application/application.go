@@ -136,11 +136,11 @@ func (service *Service) Update(ctx context.Context, actor Actor, commentID, body
 	if err != nil {
 		return Comment{}, err
 	}
-	if record.Comment.RemovedAt != nil {
-		return Comment{}, ErrCommentRemoved
-	}
 	if !record.Comment.CanBeEditedBy(actor) {
 		return Comment{}, ErrCommentForbidden
+	}
+	if record.Comment.RemovedAt != nil {
+		return Comment{}, ErrCommentRemoved
 	}
 	validated, err := domain.NewComment(domain.Comment{LessonID: record.Comment.LessonID, Body: body}, nil, nil)
 	if err != nil {

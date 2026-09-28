@@ -2463,7 +2463,7 @@ export type publishLessonCommentResponse401 = {
 }
 
 export type publishLessonCommentResponse403 = {
-  data: LearningForbiddenResponse
+  data: PlaybackForbiddenResponse
   status: 403
 }
 

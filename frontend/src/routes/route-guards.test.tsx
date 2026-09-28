@@ -21,7 +21,12 @@ import { createLearnQueries } from '../app/composition/learn-queries';
 import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
+import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
+import type { DiscussionRepository } from '../ports/DiscussionRepository';
+import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
+import type { LessonTranscript } from '../domain/transcript/transcript';
+import type { LearningCourse } from '../domain/playback/playback';
 
 // Route guards never touch transcripts; a proxy keeps this stub from drifting every time the port
 // grows a method.
@@ -29,6 +34,13 @@ const transcriptStub = new Proxy({} as TranscriptRepository, {
   get() {
     return () => {
       throw new Error('Transcripts are not used by route guard tests');
+    };
+  },
+});
+const discussionStub = new Proxy({} as DiscussionRepository, {
+  get() {
+    return () => {
+      throw new Error('Discussion is not used by route guard tests');
     };
   },
 });
@@ -93,6 +105,9 @@ function createTestRouter(
   adminUsers: readonly AdminUser[] = [],
   adminUserOverrides: Partial<AdminUserRepository> = {},
   playbackOverrides: Partial<PlaybackRepository> = {},
+  transcriptRepository: TranscriptRepository = transcriptStub,
+  discussionRepository: DiscussionRepository = discussionStub,
+  createMediaOverride?: CreatePlaybackMedia,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -203,11 +218,18 @@ function createTestRouter(
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
       learn: {
         ...createLearnQueries(playbackRepository),
-        ...createTranscriptQueries(transcriptStub),
+        ...createTranscriptQueries(transcriptRepository),
+        discussion: createDiscussionQueries(discussionRepository),
         primeAv1Probe: () => undefined,
-        createMedia: () => {
-          throw new Error('Playback media is not used by route guard tests');
-        },
+        createMedia:
+          createMediaOverride ??
+          ((_video, _callbacks) => ({
+            kind: 'native',
+            load: () => undefined,
+            stopLoad: () => undefined,
+            selectLevel: () => undefined,
+            destroy: () => undefined,
+          })),
       },
     },
     defaultPendingMs: 0,
@@ -598,6 +620,87 @@ test('R11 renders course access denial instead of a session failure', async () =
   );
   expect(screen.queryByRole('link', { name: 'Спробувати ще раз' })).toBeNull();
   expect(screen.queryByRole('heading', { name: 'Не вдалося перевірити сеанс' })).toBeNull();
+});
+
+test('K18 keeps the lesson usable when discussion loading fails', async () => {
+  const student = user('student');
+  const lessonId = '30000000-0000-4000-8000-000000000001';
+  const course: LearningCourse = {
+    id: '10000000-0000-4000-8000-000000000001',
+    slug: 'go',
+    title: 'Go basics',
+    summary: 'Practice',
+    description: 'Learn Go.',
+    status: 'published',
+    continueLessonId: lessonId,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-000000000001',
+        title: 'Basics',
+        lessons: [
+          {
+            id: lessonId,
+            title: 'Ownership',
+            videoState: 'ready',
+            position: 0,
+            completed: false,
+            clientSeq: 0,
+          },
+        ],
+      },
+    ],
+  };
+  const transcript: LessonTranscript = {
+    lessonId,
+    language: 'en',
+    updatedAt: '2026-09-28T10:00:00Z',
+    stale: false,
+    segments: [
+      {
+        id: '70000000-0000-4000-8000-000000000001',
+        startMs: 0,
+        endMs: 1_000,
+        text: 'The first line',
+        documentIds: [],
+      },
+    ],
+    documents: [],
+  };
+  const transcriptRepository: TranscriptRepository = {
+    getLessonTranscript: async () => ({ ok: true, value: transcript }),
+    saveLessonTranscript: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    listCourseDocuments: async () => ({ ok: true, value: [] }),
+    addCourseDocument: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    removeCourseDocument: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  };
+  const discussionRepository: DiscussionRepository = {
+    list: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    publish: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    update: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    remove: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  };
+  answerWith(student);
+  const router = createTestRouter(
+    `/learn/${course.slug}/${lessonId}`,
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    { getCourse: async () => ({ ok: true, value: course }) },
+    transcriptRepository,
+    discussionRepository,
+  );
+
+  await router.load();
+  renderRouter(router);
+
+  expect(await screen.findByRole('heading', { name: 'Ownership' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Transcript' })).toBeTruthy();
+  const panel = screen.getByRole('region', { name: 'Discussion' });
+  expect(await within(panel).findByText('The service is unavailable. Try again.')).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: 'Could not verify your session' })).toBeNull();
 });
 
 test('G08 shows the route pending state while protected navigation revalidates', async () => {

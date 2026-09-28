@@ -703,6 +703,78 @@ nav a {
 .course-learning-player {
   min-inline-size: 0;
 }
+.discussion-panel {
+  display: grid;
+  gap: var(--space-4);
+  margin-block-start: var(--space-8);
+  padding-block-start: var(--space-6);
+  border-block-start: 1px solid var(--color-border);
+}
+.discussion-panel h2,
+.discussion-panel p {
+  margin: 0;
+}
+.discussion-threads,
+.discussion-replies {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.discussion-replies {
+  margin-block-start: var(--space-4);
+  padding-inline-start: var(--space-6);
+}
+.discussion-comment {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+.discussion-comment-header,
+.discussion-actions,
+.discussion-compose,
+.discussion-edit-form,
+.discussion-reply-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.discussion-comment-header {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+.discussion-comment-header strong {
+  color: var(--color-text);
+}
+.discussion-body-removed {
+  color: var(--color-muted);
+  font-style: italic;
+}
+.discussion-timestamp {
+  inline-size: fit-content;
+  min-block-size: var(--control-min-size);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+  color: var(--color-primary);
+  font: 0.8rem var(--font-utility);
+}
+.discussion-compose {
+  align-items: end;
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+.discussion-compose .ui-field,
+.discussion-edit-form .ui-field,
+.discussion-reply-form .ui-field {
+  flex: 1 1 18rem;
+}
 .course-outline {
   border-block-start: 3px solid var(--color-primary);
   background: var(--color-surface);
