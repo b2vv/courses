@@ -815,6 +815,102 @@ paths:
         '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{lessonId}/draft:
+    get:
+      operationId: getLessonDraft
+      summary: Get a lesson recognition draft
+      description: >-
+        Returns the machine-produced draft for an editable lesson. A lesson without a draft is
+        still a successful read: state, language, failure, updatedAt, assetId and generation are
+        null and segments is empty. Responses are never cached.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The lesson draft, or the empty draft state.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LessonDraft' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{lessonId}/draft/regenerate:
+    post:
+      operationId: regenerateLessonDraft
+      summary: Queue lesson speech recognition
+      description: >-
+        Authenticated same-origin mutation for the course owner or an admin. An omitted language
+        asks the recognizer to detect it. The body is optional, accepts no unknown members and is
+        limited to 1 KiB. Responses are never cached.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegenerateLessonDraftRequest' }
+      responses:
+        '202':
+          description: Recognition was queued.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '409': { $ref: '#/components/responses/DraftConflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{lessonId}/draft/publish:
+    post:
+      operationId: publishLessonDraft
+      summary: Publish a lesson recognition draft
+      description: >-
+        Authenticated same-origin mutation for the course owner or an admin. It publishes through
+        the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token.
+        The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are
+        never cached.
+      parameters:
+        - name: lessonId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishLessonDraftRequest' }
+      responses:
+        '200':
+          description: The draft was published as the lesson transcript.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [updatedAt]
+                properties:
+                  updatedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminMutationForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/playback/heartbeat:
     post:
       operationId: heartbeatPlayback
@@ -922,6 +1018,67 @@ components:
                 type: array
                 maxItems: 3
                 items: { type: string, format: uuid }
+    RegenerateLessonDraftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        language:
+          type: string
+          minLength: 2
+          maxLength: 35
+          pattern: '^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$'
+    PublishLessonDraftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedUpdatedAt: { type: string, format: date-time }
+    LessonDraft:
+      type: object
+      additionalProperties: false
+      required: [lessonId, state, language, failure, stale, updatedAt, assetId, generation, segments]
+      properties:
+        lessonId: { type: string, format: uuid }
+        state:
+          type: string
+          nullable: true
+          enum: [queued, running, ready, failed, no_speech]
+          description: Null when recognition has not created a draft row yet.
+        language:
+          type: string
+          nullable: true
+          minLength: 2
+          maxLength: 35
+          pattern: '^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$'
+        failure:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+        stale:
+          type: boolean
+          description: True when the draft was made from a previous ready video generation.
+        updatedAt: { type: string, format: date-time, nullable: true }
+        assetId: { type: string, format: uuid, nullable: true }
+        generation: { type: integer, format: int32, minimum: 1, nullable: true }
+        segments:
+          type: array
+          maxItems: 5000
+          items: { $ref: '#/components/schemas/DraftSegment' }
+    DraftSegment:
+      type: object
+      additionalProperties: false
+      required: [id, startMs, endMs, text]
+      properties:
+        id: { type: string, format: uuid }
+        startMs: { type: integer, format: int64, minimum: 0 }
+        endMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Must be greater than or equal to startMs.
+        text: { type: string, minLength: 1, maxLength: 1000 }
+        speaker: { type: string, minLength: 1, maxLength: 100 }
+        confidence: { type: number, format: double, minimum: 0, maximum: 1 }
     LessonTranscript:
       type: object
       additionalProperties: false
@@ -1333,7 +1490,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
@@ -1405,6 +1562,14 @@ components:
       description: >-
         The transcript changed under the author, or a second writer reached the same empty lesson
         first. Named so the editor can say which of the two happened.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    DraftConflict:
+      description: Recognition is already running for the lesson's current video asset.
       headers:
         X-Request-ID: { $ref: '#/components/headers/RequestID' }
         Cache-Control: { $ref: '#/components/headers/NoStore' }

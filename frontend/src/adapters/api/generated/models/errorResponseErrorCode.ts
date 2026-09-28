@@ -36,6 +36,7 @@ export const ErrorResponseErrorCode = {
   transcript_document_limit: 'transcript_document_limit',
   transcript_modified: 'transcript_modified',
   transcript_exists: 'transcript_exists',
+  already_running: 'already_running',
   cannot_target_self: 'cannot_target_self',
   admin_immutable: 'admin_immutable',
   last_admin: 'last_admin',

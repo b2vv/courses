@@ -28,6 +28,7 @@ import type {
   CourseDetail,
   CoursePage,
   CourseVideos,
+  DraftConflictResponse,
   ForbiddenResponse,
   GetLessonTranscriptParams,
   Instructor,
@@ -35,6 +36,7 @@ import type {
   InvalidRequestResponse,
   LearningCourse,
   LearningForbiddenResponse,
+  LessonDraft,
   LessonNotFoundResponse,
   LessonTranscript,
   ListAdminCoursesParams,
@@ -56,6 +58,9 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
+  PublishLessonDraft200,
+  PublishLessonDraftRequest,
+  RegenerateLessonDraftRequest,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TranscriptConflictResponse,
@@ -2112,6 +2117,243 @@ const res = await fetch(getSaveLessonTranscriptUrl(lessonId),
 
   const data: saveLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as saveLessonTranscriptResponse
+}
+
+
+
+export type getLessonDraftResponse200 = {
+  data: LessonDraft
+  status: 200
+}
+
+export type getLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLessonDraftResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type getLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLessonDraftResponseSuccess = (getLessonDraftResponse200) & {
+  headers: Headers;
+};
+export type getLessonDraftResponseError = (getLessonDraftResponse400 | getLessonDraftResponse401 | getLessonDraftResponse403 | getLessonDraftResponse404 | getLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type getLessonDraftResponse = (getLessonDraftResponseSuccess | getLessonDraftResponseError)
+
+export const getGetLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft`
+}
+
+/**
+ * Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached.
+ * @summary Get a lesson recognition draft
+ */
+export const getLessonDraft = async (lessonId: string, options?: RequestInit): Promise<getLessonDraftResponse> => {
+
+  const res = await fetch(getGetLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLessonDraftResponse
+}
+
+
+
+export type regenerateLessonDraftResponse202 = {
+  data: void
+  status: 202
+}
+
+export type regenerateLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type regenerateLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type regenerateLessonDraftResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type regenerateLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type regenerateLessonDraftResponse409 = {
+  data: DraftConflictResponse
+  status: 409
+}
+
+export type regenerateLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type regenerateLessonDraftResponseSuccess = (regenerateLessonDraftResponse202) & {
+  headers: Headers;
+};
+export type regenerateLessonDraftResponseError = (regenerateLessonDraftResponse400 | regenerateLessonDraftResponse401 | regenerateLessonDraftResponse403 | regenerateLessonDraftResponse404 | regenerateLessonDraftResponse409 | regenerateLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type regenerateLessonDraftResponse = (regenerateLessonDraftResponseSuccess | regenerateLessonDraftResponseError)
+
+export const getRegenerateLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/regenerate`
+}
+
+/**
+ * Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+ * @summary Queue lesson speech recognition
+ */
+export const regenerateLessonDraft = async (lessonId: string,
+    regenerateLessonDraftRequest?: RegenerateLessonDraftRequest, options?: RequestInit): Promise<regenerateLessonDraftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegenerateLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(regenerateLessonDraftRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateLessonDraftResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as regenerateLessonDraftResponse
+}
+
+
+
+export type publishLessonDraftResponse200 = {
+  data: PublishLessonDraft200
+  status: 200
+}
+
+export type publishLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type publishLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type publishLessonDraftResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type publishLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type publishLessonDraftResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type publishLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type publishLessonDraftResponseSuccess = (publishLessonDraftResponse200) & {
+  headers: Headers;
+};
+export type publishLessonDraftResponseError = (publishLessonDraftResponse400 | publishLessonDraftResponse401 | publishLessonDraftResponse403 | publishLessonDraftResponse404 | publishLessonDraftResponse409 | publishLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type publishLessonDraftResponse = (publishLessonDraftResponseSuccess | publishLessonDraftResponseError)
+
+export const getPublishLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/publish`
+}
+
+/**
+ * Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+ * @summary Publish a lesson recognition draft
+ */
+export const publishLessonDraft = async (lessonId: string,
+    publishLessonDraftRequest?: PublishLessonDraftRequest, options?: RequestInit): Promise<publishLessonDraftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPublishLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishLessonDraftRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: publishLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as publishLessonDraftResponse
 }
 
 
