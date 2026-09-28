@@ -210,3 +210,18 @@ Compose і фікстур, тобто не може бігти раніше за
 | P04 | Чотири точки — один сценарій відмови | 1.5h | P02 | done | `090b912`; R09: 4 контракт-тести RUN+PASS; рецензент перевірив прод-шлях |
 | P05 | Фронтенд: «немає доступу» як названий стан + e2e | 1.5h | — | done | `17a5d85`; R11: route-guards R11+G09 + e2e learn-access; прод-ребілд + ширший e2e 71 passed |
 | P06 | Шви, R12, гейт, звіт | 1h | P01–P05 | done | R12: grep §4 чисто + architecture-рядок «фікстура не в проді»; звіт `docs/readiness/report.md` R01–R12 по одному; упорядкований `make check` |
+
+## Phase 7b — гілки бесід
+
+Джерело scope: [spec](../docs/discussion/spec.md), [plan](../docs/discussion/plan.md); §24 п.4 з
+поправкою 2026-09-28. Оплата лишається останньою (§24 п.21). Ролі: Courses — план, брифи, гейти,
+коміти; код — Codex; рев'ю — Courses 2.
+
+| ID | Назва | Est | Depends | Status | Result |
+|---|---|---:|---|---|---|
+| D01 | Домен `discussion` + `expectedMethods` 3→4 + `viaDiscussion` і гілка межі мітки в крос-тестах | 2h | — | planned | K01–K06, K05a |
+| D02 | Міграція `00009` + postgres-адаптер, атомарний cap, гейт-тест селектора, борг селектора в беклог | 3h | D01 | planned | K07–K09a |
+| D03 | Application + HTTP + OpenAPI/Orval + підключення в `cmd/api` | 2h | D02 | planned | K10–K15 |
+| D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | planned | K16–K18 |
+| D05 | e2e: мітка й перемотка, відповідь, модерація, відмова, a11y | 2h | D04 | planned | K19–K23 |
+| D06 | Упорядкований `make check`, звіт K01–K23 по одному | 1h | D01–D05 | planned | — |

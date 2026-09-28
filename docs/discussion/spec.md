@@ -7,7 +7,7 @@
 | Автор | сесія Courses; рецензент — Courses 2 |
 | Підстава | `work/PRODUCT-BRIEF.md` §24 п.4; розріз `7a`/`7b` — рішення Q0 замовника 2026-09-17 (`docs/transcript/spec.md` §4-5); рішення Q1–Q4 замовника 2026-09-28 (§5 нижче) |
 | Порядок | Оплата лишається останньою (§24 п.21); між 7b і нею — робоче місце інструктора (§24 п.3) |
-| Стан | GATE 1 пройдено 2026-09-28 (Courses 2); одне обов'язкове доповнення внесено — `shared_rules_test` у D7 і K05a; три нотатки для плану — §8 |
+| Стан | GATE 1 і GATE 2 пройдено 2026-09-28 (Courses 2). GATE 1: `shared_rules_test` у D7 і K05a. GATE 2 (план): cap атомарний і без прибраних, keyset-індекси в K08, селектор під гейтом — K09a |
 
 ## 1. Навіщо ця фаза
 
@@ -62,7 +62,7 @@
 | Дія | Хто | Відмова |
 |---|---|---|
 | Читати гілки уроку | `CanView` (Q3) | анонім → 401 `authentication_required`; без права → 403 `course_forbidden` (та сама відмова, що в транскрипті, ADR 010); невідомий урок → 404 `lesson_not_found` |
-| Опублікувати корінь / відповідь | `CanView` | 400 `comment_body_invalid` / `comment_position_invalid` / `comment_parent_invalid`; 403 `origin_forbidden` / `course_forbidden` |
+| Опублікувати корінь / відповідь | `CanView` | 400 `comment_body_invalid` / `comment_position_invalid` / `comment_parent_invalid`; 403 `origin_forbidden` / `course_forbidden`; 409 `comment_thread_full` — понад 200 не прибраних відповідей на корінь, перевірка атомарна (план X4) |
 | Змінити | лише автор | 403 `comment_forbidden`; 404 `comment_not_found`; 409 `comment_removed` |
 | Прибрати | автор ∨ адмін ∨ власник курсу (Q4) | 403 `comment_forbidden`; 404 `comment_not_found`; повторне прибирання — 204 (ідемпотентно) |
 
@@ -139,14 +139,15 @@ Real-time (WebSocket/SSE/polling); сповіщення; реакції й ла�
 |---|---|---|
 | **K01** | Тіло: trim, 1..2000 символів; порожнє й задовге відмовлено `comment_body_invalid` | unit |
 | **K02** | Мітка: лише в кореня; без `ready`-ассета або поза `0..тривалість` — `comment_position_invalid` | unit |
-| **K03** | Відповідь лише до наявного, не прибраного кореня того ж уроку; інакше `comment_parent_invalid` | unit |
+| **K03** | Відповідь лише до наявного, не прибраного кореня того ж уроку; інакше `comment_parent_invalid`; 201-ша відповідь — `comment_thread_full` | unit |
 | **K04** | `Course.CanBeViewedBy` дає вердикт `access.CanView` на всій таблиці `accesstest` | unit |
 | **K05** | AST: рівно **4** методи `CanBeViewedBy`, кожен — один `return access.CanView(…)` | unit (architecture) |
 | **K05a** | `TestTheAccessPredicateAgreesAcrossModules` має гілку `viaDiscussion`: чотири мапінги згодні на всій таблиці | unit (architecture) |
 | **K06** | Прибрати: автор ∨ адмін ∨ власник курсу; змінити — лише автор; сторонній — ні | unit |
 | **K07** | Таблиця `accesstest` через SQL адаптера `discussion` (факти курсу за `lessonId`) | integration |
-| **K08** | Міграція `00009`: FK, `ON DELETE CASCADE` з уроку, обмеження колонок | integration |
+| **K08** | Міграція `00009`: FK, `ON DELETE CASCADE` з уроку, обмеження колонок; keyset-індекси `(lesson_id, created_at DESC, id DESC)` для коренів і `(parent_id, created_at, id)` для відповідей | integration |
 | **K09** | Список: корені по 50 курсором, найновіші першими; відповіді всі, найстаріші першими; прибраний корінь без відповідей зникає, з відповідями — заглушка без тексту | integration |
+| **K09a** | Селектор «поточне відео» — фільтрована форма: ready покоління N витіснений, N+1 у `processing` → не вибрано нічого; асерт самого вибраного ассета, не лише прийняття мітки. Дві одночасні відповіді на 199 — рівно одна проходить | integration |
 | **K10** | `GET`: 200 форма; 401 анонім; 403 `course_forbidden` на чужій чернетці; 404 `lesson_not_found` | contract |
 | **K11** | `POST`: 201; 400 три коди валідації; 403 `origin_forbidden` і `course_forbidden` | contract |
 | **K12** | `PATCH`: лише автор; 403 `comment_forbidden`; 409 `comment_removed`; ставить `editedAt` | contract |
@@ -167,8 +168,9 @@ Real-time (WebSocket/SSE/polling); сповіщення; реакції й ла�
 1. **Флуд.** Єдиний запобіжник — `zone=api` 10 r/s, burst 20, **за IP** (`nginx.conf:21,117`).
    Кілька акаунтів з одного NAT або один повільний спамер під лімітом пройдуть. Per-user ліміт і
    модерація масштабу — робоче місце інструктора.
-2. **Корінь із дуже багатьма відповідями** віддається повністю. ⚠️ неперевірено: верхньої межі
-   не заміряно; якщо зростатиме — пагінація відповідей стає окремою задачею.
+2. **Корінь із дуже багатьма відповідями** віддається повністю — обмежено cap 200 відповідей на
+   корінь (план X4: ≈ 400K символів тіла в одній відповіді `GET` у найгіршому разі). Пагінація
+   відповідей лишається поза фазою.
 3. **Відео уроку замінили** — старі мітки можуть вийти за нову тривалість. Мітка лишається,
    перемотка обмежується плеєром (`seekTo` clamp, `LessonPlayer.tsx:405`); окремої позначки
    «застаріло» немає.
