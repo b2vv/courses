@@ -12,8 +12,11 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	playbackhttp "courses/internal/playback/adapters/http"
+	playbackapp "courses/internal/playback/application"
 	"courses/internal/playback/domain"
 	"courses/platform/httpserver"
 	"courses/platform/observability"
@@ -28,6 +31,7 @@ const (
 	playbackID = "11111111111111111111111111111111"
 	videoID    = "50000000-0000-4000-8000-000000000001"
 	lessonID   = "70000000-0000-4000-8000-000000000001"
+	r09OwnerID = "40000000-0000-4000-8000-000000000002"
 )
 
 type authorizer struct {
@@ -48,6 +52,40 @@ type sessions struct {
 	lessonID       string
 	playbackID     string
 	update         domain.ProgressUpdate
+}
+
+type r09PlaybackReader struct{ playback domain.LessonPlayback }
+
+func (reader *r09PlaybackReader) LoadLessonPlayback(context.Context, string, string) (domain.LessonPlayback, error) {
+	return reader.playback, nil
+}
+
+type r09OwnershipWriter struct{}
+
+func (*r09OwnershipWriter) Take(context.Context, string, domain.Ownership, time.Duration) error {
+	return nil
+}
+
+func (*r09OwnershipWriter) Renew(context.Context, string, string, time.Duration) (domain.OwnershipRenewal, error) {
+	return domain.OwnershipRenewed, nil
+}
+
+type r09ProgressWriter struct{}
+
+func (*r09ProgressWriter) Save(context.Context, string, string, domain.ProgressUpdate, time.Time) error {
+	return nil
+}
+
+type r09OwnershipReader struct{}
+
+func (*r09OwnershipReader) Load(context.Context, string) (domain.Ownership, error) {
+	return domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}, nil
+}
+
+type r09VideoAccessReader struct{ course domain.VideoCourse }
+
+func (reader *r09VideoAccessReader) LoadVideoCourse(context.Context, string) (domain.VideoCourse, error) {
+	return reader.course, nil
 }
 
 func (service *sessions) Play(_ context.Context, actor domain.Actor, lessonID, playbackID string) (domain.LessonPlayback, error) {
@@ -166,6 +204,91 @@ func TestAuthorizeReturnsNoContentForAnAllowedMediaRequest(t *testing.T) {
 	if service.actor != (domain.Actor{UserID: "40000000-0000-4000-8000-000000000001"}) || service.playbackID != "11111111111111111111111111111111" || service.videoID != "50000000-0000-4000-8000-000000000001" {
 		t.Fatalf("actor=%+v playback=%q video=%q", service.actor, service.playbackID, service.videoID)
 	}
+}
+
+func TestR09PlaybackSessionForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+	for _, test := range []accesstest.Case{
+		playbackAccessCase(t, accesstest.Stranger, "draft"),
+		playbackAccessCase(t, accesstest.Stranger, "published"),
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			service := playbackapp.NewSessions(
+				&r09PlaybackReader{playback: domain.LessonPlayback{
+					VideoID: videoID,
+					Course:  domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)},
+				}},
+				&r09OwnershipWriter{}, &r09ProgressWriter{}, time.Minute, time.Now,
+			)
+			adapter := playbackhttp.NewHandler(&authorizer{}, service, testConfig(t), ignoreAV1Probe)
+			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+				adapter.Register(mux, authenticated(playbackAccessActor(test)), passThrough)
+			}})
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/playback/sessions", strings.NewReader(`{"lessonId":"`+lessonID+`"}`))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if test.Want {
+				if response.Code != http.StatusCreated {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+			} else if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"playback_forbidden"`) {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestR09PlaybackAuthorizeForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+	for _, test := range []accesstest.Case{
+		playbackAccessCase(t, accesstest.Stranger, "draft"),
+		playbackAccessCase(t, accesstest.Stranger, "published"),
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			service := playbackapp.NewAuthorizer(&r09OwnershipReader{}, &r09VideoAccessReader{
+				course: domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)},
+			})
+			adapter := playbackhttp.NewHandler(service, nil, testConfig(t), ignoreAV1Probe)
+			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+				adapter.Register(mux, authenticated(playbackAccessActor(test)), passThrough)
+			}})
+			request := httptest.NewRequest(http.MethodGet, "/internal/playback/authorize", nil)
+			request.Header.Set("X-Playback-Id", playbackID)
+			request.Header.Set("X-Video-Id", videoID)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			wantStatus := http.StatusForbidden
+			if test.Want {
+				wantStatus = http.StatusNoContent
+			}
+			if response.Code != wantStatus {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, wantStatus, response.Body.String())
+			}
+		})
+	}
+}
+
+func playbackAccessCase(t *testing.T, role accesstest.Role, status string) accesstest.Case {
+	t.Helper()
+	for _, test := range accesstest.TruthTable {
+		if test.Role == role && test.Status == status {
+			return test
+		}
+	}
+	t.Fatalf("missing access truth-table row role=%q status=%q", role, status)
+	return accesstest.Case{}
+}
+
+func playbackAccessActor(test accesstest.Case) httpserver.Actor {
+	actor := httpserver.Actor{UserID: userID, Role: "student"}
+	switch test.Role {
+	case accesstest.Owner:
+		actor.UserID, actor.Role = r09OwnerID, "instructor"
+	case accesstest.Administrator:
+		actor.Role = "admin"
+	}
+	return actor
 }
 
 func TestPlayMintsServerSelectedSession(t *testing.T) {

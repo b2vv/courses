@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access/accesstest"
 	coursehttp "courses/internal/course/adapters/http"
 	"courses/internal/course/application"
 	"courses/internal/course/domain"
@@ -108,6 +109,61 @@ func TestLearningHTTPBoundariesAndDenials(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestR09LearningForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+	for _, test := range []accesstest.Case{
+		accessCase(t, accesstest.Stranger, "draft"),
+		accessCase(t, accesstest.Stranger, "published"),
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			repository := &learningReadRepository{course: learningHTTPAccessFixture(test)}
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/learn/courses/learning-course", nil)
+			response := httptest.NewRecorder()
+			learningHTTPHandler(repository, learningAuthenticated(learningHTTPActor(test))).ServeHTTP(response, request)
+
+			if test.Want {
+				if response.Code != http.StatusOK {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+			} else {
+				if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"course_forbidden"`) {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+			}
+			assertLearningHTTPContract(t, request, response, true)
+		})
+	}
+}
+
+func accessCase(t *testing.T, role accesstest.Role, status string) accesstest.Case {
+	t.Helper()
+	for _, test := range accesstest.TruthTable {
+		if test.Role == role && test.Status == status {
+			return test
+		}
+	}
+	t.Fatalf("missing access truth-table row role=%q status=%q", role, status)
+	return accesstest.Case{}
+}
+
+func learningHTTPActor(test accesstest.Case) httpserver.Actor {
+	actor := httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}
+	switch test.Role {
+	case accesstest.Owner:
+		actor.UserID, actor.Role = learningHTTPOwnerID, "instructor"
+	case accesstest.Administrator:
+		actor.Role = "admin"
+	}
+	return actor
+}
+
+func learningHTTPAccessFixture(test accesstest.Case) domain.LearningCourse {
+	fixture := learningHTTPFixtureWithLessons([]domain.LearningLesson{{
+		ID: learningHTTPLessonID, Title: "Lesson", VideoState: domain.VideoAbsent,
+	}})
+	fixture.Status = domain.Status(test.Status)
+	return fixture
 }
 
 func TestB01LearningCourseWithoutLessonsUsesEmptyArraysAndNullContinue(t *testing.T) {

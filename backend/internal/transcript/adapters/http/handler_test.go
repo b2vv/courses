@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"courses/internal/contracts/access/accesstest"
 	transcripthttp "courses/internal/transcript/adapters/http"
 	"courses/internal/transcript/application"
 	"courses/internal/transcript/domain"
@@ -219,6 +220,51 @@ func TestRefusalDoesNotDependOnWhetherATranscriptExists(t *testing.T) {
 			assertContract(t, r, response, true)
 		})
 	}
+}
+
+func TestR09TranscriptForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+	for _, test := range []accesstest.Case{
+		transcriptAccessCase(t, accesstest.Stranger, "draft"),
+		transcriptAccessCase(t, accesstest.Stranger, "published"),
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			result := published(nil, nil, 0, 0)
+			result.Course.Status = domain.Status(test.Status)
+			r := request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript", transcriptAccessActor(test))
+			response := serve(t, &stubRepository{result: result}, r)
+
+			if test.Want {
+				if response.Code != http.StatusOK {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+			} else if response.Code != http.StatusForbidden {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			assertContract(t, r, response, true)
+		})
+	}
+}
+
+func transcriptAccessCase(t *testing.T, role accesstest.Role, status string) accesstest.Case {
+	t.Helper()
+	for _, test := range accesstest.TruthTable {
+		if test.Role == role && test.Status == status {
+			return test
+		}
+	}
+	t.Fatalf("missing access truth-table row role=%q status=%q", role, status)
+	return accesstest.Case{}
+}
+
+func transcriptAccessActor(test accesstest.Case) httpserver.Actor {
+	actor := httpserver.Actor{UserID: viewerID, Role: "student"}
+	switch test.Role {
+	case accesstest.Owner:
+		actor.UserID, actor.Role = ownerID, "instructor"
+	case accesstest.Administrator:
+		actor.Role = "admin"
+	}
+	return actor
 }
 
 func TestUnauthenticatedIsRefusedBeforeAnythingElse(t *testing.T) {
