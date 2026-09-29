@@ -241,3 +241,20 @@ Compose і фікстур, тобто не може бігти раніше за
 | I04 | Фронтенд: route `teach.*` (guard+loader за зразком admin), огляд + черга, кнопка «Поскаржитись» на уроці, Orval-адаптер, query boundary, стани, a11y | 3h | I03 | done | `f3b7302`; typecheck+lint+architecture(125)+rstest 505/505; гейт-фікс R24 route-tree; W01/W03/W04/W07/W08/W21(частково) |
 | I05 | e2e `instructor.spec.ts`: W01–W26 спостережувані журнеї + a11y (W21, селектори в межах сторінки — правило «глобально лічене») | 2.5h | I04 | done | `1de3384`; 8 e2e (W01/W03-W08/W14/W16/W21); e2e викрив 2 дефекти I04 (W01 lesson-title/момент, W05 remove-інвалідація) — полагоджено; повний make check exit 0, e2e 87/87, rstest 505 |
 | I06 | Упорядкований `make check`; звіт `docs/instructor/report.md` — W01–W26 по одному на свій тест; `work/tasks.md`; AGENDA/брифінг; PR у main | 1.5h | I01–I05 | done | звіт W01–W26 кожен на свій тест; незалежна звірка знайшла 8 прогалин доказів — закрито gap-тестами; повний make check exit 0, e2e 87/87, rstest 505, integration зелено; **фазу закрито** |
+
+## Оплата (остання фаза роадмапу)
+
+Джерело scope: [spec](../docs/payment/spec.md) (GATE 1), [plan](../docs/payment/plan.md) (GATE 2 зелений,
+Courses 2 на opus-4-8); §24 п.21/п.22, ADR 013→014, шви `docs/readiness/spec.md` §5. Розширюємо `access`
+(факти Paid/Entitled/Preview) + новий модуль `orders`. Ролі: Courses 1 — план/гейти/коміти; код — Codex (sol);
+рев'ю — Courses 2. Гілка `feat/payment`. Кожен таск закриває названі рядки Pay01–Pay27 + Pay04b/Pay21b.
+
+| ID | Назва | Est | Depends | Status | Result / закриває |
+|---|---|---:|---|---|---|
+| O01 | ADR 014; `access.Course`+=Paid/Entitled/Preview; `CanView`+`PurchaseRequired` (спільні факти); `accesstest` розширено; property-тест PurchaseRequired⟹¬CanView; 4 доменні типи фактів. Поведінково нейтральний | 2.5h | — | planned | Pay01/Pay05/Pay15/Pay27; unit |
+| O02 | Міграція 00011 (courses price/currency, lessons is_preview, orders, course_grants, payment_events, grant_audit) + домен `orders`: Money(UAH), Order, Grant, ApplyPaymentEvent-правило; unit | 3.5h | O01 | planned | Pay02/Pay03/Pay18 + домен Pay04/Pay16/Pay21 |
+| O03 | 6 запитів джойнять course_grants + читають price/preview; userID через 4 порти; integration-таблиця через SQL у 4 модулях; замір гарячого шляху (EXPLAIN) | 3h | O02 | planned | Pay01(SQL)/Pay11/Pay14/Pay23 |
+| O04 | `orders` application+HTTP: старт покупки, статус, адмін-видача, ApplyPaymentEvent (unknown-order не термінальна), grandfather на price-set; PurchaseRequired-код на 4 шарах; каталог price/paid; авторинг ціни/прев'ю; OpenAPI+Orval; architecture-тест | 4h | O03 | planned | Pay04/06/07/08/10/12/13/16/17/19/20/21/21b/22/26 |
+| O05 | Фронт: ціна/«платний» у каталозі; «Купити»→старт; «оплата в обробці» з опитуванням; «потрібна покупка» + прев'ю-позначки; адмін-видача; авторинг ціни/прев'ю; a11y | 3h | O04 | planned | Pay07/09/11/13 (UI) |
+| O06 | **ЗАБЛОКОВАНО на назві провайдера.** Порт+перший адаптер: checkout(redirect), вебхук-ендпоінт(підпис→ApplyPaymentEvent), повернення→статус; ключі лише env | 3h | O04 | blocked | Pay24/Pay25 |
+| O07 | Упорядкований make check; звіт Pay01–Pay27+Pay04b/21b по одному; tasks; AGENDA/брифінг; PR | 1.5h | O01–O06 | planned | закриття фази |
