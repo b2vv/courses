@@ -32,6 +32,9 @@ func (database *playbackQueryer) QueryRow(_ context.Context, query string, args 
 type playbackRow struct {
 	ownerID        string
 	status         string
+	paid           bool
+	entitled       bool
+	preview        bool
 	videoID        string
 	clientSequence int64
 	videoPresent   bool
@@ -44,8 +47,11 @@ func (result playbackRow) Scan(dest ...any) error {
 	}
 	*dest[0].(*string) = result.ownerID
 	*dest[1].(*string) = result.status
-	*dest[2].(*pgtype.Text) = pgtype.Text{String: result.videoID, Valid: result.videoPresent}
-	*dest[3].(*int64) = result.clientSequence
+	*dest[2].(*bool) = result.paid
+	*dest[3].(*bool) = result.entitled
+	*dest[4].(*bool) = result.preview
+	*dest[5].(*pgtype.Text) = pgtype.Text{String: result.videoID, Valid: result.videoPresent}
+	*dest[6].(*int64) = result.clientSequence
 	return nil
 }
 
@@ -53,6 +59,7 @@ func TestLessonPlaybackReaderLoadsServerSelectedVideoAndProgress(t *testing.T) {
 	t.Parallel()
 	database := &playbackQueryer{row: playbackRow{
 		ownerID: "40000000-0000-4000-8000-000000000002", status: "published",
+		paid: true, entitled: true, preview: true,
 		videoID: playbackVideoID, videoPresent: true, clientSequence: 12,
 	}}
 	reader := playbackpostgres.NewLessonPlaybackReader(database)
@@ -63,7 +70,7 @@ func TestLessonPlaybackReaderLoadsServerSelectedVideoAndProgress(t *testing.T) {
 	}
 	want := domain.LessonPlayback{
 		VideoID: playbackVideoID, ClientSequence: 12,
-		Course: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published},
+		Course: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published, Paid: true, Entitled: true, Preview: true},
 	}
 	if got != want {
 		t.Fatalf("playback=%+v, want %+v", got, want)
@@ -71,7 +78,7 @@ func TestLessonPlaybackReaderLoadsServerSelectedVideoAndProgress(t *testing.T) {
 	if len(database.args) != 2 || database.args[0] != playbackUserID || database.args[1] != playbackLessonID {
 		t.Fatalf("args=%v", database.args)
 	}
-	for _, fragment := range []string{"course_lessons", "course_modules", "courses", "video_assets", "lesson_progress", "state='ready'", "generation DESC", "evicted_at IS NULL"} {
+	for _, fragment := range []string{"course_lessons", "course_modules", "courses", "course_grants", "video_assets", "lesson_progress", "state='ready'", "generation DESC", "evicted_at IS NULL"} {
 		if !strings.Contains(database.query, fragment) {
 			t.Fatalf("query missing %q: %s", fragment, database.query)
 		}

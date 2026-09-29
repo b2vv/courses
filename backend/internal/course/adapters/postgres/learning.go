@@ -19,6 +19,9 @@ const getLearningCourse = `SELECT
   courses.updated_at,
   courses.published_at,
   courses.instructor_id::text,
+  courses.price_minor IS NOT NULL,
+  grants.id IS NOT NULL,
+  COALESCE(lessons.is_preview, false),
   COALESCE(modules.id::text, ''),
   COALESCE(modules.title, ''),
   COALESCE(lessons.id::text, ''),
@@ -35,6 +38,8 @@ const getLearningCourse = `SELECT
   (progress.completed_at IS NOT NULL),
   COALESCE(progress.client_seq, 0)
 FROM courses
+LEFT JOIN course_grants AS grants
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
 LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
 LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 LEFT JOIN LATERAL (
@@ -54,6 +59,7 @@ ORDER BY modules.position, modules.id, lessons.position, lessons.id`
 type learningCourseRow struct {
 	id, slug, title, summary, description, status, instructorID string
 	createdAt, updatedAt, publishedAt                           pgtype.Timestamptz
+	paid, entitled, preview                                     bool
 }
 
 func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slug string) (domain.LearningCourse, error) {
@@ -78,6 +84,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 		if err := rows.Scan(
 			&courseRow.id, &courseRow.slug, &courseRow.title, &courseRow.summary, &courseRow.description, &courseRow.status,
 			&courseRow.createdAt, &courseRow.updatedAt, &courseRow.publishedAt, &courseRow.instructorID,
+			&courseRow.paid, &courseRow.entitled, &courseRow.preview,
 			&storedModuleID, &moduleTitle, &lessonID, &lessonTitle, &videoState,
 			&duration, &position, &completed, &clientSequence,
 		); err != nil {
@@ -88,7 +95,10 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			if err != nil {
 				return domain.LearningCourse{}, err
 			}
-			result = domain.LearningCourse{Course: course, InstructorID: courseRow.instructorID, Modules: []domain.LearningModule{}}
+			result = domain.LearningCourse{
+				Course: course, InstructorID: courseRow.instructorID, Modules: []domain.LearningModule{},
+				Paid: courseRow.paid, Entitled: courseRow.entitled, Preview: courseRow.preview,
+			}
 			found = true
 		}
 		if storedModuleID == "" {

@@ -84,7 +84,7 @@ func (*r09OwnershipReader) Load(context.Context, string) (domain.Ownership, erro
 
 type r09VideoAccessReader struct{ course domain.VideoCourse }
 
-func (reader *r09VideoAccessReader) LoadVideoCourse(context.Context, string) (domain.VideoCourse, error) {
+func (reader *r09VideoAccessReader) LoadVideoCourse(context.Context, string, string) (domain.VideoCourse, error) {
 	return reader.course, nil
 }
 

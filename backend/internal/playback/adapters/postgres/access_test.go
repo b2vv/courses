@@ -32,7 +32,7 @@ func TestVideoAccessReaderClassifiesAbsentUnavailableAndCorruptRows(t *testing.T
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			metric := &counter{}
-			_, err := playbackpostgres.NewVideoAccessReader(&queryer{row: test.row}, metric).LoadVideoCourse(context.Background(), "50000000-0000-4000-8000-000000000001")
+			_, err := playbackpostgres.NewVideoAccessReader(&queryer{row: test.row}, metric).LoadVideoCourse(context.Background(), "40000000-0000-4000-8000-000000000001", "50000000-0000-4000-8000-000000000001")
 			if !errors.Is(err, test.want) || metric.value != 1 {
 				t.Fatalf("err=%v metric=%d, want %v and 1", err, metric.value, test.want)
 			}
@@ -46,9 +46,10 @@ func (database *queryer) QueryRow(_ context.Context, query string, args ...any) 
 }
 
 type row struct {
-	owner  string
-	status string
-	err    error
+	owner                   string
+	status                  string
+	paid, entitled, preview bool
+	err                     error
 }
 
 func (result row) Scan(dest ...any) error {
@@ -57,6 +58,9 @@ func (result row) Scan(dest ...any) error {
 	}
 	*dest[0].(*string) = result.owner
 	*dest[1].(*string) = result.status
+	*dest[2].(*bool) = result.paid
+	*dest[3].(*bool) = result.entitled
+	*dest[4].(*bool) = result.preview
 	return nil
 }
 
@@ -67,20 +71,20 @@ func (metric *counter) Inc() { metric.value++ }
 func TestVideoAccessReaderLoadsCourseForTheExactVideo(t *testing.T) {
 	t.Parallel()
 	metric := &counter{}
-	database := &queryer{row: row{owner: "40000000-0000-4000-8000-000000000002", status: "published"}}
+	database := &queryer{row: row{owner: "40000000-0000-4000-8000-000000000002", status: "published", paid: true, entitled: true, preview: true}}
 	reader := playbackpostgres.NewVideoAccessReader(database, metric)
 
-	course, err := reader.LoadVideoCourse(context.Background(), "50000000-0000-4000-8000-000000000001")
+	course, err := reader.LoadVideoCourse(context.Background(), "40000000-0000-4000-8000-000000000001", "50000000-0000-4000-8000-000000000001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if course != (domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published}) {
+	if course != (domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published, Paid: true, Entitled: true, Preview: true}) {
 		t.Fatalf("course=%+v", course)
 	}
-	if len(database.args) != 1 || database.args[0] != "50000000-0000-4000-8000-000000000001" {
+	if len(database.args) != 2 || database.args[0] != "40000000-0000-4000-8000-000000000001" || database.args[1] != "50000000-0000-4000-8000-000000000001" {
 		t.Fatalf("args=%v", database.args)
 	}
-	for _, relation := range []string{"video_assets", "course_lessons", "course_modules", "courses"} {
+	for _, relation := range []string{"video_assets", "course_lessons", "course_modules", "courses", "course_grants"} {
 		if !strings.Contains(database.query, relation) {
 			t.Fatalf("query does not join %s: %s", relation, database.query)
 		}

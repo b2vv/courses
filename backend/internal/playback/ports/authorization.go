@@ -11,5 +11,5 @@ type OwnershipReader interface {
 }
 
 type VideoAccessReader interface {
-	LoadVideoCourse(context.Context, string) (domain.VideoCourse, error)
+	LoadVideoCourse(context.Context, string, string) (domain.VideoCourse, error)
 }

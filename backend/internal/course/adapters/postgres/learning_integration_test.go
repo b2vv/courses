@@ -82,14 +82,18 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 				if test.Status == "published" {
 					publishedAt = "now()"
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
-					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`) RETURNING id::text`, tableOwner, slug, test.Status).Scan(&courseID); err != nil {
+				var price, currency any
+				if test.Paid {
+					price, currency = int64(50000), "UAH"
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at,price_minor,currency)
+					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`,$4,$5) RETURNING id::text`, tableOwner, slug, test.Status, price, currency).Scan(&courseID); err != nil {
 					t.Fatal(err)
 				}
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 
@@ -99,6 +103,11 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 					actorID, role = tableOwner, domain.ActorInstructor
 				} else if test.Role == accesstest.Administrator {
 					role = domain.ActorAdmin
+				}
+				if test.Granted {
+					if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, actorID, courseID, tableOwner); err != nil {
+						t.Fatal(err)
+					}
 				}
 				course, err := repository.GetLearningCourse(ctx, actorID, slug)
 				if err != nil {

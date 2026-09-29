@@ -18,10 +18,13 @@ import (
 // course uses its deliberately different sorting selector to report UI state. discussion must
 // not copy that sorting form: a processing upload is not the playable asset.
 const lessonFactsQuery = `SELECT courses.instructor_id::text, courses.status,
+  courses.price_minor IS NOT NULL, grants.id IS NOT NULL, lessons.is_preview,
   COALESCE(current_asset.id::text, ''), COALESCE(current_asset.generation, 0), current_asset.duration_seconds
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
+LEFT JOIN course_grants AS grants
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
 LEFT JOIN LATERAL (
   SELECT assets.id, assets.generation, assets.duration_seconds
   FROM video_assets AS assets
@@ -29,7 +32,7 @@ LEFT JOIN LATERAL (
   ORDER BY assets.generation DESC
   LIMIT 1
 ) AS current_asset ON true
-WHERE lessons.id = $1::text::uuid`
+WHERE lessons.id = $2::text::uuid`
 
 const rootsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
@@ -61,23 +64,30 @@ ORDER BY c.parent_id, c.created_at, c.id`
 
 const commentQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.id::text, courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status,
+  courses.price_minor IS NOT NULL, grants.id IS NOT NULL, lessons.is_preview
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
+LEFT JOIN course_grants AS grants
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
 LEFT JOIN users AS u ON u.id = c.author_id AND u.deleted_at IS NULL
-WHERE c.id = $1::text::uuid`
+WHERE c.id = $2::text::uuid`
 
 type Repository struct{ pool *pgxpool.Pool }
 
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
-func (repository *Repository) LessonFacts(ctx context.Context, lessonID string) (ports.LessonFacts, error) {
+func (repository *Repository) LessonFacts(ctx context.Context, userID, lessonID string) (ports.LessonFacts, error) {
 	var result ports.LessonFacts
 	var status string
+	var paid, entitled, preview bool
 	var duration pgtype.Numeric
-	err := repository.pool.QueryRow(ctx, lessonFactsQuery, lessonID).Scan(&result.Course.OwnerID, &status, &result.AssetID, &result.Generation, &duration)
+	err := repository.pool.QueryRow(ctx, lessonFactsQuery, userID, lessonID).Scan(
+		&result.Course.OwnerID, &status, &paid, &entitled, &preview,
+		&result.AssetID, &result.Generation, &duration,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.LessonFacts{}, domain.ErrNotFound
 	}
@@ -85,6 +95,9 @@ func (repository *Repository) LessonFacts(ctx context.Context, lessonID string) 
 		return ports.LessonFacts{}, persistenceError(err)
 	}
 	result.Course.Status = domain.Status(status)
+	result.Course.Paid = paid
+	result.Course.Entitled = entitled
+	result.Course.Preview = preview
 	if value, err := duration.Float64Value(); err == nil && value.Valid {
 		result.DurationSecs = &value.Float64
 	}
@@ -156,8 +169,8 @@ func (repository *Repository) List(ctx context.Context, lessonID, cursor string,
 	return page, nil
 }
 
-func (repository *Repository) Get(ctx context.Context, id string) (ports.CommentRecord, error) {
-	return scanRecord(repository.pool.QueryRow(ctx, commentQuery, id))
+func (repository *Repository) Get(ctx context.Context, userID, id string) (ports.CommentRecord, error) {
+	return scanRecordFields(repository.pool.QueryRow(ctx, commentQuery, userID, id), recordScanTail{accessFacts: true})
 }
 
 func (repository *Repository) InsertRoot(ctx context.Context, comment domain.Comment) (ports.CommentRecord, error) {
@@ -228,7 +241,7 @@ func (repository *Repository) UpdateBody(ctx context.Context, id, authorID, body
 	if err != nil {
 		return ports.CommentRecord{}, persistenceError(err)
 	}
-	return repository.Get(ctx, id)
+	return repository.Get(ctx, authorID, id)
 }
 
 func (repository *Repository) Remove(ctx context.Context, id, actorID string, now time.Time) error {
@@ -246,6 +259,7 @@ func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error
 type recordScanTail struct {
 	lessonTitle *string
 	openReports *int
+	accessFacts bool
 }
 
 func scanModerationRecord(row interface{ Scan(...any) error }, openReports *int) (ports.ModerationCommentRecord, error) {
@@ -260,11 +274,15 @@ func scanModerationRecord(row interface{ Scan(...any) error }, openReports *int)
 func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) (ports.CommentRecord, error) {
 	var c ports.CommentRecord
 	var status string
+	var paid, entitled, preview bool
 	var parentID, body pgtype.Text
 	var position pgtype.Int8
 	var edited, removed pgtype.Timestamptz
 	var removedBy, display pgtype.Text
 	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.CourseID, &c.Course.OwnerID, &status}
+	if tail.accessFacts {
+		values = append(values, &paid, &entitled, &preview)
+	}
 	if tail.lessonTitle != nil {
 		values = append(values, tail.lessonTitle)
 	}
@@ -298,6 +316,9 @@ func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) 
 		c.DisplayName = &display.String
 	}
 	c.Course.Status = domain.Status(status)
+	c.Course.Paid = paid
+	c.Course.Entitled = entitled
+	c.Course.Preview = preview
 	return c, nil
 }
 

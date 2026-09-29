@@ -36,8 +36,11 @@ type accessReader struct {
 	err    error
 }
 
-func (reader *accessReader) LoadVideoCourse(_ context.Context, gotVideoID string) (domain.VideoCourse, error) {
+func (reader *accessReader) LoadVideoCourse(_ context.Context, gotUserID, gotVideoID string) (domain.VideoCourse, error) {
 	reader.calls++
+	if gotUserID != userID {
+		return domain.VideoCourse{}, errors.New("unexpected user")
+	}
 	if gotVideoID != videoID {
 		return domain.VideoCourse{}, errors.New("unexpected video")
 	}

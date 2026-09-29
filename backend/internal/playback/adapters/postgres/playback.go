@@ -10,6 +10,9 @@ import (
 )
 
 const loadLessonPlayback = `SELECT courses.instructor_id::text, courses.status,
+courses.price_minor IS NOT NULL,
+grants.id IS NOT NULL,
+lessons.is_preview,
 (
     SELECT assets.id::text
     FROM video_assets AS assets
@@ -22,6 +25,8 @@ COALESCE(progress.client_seq,0)
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id=lessons.module_id
 JOIN courses ON courses.id=modules.course_id
+LEFT JOIN course_grants AS grants
+  ON grants.user_id=$1::text::uuid AND grants.course_id=courses.id AND grants.state='active'
 LEFT JOIN lesson_progress AS progress
   ON progress.user_id=$1::text::uuid AND progress.lesson_id=lessons.id
 WHERE lessons.id=$2::text::uuid`
@@ -34,13 +39,17 @@ func NewLessonPlaybackReader(database QueryRower) *LessonPlaybackReader {
 
 func (reader *LessonPlaybackReader) LoadLessonPlayback(ctx context.Context, userID, lessonID string) (domain.LessonPlayback, error) {
 	var (
-		ownerID, status string
-		videoID         pgtype.Text
-		clientSequence  int64
+		ownerID, status         string
+		paid, entitled, preview bool
+		videoID                 pgtype.Text
+		clientSequence          int64
 	)
 	err := reader.database.QueryRow(ctx, loadLessonPlayback, userID, lessonID).Scan(
 		&ownerID,
 		&status,
+		&paid,
+		&entitled,
+		&preview,
 		&videoID,
 		&clientSequence,
 	)
@@ -61,6 +70,6 @@ func (reader *LessonPlaybackReader) LoadLessonPlayback(ctx context.Context, user
 	return domain.LessonPlayback{
 		VideoID:        videoID.String,
 		ClientSequence: clientSequence,
-		Course:         domain.VideoCourse{OwnerID: ownerID, Status: courseStatus},
+		Course:         domain.VideoCourse{OwnerID: ownerID, Status: courseStatus, Paid: paid, Entitled: entitled, Preview: preview},
 	}, nil
 }
