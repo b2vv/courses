@@ -40,7 +40,7 @@ type stubRepository struct {
 	saveErr error
 }
 
-func (stub *stubRepository) GetLessonTranscript(_ context.Context, _ string, language domain.Language) (ports.LessonTranscript, error) {
+func (stub *stubRepository) GetLessonTranscript(_ context.Context, _, _ string, language domain.Language) (ports.LessonTranscript, error) {
 	stub.gotLanguage = language
 	return stub.result, stub.err
 }

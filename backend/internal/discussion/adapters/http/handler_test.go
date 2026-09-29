@@ -46,13 +46,13 @@ type fakeRepository struct {
 	moderationLogs []ports.ModerationLogEntry
 }
 
-func (fake *fakeRepository) LessonFacts(context.Context, string) (ports.LessonFacts, error) {
+func (fake *fakeRepository) LessonFacts(context.Context, string, string) (ports.LessonFacts, error) {
 	return fake.facts, fake.factsErr
 }
 func (fake *fakeRepository) List(context.Context, string, string, int) (ports.CommentPage, error) {
 	return fake.page, fake.listErr
 }
-func (fake *fakeRepository) Get(_ context.Context, id string) (ports.CommentRecord, error) {
+func (fake *fakeRepository) Get(_ context.Context, _ string, id string) (ports.CommentRecord, error) {
 	record, ok := fake.comments[id]
 	if !ok {
 		return ports.CommentRecord{}, domain.ErrNotFound
@@ -78,7 +78,7 @@ func (fake *fakeRepository) insert(comment domain.Comment, id string) (ports.Com
 	return record, nil
 }
 func (fake *fakeRepository) UpdateBody(_ context.Context, id, _ string, body string, now time.Time) (ports.CommentRecord, error) {
-	record, err := fake.Get(context.Background(), id)
+	record, err := fake.Get(context.Background(), "actor", id)
 	if err != nil {
 		return ports.CommentRecord{}, err
 	}
@@ -87,7 +87,7 @@ func (fake *fakeRepository) UpdateBody(_ context.Context, id, _ string, body str
 	return record, nil
 }
 func (fake *fakeRepository) Remove(_ context.Context, id, actorID string, now time.Time) error {
-	record, err := fake.Get(context.Background(), id)
+	record, err := fake.Get(context.Background(), actorID, id)
 	if err != nil {
 		return err
 	}

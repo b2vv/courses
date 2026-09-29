@@ -28,11 +28,16 @@ const readyGenerationForLesson = `SELECT COALESCE((
 
 // The course facts the access rule needs are read even when no transcript exists, so that a
 // missing transcript and a forbidden course cannot be told apart by the caller.
-const getLessonCourse = `SELECT courses.instructor_id::text, courses.status
+const getLessonAccessCourse = `SELECT courses.instructor_id::text, courses.status,
+  courses.price_minor IS NOT NULL,
+  grants.id IS NOT NULL,
+  lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
-WHERE lessons.id = $1::text::uuid`
+LEFT JOIN course_grants AS grants
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+WHERE lessons.id = $2::text::uuid`
 
 // An empty language selects the only transcript, or the first by normalised code when several
 // exist. The order is on the stored, already normalised value, so the choice is deterministic
@@ -63,16 +68,19 @@ type Repository struct{ pool *pgxpool.Pool }
 
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
-func (repository *Repository) GetLessonTranscript(ctx context.Context, lessonID string, language domain.Language) (ports.LessonTranscript, error) {
+func (repository *Repository) GetLessonTranscript(ctx context.Context, userID, lessonID string, language domain.Language) (ports.LessonTranscript, error) {
 	var ownerID, status string
-	err := repository.pool.QueryRow(ctx, getLessonCourse, lessonID).Scan(&ownerID, &status)
+	var paid, entitled, preview bool
+	err := repository.pool.QueryRow(ctx, getLessonAccessCourse, userID, lessonID).Scan(&ownerID, &status, &paid, &entitled, &preview)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.LessonTranscript{}, domain.ErrNotFound
 	}
 	if err != nil {
 		return ports.LessonTranscript{}, persistenceError(err)
 	}
-	result := ports.LessonTranscript{Course: domain.Course{OwnerID: ownerID, Status: domain.Status(status)}}
+	result := ports.LessonTranscript{Course: domain.Course{
+		OwnerID: ownerID, Status: domain.Status(status), Paid: paid, Entitled: entitled, Preview: preview,
+	}}
 
 	var storedLanguage string
 	var generation int32
