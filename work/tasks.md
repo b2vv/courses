@@ -235,7 +235,7 @@ Compose і фікстур, тобто не може бігти раніше за
 
 | ID | Назва | Est | Depends | Status | Result / закриває |
 |---|---|---:|---|---|---|
-| I01 | Домен `discussion`: `Report` (правила: не власний, доступ до курсу), course-level guard модерації (owner∨admin), дискримінатор `actor≠author` для журналу, `removed_by` у Comment; unit-таблиці | 2.5h | — | planned | W12/W13 (логіка), W17/W18 (правила); unit |
+| I01 | Домен `discussion`: `Report` (правила: не власний, доступ до курсу), course-level guard модерації (owner∨admin), дискримінатор `actor≠author` для журналу, `removed_by` у Comment; unit-таблиці | 2.5h | — | done | `46a94a2`; `NewReport`/`CanBeModeratedBy`/`IsModeration`/`RemovedBy`; W12/W13/W15/W16/W18; go build+`go test -race` домену зелені (docker) |
 | I02 | Міграція `00010` (removed_by+CHECK, reports+dismissed_at+UNIQUE+CASCADE, moderation_log, keyset+partial індекси) + postgres: `CourseFacts`, `ListByCourse`, `InsertReport` ON CONFLICT, `DismissReports`, `ListQueue`, `Remove`→removed_by+log, read+`courses.id` | 3.5h | I01 | planned | W01/W02/W04/W05/W06/W09/W10/W11/W23/W26; integration |
 | I03 | Application (list-by-course, report, queue, dismiss, remove-with-audit) + HTTP (`RegisterTeach` під `/teach`, report під `/learn`, owner-скоуп, коди) + OpenAPI teach/report + Orval + `assertContract` + architecture-тест «без крос-модульного імпорту ownership» | 3h | I02 | planned | W03/W14–W20/W22/W24/W25; contract + gate |
 | I04 | Фронтенд: route `teach.*` (guard+loader за зразком admin), огляд + черга, кнопка «Поскаржитись» на уроці, Orval-адаптер, query boundary, стани, a11y | 3h | I03 | planned | W01/W04/W07/W08 (UI), W03 (репорт UI), W21 (частково) |
