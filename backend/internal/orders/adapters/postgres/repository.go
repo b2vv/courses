@@ -188,12 +188,17 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 		return persistenceError(err)
 	}
 	grantID := newID()
-	if _, err := tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,'purchase',$4::text::uuid,'active',$5)`,
-		grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt); err != nil {
+	var insertedGrantID string
+	err = tx.QueryRow(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,'purchase',$4::text::uuid,'active',$5)
+ON CONFLICT (user_id, course_id) WHERE state='active' DO NOTHING
+RETURNING id::text`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&insertedGrantID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return persistenceError(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,'grant',$2::text::uuid,$3)`, grantID, eventDatabaseID, event.ReceivedAt); err != nil {
-		return persistenceError(err)
+	if err == nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,'grant',$2::text::uuid,$3)`, insertedGrantID, eventDatabaseID, event.ReceivedAt); err != nil {
+			return persistenceError(err)
+		}
 	}
 	return persistenceError(tx.Commit(ctx))
 }
