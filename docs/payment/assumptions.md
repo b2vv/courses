@@ -75,3 +75,9 @@
 - NB1: один предикат (A6). NB2: Pay16 за станом active будь-якого source. NB3: Pay21b unknown-order не термінальна.
 - Чисте: покриття доступу повне, A2 ок, O01 нейтральний.
 - ДАЛІ: Courses 2 перепровіряє закриття; якщо зелено — tasks.
+
+## GATE 2 ЗЕЛЕНО (повторна звірка Courses 2, claude-opus-4-8)
+- Обидва blocking закриті, усі NB адресовані. 3 залишкові NB (не гейтять) прийнято:
+  NB1' → property-тест PurchaseRequired⟹¬CanView (O01/Pay27); NB5 → O07 рахує рядки не діапазон;
+  NB4 → grandfather на playback-прогресі, названа межа (вузька підмножина transcript/discussion-only).
+- GATE 2 ПРОЙДЕНО. ДАЛІ: tasks (O01–O07 → Pay-рядки), implement Codex (sol); O06 блокований на назві провайдера.
