@@ -64,6 +64,8 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		"60000000-0000-4000-8000-000000000001", "70000000-0000-4000-8000-000000000001",
 		"70000000-0000-4000-8000-000000000002", "70000000-0000-4000-8000-000000000003",
 		"70000000-0000-4000-8000-000000000004", "70000000-0000-4000-8000-000000000005",
+		"60000000-0000-4000-8000-000000000002", "70000000-0000-4000-8000-000000000006",
+		"70000000-0000-4000-8000-000000000007", "70000000-0000-4000-8000-000000000008",
 	}
 	newID := func() string { id := ids[0]; ids = ids[1:]; return id }
 	now := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
@@ -125,6 +127,39 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	if err != nil || grant.Source() != domain.GrantAdmin {
 		t.Fatalf("admin grant=%+v error=%v", grant, err)
 	}
+
+	t.Run("paid event settles when active admin grant already exists", func(t *testing.T) {
+		var userID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+(gen_random_uuid(),'paid-with-admin-grant@example.test','Paid with admin grant','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {
+			t.Fatal(err)
+		}
+		order, err := service.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "purchase-with-admin-grant")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, userID, integrationCourseID, "issued while payment was pending"); err != nil {
+			t.Fatal(err)
+		}
+		event := domain.PaymentEvent{Provider: "provider", EventID: "paid-with-admin-grant", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(3 * time.Minute)}
+		if err := service.ApplyPaymentEvent(ctx, event); err != nil {
+			t.Fatalf("ApplyPaymentEvent with existing active grant: %v", err)
+		}
+		status, err := service.PurchaseStatus(ctx, application.Actor{UserID: userID}, order.ID())
+		if err != nil || status.Status() != domain.OrderPaid {
+			t.Fatalf("status=%q error=%v", status.Status(), err)
+		}
+		var activeGrants, events, paymentAudits int
+		if err := pool.QueryRow(ctx, `SELECT
+  (SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND state='active'),
+  (SELECT count(*) FROM payment_events WHERE provider='provider' AND event_id='paid-with-admin-grant'),
+  (SELECT count(*) FROM grant_audit AS audit JOIN payment_events AS event ON event.id=audit.payment_event_id WHERE event.provider='provider' AND event.event_id='paid-with-admin-grant')`, userID, integrationCourseID).Scan(&activeGrants, &events, &paymentAudits); err != nil {
+			t.Fatal(err)
+		}
+		if activeGrants != 1 || events != 1 || paymentAudits != 0 {
+			t.Fatalf("active grants=%d events=%d payment audits=%d", activeGrants, events, paymentAudits)
+		}
+	})
 
 	var freeUpdated time.Time
 	if err := pool.QueryRow(ctx, `SELECT updated_at FROM courses WHERE id=$1`, integrationFreeID).Scan(&freeUpdated); err != nil {
