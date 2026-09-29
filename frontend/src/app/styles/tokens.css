@@ -32,6 +32,8 @@
   --font-utility: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   --radius-control: 0.375rem;
   --radius-panel: 0.75rem;
+  --radius-card: 1rem;
+  --radius-pill: 999px;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -39,6 +41,9 @@
   --space-6: 1.5rem;
   --space-8: 2rem;
   --control-min-size: 2.75rem;
+  --shadow-card: 0 0.5rem 1.5rem color-mix(in srgb, var(--color-media-frame) 10%, transparent);
+  --shadow-floating: 0 1rem 2.5rem color-mix(in srgb, var(--color-media-frame) 18%, transparent);
+  --shadow-primary-glow: 0 0 2rem color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -379,6 +384,288 @@
 .ui-progress:not([aria-valuenow]) .ui-progress-fill {
   inline-size: 35%;
 }
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  max-inline-size: 100%;
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.ui-pill:is(a, button, [role='button']) {
+  min-block-size: var(--control-min-size);
+  cursor: pointer;
+}
+.ui-pill--neutral {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+.ui-pill--accent {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.ui-pill--success {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
+}
+.ui-pill--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
+}
+.ui-pill--info {
+  color: var(--color-info);
+  background: color-mix(in srgb, var(--color-info) 12%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-info) 45%, var(--color-border));
+}
+
+.ui-icon-tile {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--control-min-size);
+  block-size: var(--control-min-size);
+  flex: none;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-background));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: var(--radius-panel);
+}
+
+.ui-card {
+  padding: var(--space-6);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.ui-card--floating {
+  box-shadow: var(--shadow-floating);
+}
+.ui-card--floating.ui-card--glow {
+  box-shadow: var(--shadow-floating), var(--shadow-primary-glow);
+}
+.ui-grid-surface {
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-border) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-border) 28%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: var(--space-6) var(--space-6);
+}
+
+.ui-stat {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+.ui-stat-value {
+  font-family: var(--font-utility);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.ui-stat-label,
+.ui-stat-meta {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+.ui-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  inline-size: fit-content;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font: 700 0.75rem/1.2 var(--font-utility);
+}
+.ui-delta--success {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-background));
+}
+.ui-delta--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-background));
+}
+
+.ui-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  max-inline-size: 100%;
+  padding: var(--space-1);
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+.ui-segment {
+  min-inline-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font: 650 0.875rem/1.2 var(--font-body);
+  cursor: pointer;
+}
+.ui-segment[data-hovered] {
+  color: var(--color-text);
+  background: var(--color-background);
+}
+.ui-segment[data-selected] {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.ui-segment[data-focus-visible] {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.ui-segment[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-meter {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.ui-meter-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+.ui-meter-value {
+  color: var(--color-text);
+  font-family: var(--font-utility);
+}
+.ui-meter-track {
+  block-size: var(--space-2);
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+.ui-meter-fill {
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+.ui-meter--neutral .ui-meter-fill {
+  background: var(--color-primary);
+}
+.ui-meter--success .ui-meter-fill {
+  background: var(--color-success);
+}
+.ui-meter--warning .ui-meter-fill {
+  background: var(--color-warning);
+}
+.ui-meter--danger .ui-meter-fill {
+  background: var(--color-danger);
+}
+.ui-meter--info .ui-meter-fill {
+  background: var(--color-info);
+}
+
+.ui-sidebar {
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+  inline-size: min(100%, 17rem);
+  padding: var(--space-4);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-inline-end: 1px solid var(--color-border);
+}
+.ui-sidebar-section {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.ui-sidebar-section-label {
+  padding-inline: var(--space-3);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ui-sidebar-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ui-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--control-min-size);
+  min-inline-size: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-weight: 650;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.ui-sidebar-link[data-hovered] {
+  color: var(--color-text);
+  background: var(--color-background);
+}
+.ui-sidebar-link[aria-current='page'] {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+}
+.ui-sidebar-link[data-focus-visible],
+.ui-sidebar-link:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.ui-mono {
+  font-family: var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui-meter-fill {
+    transition: inline-size 240ms ease-out;
+  }
+}
 .ui-table-scroll {
   max-inline-size: 100%;
   overflow-x: auto;
@@ -495,7 +782,28 @@
     color: HighlightText;
   }
   .ui-progress-fill,
+  .ui-meter-fill,
   .ui-skeleton-line {
     background: Highlight;
+  }
+  .ui-card,
+  .ui-stat,
+  .ui-pill,
+  .ui-icon-tile,
+  .ui-segmented,
+  .ui-segment,
+  .ui-meter-track,
+  .ui-sidebar,
+  .ui-sidebar-link {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+  .ui-segment[data-selected],
+  .ui-sidebar-link[aria-current='page'] {
+    color: HighlightText;
+    background: Highlight;
+  }
+  .ui-grid-surface {
+    background-image: none;
   }
 }

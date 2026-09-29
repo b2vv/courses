@@ -66,6 +66,44 @@ export function TextArea({ label, description, errorMessage, placeholder, ...pro
 
 export type ChoiceOption = { id: string; label: string };
 
+export type SegmentedOption = ChoiceOption & { isDisabled?: boolean };
+
+type SegmentedControlProps = Omit<
+  Aria.ToggleButtonGroupProps,
+  'children' | 'className' | 'selectionMode'
+> & {
+  label: string;
+  options: readonly SegmentedOption[];
+};
+
+export function SegmentedControl({
+  label,
+  options,
+  disallowEmptySelection = true,
+  ...props
+}: SegmentedControlProps) {
+  return (
+    <Aria.ToggleButtonGroup
+      {...props}
+      aria-label={label}
+      selectionMode="single"
+      disallowEmptySelection={disallowEmptySelection}
+      className="ui-segmented"
+    >
+      {options.map((option) => (
+        <Aria.ToggleButton
+          key={option.id}
+          id={option.id}
+          isDisabled={option.isDisabled ?? false}
+          className="ui-segment"
+        >
+          {option.label}
+        </Aria.ToggleButton>
+      ))}
+    </Aria.ToggleButtonGroup>
+  );
+}
+
 type SelectProps = Omit<Aria.SelectProps<ChoiceOption>, 'children' | 'className'> & {
   label: string;
   options: readonly ChoiceOption[];
