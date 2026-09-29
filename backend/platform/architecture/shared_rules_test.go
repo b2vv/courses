@@ -38,21 +38,33 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 			viaCourse := coursedomain.LearningCourse{
 				Course:       coursedomain.Course{Status: coursedomain.Status(test.Status)},
 				InstructorID: owner,
+				Paid:         test.Paid,
+				Entitled:     test.Granted,
+				Preview:      test.Preview,
 			}.CanBeViewedBy(coursedomain.Actor{UserID: actor, Role: role})
 
 			viaPlayback := playbackdomain.VideoCourse{
-				OwnerID: owner,
-				Status:  playbackdomain.CourseStatus(test.Status),
+				OwnerID:  owner,
+				Status:   playbackdomain.CourseStatus(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(playbackdomain.Actor{UserID: actor, Administrator: administrator})
 
 			viaTranscript := transcriptdomain.Course{
-				OwnerID: owner,
-				Status:  transcriptdomain.Status(test.Status),
+				OwnerID:  owner,
+				Status:   transcriptdomain.Status(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(transcriptdomain.Actor{UserID: actor, Administrator: administrator})
 
 			viaDiscussion := discussiondomain.Course{
-				OwnerID: owner,
-				Status:  discussiondomain.Status(test.Status),
+				OwnerID:  owner,
+				Status:   discussiondomain.Status(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(discussiondomain.Actor{UserID: actor, Administrator: administrator})
 
 			if viaCourse != test.Want || viaPlayback != test.Want || viaTranscript != test.Want || viaDiscussion != test.Want {

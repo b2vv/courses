@@ -18,8 +18,11 @@ type Actor struct {
 }
 
 type Course struct {
-	OwnerID string
-	Status  Status
+	OwnerID  string
+	Status   Status
+	Paid     bool
+	Entitled bool
+	Preview  bool
 }
 
 // CanBeEditedBy answers who may write one. Deliberately NOT the same rule as reading: a published
@@ -33,5 +36,5 @@ func (course Course) CanBeEditedBy(actor Actor) bool {
 // CanBeViewedBy answers who may read a transcript, and it must answer exactly as the other two
 // copies do: a transcript is not a second way into a course (A6).
 func (course Course) CanBeViewedBy(actor Actor) bool {
-	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published})
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }

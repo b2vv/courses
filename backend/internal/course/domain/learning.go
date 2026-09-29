@@ -46,6 +46,9 @@ type LearningCourse struct {
 	InstructorID     string
 	Modules          []LearningModule
 	ContinueLessonID string
+	Paid             bool
+	Entitled         bool
+	Preview          bool
 }
 
 func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
@@ -76,13 +79,14 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 
 	result := LearningCourse{
 		Course: course, InstructorID: input.InstructorID, Modules: modules,
+		Paid: input.Paid, Entitled: input.Entitled, Preview: input.Preview,
 	}
 	result.ContinueLessonID = continueLessonID(modules)
 	return result, nil
 }
 
 func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
-	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published})
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
 
 func (state LearningVideoState) Valid() bool {
