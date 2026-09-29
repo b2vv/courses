@@ -28,6 +28,9 @@ func (learning *Learning) GetCourse(ctx context.Context, actor domain.Actor, slu
 		return domain.LearningCourse{}, err
 	}
 	if !course.CanBeViewedBy(actor) {
+		if course.PurchaseRequiredBy(actor) {
+			return domain.LearningCourse{}, domain.ErrPurchaseRequired
+		}
 		return domain.LearningCourse{}, domain.ErrCourseForbidden
 	}
 	return course, nil

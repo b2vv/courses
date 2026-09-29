@@ -10,6 +10,7 @@ const (
 	ErrInvalidRequest          Error = "invalid_request"
 	ErrForbidden               Error = "forbidden"
 	ErrCourseForbidden         Error = "course_forbidden"
+	ErrPurchaseRequired        Error = "course_purchase_required"
 	ErrSlugTaken               Error = "slug_taken"
 	ErrSlugImmutable           Error = "slug_immutable"
 	ErrInvalidOwner            Error = "invalid_owner"
@@ -53,6 +54,8 @@ type CourseDraft struct {
 	Summary      string
 	Description  string
 	InstructorID string
+	Price        *Price
+	PriceSet     bool
 }
 
 type Lesson struct {
@@ -60,6 +63,8 @@ type Lesson struct {
 	Title       string
 	Description string
 	Position    int
+	IsPreview   bool
+	PreviewSet  bool
 }
 
 type Module struct {
@@ -80,6 +85,8 @@ type CourseTree struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	PublishedAt  *time.Time
+	Price        *Price
+	PriceSet     bool
 	Modules      []Module
 }
 
@@ -150,6 +157,9 @@ func ValidateCourseDraft(draft CourseDraft) error {
 	if !validID(draft.InstructorID) {
 		return ErrInvalidOwner
 	}
+	if draft.Price != nil && (draft.Price.Minor <= 0 || draft.Price.Currency != "UAH") {
+		return ErrInvalidRequest
+	}
 	return nil
 }
 
@@ -160,7 +170,7 @@ func ValidateCourseTree(tree CourseTree) error {
 	if _, err := NewCourse(Course{
 		ID: tree.ID, Slug: tree.Slug, Title: tree.Title, Summary: tree.Summary,
 		Description: tree.Description, Status: tree.Status, CreatedAt: tree.CreatedAt,
-		UpdatedAt: tree.UpdatedAt, PublishedAt: tree.PublishedAt,
+		UpdatedAt: tree.UpdatedAt, PublishedAt: tree.PublishedAt, Price: tree.Price, Paid: tree.Price != nil,
 	}); err != nil {
 		return ErrInvalidRequest
 	}
@@ -173,7 +183,7 @@ func ValidateCourseTreeEdit(tree CourseTree) error {
 	}
 	if err := ValidateCourseDraft(CourseDraft{
 		Slug: tree.Slug, Title: tree.Title, Summary: tree.Summary,
-		Description: tree.Description, InstructorID: tree.InstructorID,
+		Description: tree.Description, InstructorID: tree.InstructorID, Price: tree.Price,
 	}); err != nil {
 		return err
 	}

@@ -144,10 +144,6 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if !lessonsGone || !modulesGone || !ownerGone {
 			t.Fatalf("authoring down migration: lessons gone=%t modules gone=%t owner gone=%t", lessonsGone, modulesGone, ownerGone)
 		}
-		if _, err := repository.ListPublished(ctx, query); err != nil {
-			t.Fatal(err)
-		}
-
 		if _, err := pool.Exec(ctx, "DELETE FROM courses"); err != nil {
 			t.Fatal(err)
 		}
@@ -186,6 +182,9 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.ListPublished(ctx, query); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -267,6 +266,9 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if lessonStructureAfter != lessonStructureBefore {
 			t.Fatal("media migration changed course_lessons structure")
 		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
 	})
 	t.Run("playback migration preserves populated database", func(t *testing.T) {
 		if _, err := provider.DownTo(ctx, 5); err != nil {
@@ -330,6 +332,9 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if assetsAfter != assetsBefore {
 			t.Fatal("playback migration changed pre-existing video_assets rows")
 		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
 	})
 	t.Run("playback migration lock timeout rolls back and retry succeeds", func(t *testing.T) {
 		if _, err := provider.DownTo(ctx, 5); err != nil {
@@ -377,8 +382,14 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if !progressTable || !durationColumn {
 			t.Fatalf("retry did not apply playback schema: table=%t duration=%t", progressTable, durationColumn)
 		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
 	})
 	t.Run("failed migration rolls back its complete transaction", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 6); err != nil {
+			t.Fatal(err)
+		}
 		initial, err := os.ReadFile(filepath.Join(directory, "00001_courses.sql"))
 		if err != nil {
 			t.Fatal(err)
@@ -414,6 +425,9 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if !progressTable || !durationColumn {
 			t.Fatalf("failed later migration rolled back playback schema: table=%t duration=%t", progressTable, durationColumn)
+		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
 		}
 		if _, err := repository.ListPublished(ctx, query); err != nil {
 			t.Fatal(err)

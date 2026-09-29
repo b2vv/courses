@@ -48,7 +48,7 @@ func (q *Queries) CountPublishedCourses(ctx context.Context, searchPattern strin
 const createAuthoringCourse = `-- name: CreateAuthoringCourse :one
 INSERT INTO courses (
   id, instructor_id, slug, title, summary, description, status,
-  created_at, updated_at, published_at
+  created_at, updated_at, published_at, price_minor, currency
 )
 VALUES (
   gen_random_uuid(),
@@ -60,7 +60,9 @@ VALUES (
   'draft',
   $6::timestamptz,
   $6::timestamptz,
-  NULL
+  NULL,
+  $7::bigint,
+  $8::text
 )
 RETURNING id::text AS id
 `
@@ -72,6 +74,8 @@ type CreateAuthoringCourseParams struct {
 	Summary     string
 	Description string
 	CreatedAt   pgtype.Timestamptz
+	PriceMinor  pgtype.Int8
+	Currency    pgtype.Text
 }
 
 func (q *Queries) CreateAuthoringCourse(ctx context.Context, arg CreateAuthoringCourseParams) (string, error) {
@@ -82,6 +86,8 @@ func (q *Queries) CreateAuthoringCourse(ctx context.Context, arg CreateAuthoring
 		arg.Summary,
 		arg.Description,
 		arg.CreatedAt,
+		arg.PriceMinor,
+		arg.Currency,
 	)
 	var id string
 	err := row.Scan(&id)
@@ -100,6 +106,8 @@ SELECT
   created_at,
   updated_at,
   published_at
+  , price_minor
+  , currency
 FROM courses
 WHERE id = $1::text::uuid
 `
@@ -115,6 +123,8 @@ type GetAuthoringCourseRow struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	PublishedAt  pgtype.Timestamptz
+	PriceMinor   pgtype.Int8
+	Currency     pgtype.Text
 }
 
 func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetAuthoringCourseRow, error) {
@@ -131,6 +141,8 @@ func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetA
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PublishedAt,
+		&i.PriceMinor,
+		&i.Currency,
 	)
 	return i, err
 }
@@ -146,6 +158,8 @@ SELECT
   courses.created_at,
   courses.updated_at,
   courses.published_at,
+  courses.price_minor,
+  courses.currency,
   COALESCE(modules.id::text, '')::text AS module_id,
   COALESCE(modules.title, '')::text AS module_title,
   COALESCE(lessons.title, '')::text AS lesson_title,
@@ -167,6 +181,8 @@ type GetPublishedCourseRow struct {
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 	PublishedAt   pgtype.Timestamptz
+	PriceMinor    pgtype.Int8
+	Currency      pgtype.Text
 	ModuleID      string
 	ModuleTitle   string
 	LessonTitle   string
@@ -192,6 +208,8 @@ func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) ([]GetPub
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PublishedAt,
+			&i.PriceMinor,
+			&i.Currency,
 			&i.ModuleID,
 			&i.ModuleTitle,
 			&i.LessonTitle,
@@ -274,7 +292,7 @@ func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCou
 
 const listAuthoringLessons = `-- name: ListAuthoringLessons :many
 SELECT lessons.id::text AS id, lessons.module_id::text AS module_id,
-  lessons.title, lessons.description, lessons.position
+  lessons.title, lessons.description, lessons.position, lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 WHERE modules.course_id = $1::text::uuid
@@ -287,6 +305,7 @@ type ListAuthoringLessonsRow struct {
 	Title       string
 	Description string
 	Position    int32
+	IsPreview   bool
 }
 
 func (q *Queries) ListAuthoringLessons(ctx context.Context, courseID string) ([]ListAuthoringLessonsRow, error) {
@@ -304,6 +323,7 @@ func (q *Queries) ListAuthoringLessons(ctx context.Context, courseID string) ([]
 			&i.Title,
 			&i.Description,
 			&i.Position,
+			&i.IsPreview,
 		); err != nil {
 			return nil, err
 		}
@@ -349,7 +369,8 @@ func (q *Queries) ListAuthoringModules(ctx context.Context, courseID string) ([]
 }
 
 const listPublishedCourses = `-- name: ListPublishedCourses :many
-SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at
+SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at,
+  price_minor, currency
 FROM courses
 WHERE status = 'published'
   AND (title ILIKE '%' || $1::text || '%' ESCAPE '!'
@@ -378,6 +399,8 @@ type ListPublishedCoursesRow struct {
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 	PublishedAt pgtype.Timestamptz
+	PriceMinor  pgtype.Int8
+	Currency    pgtype.Text
 }
 
 func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCoursesParams) ([]ListPublishedCoursesRow, error) {
@@ -404,6 +427,8 @@ func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCou
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PublishedAt,
+			&i.PriceMinor,
+			&i.Currency,
 		); err != nil {
 			return nil, err
 		}
@@ -427,6 +452,8 @@ SELECT
   created_at,
   updated_at,
   published_at
+  , price_minor
+  , currency
 FROM courses
 WHERE id = $1::text::uuid
 FOR UPDATE
@@ -443,6 +470,8 @@ type LockAuthoringCourseRow struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	PublishedAt  pgtype.Timestamptz
+	PriceMinor   pgtype.Int8
+	Currency     pgtype.Text
 }
 
 func (q *Queries) LockAuthoringCourse(ctx context.Context, courseID string) (LockAuthoringCourseRow, error) {
@@ -459,6 +488,8 @@ func (q *Queries) LockAuthoringCourse(ctx context.Context, courseID string) (Loc
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PublishedAt,
+		&i.PriceMinor,
+		&i.Currency,
 	)
 	return i, err
 }

@@ -24,3 +24,7 @@ type AuthoringRepository interface {
 	Transition(context.Context, domain.Actor, string, domain.Status, domain.Status, time.Time, time.Time) (domain.CourseTree, error)
 	Delete(context.Context, domain.Actor, string, time.Time) error
 }
+
+type Grandfatherer interface {
+	GrandfatherOnPriceSet(context.Context, string, time.Time, int64, string, time.Time) error
+}

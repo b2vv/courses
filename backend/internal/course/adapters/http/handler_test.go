@@ -51,7 +51,7 @@ func (r repository) GetPublished(_ context.Context, slug string) (domain.CourseD
 }
 func fixture() domain.Course {
 	now := time.Date(2026, 9, 3, 10, 0, 0, 0, time.UTC)
-	return domain.Course{ID: "10000000-0000-4000-8000-000000000001", Slug: "go-foundations", Title: "Go foundations", Summary: "Build a reliable API", Description: "Learn modules, PostgreSQL and tests.", Status: domain.Published, CreatedAt: now, UpdatedAt: now, PublishedAt: &now}
+	return domain.Course{ID: "10000000-0000-4000-8000-000000000001", Slug: "go-foundations", Title: "Go foundations", Summary: "Build a reliable API", Description: "Learn modules, PostgreSQL and tests.", Status: domain.Published, CreatedAt: now, UpdatedAt: now, PublishedAt: &now, Price: &domain.Price{Minor: 50000, Currency: "UAH"}, Paid: true}
 }
 func handler(failure error) http.Handler {
 	adapter := coursehttp.NewHandler(application.NewCatalog(repository{failure: failure}), nil)

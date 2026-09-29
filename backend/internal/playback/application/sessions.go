@@ -72,6 +72,9 @@ func (sessions *Sessions) loadViewablePlayback(ctx context.Context, actor domain
 		return domain.LessonPlayback{}, err
 	}
 	if !playback.Course.CanBeViewedBy(actor) {
+		if playback.Course.PurchaseRequiredBy(actor) {
+			return domain.LessonPlayback{}, domain.ErrPurchaseRequired
+		}
 		return domain.LessonPlayback{}, domain.ErrForbidden
 	}
 	return playback, nil

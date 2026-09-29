@@ -75,6 +75,8 @@ func learningActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) 
 }
 
 func mapLearningCourse(course domain.LearningCourse) learningCourseDTO {
+	base := mapCourse(course.Course)
+	base.Paid = course.Paid
 	modules := make([]learningModuleDTO, 0, len(course.Modules))
 	for _, module := range course.Modules {
 		lessons := make([]learningLessonDTO, 0, len(module.Lessons))
@@ -97,11 +99,15 @@ func mapLearningCourse(course domain.LearningCourse) learningCourseDTO {
 		continueLessonID = &value
 	}
 	return learningCourseDTO{
-		courseDTO: mapCourse(course.Course), Modules: modules, ContinueLessonID: continueLessonID,
+		courseDTO: base, Modules: modules, ContinueLessonID: continueLessonID,
 	}
 }
 
 func writeLearningError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, domain.ErrPurchaseRequired) {
+		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
+		return
+	}
 	if errors.Is(err, domain.ErrForbidden) || errors.Is(err, domain.ErrCourseForbidden) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_forbidden", "Course is not available to this account")
 		return

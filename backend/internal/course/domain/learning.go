@@ -89,6 +89,10 @@ func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
 
+func (course LearningCourse) PurchaseRequiredBy(actor Actor) bool {
+	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+}
+
 func (state LearningVideoState) Valid() bool {
 	return state == VideoAbsent || state == VideoProcessing || state == VideoReady || state == VideoFailed
 }

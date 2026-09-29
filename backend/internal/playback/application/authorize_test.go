@@ -86,6 +86,7 @@ func TestCourseVisibilityPolicyRunsOnlyAfterMatchingOwnership(t *testing.T) {
 		want   error
 	}{
 		{name: "student cannot view archived course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}, want: domain.ErrForbidden},
+		{name: "student must purchase paid course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}, want: domain.ErrPurchaseRequired},
 		{name: "owner can view archived course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: userID, Status: domain.Archived}},
 		{name: "administrator can view draft course", actor: domain.Actor{UserID: userID, Administrator: true}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}},
 	}

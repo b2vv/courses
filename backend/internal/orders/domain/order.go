@@ -37,6 +37,32 @@ func NewOrder(id, userID, courseID string, amount Money, idempotencyKey string, 
 	}, nil
 }
 
+func RestoreOrder(id, userID, courseID string, amount Money, status OrderStatus, idempotencyKey string, createdAt time.Time, paidAt *time.Time) (Order, error) {
+	order, err := NewOrder(id, userID, courseID, amount, idempotencyKey, createdAt)
+	if err != nil {
+		return Order{}, err
+	}
+	switch status {
+	case OrderPending:
+		if paidAt != nil {
+			return Order{}, ErrOrderInvalid
+		}
+		return order, nil
+	case OrderPaid:
+		if paidAt == nil {
+			return Order{}, ErrOrderInvalid
+		}
+		return order.MarkPaid(*paidAt)
+	case OrderFailed:
+		if paidAt != nil {
+			return Order{}, ErrOrderInvalid
+		}
+		return order.MarkFailed()
+	default:
+		return Order{}, ErrOrderInvalid
+	}
+}
+
 func (order Order) ID() string { return order.id }
 
 func (order Order) UserID() string { return order.userID }

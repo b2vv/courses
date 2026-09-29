@@ -93,6 +93,9 @@ func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor 
 		return Page{}, err
 	}
 	if !facts.Course.CanBeViewedBy(actor) {
+		if facts.Course.PurchaseRequiredBy(actor) {
+			return Page{}, domain.ErrPurchaseRequired
+		}
 		return Page{}, domain.ErrForbidden
 	}
 	page, err := service.repository.List(ctx, lessonID, cursor, 50)
@@ -118,6 +121,9 @@ func (service *Service) Publish(ctx context.Context, actor Actor, request Publis
 		return Comment{}, err
 	}
 	if !facts.Course.CanBeViewedBy(actor) {
+		if facts.Course.PurchaseRequiredBy(actor) {
+			return Comment{}, domain.ErrPurchaseRequired
+		}
 		return Comment{}, domain.ErrForbidden
 	}
 	var parent *domain.Comment
@@ -215,6 +221,9 @@ func (service *Service) ReportComment(ctx context.Context, actor Actor, commentI
 		return err
 	}
 	if !record.Course.CanBeViewedBy(actor) {
+		if record.Course.PurchaseRequiredBy(actor) {
+			return domain.ErrPurchaseRequired
+		}
 		return domain.ErrForbidden
 	}
 	if record.Comment.RemovedAt != nil {

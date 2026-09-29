@@ -26,6 +26,12 @@ type authoringRepository struct {
 	deleteCourse func(context.Context, domain.Actor, string, time.Time) error
 }
 
+type grandfathererFunc func(context.Context, string, time.Time, int64, string, time.Time) error
+
+func (fn grandfathererFunc) GrandfatherOnPriceSet(ctx context.Context, courseID string, expected time.Time, minor int64, currency string, updatedAt time.Time) error {
+	return fn(ctx, courseID, expected, minor, currency, updatedAt)
+}
+
 func (repository *authoringRepository) List(ctx context.Context, actor domain.Actor, query domain.Query, status domain.Status) (domain.AuthoringPage, error) {
 	repository.calls = append(repository.calls, "list")
 	return repository.list(ctx, actor, query, status)
@@ -102,6 +108,13 @@ func TestAuthoringRejectsRoleAndMalformedInputBeforeRepository(t *testing.T) {
 		}, want: domain.ErrInvalidRequest},
 		{name: "zero save token", act: func(authoring *application.Authoring) error {
 			_, err := authoring.Save(context.Background(), adminActor(), applicationTree(), time.Time{})
+			return err
+		}, want: domain.ErrInvalidRequest},
+		{name: "invalid save price", act: func(authoring *application.Authoring) error {
+			tree := applicationTree()
+			tree.Price = &domain.Price{Minor: 0, Currency: "UAH"}
+			tree.PriceSet = true
+			_, err := authoring.Save(context.Background(), adminActor(), tree, tree.UpdatedAt)
 			return err
 		}, want: domain.ErrInvalidRequest},
 		{name: "instructor reassignment", act: func(authoring *application.Authoring) error {
@@ -354,6 +367,45 @@ func TestWriteTokensAndMicrosecondClockReachRepository(t *testing.T) {
 	}
 	if _, err := application.NewAuthoring(repository, func() time.Time { return clockReading }).Save(context.Background(), adminActor(), edit, expected); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFirstPriceSetUsesAtomicGrandfatherOperation(t *testing.T) {
+	stored := applicationTree()
+	edit := stored
+	edit.Price = &domain.Price{Minor: 50000, Currency: "UAH"}
+	edit.PriceSet = true
+	loaded := stored
+	loaded.Price = edit.Price
+	loaded.UpdatedAt = stored.UpdatedAt.Add(time.Microsecond)
+	loadCalls := 0
+	repository := &authoringRepository{
+		load: func(context.Context, string) (domain.CourseTree, error) {
+			loadCalls++
+			if loadCalls == 1 {
+				return stored, nil
+			}
+			return loaded, nil
+		},
+		save: func(_ context.Context, _ domain.Actor, tree domain.CourseTree, _, _ time.Time) (domain.CourseTree, error) {
+			t.Fatalf("first price must not use the non-atomic course save: %+v", tree)
+			return domain.CourseTree{}, nil
+		},
+	}
+	called := false
+	grandfatherer := grandfathererFunc(func(_ context.Context, courseID string, expected time.Time, minor int64, currency string, updatedAt time.Time) error {
+		called = true
+		if courseID != stored.ID || expected != stored.UpdatedAt || minor != 50000 || currency != "UAH" || !updatedAt.After(expected) {
+			t.Fatalf("atomic price args: id=%s expected=%s minor=%d currency=%s updated=%s", courseID, expected, minor, currency, updatedAt)
+		}
+		return nil
+	})
+	saved, err := application.NewAuthoring(repository, func() time.Time { return loaded.UpdatedAt }, grandfatherer).Save(context.Background(), adminActor(), edit, stored.UpdatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called || saved.Price == nil || saved.Price.Minor != 50000 || loadCalls != 2 {
+		t.Fatalf("saved=%+v called=%v loads=%d", saved, called, loadCalls)
 	}
 }
 

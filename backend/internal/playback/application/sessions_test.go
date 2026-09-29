@@ -95,6 +95,7 @@ func TestPlayChecksLessonAndPolicyBeforeTakingOwnership(t *testing.T) {
 		{name: "missing lesson", loadErr: domain.ErrLessonNotFound, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrLessonNotFound},
 		{name: "video not ready", loadErr: domain.ErrVideoNotReady, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrVideoNotReady},
 		{name: "draft denied to student", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrForbidden},
+		{name: "paid course requires purchase", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrPurchaseRequired},
 		{name: "published allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID}, wantTake: true},
 		{name: "draft allowed to owner", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: userID, Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantTake: true},
 		{name: "archived allowed to admin", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}}, actor: domain.Actor{UserID: userID, Administrator: true}, wantTake: true},

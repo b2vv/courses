@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"courses/internal/course/domain"
@@ -13,8 +14,9 @@ const authoringOperationTimeout = 3 * time.Second
 type AuthoringClock func() time.Time
 
 type Authoring struct {
-	repository ports.AuthoringRepository
-	now        AuthoringClock
+	repository    ports.AuthoringRepository
+	now           AuthoringClock
+	grandfatherer ports.Grandfatherer
 }
 
 type AuthoringListInput struct {
@@ -23,8 +25,12 @@ type AuthoringListInput struct {
 	Status domain.Status
 }
 
-func NewAuthoring(repository ports.AuthoringRepository, now AuthoringClock) *Authoring {
-	return &Authoring{repository: repository, now: now}
+func NewAuthoring(repository ports.AuthoringRepository, now AuthoringClock, grandfatherer ...ports.Grandfatherer) *Authoring {
+	var grants ports.Grandfatherer
+	if len(grandfatherer) != 0 {
+		grants = grandfatherer[0]
+	}
+	return &Authoring{repository: repository, now: now, grandfatherer: grants}
 }
 
 func (authoring *Authoring) List(ctx context.Context, actor domain.Actor, input AuthoringListInput) (domain.AuthoringPage, error) {
@@ -120,6 +126,7 @@ func (authoring *Authoring) Save(ctx context.Context, actor domain.Actor, tree d
 	if err := actor.CanManage(stored.InstructorID); err != nil {
 		return domain.CourseTree{}, err
 	}
+	original := stored
 	if err := domain.ValidateSlugChange(stored.Slug, stored.PublishedAt, tree.Slug); err != nil {
 		return domain.CourseTree{}, err
 	}
@@ -128,13 +135,60 @@ func (authoring *Authoring) Save(ctx context.Context, actor domain.Actor, tree d
 	stored.Summary = tree.Summary
 	stored.Description = tree.Description
 	stored.InstructorID = tree.InstructorID
+	if !tree.PriceSet {
+		tree.Price = stored.Price
+	}
+	preserveUnspecifiedPreviews(stored.Modules, tree.Modules)
+	firstPriceSet := stored.Price == nil && tree.Price != nil
+	requestedPrice := tree.Price
+	if !firstPriceSet {
+		stored.Price = requestedPrice
+	}
 	stored.Modules = tree.Modules
 
-	saved, err := authoring.repository.Save(callCtx, actor, stored, expectedUpdatedAt, authoring.timestampAfter(expectedUpdatedAt))
-	if err != nil {
-		return domain.CourseTree{}, operationError(ctx, err)
+	var saved domain.CourseTree
+	if firstPriceSet {
+		if !reflect.DeepEqual(original, stored) {
+			return domain.CourseTree{}, domain.ErrInvalidRequest
+		}
+		saved = original
+	} else {
+		saved, err = authoring.repository.Save(callCtx, actor, stored, expectedUpdatedAt, authoring.timestampAfter(expectedUpdatedAt))
+		if err != nil {
+			return domain.CourseTree{}, operationError(ctx, err)
+		}
+	}
+	if firstPriceSet {
+		if authoring.grandfatherer == nil {
+			return domain.CourseTree{}, domain.ErrDependencyUnavailable
+		}
+		priceUpdatedAt := authoring.timestampAfter(saved.UpdatedAt)
+		if err := authoring.grandfatherer.GrandfatherOnPriceSet(callCtx, saved.ID, saved.UpdatedAt, requestedPrice.Minor, requestedPrice.Currency, priceUpdatedAt); err != nil {
+			return domain.CourseTree{}, operationError(ctx, err)
+		}
+		saved, err = authoring.repository.Load(callCtx, saved.ID)
+		if err != nil {
+			return domain.CourseTree{}, operationError(ctx, err)
+		}
 	}
 	return authoring.validateStoredTree(saved)
+}
+
+func preserveUnspecifiedPreviews(stored, proposed []domain.Module) {
+	previews := make(map[string]bool)
+	for _, module := range stored {
+		for _, lesson := range module.Lessons {
+			previews[lesson.ID] = lesson.IsPreview
+		}
+	}
+	for moduleIndex := range proposed {
+		for lessonIndex := range proposed[moduleIndex].Lessons {
+			lesson := &proposed[moduleIndex].Lessons[lessonIndex]
+			if !lesson.PreviewSet {
+				lesson.IsPreview = previews[lesson.ID]
+			}
+		}
+	}
 }
 
 func (authoring *Authoring) Transition(ctx context.Context, actor domain.Actor, id string, to domain.Status, expectedUpdatedAt time.Time) (domain.CourseTree, error) {

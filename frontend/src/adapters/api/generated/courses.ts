@@ -16,6 +16,7 @@ import type {
   AdminCourseStatusRequest,
   AdminCourseTree,
   AdminCourseWrite,
+  AdminGrantRequest,
   AdminMutationForbiddenResponse,
   AdminUserConflictResponse,
   AdminUserMutationForbiddenResponse,
@@ -28,12 +29,14 @@ import type {
   Comment,
   CommentPage,
   CourseDetail,
+  CourseGrant,
   CoursePage,
   CourseVideos,
   DismissReportsRequest,
   DraftConflictResponse,
   ForbiddenResponse,
   GetLessonTranscriptParams,
+  GrantForbiddenResponse,
   Instructor,
   InternalErrorResponse,
   InvalidRequestResponse,
@@ -57,6 +60,7 @@ import type {
   MediaVideo,
   ModerationQueuePage,
   NotFoundResponse,
+  OrderNotFoundResponse,
   OriginForbiddenResponse,
   PlaybackExpiredResponse,
   PlaybackForbiddenResponse,
@@ -68,6 +72,8 @@ import type {
   PublishCommentRequest,
   PublishLessonDraft200,
   PublishLessonDraftRequest,
+  PurchaseConflictResponse,
+  PurchaseOrder,
   RegenerateLessonDraftRequest,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
@@ -214,6 +220,235 @@ export const getPublishedCourse = async (slug: string, options?: RequestInit): P
 
   const data: getPublishedCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getPublishedCourseResponse
+}
+
+
+
+export type startCoursePurchaseResponse201 = {
+  data: PurchaseOrder
+  status: 201
+}
+
+export type startCoursePurchaseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type startCoursePurchaseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type startCoursePurchaseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type startCoursePurchaseResponse409 = {
+  data: PurchaseConflictResponse
+  status: 409
+}
+
+export type startCoursePurchaseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type startCoursePurchaseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type startCoursePurchaseResponseSuccess = (startCoursePurchaseResponse201) & {
+  headers: Headers;
+};
+export type startCoursePurchaseResponseError = (startCoursePurchaseResponse400 | startCoursePurchaseResponse401 | startCoursePurchaseResponse403 | startCoursePurchaseResponse409 | startCoursePurchaseResponse500 | startCoursePurchaseResponse503) & {
+  headers: Headers;
+};
+
+export type startCoursePurchaseResponse = (startCoursePurchaseResponseSuccess | startCoursePurchaseResponseError)
+
+export const getStartCoursePurchaseUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/purchase`
+}
+
+/**
+ * Authenticated same-origin mutation. The order snapshots the published course price.
+ * @summary Start an idempotent course purchase
+ */
+export const startCoursePurchase = async (courseId: string, options?: RequestInit): Promise<startCoursePurchaseResponse> => {
+
+  const res = await fetch(getStartCoursePurchaseUrl(courseId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startCoursePurchaseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as startCoursePurchaseResponse
+}
+
+
+
+export type getPurchaseStatusResponse200 = {
+  data: PurchaseOrder
+  status: 200
+}
+
+export type getPurchaseStatusResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getPurchaseStatusResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getPurchaseStatusResponse404 = {
+  data: OrderNotFoundResponse
+  status: 404
+}
+
+export type getPurchaseStatusResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getPurchaseStatusResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getPurchaseStatusResponseSuccess = (getPurchaseStatusResponse200) & {
+  headers: Headers;
+};
+export type getPurchaseStatusResponseError = (getPurchaseStatusResponse400 | getPurchaseStatusResponse401 | getPurchaseStatusResponse404 | getPurchaseStatusResponse500 | getPurchaseStatusResponse503) & {
+  headers: Headers;
+};
+
+export type getPurchaseStatusResponse = (getPurchaseStatusResponseSuccess | getPurchaseStatusResponseError)
+
+export const getGetPurchaseStatusUrl = (orderId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/orders/${orderId}`
+}
+
+/**
+ * @summary Read the authenticated account's purchase status
+ */
+export const getPurchaseStatus = async (orderId: string, options?: RequestInit): Promise<getPurchaseStatusResponse> => {
+
+  const res = await fetch(getGetPurchaseStatusUrl(orderId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getPurchaseStatusResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getPurchaseStatusResponse
+}
+
+
+
+export type grantCourseAccessResponse201 = {
+  data: CourseGrant
+  status: 201
+}
+
+export type grantCourseAccessResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type grantCourseAccessResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type grantCourseAccessResponse403 = {
+  data: GrantForbiddenResponse
+  status: 403
+}
+
+export type grantCourseAccessResponse409 = {
+  data: PurchaseConflictResponse
+  status: 409
+}
+
+export type grantCourseAccessResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type grantCourseAccessResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type grantCourseAccessResponseSuccess = (grantCourseAccessResponse201) & {
+  headers: Headers;
+};
+export type grantCourseAccessResponseError = (grantCourseAccessResponse400 | grantCourseAccessResponse401 | grantCourseAccessResponse403 | grantCourseAccessResponse409 | grantCourseAccessResponse500 | grantCourseAccessResponse503) & {
+  headers: Headers;
+};
+
+export type grantCourseAccessResponse = (grantCourseAccessResponseSuccess | grantCourseAccessResponseError)
+
+export const getGrantCourseAccessUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/grants`
+}
+
+/**
+ * Admin-only same-origin mutation. Creates an active admin grant and its audit record.
+ * @summary Grant course access as an administrator
+ */
+export const grantCourseAccess = async (courseId: string,
+    adminGrantRequest: AdminGrantRequest, options?: RequestInit): Promise<grantCourseAccessResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getGrantCourseAccessUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminGrantRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: grantCourseAccessResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as grantCourseAccessResponse
 }
 
 
