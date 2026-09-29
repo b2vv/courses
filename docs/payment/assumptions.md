@@ -81,3 +81,12 @@
   NB1' → property-тест PurchaseRequired⟹¬CanView (O01/Pay27); NB5 → O07 рахує рядки не діапазон;
   NB4 → grandfather на playback-прогресі, названа межа (вузька підмножина transcript/discussion-only).
 - GATE 2 ПРОЙДЕНО. ДАЛІ: tasks (O01–O07 → Pay-рядки), implement Codex (sol); O06 блокований на назві провайдера.
+
+## O01/O03 зчеплення по integration (знайдено при верифікації O02)
+- O01 розширив accesstest.TruthTable рядками paid/entitled/preview. Integration-guard D4 (R06/R07/R08 +
+  discussion) ганяє таблицю через SQL — а SQL віддасть нові факти лише в O03. Тому між O01 і O03
+  integration ЧЕРВОНИЙ на нових рядках (напр. R06 stranger_paid_published). Міграція 00011 застосовується
+  (тест падає на асерті, не на setup). На feature-гілці проміжний red припустимий; O03 закриває.
+- Урок: O01 «поведінково нейтральний» — лише про прод+unit; integration-guard зчеплений із SQL-слайсом.
+  O03 мусить: (а) SQL читає price/grants/preview; (б) integration-сіди створюють платні курси+гранти для
+  нових рядків. Повний integration зелений — критерій O03.
