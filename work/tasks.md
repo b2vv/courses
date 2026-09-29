@@ -251,7 +251,7 @@ Courses 2 на opus-4-8); §24 п.21/п.22, ADR 013→014, шви `docs/readines
 
 | ID | Назва | Est | Depends | Status | Result / закриває |
 |---|---|---:|---|---|---|
-| O01 | ADR 014; `access.Course`+=Paid/Entitled/Preview; `CanView`+`PurchaseRequired` (спільні факти); `accesstest` розширено; property-тест PurchaseRequired⟹¬CanView; 4 доменні типи фактів. Поведінково нейтральний | 2.5h | — | planned | Pay01/Pay05/Pay15/Pay27; unit |
+| O01 | ADR 014; `access.Course`+=Paid/Entitled/Preview; `CanView`+`PurchaseRequired` (спільний accessExempt); property-тест; таблиця; 4 доменні типи | 2.5h | — | done | `40a724f`; build 57pkg + unit контракту/арх/4 доменів зелені; Pay01/05/15/27; поведінково нейтрально |
 | O02 | Міграція 00011 (courses price/currency, lessons is_preview, orders, course_grants, payment_events, grant_audit) + домен `orders`: Money(UAH), Order, Grant, ApplyPaymentEvent-правило; unit | 3.5h | O01 | planned | Pay02/Pay03/Pay18 + домен Pay04/Pay16/Pay21 |
 | O03 | 6 запитів джойнять course_grants + читають price/preview; userID через 4 порти; integration-таблиця через SQL у 4 модулях; замір гарячого шляху (EXPLAIN) | 3h | O02 | planned | Pay01(SQL)/Pay11/Pay14/Pay23 |
 | O04 | `orders` application+HTTP: старт покупки, статус, адмін-видача, ApplyPaymentEvent (unknown-order не термінальна), grandfather на price-set; PurchaseRequired-код на 4 шарах; каталог price/paid; авторинг ціни/прев'ю; OpenAPI+Orval; architecture-тест | 4h | O03 | planned | Pay04/06/07/08/10/12/13/16/17/19/20/21/21b/22/26 |
