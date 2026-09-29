@@ -23,3 +23,11 @@ type Course struct {
 func (course Course) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published})
 }
+
+func (course Course) CanBeModeratedBy(actor Actor) bool {
+	return actor.UserID != "" && (actor.Administrator || actor.UserID == course.OwnerID)
+}
+
+func IsModeration(actor Actor, comment Comment) bool {
+	return actor.UserID != comment.AuthorID
+}

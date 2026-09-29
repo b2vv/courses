@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
+import type { TeachDependencies } from '../app/composition/teach';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../application/transcript/recovery';
@@ -25,6 +26,7 @@ type RootRouteContext = RootIdentityContext & {
   admin: AdminDependencies;
   catalog: ReturnType<typeof createCatalogDependencies>;
   learn: LearnDependencies;
+  teach: TeachDependencies;
   transcriptHistory: TranscriptHistoryStore;
 };
 

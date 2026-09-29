@@ -30,6 +30,7 @@ type Comment struct {
 	CreatedAt  time.Time
 	EditedAt   *time.Time
 	RemovedAt  *time.Time
+	RemovedBy  *string
 }
 
 // NewComment validates a root or a flat reply. parent is required exactly when ParentID is set;

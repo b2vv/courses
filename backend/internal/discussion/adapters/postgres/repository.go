@@ -32,8 +32,8 @@ LEFT JOIN LATERAL (
 WHERE lessons.id = $1::text::uuid`
 
 const rootsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
-  courses.instructor_id::text, courses.status
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -49,8 +49,8 @@ ORDER BY c.created_at DESC, c.id DESC
 LIMIT $4`
 
 const repliesQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
-  courses.instructor_id::text, courses.status
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -60,8 +60,8 @@ WHERE c.parent_id = ANY($1::uuid[])
 ORDER BY c.parent_id, c.created_at, c.id`
 
 const commentQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
-  courses.instructor_id::text, courses.status
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -231,8 +231,8 @@ func (repository *Repository) UpdateBody(ctx context.Context, id, authorID, body
 	return repository.Get(ctx, id)
 }
 
-func (repository *Repository) Remove(ctx context.Context, id string, now time.Time) error {
-	_, err := repository.pool.Exec(ctx, `UPDATE discussion_comments SET body=NULL, removed_at=COALESCE(removed_at,$2) WHERE id=$1::text::uuid`, id, now)
+func (repository *Repository) Remove(ctx context.Context, id, actorID string, now time.Time) error {
+	_, err := repository.pool.Exec(ctx, `UPDATE discussion_comments SET body=NULL, removed_at=COALESCE(removed_at,$2), removed_by=COALESCE(removed_by,$3::text::uuid) WHERE id=$1::text::uuid`, id, now, actorID)
 	if err != nil {
 		return persistenceError(err)
 	}
@@ -240,13 +240,38 @@ func (repository *Repository) Remove(ctx context.Context, id string, now time.Ti
 }
 
 func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error) {
+	return scanRecordFields(row, recordScanTail{})
+}
+
+type recordScanTail struct {
+	lessonTitle *string
+	openReports *int
+}
+
+func scanModerationRecord(row interface{ Scan(...any) error }, openReports *int) (ports.ModerationCommentRecord, error) {
+	var lessonTitle string
+	record, err := scanRecordFields(row, recordScanTail{lessonTitle: &lessonTitle, openReports: openReports})
+	if err != nil {
+		return ports.ModerationCommentRecord{}, err
+	}
+	return ports.ModerationCommentRecord{CommentRecord: record, LessonTitle: lessonTitle}, nil
+}
+
+func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) (ports.CommentRecord, error) {
 	var c ports.CommentRecord
 	var status string
 	var parentID, body pgtype.Text
 	var position pgtype.Int8
 	var edited, removed pgtype.Timestamptz
-	var display pgtype.Text
-	err := row.Scan(&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &display, &c.Course.OwnerID, &status)
+	var removedBy, display pgtype.Text
+	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.CourseID, &c.Course.OwnerID, &status}
+	if tail.lessonTitle != nil {
+		values = append(values, tail.lessonTitle)
+	}
+	if tail.openReports != nil {
+		values = append(values, tail.openReports)
+	}
+	err := row.Scan(values...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.CommentRecord{}, domain.ErrNotFound
 	}
@@ -265,6 +290,9 @@ func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error
 	}
 	if removed.Valid {
 		c.Comment.RemovedAt = &removed.Time
+	}
+	if removedBy.Valid {
+		c.Comment.RemovedBy = &removedBy.String
 	}
 	if display.Valid {
 		c.DisplayName = &display.String

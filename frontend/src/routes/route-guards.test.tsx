@@ -22,6 +22,8 @@ import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-hi
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
+import { createTeachQueries } from '../app/composition/teach-queries';
+import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import type { DiscussionRepository } from '../ports/DiscussionRepository';
 import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
@@ -41,6 +43,13 @@ const discussionStub = new Proxy({} as DiscussionRepository, {
   get() {
     return () => {
       throw new Error('Discussion is not used by route guard tests');
+    };
+  },
+});
+const teachStub = new Proxy({} as TeachRepository, {
+  get() {
+    return () => {
+      throw new Error('Teach is not used by route guard tests');
     };
   },
 });
@@ -231,6 +240,7 @@ function createTestRouter(
             destroy: () => undefined,
           })),
       },
+      teach: createTeachQueries(teachStub),
     },
     defaultPendingMs: 0,
     defaultPendingMinMs: 0,
@@ -327,6 +337,12 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
       { id: '/learn', path: 'learn', fullPath: '/learn' },
       { id: '/learn/$', path: '$', fullPath: '/learn/$' },
       { id: '/login', path: 'login', fullPath: '/login' },
+      { id: '/teach', path: 'teach', fullPath: '/teach' },
+      {
+        id: '/teach/courses/$courseId',
+        path: 'courses/$courseId',
+        fullPath: '/teach/courses/$courseId',
+      },
     ].sort((left, right) => left.id.localeCompare(right.id)),
   );
 });
@@ -443,6 +459,23 @@ test('G04 gives a student the same not-found answer for /admin as an unknown add
 
   expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' }).textContent).toBe(
     adminAnswer,
+  );
+});
+
+test('W guard gives a student the same not-found answer for /teach as an unknown address', async () => {
+  const student = user('student');
+  answerWith(student);
+  const teachRouter = createTestRouter('/teach', student);
+  await teachRouter.load();
+  const teachScreen = renderRouter(teachRouter);
+  const teachAnswer = screen.getByRole('heading', { name: 'Сторінку не знайдено' }).textContent;
+  teachScreen.unmount();
+
+  const unknownRouter = createTestRouter('/unknown', student);
+  await unknownRouter.load();
+  renderRouter(unknownRouter);
+  expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' }).textContent).toBe(
+    teachAnswer,
   );
 });
 

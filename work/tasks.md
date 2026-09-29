@@ -225,3 +225,19 @@ Compose і фікстур, тобто не може бігти раніше за
 | D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | done | K16–K18; 3 дефекти продукту знайдено й закрито в слайсі; make check exit 0, e2e 75/75 (B39 → B-23) |
 | D05 | e2e: мітка й перемотка, відповідь, модерація, відмова, a11y | 2h | D04 | done | K19–K23; мітку до Play виправлено (дефект продукту); make check exit 0, e2e 79/79 |
 | D06 | Упорядкований `make check`, звіт K01–K23 по одному | 1h | D01–D05 | done | `docs/discussion/report.md`; K01–K23 кожен вказує на свій тест; make check exit 0, e2e 79/79 (B39 ✓), backend 501/0; B-23 рядок D06; Phase 7b закрито |
+
+## Робоче місце інструктора
+
+Джерело scope: [spec](../docs/instructor/spec.md) (GATE 1), [plan](../docs/instructor/plan.md)
+(GATE 2 зелений); §24 п.3. Розширюємо модуль `discussion` (рішення плану, підтверджене кодом).
+Ролі: Courses 1 — план, гейти, коміти; код — Codex; рев'ю — Courses 2. Гілка `feat/instructor-workspace`.
+Кожен таск закриває названі рядки приймальної таблиці W01–W26 (`plan.md` §Приймальні сценарії).
+
+| ID | Назва | Est | Depends | Status | Result / закриває |
+|---|---|---:|---|---|---|
+| I01 | Домен `discussion`: `Report` (правила: не власний, доступ до курсу), course-level guard модерації (owner∨admin), дискримінатор `actor≠author` для журналу, `removed_by` у Comment; unit-таблиці | 2.5h | — | done | `46a94a2`; `NewReport`/`CanBeModeratedBy`/`IsModeration`/`RemovedBy`; W12/W13/W15/W16/W18; go build+`go test -race` домену зелені (docker) |
+| I02 | Міграція `00010` (removed_by+CHECK, reports+dismissed_at+UNIQUE+CASCADE, moderation_log, keyset+partial індекси) + postgres `ModerationRepository`: `CourseFacts`, `ListByCourse`, `InsertReport` ON CONFLICT, `DismissReports`, `ListQueue` | 3.5h | I01 | done | `3fb51ee`; адитивно (Remove/log→I03); 2 гейт-фікси (SQL $2::int, ізоляція тесту); integration 7b+W01/W02/W04/W09/W10/W11/W23/W26 зелено |
+| I03 | Application (list-by-course, report, queue, dismiss, remove-with-audit) + HTTP (`RegisterTeach` під `/teach`, report під `/learn`, owner-скоуп, коди) + OpenAPI teach/report + Orval + `assertContract` + architecture-тест «без крос-модульного імпорту ownership» | 3h | I02 | done | `3b7b74c`; build+vet+unit+contract+architecture(discussion→course)+check-generated+integration(7b+I02+I03)+typecheck зелено; W03/W14–W20/W22/W24/W25 |
+| I04 | Фронтенд: route `teach.*` (guard+loader за зразком admin), огляд + черга, кнопка «Поскаржитись» на уроці, Orval-адаптер, query boundary, стани, a11y | 3h | I03 | done | `f3b7302`; typecheck+lint+architecture(125)+rstest 505/505; гейт-фікс R24 route-tree; W01/W03/W04/W07/W08/W21(частково) |
+| I05 | e2e `instructor.spec.ts`: W01–W26 спостережувані журнеї + a11y (W21, селектори в межах сторінки — правило «глобально лічене») | 2.5h | I04 | done | `1de3384`; 8 e2e (W01/W03-W08/W14/W16/W21); e2e викрив 2 дефекти I04 (W01 lesson-title/момент, W05 remove-інвалідація) — полагоджено; повний make check exit 0, e2e 87/87, rstest 505 |
+| I06 | Упорядкований `make check`; звіт `docs/instructor/report.md` — W01–W26 по одному на свій тест; `work/tasks.md`; AGENDA/брифінг; PR у main | 1.5h | I01–I05 | done | звіт W01–W26 кожен на свій тест; незалежна звірка знайшла 8 прогалин доказів — закрито gap-тестами; повний make check exit 0, e2e 87/87, rstest 505, integration зелено; **фазу закрито** |

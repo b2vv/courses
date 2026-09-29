@@ -64,5 +64,15 @@ export function createDiscussionQueries(discussion: DiscussionRepository) {
           unwrap(await discussion.remove(commentId)),
         onSuccess: (_value, { lessonId }) => invalidate(_client, lessonId),
       }),
+    report: (_client: QueryClient) =>
+      mutationOptions({
+        mutationFn: async ({ commentId }: { lessonId: string; commentId: string }) =>
+          unwrap(
+            discussion.report === undefined
+              ? ({ ok: false, error: { code: 'dependency_unavailable' as const } } as const)
+              : await discussion.report(commentId),
+          ),
+        onSuccess: (_value, { lessonId }) => invalidate(_client, lessonId),
+      }),
   };
 }
