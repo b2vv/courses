@@ -6,11 +6,14 @@ import {
   Checkbox,
   ComboBox,
   Dialog,
+  Delta,
   ErrorState,
+  LoadMeter,
   Menu,
   Pagination,
   ProgressBar,
   Select,
+  SegmentedControl,
   Skeleton,
   Switch,
   Table,
@@ -213,6 +216,47 @@ describe('accessible UI primitives', () => {
       document.activeElement,
     );
     expect(screen.getByRole('tabpanel', { name: 'Програма' }).textContent).toBe('Теми занять');
+  });
+
+  it('moves a single segmented selection with the keyboard', async () => {
+    const user = userEvent.setup();
+    render(
+      <SegmentedControl
+        label="Період статистики"
+        options={[
+          { id: '1h', label: '1 год' },
+          { id: '24h', label: '24 год' },
+          { id: '7d', label: '7 днів' },
+        ]}
+        defaultSelectedKeys={['24h']}
+      />,
+    );
+    // Single selection starts at 24h and is exposed as a checked radio.
+    expect(screen.getByRole('radio', { name: '24 год' }).getAttribute('aria-checked')).toBe('true');
+    await user.tab();
+    expect((document.activeElement as HTMLElement).getAttribute('role')).toBe('radio');
+    // Arrow moves focus and the single selection follows it, staying exactly one.
+    await user.keyboard('{ArrowRight}');
+    const moved = document.activeElement as HTMLElement;
+    expect(moved.getAttribute('role')).toBe('radio');
+    expect(moved.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1);
+  });
+
+  it('exposes meter values and delta meaning without relying on color or arrows', () => {
+    const { container } = render(
+      <>
+        <LoadMeter label="Заповнення курсу" value={82} tone="success" />
+        <Delta label="Зросло на 18 відсотків" value="+18%" direction="up" tone="success" />
+      </>,
+    );
+    const meter = screen.getByRole('meter', { name: 'Заповнення курсу' });
+    expect(meter.getAttribute('aria-valuenow')).toBe('82');
+    expect(meter.classList.contains('ui-meter--success')).toBe(true);
+    expect(container.querySelector('.ui-meter-fill')?.getAttribute('style')).toContain('82%');
+    const delta = screen.getByLabelText('Зросло на 18 відсотків');
+    expect(delta.classList.contains('ui-delta--success')).toBe(true);
+    expect(delta.textContent).toBe('↑+18%');
   });
 
   it('keeps unavailable menu actions disabled and dispatches the chosen action', async () => {

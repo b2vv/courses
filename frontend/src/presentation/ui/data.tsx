@@ -22,6 +22,47 @@ export function ProgressBar({ label, ...props }: ProgressBarProps) {
   );
 }
 
+export type MeterTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+
+type LoadMeterProps = Omit<Aria.MeterProps, 'children' | 'className'> & {
+  label: string;
+  tone?: MeterTone;
+};
+
+export function LoadMeter({ label, tone = 'neutral', ...props }: LoadMeterProps) {
+  return (
+    <Aria.Meter {...props} className={`ui-meter ui-meter--${tone}`}>
+      {({ percentage, valueText }) => (
+        <>
+          <div className="ui-meter-label">
+            <Aria.Label>{label}</Aria.Label>
+            <span className="ui-meter-value">{valueText}</span>
+          </div>
+          <div className="ui-meter-track">
+            <div className="ui-meter-fill" style={{ width: `${percentage}%` }} />
+          </div>
+        </>
+      )}
+    </Aria.Meter>
+  );
+}
+
+type DeltaProps = {
+  label: string;
+  value: string;
+  direction: 'up' | 'down';
+  tone: 'success' | 'danger';
+};
+
+export function Delta({ label, value, direction, tone }: DeltaProps) {
+  return (
+    <span className={`ui-delta ui-delta--${tone}`} aria-label={label}>
+      <span aria-hidden="true">{direction === 'up' ? '↑' : '↓'}</span>
+      <span aria-hidden="true">{value}</span>
+    </span>
+  );
+}
+
 export type TableColumn = { id: string; label: string };
 export type TableRow = { id: string; cells: readonly ReactNode[] };
 type TableProps = {
