@@ -16,12 +16,15 @@ type Actor struct {
 }
 
 type Course struct {
-	OwnerID string
-	Status  Status
+	OwnerID  string
+	Status   Status
+	Paid     bool
+	Entitled bool
+	Preview  bool
 }
 
 func (course Course) CanBeViewedBy(actor Actor) bool {
-	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published})
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
 
 func (course Course) CanBeModeratedBy(actor Actor) bool {
