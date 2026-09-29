@@ -224,4 +224,4 @@ Compose і фікстур, тобто не може бігти раніше за
 | D03 | Application + HTTP + OpenAPI/Orval + підключення в `cmd/api` | 2h | D02 | done | K10–K15; 33 contract-підтести, assertContract на кожній відповіді; make check exit 0, e2e 75/75 |
 | D04 | Фронтенд: адаптер на Orval, панель «Обговорення», мітка → `onSeek` | 2.5h | D03 | done | K16–K18; 3 дефекти продукту знайдено й закрито в слайсі; make check exit 0, e2e 75/75 (B39 → B-23) |
 | D05 | e2e: мітка й перемотка, відповідь, модерація, відмова, a11y | 2h | D04 | done | K19–K23; мітку до Play виправлено (дефект продукту); make check exit 0, e2e 79/79 |
-| D06 | Упорядкований `make check`, звіт K01–K23 по одному | 1h | D01–D05 | planned | — |
+| D06 | Упорядкований `make check`, звіт K01–K23 по одному | 1h | D01–D05 | done | `docs/discussion/report.md`; K01–K23 кожен вказує на свій тест; make check exit 0, e2e 79/79 (B39 ✓), backend 501/0; B-23 рядок D06; Phase 7b закрито |
