@@ -25,13 +25,19 @@ import (
 )
 
 const (
-	discussionOwner   = "30000000-0000-4000-8000-0000000000a1"
-	discussionStudent = "30000000-0000-4000-8000-0000000000a2"
-	discussionLesson  = "40000000-0000-4000-8000-0000000000b1"
-	positiveLesson    = "40000000-0000-4000-8000-0000000000b2"
-	cascadeLesson     = "40000000-0000-4000-8000-0000000000b3"
-	discussionAsset   = "50000000-0000-4000-8000-0000000000c1"
-	positiveAsset     = "50000000-0000-4000-8000-0000000000c3"
+	discussionOwner     = "30000000-0000-4000-8000-0000000000a1"
+	discussionStudent   = "30000000-0000-4000-8000-0000000000a2"
+	discussionReporter  = "30000000-0000-4000-8000-0000000000a3"
+	discussionReporter2 = "30000000-0000-4000-8000-0000000000a4"
+	moderationCourse    = "10000000-0000-4000-8000-0000000000d2"
+	moderationModule    = "20000000-0000-4000-8000-0000000000e2"
+	moderationLessonA   = "40000000-0000-4000-8000-0000000000b4"
+	moderationLessonB   = "40000000-0000-4000-8000-0000000000b5"
+	discussionLesson    = "40000000-0000-4000-8000-0000000000b1"
+	positiveLesson      = "40000000-0000-4000-8000-0000000000b2"
+	cascadeLesson       = "40000000-0000-4000-8000-0000000000b3"
+	discussionAsset     = "50000000-0000-4000-8000-0000000000c1"
+	positiveAsset       = "50000000-0000-4000-8000-0000000000c3"
 )
 
 func TestDiscussionPostgres(t *testing.T) {
@@ -71,6 +77,94 @@ func TestDiscussionPostgres(t *testing.T) {
 	defer pool.Close()
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
+
+	t.Run("I02 course-wide moderation repository", func(t *testing.T) {
+		ctx := context.Background()
+		t.Run("ListByCourse spans lessons and paginates all comments", func(t *testing.T) {
+			rootA := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "course root")
+			rootB := insertModerationRoot(t, repository, moderationLessonB, discussionStudent, "other lesson root")
+			reply := insertModerationReply(t, repository, moderationLessonA, rootA.Comment.ID, discussionReporter, "course reply")
+			base := time.Now().UTC().Add(-time.Minute)
+			for index, id := range []string{rootA.Comment.ID, rootB.Comment.ID, reply.Comment.ID} {
+				if _, err := pool.Exec(ctx, `UPDATE discussion_comments SET created_at=$2 WHERE id=$1::uuid`, id, base.Add(time.Duration(index)*time.Second)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			page, err := repository.ListByCourse(ctx, moderationCourse, "", 2)
+			if err != nil || len(page.Comments) != 2 || page.NextCursor == "" {
+				t.Fatalf("page=%+v err=%v", page, err)
+			}
+			if page.Comments[0].Comment.ID != reply.Comment.ID || page.Comments[1].Comment.ID != rootB.Comment.ID {
+				t.Fatalf("first page=%+v", page.Comments)
+			}
+			page, err = repository.ListByCourse(ctx, moderationCourse, page.NextCursor, 2)
+			if err != nil || len(page.Comments) != 1 || page.Comments[0].Comment.ID != rootA.Comment.ID {
+				t.Fatalf("second page=%+v err=%v", page.Comments, err)
+			}
+		})
+
+		t.Run("InsertReport is idempotent", func(t *testing.T) {
+			comment := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "duplicate report")
+			report := domain.Report{CommentID: comment.Comment.ID, ReporterID: discussionReporter}
+			if err := repository.InsertReport(ctx, report, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.InsertReport(ctx, report, time.Now().UTC().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comment_reports WHERE comment_id=$1::uuid`, comment.Comment.ID).Scan(&count); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 {
+				t.Fatalf("reports=%d want 1", count)
+			}
+		})
+
+		t.Run("queue ordering dismiss removal and reactivation", func(t *testing.T) {
+			// Isolate the report-driven queue from earlier subtests that share
+			// moderationCourse (e.g. the idempotent-report comment stays open).
+			if _, err := pool.Exec(ctx, `DELETE FROM discussion_comment_reports`); err != nil {
+				t.Fatal(err)
+			}
+			most := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "most reports")
+			one := insertModerationRoot(t, repository, moderationLessonB, discussionStudent, "one report")
+			removed := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "removed report")
+			at := time.Now().UTC()
+			for _, reporter := range []string{discussionReporter, discussionReporter2} {
+				if err := repository.InsertReport(ctx, domain.Report{CommentID: most.Comment.ID, ReporterID: reporter}, at); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := repository.InsertReport(ctx, domain.Report{CommentID: one.Comment.ID, ReporterID: discussionReporter}, at.Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.InsertReport(ctx, domain.Report{CommentID: removed.Comment.ID, ReporterID: discussionReporter}, at); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE discussion_comments SET body=NULL, removed_at=$2 WHERE id=$1::uuid`, removed.Comment.ID, at); err != nil {
+				t.Fatal(err)
+			}
+			queue, err := repository.ListQueue(ctx, moderationCourse, "", 50)
+			if err != nil || len(queue.Items) != 2 || queue.Items[0].Comment.ID != most.Comment.ID || queue.Items[0].OpenReports != 2 || queue.Items[1].Comment.ID != one.Comment.ID {
+				t.Fatalf("queue=%+v err=%v", queue, err)
+			}
+			if err := repository.DismissReports(ctx, most.Comment.ID, discussionOwner, at.Add(2*time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			queue, err = repository.ListQueue(ctx, moderationCourse, "", 50)
+			if err != nil || len(queue.Items) != 1 || queue.Items[0].Comment.ID != one.Comment.ID {
+				t.Fatalf("after dismiss queue=%+v err=%v", queue, err)
+			}
+			if err := repository.InsertReport(ctx, domain.Report{CommentID: most.Comment.ID, ReporterID: discussionStudent}, at.Add(3*time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			queue, err = repository.ListQueue(ctx, moderationCourse, "", 50)
+			if err != nil || len(queue.Items) != 2 || queue.Items[0].Comment.ID != most.Comment.ID {
+				t.Fatalf("reactivated queue=%+v err=%v", queue, err)
+			}
+		})
+	})
 
 	t.Run("K07 SQL facts cover access truth table", func(t *testing.T) {
 		for index, truth := range accesstest.TruthTable {
@@ -318,10 +412,13 @@ func seedDiscussion(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	statements := []string{
-		`INSERT INTO users(id,email,display_name,role,password_hash) VALUES ('` + discussionOwner + `','owner@discussion.test','Owner','instructor','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),('` + discussionStudent + `','student@discussion.test','Student','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`,
+		`INSERT INTO users(id,email,display_name,role,password_hash) VALUES ('` + discussionOwner + `','owner@discussion.test','Owner','instructor','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),('` + discussionStudent + `','student@discussion.test','Student','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),('` + discussionReporter + `','reporter@discussion.test','Reporter','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),('` + discussionReporter2 + `','reporter2@discussion.test','Reporter 2','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`,
 		`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES ('10000000-0000-4000-8000-0000000000d1','discussion','D','S','D','published','` + discussionOwner + `',now())`,
 		`INSERT INTO course_modules(id,course_id,title,position) VALUES ('20000000-0000-4000-8000-0000000000e1','10000000-0000-4000-8000-0000000000d1','M',0)`,
+		`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES ('` + moderationCourse + `','moderation','Moderation','S','D','published','` + discussionOwner + `',now())`,
+		`INSERT INTO course_modules(id,course_id,title,position) VALUES ('` + moderationModule + `','` + moderationCourse + `','M',0)`,
 		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('` + discussionLesson + `','20000000-0000-4000-8000-0000000000e1','L','',0),('` + positiveLesson + `','20000000-0000-4000-8000-0000000000e1','Positive','',1),('` + cascadeLesson + `','20000000-0000-4000-8000-0000000000e1','Cascade','',2)`,
+		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('` + moderationLessonA + `','` + moderationModule + `','A','',0),('` + moderationLessonB + `','` + moderationModule + `','B','',1)`,
 		`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,original_name,renditions,expires_at,created_at,updated_at,duration_seconds) VALUES ('` + discussionAsset + `','` + discussionLesson + `',1,'ready',10,'a.mp4','{720p}',now()+interval '1 day',now(),now(),120),('50000000-0000-4000-8000-0000000000c2','` + discussionLesson + `',2,'processing',10,'b.mp4','{}',now()+interval '1 day',now(),now(),NULL),('` + positiveAsset + `','` + positiveLesson + `',1,'ready',10,'positive-a.mp4','{720p}',now()+interval '1 day',now(),now(),45),('50000000-0000-4000-8000-0000000000c4','` + positiveLesson + `',2,'ready',10,'positive-b.mp4','{720p}',now()+interval '1 day',now(),now(),90),('50000000-0000-4000-8000-0000000000c5','` + positiveLesson + `',3,'processing',10,'positive-c.mp4','{}',now()+interval '1 day',now(),now(),NULL)`,
 	}
 	for _, statement := range statements {
@@ -332,6 +429,24 @@ func seedDiscussion(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(ctx, `UPDATE video_assets SET evicted_at=now() WHERE id = ANY($1::uuid[])`, []string{discussionAsset, "50000000-0000-4000-8000-0000000000c4"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func insertModerationRoot(t *testing.T, repository *Repository, lessonID, authorID, body string) ports.CommentRecord {
+	t.Helper()
+	result, err := repository.InsertRoot(context.Background(), domain.Comment{LessonID: lessonID, AuthorID: authorID, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func insertModerationReply(t *testing.T, repository *Repository, lessonID, parentID, authorID, body string) ports.CommentRecord {
+	t.Helper()
+	result, err := repository.InsertReply(context.Background(), domain.Comment{LessonID: lessonID, AuthorID: authorID, ParentID: &parentID, Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 func insertRoot(t *testing.T, pool *pgxpool.Pool, repository *Repository, body string) ports.CommentRecord {

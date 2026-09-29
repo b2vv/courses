@@ -32,7 +32,7 @@ LEFT JOIN LATERAL (
 WHERE lessons.id = $1::text::uuid`
 
 const rootsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
   courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
@@ -49,7 +49,7 @@ ORDER BY c.created_at DESC, c.id DESC
 LIMIT $4`
 
 const repliesQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
   courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
@@ -60,7 +60,7 @@ WHERE c.parent_id = ANY($1::uuid[])
 ORDER BY c.parent_id, c.created_at, c.id`
 
 const commentQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
-  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, u.display_name,
+  c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
   courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
@@ -240,13 +240,21 @@ func (repository *Repository) Remove(ctx context.Context, id string, now time.Ti
 }
 
 func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error) {
+	return scanRecordWithTail(row, nil)
+}
+
+func scanRecordWithTail(row interface{ Scan(...any) error }, tail *int) (ports.CommentRecord, error) {
 	var c ports.CommentRecord
 	var status string
 	var parentID, body pgtype.Text
 	var position pgtype.Int8
 	var edited, removed pgtype.Timestamptz
-	var display pgtype.Text
-	err := row.Scan(&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &display, &c.Course.OwnerID, &status)
+	var removedBy, display pgtype.Text
+	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.Course.OwnerID, &status}
+	if tail != nil {
+		values = append(values, tail)
+	}
+	err := row.Scan(values...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.CommentRecord{}, domain.ErrNotFound
 	}
@@ -265,6 +273,9 @@ func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error
 	}
 	if removed.Valid {
 		c.Comment.RemovedAt = &removed.Time
+	}
+	if removedBy.Valid {
+		c.Comment.RemovedBy = &removedBy.String
 	}
 	if display.Valid {
 		c.DisplayName = &display.String

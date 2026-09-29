@@ -27,6 +27,22 @@ type Thread struct {
 
 type CommentPage struct {
 	Threads    []Thread
+	Comments   []CommentRecord
+	NextCursor string
+}
+
+type CourseFacts struct {
+	Course   domain.Course
+	CourseID string
+}
+
+type QueueItem struct {
+	CommentRecord
+	OpenReports int
+}
+
+type QueuePage struct {
+	Items      []QueueItem
 	NextCursor string
 }
 
@@ -38,4 +54,12 @@ type Repository interface {
 	InsertReply(context.Context, domain.Comment) (CommentRecord, error)
 	UpdateBody(context.Context, string, string, string, time.Time) (CommentRecord, error)
 	Remove(context.Context, string, time.Time) error
+}
+
+type ModerationRepository interface {
+	CourseFacts(context.Context, string) (CourseFacts, error)
+	ListByCourse(context.Context, string, string, int) (CommentPage, error)
+	InsertReport(context.Context, domain.Report, time.Time) error
+	DismissReports(context.Context, string, string, time.Time) error
+	ListQueue(context.Context, string, string, int) (QueuePage, error)
 }
