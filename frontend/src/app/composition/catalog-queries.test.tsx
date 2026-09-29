@@ -25,6 +25,8 @@ function coursePage(title: string): CoursePage {
         summary: 'Практичний курс',
         description: 'Програма курсу',
         publishedAt: '2026-09-01T00:00:00Z',
+        price: null,
+        paid: false,
       },
     ],
     pagination: { limit: 20, offset: 0, total: 1 },

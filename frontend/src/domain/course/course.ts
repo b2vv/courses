@@ -11,6 +11,10 @@ export type CatalogErrorCode =
   | 'request_cancelled';
 export type CatalogError = { readonly code: CatalogErrorCode };
 export type CourseStatus = 'draft' | 'published' | 'archived';
+export type CoursePrice = {
+  readonly minor: number;
+  readonly currency: 'UAH';
+};
 export type PublishedCourse = {
   readonly id: string;
   readonly slug: string;
@@ -18,6 +22,9 @@ export type PublishedCourse = {
   readonly summary: string;
   readonly description: string;
   readonly publishedAt: string;
+  readonly price: CoursePrice | null;
+  /** Catalog display metadata: true means the course has a price, not that the viewer owns it. */
+  readonly paid: boolean;
 };
 export type ProgramLesson = { readonly title: string };
 export type ProgramModule = {
@@ -287,14 +294,23 @@ export function makePublishedCourse(input: {
   description: string;
   status: string;
   publishedAt: string | null;
+  price: { minor: number; currency: string } | null;
+  paid: boolean;
 }): Result<PublishedCourse> {
+  const validPrice =
+    input.price === null ||
+    (Number.isSafeInteger(input.price.minor) &&
+      input.price.minor > 0 &&
+      input.price.currency === 'UAH');
   if (
     input.status !== 'published' ||
     !validSlug(input.slug) ||
     !input.id ||
     !input.title.trim() ||
     !input.publishedAt ||
-    !Number.isFinite(Date.parse(input.publishedAt))
+    !Number.isFinite(Date.parse(input.publishedAt)) ||
+    !validPrice ||
+    input.paid !== (input.price !== null)
   )
     return { ok: false, error: { code: 'invalid_response' } };
   return {
@@ -306,6 +322,8 @@ export function makePublishedCourse(input: {
       summary: input.summary,
       description: input.description,
       publishedAt: input.publishedAt,
+      price: input.price === null ? null : { minor: input.price.minor, currency: 'UAH' },
+      paid: input.paid,
     },
   };
 }
