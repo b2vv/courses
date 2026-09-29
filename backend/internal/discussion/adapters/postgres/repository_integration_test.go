@@ -286,7 +286,7 @@ func TestDiscussionPostgres(t *testing.T) {
 			}
 		}
 		insertReply(t, repository, first.Comment.ID, "reply")
-		if err := repository.Remove(ctx, second.Comment.ID, time.Now()); err != nil {
+		if err := repository.Remove(ctx, second.Comment.ID, discussionStudent, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		page, err := repository.List(ctx, discussionLesson, "", 1)
@@ -306,7 +306,7 @@ func TestDiscussionPostgres(t *testing.T) {
 		if len(page.Threads) != 1 || page.Threads[0].Root.Comment.ID != first.Comment.ID || len(page.Threads[0].Replies) != 1 {
 			t.Fatalf("cursor page=%+v", page)
 		}
-		if err := repository.Remove(ctx, first.Comment.ID, time.Now()); err != nil {
+		if err := repository.Remove(ctx, first.Comment.ID, discussionStudent, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		page, err = repository.List(ctx, discussionLesson, "", 50)

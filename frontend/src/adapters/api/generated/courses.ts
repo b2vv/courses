@@ -30,6 +30,7 @@ import type {
   CourseDetail,
   CoursePage,
   CourseVideos,
+  DismissReportsRequest,
   DraftConflictResponse,
   ForbiddenResponse,
   GetLessonTranscriptParams,
@@ -46,12 +47,15 @@ import type {
   ListCourseDocuments200,
   ListLessonCommentsParams,
   ListPublishedCoursesParams,
+  ListTeachCourseCommentsParams,
+  ListTeachModerationQueueParams,
   LoginRequest,
   MediaBadRequestResponse,
   MediaForbiddenResponse,
   MediaTicketRequest,
   MediaUploadTicket,
   MediaVideo,
+  ModerationQueuePage,
   NotFoundResponse,
   OriginForbiddenResponse,
   PlaybackExpiredResponse,
@@ -67,6 +71,7 @@ import type {
   RegenerateLessonDraftRequest,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
+  TeachCourseCommentPage,
   TranscriptConflictResponse,
   TranscriptDocumentLink,
   UnauthenticatedResponse,
@@ -2687,6 +2692,326 @@ export const removeLessonComment = async (commentId: string, options?: RequestIn
 
   const data: removeLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as removeLessonCommentResponse
+}
+
+
+
+export type reportLessonCommentResponse201 = {
+  data: void
+  status: 201
+}
+
+export type reportLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportLessonCommentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportLessonCommentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type reportLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportLessonCommentResponseSuccess = (reportLessonCommentResponse201) & {
+  headers: Headers;
+};
+export type reportLessonCommentResponseError = (reportLessonCommentResponse401 | reportLessonCommentResponse403 | reportLessonCommentResponse404 | reportLessonCommentResponse500 | reportLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type reportLessonCommentResponse = (reportLessonCommentResponseSuccess | reportLessonCommentResponseError)
+
+export const getReportLessonCommentUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}/reports`
+}
+
+/**
+ * @summary Report a lesson comment
+ */
+export const reportLessonComment = async (commentId: string, options?: RequestInit): Promise<reportLessonCommentResponse> => {
+
+  const res = await fetch(getReportLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as reportLessonCommentResponse
+}
+
+
+
+export type listTeachCourseCommentsResponse200 = {
+  data: TeachCourseCommentPage
+  status: 200
+}
+
+export type listTeachCourseCommentsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listTeachCourseCommentsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listTeachCourseCommentsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listTeachCourseCommentsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listTeachCourseCommentsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listTeachCourseCommentsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listTeachCourseCommentsResponseSuccess = (listTeachCourseCommentsResponse200) & {
+  headers: Headers;
+};
+export type listTeachCourseCommentsResponseError = (listTeachCourseCommentsResponse400 | listTeachCourseCommentsResponse401 | listTeachCourseCommentsResponse403 | listTeachCourseCommentsResponse404 | listTeachCourseCommentsResponse500 | listTeachCourseCommentsResponse503) & {
+  headers: Headers;
+};
+
+export type listTeachCourseCommentsResponse = (listTeachCourseCommentsResponseSuccess | listTeachCourseCommentsResponseError)
+
+export const getListTeachCourseCommentsUrl = (courseId: string,
+    params?: ListTeachCourseCommentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/comments?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/comments`
+}
+
+/**
+ * @summary List all comments in an instructor course workspace
+ */
+export const listTeachCourseComments = async (courseId: string,
+    params?: ListTeachCourseCommentsParams, options?: RequestInit): Promise<listTeachCourseCommentsResponse> => {
+
+  const res = await fetch(getListTeachCourseCommentsUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeachCourseCommentsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listTeachCourseCommentsResponse
+}
+
+
+
+export type listTeachModerationQueueResponse200 = {
+  data: ModerationQueuePage
+  status: 200
+}
+
+export type listTeachModerationQueueResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listTeachModerationQueueResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listTeachModerationQueueResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listTeachModerationQueueResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listTeachModerationQueueResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listTeachModerationQueueResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listTeachModerationQueueResponseSuccess = (listTeachModerationQueueResponse200) & {
+  headers: Headers;
+};
+export type listTeachModerationQueueResponseError = (listTeachModerationQueueResponse400 | listTeachModerationQueueResponse401 | listTeachModerationQueueResponse403 | listTeachModerationQueueResponse404 | listTeachModerationQueueResponse500 | listTeachModerationQueueResponse503) & {
+  headers: Headers;
+};
+
+export type listTeachModerationQueueResponse = (listTeachModerationQueueResponseSuccess | listTeachModerationQueueResponseError)
+
+export const getListTeachModerationQueueUrl = (courseId: string,
+    params?: ListTeachModerationQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/moderation-queue?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/moderation-queue`
+}
+
+/**
+ * @summary List the open moderation queue for an instructor course
+ */
+export const listTeachModerationQueue = async (courseId: string,
+    params?: ListTeachModerationQueueParams, options?: RequestInit): Promise<listTeachModerationQueueResponse> => {
+
+  const res = await fetch(getListTeachModerationQueueUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeachModerationQueueResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listTeachModerationQueueResponse
+}
+
+
+
+export type dismissCommentReportsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissCommentReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type dismissCommentReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type dismissCommentReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type dismissCommentReportsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type dismissCommentReportsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type dismissCommentReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type dismissCommentReportsResponseSuccess = (dismissCommentReportsResponse204) & {
+  headers: Headers;
+};
+export type dismissCommentReportsResponseError = (dismissCommentReportsResponse400 | dismissCommentReportsResponse401 | dismissCommentReportsResponse403 | dismissCommentReportsResponse404 | dismissCommentReportsResponse500 | dismissCommentReportsResponse503) & {
+  headers: Headers;
+};
+
+export type dismissCommentReportsResponse = (dismissCommentReportsResponseSuccess | dismissCommentReportsResponseError)
+
+export const getDismissCommentReportsUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/dismiss-report`
+}
+
+/**
+ * @summary Dismiss all open reports for a comment
+ */
+export const dismissCommentReports = async (commentId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCommentReportsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDismissCommentReportsUrl(commentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(dismissReportsRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissCommentReportsResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as dismissCommentReportsResponse
 }
 
 

@@ -27,6 +27,13 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin fu
 	mux.Handle("DELETE /api/v1/learn/comments/{commentId}", sameOrigin(authenticate(http.HandlerFunc(handler.remove))))
 }
 
+func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/teach/courses/{courseId}/comments", authenticate(http.HandlerFunc(handler.listCourseComments)))
+	mux.Handle("GET /api/v1/teach/courses/{courseId}/moderation-queue", authenticate(http.HandlerFunc(handler.queue)))
+	mux.Handle("POST /api/v1/teach/comments/{commentId}/dismiss-report", sameOrigin(authenticate(http.HandlerFunc(handler.dismissReports))))
+	mux.Handle("POST /api/v1/learn/comments/{commentId}/reports", sameOrigin(authenticate(http.HandlerFunc(handler.reportComment))))
+}
+
 type authorDTO struct {
 	DisplayName *string `json:"displayName"`
 }
@@ -61,6 +68,37 @@ type publishRequest struct {
 
 type updateRequest struct {
 	Body string `json:"body"`
+}
+
+type dismissReportsRequest struct {
+	Reason string `json:"reason"`
+}
+
+type moderationCommentDTO struct {
+	ID         string     `json:"id"`
+	LessonID   string     `json:"lessonId"`
+	ParentID   *string    `json:"parentId"`
+	Author     authorDTO  `json:"author"`
+	Body       *string    `json:"body"`
+	PositionMs *int64     `json:"positionMs"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	EditedAt   *time.Time `json:"editedAt"`
+	Removed    bool       `json:"removed"`
+}
+
+type courseCommentsDTO struct {
+	Comments   []moderationCommentDTO `json:"comments"`
+	NextCursor string                 `json:"nextCursor"`
+}
+
+type queueItemDTO struct {
+	Comment     moderationCommentDTO `json:"comment"`
+	OpenReports int                  `json:"openReports"`
+}
+
+type queueDTO struct {
+	Items      []queueItemDTO `json:"items"`
+	NextCursor string         `json:"nextCursor"`
 }
 
 func (handler *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +180,83 @@ func (handler *Handler) remove(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (handler *Handler) reportComment(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := handler.service.ReportComment(r.Context(), actor, r.PathValue("commentId")); err != nil {
+		writeReportError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (handler *Handler) listCourseComments(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	page, err := handler.service.ListCourseComments(r.Context(), actor, r.PathValue("courseId"), query.Get("cursor"))
+	if err != nil {
+		writeTeachListError(w, r, err)
+		return
+	}
+	items := make([]moderationCommentDTO, len(page.Comments))
+	for i, comment := range page.Comments {
+		items[i] = mapModerationComment(comment)
+	}
+	httpserver.WriteJSON(w, http.StatusOK, courseCommentsDTO{Comments: items, NextCursor: page.NextCursor})
+}
+
+func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	page, err := handler.service.Queue(r.Context(), actor, r.PathValue("courseId"), query.Get("cursor"))
+	if err != nil {
+		writeTeachListError(w, r, err)
+		return
+	}
+	items := make([]queueItemDTO, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = queueItemDTO{Comment: mapModerationComment(item.Comment), OpenReports: item.OpenReports}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, queueDTO{Items: items, NextCursor: page.NextCursor})
+}
+
+func (handler *Handler) dismissReports(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[dismissReportsRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if err := handler.service.DismissReports(r.Context(), actor, r.PathValue("commentId"), input.Reason); err != nil {
+		writeMutationError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func actorFromRequest(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
 	transportActor, ok := httpserver.ActorFromContext(r.Context())
 	if !ok {
@@ -207,6 +322,12 @@ func mapComment(comment application.Comment) commentDTO {
 		Removed: comment.Removed, CanEdit: comment.CanEdit, CanRemove: comment.CanRemove}
 }
 
+func mapModerationComment(comment application.ModerationComment) moderationCommentDTO {
+	return moderationCommentDTO{ID: comment.ID, LessonID: comment.LessonID, ParentID: comment.ParentID,
+		Author: authorDTO{DisplayName: comment.Author}, Body: comment.Body, PositionMs: comment.PositionMs,
+		CreatedAt: comment.CreatedAt, EditedAt: comment.EditedAt, Removed: comment.Removed}
+}
+
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
 func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
 	for key := range query {
@@ -248,9 +369,25 @@ func writeMutationError(w http.ResponseWriter, r *http.Request, err error) {
 	writeError(w, r, statusFor(err), err)
 }
 
+func writeReportError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, r, http.StatusNotFound, errors.New("comment_not_found"))
+		return
+	}
+	writeError(w, r, statusFor(err), err)
+}
+
+func writeTeachListError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		return
+	}
+	writeError(w, r, statusFor(err), err)
+}
+
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, application.ErrCommentForbidden):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden):
 		return http.StatusForbidden
 	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull):
 		return http.StatusConflict

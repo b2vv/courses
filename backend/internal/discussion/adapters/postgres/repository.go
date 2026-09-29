@@ -33,7 +33,7 @@ WHERE lessons.id = $1::text::uuid`
 
 const rootsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -50,7 +50,7 @@ LIMIT $4`
 
 const repliesQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -61,7 +61,7 @@ ORDER BY c.parent_id, c.created_at, c.id`
 
 const commentQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -231,8 +231,8 @@ func (repository *Repository) UpdateBody(ctx context.Context, id, authorID, body
 	return repository.Get(ctx, id)
 }
 
-func (repository *Repository) Remove(ctx context.Context, id string, now time.Time) error {
-	_, err := repository.pool.Exec(ctx, `UPDATE discussion_comments SET body=NULL, removed_at=COALESCE(removed_at,$2) WHERE id=$1::text::uuid`, id, now)
+func (repository *Repository) Remove(ctx context.Context, id, actorID string, now time.Time) error {
+	_, err := repository.pool.Exec(ctx, `UPDATE discussion_comments SET body=NULL, removed_at=COALESCE(removed_at,$2), removed_by=COALESCE(removed_by,$3::text::uuid) WHERE id=$1::text::uuid`, id, now, actorID)
 	if err != nil {
 		return persistenceError(err)
 	}
@@ -250,7 +250,7 @@ func scanRecordWithTail(row interface{ Scan(...any) error }, tail *int) (ports.C
 	var position pgtype.Int8
 	var edited, removed pgtype.Timestamptz
 	var removedBy, display pgtype.Text
-	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.Course.OwnerID, &status}
+	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.CourseID, &c.Course.OwnerID, &status}
 	if tail != nil {
 		values = append(values, tail)
 	}

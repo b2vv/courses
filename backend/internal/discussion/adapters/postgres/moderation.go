@@ -18,7 +18,7 @@ FROM courses WHERE id=$1::text::uuid`
 
 const courseCommentsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -31,7 +31,7 @@ LIMIT $4`
 
 const queueQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.instructor_id::text, courses.status, open_reports.open_count
+  courses.id::text, courses.instructor_id::text, courses.status, open_reports.open_count
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -108,6 +108,15 @@ func (repository *Repository) DismissReports(ctx context.Context, commentID, dis
 	_, err := repository.pool.Exec(ctx, `UPDATE discussion_comment_reports
 SET dismissed_at=$3, dismissed_by=$2::text::uuid
 WHERE comment_id=$1::text::uuid AND dismissed_at IS NULL`, commentID, dismissedBy, now)
+	if err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
+func (repository *Repository) WriteModerationLog(ctx context.Context, entry ports.ModerationLogEntry) error {
+	_, err := repository.pool.Exec(ctx, `INSERT INTO discussion_moderation_log(course_id, comment_id, actor_id, actor_role, action, reason, created_at)
+VALUES($1::text::uuid, $2::text::uuid, $3::text::uuid, $4, $5, $6, $7)`, entry.CourseID, entry.CommentID, entry.ActorID, entry.ActorRole, entry.Action, entry.Reason, entry.CreatedAt)
 	if err != nil {
 		return persistenceError(err)
 	}
