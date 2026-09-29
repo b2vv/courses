@@ -21,4 +21,5 @@ export interface TeachRepository {
     input: DismissReportsInput,
     signal?: AbortSignal,
   ): Promise<TeachResult<void>>;
+  removeComment(commentId: string, signal?: AbortSignal): Promise<TeachResult<void>>;
 }

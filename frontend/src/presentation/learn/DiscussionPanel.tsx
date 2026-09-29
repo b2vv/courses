@@ -7,6 +7,7 @@ import type {
   PublishDiscussionInput,
 } from '../../domain/discussion/discussion';
 import { Button, TextArea } from '../ui';
+import { formatTimestamp } from '../format-timestamp';
 
 type DiscussionPanelProps = {
   readonly page: DiscussionPage | undefined;
@@ -22,11 +23,6 @@ type DiscussionPanelProps = {
   readonly onRemove: (commentId: string) => Promise<void>;
   readonly onReport?: (commentId: string) => Promise<void>;
 };
-
-function timestamp(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
 
 function commentText(comment: DiscussionComment, t: (key: string) => string): string {
   if (comment.removed) return t('learn.discussion.removed');
@@ -91,12 +87,12 @@ function CommentCard({
           )}
         </header>
         {position === null ? null : onSeek === undefined ? (
-          <time dateTime={`PT${position / 1000}S`} aria-label={timestamp(position)}>
-            {timestamp(position)}
+          <time dateTime={`PT${position / 1000}S`} aria-label={formatTimestamp(position)}>
+            {formatTimestamp(position)}
           </time>
         ) : (
           <Button variant="secondary" onPress={() => onSeek(position)}>
-            {timestamp(position)}
+            {formatTimestamp(position)}
           </Button>
         )}
         {editing ? (
@@ -271,7 +267,7 @@ export function DiscussionPanel({
             {t('learn.discussion.form.currentMoment')}
           </Button>
         ) : (
-          <p>{t('learn.discussion.form.attached', { time: timestamp(position) })}</p>
+          <p>{t('learn.discussion.form.attached', { time: formatTimestamp(position) })}</p>
         )}
         <Button isDisabled={busy || body.trim() === ''} type="submit">
           {t('learn.discussion.publish')}

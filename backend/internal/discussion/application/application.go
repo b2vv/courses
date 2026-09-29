@@ -60,15 +60,16 @@ type PublishRequest struct {
 }
 
 type ModerationComment struct {
-	ID         string
-	LessonID   string
-	ParentID   *string
-	Author     *string
-	Body       *string
-	PositionMs *int64
-	CreatedAt  time.Time
-	EditedAt   *time.Time
-	Removed    bool
+	ID          string
+	LessonID    string
+	LessonTitle string
+	ParentID    *string
+	Author      *string
+	Body        *string
+	PositionMs  *int64
+	CreatedAt   time.Time
+	EditedAt    *time.Time
+	Removed     bool
 }
 
 type CourseCommentPage struct {
@@ -251,7 +252,7 @@ func (service *Service) Queue(ctx context.Context, actor Actor, courseID, cursor
 	}
 	result := QueuePage{NextCursor: page.NextCursor, Items: make([]QueueItem, len(page.Items))}
 	for i, item := range page.Items {
-		result.Items[i] = QueueItem{Comment: service.presentModeration(item.CommentRecord), OpenReports: item.OpenReports}
+		result.Items[i] = QueueItem{Comment: service.presentModeration(item.ModerationCommentRecord), OpenReports: item.OpenReports}
 	}
 	return result, nil
 }
@@ -295,8 +296,8 @@ func actorRole(actor Actor) string {
 	return "instructor"
 }
 
-func (service *Service) presentModeration(record ports.CommentRecord) ModerationComment {
-	result := ModerationComment{ID: record.Comment.ID, LessonID: record.Comment.LessonID, ParentID: record.Comment.ParentID,
+func (service *Service) presentModeration(record ports.ModerationCommentRecord) ModerationComment {
+	result := ModerationComment{ID: record.Comment.ID, LessonID: record.Comment.LessonID, LessonTitle: record.LessonTitle, ParentID: record.Comment.ParentID,
 		Author: record.DisplayName, PositionMs: record.Comment.PositionMs, CreatedAt: record.Comment.CreatedAt,
 		EditedAt: record.Comment.EditedAt, Removed: record.Comment.RemovedAt != nil}
 	if !result.Removed {

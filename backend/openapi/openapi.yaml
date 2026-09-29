@@ -1230,10 +1230,11 @@ components:
     TeachComment:
       type: object
       additionalProperties: false
-      required: [id, lessonId, parentId, author, body, positionMs, createdAt, editedAt, removed]
+      required: [id, lessonId, lessonTitle, parentId, author, body, positionMs, createdAt, editedAt, removed]
       properties:
         id: { type: string, format: uuid }
         lessonId: { type: string, format: uuid }
+        lessonTitle: { type: string, minLength: 1, maxLength: 200 }
         parentId: { type: string, format: uuid, nullable: true }
         author: { $ref: '#/components/schemas/CommentAuthor' }
         body: { type: string, nullable: true }

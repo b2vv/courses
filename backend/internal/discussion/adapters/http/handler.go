@@ -75,15 +75,16 @@ type dismissReportsRequest struct {
 }
 
 type moderationCommentDTO struct {
-	ID         string     `json:"id"`
-	LessonID   string     `json:"lessonId"`
-	ParentID   *string    `json:"parentId"`
-	Author     authorDTO  `json:"author"`
-	Body       *string    `json:"body"`
-	PositionMs *int64     `json:"positionMs"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	EditedAt   *time.Time `json:"editedAt"`
-	Removed    bool       `json:"removed"`
+	ID          string     `json:"id"`
+	LessonID    string     `json:"lessonId"`
+	LessonTitle string     `json:"lessonTitle"`
+	ParentID    *string    `json:"parentId"`
+	Author      authorDTO  `json:"author"`
+	Body        *string    `json:"body"`
+	PositionMs  *int64     `json:"positionMs"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	EditedAt    *time.Time `json:"editedAt"`
+	Removed     bool       `json:"removed"`
 }
 
 type courseCommentsDTO struct {
@@ -323,7 +324,7 @@ func mapComment(comment application.Comment) commentDTO {
 }
 
 func mapModerationComment(comment application.ModerationComment) moderationCommentDTO {
-	return moderationCommentDTO{ID: comment.ID, LessonID: comment.LessonID, ParentID: comment.ParentID,
+	return moderationCommentDTO{ID: comment.ID, LessonID: comment.LessonID, LessonTitle: comment.LessonTitle, ParentID: comment.ParentID,
 		Author: authorDTO{DisplayName: comment.Author}, Body: comment.Body, PositionMs: comment.PositionMs,
 		CreatedAt: comment.CreatedAt, EditedAt: comment.EditedAt, Removed: comment.Removed}
 }

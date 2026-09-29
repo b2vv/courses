@@ -39,6 +39,7 @@ type fakeRepository struct {
 	listErr        error
 	insertErr      error
 	updated        string
+	queue          ports.QueuePage
 	moderationLogs []ports.ModerationLogEntry
 }
 
@@ -104,7 +105,7 @@ func (fake *fakeRepository) DismissReports(context.Context, string, string, time
 	return nil
 }
 func (fake *fakeRepository) ListQueue(context.Context, string, string, int) (ports.QueuePage, error) {
-	return ports.QueuePage{}, nil
+	return fake.queue, nil
 }
 func (fake *fakeRepository) WriteModerationLog(_ context.Context, entry ports.ModerationLogEntry) error {
 	fake.moderationLogs = append(fake.moderationLogs, entry)
@@ -118,10 +119,15 @@ func newFake() *fakeRepository {
 		Comment:     domain.Comment{ID: discussionComment, LessonID: discussionLesson, AuthorID: discussionAuthor, Body: "hello", CreatedAt: now},
 		DisplayName: &name, Course: domain.Course{OwnerID: discussionOwner, Status: domain.Published},
 	}
+	moderation := ports.ModerationCommentRecord{CommentRecord: root, LessonTitle: "Lesson one"}
 	return &fakeRepository{
-		facts:    ports.LessonFacts{Course: root.Course, DurationSecs: floatPointer(100)},
-		page:     ports.CommentPage{Threads: []ports.Thread{{Root: root}}, Comments: []ports.CommentRecord{root}},
+		facts: ports.LessonFacts{Course: root.Course, DurationSecs: floatPointer(100)},
+		page: ports.CommentPage{
+			Threads:  []ports.Thread{{Root: root}},
+			Comments: []ports.ModerationCommentRecord{moderation},
+		},
 		comments: map[string]ports.CommentRecord{discussionComment: root},
+		queue:    ports.QueuePage{Items: []ports.QueueItem{{ModerationCommentRecord: moderation, OpenReports: 1}}},
 	}
 }
 
@@ -413,6 +419,17 @@ func TestI03ModerationContracts(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
+		var body struct {
+			Comments []struct {
+				LessonTitle string `json:"lessonTitle"`
+			} `json:"comments"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Comments) != 1 || body.Comments[0].LessonTitle != "Lesson one" {
+			t.Fatalf("comments=%+v", body.Comments)
+		}
 	})
 	t.Run("course comments forbidden", func(t *testing.T) {
 		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments", "", actor(discussionViewer, "student"), true)
@@ -422,6 +439,19 @@ func TestI03ModerationContracts(t *testing.T) {
 		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/moderation-queue", "", actor(discussionAdmin, "admin"), true)
 		if response.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Items []struct {
+				Comment struct {
+					LessonTitle string `json:"lessonTitle"`
+				} `json:"comment"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Items) != 1 || body.Items[0].Comment.LessonTitle != "Lesson one" {
+			t.Fatalf("items=%+v", body.Items)
 		}
 	})
 	t.Run("invalid cursor", func(t *testing.T) {

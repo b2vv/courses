@@ -4,6 +4,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { validEntityId } from '../domain/course/course';
 import type { ModerationQueueItem, TeachComment } from '../domain/teach/teach';
+import { formatTimestamp } from '../presentation/format-timestamp';
 import { Button } from '../presentation/ui';
 
 function courseId(value: string): string {
@@ -46,13 +47,13 @@ function commentLabel(comment: TeachComment): string {
 }
 
 function TeachCourseRoute() {
-  const { teach, learn } = Route.useRouteContext();
+  const { teach } = Route.useRouteContext();
   const { courseId: id } = Route.useLoaderData();
   const queryClient = useQueryClient();
   const comments = useInfiniteQuery(teach.courseComments(id));
   const queue = useInfiniteQuery(teach.moderationQueue(id));
   const dismiss = useMutation(teach.dismiss(queryClient));
-  const remove = useMutation(learn.discussion.remove(queryClient));
+  const remove = useMutation(teach.remove(queryClient));
   const [actionError, setActionError] = useState<string>();
   const commentItems = useMemo(
     () => comments.data?.pages.flatMap((page) => page.comments) ?? [],
@@ -90,9 +91,15 @@ function TeachCourseRoute() {
             {commentItems.map((comment) => (
               <li key={comment.id}>
                 <article>
+                  <p>{comment.lessonTitle}</p>
                   <p>{commentLabel(comment)}</p>
+                  {comment.positionMs === null ? null : (
+                    <time dateTime={`PT${comment.positionMs / 1000}S`}>
+                      {formatTimestamp(comment.positionMs)}
+                    </time>
+                  )}
                   <time dateTime={comment.createdAt}>
-                    {new Date(comment.createdAt).toLocaleDateString()}
+                    {new Date(comment.createdAt).toLocaleString()}
                   </time>
                 </article>
               </li>

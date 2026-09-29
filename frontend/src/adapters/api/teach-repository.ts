@@ -2,6 +2,7 @@ import {
   dismissCommentReports,
   listTeachCourseComments,
   listTeachModerationQueue,
+  removeLessonComment,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
@@ -32,6 +33,9 @@ function comment(value: unknown): value is TeachComment {
     !record(value) ||
     !uuid(value.id) ||
     !uuid(value.lessonId) ||
+    typeof value.lessonTitle !== 'string' ||
+    value.lessonTitle.length === 0 ||
+    value.lessonTitle.length > 200 ||
     (value.parentId !== null && !uuid(value.parentId)) ||
     !record(value.author) ||
     (value.author.displayName !== null && typeof value.author.displayName !== 'string') ||
@@ -96,6 +100,11 @@ const dismissErrors = {
   403: ['course_forbidden', 'comment_forbidden'],
   404: ['comment_not_found'],
 } as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+const removeErrors = {
+  401: ['authentication_required'],
+  403: ['comment_forbidden'],
+  404: ['comment_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
 
 export function createApiTeachRepository(options: TransportOptions = {}): TeachRepository {
   const send = createApiTransport(options);
@@ -147,6 +156,17 @@ export function createApiTeachRepository(options: TransportOptions = {}): TeachR
       );
       if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
       if (outcome.status !== 204) return failure(namedError(outcome, dismissErrors));
+      return { ok: true, value: undefined };
+    },
+    async removeComment(commentId, signal) {
+      const outcome = await send(
+        'teach.moderation.remove',
+        (init) => removeLessonComment(commentId, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      if (outcome.status !== 204) return failure(namedError(outcome, removeErrors));
       return { ok: true, value: undefined };
     },
   };

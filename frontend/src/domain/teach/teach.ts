@@ -17,6 +17,7 @@ export type TeachResult<T> =
 export type TeachComment = {
   readonly id: string;
   readonly lessonId: string;
+  readonly lessonTitle: string;
   readonly parentId: string | null;
   readonly author: { readonly displayName: string | null };
   readonly body: string | null;

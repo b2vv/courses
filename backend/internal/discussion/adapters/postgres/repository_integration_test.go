@@ -97,9 +97,15 @@ func TestDiscussionPostgres(t *testing.T) {
 			if page.Comments[0].Comment.ID != reply.Comment.ID || page.Comments[1].Comment.ID != rootB.Comment.ID {
 				t.Fatalf("first page=%+v", page.Comments)
 			}
+			if page.Comments[0].LessonTitle != "A" || page.Comments[1].LessonTitle != "B" {
+				t.Fatalf("lesson titles=%q,%q want A,B", page.Comments[0].LessonTitle, page.Comments[1].LessonTitle)
+			}
 			page, err = repository.ListByCourse(ctx, moderationCourse, page.NextCursor, 2)
 			if err != nil || len(page.Comments) != 1 || page.Comments[0].Comment.ID != rootA.Comment.ID {
 				t.Fatalf("second page=%+v err=%v", page.Comments, err)
+			}
+			if page.Comments[0].LessonTitle != "A" {
+				t.Fatalf("lesson title=%q want A", page.Comments[0].LessonTitle)
 			}
 		})
 

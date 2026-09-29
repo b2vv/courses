@@ -22,6 +22,11 @@ function unwrap<T>(result: TeachResult<T>): T {
   return result.value;
 }
 export function createTeachQueries(teach: TeachRepository) {
+  const invalidateWorkspace = async (client: QueryClient) => {
+    await client.invalidateQueries({ queryKey: ['teach', 'moderation'] });
+    await client.invalidateQueries({ queryKey: ['teach', 'comments'] });
+    await client.invalidateQueries({ queryKey: ['learn', 'discussion'] });
+  };
   return {
     teach,
     courseComments: (courseId: string) =>
@@ -44,11 +49,13 @@ export function createTeachQueries(teach: TeachRepository) {
       mutationOptions({
         mutationFn: ({ commentId, input }: { commentId: string; input: DismissReportsInput }) =>
           teach.dismissReport(commentId, input).then(unwrap),
-        onSuccess: async () => {
-          await client.invalidateQueries({ queryKey: ['teach', 'moderation'] });
-          await client.invalidateQueries({ queryKey: ['teach', 'comments'] });
-          await client.invalidateQueries({ queryKey: ['learn', 'discussion'] });
-        },
+        onSuccess: () => invalidateWorkspace(client),
+      }),
+    remove: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: ({ commentId }: { lessonId: string; commentId: string }) =>
+          teach.removeComment(commentId).then(unwrap),
+        onSuccess: () => invalidateWorkspace(client),
       }),
   };
 }

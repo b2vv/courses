@@ -18,7 +18,7 @@ FROM courses WHERE id=$1::text::uuid`
 
 const courseCommentsQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.id::text, courses.instructor_id::text, courses.status
+  courses.id::text, courses.instructor_id::text, courses.status, lessons.title
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -31,7 +31,7 @@ LIMIT $4`
 
 const queueQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
-  courses.id::text, courses.instructor_id::text, courses.status, open_reports.open_count
+  courses.id::text, courses.instructor_id::text, courses.status, lessons.title, open_reports.open_count
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
@@ -73,9 +73,9 @@ func (repository *Repository) ListByCourse(ctx context.Context, courseID, cursor
 		return ports.CommentPage{}, persistenceError(err)
 	}
 	defer rows.Close()
-	comments := make([]ports.CommentRecord, 0, limit+1)
+	comments := make([]ports.ModerationCommentRecord, 0, limit+1)
 	for rows.Next() {
-		record, err := scanRecord(rows)
+		record, err := scanModerationRecord(rows, nil)
 		if err != nil {
 			return ports.CommentPage{}, err
 		}
@@ -145,11 +145,14 @@ func (repository *Repository) ListQueue(ctx context.Context, courseID, cursor st
 	items := make([]ports.QueueItem, 0, limit+1)
 	for rows.Next() {
 		var openReports int
-		record, err := scanRecordWithTail(rows, &openReports)
+		record, err := scanModerationRecord(rows, &openReports)
 		if err != nil {
 			return ports.QueuePage{}, err
 		}
-		items = append(items, ports.QueueItem{CommentRecord: record, OpenReports: openReports})
+		items = append(items, ports.QueueItem{
+			ModerationCommentRecord: record,
+			OpenReports:             openReports,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return ports.QueuePage{}, persistenceError(err)

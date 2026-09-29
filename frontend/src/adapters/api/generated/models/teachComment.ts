@@ -10,6 +10,11 @@ import type { CommentAuthor } from './commentAuthor.ts';
 export interface TeachComment {
   id: string;
   lessonId: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  lessonTitle: string;
   /** @nullable */
   parentId: string | null;
   author: CommentAuthor;

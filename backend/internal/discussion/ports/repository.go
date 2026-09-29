@@ -21,6 +21,11 @@ type CommentRecord struct {
 	CourseID    string
 }
 
+type ModerationCommentRecord struct {
+	CommentRecord
+	LessonTitle string
+}
+
 type Thread struct {
 	Root    CommentRecord
 	Replies []CommentRecord
@@ -28,7 +33,7 @@ type Thread struct {
 
 type CommentPage struct {
 	Threads    []Thread
-	Comments   []CommentRecord
+	Comments   []ModerationCommentRecord
 	NextCursor string
 }
 
@@ -38,7 +43,7 @@ type CourseFacts struct {
 }
 
 type QueueItem struct {
-	CommentRecord
+	ModerationCommentRecord
 	OpenReports int
 }
 

@@ -240,10 +240,24 @@ func (repository *Repository) Remove(ctx context.Context, id, actorID string, no
 }
 
 func scanRecord(row interface{ Scan(...any) error }) (ports.CommentRecord, error) {
-	return scanRecordWithTail(row, nil)
+	return scanRecordFields(row, recordScanTail{})
 }
 
-func scanRecordWithTail(row interface{ Scan(...any) error }, tail *int) (ports.CommentRecord, error) {
+type recordScanTail struct {
+	lessonTitle *string
+	openReports *int
+}
+
+func scanModerationRecord(row interface{ Scan(...any) error }, openReports *int) (ports.ModerationCommentRecord, error) {
+	var lessonTitle string
+	record, err := scanRecordFields(row, recordScanTail{lessonTitle: &lessonTitle, openReports: openReports})
+	if err != nil {
+		return ports.ModerationCommentRecord{}, err
+	}
+	return ports.ModerationCommentRecord{CommentRecord: record, LessonTitle: lessonTitle}, nil
+}
+
+func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) (ports.CommentRecord, error) {
 	var c ports.CommentRecord
 	var status string
 	var parentID, body pgtype.Text
@@ -251,8 +265,11 @@ func scanRecordWithTail(row interface{ Scan(...any) error }, tail *int) (ports.C
 	var edited, removed pgtype.Timestamptz
 	var removedBy, display pgtype.Text
 	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.CourseID, &c.Course.OwnerID, &status}
-	if tail != nil {
-		values = append(values, tail)
+	if tail.lessonTitle != nil {
+		values = append(values, tail.lessonTitle)
+	}
+	if tail.openReports != nil {
+		values = append(values, tail.openReports)
 	}
 	err := row.Scan(values...)
 	if errors.Is(err, pgx.ErrNoRows) {
