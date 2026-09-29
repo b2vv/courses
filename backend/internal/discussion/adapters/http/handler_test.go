@@ -201,6 +201,7 @@ func TestK10GetComments(t *testing.T) {
 		{"200", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusOK, ""},
 		{"401 anonymous", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments", nil, http.StatusUnauthorized, "authentication_required"},
 		{"403 draft", func() *fakeRepository { fake := newFake(); fake.facts.Course.Status = domain.Draft; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_forbidden"},
+		{"Pay19 paid course", func() *fakeRepository { fake := newFake(); fake.facts.Course.Paid = true; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_purchase_required"},
 		{"404 lesson", func() *fakeRepository { fake := newFake(); fake.factsErr = domain.ErrNotFound; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusNotFound, "lesson_not_found"},
 		{"400 cursor", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments?cursor=%%", actor(discussionViewer, "student"), http.StatusBadRequest, "comment_cursor_invalid"},
 	}
@@ -233,6 +234,7 @@ func TestK11PostComments(t *testing.T) {
 		{"400 parent", `{"body":"bad","parentId":"70000000-0000-4000-8000-0000000000cc"}`, true, nil, http.StatusBadRequest, "comment_parent_invalid"},
 		{"409 full", `{"body":"reply","parentId":"` + discussionComment + `"}`, true, func(fake *fakeRepository) { fake.insertErr = domain.ErrThreadFull }, http.StatusConflict, "comment_thread_full"},
 		{"403 course", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Status = domain.Draft }, http.StatusForbidden, "course_forbidden"},
+		{"Pay19 paid course", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Paid = true }, http.StatusForbidden, "course_purchase_required"},
 		{"400 malformed JSON", `{"body":`, false, nil, http.StatusBadRequest, "invalid_request"},
 	}
 	for _, test := range cases {
@@ -474,6 +476,17 @@ func TestI03ModerationContracts(t *testing.T) {
 		fake.comments[discussionComment] = record
 		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
 		requireError(t, response, http.StatusForbidden, "course_forbidden")
+		if len(fake.reports) != 0 {
+			t.Fatalf("reports=%+v want none", fake.reports)
+		}
+	})
+	t.Run("Pay19 report on a paid course requires purchase without a write", func(t *testing.T) {
+		fake := newFake()
+		record := fake.comments[discussionComment]
+		record.Course.Paid = true
+		fake.comments[discussionComment] = record
+		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
+		requireError(t, response, http.StatusForbidden, "course_purchase_required")
 		if len(fake.reports) != 0 {
 			t.Fatalf("reports=%+v want none", fake.reports)
 		}

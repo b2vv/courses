@@ -118,9 +118,11 @@ func mapTranscript(transcript application.Transcript) transcriptDTO {
 
 func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, domain.ErrPurchaseRequired):
+		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
 	case errors.Is(err, domain.ErrForbidden):
-		// The same answer for "not allowed" and for a lesson the caller may not see, so that the
-		// refusal does not tell the caller which of the two it was.
+		// The same answer whether the transcript exists or not, so that the refusal does not tell
+		// the caller which of the two it was.
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_forbidden", "Course is not available to this account")
 	case errors.Is(err, domain.ErrNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")

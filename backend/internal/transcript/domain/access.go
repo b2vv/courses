@@ -38,3 +38,7 @@ func (course Course) CanBeEditedBy(actor Actor) bool {
 func (course Course) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
+
+func (course Course) PurchaseRequiredBy(actor Actor) bool {
+	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+}

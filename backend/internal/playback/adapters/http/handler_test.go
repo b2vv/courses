@@ -156,6 +156,7 @@ func TestAuthorizeReturnsOnlyForbiddenOrUnavailableForFailures(t *testing.T) {
 		{name: "identity denial is normalized", authenticate: rejectedAuthentication(http.StatusUnauthorized), wantStatus: http.StatusForbidden},
 		{name: "identity dependency stays unavailable", authenticate: rejectedAuthentication(http.StatusServiceUnavailable), wantStatus: http.StatusServiceUnavailable},
 		{name: "ownership or access denial", authenticate: authenticated(httpserver.Actor{UserID: userID, Role: "student"}), failure: domain.ErrForbidden, wantStatus: http.StatusForbidden, wantCalls: 1, wantCode: "playback_forbidden"},
+		{name: "purchase required", authenticate: authenticated(httpserver.Actor{UserID: userID, Role: "student"}), failure: domain.ErrPurchaseRequired, wantStatus: http.StatusForbidden, wantCalls: 1, wantCode: "course_purchase_required"},
 		{name: "dependency failure", authenticate: authenticated(httpserver.Actor{UserID: userID, Role: "student"}), failure: domain.ErrDependencyUnavailable, wantStatus: http.StatusServiceUnavailable, wantCalls: 1, wantCode: "dependency_unavailable"},
 		{name: "unknown verification failure", authenticate: authenticated(httpserver.Actor{UserID: userID, Role: "student"}), failure: errors.New("unexpected"), wantStatus: http.StatusServiceUnavailable, wantCalls: 1, wantCode: "dependency_unavailable"},
 	}
@@ -423,6 +424,7 @@ func TestPlayMapsPolicyFailuresWithoutConflict(t *testing.T) {
 		code   string
 	}{
 		{err: domain.ErrForbidden, status: http.StatusForbidden, code: "playback_forbidden"},
+		{err: domain.ErrPurchaseRequired, status: http.StatusForbidden, code: "course_purchase_required"},
 		{err: domain.ErrLessonNotFound, status: http.StatusNotFound, code: "lesson_not_found"},
 		{err: domain.ErrVideoNotReady, status: http.StatusNotFound, code: "video_not_ready"},
 		{err: domain.ErrDependencyUnavailable, status: http.StatusServiceUnavailable, code: "dependency_unavailable"},
@@ -554,6 +556,7 @@ func TestPublicPlaybackHTTPMatchesOpenAPI(t *testing.T) {
 	}{
 		{name: "play", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `"}`, service: &sessions{playback: domain.LessonPlayback{VideoID: videoID}}, wantStatus: http.StatusCreated},
 		{name: "P12 play with AV1 probe", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `","av1Support":"unsupported"}`, service: &sessions{playback: domain.LessonPlayback{VideoID: videoID}}, wantStatus: http.StatusCreated},
+		{name: "Pay19 purchase required", path: "/api/v1/playback/sessions", body: `{"lessonId":"` + lessonID + `"}`, service: &sessions{playErr: domain.ErrPurchaseRequired}, wantStatus: http.StatusForbidden},
 		{name: "heartbeat", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{}, wantStatus: http.StatusNoContent},
 		{name: "R17 heartbeat forbidden", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrForbidden}, wantStatus: http.StatusForbidden},
 		{name: "heartbeat taken over", path: "/api/v1/playback/heartbeat", body: `{"playbackId":"` + playbackID + `","lessonId":"` + lessonID + `","positionSeconds":1,"clientSeq":0,"reason":"tick"}`, service: &sessions{heartbeatErr: domain.ErrPlaybackTakenOver}, wantStatus: http.StatusConflict},

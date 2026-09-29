@@ -9,6 +9,7 @@ import type { AdminCourseTreeStatus } from './adminCourseTreeStatus.ts';
 import type { AdminModule } from './adminModule.ts';
 import type { AdminTimestamp } from './adminTimestamp.ts';
 import type { NullableAdminTimestamp } from './nullableAdminTimestamp.ts';
+import type { NullablePrice } from './nullablePrice.ts';
 
 export interface AdminCourseTree {
   id: string;
@@ -38,6 +39,7 @@ export interface AdminCourseTree {
   createdAt: AdminTimestamp;
   updatedAt: AdminTimestamp;
   publishedAt: NullableAdminTimestamp | null;
+  price: NullablePrice | null;
   /** @maxItems 40 */
   modules: AdminModule[];
 }

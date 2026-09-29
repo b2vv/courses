@@ -71,6 +71,85 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/purchase:
+    post:
+      operationId: startCoursePurchase
+      summary: Start an idempotent course purchase
+      description: Authenticated same-origin mutation. The order snapshots the published course price.
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '201':
+          description: The new or replayed pending order.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseOrder' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/PurchaseConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/orders/{orderId}:
+    get:
+      operationId: getPurchaseStatus
+      summary: Read the authenticated account's purchase status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current order status.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurchaseOrder' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/OrderNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses/{courseId}/grants:
+    post:
+      operationId: grantCourseAccess
+      summary: Grant course access as an administrator
+      description: Admin-only same-origin mutation. Creates an active admin grant and its audit record.
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminGrantRequest' }
+      responses:
+        '201':
+          description: Active administrative grant.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourseGrant' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/GrantForbidden' }
+        '409': { $ref: '#/components/responses/PurchaseConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/users:
     get:
       operationId: listAdminUsers
@@ -1152,7 +1231,8 @@ components:
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      description: Reserved for future payment mutations. No foundation endpoint consumes this header or promises idempotent payment processing.
+      required: true
+      description: User-scoped replay key for starting a course purchase.
       schema: { type: string, minLength: 1, maxLength: 128 }
   headers:
     RequestID:
@@ -1481,7 +1561,7 @@ components:
     LearningCourse:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, modules, continueLessonId]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, modules, continueLessonId]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1492,6 +1572,8 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time, nullable: true }
+        price: { $ref: '#/components/schemas/NullablePrice' }
+        paid: { type: boolean }
         modules:
           type: array
           maxItems: 40
@@ -1503,7 +1585,7 @@ components:
     Course:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1517,6 +1599,8 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time, nullable: true }
+        price: { $ref: '#/components/schemas/NullablePrice' }
+        paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
     ProgramLesson:
       type: object
       additionalProperties: false
@@ -1536,7 +1620,7 @@ components:
     CourseDetail:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, program]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, program]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1549,6 +1633,8 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time }
+        price: { $ref: '#/components/schemas/NullablePrice' }
+        paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
         program:
           type: array
           maxItems: 40
@@ -1637,6 +1723,7 @@ components:
         id: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, maxLength: 1000 }
+        isPreview: { type: boolean, default: false }
     AdminModule:
       type: object
       additionalProperties: false
@@ -1651,7 +1738,7 @@ components:
     AdminCourseTree:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, instructorId, createdAt, updatedAt, publishedAt, modules]
+      required: [id, slug, title, summary, description, status, instructorId, createdAt, updatedAt, publishedAt, price, modules]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1663,6 +1750,7 @@ components:
         createdAt: { $ref: '#/components/schemas/AdminTimestamp' }
         updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
         publishedAt: { $ref: '#/components/schemas/NullableAdminTimestamp' }
+        price: { $ref: '#/components/schemas/NullablePrice' }
         modules:
           type: array
           maxItems: 40
@@ -1677,6 +1765,49 @@ components:
         summary: { type: string, minLength: 1, maxLength: 500 }
         description: { type: string, minLength: 1, maxLength: 20000 }
         instructorId: { type: string, format: uuid }
+        price: { $ref: '#/components/schemas/NullablePrice' }
+
+    Price:
+      type: object
+      additionalProperties: false
+      required: [minor, currency]
+      properties:
+        minor: { type: integer, format: int64, minimum: 1 }
+        currency: { type: string, enum: [UAH] }
+    NullablePrice:
+      allOf:
+        - $ref: '#/components/schemas/Price'
+      nullable: true
+    PurchaseOrder:
+      type: object
+      additionalProperties: false
+      required: [id, courseId, amount, status, createdAt, paidAt]
+      properties:
+        id: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Price' }
+        status: { type: string, enum: [pending, paid, failed] }
+        createdAt: { type: string, format: date-time }
+        paidAt: { type: string, format: date-time, nullable: true }
+    AdminGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [userId, reason]
+      properties:
+        userId: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CourseGrant:
+      type: object
+      additionalProperties: false
+      required: [id, userId, courseId, source, state, grantedAt, grantedBy]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        source: { type: string, enum: [admin] }
+        state: { type: string, enum: [active] }
+        grantedAt: { type: string, format: date-time }
+        grantedBy: { type: string, format: uuid, nullable: true }
     AdminCourseSaveRequest:
       type: object
       additionalProperties: false
@@ -1799,10 +1930,34 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, grant_forbidden, payment_event_rejected, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    PurchaseConflict:
+      description: The course is already owned or the price operation conflicted.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    GrantForbidden:
+      description: Administrator permission is required to issue a grant.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    OrderNotFound:
+      description: The order is unknown or belongs to another account.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     LearningForbidden:
       description: The authenticated actor cannot view the requested course.
       headers:

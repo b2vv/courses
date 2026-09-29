@@ -64,6 +64,20 @@ func TestLearningCourseValidatesBeforeLookupAndAppliesVisibility(t *testing.T) {
 	}
 }
 
+func TestLearningCourseReportsWhenPurchaseIsRequired(t *testing.T) {
+	actor := domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent}
+	paid := learningCourse(nil)
+	paid.Paid = true
+	repository := &learningRepository{course: paid}
+
+	if _, err := application.NewLearning(repository).GetCourse(context.Background(), actor, "learning-course"); !errors.Is(err, domain.ErrPurchaseRequired) {
+		t.Fatalf("paid course error=%v, want purchase required", err)
+	}
+	if repository.calls != 1 {
+		t.Fatalf("lookup calls=%d, want 1", repository.calls)
+	}
+}
+
 func learningCourse(lessons []domain.LearningLesson) domain.LearningCourse {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	return domain.LearningCourse{

@@ -58,6 +58,9 @@ func (reading *Reading) Get(ctx context.Context, actor domain.Actor, lessonID, r
 	// answer differently from its presence, and "no transcript" would quietly confirm that a
 	// draft course exists — a transcript must not become a second way into a course.
 	if !found.Course.CanBeViewedBy(actor) {
+		if found.Course.PurchaseRequiredBy(actor) {
+			return Transcript{}, domain.ErrPurchaseRequired
+		}
 		return Transcript{}, domain.ErrForbidden
 	}
 	if !found.Found {

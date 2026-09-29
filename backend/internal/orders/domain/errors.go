@@ -11,4 +11,10 @@ const (
 	ErrGrantInvalid           Error = "grant_invalid"
 	ErrCourseAlreadyOwned     Error = "course_already_owned"
 	ErrPaymentEventRejected   Error = "payment_event_rejected"
+	ErrPaymentEventUnmatched  Error = "payment_event_unmatched"
+	ErrCourseNotPurchasable   Error = "course_not_purchasable"
+	ErrOrderNotFound          Error = "order_not_found"
+	ErrGrantForbidden         Error = "grant_forbidden"
+	ErrDependencyUnavailable  Error = "dependency_unavailable"
+	ErrCourseModified         Error = "course_modified"
 )

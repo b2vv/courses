@@ -29,6 +29,9 @@ func (authorizer *Authorizer) Authorize(ctx context.Context, actor domain.Actor,
 		return err
 	}
 	if !course.CanBeViewedBy(actor) {
+		if course.PurchaseRequiredBy(actor) {
+			return domain.ErrPurchaseRequired
+		}
 		return domain.ErrForbidden
 	}
 	return nil

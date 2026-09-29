@@ -1,0 +1,287 @@
+package http
+
+import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"unicode/utf8"
+
+	"courses/internal/orders/application"
+	"courses/internal/orders/domain"
+	"courses/platform/httpserver"
+)
+
+const maximumGrantBody = 8 * 1024
+
+type Handler struct{ service *application.Service }
+
+func NewHandler(service *application.Service) *Handler { return &Handler{service: service} }
+
+func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/learn/courses/{courseId}/purchase", sameOrigin(authenticate(http.HandlerFunc(handler.startPurchase))))
+	mux.Handle("GET /api/v1/learn/orders/{orderId}", authenticate(http.HandlerFunc(handler.purchaseStatus)))
+}
+
+func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrigin, administrator func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/admin/courses/{courseId}/grants", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.grantCourse)))))
+}
+
+type moneyDTO struct {
+	Minor    int64  `json:"minor"`
+	Currency string `json:"currency"`
+}
+
+type orderDTO struct {
+	ID        string   `json:"id"`
+	CourseID  string   `json:"courseId"`
+	Amount    moneyDTO `json:"amount"`
+	Status    string   `json:"status"`
+	CreatedAt string   `json:"createdAt"`
+	PaidAt    *string  `json:"paidAt"`
+}
+
+type grantRequest struct {
+	UserID string `json:"userId"`
+	Reason string `json:"reason"`
+}
+
+type grantDTO struct {
+	ID        string  `json:"id"`
+	UserID    string  `json:"userId"`
+	CourseID  string  `json:"courseId"`
+	Source    string  `json:"source"`
+	State     string  `json:"state"`
+	GrantedAt string  `json:"grantedAt"`
+	GrantedBy *string `json:"grantedBy"`
+}
+
+func (handler *Handler) startPurchase(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	if !validID(r.PathValue("courseId")) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	keys := r.Header.Values("Idempotency-Key")
+	if len(keys) != 1 {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	key := keys[0]
+	if len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key || !utf8.ValidString(key) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	order, err := handler.service.StartPurchase(r.Context(), actor, r.PathValue("courseId"), key)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, mapOrder(order))
+}
+
+func (handler *Handler) purchaseStatus(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	if !validID(r.PathValue("orderId")) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	order, err := handler.service.PurchaseStatus(r.Context(), actor, r.PathValue("orderId"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapOrder(order))
+}
+
+func (handler *Handler) grantCourse(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	if !validID(r.PathValue("courseId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	request, err := decodeGrant(w, r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if !validID(request.UserID) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	grant, err := handler.service.GrantCourse(r.Context(), actor, request.UserID, r.PathValue("courseId"), request.Reason)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, grantDTO{
+		ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: string(grant.Source()),
+		State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format("2006-01-02T15:04:05.000000Z07:00"), GrantedBy: grant.GrantedBy(),
+	})
+}
+
+func actorFromRequest(w http.ResponseWriter, r *http.Request) (application.Actor, bool) {
+	actor, ok := httpserver.ActorFromContext(r.Context())
+	if !ok {
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+		return application.Actor{}, false
+	}
+	return application.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin"}, true
+}
+
+func mapOrder(order domain.Order) orderDTO {
+	var paidAt *string
+	if value := order.PaidAt(); value != nil {
+		formatted := value.UTC().Format("2006-01-02T15:04:05.000000Z07:00")
+		paidAt = &formatted
+	}
+	return orderDTO{ID: order.ID(), CourseID: order.CourseID(), Amount: moneyDTO{Minor: int64(order.Amount().MinorUnits()), Currency: string(order.Amount().Currency())}, Status: string(order.Status()), CreatedAt: order.CreatedAt().UTC().Format("2006-01-02T15:04:05.000000Z07:00"), PaidAt: paidAt}
+}
+
+func decodeGrant(w http.ResponseWriter, r *http.Request) (grantRequest, error) {
+	if strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]) != "application/json" {
+		return grantRequest{}, domain.ErrGrantInvalid
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maximumGrantBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil || validateUniqueJSONObject(body) != nil {
+		return grantRequest{}, domain.ErrGrantInvalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var request grantRequest
+	if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return grantRequest{}, domain.ErrGrantInvalid
+	}
+	return request, nil
+}
+
+func validateUniqueJSONObject(body []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return domain.ErrGrantInvalid
+	}
+	if err := validateUniqueObject(decoder); err != nil {
+		return err
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return domain.ErrGrantInvalid
+	}
+	return nil
+}
+
+func validateUniqueObject(decoder *json.Decoder) error {
+	seen := make(map[string]struct{})
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return domain.ErrGrantInvalid
+		}
+		if _, exists := seen[key]; exists {
+			return domain.ErrGrantInvalid
+		}
+		seen[key] = struct{}{}
+		if err := validateUniqueValue(decoder); err != nil {
+			return err
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') {
+		return domain.ErrGrantInvalid
+	}
+	return nil
+}
+
+func validateUniqueValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return domain.ErrGrantInvalid
+	}
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		return validateUniqueObject(decoder)
+	case '[':
+		for decoder.More() {
+			if err := validateUniqueValue(decoder); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim(']') {
+			return domain.ErrGrantInvalid
+		}
+		return nil
+	default:
+		return domain.ErrGrantInvalid
+	}
+}
+
+func emptyQuery(raw string) bool {
+	query, err := url.ParseQuery(raw)
+	return err == nil && len(query) == 0
+}
+
+func validID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' || strings.ToLower(value) != value || value == "00000000-0000-0000-0000-000000000000" {
+		return false
+	}
+	decoded, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
+	return err == nil && len(decoded) == 16
+}
+
+func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
+
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, domain.ErrOrderInvalid), errors.Is(err, domain.ErrGrantInvalid), errors.Is(err, domain.ErrMoneyInvalid), errors.Is(err, domain.ErrCourseNotPurchasable):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
+	case errors.Is(err, domain.ErrCourseAlreadyOwned):
+		httpserver.WriteError(w, r, http.StatusConflict, "course_already_owned", "Course is already owned")
+	case errors.Is(err, domain.ErrOrderNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "order_not_found", "Order was not found")
+	case errors.Is(err, domain.ErrGrantForbidden):
+		httpserver.WriteError(w, r, http.StatusForbidden, "grant_forbidden", "Administrator permission is required")
+	case errors.Is(err, domain.ErrPaymentEventRejected), errors.Is(err, domain.ErrPaymentEventUnmatched):
+		httpserver.WriteError(w, r, http.StatusConflict, "payment_event_rejected", "Payment event was rejected")
+	case errors.Is(err, domain.ErrCourseModified):
+		httpserver.WriteError(w, r, http.StatusConflict, "course_modified", "Course changed since it was loaded")
+	case errors.Is(err, domain.ErrDependencyUnavailable):
+		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Purchases are temporarily unavailable")
+	default:
+		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
+	}
+}

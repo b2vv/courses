@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration and playback-session control. Purchases and the learning player are not implemented.
  * OpenAPI spec version: 1.0.0
  */
+import type { NullablePrice } from './nullablePrice.ts';
 
 export interface AdminCourseWrite {
   /**
@@ -29,4 +30,5 @@ export interface AdminCourseWrite {
      */
   description: string;
   instructorId?: string;
+  price?: NullablePrice | null;
 }

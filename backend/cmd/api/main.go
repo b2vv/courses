@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +14,7 @@ import (
 	coursehttp "courses/internal/course/adapters/http"
 	coursepostgres "courses/internal/course/adapters/postgres"
 	courseapplication "courses/internal/course/application"
+	coursedomain "courses/internal/course/domain"
 	discussionhttp "courses/internal/discussion/adapters/http"
 	discussionpostgres "courses/internal/discussion/adapters/postgres"
 	discussionapplication "courses/internal/discussion/application"
@@ -22,6 +26,10 @@ import (
 	mediahttp "courses/internal/media/adapters/http"
 	mediapostgres "courses/internal/media/adapters/postgres"
 	mediaapplication "courses/internal/media/application"
+	ordershttp "courses/internal/orders/adapters/http"
+	orderspostgres "courses/internal/orders/adapters/postgres"
+	ordersapplication "courses/internal/orders/application"
+	ordersdomain "courses/internal/orders/domain"
 	playbackhttp "courses/internal/playback/adapters/http"
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	playbackredis "courses/internal/playback/adapters/redis"
@@ -60,8 +68,11 @@ func main() {
 		courseRepository := coursepostgres.NewRepository(dependencies.Database)
 		catalog := courseapplication.NewCatalog(courseRepository)
 		learning := courseapplication.NewLearning(courseRepository)
-		authoring := courseapplication.NewAuthoring(courseRepository, time.Now)
+		ordersRepository := orderspostgres.NewRepository(dependencies.Database)
+		orders := ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID)
+		authoring := courseapplication.NewAuthoring(courseRepository, time.Now, courseGrandfatherer{orders})
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
+		ordersHandler := ordershttp.NewHandler(orders)
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)
@@ -104,6 +115,8 @@ func main() {
 			Tracer: dependencies.Tracing.Tracer("http"),
 			Register: func(mux *http.ServeMux) {
 				courseHandler.Register(mux)
+				ordersHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				ordersHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin, identityHandler.RequireAdministrator)
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
@@ -124,4 +137,25 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("shutdown complete")
+}
+
+type courseGrandfatherer struct{ service *ordersapplication.Service }
+
+func (adapter courseGrandfatherer) GrandfatherOnPriceSet(ctx context.Context, courseID string, expectedUpdatedAt time.Time, priceMinor int64, currency string, updatedAt time.Time) error {
+	err := adapter.service.GrandfatherOnPriceSet(ctx, courseID, expectedUpdatedAt, priceMinor, currency, updatedAt)
+	if errors.Is(err, ordersdomain.ErrCourseModified) {
+		return coursedomain.ErrCourseModified
+	}
+	return err
+}
+
+func newUUID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		panic(fmt.Sprintf("generate uuid: %v", err))
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		value[0:4], value[4:6], value[6:8], value[8:10], value[10:16])
 }

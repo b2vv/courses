@@ -87,6 +87,34 @@ func TestOrderRejectsInvalidCreationAndTerminalTransitions(t *testing.T) {
 	}
 }
 
+func TestRestoreOrderValidatesPersistedStatusAndPaidTimestamp(t *testing.T) {
+	createdAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	paidAt := createdAt.Add(time.Minute)
+	for _, test := range []struct {
+		name   string
+		status OrderStatus
+		paidAt *time.Time
+		want   error
+	}{
+		{name: "pending", status: OrderPending},
+		{name: "paid", status: OrderPaid, paidAt: &paidAt},
+		{name: "failed", status: OrderFailed},
+		{name: "paid without timestamp", status: OrderPaid, want: ErrOrderInvalid},
+		{name: "pending with timestamp", status: OrderPending, paidAt: &paidAt, want: ErrOrderInvalid},
+		{name: "unknown status", status: OrderStatus("refunded"), want: ErrOrderInvalid},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			order, err := RestoreOrder("order-1", "user-1", "course-1", mustMoney(t, "50000"), test.status, "key", createdAt, test.paidAt)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error=%v want=%v", err, test.want)
+			}
+			if test.want == nil && order.Status() != test.status {
+				t.Fatalf("status=%q want=%q", order.Status(), test.status)
+			}
+		})
+	}
+}
+
 func mustMoney(t *testing.T, minor string) Money {
 	t.Helper()
 	money, err := NewMoney(minor, "UAH")

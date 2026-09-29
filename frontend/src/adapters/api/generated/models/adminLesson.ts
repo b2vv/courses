@@ -15,4 +15,5 @@ export interface AdminLesson {
   title: string;
   /** @maxLength 1000 */
   description: string;
+  isPreview?: boolean;
 }

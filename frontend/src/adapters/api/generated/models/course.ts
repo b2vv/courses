@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CourseStatus } from './courseStatus.ts';
+import type { NullablePrice } from './nullablePrice.ts';
 
 export interface Course {
   id: string;
@@ -36,4 +37,7 @@ export interface Course {
   updatedAt: string;
   /** @nullable */
   publishedAt: string | null;
+  price: NullablePrice | null;
+  /** True when the course has a price; this is display metadata, not an access decision. */
+  paid: boolean;
 }

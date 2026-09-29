@@ -7,6 +7,6 @@
  */
 
 /**
- * Reserved for future payment mutations. No foundation endpoint consumes this header or promises idempotent payment processing.
+ * User-scoped replay key for starting a course purchase.
  */
 export type IdempotencyKeyParameter = string;

@@ -7,6 +7,7 @@
  */
 import type { LearningCourseStatus } from './learningCourseStatus.ts';
 import type { LearningModule } from './learningModule.ts';
+import type { NullablePrice } from './nullablePrice.ts';
 
 export interface LearningCourse {
   id: string;
@@ -36,6 +37,8 @@ export interface LearningCourse {
   updatedAt: string;
   /** @nullable */
   publishedAt: string | null;
+  price: NullablePrice | null;
+  paid: boolean;
   /** @maxItems 40 */
   modules: LearningModule[];
   /** @nullable */
