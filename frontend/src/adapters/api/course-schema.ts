@@ -10,6 +10,14 @@ export const courseSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
   publishedAt: z.iso.datetime({ offset: true }).nullable(),
+  price: z
+    .object({
+      minor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      currency: z.literal('UAH'),
+    })
+    .strict()
+    .nullable(),
+  paid: z.boolean(),
 });
 const programTitleSchema = z
   .string()

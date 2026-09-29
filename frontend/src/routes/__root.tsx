@@ -5,6 +5,7 @@ import {
   Scripts,
   Link,
   useNavigate,
+  useRouterState,
 } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
@@ -93,6 +94,10 @@ function Layout() {
   const navigate = useNavigate();
   const [signOutFailed, setSignOutFailed] = useState(false);
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
+  const isStorefront = useRouterState({
+    select: (state) =>
+      state.location.pathname === '/' || state.location.pathname.startsWith('/courses'),
+  });
 
   // Unsaved editor lines are kept locally so a reload cannot lose them, and they outlive the
   // session on disk. The author is in their key, so nobody is ever OFFERED another person's text
@@ -148,10 +153,28 @@ function Layout() {
       <main id="main" className="shell main-content" tabIndex={-1}>
         <Outlet />
       </main>
-      <footer className="shell site-footer">
-        <span>CourseForge</span>
-        <span>{t('common.tagline')}</span>
-      </footer>
+      {isStorefront ? (
+        <footer className="site-footer site-footer--storefront">
+          <div className="shell footer-grid">
+            <div className="footer-brand">
+              <Link to="/" className="wordmark" aria-label={t('common.homeLabel')}>
+                <span aria-hidden="true">{'</>'}</span>CourseForge
+              </Link>
+              <p>{t('common.tagline')}</p>
+            </div>
+            <nav aria-label={t('common.footerLearning')} className="footer-links">
+              <strong>{t('common.footerLearning')}</strong>
+              <Link to="/courses">{t('common.catalog')}</Link>
+              <Link to="/learn">{t('common.myLearning')}</Link>
+            </nav>
+          </div>
+        </footer>
+      ) : (
+        <footer className="shell site-footer">
+          <span>CourseForge</span>
+          <span>{t('common.tagline')}</span>
+        </footer>
+      )}
     </>
   );
 }

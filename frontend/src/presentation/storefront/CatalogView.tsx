@@ -6,14 +6,14 @@ export function CatalogView({ page, query }: { page: CoursePage; query: CatalogQ
   const { t } = useTranslation();
   const last = query.offset + page.items.length;
   return (
-    <section>
+    <section className="catalog-view">
       <div className="catalog-heading">
         <div>
           <p className="eyebrow">{t('catalog.label')}</p>
           <h1>{t('catalog.title')}</h1>
           <p className="lede">{t('catalog.description')}</p>
         </div>
-        <span className="catalog-count">
+        <span className="catalog-count ui-pill ui-pill--neutral">
           {t('catalog.count', { count: page.pagination.total })}
         </span>
       </div>
@@ -76,12 +76,14 @@ function catalogHref(query: CatalogQuery) {
   return `/courses?${new URLSearchParams({ q: query.q, sort: query.sort, limit: String(query.limit), offset: String(query.offset) })}`;
 }
 function CourseCard({ course }: { course: PublishedCourse }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const action = course.paid ? t('catalog.buy') : t('catalog.open');
   return (
     <li>
-      <article className="course-card">
-        <div className="course-glyph" aria-hidden="true">
-          {'</>'}
+      <article className="course-card ui-card">
+        <div className="course-cover" aria-hidden="true">
+          <span className="ui-icon-tile course-glyph">{'</>'}</span>
+          <span className="course-cover-orbit" />
         </div>
         <div className="course-card-copy">
           <p className="eyebrow">{t('catalog.kind')}</p>
@@ -90,13 +92,25 @@ function CourseCard({ course }: { course: PublishedCourse }) {
           </h2>
           <p>{course.summary}</p>
         </div>
-        <Link
-          href={`/courses/${course.slug}`}
-          aria-label={t('catalog.details', { title: course.title })}
-          className="course-arrow"
-        >
-          ↗
-        </Link>
+        <footer className="course-card-footer">
+          <span className="course-price ui-mono">
+            {course.price === null
+              ? t('catalog.free')
+              : new Intl.NumberFormat(i18n.resolvedLanguage === 'en' ? 'en-US' : 'uk-UA', {
+                  style: 'currency',
+                  currency: course.price.currency,
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                }).format(course.price.minor / 100)}
+          </span>
+          <Link
+            href={`/courses/${course.slug}`}
+            aria-label={t('catalog.details', { title: course.title })}
+            className="course-action"
+          >
+            {action} <span aria-hidden="true">↗</span>
+          </Link>
+        </footer>
       </article>
     </li>
   );

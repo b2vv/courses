@@ -137,9 +137,9 @@ test('renders one request locale and changes visible copy without a reload', asy
       <HomeView />
     </I18nProvider>,
   );
-  expect(screen.getByRole('heading').textContent).toContain('Навички, які працюють у production');
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Навички, які працюють у production');
   await user.click(screen.getByRole('button', { name: 'EN' }));
-  expect(screen.getByRole('heading').textContent).toContain('Skills that work in production');
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Skills that work in production');
   expect(document.documentElement.lang).toBe('en');
   expect(document.cookie).toContain('courseforge_locale=en');
 });

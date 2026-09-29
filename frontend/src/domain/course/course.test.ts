@@ -32,12 +32,30 @@ describe('public catalog rules', () => {
       description: 'Опис',
       status: 'draft',
       publishedAt: '2026-09-01T00:00:00Z',
+      price: null,
+      paid: false,
     };
     expect(makePublishedCourse(input).ok).toBe(false);
     expect(makePublishedCourse({ ...input, status: 'published', slug: '../secret' }).ok).toBe(
       false,
     );
     expect(makePublishedCourse({ ...input, status: 'published' }).ok).toBe(true);
+    expect(
+      makePublishedCourse({
+        ...input,
+        status: 'published',
+        price: { minor: 149900, currency: 'UAH' },
+        paid: true,
+      }),
+    ).toMatchObject({ ok: true, value: { price: { minor: 149900, currency: 'UAH' }, paid: true } });
+    expect(
+      makePublishedCourse({
+        ...input,
+        status: 'published',
+        price: { minor: 149900, currency: 'UAH' },
+        paid: false,
+      }).ok,
+    ).toBe(false);
   });
 });
 

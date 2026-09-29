@@ -3,6 +3,10 @@ export const uk = {
     common: {
       catalog: 'Каталог',
       login: 'Увійти',
+      home: 'Головна',
+      myLearning: 'Моє навчання',
+      footerLearning: 'Навчання',
+      footerAccount: 'Акаунт',
       skip: 'До основного вмісту',
       mainNavigation: 'Основна навігація',
       tagline: 'Знання, які стають практикою.',
@@ -17,7 +21,22 @@ export const uk = {
       description:
         'Від першого рішення до надійної системи. Поглиблюйте знання архітектури, бекенду та інтерфейсів на практиці.',
       action: 'Переглянути курси',
+      secondaryAction: 'Як влаштоване навчання',
+      factsLabel: 'Формат навчання',
+      factPracticeLabel: 'Підхід',
+      factPracticeValue: 'Навчання через практику',
+      factPaceLabel: 'Темп',
+      factPaceValue: 'Самостійний',
+      codePractice: 'practice',
+      codeSystem: 'system',
+      codeWhy: 'why',
       art: 'Менше здогадок.\nБільше розуміння.',
+      valuesTitle: 'Що дає навчання',
+      values: {
+        practice: { title: 'Практика', description: 'Рішення, які можна застосувати у роботі.' },
+        review: { title: 'Транскрипти', description: 'Текст уроку з пошуком і часовими мітками.' },
+        access: { title: 'Обговорення', description: 'Запитання й відповіді поруч із уроком.' },
+      },
     },
     catalog: {
       label: 'Навчання через практику',
@@ -44,6 +63,9 @@ export const uk = {
       next: 'Наступна →',
       kind: 'Практичний курс',
       details: 'Детальніше: {{title}}',
+      buy: 'Купити',
+      open: 'Відкрити',
+      free: 'Безкоштовно',
       loading: 'Завантажуємо курси',
       failure: 'Не вдалося завантажити курси',
       failureHint:
