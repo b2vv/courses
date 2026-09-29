@@ -4,7 +4,7 @@
 |---|---|
 | Фаза | Оплата (`PRODUCT-BRIEF.md` §24 п.21) — остання |
 | Спека | `docs/payment/spec.md` (GATE 1 пройдено 2026-09-29) |
-| Статус | **DRAFT** — до GATE 2 (`plan-critique` + `plan-defense` + конституція) |
+| Статус | **GATE 2 — знахідки закрито** (Courses 2, Opus 4.8, 2026-09-29); до повторної звірки |
 | Автор | Courses 1 |
 | Гілка | `feat/payment` |
 
@@ -43,9 +43,19 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 адмін (`source=admin`, `order_id` NULL). Активне право одне на `(user, course)` — частковий UNIQUE.
 Редірект-повернення права не видає ніколи.
 
-**A6. Причина відмови для платного курсу — в application, не в контракті.** Контракт повертає лише bool.
-Коли `¬CanView ∧ Published ∧ Paid ∧ ¬Preview`, application курсу/плеєра повертає `course_purchase_required`
-(403), інакше — `course_forbidden`. Так UI показує «купіть курс», а не загальну відмову.
+**A7. free→paid grandfathering (B2, рішення користувача 2026-09-29).** Коли автор уперше ставить курсу
+ціну, orders видає активний grant (`source=grandfather`, `order_id` NULL) усім, хто вже має **прогрес**
+на курсі (playback watched/progress) — щоб ніхто не втратив доступ посеред навчання. Видача — одна
+транзакція з `UPDATE courses SET price_minor`; ідемпотентна (частковий UNIQUE не дублює наявні права).
+`source` розширюється до `purchase|admin|grandfather`; аудит фіксує підставу.
+
+**A6. Причина відмови — один спільний предикат у контракті, вибір коду в application (B1+NB1).**
+Контракт `CanView` повертає bool; поряд — чиста `access.PurchaseRequired(subject, course) bool` =
+`Published ∧ Paid ∧ ¬Preview ∧ ¬(Administrator ∨ owner ∨ Entitled)`. **Усі чотири** application-шари на
+відмові view кличуть цей один предикат і обирають `course_purchase_required` (403) інакше `course_forbidden`.
+Один предикат — без дубля з §A1-правилом (NB1, знято ризик десинку коду); Pay19 виконується на 4 поверхнях
+однаково. Сьогодні transcript/discussion віддають generic `ErrForbidden` (`discussion/application/application.go:96,121,218`,
+`transcript/application/read.go`) — зріз O04 підмінює на вибір за предикатом.
 
 ## Reuse-first
 
@@ -84,7 +94,7 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 | **O01** | ADR 014; `access.Course` += `Paid/Entitled/Preview`; правило; `accesstest` розширено; `access_test`, `shared_rules_test`; 4 доменні типи фактів. **Поведінку не міняє**, доки SQL не дає фактів (усі false = сьогоднішнє правило) | Pay01 (unit), Pay05, Pay15 (unit) |
 | **O02** | Міграція 00011 + модуль `orders`: `Money` (мінорні, UAH), `Order` (pending→paid\|failed), `Grant` (source, state), правило застосування події; unit | Pay02, Pay03, Pay18 (+ доменна частина Pay04/Pay16/Pay21) |
 | **O03** | 6 запитів джойнять `course_grants` і читають `price_minor`/`is_preview`; userID через 4 порти; integration-таблиця через SQL у 4 модулях; **замір гарячого шляху** | Pay01 (SQL), Pay11 (integration), Pay14, Pay23 |
-| **O04** | `orders` application+HTTP: старт покупки (IdempotencyKey, pending), статус, адмін-видача (admin-only, аудит), `ApplyPaymentEvent`; причина `course_purchase_required`; каталог `price/paid`; авторинг ціни й прев'ю; OpenAPI+Orval; architecture-тест `orders` | Pay04, Pay06, Pay07, Pay08, Pay10, Pay12, Pay13, Pay16, Pay17, Pay19, Pay20, Pay21, Pay22 |
+| **O04** | `orders` application+HTTP: старт покупки (IdempotencyKey, pending), статус, адмін-видача (admin-only, аудит), `ApplyPaymentEvent` (unknown-order → не термінальна відмова, Pay21b), **grandfather при першому price-set** (A7); спільний `access.PurchaseRequired` і вибір коду на **4** application-шарах (A6); каталог `price/paid`; авторинг ціни й прев'ю; OpenAPI+Orval; architecture-тест `orders` | Pay04, Pay06, Pay07, Pay08, Pay10, Pay12, Pay13, Pay16, Pay17, Pay19, Pay20, Pay21, Pay21b, Pay22, Pay26 |
 | **O05** | Фронт: ціна/«платний» у каталозі; «Купити» → старт; «оплата в обробці» з опитуванням статусу; «потрібна покупка» + позначки прев'ю на уроці; адмін-видача; авторинг ціни/прев'ю | Pay07, Pay09, Pay11, Pay13 (UI) |
 | **O06** | **ЗАБЛОКОВАНО на назві провайдера.** Порт + перший адаптер: checkout-сесія (redirect), вебхук-ендпоінт (без сесії, перевірка підпису → `ApplyPaymentEvent`), повернення → сторінка статусу; ключі лише з env | Pay24, Pay25 |
 | **O07** | e2e (непровайдерні журнеї одразу, провайдерна — після O06), упорядкований `make check`, звіт Pay01–Pay25 по одному, PR | усі |
@@ -113,9 +123,10 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 - `orders (id, user_id FK users, course_id FK courses, amount_minor bigint CHECK >0, currency CHECK='UAH',
   status text CHECK IN ('pending','paid','failed'), idempotency_key text, created_at, paid_at NULL,
   provider text NULL, provider_ref text NULL, UNIQUE(user_id, idempotency_key))`.
-- `course_grants (id, user_id FK, course_id FK, source text CHECK IN ('purchase','admin'), order_id NULL FK orders,
+- `course_grants (id, user_id FK, course_id FK, source text CHECK IN ('purchase','admin','grandfather'), order_id NULL FK orders,
   state text CHECK IN ('active','revoked'), granted_at, granted_by NULL FK users,
   CHECK ((source='purchase') = (order_id IS NOT NULL)))` + частковий `UNIQUE (user_id, course_id) WHERE state='active'`.
+  Grandfather-видача (A7) при першому price-set — `INSERT … SELECT` з тих, хто має прогрес, `ON CONFLICT DO NOTHING`.
 - `payment_events (id, provider text, event_id text, order_id NULL FK, type text, amount_minor NULL,
   received_at, UNIQUE(provider, event_id))`.
 - `grant_audit (id, grant_id FK, actor_id NULL, action text, reason text NULL, payment_event_id NULL, created_at)`.
@@ -166,7 +177,7 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 |---|---|---|---|---|---|
 | Pay03 | Гроші | — | створити Money | мінорні одиниці, UAH | unit |
 | Pay15 | Безкоштовний курс не змінився | курс без ціни | будь-хто відкриває | як сьогодні (published → відкрито) | unit table; e2e регресія |
-| Pay16 | Повторна покупка | активне право | старт покупки | 409 `course_already_owned`, замовлення не створено | contract; integration |
+| Pay16 | Повторна покупка | активне право **будь-якого source** (purchase/admin/grandfather) | старт покупки | 409 `course_already_owned`, замовлення не створено (NB2: перевіряти `course_grants` за станом active, не за source) | contract; integration |
 | Pay17 | Зміна ціни після покупки | куплено за 500, ціну змінено на 700 | — | доступ є; замовлення лишається 50000 | integration |
 | Pay18 | Некоректні гроші | — | від'ємна / переповнення / не UAH | відмова | unit |
 | Pay23 | Гарячий шлях | сід із правами | `EXPLAIN (ANALYZE, BUFFERS)` `loadVideoCourse` до/після | index scan; час ≤ ×2 від базового; числа у звіті | integration (замір) |
@@ -175,9 +186,11 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 
 | # | Сценарій | Передумова | Дія | Результат | Чим |
 |---|---|---|---|---|---|
-| Pay19 | Без права на платний | студент без права, не-прев'ю | API уроку/сесії/транскрипту/коментарів | 403 `course_purchase_required`; стан не змінено | contract ×4 |
+| Pay19 | Без права на платний | студент без права, не-прев'ю | API уроку/сесії/транскрипту/коментарів | 403 `course_purchase_required` на всіх 4 (через спільний `access.PurchaseRequired`, A6); стан не змінено | contract ×4 |
 | Pay20 | Адмін-видача не адміном | інструктор/студент | видати право | 403 `grant_forbidden` | contract |
-| Pay21 | Подія на невідоме замовлення / чужа сума | — | `ApplyPaymentEvent` | `payment_event_rejected`, права немає, подія записана з відмовою | integration |
+| Pay21 | Подія з **чужою сумою** на відоме замовлення | замовлення існує, сума події ≠ сума замовлення | `ApplyPaymentEvent` | `payment_event_rejected`, права немає, подія записана як термінальна відмова | integration |
+| Pay21b | Подія на **ще-не-створене** замовлення (гонка «подія до коміту», NB3) | замовлення не знайдено | `ApplyPaymentEvent` | **НЕ** термінальна відмова: подія не пишеться в inbox як reject; відповідь провайдеру спонукає ретрай (або запис pending-unmatched для звірки, коли замовлення з'явиться) — інакше гроші без доступу | integration |
+| Pay26 | Grandfather при free→paid (A7) | безкоштовний курс, N студентів із прогресом | автор ставить ціну | усі N дістають активний grant `source=grandfather`; доступ не зникає; повтор price-set не дублює | integration |
 | Pay22 | Недоступна залежність | БД недоступна | старт/статус/видача | 503 `dependency_unavailable` | contract |
 | Pay04b | Дубль події | подія вже застосована | повтор | no-op, друге право не створено | integration |
 
@@ -196,6 +209,23 @@ checkout-сесія і вебхук-ендпоінт з перевіркою п�
 | Pay25 | Повна покупка | sandbox провайдера: оплата → вебхук → право → урок відкрито | e2e (sandbox) |
 
 Ручних рядків: **0**. Три групи присутні.
+
+## GATE 2 — знахідки й закриття (свіжий рецензент Courses 2, Opus 4.8, 2026-09-29)
+
+Вердикт виносив не автор плану: сесія Courses 2 (підтверджено `claude-opus-4-8`), critique+defense інлайн,
+нейтральні формулювання. Було **червоно**; нижче — закриття.
+
+| Знахідка | Рівень | Закрито |
+|---|---|---|
+| B1 — `course_purchase_required` лише в course/player, а Pay19 вимагає ×4 (transcript/discussion віддають generic forbidden) | blocking | A6: спільний `access.PurchaseRequired`, вибір коду на 4 шарах; O04 підмінює generic |
+| B2 — free→paid відбирає доступ у вже-навчених студентів | blocking | **A7 grandfather** (рішення користувача): price-set видає grant усім із прогресом; Pay26 |
+| NB1 — дубль предиката платної видимості (десинк коду) | non-blocking | A6: один предикат у контракті |
+| NB2 — Pay16 має ловити active grant будь-якого source | non-blocking | Pay16 уточнено (за станом active, не source) |
+| NB3 — подія-до-замовлення пишеться як reject → гроші без доступу | non-blocking | Pay21b: unknown-order не термінальна відмова, ретрай/pending-unmatched |
+
+Підтверджено чистим: покриття доступу повне (6 запитів ловлять усі студентські read+write; media лише
+`/admin/*`, WebVTT не окремий ендпоінт, ASR-draft admin-only, discussion publish через запит #5); A2 vs
+AGENTS.md (boundaries_test забороняє імпорт пакетів, не читання таблиць); O01 поведінково нейтральний.
 
 ## План-секція майбутнього звіту
 
