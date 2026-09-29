@@ -20,6 +20,7 @@ type DiscussionPanelProps = {
   readonly onPublish: (input: PublishDiscussionInput) => Promise<void>;
   readonly onUpdate: (commentId: string, body: string) => Promise<void>;
   readonly onRemove: (commentId: string) => Promise<void>;
+  readonly onReport?: (commentId: string) => Promise<void>;
 };
 
 function timestamp(ms: number): string {
@@ -45,6 +46,7 @@ function CommentCard({
   onReply,
   onUpdate,
   onRemove,
+  onReport,
 }: {
   readonly comment: DiscussionComment;
   readonly replies: readonly DiscussionComment[];
@@ -53,6 +55,7 @@ function CommentCard({
   readonly onReply: (parentId: string, body: string) => Promise<void>;
   readonly onUpdate: (commentId: string, body: string) => Promise<void>;
   readonly onRemove: (commentId: string) => Promise<void>;
+  readonly onReport?: (commentId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [replying, setReplying] = useState(false);
@@ -60,6 +63,8 @@ function CommentCard({
   const [body, setBody] = useState(comment.body ?? '');
   const [replyBody, setReplyBody] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reported, setReported] = useState(false);
+  const [reportError, setReportError] = useState(false);
   const author = comment.author.displayName ?? t('learn.discussion.formerParticipant');
   const position = comment.positionMs;
   const run = async (action: () => Promise<void>) => {
@@ -134,7 +139,22 @@ function CommentCard({
               {t('learn.discussion.remove')}
             </Button>
           ) : null}
+          {onReport !== undefined && !comment.canEdit && !comment.removed ? (
+            <Button
+              variant="secondary"
+              isDisabled={busy || reported}
+              onPress={() => {
+                setReportError(false);
+                void run(() => onReport(comment.id))
+                  .then(() => setReported(true))
+                  .catch(() => setReportError(true));
+              }}
+            >
+              {reported ? t('learn.discussion.reported') : t('learn.discussion.report')}
+            </Button>
+          ) : null}
         </div>
+        {reportError ? <p role="alert">{t('learn.discussion.reportError')}</p> : null}
         {canReply && replying ? (
           <form
             className="discussion-reply-form"
@@ -166,6 +186,7 @@ function CommentCard({
               onReply={onReply}
               onUpdate={onUpdate}
               onRemove={onRemove}
+              {...(onReport === undefined ? {} : { onReport })}
             />
           ))}
         </ol>
@@ -186,6 +207,7 @@ export function DiscussionPanel({
   onPublish,
   onUpdate,
   onRemove,
+  onReport,
 }: DiscussionPanelProps) {
   const { t } = useTranslation();
   const [body, setBody] = useState('');
@@ -226,6 +248,7 @@ export function DiscussionPanel({
               onReply={(parentId, replyBody) => onPublish({ body: replyBody, parentId })}
               onUpdate={onUpdate}
               onRemove={onRemove}
+              {...(onReport === undefined ? {} : { onReport })}
             />
           ))}
         </ol>

@@ -13,6 +13,7 @@ import {
   listLessonComments,
   publishLessonComment,
   removeLessonComment,
+  reportLessonComment,
   updateLessonComment,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
@@ -142,6 +143,12 @@ const removeErrors = {
   404: ['comment_not_found'],
 } as const satisfies Readonly<Record<number, readonly DiscussionErrorCode[]>>;
 
+const reportErrors = {
+  401: ['authentication_required'],
+  403: ['comment_forbidden'],
+  404: ['comment_not_found'],
+} as const satisfies Readonly<Record<number, readonly DiscussionErrorCode[]>>;
+
 export function createApiDiscussionRepository(
   options: TransportOptions = {},
 ): DiscussionRepository {
@@ -201,6 +208,18 @@ export function createApiDiscussionRepository(
       );
       if (!outcome.ok) return failure(outcome.code as DiscussionErrorCode);
       if (outcome.status !== 204) return failure(namedError(outcome, removeErrors));
+      return { ok: true, value: undefined };
+    },
+
+    async report(commentId, signal) {
+      const outcome = await send(
+        'learn.discussion.report',
+        (init) => reportLessonComment(commentId, init),
+        201,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as DiscussionErrorCode);
+      if (outcome.status !== 201) return failure(namedError(outcome, reportErrors));
       return { ok: true, value: undefined };
     },
   };

@@ -25,4 +25,5 @@ export interface DiscussionRepository {
   ): Promise<DiscussionResult<DiscussionComment>>;
 
   remove(commentId: string, signal?: AbortSignal): Promise<DiscussionResult<void>>;
+  report?(commentId: string, signal?: AbortSignal): Promise<DiscussionResult<void>>;
 }
