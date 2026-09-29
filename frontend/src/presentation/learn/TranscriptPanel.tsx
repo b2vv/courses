@@ -7,6 +7,7 @@ import {
   type LessonTranscript,
   type TranscriptSegment,
 } from '../../domain/transcript/transcript';
+import { formatTimestamp } from '../format-timestamp';
 
 type TranscriptPanelProps = {
   readonly transcript: LessonTranscript;
@@ -15,13 +16,6 @@ type TranscriptPanelProps = {
    * a click would be clamped into the first second instead of going where it says. */
   readonly onSeek?: (positionMs: number) => void;
 };
-
-function timestamp(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
 
 export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPanelProps) {
   const { t } = useTranslation();
@@ -115,7 +109,7 @@ export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPa
               */}
               {onSeek === undefined ? (
                 <p className="transcript-line-body">
-                  <time>{timestamp(segment.startMs)}</time>
+                  <time>{formatTimestamp(segment.startMs)}</time>
                   {segment.speaker === undefined ? null : (
                     <span className="transcript-speaker">{segment.speaker}</span>
                   )}
@@ -125,10 +119,12 @@ export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPa
                 <button
                   type="button"
                   className="transcript-line-body"
-                  aria-label={t('learn.transcript.seek', { time: timestamp(segment.startMs) })}
+                  aria-label={t('learn.transcript.seek', {
+                    time: formatTimestamp(segment.startMs),
+                  })}
                   onClick={() => onSeek(segment.startMs)}
                 >
-                  <time>{timestamp(segment.startMs)}</time>
+                  <time>{formatTimestamp(segment.startMs)}</time>
                   {segment.speaker === undefined ? null : (
                     <span className="transcript-speaker">{segment.speaker}</span>
                   )}

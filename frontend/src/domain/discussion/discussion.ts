@@ -50,3 +50,5 @@ export type PublishDiscussionInput = {
 };
 
 export type UpdateDiscussionInput = { readonly commentId: string; readonly body: string };
+
+export type ReportDiscussionResult = DiscussionResult<void>;

@@ -3,7 +3,9 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"courses/internal/discussion/domain"
 	"courses/internal/discussion/ports"
@@ -55,6 +57,34 @@ type PublishRequest struct {
 	Body       string
 	PositionMs *int64
 	ParentID   *string
+}
+
+type ModerationComment struct {
+	ID          string
+	LessonID    string
+	LessonTitle string
+	ParentID    *string
+	Author      *string
+	Body        *string
+	PositionMs  *int64
+	CreatedAt   time.Time
+	EditedAt    *time.Time
+	Removed     bool
+}
+
+type CourseCommentPage struct {
+	Comments   []ModerationComment
+	NextCursor string
+}
+
+type QueueItem struct {
+	Comment     ModerationComment
+	OpenReports int
+}
+
+type QueuePage struct {
+	Items      []QueueItem
+	NextCursor string
 }
 
 func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor string) (Page, error) {
@@ -167,7 +197,114 @@ func (service *Service) Remove(ctx context.Context, actor Actor, commentID strin
 	if record.Comment.RemovedAt != nil {
 		return nil
 	}
-	return service.repository.Remove(ctx, commentID, service.now())
+	if err := service.repository.Remove(ctx, commentID, actor.UserID, service.now()); err != nil {
+		return err
+	}
+	if domain.IsModeration(actor, record.Comment) {
+		return service.repository.WriteModerationLog(ctx, ports.ModerationLogEntry{
+			CourseID: record.CourseID, CommentID: commentID, ActorID: actor.UserID,
+			ActorRole: actorRole(actor), Action: "remove", CreatedAt: service.now(),
+		})
+	}
+	return nil
+}
+
+func (service *Service) ReportComment(ctx context.Context, actor Actor, commentID string) error {
+	record, err := service.repository.Get(ctx, commentID)
+	if err != nil {
+		return err
+	}
+	if !record.Course.CanBeViewedBy(actor) {
+		return domain.ErrForbidden
+	}
+	if record.Comment.RemovedAt != nil {
+		return nil
+	}
+	report, err := domain.NewReport(domain.Report{CommentID: commentID, ReporterID: actor.UserID}, record.Comment)
+	if err != nil {
+		return err
+	}
+	return service.repository.InsertReport(ctx, report, service.now())
+}
+
+func (service *Service) ListCourseComments(ctx context.Context, actor Actor, courseID, cursor string) (CourseCommentPage, error) {
+	if err := service.requireModerationAccess(ctx, actor, courseID); err != nil {
+		return CourseCommentPage{}, err
+	}
+	page, err := service.repository.ListByCourse(ctx, courseID, cursor, 50)
+	if err != nil {
+		return CourseCommentPage{}, err
+	}
+	result := CourseCommentPage{NextCursor: page.NextCursor, Comments: make([]ModerationComment, len(page.Comments))}
+	for i, record := range page.Comments {
+		result.Comments[i] = service.presentModeration(record)
+	}
+	return result, nil
+}
+
+func (service *Service) Queue(ctx context.Context, actor Actor, courseID, cursor string) (QueuePage, error) {
+	if err := service.requireModerationAccess(ctx, actor, courseID); err != nil {
+		return QueuePage{}, err
+	}
+	page, err := service.repository.ListQueue(ctx, courseID, cursor, 50)
+	if err != nil {
+		return QueuePage{}, err
+	}
+	result := QueuePage{NextCursor: page.NextCursor, Items: make([]QueueItem, len(page.Items))}
+	for i, item := range page.Items {
+		result.Items[i] = QueueItem{Comment: service.presentModeration(item.ModerationCommentRecord), OpenReports: item.OpenReports}
+	}
+	return result, nil
+}
+
+func (service *Service) DismissReports(ctx context.Context, actor Actor, commentID, reason string) error {
+	record, err := service.repository.Get(ctx, commentID)
+	if err != nil {
+		return err
+	}
+	if !record.Course.CanBeModeratedBy(actor) {
+		return domain.ErrForbidden
+	}
+	reason = strings.TrimSpace(reason)
+	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return domain.ErrInvalidRequest
+	}
+	if err := service.repository.DismissReports(ctx, commentID, actor.UserID, service.now()); err != nil {
+		return err
+	}
+	return service.repository.WriteModerationLog(ctx, ports.ModerationLogEntry{
+		CourseID: record.CourseID, CommentID: commentID, ActorID: actor.UserID,
+		ActorRole: actorRole(actor), Action: "dismiss", Reason: &reason, CreatedAt: service.now(),
+	})
+}
+
+func (service *Service) requireModerationAccess(ctx context.Context, actor Actor, courseID string) error {
+	facts, err := service.repository.CourseFacts(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	if !facts.Course.CanBeModeratedBy(actor) {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
+func actorRole(actor Actor) string {
+	if actor.Administrator {
+		return "admin"
+	}
+	return "instructor"
+}
+
+func (service *Service) presentModeration(record ports.ModerationCommentRecord) ModerationComment {
+	result := ModerationComment{ID: record.Comment.ID, LessonID: record.Comment.LessonID, LessonTitle: record.LessonTitle, ParentID: record.Comment.ParentID,
+		Author: record.DisplayName, PositionMs: record.Comment.PositionMs, CreatedAt: record.Comment.CreatedAt,
+		EditedAt: record.Comment.EditedAt, Removed: record.Comment.RemovedAt != nil}
+	if !result.Removed {
+		body := record.Comment.Body
+		result.Body = &body
+	}
+	return result
 }
 
 func (service *Service) present(record ports.CommentRecord, actor Actor) Comment {

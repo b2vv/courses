@@ -50,6 +50,7 @@ export const ErrorResponseErrorCode = {
   comment_parent_invalid: 'comment_parent_invalid',
   comment_cursor_invalid: 'comment_cursor_invalid',
   comment_thread_full: 'comment_thread_full',
+  report_own_comment: 'report_own_comment',
   upload_in_progress: 'upload_in_progress',
   unsupported_media: 'unsupported_media',
   upload_too_large: 'upload_too_large',

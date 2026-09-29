@@ -98,6 +98,7 @@ function LessonRoutePlayer({
   const publishDiscussion = useMutation(learn.discussion.publish(queryClient));
   const updateDiscussion = useMutation(learn.discussion.update(queryClient));
   const removeDiscussion = useMutation(learn.discussion.remove(queryClient));
+  const reportDiscussion = useMutation(learn.discussion.report(queryClient));
   const discussionPage = useMemo<DiscussionPage | undefined>(() => {
     const pages = discussionQuery.data?.pages;
     if (pages === undefined || pages.length === 0) return undefined;
@@ -181,6 +182,9 @@ function LessonRoutePlayer({
         }
         onRemove={(commentId) =>
           runDiscussionMutation(() => removeDiscussion.mutateAsync({ lessonId, commentId }))
+        }
+        onReport={(commentId) =>
+          runDiscussionMutation(() => reportDiscussion.mutateAsync({ lessonId, commentId }))
         }
       />
     </CourseLearningView>

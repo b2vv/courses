@@ -22,23 +22,28 @@ import (
 )
 
 const (
-	discussionLesson  = "70000000-0000-4000-8000-000000000001"
-	discussionAuthor  = "40000000-0000-4000-8000-000000000003"
-	discussionOwner   = "40000000-0000-4000-8000-000000000002"
-	discussionViewer  = "40000000-0000-4000-8000-000000000001"
-	discussionAdmin   = "40000000-0000-4000-8000-000000000004"
-	discussionComment = "70000000-0000-4000-8000-0000000000aa"
-	discussionReply   = "70000000-0000-4000-8000-0000000000bb"
+	discussionLesson     = "70000000-0000-4000-8000-000000000001"
+	discussionAuthor     = "40000000-0000-4000-8000-000000000003"
+	discussionOwner      = "40000000-0000-4000-8000-000000000002"
+	discussionViewer     = "40000000-0000-4000-8000-000000000001"
+	discussionAdmin      = "40000000-0000-4000-8000-000000000004"
+	discussionOtherOwner = "40000000-0000-4000-8000-000000000005"
+	discussionComment    = "70000000-0000-4000-8000-0000000000aa"
+	discussionReply      = "70000000-0000-4000-8000-0000000000bb"
 )
 
 type fakeRepository struct {
-	facts     ports.LessonFacts
-	page      ports.CommentPage
-	comments  map[string]ports.CommentRecord
-	factsErr  error
-	listErr   error
-	insertErr error
-	updated   string
+	facts          ports.LessonFacts
+	page           ports.CommentPage
+	comments       map[string]ports.CommentRecord
+	factsErr       error
+	listErr        error
+	insertErr      error
+	updated        string
+	queue          ports.QueuePage
+	reports        []domain.Report
+	dismissed      []string
+	moderationLogs []ports.ModerationLogEntry
 }
 
 func (fake *fakeRepository) LessonFacts(context.Context, string) (ports.LessonFacts, error) {
@@ -81,13 +86,39 @@ func (fake *fakeRepository) UpdateBody(_ context.Context, id, _ string, body str
 	fake.comments[id], fake.updated = record, body
 	return record, nil
 }
-func (fake *fakeRepository) Remove(_ context.Context, id string, now time.Time) error {
+func (fake *fakeRepository) Remove(_ context.Context, id, actorID string, now time.Time) error {
 	record, err := fake.Get(context.Background(), id)
 	if err != nil {
 		return err
 	}
 	record.Comment.Body, record.Comment.RemovedAt = "", &now
+	record.Comment.RemovedBy = &actorID
 	fake.comments[id] = record
+	return nil
+}
+
+func (fake *fakeRepository) CourseFacts(context.Context, string) (ports.CourseFacts, error) {
+	if fake.factsErr != nil {
+		return ports.CourseFacts{}, fake.factsErr
+	}
+	return ports.CourseFacts{Course: fake.facts.Course, CourseID: "course"}, nil
+}
+func (fake *fakeRepository) ListByCourse(context.Context, string, string, int) (ports.CommentPage, error) {
+	return fake.page, fake.listErr
+}
+func (fake *fakeRepository) InsertReport(_ context.Context, report domain.Report, _ time.Time) error {
+	fake.reports = append(fake.reports, report)
+	return nil
+}
+func (fake *fakeRepository) DismissReports(_ context.Context, commentID, _ string, _ time.Time) error {
+	fake.dismissed = append(fake.dismissed, commentID)
+	return nil
+}
+func (fake *fakeRepository) ListQueue(context.Context, string, string, int) (ports.QueuePage, error) {
+	return fake.queue, nil
+}
+func (fake *fakeRepository) WriteModerationLog(_ context.Context, entry ports.ModerationLogEntry) error {
+	fake.moderationLogs = append(fake.moderationLogs, entry)
 	return nil
 }
 
@@ -98,10 +129,15 @@ func newFake() *fakeRepository {
 		Comment:     domain.Comment{ID: discussionComment, LessonID: discussionLesson, AuthorID: discussionAuthor, Body: "hello", CreatedAt: now},
 		DisplayName: &name, Course: domain.Course{OwnerID: discussionOwner, Status: domain.Published},
 	}
+	moderation := ports.ModerationCommentRecord{CommentRecord: root, LessonTitle: "Lesson one"}
 	return &fakeRepository{
-		facts:    ports.LessonFacts{Course: root.Course, DurationSecs: floatPointer(100)},
-		page:     ports.CommentPage{Threads: []ports.Thread{{Root: root}}},
+		facts: ports.LessonFacts{Course: root.Course, DurationSecs: floatPointer(100)},
+		page: ports.CommentPage{
+			Threads:  []ports.Thread{{Root: root}},
+			Comments: []ports.ModerationCommentRecord{moderation},
+		},
 		comments: map[string]ports.CommentRecord{discussionComment: root},
+		queue:    ports.QueuePage{Items: []ports.QueueItem{{ModerationCommentRecord: moderation, OpenReports: 1}}},
 	}
 }
 
@@ -114,7 +150,10 @@ func stringPointer(value string) *string  { return &value }
 func serve(t *testing.T, repository ports.Repository, method, path, body string, actor *httpserver.Actor, validRequest bool) *httptest.ResponseRecorder {
 	t.Helper()
 	handler := discussionhttp.NewHandler(application.New(repository, func() time.Time { return time.Date(2026, 9, 28, 11, 0, 0, 0, time.UTC) }))
-	server := httpserver.NewHandler(httpserver.Options{Service: "discussion-test", Register: func(mux *http.ServeMux) { handler.Register(mux, passThrough, passThrough) }})
+	server := httpserver.NewHandler(httpserver.Options{Service: "discussion-test", Register: func(mux *http.ServeMux) {
+		handler.Register(mux, passThrough, passThrough)
+		handler.RegisterTeach(mux, passThrough, passThrough)
+	}})
 	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	if actor != nil {
 		request = request.WithContext(httpserver.WithActor(request.Context(), *actor))
@@ -307,6 +346,45 @@ func TestK13DeleteComments(t *testing.T) {
 	}
 }
 
+func TestW12W13ModerationLogEffects(t *testing.T) {
+	cases := []struct {
+		name     string
+		actor    *httpserver.Actor
+		wantLog  bool
+		wantRole string
+	}{
+		{name: "W12 author self-removal is not moderation", actor: actor(discussionAuthor, "student")},
+		{name: "W13 owner removal is moderation", actor: actor(discussionOwner, "instructor"), wantLog: true, wantRole: "instructor"},
+		{name: "W13 admin removal is moderation", actor: actor(discussionAdmin, "admin"), wantLog: true, wantRole: "admin"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			fake := newFake()
+			response := serve(t, fake, http.MethodDelete, "/api/v1/learn/comments/"+discussionComment, "", test.actor, true)
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			record := fake.comments[discussionComment]
+			if record.Comment.RemovedBy == nil || *record.Comment.RemovedBy != test.actor.UserID {
+				t.Fatalf("removedBy=%v want=%s", record.Comment.RemovedBy, test.actor.UserID)
+			}
+			if !test.wantLog {
+				if len(fake.moderationLogs) != 0 {
+					t.Fatalf("moderation logs=%+v want none", fake.moderationLogs)
+				}
+				return
+			}
+			if len(fake.moderationLogs) != 1 {
+				t.Fatalf("moderation logs=%+v want one", fake.moderationLogs)
+			}
+			entry := fake.moderationLogs[0]
+			if entry.ActorID != test.actor.UserID || entry.ActorRole != test.wantRole || entry.CommentID != discussionComment || entry.Action != "remove" || entry.Reason != nil {
+				t.Fatalf("moderation log=%+v", entry)
+			}
+		})
+	}
+}
+
 func TestK14CapabilitiesAndRemovedAuthorForm(t *testing.T) {
 	cases := []struct {
 		name               string
@@ -367,6 +445,125 @@ func TestK14CapabilitiesAndRemovedAuthorForm(t *testing.T) {
 		if rootBody.Body != nil || !rootBody.Removed || rootBody.Author.DisplayName != nil {
 			t.Fatalf("removed form=%+v", rootBody)
 		}
+	})
+}
+
+func TestI03ModerationContracts(t *testing.T) {
+	t.Run("report accepted", func(t *testing.T) {
+		fake := newFake()
+		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		if len(fake.reports) != 1 || fake.reports[0].CommentID != discussionComment || fake.reports[0].ReporterID != discussionViewer {
+			t.Fatalf("reports=%+v", fake.reports)
+		}
+	})
+	t.Run("report own comment forbidden", func(t *testing.T) {
+		fake := newFake()
+		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionAuthor, "student"), true)
+		requireError(t, response, http.StatusForbidden, "report_own_comment")
+		if len(fake.reports) != 0 {
+			t.Fatalf("reports=%+v want none", fake.reports)
+		}
+	})
+	t.Run("W17 report without course access is forbidden without a write", func(t *testing.T) {
+		fake := newFake()
+		record := fake.comments[discussionComment]
+		record.Course.Status = domain.Draft
+		fake.comments[discussionComment] = record
+		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
+		requireError(t, response, http.StatusForbidden, "course_forbidden")
+		if len(fake.reports) != 0 {
+			t.Fatalf("reports=%+v want none", fake.reports)
+		}
+	})
+	t.Run("report unknown comment", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodPost, "/api/v1/learn/comments/70000000-0000-4000-8000-0000000000cc/reports", "", actor(discussionViewer, "student"), true)
+		requireError(t, response, http.StatusNotFound, "comment_not_found")
+	})
+	t.Run("course comments", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments", "", actor(discussionOwner, "instructor"), true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Comments []struct {
+				LessonTitle string `json:"lessonTitle"`
+			} `json:"comments"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Comments) != 1 || body.Comments[0].LessonTitle != "Lesson one" {
+			t.Fatalf("comments=%+v", body.Comments)
+		}
+	})
+	t.Run("course comments forbidden", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments", "", actor(discussionViewer, "student"), true)
+		requireError(t, response, http.StatusForbidden, "course_forbidden")
+	})
+	t.Run("W15 other course owner is forbidden", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments", "", actor(discussionOtherOwner, "instructor"), true)
+		requireError(t, response, http.StatusForbidden, "course_forbidden")
+	})
+	t.Run("W20 unavailable teach dependency is named", func(t *testing.T) {
+		fake := newFake()
+		fake.factsErr = domain.ErrDependencyUnavailable
+		response := serve(t, fake, http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments", "", actor(discussionOwner, "instructor"), true)
+		requireError(t, response, http.StatusServiceUnavailable, "dependency_unavailable")
+	})
+	t.Run("queue", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/moderation-queue", "", actor(discussionAdmin, "admin"), true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Items []struct {
+				Comment struct {
+					LessonTitle string `json:"lessonTitle"`
+				} `json:"comment"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Items) != 1 || body.Items[0].Comment.LessonTitle != "Lesson one" {
+			t.Fatalf("items=%+v", body.Items)
+		}
+	})
+	t.Run("invalid cursor", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/teach/courses/"+discussionOwner+"/comments?cursor=%%", "", actor(discussionOwner, "instructor"), true)
+		requireError(t, response, http.StatusBadRequest, "comment_cursor_invalid")
+	})
+	t.Run("W06 dismiss writes a moderation log with its reason", func(t *testing.T) {
+		fake := newFake()
+		response := serve(t, fake, http.MethodPost, "/api/v1/teach/comments/"+discussionComment+"/dismiss-report", `{"reason":"not a violation"}`, actor(discussionOwner, "instructor"), true)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		if len(fake.dismissed) != 1 || fake.dismissed[0] != discussionComment {
+			t.Fatalf("dismissed=%+v", fake.dismissed)
+		}
+		if len(fake.moderationLogs) != 1 {
+			t.Fatalf("moderation logs=%+v want one", fake.moderationLogs)
+		}
+		entry := fake.moderationLogs[0]
+		if entry.ActorID != discussionOwner || entry.ActorRole != "instructor" || entry.CommentID != discussionComment || entry.Action != "dismiss" || entry.Reason == nil || *entry.Reason != "not a violation" {
+			t.Fatalf("moderation log=%+v", entry)
+		}
+	})
+	t.Run("W19 dismiss by another course owner is forbidden without effects", func(t *testing.T) {
+		fake := newFake()
+		response := serve(t, fake, http.MethodPost, "/api/v1/teach/comments/"+discussionComment+"/dismiss-report", `{"reason":"not mine"}`, actor(discussionOtherOwner, "instructor"), true)
+		requireError(t, response, http.StatusForbidden, "course_forbidden")
+		if len(fake.dismissed) != 0 || len(fake.moderationLogs) != 0 {
+			t.Fatalf("dismissed=%+v logs=%+v want none", fake.dismissed, fake.moderationLogs)
+		}
+	})
+	t.Run("dismiss invalid reason", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodPost, "/api/v1/teach/comments/"+discussionComment+"/dismiss-report", `{"reason":"   "}`, actor(discussionOwner, "instructor"), true)
+		requireError(t, response, http.StatusBadRequest, "invalid_request")
 	})
 }
 

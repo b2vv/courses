@@ -192,3 +192,39 @@ test('K16 translates mutation errors by their named code', () => {
     within(panel.getByRole('region', { name: 'Discussion' })).getByRole('alert').textContent,
   ).toContain('This thread has reached its reply limit.');
 });
+
+test('W03 reports a student comment, shows success, and hides report on own or removed comments', async () => {
+  let reports = 0;
+  renderPanel({
+    onReport: async () => {
+      reports += 1;
+    },
+  });
+  await userEvent.click(screen.getByRole('button', { name: 'Report' }));
+  expect(reports).toBe(1);
+  expect(screen.getByRole('button', { name: 'Reported' })).toBeTruthy();
+
+  const own = { ...rootComment, canEdit: true };
+  renderPanel({
+    page: { threads: [{ root: own, replies: [] }], nextCursor: null },
+    onReport: async () => undefined,
+  });
+  expect(screen.queryByRole('button', { name: 'Report' })).toBeNull();
+  const removed = { ...rootComment, body: null, removed: true };
+  renderPanel({
+    page: { threads: [{ root: removed, replies: [] }], nextCursor: null },
+    onReport: async () => undefined,
+  });
+  expect(screen.queryByRole('button', { name: 'Report' })).toBeNull();
+});
+
+test('W03 shows an error when reporting fails', async () => {
+  renderPanel({
+    onReport: async () => {
+      throw new Error('report failed');
+    },
+  });
+  await userEvent.click(screen.getByRole('button', { name: 'Report' }));
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(screen.getByRole('alert').textContent).toContain('Could not report this comment');
+});
