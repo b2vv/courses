@@ -66,3 +66,5 @@
   показав `claude-opus-5-5`: аліас opus ≠ 4.8; обидва впали на тому ж safeguard (2 запущено, 0 повернулось).
 - Для 4.8 створено `~/.claude/agents/gate-reviewer.md` (`model: claude-opus-4-8`); тип агента
   підхоплюється лише новою сесією.
+- GATE 2 делеговано сесії **Courses 2** (рев'ю, на Opus 4.8) через SendMessage — critique+defense на
+  docs/payment/plan.md; просив підтвердити модель і нейтральні формулювання. Чекаю вердикт назад у Courses [035346].
