@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"courses/internal/contracts/access/accesstest"
+	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
 	"courses/internal/discussion/ports"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -127,6 +128,38 @@ func TestDiscussionPostgres(t *testing.T) {
 			}
 		})
 
+		t.Run("W10 reporting a removed comment is a no-op", func(t *testing.T) {
+			comment := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "removed before report")
+			at := time.Now().UTC()
+			if err := repository.Remove(ctx, comment.Comment.ID, discussionOwner, at); err != nil {
+				t.Fatal(err)
+			}
+			var before int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comment_reports WHERE comment_id=$1::uuid`, comment.Comment.ID).Scan(&before); err != nil {
+				t.Fatal(err)
+			}
+			service := application.New(repository, func() time.Time { return at.Add(time.Second) })
+			if err := service.ReportComment(ctx, domain.Actor{UserID: discussionReporter}, comment.Comment.ID); err != nil {
+				t.Fatal(err)
+			}
+			var after int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comment_reports WHERE comment_id=$1::uuid`, comment.Comment.ID).Scan(&after); err != nil {
+				t.Fatal(err)
+			}
+			if after != before {
+				t.Fatalf("reports before=%d after=%d", before, after)
+			}
+			queue, err := repository.ListQueue(ctx, moderationCourse, "", 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range queue.Items {
+				if item.Comment.ID == comment.Comment.ID {
+					t.Fatalf("removed comment is queued: %+v", item)
+				}
+			}
+		})
+
 		t.Run("queue ordering dismiss removal and reactivation", func(t *testing.T) {
 			// Isolate the report-driven queue from earlier subtests that share
 			// moderationCourse (e.g. the idempotent-report comment stays open).
@@ -168,6 +201,78 @@ func TestDiscussionPostgres(t *testing.T) {
 			queue, err = repository.ListQueue(ctx, moderationCourse, "", 50)
 			if err != nil || len(queue.Items) != 2 || queue.Items[0].Comment.ID != most.Comment.ID {
 				t.Fatalf("reactivated queue=%+v err=%v", queue, err)
+			}
+		})
+
+		t.Run("W26 remove and dismiss converge in either order", func(t *testing.T) {
+			cases := []struct {
+				name        string
+				removeFirst bool
+			}{
+				{name: "remove then dismiss", removeFirst: true},
+				{name: "dismiss then remove"},
+			}
+			for index, test := range cases {
+				t.Run(test.name, func(t *testing.T) {
+					comment := insertModerationRoot(t, repository, moderationLessonA, discussionStudent, "remove dismiss order")
+					at := time.Now().UTC().Add(time.Duration(index) * time.Second)
+					if err := repository.InsertReport(ctx, domain.Report{CommentID: comment.Comment.ID, ReporterID: discussionReporter}, at); err != nil {
+						t.Fatal(err)
+					}
+					before, err := repository.ListQueue(ctx, moderationCourse, "", 50)
+					if err != nil {
+						t.Fatal(err)
+					}
+					queued := false
+					for _, item := range before.Items {
+						if item.Comment.ID == comment.Comment.ID {
+							queued = true
+							break
+						}
+					}
+					if !queued {
+						t.Fatalf("reported comment is absent before %s", test.name)
+					}
+					remove := func() error { return repository.Remove(ctx, comment.Comment.ID, discussionOwner, at.Add(time.Second)) }
+					dismiss := func() error {
+						return repository.DismissReports(ctx, comment.Comment.ID, discussionOwner, at.Add(2*time.Second))
+					}
+					if test.removeFirst {
+						if err := remove(); err != nil {
+							t.Fatal(err)
+						}
+						if err := dismiss(); err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						if err := dismiss(); err != nil {
+							t.Fatal(err)
+						}
+						if err := remove(); err != nil {
+							t.Fatal(err)
+						}
+					}
+					var removed bool
+					if err := pool.QueryRow(ctx, `SELECT removed_at IS NOT NULL FROM discussion_comments WHERE id=$1::uuid`, comment.Comment.ID).Scan(&removed); err != nil {
+						t.Fatal(err)
+					}
+					var openReports int
+					if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comment_reports WHERE comment_id=$1::uuid AND dismissed_at IS NULL`, comment.Comment.ID).Scan(&openReports); err != nil {
+						t.Fatal(err)
+					}
+					if !removed || openReports != 0 {
+						t.Fatalf("removed=%v openReports=%d", removed, openReports)
+					}
+					queue, err := repository.ListQueue(ctx, moderationCourse, "", 50)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, item := range queue.Items {
+						if item.Comment.ID == comment.Comment.ID {
+							t.Fatalf("comment is queued after %s: %+v", test.name, item)
+						}
+					}
+				})
 			}
 		})
 	})

@@ -43,3 +43,10 @@
 ## ДАЛІ
 - Оновити `spec.md` під підтверджені рішення; підтвердити GATE 1 з користувачем; тоді `plan.md`
   (крок 4 spec-flow): reuse-first, side-effects/migration/rollback, конституція, acceptance-spec.
+
+## I06 — незалежна звірка W01–W26 (Explore) виявила прогалини доказів
+Obsidian MCP відпав — нота тут (CLAUDE.local.md rule #4).
+- Немає тесту: W10 (репорт на прибраний), W17 (репорт без доступу), W20 (503), W26 (гонка remove+dismiss).
+- Лише доменне правило, ефект не асертиться: W12/W13 (запис журналу модерації), W15 (інший власник).
+- Розбіжності: W09 (обіцяно contract — є integration+e2e, прийнятно); W19 (dismiss-forbidden не тестовано; remove→comment_forbidden, dismiss→course_forbidden — план узгоджено).
+- РІШЕННЯ: не закриваю з дірками (AGENTS.md: фаза закрита коли закриті рядки; зелений агрегат ≠ рядок). Codex sol доповнює тести (task a9a7...). Тоді перегейт + звіт W-таблиця + PR.
