@@ -36,6 +36,18 @@ func TestStartPurchaseSnapshotsPublishedPaidCoursePrice(t *testing.T) {
 
 func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testing.T) {
 	existing := pendingOrder(t)
+	paidExisting, err := existing.MarkPaid(fixedNow.Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedExisting, err := existing.MarkFailed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherCourseOrder, err := domain.NewOrder(orderID, userID, "50000000-0000-4000-8000-000000000002", *money(t, "50000"), "purchase-key", fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		name       string
 		configure  func(*fakeStore)
@@ -43,7 +55,20 @@ func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testi
 		wantOrder  string
 		wantCreate int
 	}{
-		{name: "same key returns existing order", configure: func(store *fakeStore) { store.idempotentOrder = &existing }, wantOrder: orderID},
+		{name: "same key pending returns existing order", configure: func(store *fakeStore) { store.idempotentOrder = &existing }, wantOrder: orderID},
+		// Paid without an active grant is not a production state (paid and the grant
+		// are written in one transaction); it stands in for a grant revoked since.
+		{name: "same key paid without active grant returns paid order", configure: func(store *fakeStore) { store.idempotentOrder = &paidExisting }, wantOrder: orderID},
+		// The production replay of a paid key: the owner check answers first (Pay12
+		// accepts already_owned here rather than the order itself).
+		{name: "same key after a completed purchase is already owned", configure: func(store *fakeStore) {
+			store.idempotentOrder = &paidExisting
+			store.activeGrant = true
+		}, want: domain.ErrCourseAlreadyOwned},
+		{name: "same key failed returns failed order", configure: func(store *fakeStore) { store.idempotentOrder = &failedExisting }, wantOrder: orderID},
+		// The same key raced for another course: the insert hands back the other
+		// course's order, which must never be answered as this course's purchase.
+		{name: "same key raced for another course is refused", configure: func(store *fakeStore) { store.createReturns = &otherCourseOrder }, want: domain.ErrOrderInvalid, wantCreate: 1},
 		{name: "active grant blocks purchase", configure: func(store *fakeStore) { store.activeGrant = true }, want: domain.ErrCourseAlreadyOwned},
 		{name: "free course", configure: func(store *fakeStore) { store.course.Price = nil }, want: domain.ErrCourseNotPurchasable},
 		{name: "unpublished course", configure: func(store *fakeStore) { store.course.Published = false }, want: domain.ErrCourseNotPurchasable},
@@ -143,6 +168,7 @@ func newFakeStore(t *testing.T) *fakeStore {
 type fakeStore struct {
 	course              ports.CourseFacts
 	idempotentOrder     *domain.Order
+	createReturns       *domain.Order
 	activeGrant         bool
 	createCalls         int
 	order               *domain.Order
@@ -170,6 +196,11 @@ func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (d
 
 func (store *fakeStore) Create(_ context.Context, order domain.Order) (domain.Order, error) {
 	store.createCalls++
+	// A unique (user, key) conflict makes the repository hand back the row that won
+	// the race; createReturns models that row.
+	if store.createReturns != nil {
+		return *store.createReturns, nil
+	}
 	return order, nil
 }
 

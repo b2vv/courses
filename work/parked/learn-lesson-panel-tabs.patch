@@ -1,0 +1,133 @@
+diff --git a/frontend/src/routes/learn.$.tsx b/frontend/src/routes/learn.$.tsx
+index 80ea9d4..2e5f5bf 100644
+--- a/frontend/src/routes/learn.$.tsx
++++ b/frontend/src/routes/learn.$.tsx
+@@ -7,6 +7,7 @@ import {
+   useSuspenseQuery,
+ } from '@tanstack/react-query';
+ import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
++import { useTranslation } from 'react-i18next';
+ import { ensureRouteQuery } from '../app/composition/catalog-queries';
+ import { learningCourseQueryKey } from '../app/composition/learn-queries';
+ import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
+@@ -16,6 +17,7 @@ import { LessonPlayer } from '../presentation/learn/LessonPlayer';
+ import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
+ import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
+ import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';
++import { Tabs } from '../presentation/ui';
+ import { toWebVTT } from '../domain/transcript/transcript';
+ import { LearnEmptyState } from './learn';
+ import { DiscussionQueryError } from '../app/composition/discussion-queries';
+@@ -67,6 +69,7 @@ function LessonRoutePlayer({
+   readonly lessonId: string;
+ }) {
+   const { learn } = Route.useRouteContext();
++  const { t } = useTranslation();
+   const queryClient = useQueryClient();
+   const { data: course } = useSuspenseQuery(learn.course(slug));
+   const found = lessonInCourse(course, lessonId);
+@@ -143,6 +146,51 @@ function LessonRoutePlayer({
+       : discussionQuery.error === null || discussionQuery.error === undefined
+         ? undefined
+         : 'dependency_unavailable');
++  const discussionPanel = (
++    <DiscussionPanel
++      page={discussionPage}
++      {...(discussionError === undefined ? {} : { error: discussionError })}
++      isLoading={discussionQuery.isLoading}
++      isLoadingMore={discussionQuery.isFetchingNextPage}
++      onRetry={() => void discussionQuery.refetch()}
++      {...(discussionQuery.hasNextPage
++        ? { onLoadMore: () => void discussionQuery.fetchNextPage() }
++        : {})}
++      positionMs={channel.positionMs}
++      {...(channel.seek === null ? {} : { onSeek: channel.seek })}
++      onPublish={(input) =>
++        runDiscussionMutation(() => publishDiscussion.mutateAsync({ lessonId, input }))
++      }
++      onUpdate={(commentId, body) =>
++        runDiscussionMutation(() =>
++          updateDiscussion.mutateAsync({ lessonId, input: { commentId, body } }),
++        )
++      }
++      onRemove={(commentId) =>
++        runDiscussionMutation(() => removeDiscussion.mutateAsync({ lessonId, commentId }))
++      }
++      onReport={(commentId) =>
++        runDiscussionMutation(() => reportDiscussion.mutateAsync({ lessonId, commentId }))
++      }
++    />
++  );
++  const panelTabs =
++    transcript === undefined
++      ? null
++      : [
++          {
++            id: 'transcript',
++            label: t('learn.transcript.heading'),
++            content: (
++              <TranscriptPanel
++                transcript={transcript}
++                positionMs={channel.positionMs}
++                {...(channel.seek === null ? {} : { onSeek: channel.seek })}
++              />
++            ),
++          },
++          { id: 'discussion', label: t('learn.discussion.heading'), content: discussionPanel },
++        ];
+   return (
+     <CourseLearningView course={course} currentLessonId={lessonId}>
+       <LessonPlayer
+@@ -154,39 +202,7 @@ function LessonRoutePlayer({
+         {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
+         onPlaybackChannel={onPlaybackChannel}
+       />
+-      {transcript === undefined ? null : (
+-        <TranscriptPanel
+-          transcript={transcript}
+-          positionMs={channel.positionMs}
+-          {...(channel.seek === null ? {} : { onSeek: channel.seek })}
+-        />
+-      )}
+-      <DiscussionPanel
+-        page={discussionPage}
+-        {...(discussionError === undefined ? {} : { error: discussionError })}
+-        isLoading={discussionQuery.isLoading}
+-        isLoadingMore={discussionQuery.isFetchingNextPage}
+-        onRetry={() => void discussionQuery.refetch()}
+-        {...(discussionQuery.hasNextPage
+-          ? { onLoadMore: () => void discussionQuery.fetchNextPage() }
+-          : {})}
+-        positionMs={channel.positionMs}
+-        {...(channel.seek === null ? {} : { onSeek: channel.seek })}
+-        onPublish={(input) =>
+-          runDiscussionMutation(() => publishDiscussion.mutateAsync({ lessonId, input }))
+-        }
+-        onUpdate={(commentId, body) =>
+-          runDiscussionMutation(() =>
+-            updateDiscussion.mutateAsync({ lessonId, input: { commentId, body } }),
+-          )
+-        }
+-        onRemove={(commentId) =>
+-          runDiscussionMutation(() => removeDiscussion.mutateAsync({ lessonId, commentId }))
+-        }
+-        onReport={(commentId) =>
+-          runDiscussionMutation(() => reportDiscussion.mutateAsync({ lessonId, commentId }))
+-        }
+-      />
++      {panelTabs !== null ? <Tabs label={t('learn.panels')} items={panelTabs} /> : discussionPanel}
+     </CourseLearningView>
+   );
+ }
+diff --git a/frontend/src/routes/route-guards.test.tsx b/frontend/src/routes/route-guards.test.tsx
+index a4dbfb8..013860b 100644
+--- a/frontend/src/routes/route-guards.test.tsx
++++ b/frontend/src/routes/route-guards.test.tsx
+@@ -731,6 +731,7 @@ test('K18 keeps the lesson usable when discussion loading fails', async () => {
+ 
+   expect(await screen.findByRole('heading', { name: 'Ownership' })).toBeTruthy();
+   expect(await screen.findByRole('heading', { name: 'Transcript' })).toBeTruthy();
++  await userEvent.click(screen.getByRole('tab', { name: 'Discussion' }));
+   const panel = screen.getByRole('region', { name: 'Discussion' });
+   expect(await within(panel).findByText('The service is unavailable. Try again.')).toBeTruthy();
+   expect(screen.queryByRole('heading', { name: 'Could not verify your session' })).toBeNull();

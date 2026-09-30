@@ -90,3 +90,17 @@
 - Урок: O01 «поведінково нейтральний» — лише про прод+unit; integration-guard зчеплений із SQL-слайсом.
   O03 мусить: (а) SQL читає price/grants/preview; (б) integration-сіди створюють платні курси+гранти для
   нових рядків. Повний integration зелений — критерій O03.
+
+## 2026-09-30 — O05 prerequisites (Courses 1, reviewed by Courses 2)
+
+- **Retry after a failed payment needs a NEW idempotency key.** `StartPurchase` replays
+  any order already stored under a key — pending, paid or failed — as the same answer
+  (Pay12). A client that retries a failed purchase with the old key gets the failed
+  order back. The O05 UI must mint a fresh key for "Спробувати ще раз".
+- **Replay of a paid key answers `already_owned`,** not the paid order: the owner check
+  runs before the idempotency lookup, and paid ⟹ active grant in production (one
+  transaction). Pay12 accepts that answer.
+- **First price set with explicitly stated previews** no longer fails
+  (`PreviewSet` presence no longer breaks the price-only comparison); a preview
+  CHANGE together with the first price is still refused. The O05 pricing editor may
+  send `isPreview` with the first price.

@@ -79,6 +79,25 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	if err != nil || repeated.ID() != order.ID() {
 		t.Fatalf("idempotent repeat=%q error=%v", repeated.ID(), err)
 	}
+	// The service refuses an order for another course coming back from Create (unit:
+	// "same key raced for another course is refused"). That guard rests on this
+	// repository behaviour: a unique (user, key) conflict hands back the row that
+	// won, even when the losing insert was for a different course.
+	raced, err := domain.NewOrder("60000000-0000-4000-8000-000000000077", integrationUserID, integrationFreeID, order.Amount(), "purchase-1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	winner, err := repository.Create(ctx, raced)
+	if err != nil {
+		t.Fatalf("conflicting create: %v", err)
+	}
+	if winner.ID() != order.ID() || winner.CourseID() != integrationCourseID {
+		t.Fatalf("conflict returned id=%s course=%s, want the existing order %s for %s", winner.ID(), winner.CourseID(), order.ID(), integrationCourseID)
+	}
+	var sameKey int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE user_id=$1 AND idempotency_key='purchase-1'`, integrationUserID).Scan(&sameKey); err != nil || sameKey != 1 {
+		t.Fatalf("orders under the key=%d err=%v, want exactly the winner", sameKey, err)
+	}
 	event := domain.PaymentEvent{Provider: "provider", EventID: "paid-1", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(time.Minute)}
 	if err := service.ApplyPaymentEvent(ctx, event); err != nil {
 		t.Fatal(err)
