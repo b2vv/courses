@@ -539,7 +539,7 @@ describe('course editor', () => {
               },
               { status: 503 },
             )
-          : HttpResponse.json(tree);
+          : HttpResponse.json({ ...tree, price: null });
       }),
     );
     const root = createRootRoute({ component: Outlet });
@@ -595,6 +595,7 @@ describe('course editor', () => {
         await pendingPut;
         return HttpResponse.json({
           ...tree,
+          price: null,
           updatedAt: '2026-09-01T00:00:00.000002Z',
         });
       }),
