@@ -18,6 +18,8 @@ const course = {
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
   publishedAt: '2026-09-01T00:00:00Z',
+  price: null,
+  paid: false,
   continueLessonId: lessonId,
   modules: [
     {
@@ -82,6 +84,16 @@ test('maps the authenticated learning model and validates the requested slug', a
       continueLessonId: course.continueLessonId,
     },
   });
+
+  // A paid course the viewer is entitled to carries its price; the learning
+  // model does not need it, so it is accepted at the boundary and not mapped.
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>
+      HttpResponse.json({ ...course, price: { minor: 49900, currency: 'UAH' }, paid: true }),
+    ),
+  );
+  const paid = await createApiPlaybackRepository().getCourse('go-basics');
+  expect(paid.ok).toBe(true);
 
   server.use(
     http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>

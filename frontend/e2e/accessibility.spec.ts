@@ -293,6 +293,8 @@ test.describe('with a stored student session', () => {
           createdAt: '2026-09-08T08:00:00Z',
           updatedAt: '2026-09-08T08:00:00Z',
           publishedAt: '2026-09-08T08:00:00Z',
+          price: null,
+          paid: false,
           modules: [
             {
               id: '20000000-0000-4000-8000-000000000001',

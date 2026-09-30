@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { priceSchema } from './price-schema';
 import { asBrandedId, validCourseTree, validEntityId } from '../../domain/course/course';
 
 const entityIdSchema = z.uuid().refine(validEntityId);
@@ -55,6 +56,9 @@ const adminLessonSchema = z
     id: lessonIdSchema,
     title: requiredText(200),
     description: optionalText(1000),
+    // Optional in the contract (default false). Read-only here: saves omit it,
+    // and the backend keeps an unspecified preview flag as stored.
+    isPreview: z.boolean().optional(),
   })
   .strict();
 
@@ -82,6 +86,9 @@ export const adminCourseTreeSchema = z
     createdAt: adminTimestampSchema,
     updatedAt: adminTimestampSchema,
     publishedAt: adminTimestampSchema.nullable(),
+    // Required and nullable in the contract (null = free). Read-only here: saves
+    // omit it, which the backend treats as "unchanged", never as "make it free".
+    price: priceSchema.nullable(),
     modules: z.array(adminModuleSchema).max(40),
   })
   .strict()
