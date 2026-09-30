@@ -1,0 +1,19 @@
+/*
+ * Admin surface — the dense density.
+ *
+ * Same system as the client (tokens.css holds every colour, font and scale);
+ * this file only re-binds the density knobs for the admin and instructor
+ * workspaces: compact rhythm, defined cards (visible border + a subtle drop
+ * shadow), tighter padding — the ops-dashboard feel. Applied via
+ * `data-surface="admin"` on the page container.
+ *
+ * The airy client counterpart is tokens.client.css.
+ */
+[data-surface='admin'] {
+  --card-padding: var(--space-4);
+  --card-radius: var(--radius-panel);
+  --card-border-color: var(--color-border);
+  --card-shadow: var(--shadow-card);
+  --card-shadow-hover: var(--shadow-floating);
+  --surface-gap: var(--space-6);
+}

@@ -98,6 +98,14 @@ function Layout() {
     select: (state) =>
       state.location.pathname === '/' || state.location.pathname.startsWith('/courses'),
   });
+  // One system, two densities (tokens.client.css / tokens.admin.css): the admin
+  // and instructor workspaces render dense, everything else airy.
+  const surface = useRouterState({
+    select: (state) =>
+      state.location.pathname.startsWith('/admin') || state.location.pathname.startsWith('/teach')
+        ? 'admin'
+        : 'client',
+  });
 
   // Unsaved editor lines are kept locally so a reload cannot lose them, and they outlive the
   // session on disk. The author is in their key, so nobody is ever OFFERED another person's text
@@ -150,7 +158,7 @@ function Layout() {
           <Toast message={t('identity.signOutFailure')} onDismiss={() => setSignOutFailed(false)} />
         </div>
       )}
-      <main id="main" className="shell main-content" tabIndex={-1}>
+      <main id="main" className="shell main-content" data-surface={surface} tabIndex={-1}>
         <Outlet />
       </main>
       {isStorefront ? (
