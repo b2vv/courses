@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
 @import './tokens.css';
 @import './tokens.client.css';
 @import './tokens.admin.css';
@@ -13,6 +14,20 @@ body {
   color: var(--color-text);
   font-family: var(--font-body);
   line-height: 1.6;
+}
+/* The whole chrome carries the surface scope so header/main/footer re-skin
+   together (admin -> NorthWind editorial, client -> airy). It also paints the
+   surface background across the viewport, so body behind it never shows through
+   with the other surface's colour. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+.app-shell > .main-content {
+  flex: 1 0 auto;
 }
 a {
   color: var(--color-primary);
@@ -451,6 +466,61 @@ nav a {
 .admin-user-status[data-status='deleted'] {
   color: var(--color-muted);
 }
+
+/* Admin — NorthWind editorial (D-d). Structural refinements on top of the
+   palette/density re-bind in tokens.admin.css: teal section labels, a tighter
+   Space Grotesk heading, an editorial card around the table, thin hairline rows
+   and tinted status pills. */
+[data-surface='admin'] .eyebrow {
+  color: var(--color-primary);
+}
+[data-surface='admin'] .admin-list-heading h1 {
+  font-size: clamp(1.6rem, 2.5vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-block: 0.1em 0;
+}
+[data-surface='admin'] .admin-list-results {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-panel);
+  padding: 0 var(--space-6) var(--space-4);
+}
+[data-surface='admin'] .ui-table th,
+[data-surface='admin'] .ui-table td {
+  border-block-end: 1px solid var(--color-hairline);
+}
+[data-surface='admin'] .ui-table th {
+  background: transparent;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+[data-surface='admin'] :is(.admin-course-status, .admin-user-status) {
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+[data-surface='admin'] .admin-course-status[data-status='draft'] {
+  color: var(--color-warning);
+}
+/* Danger actions read as editorial: tinted, not a loud solid fill. The danger
+   ink keeps >=4.5:1 on its own 14% wash in both admin themes. */
+[data-surface='admin'] .ui-button--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  /* Solid danger border: the boundary itself clears 1.4.11 (>=3:1 on the admin
+     surface) and reads as an outlined button, distinct from the borderless pills
+     that share the 14% wash. */
+  border-color: var(--color-danger);
+}
+[data-surface='admin'] .ui-button--danger[data-hovered] {
+  background: color-mix(in srgb, var(--color-danger) 24%, transparent);
+}
+
 .admin-user-search {
   display: flex;
   align-items: end;

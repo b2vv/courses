@@ -133,7 +133,7 @@ function Layout() {
     },
   });
   return (
-    <>
+    <div className="app-shell" data-surface={surface}>
       <a className="skip-link" href="#main">
         {t('common.skip')}
       </a>
@@ -158,7 +158,7 @@ function Layout() {
           <Toast message={t('identity.signOutFailure')} onDismiss={() => setSignOutFailed(false)} />
         </div>
       )}
-      <main id="main" className="shell main-content" data-surface={surface} tabIndex={-1}>
+      <main id="main" className="shell main-content" tabIndex={-1}>
         <Outlet />
       </main>
       {isStorefront ? (
@@ -183,6 +183,6 @@ function Layout() {
           <span>{t('common.tagline')}</span>
         </footer>
       )}
-    </>
+    </div>
   );
 }
