@@ -1,4 +1,5 @@
 import type { CatalogQuery, CoursePage, PublishedCourse } from '../../domain/course/course';
+import { ValueStrip } from './ValueStrip';
 import { Button, EmptyState, Link, TextField } from '../ui';
 import { useTranslation } from 'react-i18next';
 
@@ -68,6 +69,7 @@ export function CatalogView({ page, query }: { page: CoursePage; query: CatalogQ
             )}
         </div>
       </nav>
+      <ValueStrip />
     </section>
   );
 }
@@ -81,15 +83,16 @@ function CourseCard({ course }: { course: PublishedCourse }) {
   return (
     <li>
       <article className="course-card ui-card">
-        <div className="course-cover" aria-hidden="true">
-          <span className="ui-icon-tile course-glyph">{'</>'}</span>
-          <span className="course-cover-orbit" />
+        <div className="course-cover">
+          <span className="ui-icon-tile course-glyph" aria-hidden="true">
+            {'</>'}
+          </span>
+          <h2 className="course-cover-title">
+            <Link href={`/courses/${course.slug}`}>{course.title}</Link>
+          </h2>
         </div>
         <div className="course-card-copy">
           <p className="eyebrow">{t('catalog.kind')}</p>
-          <h2>
-            <Link href={`/courses/${course.slug}`}>{course.title}</Link>
-          </h2>
           <p>{course.summary}</p>
         </div>
         <footer className="course-card-footer">
@@ -99,6 +102,7 @@ function CourseCard({ course }: { course: PublishedCourse }) {
               : new Intl.NumberFormat(i18n.resolvedLanguage === 'en' ? 'en-US' : 'uk-UA', {
                   style: 'currency',
                   currency: course.price.currency,
+                  currencyDisplay: 'narrowSymbol',
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 2,
                 }).format(course.price.minor / 100)}

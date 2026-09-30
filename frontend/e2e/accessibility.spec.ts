@@ -233,7 +233,7 @@ test.describe('with a stored admin session', () => {
     await page.goto('/');
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
 
-    const administration = page.getByRole('link', { name: 'Адміністрування' });
+    const administration = page.getByRole('link', { name: 'В адмінку' });
     const signOut = page.getByRole('button', { name: 'Вийти' });
     const administrationBox = await administration.boundingBox();
     const signOutBox = await signOut.boundingBox();

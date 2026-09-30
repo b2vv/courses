@@ -14,6 +14,13 @@ export const uk = {
       retry: 'Спробувати ще раз',
       loading: 'Завантаження',
       close: 'Закрити',
+      toClient: 'На клієнт',
+      toAdmin: 'В адмінку',
+      toTeach: 'Кабінет викладача',
+      adminArea: 'Адмінка',
+      teachArea: 'Кабінет викладача',
+      navCourses: 'Курси',
+      navModeration: 'Модерація',
     },
     home: {
       label: 'Практичне навчання для розробників',

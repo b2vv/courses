@@ -15,6 +15,7 @@
 /* Density (dense) + display font — theme-independent. */
 [data-surface='admin'] {
   --font-display: 'Space Grotesk Variable', var(--font-body);
+  --radius-control: calc(var(--radius-panel) - 2px);
   --card-padding: var(--space-4);
   --card-radius: var(--radius-panel);
   --card-shadow: var(--shadow-card);

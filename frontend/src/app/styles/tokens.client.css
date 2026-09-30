@@ -12,6 +12,7 @@
  * colours or fonts — that would fork the system instead of scoping it.
  */
 [data-surface='client'] {
+  --radius-control: var(--radius-panel);
   --card-padding: var(--space-6);
   --card-radius: var(--radius-card);
   --card-border-color: var(--color-hairline);

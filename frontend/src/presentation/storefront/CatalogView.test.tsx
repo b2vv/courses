@@ -75,7 +75,11 @@ describe('catalog presentation', () => {
       />,
     );
 
-    expect(screen.getByText(/1\s?499/)).toBeTruthy();
+    // Hryvnia sign, as in the mockup — not the "грн" abbreviation.
+    expect(screen.getByText(/1\s?499\s?₴/u)).toBeTruthy();
+    // The catalog carries the same truthful value strip as the home page.
+    expect(screen.getByRole('heading', { name: 'Що дає навчання' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Транскрипти' })).toBeTruthy();
     const action = screen.getByText('Купити').closest('a');
     expect(action?.getAttribute('href')).toBe('/courses/paid-architecture');
     expect(action?.getAttribute('aria-label')).toBe('Детальніше: Платна архітектура');
