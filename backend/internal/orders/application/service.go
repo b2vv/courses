@@ -52,7 +52,7 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 		return domain.Order{}, err
 	}
 	if existing, err := service.orders.FindByIdempotencyKey(ctx, actor.UserID, idempotencyKey); err == nil {
-		if existing.CourseID() != courseID || existing.Status() != domain.OrderPending {
+		if existing.CourseID() != courseID {
 			return domain.Order{}, domain.ErrOrderInvalid
 		}
 		return existing, nil
@@ -63,7 +63,14 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 	if err != nil {
 		return domain.Order{}, err
 	}
-	return service.orders.Create(ctx, order)
+	created, err := service.orders.Create(ctx, order)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if created.CourseID() != courseID {
+		return domain.Order{}, domain.ErrOrderInvalid
+	}
+	return created, nil
 }
 
 func (service *Service) PurchaseStatus(ctx context.Context, actor Actor, orderID string) (domain.Order, error) {

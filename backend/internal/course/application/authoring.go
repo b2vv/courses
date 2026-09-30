@@ -148,7 +148,9 @@ func (authoring *Authoring) Save(ctx context.Context, actor domain.Actor, tree d
 
 	var saved domain.CourseTree
 	if firstPriceSet {
-		if !reflect.DeepEqual(original, stored) {
+		storedForCompare := stored
+		storedForCompare.Modules = clearPreviewSet(stored.Modules)
+		if !reflect.DeepEqual(original, storedForCompare) {
 			return domain.CourseTree{}, domain.ErrInvalidRequest
 		}
 		saved = original
@@ -189,6 +191,19 @@ func preserveUnspecifiedPreviews(stored, proposed []domain.Module) {
 			}
 		}
 	}
+}
+
+func clearPreviewSet(modules []domain.Module) []domain.Module {
+	result := make([]domain.Module, len(modules))
+	for i, module := range modules {
+		result[i] = module
+		result[i].Lessons = make([]domain.Lesson, len(module.Lessons))
+		for j, lesson := range module.Lessons {
+			lesson.PreviewSet = false
+			result[i].Lessons[j] = lesson
+		}
+	}
+	return result
 }
 
 func (authoring *Authoring) Transition(ctx context.Context, actor domain.Actor, id string, to domain.Status, expectedUpdatedAt time.Time) (domain.CourseTree, error) {
