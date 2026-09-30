@@ -14,6 +14,13 @@ export const en = {
       retry: 'Try again',
       loading: 'Loading',
       close: 'Close',
+      toClient: 'To client',
+      toAdmin: 'Admin panel',
+      toTeach: 'Teaching',
+      adminArea: 'Admin',
+      teachArea: 'Teaching',
+      navCourses: 'Courses',
+      navModeration: 'Moderation',
     },
     home: {
       label: 'Practical learning for developers',

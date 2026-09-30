@@ -14,6 +14,10 @@ body {
   color: var(--color-text);
   font-family: var(--font-body);
   line-height: 1.6;
+  /* Full-bleed sections (the home hero) span 100vw via negative margins; clip
+     the horizontal axis so that never adds a scrollbar. overflow-y stays visible
+     (clip on one axis exempts the other), so page scroll and sticky are intact. */
+  overflow-x: clip;
 }
 /* The whole chrome carries the surface scope so header/main/footer re-skin
    together (admin -> NorthWind editorial, client -> airy). It also paints the
@@ -65,14 +69,16 @@ h2 {
   margin-inline: auto;
 }
 .site-header {
+  position: relative;
+  z-index: 10;
+  background: var(--color-background);
   border-bottom: 1px solid var(--color-hairline);
 }
 .header-inner {
-  min-height: 6rem;
+  min-height: 5.25rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 .wordmark {
@@ -88,13 +94,37 @@ h2 {
   color: var(--color-text);
   letter-spacing: -0.045em;
 }
-.wordmark span {
+.wordmark > span[aria-hidden] {
   background: var(--color-primary);
   color: var(--color-on-primary);
   border-radius: 0.6rem;
   padding: 0.3rem 0.45rem;
   font: 1rem var(--font-utility);
   letter-spacing: -0.12em;
+}
+.client-wordmark {
+  flex: none;
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  font-size: 1.3rem;
+  letter-spacing: -0.035em;
+}
+.client-wordmark .client-wordmark-mark {
+  display: grid;
+  place-items: center;
+  inline-size: var(--control-min-size);
+  block-size: var(--control-min-size);
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-cover-text) 22%, transparent);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(135deg, var(--color-cover-start), var(--color-cover-end));
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-cover-text);
+  font: 700 0.85rem var(--font-utility);
+  letter-spacing: -0.1em;
+}
+.client-wordmark-text {
+  white-space: nowrap;
 }
 nav {
   display: flex;
@@ -107,15 +137,83 @@ nav a {
   display: inline-flex;
   align-items: center;
   font-weight: 600;
+  text-decoration: none;
 }
 .header-inner nav {
   min-width: 0;
   max-width: 100%;
 }
+.client-primary-nav {
+  margin-inline-start: clamp(var(--space-2), 2vw, var(--space-6));
+  gap: var(--space-1);
+}
+.client-primary-nav a {
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-muted);
+}
+.client-primary-nav a:hover,
+.client-primary-nav a[aria-current='page'] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.client-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+}
+.header-identity {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  flex-wrap: wrap;
+}
 .header-identity-name {
-  min-width: 0;
-  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-min-size);
+  min-inline-size: 0;
+  max-inline-size: min(16rem, 100%);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+.header-cross-nav,
+.header-login {
+  justify-content: center;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  text-decoration: none;
+  font-weight: 650;
+}
+.header-cross-nav {
+  color: var(--color-text);
+  background: var(--color-background);
+}
+.header-cross-nav[data-hovered] {
+  background: var(--color-surface);
+}
+.header-login {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.header-login[data-hovered] {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 .sign-out-message {
   padding-block-start: 1rem;
@@ -245,7 +343,24 @@ nav a {
     width: calc(100% - 2rem);
   }
   .header-inner {
+    align-items: flex-start;
     padding-block: 1rem;
+  }
+  .client-wordmark {
+    align-self: center;
+  }
+  .client-primary-nav,
+  .client-header-actions {
+    flex: 1 1 100%;
+    margin-inline-start: 0;
+  }
+  .client-primary-nav {
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-hairline);
+  }
+  .client-header-actions,
+  .header-identity {
+    justify-content: flex-start;
   }
   nav {
     gap: 1rem;
@@ -300,7 +415,8 @@ nav a {
 }
 .course-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  /* Four across on a desktop column, as in the mockup; fewer as space shrinks. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
   gap: clamp(var(--space-6), 3vw, var(--space-8));
   list-style: none;
   margin: 0;
@@ -348,23 +464,31 @@ nav a {
 }
 .course-cover {
   position: relative;
-  display: grid;
-  align-items: end;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   min-height: 11rem;
-  padding: var(--space-6);
+  padding: var(--space-5) var(--space-6);
   overflow: hidden;
   background: linear-gradient(135deg, var(--color-cover-start), var(--color-cover-end));
   color: var(--color-cover-text);
+  --cover-solid: var(--color-cover-end);
 }
 .course-cover .course-glyph {
   position: relative;
   z-index: 1;
+  align-self: start;
   color: var(--color-cover-text);
   background: color-mix(in srgb, var(--color-background) 14%, transparent);
   border-color: color-mix(in srgb, var(--color-cover-text) 38%, transparent);
   font: 700 1rem var(--font-utility);
 }
-.course-cover-orbit {
+/* A decorative ring, drawn as a pseudo-element: it deliberately overhangs the
+   cover's corner and is clipped by overflow:hidden. As a real element its box
+   reached past the viewport at 200% zoom on phones, which the overflow check
+   rightly counts; a pseudo-element paints the same without a box in the DOM. */
+.course-cover::after {
+  content: '';
   position: absolute;
   inline-size: 11rem;
   block-size: 11rem;
@@ -373,21 +497,64 @@ nav a {
   border: 2.5rem solid color-mix(in srgb, var(--color-cover-text) 12%, transparent);
   border-radius: 50%;
 }
-.course-list > li:nth-child(3n + 2) .course-cover {
+.course-cover .course-cover-title {
+  /* The title sits on a solid band of the cover's own gradient end, flush with
+     the cover's edges. Text over a gradient cannot be contrast-checked (axe
+     reports it incomplete), and the lightest stops fail with white text — the
+     orange start #f97316 is 2.8:1. On the band white is 6.5:1 or better. */
+  margin: 0 calc(-1 * var(--space-6)) calc(-1 * var(--space-5));
+  padding: var(--space-3) var(--space-6) var(--space-5);
+  background: var(--cover-solid);
+  font-size: 1.1rem;
+  font-weight: 750;
+  line-height: 1.3;
+  position: relative;
+  z-index: 1;
+}
+.course-cover .course-cover-title a {
+  color: var(--color-cover-text);
+  text-decoration: none;
+}
+.course-cover .course-cover-title a:hover {
+  text-decoration: underline;
+}
+.course-list > li:nth-child(4n + 2) .course-cover {
+  --cover-solid: var(--color-cover-blue-end);
   background: linear-gradient(135deg, var(--color-cover-blue-start), var(--color-cover-blue-end));
 }
-.course-list > li:nth-child(3n + 3) .course-cover {
+.course-list > li:nth-child(4n + 3) .course-cover {
+  --cover-solid: var(--color-cover-green-end);
   background: linear-gradient(135deg, var(--color-cover-green-start), var(--color-cover-green-end));
+}
+.course-list > li:nth-child(4n) .course-cover {
+  --cover-solid: var(--color-cover-orange-end);
+  background: linear-gradient(
+    135deg,
+    var(--color-cover-orange-start),
+    var(--color-cover-orange-end)
+  );
 }
 .course-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  /* Four narrow cards: price and action wrap as whole units rather than
+     breaking mid-word ("Безкошто|вно", "Відкр|ити"). */
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
   margin-block-start: auto;
   padding: var(--space-6);
 }
+.course-price,
+.course-action {
+  white-space: nowrap;
+}
 .course-price {
+  /* Body font with tabular figures, not the monospace utility font: the system
+     monospace (SF Mono) has no Cyrillic, so "Безкоштовно" and "грн" fell back
+     to a serif face. Tabular figures keep the digits aligned. */
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
   font-size: 1.05rem;
   font-weight: 750;
 }
@@ -473,6 +640,13 @@ nav a {
    and tinted status pills. */
 [data-surface='admin'] .eyebrow {
   color: var(--color-primary);
+}
+/* Admin headings are dense-scale: the client's display h1 (up to 4.6rem) is
+   for the storefront; a course title in the editor is a working heading. */
+[data-surface='admin'] h1 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 [data-surface='admin'] .admin-list-heading h1 {
   font-size: clamp(1.6rem, 2.5vw, 2rem);
@@ -785,8 +959,13 @@ nav a {
   grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
   align-items: center;
   gap: clamp(2.5rem, 7vw, 6rem);
-  padding: clamp(2rem, 6vw, 5rem);
-  border-radius: var(--radius-card);
+  /* Full-bleed like the mockup: the dark field spans the viewport and sits flush
+     under the header, while its content stays aligned to the 72rem column. */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  margin-block-start: calc(-1 * clamp(2rem, 7vw, 5rem));
+  padding-block: clamp(3rem, 8vw, 6.5rem);
+  padding-inline: max(1.5rem, calc(50vw - 36rem));
   background: var(--color-hero-background);
   color: var(--color-hero-text);
 }
@@ -850,38 +1029,90 @@ nav a {
   font-weight: 700;
 }
 .hero-art {
+  position: relative;
   min-inline-size: 0;
-  padding: clamp(var(--space-4), 4vw, var(--space-8));
+  min-block-size: 22rem;
+  padding: 0;
+  background: transparent;
+}
+.hero-preview-card {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: var(--space-4);
+  inline-size: 82%;
   border-radius: var(--radius-card);
-  background-color: color-mix(in srgb, var(--color-primary) 28%, var(--color-hero-background));
+  overflow: hidden;
+  box-shadow: var(--shadow-floating);
+  transform: rotate(3deg);
 }
-.hero-code-card {
-  display: grid;
-  gap: var(--space-6);
-  transform: rotate(2deg);
+.hero-preview-cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-block-size: 14rem;
+  padding: var(--space-6);
+  background: linear-gradient(135deg, var(--color-cover-start), var(--color-cover-end));
+  color: #ffffff;
 }
-.hero-code-heading {
+.hero-preview-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.hero-preview-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+.hero-progress-card {
+  position: absolute;
+  inset-block-end: var(--space-8);
+  inset-inline-start: 0;
+  inline-size: 66%;
+  border-radius: var(--radius-panel);
+  background: #ffffff;
+  color: #111827;
+  padding: var(--space-4) var(--space-5);
+  box-shadow: 0 20px 40px color-mix(in srgb, black 35%, transparent);
+  transform: rotate(-2deg);
+}
+.hero-progress-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  margin-block-end: var(--space-2);
 }
-.hero-code-card code {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-2) var(--space-1);
-  color: var(--color-muted);
-  font: 0.9rem/1.6 var(--font-utility);
+.hero-progress-header span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
 }
-.hero-code-card code strong {
-  color: var(--color-primary);
-}
-.hero-code-card p {
-  margin: 0;
-  white-space: pre-line;
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
+.hero-progress-header strong {
+  font-size: 0.85rem;
   font-weight: 750;
-  line-height: 1.25;
+  color: #111827;
+}
+.hero-progress-bar {
+  block-size: 0.45rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+  margin-block-end: var(--space-2);
+}
+.hero-progress-fill {
+  block-size: 100%;
+  inline-size: 68%;
+  border-radius: 999px;
+  background: var(--color-cover-start);
+}
+.hero-progress-meta {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin: 0;
 }
 .value-strip {
   display: grid;
@@ -1170,5 +1401,264 @@ nav a {
 @media (max-width: 42rem) {
   .lesson-player-controls {
     grid-template-columns: 1fr;
+  }
+}
+.transcript {
+  display: grid;
+}
+.transcript-header {
+  display: grid;
+  gap: var(--space-3);
+  padding-block: var(--space-4);
+  padding-block-end: var(--space-3);
+}
+.transcript-header h2 {
+  margin: 0;
+}
+.transcript-search {
+  display: grid;
+  gap: var(--space-1);
+}
+.transcript-search > span {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--color-muted);
+  letter-spacing: 0.02em;
+}
+.transcript-matches {
+  display: block;
+  color: var(--color-muted);
+  font: 0.8rem var(--font-utility);
+}
+.transcript-stale {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid oklch(75% 0.12 65);
+  border-radius: var(--radius-control);
+  background: oklch(97% 0.04 65);
+  color: oklch(35% 0.12 65);
+  font-size: 0.8rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .transcript-stale {
+    background: oklch(20% 0.06 65);
+    border-color: oklch(45% 0.1 65);
+    color: oklch(75% 0.1 65);
+  }
+}
+:root[data-theme='dark'] .transcript-stale {
+  background: oklch(20% 0.06 65);
+  border-color: oklch(45% 0.1 65);
+  color: oklch(75% 0.1 65);
+}
+.transcript-empty {
+  padding: var(--space-6) 0;
+  color: var(--color-muted);
+  margin: 0;
+}
+.transcript-lines {
+  overflow-y: auto;
+  max-block-size: 28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+.transcript-line {
+  border-inline-start: 3px solid transparent;
+}
+.transcript-line-active {
+  border-inline-start-color: var(--color-primary);
+  background: color-mix(in oklch, var(--color-primary) 8%, transparent);
+}
+.transcript-line-body {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  align-items: baseline;
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+button.transcript-line-body {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: start;
+}
+button.transcript-line-body:hover {
+  background: color-mix(in oklch, var(--color-primary) 5%, transparent);
+}
+.transcript-line-body time {
+  align-self: start;
+  padding-block-start: 0.2em;
+  color: var(--color-muted);
+  font: 0.72rem var(--font-utility);
+  letter-spacing: 0.03em;
+}
+.transcript-speaker,
+.transcript-text {
+  grid-column: 2;
+}
+.transcript-speaker {
+  color: var(--color-primary);
+  font-weight: 650;
+  font-size: 0.8rem;
+}
+.transcript-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-2) calc(3.5rem + var(--space-3) + var(--space-4));
+  list-style: none;
+}
+.transcript-documents a {
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.transcript-documents a:hover {
+  text-decoration: underline;
+}
+
+/* Admin-side shell (D-e): a dedicated sidebar + top bar that replace the client
+   chrome for /admin and /teach. Colours come from the data-surface="admin" scope
+   on the root .app-shell, so this inherits the NorthWind editorial palette. */
+.admin-shell {
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  min-block-size: 100dvh;
+}
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-surface);
+  border-inline-end: 1px solid var(--color-hairline);
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100dvh;
+}
+.admin-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.admin-brand span[aria-hidden] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: 700 0.85rem var(--font-utility);
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.5rem;
+}
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-nav-link {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-control);
+  color: var(--color-muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.admin-nav-link:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-text);
+}
+.admin-nav-link[aria-current='page'] {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary);
+}
+.admin-to-client {
+  margin-block-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-control);
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.admin-to-client:hover {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.admin-canvas {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-6);
+  border-block-end: 1px solid var(--color-hairline);
+}
+.admin-topbar-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+.admin-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.admin-topbar-user {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+.admin-topbar-message {
+  padding: var(--space-2) var(--space-6) 0;
+}
+.admin-content {
+  flex: 1 0 auto;
+  min-inline-size: 0;
+  padding: var(--space-8) var(--space-6);
+}
+/* Narrow screens: the sidebar becomes a horizontal top strip. */
+@media (max-width: 52rem) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+  .admin-sidebar {
+    position: static;
+    block-size: auto;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--color-hairline);
+  }
+  .admin-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .admin-to-client {
+    margin-block-start: 0;
+    margin-inline-start: auto;
   }
 }

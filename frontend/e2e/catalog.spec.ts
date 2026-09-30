@@ -47,7 +47,9 @@ test('search and pagination live in the URL and recover from an empty page', asy
   await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
   // The limit is honoured, not merely accepted: the scope holds exactly one course, and one card
   // is what the page renders.
-  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(1);
+  // Count the cards in the course list, not every h2 on the page: the catalog
+  // also carries the value strip's own (visually hidden) heading.
+  await expect(page.locator('.course-list').getByRole('listitem')).toHaveCount(1);
 
   // Offset one past the end of a scoped result is the empty page, and the recovery link works
   // from there - the same claim the ceiling case makes, on a boundary a fixture can reach.

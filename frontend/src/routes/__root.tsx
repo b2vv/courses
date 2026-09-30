@@ -4,18 +4,19 @@ import {
   Outlet,
   Scripts,
   Link,
-  useNavigate,
   useRouterState,
 } from '@tanstack/react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
 import type { TeachDependencies } from '../app/composition/teach';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../application/transcript/recovery';
-import { sessionQueryKey } from '../app/composition/identity-queries';
+import { useSignOut } from '../app/composition/use-sign-out';
+import { canAccessAdministration, canAdministerAccounts } from '../domain/identity/identity';
+import { AdminShell, type AdminNavItem } from '../presentation/admin/AdminShell';
 import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../presentation/identity/IdentityHeader';
@@ -90,22 +91,28 @@ function Document({ children }: { children: ReactNode }) {
 function Layout() {
   const { t } = useTranslation();
   const { identityDependencies, transcriptHistory } = Route.useRouteContext();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [signOutFailed, setSignOutFailed] = useState(false);
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
   const isStorefront = useRouterState({
     select: (state) =>
       state.location.pathname === '/' || state.location.pathname.startsWith('/courses'),
   });
-  // One system, two densities (tokens.client.css / tokens.admin.css): the admin
-  // and instructor workspaces render dense, everything else airy.
-  const surface = useRouterState({
+  // Client vs admin surface: the admin and instructor workspaces are a separate
+  // app with their own shell (AdminShell) and the NorthWind theme; the client
+  // header/footer are suppressed there. The admin surface needs BOTH an admin
+  // path and a viewer the guards let in: a refused student gets the not-found
+  // answer inside the client app, because AdminShell never mounts for them and
+  // an admin-surface page would have no chrome at all.
+  const onAdminPath = useRouterState({
     select: (state) =>
-      state.location.pathname.startsWith('/admin') || state.location.pathname.startsWith('/teach')
-        ? 'admin'
-        : 'client',
+      state.location.pathname.startsWith('/admin') || state.location.pathname.startsWith('/teach'),
   });
+  const onTeachPath = useRouterState({
+    select: (state) => state.location.pathname.startsWith('/teach'),
+  });
+  const surface =
+    onAdminPath && session.data != null && canAccessAdministration(session.data)
+      ? 'admin'
+      : 'client';
 
   // Unsaved editor lines are kept locally so a reload cannot lose them, and they outlive the
   // session on disk. The author is in their key, so nobody is ever OFFERED another person's text
@@ -119,43 +126,71 @@ function Layout() {
     if (viewerId === undefined) return;
     void forgetOtherAuthors(transcriptHistory, viewerId);
   }, [viewerId, transcriptHistory]);
-  const signOut = useMutation({
-    mutationFn: () =>
-      identityDependencies.session.logOut().then((result) => identityDependencies.unwrap(result)),
-    onMutate: () => setSignOutFailed(false),
-    onSettled: async (_data, error) => {
-      setSignOutFailed(error !== null);
-      try {
-        await navigate({ to: '/courses' });
-      } finally {
-        queryClient.setQueryData(sessionQueryKey, null);
-      }
-    },
-  });
+  const { signOut, isSigningOut, signOutFailed, dismissSignOutFailure } =
+    useSignOut(identityDependencies);
+
+  // The admin side is its own root layout: AdminShell (sidebar + top bar + the
+  // #main skip target) replaces the client header and footer. It lives here, not
+  // in the /admin and /teach routes, because those are client-only (ssr: false):
+  // rendered at the root, the signed-in chrome is in the server HTML, so the
+  // viewer never sees an anonymous frame before hydration.
+  if (surface === 'admin' && session.data != null) {
+    const viewer = session.data;
+    const navItems: AdminNavItem[] = onTeachPath
+      ? [{ to: '/teach', label: t('common.navModeration'), exact: true }]
+      : [
+          { to: '/admin', label: t('common.navCourses'), exact: true },
+          ...(canAdministerAccounts(viewer)
+            ? [{ to: '/admin/users', label: t('adminUsers.title') }]
+            : []),
+        ];
+    return (
+      <div className="app-shell" data-surface="admin">
+        <a className="skip-link" href="#main">
+          {t('common.skip')}
+        </a>
+        <AdminShell
+          title={onTeachPath ? t('common.teachArea') : t('administration.title')}
+          navLabel={onTeachPath ? t('common.teachArea') : t('common.adminArea')}
+          navItems={navItems}
+          user={viewer}
+          identityDependencies={identityDependencies}
+        >
+          <Outlet />
+        </AdminShell>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-shell" data-surface={surface}>
+    <div className="app-shell" data-surface="client">
       <a className="skip-link" href="#main">
         {t('common.skip')}
       </a>
       <header className="site-header">
         <div className="shell header-inner">
-          <Link to="/" className="wordmark" aria-label={t('common.homeLabel')}>
-            <span aria-hidden="true">{'</>'}</span>CourseForge
+          <Link to="/" className="wordmark client-wordmark" aria-label={t('common.homeLabel')}>
+            <span className="client-wordmark-mark" aria-hidden="true">
+              {'</>'}
+            </span>
+            <span className="client-wordmark-text">CourseForge</span>
           </Link>
-          <nav aria-label={t('common.mainNavigation')}>
+          <nav className="client-primary-nav" aria-label={t('common.mainNavigation')}>
             <Link to="/courses">{t('common.catalog')}</Link>
+          </nav>
+          <div className="client-header-actions">
             <IdentityHeader
               user={session.data ?? null}
-              isSigningOut={signOut.isPending}
-              onSignOut={() => signOut.mutate()}
+              isSigningOut={isSigningOut}
+              onSignOut={signOut}
             />
             <LanguageSwitcher />
-          </nav>
+          </div>
         </div>
       </header>
       {signOutFailed && (
         <div className="shell sign-out-message">
-          <Toast message={t('identity.signOutFailure')} onDismiss={() => setSignOutFailed(false)} />
+          <Toast message={t('identity.signOutFailure')} onDismiss={dismissSignOutFailure} />
         </div>
       )}
       <main id="main" className="shell main-content" tabIndex={-1}>
@@ -165,7 +200,10 @@ function Layout() {
         <footer className="site-footer site-footer--storefront">
           <div className="shell footer-grid">
             <div className="footer-brand">
-              <Link to="/" className="wordmark" aria-label={t('common.homeLabel')}>
+              {/* Named by its visible text, not homeLabel: the header wordmark
+                  already owns "CourseForge — home", and two links sharing one
+                  accessible name make the header link ambiguous. */}
+              <Link to="/" className="wordmark">
                 <span aria-hidden="true">{'</>'}</span>CourseForge
               </Link>
               <p>{t('common.tagline')}</p>

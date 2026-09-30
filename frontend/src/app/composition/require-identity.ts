@@ -37,9 +37,16 @@ export function useRedirectWhenSessionEnds(identityDependencies: IdentityDepende
 
   useEffect(() => {
     if (session.data !== null) {
-      protectedReturnTo.current = returnTo;
+      // Track only real protected locations. The login route is never something
+      // to return to, and capturing it would nest returnTo into itself during a
+      // surface transition (client vs admin shells reconcile the whole subtree,
+      // so a guarded route can render once more before it unmounts).
+      if (!returnTo.startsWith('/login')) protectedReturnTo.current = returnTo;
       return;
     }
+    // Already at the login route: the session is gone and there is nothing left
+    // to protect, so re-navigating would only nest returnTo.
+    if (returnTo.startsWith('/login')) return;
     void navigate({ to: '/login', search: { returnTo: protectedReturnTo.current } });
   }, [navigate, returnTo, session.data]);
 }

@@ -1,9 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import {
-  canAccessAdministration,
-  canAdministerAccounts,
-  type AuthenticatedUser,
-} from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../domain/identity/identity';
 import { Button, Link } from '../ui';
 
 type IdentityHeaderProps = {
@@ -15,16 +11,31 @@ type IdentityHeaderProps = {
 export function IdentityHeader({ user, isSigningOut, onSignOut }: IdentityHeaderProps) {
   const { t } = useTranslation();
 
-  if (user === null) return <Link href="/login">{t('common.login')}</Link>;
+  if (user === null)
+    return (
+      <div className="header-identity">
+        <Link href="/login" className="header-login">
+          {t('common.login')}
+        </Link>
+      </div>
+    );
 
   return (
-    <>
+    <div className="header-identity">
       <span className="header-identity-name">{user.displayName}</span>
-      {canAccessAdministration(user) && <Link href="/admin">{t('administration.title')}</Link>}
-      {canAdministerAccounts(user) && <Link href="/admin/users">{t('adminUsers.title')}</Link>}
+      {user.role === 'admin' && (
+        <Link href="/admin" className="header-cross-nav">
+          {t('common.toAdmin')}
+        </Link>
+      )}
+      {user.role === 'instructor' && (
+        <Link href="/teach" className="header-cross-nav">
+          {t('common.toTeach')}
+        </Link>
+      )}
       <Button variant="secondary" isDisabled={isSigningOut} onPress={onSignOut}>
         {isSigningOut ? t('identity.signingOut') : t('identity.signOut')}
       </Button>
-    </>
+    </div>
   );
 }

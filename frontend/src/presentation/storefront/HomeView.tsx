@@ -1,4 +1,5 @@
 import { Link } from '../ui';
+import { ValueStrip } from './ValueStrip';
 import { useTranslation } from 'react-i18next';
 
 export function HomeView() {
@@ -31,43 +32,26 @@ export function HomeView() {
             </div>
           </dl>
         </div>
-        <div className="hero-art ui-grid-surface" aria-hidden="true">
-          <div className="hero-code-card ui-card ui-card--floating ui-card--glow">
-            <div className="hero-code-heading">
-              <span className="ui-icon-tile">{'</>'}</span>
-              <span className="ui-mono">course.ts</span>
+        <div className="hero-art" aria-hidden="true">
+          <div className="hero-preview-card">
+            <div className="hero-preview-cover">
+              <p className="hero-preview-label">Популярний курс</p>
+              <p className="hero-preview-title">React Architecture Pro</p>
             </div>
-            <code>
-              <span>learn(</span>
-              <strong>{t('home.codePractice')}</strong>
-              <span>)</span>
-              <span>build(</span>
-              <strong>{t('home.codeSystem')}</strong>
-              <span>)</span>
-              <span>understand(</span>
-              <strong>{t('home.codeWhy')}</strong>
-              <span>)</span>
-            </code>
-            <p>{t('home.art')}</p>
+          </div>
+          <div className="hero-progress-card">
+            <div className="hero-progress-header">
+              <span>Ваш прогрес</span>
+              <strong>68%</strong>
+            </div>
+            <div className="hero-progress-bar">
+              <div className="hero-progress-fill" />
+            </div>
+            <p className="hero-progress-meta">Модуль 7 з 10 · Domain boundaries</p>
           </div>
         </div>
       </section>
-      <section id="values" className="value-strip" aria-labelledby="values-heading">
-        <h2 id="values-heading" className="ui-visually-hidden">
-          {t('home.valuesTitle')}
-        </h2>
-        {(['practice', 'review', 'access'] as const).map((value) => (
-          <article key={value} className="value-item">
-            <span className="ui-icon-tile" aria-hidden="true">
-              {value === 'practice' ? '⌘' : value === 'review' ? '✓' : '∞'}
-            </span>
-            <div>
-              <h3>{t(`home.values.${value}.title`)}</h3>
-              <p>{t(`home.values.${value}.description`)}</p>
-            </div>
-          </article>
-        ))}
-      </section>
+      <ValueStrip />
     </div>
   );
 }

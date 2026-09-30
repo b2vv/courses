@@ -451,6 +451,10 @@ test('G04 gives a student the same not-found answer for /admin as an unknown add
   await adminRouter.load();
   const adminScreen = renderRouter(adminRouter);
   const adminAnswer = screen.getByRole('heading', { name: 'Сторінку не знайдено' }).textContent;
+  // Refused, the student stays in the client app: its header (with their name)
+  // and no admin sidebar — not a bare page with no way back.
+  expect(screen.getByText(student.displayName)).toBeTruthy();
+  expect(screen.queryByRole('complementary')).toBeNull();
   adminScreen.unmount();
 
   const unknownRouter = createTestRouter('/unknown', student);
@@ -469,6 +473,8 @@ test('W guard gives a student the same not-found answer for /teach as an unknown
   await teachRouter.load();
   const teachScreen = renderRouter(teachRouter);
   const teachAnswer = screen.getByRole('heading', { name: 'Сторінку не знайдено' }).textContent;
+  expect(screen.getByText(student.displayName)).toBeTruthy();
+  expect(screen.queryByRole('complementary')).toBeNull();
   teachScreen.unmount();
 
   const unknownRouter = createTestRouter('/unknown', student);
