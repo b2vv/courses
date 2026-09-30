@@ -24,6 +24,7 @@ const REF = process.env.REF_URL ?? 'https://courseforge-academy.strelchenko-dev.
 const LOCAL = process.env.LOCAL_URL ?? 'http://localhost:8080';
 const WIDTHS = (process.env.PP_WIDTHS ?? '1280,390').split(',').map((n) => Number(n.trim()));
 const SCHEME = process.env.PP_SCHEME ?? 'light';
+const ONLY = process.env.PP_SURFACES?.split(',').map((x) => x.trim());
 const OUT = join(HERE, 'out');
 const RAW = join(OUT, 'raw');
 mkdirSync(RAW, { recursive: true });
@@ -42,12 +43,24 @@ const SURFACES = [
     ref: { path: '/', ready: 'article', scrollTo: 'article' },
     ours: { path: '/courses', ready: '.course-card', scrollTo: '.course-card' },
   },
+  // Whole first page. The reference is a one-pager (hero, catalog, benefits,
+  // footer); ours splits it into the home page and the catalog page.
+  {
+    name: 'page-home',
+    ref: { path: '/', ready: 'h1', scrollTo: null, full: true },
+    ours: { path: '/', ready: 'h1', scrollTo: null, full: true },
+  },
+  {
+    name: 'page-catalog',
+    ref: { path: '/', ready: 'article', scrollTo: null, full: true },
+    ours: { path: '/courses', ready: '.course-card', scrollTo: null, full: true },
+  },
 ];
 
 const KILL_ANIM =
   '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}';
 
-async function shot(browser, url, width, { ready, scrollTo }, file) {
+async function shot(browser, url, width, { ready, scrollTo, full = false }, file) {
   const ctx = await browser.newContext({
     viewport: { width, height: 900 },
     colorScheme: SCHEME,
@@ -70,7 +83,7 @@ async function shot(browser, url, width, { ready, scrollTo }, file) {
     await page.waitForTimeout(250);
   }
   await page.waitForTimeout(300);
-  await page.screenshot({ path: file });
+  await page.screenshot({ path: file, fullPage: full });
   await ctx.close();
 }
 
@@ -106,7 +119,7 @@ async function sheet(browser, refPng, oursPng, width, title, file) {
 const browser = await chromium.launch();
 const sheets = [];
 for (const w of WIDTHS) {
-  for (const s of SURFACES) {
+  for (const s of SURFACES.filter((x) => !ONLY || ONLY.includes(x.name))) {
     const refPng = join(RAW, `${s.name}-${w}-ref.png`);
     const oursPng = join(RAW, `${s.name}-${w}-ours.png`);
     await shot(browser, REF + s.ref.path, w, s.ref, refPng);
