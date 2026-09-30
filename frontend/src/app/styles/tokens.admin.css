@@ -1,19 +1,79 @@
 /*
- * Admin surface — the dense density.
+ * Admin surface — the dense, editorial density (D-d), on NorthWindLab's
+ * stylistics (https://northwindlab.com): near-black editorial dark, a teal
+ * accent, Space Grotesk display, thin borders, elevated card surfaces. Applied
+ * via `data-surface="admin"` on the page container (admin + instructor).
  *
- * Same system as the client (tokens.css holds every colour, font and scale);
- * this file only re-binds the density knobs for the admin and instructor
- * workspaces: compact rhythm, defined cards (visible border + a subtle drop
- * shadow), tighter padding — the ops-dashboard feel. Applied via
- * `data-surface="admin"` on the page container.
- *
+ * Same SYSTEM as the client — the primitives and scales live in tokens.css.
+ * This scope re-binds the density knobs AND the surface palette / accent /
+ * display font for admin, in BOTH themes (owner's call: admin follows
+ * light/dark, not dark-only). NorthWind itself is dark-only, so the dark values
+ * are the faithful ones; the light values are a derived editorial-light theme.
  * The airy client counterpart is tokens.client.css.
  */
+
+/* Density (dense) + display font — theme-independent. */
 [data-surface='admin'] {
+  --font-display: 'Space Grotesk Variable', var(--font-body);
   --card-padding: var(--space-4);
   --card-radius: var(--radius-panel);
-  --card-border-color: var(--color-border);
   --card-shadow: var(--shadow-card);
   --card-shadow-hover: var(--shadow-floating);
   --surface-gap: var(--space-6);
+}
+
+/* Light admin — derived editorial-light (NorthWind is dark-only). */
+[data-surface='admin'] {
+  --color-background: #f7f9fa;
+  --color-surface: #eef2f4;
+  --color-text: #0f1720;
+  --color-muted: #5b6675;
+  /* Control-grade border, >=3:1 on the light admin bg (WCAG 1.4.11). */
+  --color-border: #7d828c;
+  --color-hairline: #dfe4e8;
+  /* Teal accent. Button = teal fill + white text. Deep teal so links/labels as
+     TEXT clear 4.5:1 on both the light bg and the card surface. */
+  --color-primary: #0b6b78;
+  --color-primary-hover: #095863;
+  --color-on-primary: #ffffff;
+  --color-accent: #0b6b78;
+  --color-on-accent: #ffffff;
+  --color-focus: #0b6b78;
+  --card-border-color: var(--color-hairline);
+}
+
+/* Dark admin — faithful NorthWind. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-surface='admin'] {
+    --color-background: #070a13;
+    --color-surface: #0d121c;
+    --color-text: #dae0e7;
+    --color-muted: #8b95a3;
+    /* Control-grade border, >=3:1 on #070a13. NorthWind's own #242932 is a
+       decorative hairline, kept for cards/tables via --color-hairline. */
+    --color-border: #656e7b;
+    --color-hairline: #242932;
+    --color-primary: #20b2c5;
+    --color-primary-hover: #3cc3d4;
+    --color-on-primary: #071018;
+    --color-accent: #20b2c5;
+    --color-on-accent: #071018;
+    --color-focus: #20b2c5;
+    --card-border-color: var(--color-hairline);
+  }
+}
+:root[data-theme='dark'] [data-surface='admin'] {
+  --color-background: #070a13;
+  --color-surface: #0d121c;
+  --color-text: #dae0e7;
+  --color-muted: #8b95a3;
+  --color-border: #656e7b;
+  --color-hairline: #242932;
+  --color-primary: #20b2c5;
+  --color-primary-hover: #3cc3d4;
+  --color-on-primary: #071018;
+  --color-accent: #20b2c5;
+  --color-on-accent: #071018;
+  --color-focus: #20b2c5;
+  --card-border-color: var(--color-hairline);
 }
