@@ -1,0 +1,21 @@
+/*
+ * Client surface — the airy density.
+ *
+ * One system, two densities: the palette, type, radii and shadow SCALES all
+ * live in tokens.css (shared) and are identical everywhere. This file only
+ * re-binds the density knobs the shared primitives read (--card-*, --surface-*)
+ * for the storefront and the learning views: generous rhythm, flat cards
+ * (hairline border, no drop shadow), roomy padding. Toward the storefront
+ * mockup. Applied via `data-surface="client"` on the page container.
+ *
+ * Admin's dense counterpart is tokens.admin.css. Neither file introduces new
+ * colours or fonts — that would fork the system instead of scoping it.
+ */
+[data-surface='client'] {
+  --card-padding: var(--space-6);
+  --card-radius: var(--radius-card);
+  --card-border-color: var(--color-hairline);
+  --card-shadow: none;
+  --card-shadow-hover: var(--shadow-card);
+  --surface-gap: clamp(2.5rem, 6vw, 5rem);
+}
