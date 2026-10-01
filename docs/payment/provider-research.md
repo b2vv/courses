@@ -12,6 +12,17 @@
 
 ---
 
+## Decision — 2026-10-01 (owner)
+
+| | |
+|---|---|
+| **Primary provider now** | **WayForPay** — hosted redirect, signed server callback, UAH in and out. |
+| **Later, additional method** | **IBAN + NBU QR (format 003)**, first confirmed manually by an admin (the admin grant exists); automatic confirmation via the monobank statement webhook is a later step. Research: [`iban-qr-research.md`](iban-qr-research.md). |
+| **EU phase** | **Paddle as a second provider** for EU buyers (Merchant of Record: EU VAT handled by Paddle), alongside WayForPay — added, not swapped. The port and `payment_events (provider, event_id)` already allow two providers. |
+| **Alternatives closed** | LiqPay (even sandbox keys need a shop registered to a legal entity); Portmone (test mode switched on by an account manager after an application); Paddle as the *first* provider (~6% per sale on a 1890 ₴ course vs ~2–2.5%, payouts only in USD/EUR/GBP/AUD/CAD, live approval not guaranteed for a non-software seller). |
+| **Why now, without a ФОП** | WayForPay publishes a shared test merchant (`test_merch_n1`, wiki.wayforpay.com/view/852472), and an own merchant account starts in test mode after phone registration; the ФОП is needed only to activate live payments, at launch. So O06's sandbox proof can be built now. |
+| **How to check** | O06 closes only on a full purchase through the WayForPay test environment: Purchase redirect → signed `serviceUrl` callback verified and applied once → grant → course opens; a replayed callback changes nothing. |
+
 ## TL;DR
 
 - **Ukraine-first MVP:** the realistic candidates are **LiqPay**, **WayForPay**, and **Portmone** — all Ukrainian PSPs that (a) onboard a UA business/ФОП, (b) settle in UAH, (c) use a hosted redirect page so card data never reaches us, and (d) POST a signed server-to-server callback on success. They are **PSPs, not Merchants of Record**: *we* remain responsible for tax. This fits the MVP because our webhook-issues-grant model maps cleanly onto their callback + signature scheme.
@@ -30,16 +41,16 @@ The `orders` port is provider-agnostic by design (AGENTS.md: no port without a c
 | **Type** | PSP (acquirer: PrivatBank) | PSP | PSP / EMI (UK Fondy Ltd, FCA) | PSP | **Merchant of Record** |
 | **UA seller / ФОП onboarding** | Yes — PrivatBank merchant; sandbox keys issued on signup [1][12] | Yes — account starts in test mode on registration; complete KYC to go live [4][13] | Yes historically, but **⚠️ see UA-serving risk** [14][15] | Yes — UA merchant, unique payee ID + private key issued [7] | Yes for Ukraine **except occupied regions** (Crimea, Donetsk, Kherson, Luhansk, Zaporizhzhia); account needs approval [16][17] |
 | **Role for tax (MoR vs PSP)** | PSP — seller handles tax | PSP — seller handles tax | PSP — seller handles tax | PSP — seller handles tax | **MoR — Paddle calculates, collects & remits VAT** [18][19] |
-| **UAH (now)** | Yes [11] | Yes (default) [3] | Yes [8] | Yes (default currency) [7] | **⚠️ UAH not seen in pricing currencies** (EUR/USD listed) [16] |
+| **UAH (now)** | Yes [11] | Yes (default) [3] | Yes [8] | Yes (default currency) [7] | **Yes** — `UAH` is a payment currency, min. charge 29.00, no bank transfers (developer.paddle.com/concepts/sell/supported-currencies.md, checked 2026-10-01; corrects the earlier "not found"). Payouts only USD/EUR/GBP/AUD/CAD (+ some non-balance currencies) |
 | **EUR (later)** | Yes (referenced) ⚠️ confirm in cabinet [6] | Yes [3] | Yes [8] | ⚠️ confirm | Yes [16] |
 | **EU expansion on same account** | Ukrainian acquiring; EU selling not its purpose | UA-focused; EU selling limited | UK/EU entity + PL/CZ/SK/RO/HU coverage [8] | UA-focused | **Yes — sells in 200+ countries, no per-country setup** [17] |
 | **Checkout model** | Hosted (LiqPay domain, 3DS redirect) — card data off our servers [6] | Hosted redirect to `secure.wayforpay.com/pay` — card data off our servers [2] | Hosted checkout **and** embedded/custom option [9][10] | Gateway + CSE (client-side encryption); hosted option [7] | Hosted overlay/checkout — card data off our servers [17] |
 | **Server-to-server webhook on success** | Yes — POST `{data, signature}` to `server_url` after final status [6] | Yes — POST to `serviceUrl`; **retries up to 4 days** until a valid response [2] | Yes — callback with `order_status` [9] | Yes — callback to configured URL [7] | Yes — webhooks (`transaction.completed`, etc.) [18] |
 | **Signature scheme** | `base64(sha1(private_key + data + private_key))` — **⚠️ docs overview says sha3-256 but all code examples use SHA1** [6] | `HMAC_MD5` over `;`-joined fields; callback sig over `orderReference;status;time` [2] | SHA1 order signature (40 chars) [9] | `HMAC-SHA256` over payeeId+timestamp+order#+amount+private key [7] | `Paddle-Signature` header, **HMAC-SHA256** over `timestamp:body` [18] |
 | **Idempotency / event id** | `payment_id` (LiqPay txn id) + `order_id` in payload — dedupe on these [6] | `orderReference` unique in merchant system; **⚠️ no explicit dedup guarantee — enforce yourself** [2] | `order_id` in payload — dedupe yourself | order#/txn id in payload — dedupe yourself | Event has unique id + type — dedupe on event id [18] |
-| **Fees (rough — verify)** | ⚠️ sources vary: ~0.6–1.5% domestic to ~2.75% intl [20] | ~2–2.5% [20] | ~2.2% (≤500k UAH/mo) / 2% (>500k), +0.2% intl [3] | ~2.3–2.5% [7] | **5% + $0.50** per txn (MoR premium; ⚠️ verify current) [21] |
+| **Fees (rough — verify)** | ⚠️ sources vary: ~0.6–1.5% domestic to ~2.75% intl [20] | ~2–2.5% [20] | ~2.2% (≤500k UAH/mo) / 2% (>500k), +0.2% intl [3] | ~2.3–2.5% [7] | **5% + 50¢** per checkout transaction (paddle.com/pricing, checked 2026-10-01) |
 | **Refunds (future seam)** | API supports refunds ⚠️ confirm | API supports reverse/refund [2] | API supports refunds ⚠️ confirm | API supports refunds ⚠️ confirm | Supported via dashboard/API [18] |
-| **Sandbox for e2e** | Yes — `sandbox_`-prefixed keys after signup [12] | Yes — account starts in test mode [13] | ⚠️ sandbox exists, terms unverified | ⚠️ test env exists, verify | Yes — sandbox environment [18] |
+| **Sandbox for e2e** | Yes — `sandbox_`-prefixed keys after signup [12] | Yes — account starts in test mode [13] | ⚠️ sandbox exists, terms unverified | ⚠️ test env exists, verify | Yes — sandbox account with **no approval** and any domain; live needs seller verification (sole trader supported) and an approved domain [18] |
 | **API/docs maturity** | Mature, multi-language SDKs; docs bilingual [1][6] | Mature wiki, many recipe pages [2] | Mature docs (docs.fondy.eu / .io) [9][10] | Documented, PCI-DSS L1 [7] | Very mature developer docs [16][18] |
 
 ---
@@ -72,9 +83,10 @@ The `orders` port is provider-agnostic by design (AGENTS.md: no port without a c
 ### Paddle (Merchant of Record) — the EU-phase candidate
 - **What MoR buys us:** Paddle becomes the seller of record and **calculates, collects and remits VAT/sales tax** across 200+ jurisdictions [17][18][19]. For EU expansion this removes the entire EU-VAT-registration/OSS burden that a PSP would leave on us.
 - **UA seller eligibility:** Ukraine-registered sellers can sign up (account approval takes a few days), **except sellers operating from occupied regions** (Crimea, Donetsk, Kherson, Luhansk, Zaporizhzhia) [16][17].
-- **⚠️ Blocker for the MVP:** the pricing/currency documentation lists EUR/USD and others but **UAH was not found** [16]. If Paddle cannot charge Ukrainian buyers in UAH, it does not serve the Ukraine-first MVP. **Verify UAH support directly before considering Paddle as the *first* adapter.**
+- **UAH — corrected 2026-10-01:** Paddle *does* charge in `UAH` (min. 29.00, no bank transfers) per the current supported-currencies page; the earlier "UAH not found" came from a JS-rendered page and was wrong. What remains against Paddle as the *first* provider is cost and settlement, not currency: payouts only in USD/EUR/GBP/AUD/CAD, and ~6% per sale on a 1890 ₴ course.
+- **Acceptable use:** Paddle is built for software; own pre-recorded courses are not in the prohibited list (that targets human services such as coaching and consulting), but live approval is a review, not a guarantee.
 - **Webhook:** `Paddle-Signature` header, HMAC-SHA256 over `timestamp:body`; events carry a unique id — idempotency-friendly [18].
-- **Fee premium:** ~**5% + $0.50** per transaction (MoR handles tax + compliance in exchange) [21] **⚠️ verify current rate**.
+- **Fee premium:** **5% + 50¢** per checkout transaction (paddle.com/pricing, checked 2026-10-01) — the price of the MoR handling tax and compliance.
 
 ### Stripe — status for Ukrainian sellers
 - **Not available** for sellers located in Ukraine; Stripe's own guidance and the NBU both confirm Stripe has not entered the Ukrainian market [22][23]. The only path is a **foreign entity** (e.g. a US company via Stripe Atlas) [24]. This means legal/banking overhead abroad, not a Ukraine-first option. Listed here only to close the question.
