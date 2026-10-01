@@ -149,6 +149,10 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The locked lessons ask for this amount, so the outline carries the price itself.
+		if !course.Paid || course.Price == nil || course.Price.Minor != 50000 || course.Price.Currency != "UAH" {
+			t.Fatalf("paid=%v price=%+v, want the stored 50000 UAH", course.Paid, course.Price)
+		}
 		viewer := domain.Actor{UserID: stranger, Role: domain.ActorStudent}
 		if !course.CanBeViewedBy(viewer) {
 			t.Fatal("the outline of a published paid course must be visible to a viewer without access")

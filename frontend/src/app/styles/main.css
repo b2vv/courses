@@ -1334,6 +1334,41 @@ nav a {
 .course-outline-state[data-state='completed'] {
   color: var(--color-success);
 }
+.course-outline-state[data-state='preview'] {
+  color: var(--color-primary);
+}
+.locked-lesson-offer {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+.locked-lesson-offer p {
+  margin: 0;
+}
+.locked-lesson-price,
+.order-status-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.locked-lesson-error {
+  color: var(--color-danger);
+}
+.order-status {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  max-inline-size: 40rem;
+}
+.order-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
 @media (max-width: 64rem) {
   .course-learning {
     grid-template-columns: minmax(0, 1fr);

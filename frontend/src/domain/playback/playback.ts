@@ -26,6 +26,8 @@ export type LearningCourse = {
   readonly summary: string;
   readonly description: string;
   readonly status: 'draft' | 'published' | 'archived';
+  /** Null for a free course; the amount a locked lesson asks for. */
+  readonly price: { readonly minor: number; readonly currency: 'UAH' } | null;
   readonly modules: readonly LearningModule[];
   readonly continueLessonId: string | null;
 };

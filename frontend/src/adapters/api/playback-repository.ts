@@ -67,6 +67,7 @@ export function createApiPlaybackRepository(
         summary: parsed.data.summary,
         description: parsed.data.description,
         status: parsed.data.status,
+        price: parsed.data.price,
         modules: parsed.data.modules.map((module) => ({
           id: module.id,
           title: module.title,

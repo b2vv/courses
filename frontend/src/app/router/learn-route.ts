@@ -16,3 +16,20 @@ export function parseLessonRoute(splat: string | undefined): LessonRoute | null 
   if (slug === undefined || lessonId === undefined) return null;
   return courseSlug.test(slug) && entityId.test(lessonId) ? { slug, lessonId } : null;
 }
+
+export function parseOrderId(value: string): string | null {
+  return entityId.test(value) ? value : null;
+}
+
+export type OrderSearch = { readonly course?: string | undefined };
+
+/**
+ * The course slug only builds the way back to the course after payment; it arrives from
+ * the URL, so an unusable value is dropped instead of trusted. The key is always returned:
+ * the router merges the raw search under a route's validated one, so omitting it would let
+ * the unvalidated value through.
+ */
+export function parseOrderSearch(search: Record<string, unknown>): OrderSearch {
+  const course = search.course;
+  return { course: typeof course === 'string' && courseSlug.test(course) ? course : undefined };
+}

@@ -9,6 +9,8 @@ import { primeAv1Probe, takeAv1ProbeResult } from './av1-probe';
 import { createLearnQueries } from './learn-queries';
 import { createTranscriptQueries } from './transcript-queries';
 import { createDiscussionQueries } from './discussion-queries';
+import { createApiPurchaseRepository } from '../../adapters/api/purchase-repository';
+import { createPurchaseQueries } from './purchase-queries';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -21,6 +23,7 @@ export function createLearnDependencies(queryClient: QueryClient) {
     ),
     ...createTranscriptQueries(createApiTranscriptRepository(requestOptions())),
     discussion: createDiscussionQueries(createApiDiscussionRepository(requestOptions())),
+    purchase: createPurchaseQueries(createApiPurchaseRepository(requestOptions())),
     createMedia: createPlaybackMedia,
     primeAv1Probe: () => primeAv1Probe(queryClient),
   };

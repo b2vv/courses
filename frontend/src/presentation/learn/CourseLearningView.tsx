@@ -11,6 +11,8 @@ type CourseLearningViewProps = {
 
 export function CourseLearningView({ course, currentLessonId, children }: CourseLearningViewProps) {
   const { t } = useTranslation();
+  // The preview badge only means something to a viewer who still has locked lessons.
+  const hasLocked = course.modules.some((module) => module.lessons.some((lesson) => lesson.locked));
   return (
     <article className="course-learning">
       <div className="course-learning-player">{children}</div>
@@ -44,6 +46,16 @@ export function CourseLearningView({ course, currentLessonId, children }: Course
                         {lesson.completed && (
                           <span className="course-outline-state" data-state="completed">
                             {t('learn.completed')}
+                          </span>
+                        )}
+                        {lesson.locked && (
+                          <span className="course-outline-state" data-state="locked">
+                            {t('learn.lockedLesson')}
+                          </span>
+                        )}
+                        {hasLocked && lesson.isPreview && (
+                          <span className="course-outline-state" data-state="preview">
+                            {t('learn.preview')}
                           </span>
                         )}
                         {isCurrent && (
