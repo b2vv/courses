@@ -180,3 +180,28 @@ callback or a signed server-to-server status answer does.
 **How to check:** the e2e completes a test-card payment on WayForPay's test page and the lesson
 opens with no callback able to reach the stack; the tunnel run's log shows the callback request
 (signature verified, applied once, a replay a no-op).
+
+## 2026-10-01 — O06c split: offline stub in the gate, live tunnel run by hand (owner decision)
+
+**Decision (owner, 2026-10-01):** O06c has two parts.
+- **O06c-auto (in the gate):** the e2e drives the purchase against a **local WayForPay stub**, not
+  the real provider, so the ordered gate stays offline and deterministic. The stub serves the pay
+  page target and the CHECK_STATUS / callback endpoints. It proves: checkout form built and
+  submitted; a signed callback on a test vector applied once (Pay24 at the HTTP layer); the pending
+  status page runs CHECK_STATUS → the **same** `ApplyPaymentEvent` → the lesson unlocks (Pay25 shape,
+  against the stub); a replayed callback changes nothing.
+- **O06c-live (by hand, owner):** one recorded run through a cloudflared tunnel where WayForPay's
+  **real** `serviceUrl` callback reaches the stack, is signature-verified and applied once. Courses 1
+  writes a runbook (`work/runbook-o06c-tunnel.md`); the owner runs it with the real test-merchant
+  secret key (kept only in the owner's local `.env`, never in the repo) and returns the log/screenshot;
+  Courses 1 records it in the phase report as the production-path proof.
+**Seam:** the WayForPay adapter's `PayURL`/`StatusURL` become env-configurable, **defaulting to the
+production hosts**; only the e2e compose stack points them at the stub. The frontend action-host
+allowlist stays `secure.wayforpay.com` in production and takes the stub host only from an env the
+e2e sets — production is unchanged.
+**Why:** a tunnel in every gate run makes the gate depend on an external tunnel, the network and a
+human completing a card form; the owner cannot put the live secret key in CI. The stub exercises our
+own code paths end to end; the live run proves the one thing a stub cannot — that the real provider's
+callback reaches and satisfies us.
+**How to check:** the gate's e2e passes with no network to WayForPay; the runbook's recorded run
+shows the real callback (signature verified, applied once, replay a no-op) and the lesson open.

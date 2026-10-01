@@ -28,6 +28,10 @@ const orderSchema = z
 
 const errorSchema = z.object({ error: z.object({ code: z.string() }).loose() }).loose();
 
+// The production host is always accepted. The optional host is injected at build time only for
+// the offline e2e image; leaving it unset cannot widen the production allowlist.
+const e2ePayHost = process.env.PUBLIC_WAYFORPAY_PAY_HOST?.trim() ?? '';
+
 const checkoutFormSchema = z
   .object({
     action: z
@@ -36,7 +40,8 @@ const checkoutFormSchema = z
       .refine((value) => {
         try {
           const url = new URL(value);
-          return url.protocol === 'https:' && url.hostname === 'secure.wayforpay.com';
+          if (url.hostname === 'secure.wayforpay.com') return url.protocol === 'https:';
+          return e2ePayHost !== '' && url.hostname === e2ePayHost && url.protocol === 'http:';
         } catch {
           return false;
         }
