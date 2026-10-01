@@ -2,227 +2,218 @@
 
 | | |
 |---|---|
-| Дата | 2026-09-29 |
-| Базовий коміт | `2c0d29f` (main; дерево чисте, крім двох незакомічених PNG-скриншотів — байпродукт гейта B-18) |
-| Всього комітів у репо | 491 (`git rev-list --count HEAD`) |
-| Гейт свіжості цього прогону | **21 коміт** від `65d6065` (попередня база): вся фаза **робоче місце інструктора** (I01–I06: `46a94a2`, `3fb51ee`, `3b7b74c`, `f3b7302`, `1de3384`, `0f90ebd`) + закривні доки + merge PR #2 (`2c0d29f`). Зачепили продукт, межі й ризики. Перезібрано: шапку, §1 (робоче місце інструктора закрите; живий P0 → оплата), §2, §3 (розширення `discussion` модерацією + поверхня `/teach`), §6 (межі інструктора; урок gap-тестів). §4 — додано результат гейта інструктора. §5 — **без змін** (`git log 65d6065..HEAD` по `package.json`/`go.mod` порожній). Історія — у git. |
-| Тез із міткою `⚠️ неперевірено` | **2** (§6 — навантаження на зону `media`, без змін; §2 — юрисдикція провайдера оплати) |
-| Рішення людини (історичне) | **Оплата — остання фаза** (`PRODUCT-BRIEF.md` §24 п.21). **Модель оплати ухвалена 2026-09-28** (§24 п.22, `86fec52`): разова покупка → grant на курс, один провайдер, одна валюта, без повернень у MVP. Готовність закрита 2026-09-28; Phase 7b — 2026-09-29; **робоче місце інструктора — 2026-09-29** (`docs/instructor/report.md`, W01–W26). **Перед оплатою фаз роадмапу більше немає.** |
+| Дата | 2026-10-01 |
+| Базовий коміт | `aeff91c` (гілка `feat/payment`; дерево чисте, крім двох незакомічених PNG-скриншотів — байпродукт гейта B-18 — і робочих `work/*.md` нотаток) |
+| Всього комітів у репо | 529 (`git rev-list --count HEAD`) |
+| Гейт свіжості цього прогону | **38 комітів** від `2c0d29f` (попередня база). Зачепили продукт, межі й ризики: уся фаза **оплати, зрізи O01–O06a** (`e8ecd56`…`aeff91c`), дизайн-прохід клієнта й адмінки до мокапу (`9031e2f`, `1c90bfc`, `311ceb5`, `32c8a1d`, `22eead4`, `5e4ddb4`, `016de03`, `1b54c10`), чернетка спеки рейтингів (`d5543fd`), інструмент `visual-compare` (`1fe6cef`, `24381b2`). Перезібрано: шапку, §1 (оплата O01–O06a закрита, O06b/O06c/O07 відкриті; живий P0 лишається оплата), §2 (продукт += ціна/гранти/замовлення), §3 (новий модуль `orders`, ADR 014, розширений контракт доступу, дизайн-токени), §4 (без змін у гейтах, крім нового покриття), §5 (дві нові фронт-залежності — шрифти), §6 (два нові відкриті ризики — тестові флейки R23 і identity-інтеграція; старі ризики перенесено). Історія — у git. |
+| Тез із міткою `⚠️ неперевірено` | **3** (§2 — витримка `limit_req` під навантаженням, успадкована; §6 — механізм обох тестових флейків невстановлений; §2 — чи архівний курс показує рейтинги, відкрите питання чернетки) |
+| Рішення людини (історичне) | **Оплата — остання фаза** (`PRODUCT-BRIEF.md` §24 п.21). **Модель оплати ухвалена 2026-09-28** (§24 п.22). **Провайдер ухвалено 2026-10-01:** WayForPay зараз, IBAN+QR пізніше, Paddle для ЄС (`docs/payment/provider-research.md` → Decision). Рейтинги — **заплановані після оплати**, ще не почато (`docs/ratings/spec.md`, рішення власника 2026-09-30). |
 
 Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело,
 а кеш переписується під нього.
 
 ## 1. Вердикт на один екран
 
-`courses` — навчальна платформа: модульний Go-моноліт (**шість** доменних модулів:
-`course`, `discussion`, `identity`, `media`, `playback`, `transcript`; плюс допоміжний
-`testsupport` — тестовий пакет без шарів, і крос-модульний шар `contracts/` — domain-safe
-типи + чисті функції) і **п'ять** окремих виконуваних файлів (`api`, `media-worker`, `upload`,
-`asr-worker`, `migrate`), SSR-фронт на TanStack Start, усе в одному Compose-стеку за nginx.
+`courses` — навчальна платформа: модульний Go-моноліт (**сім** доменних модулів:
+`course`, `discussion`, `identity`, `media`, `orders`, `playback`, `transcript`; плюс допоміжний
+`testsupport` і крос-модульний шар `contracts/`) і **п'ять** окремих виконуваних файлів (`api`,
+`media-worker`, `upload`, `asr-worker`, `migrate`), SSR-фронт на TanStack Start, усе в одному
+Compose-стеку за nginx.
 
-**Поточний стан.** Фази 1–6 закриті; **7a** (транскрипт) — гейт пройдено 2026-09-18, рядкове
-приймання незалежно не встановлене (87 рядків без матриці X/X; `docs/transcript/report.md`).
-**Phase 8 (ASR) закрита 2026-09-24 за рядками 22/22** (`docs/asr/report.md`; A13/A14 знайшли й
-закрили 10 прихованих дефектів). **Phase 9 (готовність до оплати) закрита 2026-09-28 за рядками
-R01–R12** (`docs/readiness/report.md`). **Phase 7b (гілки бесід) закрита 2026-09-29 за рядками
-K01–K23** (`docs/discussion/report.md`): `make check` exit 0 (backend 501/0, e2e 79/79, B39 ✓).
-**Робоче місце інструктора закрите 2026-09-29 за рядками W01–W26** (`docs/instructor/report.md`):
-`make check` exit 0 (frontend 505, e2e 87/87) — розширення `discussion` course-wide модерацією,
-репортами, журналом і поверхнею `/teach`. Незалежна звірка знайшла 8 рядків без тесту / лише з
-доменним правилом — закрито gap-тестами; e2e викрив 2 дефекти (W01/W05), гейти — ще 3 (SQL,
-ізоляція тесту, route-tree). Жодна фаза зараз не в роботі.
+**Поточний стан.** Фази 1–9, 7a/7b та робоче місце інструктора закриті (без змін із попередньої
+редакції; деталі нижче в §2). **Фаза оплати — в роботі, зрізи O01–O06a закриті, O06b/O06c/O07
+відкриті.** GATE 1 (провайдер-незалежна спека) і GATE 2 (критика+захист, Courses 2 на Opus 4.8)
+пройдені 2026-09-29 (`docs/payment/assumptions.md`). O01 (контракт доступу += paid/entitled/preview,
+ADR 014) → O02 (міграція 00011, домен `orders`) → O03 (6 SQL-читань права в 4 модулях) → O04
+(application+HTTP замовлень, адмін-видача, grandfathering) → O05 (фронт: каталог/урок/адмінка) →
+**O06a (бекенд WayForPay: порт, адаптер, checkout-форма, підписаний callback, CHECK_STATUS)** — усі
+закриті й пройшли рев'ю Courses 2 (`work/review-o0*.md`). **O06b (фронт WayForPay: `returnUrl`
+з `?course=`, сторінка checkout), O06c (e2e через тест-мерчанта WayForPay + один прогін через
+тунель cloudflared як доказ)  і O07 (упорядкований `make check`, звіт Pay01–Pay27 порядково, PR) —
+ще не зроблені** (`docs/payment/plan.md` §Зрізи; `work/tasks.md:259-260`).
 
-**Живий P0 — оплата (остання й ЄДИНА фаза роадмапу, що лишилась; `PRODUCT-BRIEF.md` §24 п.21).**
-Робоче місце інструктора закрило передостанній рубіж — **перед оплатою фаз більше немає**. **Модель
-оплати ухвалена** (§24 п.22, нижче §2): разова покупка → grant, один провайдер, одна валюта, без
-повернень у MVP — відкритої людської розвилки немає. Що ще **не** існує: платіжний порт, таблиці
-замовлень, enrollment/entitlement, гроші як тип, вебхук-inbox, повернення — задокументовані шви
-(`docs/readiness/spec.md` §5), бо AGENTS.md забороняє порти без реальної залежності.
+**Живий P0 — оплата, зрізи O06b/O06c/O07.** Провайдер уже не відкрите питання (WayForPay, ухвалено
+2026-10-01). Фаза закривається лише після O06, бо доказ повної покупки мусить пройти production-шлях
+(sandbox провайдера), не фейк (`docs/payment/plan.md` §Зрізи, останній рядок).
 
-**Наступний хід за агендою:** цей перезбір брифінгу → `spec-flow` фази **оплати** (перше питання
-спеки — провайдер і його юрисдикція). Ранжування — `work/AGENDA.md`.
+**Наступна фаза після оплати — рейтинги й відгуки.** Чернетка спеки існує (`docs/ratings/spec.md`,
+статус «draft, not started»), рішення R1–R5 ухвалені власником 2026-09-30 (хто може оцінювати, Steam-
+подібний контекст прогресу на момент відгуку, 1–5 зірок+текст через наявну модерацію інструктора,
+поріг показу 3 оцінки), GATE 1 ще не пройдено. Не плутати з активною роботою — це наступний пункт
+агенди, не поточна фаза.
 
 **Архітектурний факт №1 — досі вірний.** Відмова 403 на сегменті нічого не вирішує про сесію
-(`docs/adr/012`); рішення ухвалює heartbeat, не сегмент. Володіння — одне на акаунт, не на пристрій
-і не на курс (ADR 011). Обмеження позиції тривалістю `ready`-ассета навмисно продубльоване у доменах
-(`course/domain/learning.go:27`, `playback/domain/progress.go:63`), а з 7b — **третій і четвертий
-читач тієї самої межі**: `discussion`-домен **відхиляє** мітку поза `0..тривалість` (не клампить), і
-крос-тест `TestThePositionBoundAgreesAcrossModules` має гілку `discussion`, щоб межі не розійшлися
-(B07 був дефектом дублю лише раз, `819dcac`; сама конструкція свідома).
+(`docs/adr/012`); рішення ухвалює heartbeat, не сегмент. Обмеження позиції тривалістю `ready`-ассета
+навмисно продубльоване в чотирьох доменах (`course`, `playback`, `discussion`'s крос-тест); оплата
+нічого тут не зачепила.
 
-**Архітектурний факт №2.** Розпізнавання мовлення **не** окремий доменний модуль — чернетка й
-порти ASR живуть **усередині** `backend/internal/transcript`; `asr-worker` лише виконуваний файл,
-що імпортує той самий модуль (`backend/cmd/asr-worker/main.go:14-17`). Причина — §24.19: ASR
-закриває одну з задач фази 7a, решта поверхні спільна з транскриптом.
+**Архітектурний факт №2.** Розпізнавання мовлення — усередині `backend/internal/transcript`, не
+окремий модуль; `asr-worker` лише виконуваний файл (`backend/cmd/asr-worker/main.go:14-17`).
 
-**Архітектурний факт №3.** Воркер ASR пише чернетку **без HTTP-актора й без токена власника**
-(`recognize.go` не проходить крізь `CanBeEditedBy`, яку проходять усі HTTP-записи транскрипту).
-Конкурентність ловить не роль-перевірка, а оптимістичний замок (`ErrDraftSuperseded`,
-`transcript/adapters/postgres/draft.go:205`).
+**Архітектурний факт №3.** Воркер ASR пише чернетку без HTTP-актора й без токена власника; конкурентність
+ловить оптимістичний замок, не роль-перевірка.
 
-**Архітектурний факт №4 — оновлено 7b: правило доступу тепер у ЧОТИРЬОХ мапінгах.** «Хто може
-дивитися курс» зведене в один контракт `backend/internal/contracts/access` — чиста функція
-`CanView(subject, course)` над нейтральними типами (лише stdlib, жодного імпорту модуля; ADR 013).
-Кожен домен маплить свої типи: `CanBeViewedBy` = рівно `return access.CanView(…)`, і це пінить
-AST-тест (`platform/architecture/access_mapping_ast_test.go`, **`expectedMethods = 4`** — 7b підняв
-з 3). Чотири мапінги (`course`, `playback`, `transcript`, `discussion`) згодні на всій таблиці
-істинності — гілка `viaDiscussion` у `shared_rules_test.go:53`. Домену **дозволено** імпортувати
-`internal/contracts/…`, але не інший модуль. Коли прийде оплата, grant — один факт: одне поле в
-контракті, одна умова в `CanView`, один join у SQL кожного модуля.
+**Архітектурний факт №4 — оновлено оплатою: контракт доступу тепер несе П'ЯТЬ фактів, мапінгів
+лишилось ЧОТИРИ.** `contracts/access.Course` дістав `Paid`, `Entitled`, `Preview` (ADR 014, доповнює
+013): `CanView = accessExempt(subject,course) ∨ Published ∧ (¬Paid ∨ Preview)`, де
+`accessExempt = Administrator ∨ owner ∨ Entitled` (`backend/internal/contracts/access/access.go:20-30`).
+Поряд — чиста `PurchaseRequired = Published ∧ Paid ∧ ¬Preview ∧ ¬accessExempt`: усі application-шари,
+що відмовляють у перегляді платного курсу, кличуть цей **один** предикат і обирають бізнес-код
+`course_purchase_required` замість generic `forbidden` (A6, `docs/payment/plan.md`). Мапінгів
+лишилось **4** (`course`, `playback`, `transcript`, `discussion`) — оплата не додала п'ятого; кожен
+і далі `CanBeViewedBy` = рівно `return access.CanView(…)`, пінить той самий AST-тест
+(`platform/architecture/access_mapping_ast_test.go`, `expectedMethods=4`). Коли приходить право
+власності на курс, це один факт `Entitled` — одне поле в контракті, один join `course_grants` у SQL
+кожного модуля (6 запитів у 5 файлах, `docs/payment/plan.md` §«Де ляже join»).
+
+**Архітектурний факт №5 — новий модуль `orders` володіє правом, грошима, inbox і аудитом, інші
+модулі лише ЧИТАЮТЬ його таблицю.** `backend/internal/orders` (domain: `Money` у мінорних одиницях,
+`Order`, `Grant`, `PaymentEvent`; application: `StartPurchase`/`PurchaseStatus`/`ApplyPaymentEvent`;
+ports: `provider.go`, `repository.go`; adapters: `http`, `postgres`, `wayforpay`). Інші чотири модулі
+джойнять `course_grants` у своїх SQL-адаптерах (прецедент — `discussion` читає `courses` напряму),
+але **не імпортують** пакети `orders` — architecture-тест пінить відсутність імпорту в обидва боки
+(дзеркало `discussion_ownership_test.go`, `docs/payment/plan.md` A2).
+
+**Архітектурний факт №6 — порт провайдера з'явився разом із першим адаптером, не раніше (AGENTS.md).**
+До O06a порту платіжного провайдера в коді не було (A4: «ports require an actual external
+dependency»). `orders/ports/provider.go` і `orders/adapters/wayforpay/` народились в одному зрізі;
+`ApplyPaymentEvent` — провайдер-незалежне ядро, яким користується і вебхук, і `CHECK_STATUS`.
 
 ## 2. Продукт
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| Що це | Платформа онлайн-курсів: публічний каталог, вхід, адмінське керування курсами, вивантаження відео, відтворення з прогресом, транскрипт із розпізнаванням мовлення, **гілки коментарів під уроком** | `work/PRODUCT-BRIEF.md` §21, `docs/discussion/report.md` §1 |
-| Для кого | Студент (дивиться, читає транскрипт, **коментує момент відео й відповідає**), адміністратор/автор (курси, акаунти, правка чернетки транскрипту, **модерація коментарів курсу через робоче місце інструктора `/teach`**) | `AGENTS.md` §Scope, `docs/instructor/spec.md`, `PRODUCT-BRIEF.md` §24.3 |
+| Що це | Платформа онлайн-курсів: публічний каталог, вхід, адмінське керування курсами, вивантаження відео, відтворення з прогресом, транскрипт, гілки коментарів, робоче місце інструктора, **разова покупка курсу з видачею права на перегляд** | `work/PRODUCT-BRIEF.md` §21, `docs/payment/plan.md` |
+| Для кого | Студент (дивиться, читає транскрипт, коментує, **купує платний курс, бачить стан замовлення**), адміністратор/автор (курси, акаунти, модерація, **ціна курсу й прев'ю-уроки, ручна видача права**) | `AGENTS.md` §Scope, `docs/payment/assumptions.md` |
 | Формат постачання | Compose-стек: `api`, `frontend` (SSR), `media-worker`, `upload`, `asr-worker`, `nginx`, `postgres`, `redis` | `docker-compose.yml`, `backend/cmd/` |
-| Що працює й **виміряно** | Плеєр, навчальна поверхня, зміст курсу, позначки переглянутого, прогрес, витіснення сесій, транскрипт (читання/пошук/`?t=`/WebVTT/`<track>`/редактор/бібліотека), ASR-чернетка (22/22), **гілки коментарів (Phase 7b, 79/79 e2e): корінь із міткою часу, пласкі відповіді (cap 200), перемотка кліком по мітці, модерація автором/власником/адміном**; **робоче місце інструктора (W01–W26, 87/87 e2e): огляд коментарів усього курсу, репорти студентів, черга модерації, dismiss, removed_by + журнал** | `docs/playback/report.md`, `docs/transcript/report.md`, `docs/asr/report.md`, `docs/discussion/report.md`, `docs/instructor/report.md` |
-| Чого **немає** | Оплат, замовлень, enrollment, другого мовного контенту, продакшн-розгортання. (Гілки коментарів `7b` і робоче місце інструктора — **тепер є**.) | `docs/instructor/report.md` §5, `docs/playback/report.md` §6 |
-| Активний P0 | **Оплата** (остання й ЄДИНА фаза, що лишилась, §24.21). Перед нею фаз роадмапу більше немає; модель ухвалена — людської розвилки немає | `PRODUCT-BRIEF.md` §24 п.21/п.22, `work/AGENDA.md` |
-| Порядок фаз далі | 7a ✓ · 8 ✓ · 9 ✓ · **7b ✓** · **робоче місце інструктора ✓** → **оплата** (остання, лишилась одна). Борги принагідно: B-22, B-21, B-18, B-23 | `PRODUCT-BRIEF.md` §24; `work/AGENDA.md` |
-| Discussion, реалізовано | Домен: тіло trim 1..2000, мітка лише в кореня в `0..тривалість` (інакше `comment_position_invalid`), пласка відповідь до не-прибраного кореня того ж уроку (cap 200 → `comment_thread_full`). HTTP: 4 операції (`GET/POST /learn/lessons/{}/comments`, `PATCH/DELETE /learn/comments/{}`), `sameOrigin` на записах, можливості `canEdit`/`canRemove` рахує сервер. Фронт: панель поряд із транскриптом на Orval, мітка → `onSeek`, `useInfiniteQuery` | `backend/internal/discussion/**`, `docs/discussion/report.md` §2 |
-| Instructor workspace, реалізовано | Розширення `discussion` (не новий модуль): `ModerationRepository` (CourseFacts, ListByCourse, InsertReport ON CONFLICT, DismissReports, ListQueue), `removed_by`+журнал (`discussion_moderation_log`), репорти (`discussion_comment_reports`, unique `(comment,reporter)`, `dismissed_at`). HTTP: `POST /learn/comments/{}/reports` + `RegisterTeach` (`GET /teach/courses/{}/comments`, `.../moderation-queue`, `POST /teach/comments/{}/dismiss-report`); прибрання переюзує 7b `DELETE`. Фронт: `/teach` (guard instructor|admin), огляд+черга, кнопка «Поскаржитись». Черга = відкриті скарги, `removed_at IS NULL`; порядок count DESC | `backend/internal/discussion/**`, `frontend/src/routes/teach*`, `docs/instructor/report.md` §2 |
-| **Модель оплати — УХВАЛЕНА** (не розвилка) | 2026-09-28 (§24 п.22, `86fec52`): разова покупка → grant на курс (не підписка), один провайдер (перший і єдиний адаптер), одна валюта, без повернень у MVP. **Відкрите лише spec-рівня:** конкретний провайдер і валюта — перші питання самої спеки оплати | `PRODUCT-BRIEF.md` §24 п.22, `docs/readiness/spec.md` §5 |
-| Юрисдикція провайдера | ⚠️ **неперевірено:** чи обслуговує запропонований провайдер (Stripe звучав як приклад) юрисдикцію продавця — перше питання спеки оплати, тут не прийняте | `PRODUCT-BRIEF.md` §24 п.22 |
+| Що працює й **виміряно** | Плеєр, навчальна поверхня, прогрес, транскрипт, ASR-чернетка, гілки коментарів, робоче місце інструктора — усе без змін із попередньої редакції (деталі § нижче, не повторено тут). **Нове, оплата:** контракт доступу з ціною/правом/прев'ю (O01, unit+property), модуль `orders` (O02, unit), 6 SQL-читань права (O03, integration), старт/статус покупки + адмін-видача + grandfathering (O04, contract+integration), фронт каталогу/уроку/адмінки з ціною й «Купити» (O05, 88/88 e2e), **бекенд WayForPay: checkout-форма, підписаний callback, CHECK_STATUS** (O06a, пройшло рев'ю, гонку даних у статусі закрито) | `docs/payment/plan.md`, `work/review-o0{1..6a}*.md` |
+| Чого **ще немає** | Повна фаза оплати (O06b фронт-чекаут, O06c e2e через реальний sandbox, O07 звіт+закриття), рейтинги й відгуки, enrollment поза грантом, продакшн-розгортання | `docs/payment/plan.md` §Зрізи, `docs/ratings/spec.md` |
+| Активний P0 | **Оплата, зрізи O06b/O06c/O07** (остання фаза роадмапу, §24.21) | `work/tasks.md:259-260`, `work/AGENDA.md` |
+| Порядок фаз далі | 7a ✓ · 8 ✓ · 9 ✓ · 7b ✓ · робоче місце інструктора ✓ · **оплата O01–O06a ✓, O06b/O06c/O07 в роботі** → (наступна, ще не почата) **рейтинги й відгуки** | `PRODUCT-BRIEF.md` §24; `docs/ratings/spec.md` |
+| Модель оплати (ухвалена, §24.22) | Разова покупка → безстроковий grant на курс (не підписка); один провайдер-адаптер; одна валюта (UAH); без повернень у MVP | `PRODUCT-BRIEF.md` §24 п.22, `docs/payment/assumptions.md` |
+| Провайдер (ухвалено 2026-10-01) | **WayForPay** зараз (hosted redirect, підписаний callback, UAH); **IBAN+NBU QR** пізніше (ручне підтвердження адміном спершу, автоматичне через monobank-вебхук — окремий крок); **Paddle** як другий провайдер для ЄС (Merchant of Record, VAT) пізніше. Закриті альтернативи: LiqPay/Portmone/Fondy (Fondy — ризик: NBU 2024 скасував реєстрацію укр. юрособи), Stripe (не онбордить Україну напряму), Paddle як перший провайдер (UAH є, але ~6% комісія, виплати лише в USD/EUR/GBP/AUD/CAD) | `docs/payment/provider-research.md` §Decision, §Recommendation |
+| Правило доступу (A1/ADR 014) | `CanView = admin ∨ owner ∨ entitled ∨ (published ∧ (¬paid ∨ preview))`; `PurchaseRequired` — спільний предикат відмови (A6) | `backend/internal/contracts/access/access.go:20-30` |
+| Grandfathering (A7) | Коли автор уперше ставить курсу ціну, усі студенти з playback-прогресом на курсі дістають активний grant `source=grandfather` в одній транзакції з `UPDATE courses SET price_minor` | `docs/payment/plan.md` A7, `docs/payment/assumptions.md` |
+| Дефект, знайдений і закритий 2026-10-01 | Навчальна сторінка платного курсу брала `Preview` лише з ПЕРШОГО рядка SQL (перший урок першого модуля) — платний курс із прев'ю не на першому уроці повністю відмовляв `course_purchase_required`, прев'ю ставало недосяжним. Рішення власника: нелогінований-без-права бачить **всю структуру** курсу, кожен урок має власний `locked`-прапор | `docs/payment/assumptions.md` «The learning outline of a paid course» |
+| Дефект, знайдений і закритий 2026-10-01 | Запит навчальної сторінки ніколи не читав `price_minor`/`currency` — ціна завжди була `null`, доки покупка-панель це не виявила; виправлено мапінгом через `domain.NewCourse` | `docs/payment/assumptions.md` «The learning course never carried its price» |
+| Дизайн-прохід (2026-09-30…10-01) | Редизайн-вирівнювання клієнта й адмінки під зовнішній мокап (shadcn/Tailwind-вигляд, **не** порт залежностей — заборонено AGENTS.md); слайси D-a (токени/примітиви) → D-b (сторінка каталогу: hero, картки з ціною/рейтингом) → D-c (урок) → D-d (адмінка, темний ops-дашборд-стиль на реальному контенті курсів/модерації, не фейкові ops-віджети) | `docs/design/portal-redesign.md` |
+| Рейтинги й відгуки (чернетка, не почато) | R1 оцінює лише студент, що почав курс; R2 Steam-подібний % прогресу на момент відгуку; R3 1–5 зірок+текст, модерація через робоче місце інструктора; R4 поріг показу — 3 оцінки («Новий курс» до того); R5 — після оплати (O05–O07) | `docs/ratings/spec.md` |
+| Юрисдикція провайдера | Закрито: WayForPay обслуговує Україну зараз, провайдер-незалежний домен не блокується вибором (A4); ЄС — окремий адаптер пізніше (Paddle) | `docs/payment/provider-research.md` |
+| Архівний курс і рейтинги | ⚠️ **неперевірено:** чернетка `docs/ratings/spec.md` лишає це відкритим питанням GATE 1, ще не вирішено | `docs/ratings/spec.md` §Open questions п.1 |
 
 ## 3. Кодова база й seams
 
-Модулі бекенду (`backend/internal/`): **шість** доменних — `course`, `discussion`, `identity`,
-`media`, `playback`, `transcript` — плюс `testsupport` (тестовий пакет, **без** шарів) і
-крос-модульний шар `contracts/` (ADR 013): domain-safe типи + чисті функції, лише stdlib, жодного
-I/O й імпорту модуля; домен **може** його імпортувати, модуль модуль — ні. Кожен доменний тримає
-`domain` / `application` / `ports` / `adapters`, залежності дивляться **всередину**. П'ять
-виконуваних файлів: `api`, `media-worker`, `upload`, `asr-worker`, `migrate` (`backend/cmd/`).
+Модулі бекенду (`backend/internal/`): **сім** доменних — `course`, `discussion`, `identity`,
+`media`, **`orders`** (новий), `playback`, `transcript` — плюс `testsupport` і крос-модульний шар
+`contracts/` (ADR 013, доповнений 014). Кожен доменний тримає `domain`/`application`/`ports`/`adapters`,
+залежності дивляться всередину. П'ять виконуваних файлів без змін (`backend/cmd/`).
 
 | Межа | Що її перетинає | Джерело |
 |---|---|---|
-| **nginx ↔ playback** — несучий шов Phase 6 | Байти медіа віддає nginx, Go їх ніколи не пропускає; `auth_request` на кожен плейлист/сегмент | `infrastructure/nginx/nginx.conf:55-86` |
-| Права на дереві медіа | Транскодер пише `0750`/`0640`; nginx читає за групою | `AGENTS.md` §Architecture |
-| api ↔ media-worker ↔ asr-worker | Три виконувані файли, спільна черга Asynq/Redis, різні `queue`-імена (`media`, `asr`), обидва в метриці `courses_queue_depth`; `media-data` монтують лише воркери, назовні байти віддає nginx | `backend/cmd/asr-worker/main.go:14-17`, `docker-compose.yml` |
-| **Новий модуль `discussion` (Phase 7b)** | Повний доменний модуль: `discussion/domain` (правила тіла/мітки/відповіді/дозволів), `application`, `ports`, `adapters/{postgres,http}`. Постгрес-адаптер — ручний SQL (не sqlc), список курсором, атомарний cap відповідей. Читає факти курсу за `lessonId` своїм SQL і маплить у контракт доступу | `backend/internal/discussion/**`, `docs/discussion/report.md` |
-| **Міграція `00009_discussion.sql`** | FK з `ON DELETE CASCADE` від уроку; keyset-індекси `(lesson_id, created_at DESC, id DESC)` для коренів і `(parent_id, created_at, id)` для відповідей; `body IS NOT NULL` (дефект: живий коментар із NULL-тілом проходив CHECK — знято рев'ю міграції) | `backend/migrations/00009_discussion.sql`, `docs/discussion/report.md` §3 |
-| **Comment-ендпоінти в OpenAPI/Orval** | 4 операції (`listLessonComments`, `publishLessonComment`, `updateLessonComment`, `removeLessonComment`) в `openapi.yaml`; фронт читає їх через Orval, `check-generated` у ланцюгу гейта | `backend/openapi/openapi.yaml`, `frontend/orval.config.ts` |
-| **Робоче місце інструктора — розширення `discussion`, не новий модуль** | `ModerationRepository` (окремий порт), `moderation.go` (ручний SQL: course-facts, ListByCourse keyset, reports ON CONFLICT, dismiss, queue), міграція `00010` (`removed_by`+CHECK, `discussion_comment_reports`, `discussion_moderation_log`), teach+report операції в OpenAPI/Orval, поверхня `/teach`. Ownership лишається читанням `courses.instructor_id` **всередині** discussion — пінить architecture-тест `discussion` не імпортує `course` (`platform/architecture/discussion_ownership_test.go`) | `backend/internal/discussion/**`, `backend/migrations/00010_instructor_moderation.sql`, `docs/instructor/report.md` |
-| **Правило доступу — один контракт, ЧОТИРИ мапінги (ADR 013 + 7b)** | `contracts/access.CanView` — чиста функція; `course`/`playback`/`transcript`/`discussion` маплять свої типи через `CanBeViewedBy` (тіло = рівно `return access.CanView(…)`, AST-тест `expectedMethods=4`); усі чотири згодні на таблиці (`shared_rules_test.go:53` гілка `viaDiscussion`) | `backend/internal/contracts/access/access.go`, `platform/architecture/access_mapping_ast_test.go` |
-| **Машинний автор ASR обходить `CanBeEditedBy`** | `recognize.go` (воркер-шлях) пише без акторської перевірки; HTTP-записи її проходять; конкурентність ловить оптимістичний замок | §1 факт №3 |
-| **Тестова фікстура доступу не на прод-шляху** | `contracts/access/accesstest` імпортується лише `_test.go`; architecture-тест відмовляє прод-імпорт | `platform/architecture/access_fixture_isolation_test.go` |
-| Клієнт ↔ сервер | Orval-моделі лишаються в адаптерах, явний мапінг у доменні сутності (в т.ч. новий `discussion` і — після B-20 — `draft-repository.ts` на `./generated/courses`) | `frontend/src/adapters/api/generated`, `AGENTS.md` §Architecture |
-| **`course` ↔ `playback` ↔ `discussion`: одна межа позиції в кількох доменах** | Обмеження позиції тривалістю `ready`-ассета: `course`/`playback` кламплять, `discussion` відхиляє; крос-тест тримає межі збіжними | `learning.go:23-33`, `progress.go:60-66`, §1 факт №1 |
-| **Плеєр ↔ елемент `<video>`** | Callback-ref, ефект медіа залежить від змонтованого елемента | `LessonPlayer.tsx:48-52,226-257,423` |
-| Дві гілки відтворення | `Hls.isSupported()` перший; нативна гілка в CI недосяжна, справжній Safari не ганяли | `hls-media.ts:81` |
-| Документи курсу — окрема бібліотека | Репліка несе `documentId`, бібліотека їде раз на курс (вкладені давали 75.8 проти 12.8 MiB) | `docs/transcript/report.md` §4 п.1 |
-| Гейт «логи без URI» | AST-тест Go-половини + хостовий скан nginx-конфігу | `backend/platform/architecture/safe_request_logs_test.go` |
+| **nginx ↔ playback** — несучий шов Phase 6 | Байти медіа віддає nginx, `auth_request` на кожен плейлист/сегмент; оплата не змінила цей шов, лише додала join на право в `loadVideoCourse` (найгарячіший з 6 запитів) | `infrastructure/nginx/nginx.conf:55-86`, `docs/payment/plan.md` §«Де ляже join» #2 |
+| **Новий модуль `orders` (O01–O06a)** | Повний доменний модуль: `domain` (Money/Order/Grant/PaymentEvent/errors), `application/service.go` (StartPurchase, PurchaseStatus, ApplyPaymentEvent), `ports` (provider.go, repository.go), `adapters/{http,postgres,wayforpay}`. Інші модулі читають `course_grants` SQL-ом, не імпортують `orders`; `orders` не імпортує жоден модуль | `backend/internal/orders/**`, `docs/payment/plan.md` A2 |
+| **Контракт доступу — 5 фактів, 4 мапінги (ADR 013+014)** | `contracts/access.CanView`/`PurchaseRequired` — чисті функції, лише stdlib; `course`/`playback`/`transcript`/`discussion` маплять свої факти через `CanBeViewedBy` = `return access.CanView(…)`; AST-тест `expectedMethods=4` незмінний (оплата не додала п'ятого мапінгу — `orders` сам не вирішує видимість, лише постачає факт `Entitled` через SQL) | `backend/internal/contracts/access/access.go`, `platform/architecture/access_mapping_ast_test.go` |
+| **Провайдерний порт з'явився з першим адаптером (A4)** | `orders/ports/provider.go` (Checkout, OrderStatus) + `orders/adapters/wayforpay` (HMAC_MD5-підпис форми й callback, CHECK_STATUS) — стандартна бібліотека, жодної платіжної SDK | `backend/internal/orders/ports/provider.go`, `backend/internal/orders/adapters/wayforpay/wayforpay.go` |
+| **Callback-ендпоінт — неавтентифікована поверхня** | `POST /api/v1/payments/wayforpay/callback` без сесії й без `sameOrigin`; авторизує лише підпис; невідоме замовлення → не термінальна відмова (503, ретрай), а не reject (Pay21b) | `docs/payment/plan.md` §Side-effects; `work/brief-codex-o06a-wayforpay-backend.md` |
+| **Міграція `00011_payment.sql`** | `courses.price_minor`/`currency` (NULL=безкоштовний), `course_lessons.is_preview`, нові таблиці `orders`, `course_grants` (частковий UNIQUE на активне право), `payment_events` (UNIQUE provider+event_id), `grant_audit`; без каскадів на видалення курсу/користувача (фінансовий слід) | `docs/payment/plan.md` §План міграції |
+| **Ціна/замовлення-ендпоінти в OpenAPI/Orval** | Каталог несе `price`/`paid`; нові операції старту покупки, статусу, адмін-видачі, чекауту; `check-generated` у ланцюгу гейта | `backend/openapi/openapi.yaml`, `frontend/orval.config.ts` |
+| Правило доступу у решти модулів | `course`/`playback`/`transcript`/`discussion` незмінні щодо своєї структури; лише 4 з 6 їхніх SQL-запитів навчились джойнити `course_grants` і читати `price_minor`/`is_preview` (O03) | `docs/payment/plan.md` §«Де ляже join» (6 запитів у 5 файлах) |
+| **Машинний автор ASR обходить `CanBeEditedBy`** | Без змін із попередньої редакції — §1 факт №3 | `recognize.go` |
+| Клієнт ↔ сервер | Orval-моделі в адаптерах, явний мапінг; новий `orders`-адаптер фронту (`routes/orders.$orderId.tsx`, `OrderStatusView`, `LockedLessonPanel`) | `frontend/src/routes/orders.$orderId.tsx`, `AGENTS.md` §Architecture |
+| **Дизайн-токени — друга денситність на тій самій системі** | `D-a` додав pill-badge, icon-tile, floating-card+glow, stat-row, segmented control, load-meter, delta-pill, sidebar-nav, mono-identifier — спільні токени для «повітряного» сторфронту й «щільної» адмінки; без Tailwind/shadcn/Radix (заборонено) | `docs/design/portal-redesign.md`, `frontend/src/presentation/ui/*` |
+| Гейт «логи без URI» | Без змін; оплата додала правило «ключі провайдера лише env, ніколи в логах» як продовження того ж принципу | `backend/platform/architecture/safe_request_logs_test.go`, `docs/payment/plan.md` §Конституція |
+| Дві гілки відтворення | Без змін | `hls-media.ts:81` |
 
-ADR, обов'язкові перед відповідними шарами: `006` transcript model, `010` предикат доступу,
-`011` володіння й витіснення, `012` що означає 403, **`013` одне правило доступу як контракт
-(перед будь-якою зміною доступу — включно з 4-м мапінгом `discussion` — і спекою оплати)**.
+ADR, обов'язкові перед відповідними шарами: `006` transcript model, `010` предикат доступу, `011`
+володіння й витіснення, `012` що означає 403, `013` одне правило доступу як контракт,
+**`014` контракт доступу знає платність/право/прев'ю (доповнює 013) — перед будь-якою подальшою
+зміною доступу й перед спекою рейтингів**.
 
 ## 4. Інфра й доставка
 
 | Питання | Відповідь | Джерело |
 |---|---|---|
-| Гейти, у порядку | `format-check`, `lint`, `typecheck`, `test`, `integration`, `check-generated`, `build`, `up`, `drain-queue`, `seed-identities`, `seed`, `smoke`, `e2e` | `Makefile:83` (`check:`) |
+| Гейти, у порядку | `format-check`, `lint`, `typecheck`, `test`, `integration`, `check-generated`, `build`, `up`, `drain-queue`, `seed-identities`, `seed`, `smoke`, `e2e` — без змін | `Makefile:83` (`check:`) |
 | CI жене те саме | Так | `.github/workflows/ci.yml` |
-| Гейт робочого місця інструктора (закриття) | `make check` exit 0 на `2c0d29f`: backend 0 FAIL, frontend **505**, e2e **87/87** (11.4 хв, +8 instructor-рядків, повна регресія); включає gap-тести W10/W12/W13/W15/W17/W19/W20/W26 | `docs/instructor/report.md` §4 |
-| Гейт Phase 7b (закриття) | `make check` exit 0: backend 501/0, e2e **79/79**, B39 (B-23) ✓ | `docs/discussion/report.md` §4 |
-| Гейт Phase 9 / Phase 8 | R01–R12 `CHECK_EXIT=0` (483 фронт, e2e 75/75); ASR 22/22 (482 фронт, e2e 74/74) | `docs/readiness/report.md`, `docs/asr/report.md` §5 |
-| Пастка `check-generated` | Порівнює з **індексом**; незастейджена перегенерація дає хибний червоний | `Makefile:59-61` |
-| **Пастка docker (гейт)** | `credsStore: desktop` у `~/.docker/config.json` вішає гейт на `load metadata` (`docker-credential-desktop`). Обхід: temp `DOCKER_CONFIG` = симлінки на `~/.docker/*` + `config.json` **без** `credsStore`; порожній `{}` ламає `docker compose` (CLI-плагін у `~/.docker/cli-plugins`) | пам'ять `docker-credential-helper-hang`; гейт 7b D06 |
-| `.asr-assets/` | Стенд заміру ASR (8.7 GiB), не фікстури гейту, у `.gitignore` | `docs/asr/plan.md` §6 |
+| Гейт O05 (фронт покупки, 2026-10-01) | Ordered `make check` exit 0: rstest **520/520**, e2e **88/88** (87+`purchase.spec.ts`); окремий прогін після 200%-зум фіксу знову зелений | `work/review-o05-purchase-ui.md` §Gate result |
+| Гейт O05 slice 3 (адмін ціна/гранти) | Rstest/e2e без регресії; ComboBox a11y добре, 1 nb (loading-vs-empty SR-оголошення) | `work/review-o05-grant-ui.md` |
+| Гейт O06a (бекенд WayForPay) | `make generate format-check lint typecheck test integration` exit 0 (реальний Docker Postgres); **e2e НЕ прогнано** (відкладено на O06c); 1 BLOCKING (гонка даних на `statusAt`) знайдено й закрито раундом 5 | `work/review-o06a-wayforpay-backend.md` |
+| Два відкриті тестові флейки (нові, O05) | **R23** (`playback.spec.ts`, heartbeat 403): раз упав, 9 залежних не побігли; ізольований пересів 84/84 зелений; наступний повний гейт 88/88 без повтору; механізм звужено до `loadViewablePlayback` або `sameOrigin`-перевірки, непідтверджено. **`TestAdministrationRepositoryAgainstPostgreSQL`** (identity, пакет не чіпано слайсом O05): раз упав під час integration O05 slice2, 2 пересіви зелені, текст помилки не збережено — підозра на спільний стан БД/порядок тестів | `work/review-o05-grant-ui.md` (кінець), `work/review-o05-purchase-ui.md` (кінець) |
+| Пастка `check-generated` | Без змін — порівнює з індексом | `Makefile:59-61` |
+| Пастка docker (гейт) | Без змін | пам'ять `docker-credential-helper-hang` |
 | Розгортання | Немає, не заявлено | `AGENTS.md` §Scope |
-| Якорі боргу в коді | 0 `TODO`/`FIXME`/`ponytail:`/безумовних скіпів; 1 умовний `t.Skipf` (гард ffmpeg, не борг) | `grep -rn 't\.Skip' backend` |
-| Трекер issues | `gh issue list` порожньо, репо `b2vv/courses` | попередній прогін |
-| Брудне дерево після гейта | Гейт переписує два відслідковувані скриншоти `docs/foundation/screenshots/` — B-18; не комітять | `work/backlog.md` §B-18 |
+| Якорі боргу в коді | Без змін (0 TODO/FIXME/ponytail:, 1 умовний ffmpeg-skip) | `grep -rn 't\.Skip' backend` |
+| Брудне дерево після гейта | Без змін — B-18 | `work/backlog.md` §B-18 |
 
 ## 5. Залежності
 
-Перечитано проти `frontend/package.json` і `backend/go.mod` — **жодна версія не змінилась** з
-попередньої редакції (`git log ba5279a..HEAD` по обох файлах — порожньо). 7b нових залежностей не
-додав: використав наявні pgx, Orval, TanStack Query (`useInfiniteQuery`), Playwright.
+Перечитано проти `frontend/package.json` і `backend/go.mod` (`git diff 2c0d29f..HEAD`). Go-залежності
+без змін. Фронт додав **два шрифти** для дизайн-проходу; інших нових runtime-залежностей немає —
+оплата й `orders` використали наявні (pgx, Orval, TanStack Query, Playwright), WayForPay-підпис —
+стандартна бібліотека Go (`crypto/hmac`, `crypto/md5`).
 
 | Що | Версія | Чому важлива |
 |---|---|---|
 | Go | 1.27.1 | `backend/go.mod:3` |
+| **`@fontsource-variable/inter`** (нове) | ^5.3.0 | Дизайн-прохід D-a, `frontend/package.json` |
+| **`@fontsource-variable/space-grotesk`** (нове) | ^5.3.0 | Дизайн-прохід D-a, комміт `7132565` |
 | hls.js | 1.7.2 | ABR увімкнено, `startLevel` не задано |
 | React | 19.2.7 | |
-| TanStack Router / Query | 1.170.32 / 5.102.8 | Query-кеш request-scoped; `useInfiniteQuery` у панелі discussion |
-| React Aria Components | 1.21.0 | джерело єдиного лишеного axe `incomplete` |
-| Rsbuild / Rstest | 2.2.2 / 0.11.11 | не Vite, не Vitest |
-| Playwright | 1.62.1 | `workers: 1`, `fullyParallel: false` |
+| TanStack Router / Query | 1.170.32 / 5.102.8 | Query-кеш request-scoped; `useInfiniteQuery`, замовлення інвалідують outline |
+| React Aria Components | 1.21.0 | |
+| Rsbuild / Rstest | 2.2.2 / 0.11.11 | |
+| Playwright | 1.62.1 | `workers: 1`, `fullyParallel: false`; також рушій нового `frontend/tools/visual-compare` |
 | axe-core | 4.13.0 | |
 | MSW | 2.15.0 | |
-| faster-whisper (Python, у `asr-worker`-образі) | — | рушій ASR, підпроцес; заборона Python-рантайму стосується foundation slice (§24.19) |
-| Silero VAD | — | замінив зламаний `no_speech_prob`-поріг |
+| faster-whisper / Silero VAD | — | без змін |
 
-Заборонене явно: Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn, Rust,
-ORM, service locator.
+Заборонене явно: Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn, Tailwind
+(дизайн-прохід бере лише вигляд мокапу на shadcn/Tailwind, не залежність), Rust, ORM, service locator.
 
 ## 6. Ризики
 
-Ризики цього прогону — межі робочого місця інструктора (`docs/instructor/report.md` §5), перенесені
-в продукт, не «закриті»:
-- **Блокування авторів по-курсно — відкладено до enrollment** (§24 п.8): без enrollment немає
-  per-course суб'єкта блокування. Модерація фази — на рівні коментарів, не авторів.
-- **Огляд навчання (студенти з прогресом) — поза фазою**: без enrollment «студент курсу»
-  напівозначений; ядро фази — модерація.
-- **Прибрання лишається безповоротним**; фаза додала лише слід (`removed_by` + журнал для actor≠author),
-  «оживлення» немає, аудит мінімальний (reason лише на dismiss).
-- **Per-user ліміту репортів/публікацій немає** — лише nginx `zone=api` за IP; ідемпотентність
-  репорту за UNIQUE.
-- **Урок процесу:** незалежна звірка доказів W01–W26 знайшла 8 рядків без тесту / лише з доменним
-  правилом попри зелений агрегат — закрито gap-тестами. «Зелений гейт ≠ доказ рядка» справдилось знову.
+Нові ризики цього прогону (оплата, O05/O06a):
 
-Ризики, **знято раніше:** `B-20` (контракт чернетки поза OpenAPI) — закрито `e8c238d`. **Модель оплати**
-перестала бути відкритою розвилкою (ухвалена, §24.22). Нижче — раніші відкриті ризики.
+1. **R23 — heartbeat 403, механізм не встановлено.** `playback.spec.ts` раз відповів 403 на
+   `POST /…/playback/heartbeat`, де очікувався 200; ізольований пересів і наступний повний гейт
+   (88/88) пройшли чисто. Звужено до двох джерел — правило доступу в `loadViewablePlayback`
+   (`playback_forbidden`/`course_purchase_required`) або `sameOrigin`-перевірка — непідтверджено;
+   неавтентифікований шлях виключено (`normalizeAuthenticationDenial` огортає лише
+   `GET /internal/playback/authorize`, не heartbeat). Наступного разу — зберігати тіло відповіді й
+   лог API (`work/review-o05-grant-ui.md`).
+2. **`TestAdministrationRepositoryAgainstPostgreSQL` — одноразовий фейл, пакет identity не чіпано.**
+   Два пересіви зелені, текст помилки втрачено; підозра на спільний стан БД/порядок паралельних
+   тестів, не на зміни O05 (`work/review-o05-purchase-ui.md`).
+3. **Провайдерна поверхня — callback без автентифікації (прийнято, не дефект).** `POST
+   /api/v1/payments/wayforpay/callback` авторизує лише підпис; `zone=api` nginx-ліміт і тіло-ліміт —
+   єдиний захист від зловживання до підпису (`docs/payment/plan.md` §Side-effects).
+4. **Фаза оплати відкрита до O07.** Доки O06b/O06c/O07 не закриті, «оплата» в продукті — не доведена
+   production-шляхом; sandbox-доказ (tunnel-прогін cloudflared) ще належить зробити
+   (`docs/payment/assumptions.md` «How O06 proves a full purchase»).
 
-1. **Нативна гілка HLS недоведена (D-9).** Потрібен справжній Safari; жодна фаза не закрила
-   (`docs/playback/report.md` §6, `docs/asr/report.md` §6).
-2. **Стеля 5000 реплік не заміряна під навантаженням** (`docs/transcript/report.md` §6 п.2).
-3. **Другий мовний контент не наповнюється** — ключ їде, вміст одна мова.
-4. **GATE 2 плану `7a` не зійшовся** — 9 знахідок третього раунду перенесені, не закриті.
-5. **Борг «дві паралельні 9-кейсові таблиці істинності».** `course`/`playback` домен-юніти ганяють
-   `internal/testsupport/coursevisibility` `Cases()`, а `contracts/access` + адаптери + новий
-   `discussion` (K04) — `accesstest.TruthTable`. Дрейф ловиться (усі проти того самого `CanView`,
-   R04 = одна реалізація), але наратив «одна таблиця» цього не покриває; `transcript`-домен
-   табличного тесту `CanBeViewedBy` не має (`transcript_test.go:182` — одиничний assert). Прибирання
-   дубля — окрема задача (`docs/readiness/report.md` §7).
-6. **Межі Phase 7b (перенесені в продукт, не закриті)** — `docs/discussion/report.md` §5:
-   прибирання коментаря **безповоротне й без `removed_by`** (сказано замовнику); **per-user ліміту
-   публікацій немає** — лише nginx `zone=api` 10 r/s за IP (`nginx.conf:21,117`), кілька акаунтів з
-   NAT проходять; **пагінації відповідей немає** — корінь віддається повністю під cap 200 (≈400K
-   символів у найгіршому `GET`); `display_name` видно всім глядачам курсу. Усе — робоче місце
-   інструктора.
-7. **`B-22` (беклог, 2026-09-29, нове).** Копії селектора «поточне відео» поза `discussion`:
-   гейт-тест K09a пінить лише копію в `discussion`; решта тримаються коментарями. Кандидат на злиття
-   в один шов (`work/backlog.md` §B-22).
-8. **`B-23` (беклог, 2026-09-29, відкрите — моніторинг).** e2e `B39` (`playback.spec.ts`) раз упав
-   у повному гейті; механізм не знайдено. Після цього — **шість чистих точок поспіль** у повному
-   гейті (D05, D06 та раніші), але за таким N падіння не атрибутують. Спосіб перевірки при повторі —
-   лише A/B **повними** гейтами (ізоляція не розрізняє гіпотез); окремий e2e пересівати перед кожним
-   прогоном (`work/backlog.md` §B-23, пам'ять `e2e-isolated-rerun-needs-reseed`).
-9. **Межі ASR** (`docs/asr/report.md` §7): integration C14 бере 500 мс дедлайн, не справжній
-   `TaskTimeout`; автопостановку не видно без reload; C01/C07 доведено частинами.
-10. **`B-18` (беклог).** Упорядкований гейт лишає дерево брудним на відслідковуваних скриншотах
-    навіть без змін (`work/backlog.md` §B-18).
-11. **`B-19` (беклог).** Ранг 360p упирається в `maxrate 365k` — продуктове питання драбини
-    бітрейтів, не дефект (`work/backlog.md` §B-19).
-12. **`B-21` (беклог).** Читання транскрипту без мови бере перший за алфавітом
-    (`repository.go:40-44`); єдиний відомий шлях до другого закрито в A13, ризик латентний.
-13. **Успадковані Phase 6 обмеження:** B25 виміряний над порожнім `<video>`; R35 лише крок ABR на
-    синтетичному каналі; каденція володіння 2/6 проти 30/180; P12 без дротового тесту; одна
-    аудіодоріжка без AV1.
-14. **`S01`/`S02`** — заблоковані на TLS-термінації (`work/tasks.md:36-37`); **`B-1`** —
-    спостережуваність фронту, відкладена на кінець роадмапу.
-15. ⚠️ **неперевірено:** чи витримає `limit_req zone=media rate=120r/s burst=240` реальний профіль
-    сегментного трафіку при кількох глядачах з одного NAT. Навантажувального заміру в репо немає.
+Ризики, перенесені без змін (детальний виклад — попередня редакція, не дублюється тут):
+5. Нативна гілка HLS недоведена (D-9). 6. Стеля 5000 реплік не заміряна під навантаженням.
+7. Другий мовний контент не наповнюється. 8. GATE 2 плану `7a` не зійшовся (9 знахідок третього
+раунду). 9. Дві паралельні 9-кейсові таблиці істинності (`coursevisibility.Cases()` vs
+`accesstest.TruthTable`) — дубль не закрито. 10. Межі Phase 7b (безповоротне прибрання коментаря,
+без per-user ліміту публікацій, без пагінації відповідей). 11. `B-22` копії селектора «поточне
+відео». 12. `B-23` одноразовий `playback.spec.ts` фейл (окремий від R23 цього прогону — старіший,
+шість чистих прогонів після нього). 13. Межі ASR (integration C14 500мс не справжній таймаут).
+14. `B-18` брудне дерево скриншотів. 15. `B-19` ранг 360p. 16. `B-21` читання транскрипту без мови.
+17. Успадковані Phase 6 обмеження. 18. `S01`/`S02` заблоковані на TLS; `B-1` спостережуваність
+фронту. 19. ⚠️ `limit_req zone=media` під реальним NAT-профілем не заміряно.
+
+Джерела рядків 5–19: `docs/playback/report.md` §6, `docs/transcript/report.md` §6, `docs/asr/report.md`
+§6–7, `docs/discussion/report.md` §5, `docs/readiness/report.md` §7, `work/backlog.md`
+(B-18, B-19, B-21, B-22, B-23), `work/tasks.md:36-37`.
 
 ## 7. Що читати далі
 
-`AGENTS.md` — контракт репо. `work/AGENDA.md` — ранжування наступного ходу (перезібране слідом за
-цим брифінгом): наступне — **фаза оплати** (остання). **`docs/instructor/{spec,plan,report}.md` —
-робоче місце інструктора: W01–W26, розширення discussion модерацією, architecture-межа discussion→course.**
-**`docs/discussion/{spec,plan,report}.md` — Phase 7b: гілки коментарів, K01–K23.** `docs/readiness/{spec,plan,report}.md`
-— Phase 9: правило доступу як контракт, R01–R12, §5 — шви фази оплати. `docs/adr/013` — одне правило
-доступу (перед будь-якою зміною доступу й спекою оплати); `010`/`011`/`012`. `PRODUCT-BRIEF.md`
-§24 п.22 — ухвалена модель оплати. `work/backlog.md` — відкриті записи (B-18, B-19, B-21, B-22, B-23).
+`AGENTS.md` — контракт репо. `work/AGENDA.md` — ранжування наступного ходу: **O06b → O06c → O07**
+закривають фазу оплати; після неї — GATE 1 на `docs/ratings/spec.md`. `docs/payment/{spec,plan,
+assumptions,provider-research,iban-qr-research}.md` — уся фаза оплати, рішення A1–A7, провайдер.
+`docs/design/portal-redesign.md` — дизайн-прохід D-a…D-d. `docs/ratings/spec.md` — наступна
+(не почата) фаза. `docs/adr/014` — контракт доступу знає платність (доповнює 013); `010`/`011`/`012`/`013`.
+`PRODUCT-BRIEF.md` §24 п.21/п.22 — ухвалена модель оплати. `work/backlog.md` — відкриті записи
+(B-18, B-19, B-21, B-22, B-23) + два нові тестові флейки з цього прогону (§6 п.1–2, ще не заведені
+в backlog під номером — варто завести при наступному дотику).
