@@ -10,7 +10,7 @@ import {
   ProtectedRouteFailure,
   ProtectedRoutePending,
 } from '../presentation/identity/ProtectedRouteStates';
-import { OrderStatusView } from '../presentation/learn/OrderStatusView';
+import { OrderStatusView, submitCheckoutForm } from '../presentation/learn/OrderStatusView';
 
 export const Route = createFileRoute('/orders/$orderId')({
   ssr: false,
@@ -38,6 +38,7 @@ function OrderRoute() {
   const navigate = useNavigate();
   const order = useQuery(learn.purchase.status(orderId));
   const retry = useMutation(learn.purchase.start(queryClient));
+  const checkout = useMutation(learn.purchase.checkout());
   const paid = order.data?.status === 'paid';
 
   // A paid order changes the course outline: its lessons must unlock without a reload.
@@ -49,6 +50,7 @@ function OrderRoute() {
   const courseHref = slug === undefined ? '/courses' : `/learn/${slug}`;
   const loadError = errorCode(order.error);
   const retryError = errorCode(retry.error);
+  const checkoutError = errorCode(checkout.error);
   return (
     <OrderStatusView
       order={order.data}
@@ -68,6 +70,15 @@ function OrderRoute() {
                 search: slug === undefined ? {} : { course: slug },
               }),
           },
+        );
+      }}
+      isCheckingOut={checkout.isPending}
+      {...(checkoutError === undefined ? {} : { checkoutError })}
+      onCheckout={() => {
+        if (order.data === undefined || order.data.status !== 'pending') return;
+        checkout.mutate(
+          { orderId: order.data.id, courseSlug: slug },
+          { onSuccess: (form) => submitCheckoutForm(form) },
         );
       }}
     />

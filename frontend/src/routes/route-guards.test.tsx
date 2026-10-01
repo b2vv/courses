@@ -89,6 +89,7 @@ const server = setupServer(
 const purchaseStub: PurchaseRepository = {
   start: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
   status: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  checkout: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
 };
 const observedAdminQueries: AdminCourseQuery[] = [];
 const observedAdminUserQueries: AdminUserQuery[] = [];
@@ -1004,6 +1005,7 @@ function recordingPurchase(
         : { ok: true, value: order };
     },
     status: async () => ({ ok: true, value: status() }),
+    checkout: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
   };
 }
 

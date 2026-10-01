@@ -1,4 +1,4 @@
-import type { PurchaseOrder, PurchaseResult } from '../domain/purchase/purchase';
+import type { CheckoutForm, PurchaseOrder, PurchaseResult } from '../domain/purchase/purchase';
 
 export interface PurchaseRepository {
   /** Starts (or replays, for the same key) a purchase of a course. */
@@ -8,4 +8,9 @@ export interface PurchaseRepository {
     signal?: AbortSignal,
   ): Promise<PurchaseResult<PurchaseOrder>>;
   status(orderId: string, signal?: AbortSignal): Promise<PurchaseResult<PurchaseOrder>>;
+  checkout(
+    orderId: string,
+    courseSlug: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<PurchaseResult<CheckoutForm>>;
 }

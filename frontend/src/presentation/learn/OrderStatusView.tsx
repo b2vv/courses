@@ -1,5 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import type { PurchaseErrorCode, PurchaseOrder } from '../../domain/purchase/purchase';
+import type {
+  CheckoutForm,
+  PurchaseErrorCode,
+  PurchaseOrder,
+} from '../../domain/purchase/purchase';
 import { formatPrice } from '../format-price';
 import { Button, Link } from '../ui';
 import { purchaseErrorKey } from './LockedLessonPanel';
@@ -11,7 +15,27 @@ type OrderStatusViewProps = {
   readonly isRetrying: boolean;
   readonly retryError?: PurchaseErrorCode;
   readonly onRetry: () => void;
+  readonly isCheckingOut: boolean;
+  readonly checkoutError?: PurchaseErrorCode;
+  readonly onCheckout: () => void;
 };
+
+export function submitCheckoutForm(checkout: CheckoutForm): void {
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = checkout.action;
+  form.style.display = 'none';
+  for (const field of checkout.fields) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = field.name;
+    input.value = field.value;
+    form.append(input);
+  }
+  document.body.append(form);
+  if (typeof form.requestSubmit === 'function') form.requestSubmit();
+  else form.submit();
+}
 
 export function OrderStatusView({
   order,
@@ -20,6 +44,9 @@ export function OrderStatusView({
   isRetrying,
   retryError,
   onRetry,
+  isCheckingOut,
+  checkoutError,
+  onCheckout,
 }: OrderStatusViewProps) {
   const { t, i18n } = useTranslation();
   if (order === undefined) {
@@ -55,7 +82,17 @@ export function OrderStatusView({
         </div>
       )}
       {order.status === 'pending' && (
-        <Link href={courseHref}>{t('learn.purchase.backToCourse')}</Link>
+        <div className="order-status-actions">
+          <Button type="button" onPress={onCheckout} isDisabled={isCheckingOut}>
+            {isCheckingOut ? t('learn.purchase.redirecting') : t('learn.purchase.checkout')}
+          </Button>
+          <Link href={courseHref}>{t('learn.purchase.backToCourse')}</Link>
+        </div>
+      )}
+      {checkoutError !== undefined && (
+        <p className="locked-lesson-error" role="alert">
+          {t(`learn.purchase.errors.${purchaseErrorKey(checkoutError)}`)}
+        </p>
       )}
       {retryError !== undefined && (
         <p className="locked-lesson-error" role="alert">

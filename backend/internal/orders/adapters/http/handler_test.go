@@ -273,9 +273,12 @@ func (verifier *fakeCallbackVerifier) Acknowledge(orderReference string, now tim
 	return []byte(`{"orderReference":"` + orderReference + `","status":"accept","time":` + fmt.Sprint(now.Unix()) + `,"signature":"0123456789abcdef0123456789abcdef"}`)
 }
 
-type fakePaymentProvider struct{}
+type fakePaymentProvider struct {
+	lastURLs ports.CheckoutURLs
+}
 
-func (*fakePaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+func (provider *fakePaymentProvider) Checkout(_ context.Context, _ domain.Order, _ ports.Buyer, urls ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	provider.lastURLs = urls
 	return ports.CheckoutForm{Action: "https://secure.wayforpay.com/pay", Fields: []ports.CheckoutField{{Name: "merchantAccount", Value: "test"}}}, nil
 }
 func (*fakePaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
@@ -406,6 +409,35 @@ func TestCheckoutHTTPContract(t *testing.T) {
 				t.Fatalf("body=%s", response.Body.String())
 			}
 			assertContract(t, request, response)
+		})
+	}
+}
+
+func TestCheckoutReturnURLCarriesOnlyAValidCourseSlug(t *testing.T) {
+	provider := &fakePaymentProvider{}
+	server := callbackServer(t, &fakeStore{order: makeOrder(t, domain.OrderPending)}, nil, provider)
+	for _, test := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "valid", body: `{"courseSlug":"go-basics"}`, want: "/orders/" + testOrder + "?course=go-basics"},
+		{name: "invalid", body: `{"courseSlug":"../private"}`, want: "/orders/" + testOrder},
+		{name: "absent", want: "/orders/" + testOrder},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/orders/"+testOrder+"/checkout", strings.NewReader(test.body))
+			if test.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if !strings.HasSuffix(provider.lastURLs.ReturnURL, test.want) {
+				t.Fatalf("returnURL=%s want suffix=%s", provider.lastURLs.ReturnURL, test.want)
+			}
 		})
 	}
 }

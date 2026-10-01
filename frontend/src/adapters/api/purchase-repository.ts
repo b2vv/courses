@@ -1,11 +1,16 @@
 import { z } from 'zod';
 import type {
+  CheckoutForm,
   PurchaseErrorCode,
   PurchaseOrder,
   PurchaseResult,
 } from '../../domain/purchase/purchase';
 import type { PurchaseRepository } from '../../ports/PurchaseRepository';
-import { getPurchaseStatus, startCoursePurchase } from './generated/courses';
+import {
+  createPurchaseCheckout,
+  getPurchaseStatus,
+  startCoursePurchase,
+} from './generated/courses';
 import { priceSchema } from './price-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
@@ -23,6 +28,23 @@ const orderSchema = z
 
 const errorSchema = z.object({ error: z.object({ code: z.string() }).loose() }).loose();
 
+const checkoutFormSchema = z
+  .object({
+    action: z
+      .string()
+      .url()
+      .refine((value) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === 'https:' && url.hostname === 'secure.wayforpay.com';
+        } catch {
+          return false;
+        }
+      }),
+    fields: z.array(z.object({ name: z.string().min(1), value: z.string() }).strict()).min(1),
+  })
+  .strict() satisfies z.ZodType<CheckoutForm>;
+
 const startErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
@@ -34,6 +56,13 @@ const statusErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
   404: ['order_not_found'],
+} as const satisfies Readonly<Record<number, readonly PurchaseErrorCode[]>>;
+
+const checkoutErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  404: ['order_not_found'],
+  503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly PurchaseErrorCode[]>>;
 
 function failure(code: PurchaseErrorCode): PurchaseResult<never> {
@@ -56,6 +85,11 @@ function order(data: unknown, expectedId?: string): PurchaseResult<PurchaseOrder
     return failure('invalid_response');
   }
   return { ok: true, value: parsed.data };
+}
+
+function checkoutForm(data: unknown): PurchaseResult<CheckoutForm> {
+  const parsed = checkoutFormSchema.safeParse(data);
+  return parsed.success ? { ok: true, value: parsed.data } : failure('invalid_response');
 }
 
 /** One repository per router request; generated transport types never leave this adapter. */
@@ -89,6 +123,22 @@ export function createApiPurchaseRepository(options: TransportOptions = {}): Pur
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, statusErrors));
       return order(outcome.data, orderId);
+    },
+    async checkout(orderId, courseSlug, signal) {
+      const outcome = await send(
+        'learn.purchase.checkout',
+        (init) =>
+          createPurchaseCheckout(
+            orderId,
+            courseSlug === undefined ? undefined : { courseSlug },
+            init,
+          ),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 200) return failure(namedError(outcome, checkoutErrors));
+      return checkoutForm(outcome.data);
     },
   };
 }
