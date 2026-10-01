@@ -23,6 +23,26 @@ func TestPurchaseSignatureMatchesWayForPayWikiVector(t *testing.T) {
 	}
 }
 
+func TestFromEnvironmentUsesProductionURLDefaultsAndOptionalOverrides(t *testing.T) {
+	values := map[string]string{
+		"WAYFORPAY_MERCHANT_ACCOUNT": "merchant",
+		"WAYFORPAY_SECRET_KEY":       "secret",
+		"WAYFORPAY_MERCHANT_DOMAIN":  "example.test",
+		"PUBLIC_BASE_URL":            "https://courses.example.test/",
+	}
+	getenv := func(key string) string { return values[key] }
+	config, ok := FromEnvironment(getenv)
+	if !ok || config.PayURL != PayURL || config.APIURL != StatusURL {
+		t.Fatalf("defaults: config=%+v ok=%v", config, ok)
+	}
+	values["WAYFORPAY_PAY_URL"] = "http://stub.test/pay"
+	values["WAYFORPAY_STATUS_URL"] = "http://stub.test/api"
+	config, ok = FromEnvironment(getenv)
+	if !ok || config.PayURL != values["WAYFORPAY_PAY_URL"] || config.APIURL != values["WAYFORPAY_STATUS_URL"] {
+		t.Fatalf("overrides: config=%+v ok=%v", config, ok)
+	}
+}
+
 func TestCallbackVerificationMapsTerminalStatusesAndRejectsTampering(t *testing.T) {
 	provider := New(Config{MerchantAccount: "test_merchant", SecretKey: "secret"})
 	for _, test := range []struct {

@@ -34,15 +34,23 @@ type Config struct {
 	PublicBaseURL   string
 	HTTPClient      *http.Client
 	APIURL          string
+	PayURL          string
 }
 
 func FromEnvironment(getenv func(string) string) (Config, bool) {
-	config := Config{MerchantAccount: getenv("WAYFORPAY_MERCHANT_ACCOUNT"), SecretKey: getenv("WAYFORPAY_SECRET_KEY"), MerchantDomain: getenv("WAYFORPAY_MERCHANT_DOMAIN"), PublicBaseURL: strings.TrimRight(getenv("PUBLIC_BASE_URL"), "/")}
+	payURL := strings.TrimSpace(getenv("WAYFORPAY_PAY_URL"))
+	if payURL == "" {
+		payURL = PayURL
+	}
+	statusURL := strings.TrimSpace(getenv("WAYFORPAY_STATUS_URL"))
+	if statusURL == "" {
+		statusURL = StatusURL
+	}
+	config := Config{MerchantAccount: getenv("WAYFORPAY_MERCHANT_ACCOUNT"), SecretKey: getenv("WAYFORPAY_SECRET_KEY"), MerchantDomain: getenv("WAYFORPAY_MERCHANT_DOMAIN"), PublicBaseURL: strings.TrimRight(getenv("PUBLIC_BASE_URL"), "/"), APIURL: statusURL, PayURL: payURL}
 	if config.MerchantAccount == "" || config.SecretKey == "" || config.MerchantDomain == "" || config.PublicBaseURL == "" {
 		return Config{}, false
 	}
 	config.HTTPClient = &http.Client{Timeout: 10 * time.Second}
-	config.APIURL = StatusURL
 	return config, true
 }
 
@@ -86,7 +94,11 @@ func (provider *Provider) Checkout(_ context.Context, order domain.Order, buyer 
 	if buyer.Email != "" {
 		fields = append(fields, ports.CheckoutField{Name: "clientEmail", Value: buyer.Email})
 	}
-	return ports.CheckoutForm{Action: PayURL, Fields: fields}, nil
+	action := provider.config.PayURL
+	if action == "" {
+		action = PayURL
+	}
+	return ports.CheckoutForm{Action: action, Fields: fields}, nil
 }
 
 func (provider *Provider) OrderStatus(ctx context.Context, orderID string) (ports.PaymentStatus, error) {
