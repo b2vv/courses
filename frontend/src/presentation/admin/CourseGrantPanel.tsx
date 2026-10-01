@@ -7,6 +7,7 @@ import type { ChoiceOption } from '../ui';
 
 type CourseGrantPanelProps = {
   readonly users: readonly ChoiceOption[];
+  readonly isUserSearchPending: boolean;
   readonly onSearch: (text: string) => void;
   /** Resolves to null on success, or the code the server named. */
   readonly onGrant: (userId: string, reason: string) => Promise<GrantErrorCode | null>;
@@ -26,7 +27,12 @@ function errorKey(code: GrantErrorCode) {
 }
 
 /** Admin-only: the server refuses anyone else with grant_forbidden, whatever this renders. */
-export function CourseGrantPanel({ users, onSearch, onGrant }: CourseGrantPanelProps) {
+export function CourseGrantPanel({
+  users,
+  isUserSearchPending,
+  onSearch,
+  onGrant,
+}: CourseGrantPanelProps) {
   const { t } = useTranslation();
   // The chosen user is kept as chosen: once picked, the input shows the label, and the next
   // search (for that label) no longer has to contain the user for the grant to go out.
@@ -73,6 +79,8 @@ export function CourseGrantPanel({ users, onSearch, onGrant }: CourseGrantPanelP
           label={t('administration.grant.user')}
           options={users}
           filtering="server"
+          isLoading={isUserSearchPending}
+          loadingLabel={t('administration.grant.searching')}
           selectedKey={userId}
           onSelectionChange={(key: Key | null) =>
             setChosen(users.find((user) => user.id === key) ?? null)

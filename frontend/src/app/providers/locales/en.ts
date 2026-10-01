@@ -308,6 +308,7 @@ export const en = {
         hint: 'Without payment: access opens at once, and the grant is logged with your account and the reason.',
         user: 'User',
         userHint: 'Start typing a name or email.',
+        searching: 'Searching…',
         userRequired: 'Choose a user from the list.',
         reason: 'Reason',
         reasonHint: 'Required, up to 500 characters — it stays in the log.',

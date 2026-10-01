@@ -8,11 +8,16 @@ import { CourseGrantPanel } from './CourseGrantPanel';
 
 const student = { id: '40000000-0000-4000-8000-000000000001', label: 'Student — s@x.test' };
 
-function renderPanel(answer: GrantErrorCode | null, calls: Array<[string, string]>) {
+function renderPanel(
+  answer: GrantErrorCode | null,
+  calls: Array<[string, string]>,
+  isUserSearchPending = false,
+) {
   render(
     <I18nProvider instance={createI18n('en')}>
       <CourseGrantPanel
         users={[student]}
+        isUserSearchPending={isUserSearchPending}
         onSearch={() => {}}
         onGrant={async (userId, reason) => {
           calls.push([userId, reason]);
@@ -29,6 +34,46 @@ async function choose(browser: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('course grant panel', () => {
+  it('announces searching while the server search is pending, not as no matches', async () => {
+    const browser = userEvent.setup();
+    const calls: Array<[string, string]> = [];
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseGrantPanel
+          users={[]}
+          isUserSearchPending
+          onSearch={() => {}}
+          onGrant={async () => {
+            calls.push(['unused', 'unused']);
+            return null;
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    await browser.type(screen.getByRole('combobox', { name: 'User' }), 'Missing');
+    expect(await screen.findByText('Searching…')).toBeTruthy();
+    expect(screen.queryByText('Немає відповідних варіантів')).toBeNull();
+
+    // A settled empty response uses the existing no-match state.
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseGrantPanel
+          users={[]}
+          isUserSearchPending={false}
+          onSearch={() => {}}
+          onGrant={async () => null}
+        />
+      </I18nProvider>,
+    );
+    const settledComboBox = screen.getAllByRole('combobox', { name: 'User' })[1];
+    if (!settledComboBox) {
+      throw new Error('Expected the settled grant panel combobox');
+    }
+    await browser.type(settledComboBox, 'Missing');
+    expect(await screen.findAllByText('Немає відповідних варіантів')).toHaveLength(1);
+  });
+
   it('Pay10 asks for a user and a reason before sending anything', async () => {
     const browser = userEvent.setup();
     const calls: Array<[string, string]> = [];
@@ -69,6 +114,7 @@ describe('course grant panel', () => {
       return (
         <CourseGrantPanel
           users={search === '' || users.length > 0 ? users : []}
+          isUserSearchPending={false}
           onSearch={setSearch}
           onGrant={async (userId) => {
             calls.push(userId);

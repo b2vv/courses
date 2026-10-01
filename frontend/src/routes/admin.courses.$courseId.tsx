@@ -319,6 +319,7 @@ function CourseGrantTool({
     id: user.id,
     label: `${user.displayName} — ${user.email}`,
   }));
+  const isUserSearchPending = typed.trim() !== search || users.isFetching;
   async function onGrant(userId: string, reason: string): Promise<GrantErrorCode | null> {
     try {
       await grant.mutateAsync({ courseId, userId, reason });
@@ -329,5 +330,12 @@ function CourseGrantTool({
       return code;
     }
   }
-  return <CourseGrantPanel users={options} onSearch={setTyped} onGrant={onGrant} />;
+  return (
+    <CourseGrantPanel
+      users={options}
+      isUserSearchPending={isUserSearchPending}
+      onSearch={setTyped}
+      onGrant={onGrant}
+    />
+  );
 }
