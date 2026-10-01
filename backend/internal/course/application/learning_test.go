@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -64,17 +65,52 @@ func TestLearningCourseValidatesBeforeLookupAndAppliesVisibility(t *testing.T) {
 	}
 }
 
-func TestLearningCourseReportsWhenPurchaseIsRequired(t *testing.T) {
-	actor := domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent}
-	paid := learningCourse(nil)
-	paid.Paid = true
-	repository := &learningRepository{course: paid}
-
-	if _, err := application.NewLearning(repository).GetCourse(context.Background(), actor, "learning-course"); !errors.Is(err, domain.ErrPurchaseRequired) {
-		t.Fatalf("paid course error=%v, want purchase required", err)
+// Owner decision 2026-10-01: a published paid course shows its whole outline to a viewer
+// without access; preview lessons open, the rest are locked for that viewer.
+func TestLearningCourseShowsTheOutlineAndLocksLessonsPerViewer(t *testing.T) {
+	lessons := []domain.LearningLesson{
+		{ID: "70000000-0000-4000-8000-000000000001", Title: "First"},
+		{ID: "70000000-0000-4000-8000-000000000002", Title: "Preview", IsPreview: true},
+		{ID: "70000000-0000-4000-8000-000000000003", Title: "Third"},
 	}
-	if repository.calls != 1 {
-		t.Fatalf("lookup calls=%d, want 1", repository.calls)
+	locks := func(course domain.LearningCourse) []bool {
+		var result []bool
+		for _, lesson := range course.Modules[0].Lessons {
+			result = append(result, lesson.Locked)
+		}
+		return result
+	}
+	for _, test := range []struct {
+		name     string
+		actor    domain.Actor
+		entitled bool
+		want     []bool
+	}{
+		{name: "student without access", actor: domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent}, want: []bool{true, false, true}},
+		{name: "entitled student", actor: domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent}, entitled: true, want: []bool{false, false, false}},
+		{name: "owner", actor: domain.Actor{UserID: learningOwnerID, Role: domain.ActorInstructor}, want: []bool{false, false, false}},
+		{name: "admin", actor: domain.Actor{UserID: learningViewerID, Role: domain.ActorAdmin}, want: []bool{false, false, false}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			paid := learningCourse(append([]domain.LearningLesson(nil), lessons...))
+			paid.Paid = true
+			paid.Entitled = test.entitled
+			course, err := application.NewLearning(&learningRepository{course: paid}).GetCourse(context.Background(), test.actor, "learning-course")
+			if err != nil {
+				t.Fatalf("outline refused: %v", err)
+			}
+			if got := locks(course); fmt.Sprint(got) != fmt.Sprint(test.want) {
+				t.Fatalf("locked=%v want=%v", got, test.want)
+			}
+		})
+	}
+
+	draft := learningCourse(append([]domain.LearningLesson(nil), lessons...))
+	draft.Paid = true
+	draft.Status = domain.Draft
+	draft.PublishedAt = nil
+	if _, err := application.NewLearning(&learningRepository{course: draft}).GetCourse(context.Background(), domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent}, "learning-course"); !errors.Is(err, domain.ErrCourseForbidden) {
+		t.Fatalf("draft error=%v, want course forbidden", err)
 	}
 }
 

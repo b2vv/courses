@@ -33,6 +33,8 @@ const course = {
           position: 12,
           completed: false,
           clientSeq: 4,
+          isPreview: false,
+          locked: false,
         },
       ],
     },

@@ -104,3 +104,30 @@
   (`PreviewSet` presence no longer breaks the price-only comparison); a preview
   CHANGE together with the first price is still refused. The O05 pricing editor may
   send `isPreview` with the first price.
+
+## 2026-10-01 — The learning outline of a paid course (owner decision; found as a defect)
+
+**Decision (owner, 2026-10-01):** a signed-in viewer without access sees the **whole
+structure** of a published paid course on its learning page — preview lessons open,
+every other lesson locked with "Купити" — whether or not the course has a preview
+lesson. Lesson content (video, media bytes, transcript, discussion) stays gated per
+lesson on the server, unchanged.
+**Alternative closed:** showing the outline only when the course has a preview lesson.
+
+**Defect it replaces:** the learning course took `Preview` from the FIRST row of a
+one-row-per-lesson query, i.e. the first lesson of the first module. A paid course
+whose preview lesson was not first refused the whole learning page with
+`course_purchase_required`, so the preview lesson was unreachable (Pay11). The
+integration test inserted one-lesson courses only, where first = only. The four
+content mappings (playback, media `auth_request`, transcript, discussion) each read
+their own lesson's `is_preview` and were not affected.
+
+**Shape:** the outline mapping passes the preview fact as true to `access.CanView`
+(the rule stays in the contract, ADR 013/014); each lesson carries `isPreview` and a
+server-computed `locked` = `access.PurchaseRequired` with that lesson's preview fact,
+so the client never re-implements owner/admin/entitled.
+
+**How to check:** a published paid course with three lessons, preview on the second:
+an unentitled student gets 200 with the outline, lesson 2 `isPreview:true, locked:false`,
+lessons 1 and 3 `locked:true`; the owner, an admin and an entitled student see no
+lesson locked; a draft stays refused.

@@ -77,6 +77,8 @@ export function createApiPlaybackRepository(
             position: lesson.position,
             completed: lesson.completed,
             clientSeq: lesson.clientSeq,
+            isPreview: lesson.isPreview,
+            locked: lesson.locked,
           })),
         })),
         continueLessonId: parsed.data.continueLessonId,

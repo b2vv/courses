@@ -43,6 +43,8 @@ export const learningCourseSchema = z
                     position: z.number().finite().nonnegative(),
                     completed: z.boolean(),
                     clientSeq: z.number().int().min(0).max(2_147_483_647),
+                    isPreview: z.boolean(),
+                    locked: z.boolean(),
                   })
                   .strict(),
               )
