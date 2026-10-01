@@ -10,6 +10,7 @@ import (
 type CourseFacts struct {
 	Published bool
 	Price     *domain.Money
+	Title     string
 }
 
 type CourseReader interface {

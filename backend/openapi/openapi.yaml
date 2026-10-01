@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Courses API
   version: 1.0.0
-  description: Public catalog, session authentication, protected administration and playback-session control. Purchases and the learning player are not implemented.
+  description: Public catalog, session authentication, protected administration, learning purchases and playback-session control.
 servers:
   - url: /
 paths:
@@ -119,6 +119,43 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/OrderNotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/orders/{orderId}/checkout:
+    post:
+      operationId: createPurchaseCheckout
+      summary: Create the hosted WayForPay checkout form for the authenticated order owner
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Ordered fields to POST to the hosted payment page.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutForm' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/OrderNotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/payments/wayforpay/callback:
+    post:
+      operationId: receiveWayForPayCallback
+      summary: Receive a signed WayForPay service callback
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+      responses:
+        '200':
+          description: Signed acknowledgement, including duplicate and ignored statuses.
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/WayForPayAcknowledgement' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses/{courseId}/grants:
     post:
@@ -1793,6 +1830,31 @@ components:
         status: { type: string, enum: [pending, paid, failed] }
         createdAt: { type: string, format: date-time }
         paidAt: { type: string, format: date-time, nullable: true }
+    CheckoutForm:
+      type: object
+      additionalProperties: false
+      required: [action, fields]
+      properties:
+        action: { type: string, format: uri }
+        fields:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, value]
+            properties:
+              name: { type: string, minLength: 1 }
+              value: { type: string }
+    WayForPayAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [orderReference, status, time, signature]
+      properties:
+        orderReference: { type: string, minLength: 1 }
+        status: { type: string, enum: [accept] }
+        time: { type: integer, format: int64 }
+        signature: { type: string, minLength: 32, maxLength: 32 }
     AdminGrantRequest:
       type: object
       additionalProperties: false
@@ -1934,7 +1996,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, grant_forbidden, payment_event_rejected, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, grant_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

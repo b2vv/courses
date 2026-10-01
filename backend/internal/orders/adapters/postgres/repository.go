@@ -22,14 +22,15 @@ func (repository *Repository) CourseForPurchase(ctx context.Context, courseID st
 	var status string
 	var minor pgtype.Int8
 	var currency pgtype.Text
-	err := repository.pool.QueryRow(ctx, `SELECT status, price_minor, currency FROM courses WHERE id=$1::text::uuid`, courseID).Scan(&status, &minor, &currency)
+	var title string
+	err := repository.pool.QueryRow(ctx, `SELECT status, title, price_minor, currency FROM courses WHERE id=$1::text::uuid`, courseID).Scan(&status, &title, &minor, &currency)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.CourseFacts{}, domain.ErrCourseNotPurchasable
 	}
 	if err != nil {
 		return ports.CourseFacts{}, persistenceError(err)
 	}
-	facts := ports.CourseFacts{Published: status == "published"}
+	facts := ports.CourseFacts{Published: status == "published", Title: title}
 	if minor.Valid && currency.Valid {
 		money, moneyErr := domain.NewMoney(strconv.FormatInt(minor.Int64, 10), currency.String)
 		if moneyErr != nil {
@@ -180,8 +181,15 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 		}
 		return decisionErr
 	}
-	if decisionErr != nil || decision.Action != domain.PaymentEventApply || !decision.IssueGrant {
+	if decisionErr != nil || decision.Action != domain.PaymentEventApply ||
+		(decision.Order.Status() != domain.OrderFailed && !decision.IssueGrant) {
 		return domain.ErrPaymentEventRejected
+	}
+	if decision.Order.Status() == domain.OrderFailed {
+		if _, err := tx.Exec(ctx, `UPDATE orders SET status='failed',paid_at=NULL,provider=$2,provider_ref=$3 WHERE id=$1::text::uuid`, order.ID(), event.Provider, event.EventID); err != nil {
+			return persistenceError(err)
+		}
+		return persistenceError(tx.Commit(ctx))
 	}
 	paidAt := decision.Order.PaidAt()
 	if _, err := tx.Exec(ctx, `UPDATE orders SET status='paid',paid_at=$2,provider=$3,provider_ref=$4 WHERE id=$1::text::uuid`, order.ID(), paidAt, event.Provider, event.EventID); err != nil {

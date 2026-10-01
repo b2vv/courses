@@ -33,6 +33,30 @@ func TestDecidePaymentEventAppliesMatchingPendingOrder(t *testing.T) {
 	}
 }
 
+func TestDecidePaymentEventFailsPendingOrderWithoutGrantAndPaidCannotReopen(t *testing.T) {
+	createdAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
+	order, err := NewOrder("order-1", "user-1", "course-1", mustMoney(t, "50000"), "checkout-1", createdAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedEvent := PaymentEvent{Provider: "provider", EventID: "failed-1", OrderID: "order-1", Type: PaymentFailed, Amount: mustMoney(t, "50000"), ReceivedAt: createdAt.Add(time.Minute)}
+	decision, err := DecidePaymentEvent(failedEvent, &order, false)
+	if err != nil || decision.Action != PaymentEventApply || decision.Order.Status() != OrderFailed || decision.IssueGrant {
+		t.Fatalf("decision=%+v error=%v", decision, err)
+	}
+	replay, err := DecidePaymentEvent(failedEvent, &order, true)
+	if err != nil || replay.Action != PaymentEventNoOp {
+		t.Fatalf("replay=%+v error=%v", replay, err)
+	}
+	paid, err := order.MarkPaid(createdAt.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecidePaymentEvent(failedEvent, &paid, false); err != ErrPaymentEventRejected {
+		t.Fatalf("failed event reopened paid order: %v", err)
+	}
+}
+
 func TestDecidePaymentEventClassifiesRetryRejectAndDuplicate(t *testing.T) {
 	createdAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
 	newPending := func(t *testing.T) Order {
