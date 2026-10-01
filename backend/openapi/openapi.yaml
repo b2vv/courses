@@ -1536,7 +1536,7 @@ components:
     LearningLesson:
       type: object
       additionalProperties: false
-      required: [id, title, videoState, position, completed, clientSeq]
+      required: [id, title, videoState, position, completed, clientSeq, isPreview, locked]
       properties:
         id: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 200 }
@@ -1547,6 +1547,10 @@ components:
         position: { type: number, format: double, minimum: 0 }
         completed: { type: boolean }
         clientSeq: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
+        isPreview: { type: boolean, description: "The lesson is open to anyone who can see a published course, without a purchase." }
+        locked:
+          type: boolean
+          description: "For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it."
     LearningModule:
       type: object
       additionalProperties: false

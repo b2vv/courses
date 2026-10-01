@@ -7,6 +7,10 @@ export type LearningLesson = {
   readonly position: number;
   readonly completed: boolean;
   readonly clientSeq: number;
+  /** Open to anyone who can see the published course, without a purchase. */
+  readonly isPreview: boolean;
+  /** For this viewer the lesson needs a purchase — decided by the server, never re-derived here. */
+  readonly locked: boolean;
 };
 
 export type LearningModule = {

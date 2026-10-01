@@ -35,13 +35,18 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 			if administrator {
 				role = coursedomain.ActorAdmin
 			}
-			viaCourse := coursedomain.LearningCourse{
+			// The course module shows the outline like a preview (owner decision 2026-10-01)
+			// and gates content per lesson, so its content answer is "outline visible AND the
+			// lesson not locked" — that, not the outline alone, must agree with the others.
+			learningCourse := coursedomain.LearningCourse{
 				Course:       coursedomain.Course{Status: coursedomain.Status(test.Status)},
 				InstructorID: owner,
 				Paid:         test.Paid,
 				Entitled:     test.Granted,
-				Preview:      test.Preview,
-			}.CanBeViewedBy(coursedomain.Actor{UserID: actor, Role: role})
+			}
+			courseActor := coursedomain.Actor{UserID: actor, Role: role}
+			lesson := coursedomain.LearningLesson{IsPreview: test.Preview}
+			viaCourse := learningCourse.CanBeViewedBy(courseActor) && !learningCourse.PurchaseRequiredBy(courseActor, lesson)
 
 			viaPlayback := playbackdomain.VideoCourse{
 				OwnerID:  owner,

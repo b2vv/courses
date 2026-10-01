@@ -24,6 +24,10 @@ type LearningLesson struct {
 	Position       float64
 	Completed      bool
 	ClientSequence int64
+	// IsPreview is the lesson's own preview fact (ADR 014: preview is lesson-level).
+	IsPreview bool
+	// Locked is computed for the viewer by GetCourse: the lesson needs a purchase.
+	Locked bool
 }
 
 // NewLearningLesson applies the playback position bound at the read boundary. ApplyProgress
@@ -48,7 +52,6 @@ type LearningCourse struct {
 	ContinueLessonID string
 	Paid             bool
 	Entitled         bool
-	Preview          bool
 }
 
 func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
@@ -79,18 +82,23 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 
 	result := LearningCourse{
 		Course: course, InstructorID: input.InstructorID, Modules: modules,
-		Paid: input.Paid, Entitled: input.Entitled, Preview: input.Preview,
+		Paid: input.Paid, Entitled: input.Entitled,
 	}
 	result.ContinueLessonID = continueLessonID(modules)
 	return result, nil
 }
 
+// CanBeViewedBy decides the outline. A published course's structure is visible like a
+// preview (owner decision 2026-10-01, docs/payment/assumptions.md): titles are public on
+// the storefront already, and content stays gated per lesson. Hence preview is true here.
 func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
-	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: true})
 }
 
-func (course LearningCourse) PurchaseRequiredBy(actor Actor) bool {
-	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+// PurchaseRequiredBy reports whether lesson needs a purchase for actor, with that
+// lesson's own preview fact.
+func (course LearningCourse) PurchaseRequiredBy(actor Actor, lesson LearningLesson) bool {
+	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: lesson.IsPreview})
 }
 
 func (state LearningVideoState) Valid() bool {

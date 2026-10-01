@@ -28,10 +28,14 @@ func (learning *Learning) GetCourse(ctx context.Context, actor domain.Actor, slu
 		return domain.LearningCourse{}, err
 	}
 	if !course.CanBeViewedBy(actor) {
-		if course.PurchaseRequiredBy(actor) {
-			return domain.LearningCourse{}, domain.ErrPurchaseRequired
-		}
 		return domain.LearningCourse{}, domain.ErrCourseForbidden
+	}
+	// The outline is visible; each lesson says whether this viewer must buy it.
+	for moduleIndex := range course.Modules {
+		for lessonIndex := range course.Modules[moduleIndex].Lessons {
+			lesson := &course.Modules[moduleIndex].Lessons[lessonIndex]
+			lesson.Locked = course.PurchaseRequiredBy(actor, *lesson)
+		}
 	}
 	return course, nil
 }

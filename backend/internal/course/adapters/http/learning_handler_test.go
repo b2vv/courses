@@ -86,7 +86,6 @@ func TestLearningHTTPBoundariesAndDenials(t *testing.T) {
 		{name: "invalid slug before repository", path: "/api/v1/learn/courses/Invalid", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), wantStatus: http.StatusBadRequest, wantCode: "invalid_slug", wantCalls: 0},
 		{name: "course not found", path: "/api/v1/learn/courses/missing-course", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), failure: domain.ErrCourseNotFound, wantStatus: http.StatusNotFound, wantCode: "course_not_found", wantCalls: 1},
 		{name: "R17 unavailable course", path: "/api/v1/learn/courses/learning-course", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), course: learningHTTPArchivedFixture(), wantStatus: http.StatusForbidden, wantCode: "course_forbidden", wantCalls: 1},
-		{name: "Pay19 paid course requires purchase", path: "/api/v1/learn/courses/learning-course", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), course: func() domain.LearningCourse { course := learningHTTPFixture(); course.Paid = true; return course }(), wantStatus: http.StatusForbidden, wantCode: "course_purchase_required", wantCalls: 1},
 		{name: "dependency unavailable", path: "/api/v1/learn/courses/learning-course", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), failure: domain.ErrDependencyUnavailable, wantStatus: http.StatusServiceUnavailable, wantCode: "dependency_unavailable", wantCalls: 1},
 		{name: "query rejected", path: "/api/v1/learn/courses/learning-course?lesson=1", authenticate: learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"}), wantStatus: http.StatusBadRequest, wantCode: "invalid_query", wantCalls: 0},
 	} {
@@ -110,6 +109,43 @@ func TestLearningHTTPBoundariesAndDenials(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Pay19 for the course mapping (owner decision 2026-10-01): a published paid course
+// answers 200 with its outline; purchase-required is per lesson, as locked. The other
+// three mappings (playback, transcript, discussion) keep answering 403.
+func TestPay19LearningOutlineLocksPaidLessonsInsteadOfRefusing(t *testing.T) {
+	course, err := domain.NewLearningCourse(learningHTTPFixtureWithLessons([]domain.LearningLesson{
+		{ID: learningHTTPLessonID, Title: "Locked", VideoState: domain.VideoAbsent},
+		{ID: "70000000-0000-4000-8000-000000000009", Title: "Preview", VideoState: domain.VideoAbsent, IsPreview: true},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	course.Paid = true
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/learn/courses/learning-course", nil)
+	response := httptest.NewRecorder()
+	learningHTTPHandler(&learningReadRepository{course: course}, learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"})).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Modules []struct {
+			Lessons []struct {
+				Title     string `json:"title"`
+				IsPreview bool   `json:"isPreview"`
+				Locked    bool   `json:"locked"`
+			} `json:"lessons"`
+		} `json:"modules"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	lessons := body.Modules[0].Lessons
+	if len(lessons) != 2 || !lessons[0].Locked || lessons[0].IsPreview || lessons[1].Locked || !lessons[1].IsPreview {
+		t.Fatalf("lessons=%+v, want the plain lesson locked and the preview open", lessons)
+	}
+	assertLearningHTTPContract(t, request, response, true)
 }
 
 func TestR09LearningForeignDraftDeniedAndPublishedAllowed(t *testing.T) {

@@ -97,7 +97,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			}
 			result = domain.LearningCourse{
 				Course: course, InstructorID: courseRow.instructorID, Modules: []domain.LearningModule{},
-				Paid: courseRow.paid, Entitled: courseRow.entitled, Preview: courseRow.preview,
+				Paid: courseRow.paid, Entitled: courseRow.entitled,
 			}
 			found = true
 		}
@@ -120,6 +120,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			lesson := domain.NewLearningLesson(domain.LearningLesson{
 				ID: lessonID, Title: lessonTitle, VideoState: domain.LearningVideoState(videoState),
 				Position: position, Completed: completed, ClientSequence: clientSequence,
+				IsPreview: courseRow.preview,
 			}, durationSeconds)
 			result.Modules[len(result.Modules)-1].Lessons = append(result.Modules[len(result.Modules)-1].Lessons, lesson)
 		}

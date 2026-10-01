@@ -307,6 +307,8 @@ test.describe('with a stored student session', () => {
                   position: 0,
                   completed: false,
                   clientSeq: 0,
+                  isPreview: false,
+                  locked: false,
                 },
               ],
             },

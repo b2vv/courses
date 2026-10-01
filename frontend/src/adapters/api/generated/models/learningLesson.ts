@@ -24,4 +24,8 @@ export interface LearningLesson {
      * @maximum 2147483647
      */
   clientSeq: number;
+  /** The lesson is open to anyone who can see a published course, without a purchase. */
+  isPreview: boolean;
+  /** For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it. */
+  locked: boolean;
 }
