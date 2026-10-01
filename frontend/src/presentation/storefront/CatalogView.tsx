@@ -2,6 +2,7 @@ import type { CatalogQuery, CoursePage, PublishedCourse } from '../../domain/cou
 import { ValueStrip } from './ValueStrip';
 import { Button, EmptyState, Link, TextField } from '../ui';
 import { useTranslation } from 'react-i18next';
+import { formatPrice } from '../format-price';
 
 export function CatalogView({ page, query }: { page: CoursePage; query: CatalogQuery }) {
   const { t } = useTranslation();
@@ -99,13 +100,7 @@ function CourseCard({ course }: { course: PublishedCourse }) {
           <span className="course-price ui-mono">
             {course.price === null
               ? t('catalog.free')
-              : new Intl.NumberFormat(i18n.resolvedLanguage === 'en' ? 'en-US' : 'uk-UA', {
-                  style: 'currency',
-                  currency: course.price.currency,
-                  currencyDisplay: 'narrowSymbol',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                }).format(course.price.minor / 100)}
+              : formatPrice(course.price, i18n.resolvedLanguage)}
           </span>
           <Link
             href={`/courses/${course.slug}`}

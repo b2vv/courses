@@ -131,3 +131,31 @@ so the client never re-implements owner/admin/entitled.
 an unentitled student gets 200 with the outline, lesson 2 `isPreview:true, locked:false`,
 lessons 1 and 3 `locked:true`; the owner, an admin and an entitled student see no
 lesson locked; a draft stays refused.
+
+## 2026-10-01 — The learning course never carried its price (defect, found by the O05 slice-2 journey)
+
+**Defect:** `GET /api/v1/learn/courses/{slug}` declares a required `price`, but the learning
+query selected only `price_minor IS NOT NULL` (the paid flag), so `price` was `null` for every
+course. Nothing read it until the purchase panel did; the browser journey found a disabled
+«Купити курс» with no amount. **Fix:** the query reads `price_minor` and `currency` and maps
+them through `domain.NewCourse` (which keeps `Paid == (Price != nil)`). **How to check:**
+integration `Pay11 preview on a later lesson…` asserts the stored 50000 UAH on the outline;
+e2e `purchase.spec.ts` asserts the amount on the locked lesson.
+
+## 2026-10-01 — Purchase UI shape (O05 slice 2, Courses 1)
+
+- A locked lesson mounts the purchase panel **instead of** the player: no playback session,
+  transcript or comments request is made for it (unit route test and e2e probe both count
+  them). Alternative closed: mount the player and let the server refuse — it costs three 403s
+  per visit and shows error states where an offer belongs.
+- The order page lives at `/orders/$orderId?course=<slug>`, not under `/learn/`: under
+  `/learn/$` a course with the slug `orders` would collide with it. **How to check:** the route
+  manifest test R24 lists `/orders/$orderId` next to `/learn/$`.
+- A paid order invalidates the course outline; it is re-read when the course is opened again,
+  so its lessons unlock without a reload. "After the event" (Pay13) cannot be proved end to
+  end before O06 brings a provider event; until then the e2e stops at the pending state.
+- **For slice 3 (admin pricing):** the server refuses a first price that arrives together with
+  any other change (it grandfathers existing learners in its own path — `authoring.go`
+  `firstPriceSet`). The admin form must save the first price as a separate request.
+  **How to check:** a save with a new structure and a first price returns 400
+  `invalid_request`; the same two changes in two saves return 200 twice.

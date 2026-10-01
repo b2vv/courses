@@ -17,18 +17,21 @@ import { createAdminUserQueries } from '../app/composition/admin-user-queries';
 import { createAdminVideoQueries } from '../app/composition/admin-video-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
-import { createLearnQueries } from '../app/composition/learn-queries';
+import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
 import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
+import { createPurchaseQueries } from '../app/composition/purchase-queries';
+import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import type { DiscussionRepository } from '../ports/DiscussionRepository';
 import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
 import type { LessonTranscript } from '../domain/transcript/transcript';
 import type { LearningCourse } from '../domain/playback/playback';
+import type { PurchaseOrder } from '../domain/purchase/purchase';
 
 // Route guards never touch transcripts; a proxy keeps this stub from drifting every time the port
 // grows a method.
@@ -82,6 +85,10 @@ const dependencyUnavailable = {
 const server = setupServer(
   http.get(currentUserUrl, () => HttpResponse.json(authenticationRequired, { status: 401 })),
 );
+const purchaseStub: PurchaseRepository = {
+  start: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  status: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+};
 const observedAdminQueries: AdminCourseQuery[] = [];
 const observedAdminUserQueries: AdminUserQuery[] = [];
 
@@ -117,6 +124,7 @@ function createTestRouter(
   transcriptRepository: TranscriptRepository = transcriptStub,
   discussionRepository: DiscussionRepository = discussionStub,
   createMediaOverride?: CreatePlaybackMedia,
+  purchaseRepository: PurchaseRepository = purchaseStub,
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -229,6 +237,7 @@ function createTestRouter(
         ...createLearnQueries(playbackRepository),
         ...createTranscriptQueries(transcriptRepository),
         discussion: createDiscussionQueries(discussionRepository),
+        purchase: createPurchaseQueries(purchaseRepository),
         primeAv1Probe: () => undefined,
         createMedia:
           createMediaOverride ??
@@ -337,6 +346,7 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
       { id: '/learn', path: 'learn', fullPath: '/learn' },
       { id: '/learn/$', path: '$', fullPath: '/learn/$' },
       { id: '/login', path: 'login', fullPath: '/login' },
+      { id: '/orders/$orderId', path: 'orders/$orderId', fullPath: '/orders/$orderId' },
       { id: '/teach', path: 'teach', fullPath: '/teach' },
       {
         id: '/teach/courses/$courseId',
@@ -671,6 +681,7 @@ test('K18 keeps the lesson usable when discussion loading fails', async () => {
     summary: 'Practice',
     description: 'Learn Go.',
     status: 'published',
+    price: null,
     continueLessonId: lessonId,
     modules: [
       {
@@ -930,3 +941,214 @@ test.each([
     expect(screen.getByRole('link', { name: login })).toBeTruthy();
   },
 );
+
+function paidCourse(): LearningCourse {
+  const lesson = (id: string, title: string, isPreview: boolean, locked: boolean) => ({
+    id,
+    title,
+    videoState: 'ready' as const,
+    position: 0,
+    completed: false,
+    clientSeq: 0,
+    isPreview,
+    locked,
+  });
+  return {
+    id: '10000000-0000-4000-8000-000000000009',
+    slug: 'paid-go',
+    title: 'Paid Go',
+    summary: 'Practice',
+    description: 'Learn Go.',
+    status: 'published',
+    price: { minor: 189000, currency: 'UAH' },
+    continueLessonId: null,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-000000000009',
+        title: 'Basics',
+        lessons: [
+          lesson('30000000-0000-4000-8000-000000000091', 'Locked first', false, true),
+          lesson('30000000-0000-4000-8000-000000000092', 'Open preview', true, false),
+        ],
+      },
+    ],
+  };
+}
+
+const pendingOrder: PurchaseOrder = {
+  id: '60000000-0000-4000-8000-000000000009',
+  courseId: '10000000-0000-4000-8000-000000000009',
+  amount: { minor: 189000, currency: 'UAH' },
+  status: 'pending',
+  createdAt: '2026-10-01T10:00:00Z',
+  paidAt: null,
+};
+
+function recordingPurchase(
+  keys: string[],
+  orders: readonly PurchaseOrder[],
+  status: () => PurchaseOrder,
+): PurchaseRepository {
+  let next = 0;
+  return {
+    start: async (_courseId, key) => {
+      keys.push(key);
+      const order = orders[next++] ?? orders[orders.length - 1];
+      return order === undefined
+        ? { ok: false, error: { code: 'dependency_unavailable' } }
+        : { ok: true, value: order };
+    },
+    status: async () => ({ ok: true, value: status() }),
+  };
+}
+
+test('Pay11 a locked lesson offers the purchase and requests no lesson content', async () => {
+  const student = user('student');
+  const course = paidCourse();
+  const lockedId = '30000000-0000-4000-8000-000000000091';
+  const contentRequests: string[] = [];
+  const keys: string[] = [];
+  answerWith(student);
+  const router = createTestRouter(
+    `/learn/${course.slug}/${lockedId}`,
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => ({ ok: true, value: course }),
+      play: async () => {
+        contentRequests.push('play');
+        return { ok: false, error: { code: 'playback_forbidden' } };
+      },
+    },
+    new Proxy({} as TranscriptRepository, {
+      get: () => () => {
+        contentRequests.push('transcript');
+        return Promise.resolve({ ok: false, error: { code: 'dependency_unavailable' } });
+      },
+    }),
+    new Proxy({} as DiscussionRepository, {
+      get: () => () => {
+        contentRequests.push('discussion');
+        return Promise.resolve({ ok: false, error: { code: 'dependency_unavailable' } });
+      },
+    }),
+    undefined,
+    recordingPurchase(keys, [pendingOrder], () => pendingOrder),
+  );
+
+  await router.load();
+  renderRouter(router);
+
+  expect(await screen.findByRole('heading', { level: 1, name: 'Locked first' })).toBeTruthy();
+  expect(screen.getByText(/1\s?890/)).toBeTruthy();
+  const outline = screen.getByRole('navigation', { name: 'Зміст курсу' });
+  expect(within(outline).getByRole('link', { name: /Locked first.*Після покупки/ })).toBeTruthy();
+  expect(within(outline).getByRole('link', { name: /Open preview.*Відкритий урок/ })).toBeTruthy();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Купити курс' }));
+
+  await waitFor(() => expect(router.state.location.pathname).toBe(`/orders/${pendingOrder.id}`));
+  expect(router.state.location.search).toEqual({ course: course.slug });
+  expect(
+    await screen.findByText('Чекаємо підтвердження оплати. Сторінка оновиться сама.'),
+  ).toBeTruthy();
+  expect(keys).toHaveLength(1);
+  expect(contentRequests).toEqual([]);
+});
+
+test('O05 a failed order retries under a new idempotency key (assumptions, O05 prerequisites)', async () => {
+  const student = user('student');
+  const failed: PurchaseOrder = { ...pendingOrder, status: 'failed' };
+  const second: PurchaseOrder = { ...pendingOrder, id: '60000000-0000-4000-8000-00000000000a' };
+  const keys: string[] = [];
+  answerWith(student);
+  const router = createTestRouter(
+    `/orders/${failed.id}?course=paid-go`,
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {},
+    transcriptStub,
+    discussionStub,
+    undefined,
+    recordingPurchase(keys, [second], () => (keys.length === 0 ? failed : second)),
+  );
+
+  await router.load();
+  renderRouter(router);
+
+  expect(await screen.findByText('Оплата не пройшла. Можна спробувати ще раз.')).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
+
+  await waitFor(() => expect(router.state.location.pathname).toBe(`/orders/${second.id}`));
+  expect(keys).toHaveLength(1);
+  expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+});
+
+test('Pay13 a paid order re-reads the course outline so its lessons unlock', async () => {
+  const student = user('student');
+  const paid: PurchaseOrder = { ...pendingOrder, status: 'paid', paidAt: '2026-10-01T10:01:00Z' };
+  answerWith(student);
+  const router = createTestRouter(
+    `/orders/${paid.id}?course=paid-go`,
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => ({ ok: true, value: paidCourse() }),
+    },
+    transcriptStub,
+    discussionStub,
+    undefined,
+    recordingPurchase([], [], () => paid),
+  );
+  await router.load();
+  // The outline was cached before the purchase, as it is after visiting a locked lesson.
+  const { queryClient, learn } = router.options.context;
+  await queryClient.prefetchQuery(learn.course('paid-go'));
+  renderRouter(router);
+
+  expect(await screen.findByText('Оплату зараховано — курс відкрито.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Перейти до курсу' }).getAttribute('href')).toBe(
+    '/learn/paid-go',
+  );
+  // Not mounted here, so it is marked stale and re-read when the course opens again.
+  await waitFor(() =>
+    expect(queryClient.getQueryState(learningCourseQueryKey('paid-go'))?.isInvalidated).toBe(true),
+  );
+});
+
+test('an unsafe course slug on the order page is dropped from the way back', async () => {
+  const student = user('student');
+  answerWith(student);
+  const router = createTestRouter(
+    `/orders/${pendingOrder.id}?course=..%2Fadmin`,
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {},
+    transcriptStub,
+    discussionStub,
+    undefined,
+    recordingPurchase([], [], () => pendingOrder),
+  );
+  await router.load();
+  renderRouter(router);
+  expect(await screen.findByRole('link', { name: 'Повернутися до курсу' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Повернутися до курсу' }).getAttribute('href')).toBe(
+    '/courses',
+  );
+});

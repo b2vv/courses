@@ -6,11 +6,14 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
-import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
+import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import { lessonInCourse } from '../domain/playback/playback';
+import type { LearningCourse, LearningLesson } from '../domain/playback/playback';
+import { PurchaseQueryError } from '../app/composition/purchase-queries';
+import { LockedLessonPanel } from '../presentation/learn/LockedLessonPanel';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
@@ -67,10 +70,81 @@ function LessonRoutePlayer({
   readonly lessonId: string;
 }) {
   const { learn } = Route.useRouteContext();
-  const queryClient = useQueryClient();
   const { data: course } = useSuspenseQuery(learn.course(slug));
   const found = lessonInCourse(course, lessonId);
   if (!found.ok) throw notFound();
+  // A locked lesson mounts no player, transcript or discussion: their requests would be
+  // refused by the server anyway, and the viewer is shown the way to buy instead.
+  if (found.value.locked)
+    return (
+      <CourseLearningView course={course} currentLessonId={lessonId}>
+        <LockedLesson course={course} lesson={found.value} />
+      </CourseLearningView>
+    );
+  return <OpenLesson slug={slug} course={course} lesson={found.value} />;
+}
+
+function LockedLesson({
+  course,
+  lesson,
+}: {
+  readonly course: LearningCourse;
+  readonly lesson: LearningLesson;
+}) {
+  const { learn } = Route.useRouteContext();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const start = useMutation(learn.purchase.start(queryClient));
+  const error =
+    start.error instanceof PurchaseQueryError
+      ? start.error.code
+      : start.error === null
+        ? undefined
+        : 'dependency_unavailable';
+  const buy = () =>
+    start.mutate(
+      { courseId: course.id },
+      {
+        onSuccess: (order) =>
+          void navigate({
+            to: '/orders/$orderId',
+            params: { orderId: order.id },
+            search: { course: course.slug },
+          }),
+        onError: (failure) => {
+          // Bought in another tab, or by a grant: re-read the outline so the lessons unlock.
+          if (failure instanceof PurchaseQueryError && failure.code === 'course_already_owned')
+            void queryClient.invalidateQueries({
+              queryKey: learningCourseQueryKey(course.slug),
+              exact: true,
+            });
+        },
+      },
+    );
+  return (
+    <LockedLessonPanel
+      courseTitle={course.title}
+      lessonTitle={lesson.title}
+      price={course.price}
+      isStarting={start.isPending}
+      {...(error === undefined || error === 'course_already_owned' ? {} : { error })}
+      onBuy={buy}
+    />
+  );
+}
+
+function OpenLesson({
+  slug,
+  course,
+  lesson,
+}: {
+  readonly slug: string;
+  readonly course: LearningCourse;
+  readonly lesson: LearningLesson;
+}) {
+  const { learn } = Route.useRouteContext();
+  const queryClient = useQueryClient();
+  const lessonId = lesson.id;
   const actions = useMemo(
     () => ({
       play: () => learn.playback.play(lessonId),
@@ -147,7 +221,7 @@ function LessonRoutePlayer({
     <CourseLearningView course={course} currentLessonId={lessonId}>
       <LessonPlayer
         courseTitle={course.title}
-        lesson={found.value}
+        lesson={lesson}
         actions={actions}
         createMedia={learn.createMedia}
         {...(captions === undefined ? {} : { captions })}

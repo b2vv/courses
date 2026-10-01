@@ -82,20 +82,20 @@ test('maps the authenticated learning model and validates the requested slug', a
       summary: course.summary,
       description: course.description,
       status: course.status,
+      price: null,
       modules: course.modules,
       continueLessonId: course.continueLessonId,
     },
   });
 
-  // A paid course the viewer is entitled to carries its price; the learning
-  // model does not need it, so it is accepted at the boundary and not mapped.
+  // A paid course carries its price: a locked lesson asks for exactly this amount.
   server.use(
     http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>
       HttpResponse.json({ ...course, price: { minor: 49900, currency: 'UAH' }, paid: true }),
     ),
   );
   const paid = await createApiPlaybackRepository().getCourse('go-basics');
-  expect(paid.ok).toBe(true);
+  expect(paid.ok && paid.value.price).toEqual({ minor: 49900, currency: 'UAH' });
 
   server.use(
     http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>
