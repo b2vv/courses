@@ -70,7 +70,7 @@ test.afterAll(async ({ browser, baseURL }) => {
   }
 });
 
-test('Pay11 Pay13 Pay09 a student without access sees the outline, opens the preview and starts a purchase — 44px, axe light/dark, keyboard, 200% text', async ({
+test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens the preview and starts a purchase — 44px, axe light/dark, keyboard, 200% text', async ({
   page,
   browser,
   baseURL,
@@ -80,6 +80,7 @@ test('Pay11 Pay13 Pay09 a student without access sees the outline, opens the pre
   const lockedLesson = { id: randomUUID(), title: `Закритий урок ${runNamespace}` };
   // The preview is the SECOND lesson: the defect fixed in slice 1 read only the first.
   const previewLesson = { id: randomUUID(), title: `Відкритий урок ${runNamespace}` };
+  let courseId = '';
   const admin = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
   try {
     const draft = {
@@ -95,13 +96,14 @@ test('Pay11 Pay13 Pay09 a student without access sees the outline, opens the pre
     });
     expect(created.status(), await created.text()).toBe(201);
     const course = token((await created.json()) as object);
+    courseId = course.id;
     const modules = [
       {
         id: randomUUID(),
         title: `Модуль ${runNamespace}`,
         lessons: [
-          { ...lockedLesson, description: '', isPreview: false },
-          { ...previewLesson, description: '', isPreview: true },
+          { ...lockedLesson, description: '' },
+          { ...previewLesson, description: '' },
         ],
       },
     ];
@@ -110,22 +112,36 @@ test('Pay11 Pay13 Pay09 a student without access sees the outline, opens the pre
       headers: origin(baseURL),
     });
     expect(structured.status(), await structured.text()).toBe(200);
-    // The first price is a save of its own: it grandfathers existing learners, so the
-    // server refuses it together with any other change.
-    const saved = await admin.request.put(`/api/v1/admin/courses/${course.id}`, {
-      data: {
-        expectedUpdatedAt: token((await structured.json()) as object).updatedAt,
-        course: { ...draft, price: { minor: 189000, currency: 'UAH' } },
-        modules,
-      },
-      headers: origin(baseURL),
-    });
-    expect(saved.status(), await saved.text()).toBe(200);
+
+    // The preview and the price go through the editor the author uses: the preview with the
+    // course form, the first price on its own afterwards (the server refuses it combined).
+    const editor = await admin.newPage();
+    await editor.goto(`/admin/courses/${course.id}`);
+    // React Aria hides the native input; the label is what a person clicks.
+    await editor.getByText('Відкритий до покупки — урок 2, модуль 1').click();
+    await expect(
+      editor.getByRole('checkbox', { name: 'Відкритий до покупки — урок 2, модуль 1' }),
+    ).toBeChecked();
+    const amount = editor.getByRole('textbox', { name: 'Ціна, грн' });
+    await expect(amount).toBeDisabled();
+    await editor.getByRole('button', { name: 'Зберегти зміни' }).click();
+    await expect(amount).toBeEnabled();
+    await amount.fill('1890');
+    await editor.getByRole('button', { name: 'Зберегти ціну' }).click();
+    await expect(editor.getByText(/Поточна ціна: 1\s?890/)).toBeVisible();
+    expect(await wcagViolations(editor)).toEqual([]);
+
+    const stored = await admin.request.get(`/api/v1/admin/courses/${course.id}`);
+    expect(stored.status(), await stored.text()).toBe(200);
+    const storedTree = (await stored.json()) as {
+      updatedAt: string;
+      price: unknown;
+      modules: Array<{ lessons: Array<{ isPreview?: boolean }> }>;
+    };
+    expect(storedTree.price).toEqual({ minor: 189000, currency: 'UAH' });
+    expect(storedTree.modules[0]?.lessons.map((lesson) => lesson.isPreview)).toEqual([false, true]);
     const status = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-      data: {
-        expectedUpdatedAt: token((await saved.json()) as object).updatedAt,
-        status: 'published',
-      },
+      data: { expectedUpdatedAt: storedTree.updatedAt, status: 'published' },
       headers: origin(baseURL),
     });
     expect(status.status(), await status.text()).toBe(200);
@@ -203,4 +219,35 @@ test('Pay11 Pay13 Pay09 a student without access sees the outline, opens the pre
   expect(await overflowAtDoubleText(page)).toEqual([]);
   await expect(page.getByRole('link', { name: 'Повернутися до курсу' })).toBeVisible();
   expect(contentRequests).toEqual([]);
+
+  // Pay10 — an administrator grants the student access in the editor; the locked lesson opens.
+  const grantor = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
+  try {
+    const editor = await grantor.newPage();
+    await editor.goto(`/admin/courses/${courseId}`);
+    const grant = editor.getByRole('region', { name: 'Видати доступ до курсу' });
+    await grant
+      .getByRole('combobox', { name: 'Користувач' })
+      .pressSequentially('student@courseforge');
+    await editor
+      .getByRole('option', { name: 'Студентка Курсу — student@courseforge.local' })
+      .click();
+    await grant.getByRole('textbox', { name: 'Причина' }).fill(`e2e ${runNamespace}`);
+    await grant.getByRole('button', { name: 'Видати доступ' }).click();
+    await expect(
+      grant.getByText('Доступ видано: Студентка Курсу — student@courseforge.local.'),
+    ).toBeVisible();
+    expect(await wcagViolations(editor)).toEqual([]);
+    // A second grant for the same learner is refused by name, not duplicated.
+    await grant.getByRole('textbox', { name: 'Причина' }).fill('again');
+    await grant.getByRole('button', { name: 'Видати доступ' }).click();
+    await expect(grant.getByRole('alert')).toHaveText('У цього користувача вже є доступ до курсу.');
+  } finally {
+    await grantor.close();
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(`/learn/${slug}/${lockedLesson.id}`);
+  await expect(page.getByRole('region', { name: 'Обговорення' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Купити курс' })).toHaveCount(0);
+  await expect(page.getByText('Після покупки')).toHaveCount(0);
 });

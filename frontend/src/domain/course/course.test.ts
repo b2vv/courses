@@ -4,6 +4,7 @@ import {
   makeAdminCourseQuery,
   makeCatalogQuery,
   makePublishedCourse,
+  parseUahAmount,
   validCourseTree,
   validCourseTreeEdit,
   validSlugChange,
@@ -68,6 +69,7 @@ describe('admin authoring rules', () => {
         id: asBrandedId('60000000-0000-4000-8000-000000000001', 'lesson'),
         title: 'Урок',
         description: '',
+        isPreview: false,
       },
     ],
   };
@@ -112,6 +114,7 @@ describe('admin authoring rules', () => {
       createdAt: '2026-09-01T00:00:00.000000Z',
       updatedAt: '2026-09-01T00:00:00.000001Z',
       publishedAt: null,
+      price: null,
     } as const;
     expect(validCourseTree(stored)).toBe(true);
     expect(validCourseTree({ ...stored, status: 'published' })).toBe(false);
@@ -132,5 +135,15 @@ describe('admin authoring rules', () => {
     });
     expect(makeAdminCourseQuery({ status: 'archived', limit: 50, offset: 10000 }).ok).toBe(true);
     expect(makeAdminCourseQuery({ limit: 51 }).ok).toBe(false);
+  });
+});
+
+describe('course price input', () => {
+  test('reads hryvnias as minor units and refuses anything it would have to round', () => {
+    expect(parseUahAmount('1890')).toEqual({ minor: 189000, currency: 'UAH' });
+    expect(parseUahAmount('1 890,5')).toEqual({ minor: 189050, currency: 'UAH' });
+    expect(parseUahAmount('0.01')).toEqual({ minor: 1, currency: 'UAH' });
+    for (const refused of ['', '0', '0.00', '-5', '1.005', '12a', '1e3', '99999999999999'])
+      expect(parseUahAmount(refused)).toBeNull();
   });
 });

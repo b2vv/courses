@@ -56,9 +56,8 @@ const adminLessonSchema = z
     id: lessonIdSchema,
     title: requiredText(200),
     description: optionalText(1000),
-    // Optional in the contract (default false). Read-only here: saves omit it,
-    // and the backend keeps an unspecified preview flag as stored.
-    isPreview: z.boolean().optional(),
+    // Optional in the contract with default false; saves always state it.
+    isPreview: z.boolean().default(false),
   })
   .strict();
 
@@ -86,8 +85,8 @@ export const adminCourseTreeSchema = z
     createdAt: adminTimestampSchema,
     updatedAt: adminTimestampSchema,
     publishedAt: adminTimestampSchema.nullable(),
-    // Required and nullable in the contract (null = free). Read-only here: saves
-    // omit it, which the backend treats as "unchanged", never as "make it free".
+    // Required and nullable in the contract (null = free). The course form omits it
+    // ("unchanged"); only `setPrice` sends it.
     price: priceSchema.nullable(),
     modules: z.array(adminModuleSchema).max(40),
   })

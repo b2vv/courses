@@ -5,12 +5,15 @@ import {
   validCourseTreeEdit,
   validSlugChange,
   validTransition,
+  unchangedEdit,
+  validCoursePrice,
 } from '../../domain/course/course';
 import type {
   AdminCourseDraft,
   AdminCourseQuery,
   AuthoringResult,
   CourseId,
+  CoursePrice,
   CourseStatus,
   CourseTree,
   CourseTreeEdit,
@@ -43,6 +46,25 @@ export function createAuthoring(repository: AdminCourseRepository) {
       if (!validSlugChange(current.slug, current.publishedAt, edit.slug))
         return Promise.resolve({ ok: false, error: { code: 'slug_immutable' } });
       return repository.save(current.id, current.updatedAt, edit, signal);
+    },
+    /**
+     * The price is saved on its own, over the stored tree: a first price is refused by the
+     * server together with any other change, and keeping every price change on this one path
+     * means the course form never carries money.
+     */
+    setPrice(
+      current: CourseTree,
+      price: CoursePrice | null,
+      signal?: AbortSignal,
+    ): Promise<AuthoringResult<CourseTree>> {
+      if (!validCourseTree(current) || (price !== null && !validCoursePrice(price)))
+        return Promise.resolve(invalid);
+      return repository.save(
+        current.id,
+        current.updatedAt,
+        { ...unchangedEdit(current), price },
+        signal,
+      );
     },
     transition(
       current: CourseTree,
