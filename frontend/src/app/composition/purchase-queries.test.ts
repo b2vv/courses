@@ -1,6 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { QueryClient } from '@tanstack/react-query';
 import type { PurchaseOrder, PurchaseResult } from '../../domain/purchase/purchase';
+import type { CheckoutForm } from '../../domain/purchase/purchase';
 import type { PurchaseRepository } from '../../ports/PurchaseRepository';
 import { createPurchaseQueries, purchaseQueryKey } from './purchase-queries';
 
@@ -20,8 +21,31 @@ function repository(keys: string[], answer: PurchaseResult<PurchaseOrder>): Purc
       return answer;
     },
     status: async () => answer,
+    checkout: async () => ({
+      ok: true,
+      value: { action: 'https://secure.wayforpay.com/pay', fields: [] } satisfies CheckoutForm,
+    }),
   };
 }
+
+test('checkout unwraps the form and keeps the started order id', async () => {
+  const calls: string[] = [];
+  const queries = createPurchaseQueries({
+    ...repository([], { ok: true, value: pending }),
+    checkout: async (orderId) => {
+      calls.push(orderId);
+      return { ok: true, value: { action: 'https://secure.wayforpay.com/pay', fields: [] } };
+    },
+  });
+  const client = new QueryClient();
+  const start = queries.start(client).mutationFn;
+  const checkout = queries.checkout().mutationFn;
+  if (start === undefined || checkout === undefined) throw new Error('mutation function missing');
+  const started = await start({ courseId: pending.courseId }, {} as never);
+  const form = await checkout({ orderId: started.id, courseSlug: 'go-basics' }, {} as never);
+  expect(calls).toEqual([pending.id]);
+  expect(form.action).toBe('https://secure.wayforpay.com/pay');
+});
 
 test('every start is a new attempt with a new idempotency key', async () => {
   const keys: string[] = [];

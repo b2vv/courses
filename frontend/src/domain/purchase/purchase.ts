@@ -12,6 +12,11 @@ export type PurchaseOrder = {
   readonly paidAt: string | null;
 };
 
+export type CheckoutForm = {
+  readonly action: string;
+  readonly fields: readonly { readonly name: string; readonly value: string }[];
+};
+
 export type PurchaseErrorCode =
   | 'request_cancelled'
   | 'request_timeout'

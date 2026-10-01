@@ -27,6 +27,7 @@ import type {
   AuthenticatedUser,
   BadRequestResponse,
   CheckoutForm,
+  CheckoutRequest,
   Comment,
   CommentPage,
   CourseDetail,
@@ -418,14 +419,21 @@ export const getCreatePurchaseCheckoutUrl = (orderId: string,) => {
 /**
  * @summary Create the hosted WayForPay checkout form for the authenticated order owner
  */
-export const createPurchaseCheckout = async (orderId: string, options?: RequestInit): Promise<createPurchaseCheckoutResponse> => {
+export const createPurchaseCheckout = async (orderId: string,
+    checkoutRequest?: CheckoutRequest, options?: RequestInit): Promise<createPurchaseCheckoutResponse> => {
 
-  const res = await fetch(getCreatePurchaseCheckoutUrl(orderId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getCreatePurchaseCheckoutUrl(orderId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(checkoutRequest)
   }
 )
 

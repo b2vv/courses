@@ -83,3 +83,67 @@ test('names the purchase conflicts the backend answers', async () => {
     error: { code: 'order_not_found' },
   });
 });
+
+test('maps a hosted checkout form and sends the course slug', async () => {
+  let requestBody: unknown;
+  const form = {
+    action: 'https://secure.wayforpay.com/pay',
+    fields: [
+      { name: 'merchantAccount', value: 'merchant' },
+      { name: 'merchantSignature', value: 'signature' },
+    ],
+  };
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json(form);
+    }),
+  );
+
+  expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+    ok: true,
+    value: form,
+  });
+  expect(requestBody).toEqual({ courseSlug: 'go-basics' });
+});
+
+test('rejects an unsafe or empty checkout form', async () => {
+  for (const response of [
+    { action: 'http://secure.wayforpay.com/pay', fields: [{ name: 'x', value: 'y' }] },
+    { action: 'https://example.test/pay', fields: [{ name: 'x', value: 'y' }] },
+    { action: 'https://secure.wayforpay.com/pay', fields: [] },
+  ]) {
+    server.use(
+      http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, () =>
+        HttpResponse.json(response),
+      ),
+    );
+    expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+      ok: false,
+      error: { code: 'invalid_response' },
+    });
+  }
+});
+
+test('names checkout not-found and unavailable responses', async () => {
+  const error = (code: string, status: number) =>
+    HttpResponse.json({ error: { code, message: 'x', requestId: 'a'.repeat(32) } }, { status });
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, () =>
+      error('order_not_found', 404),
+    ),
+  );
+  expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+    ok: false,
+    error: { code: 'order_not_found' },
+  });
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, () =>
+      error('dependency_unavailable', 503),
+    ),
+  );
+  expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+    ok: false,
+    error: { code: 'dependency_unavailable' },
+  });
+});

@@ -129,6 +129,11 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckoutRequest' }
       responses:
         '200':
           description: Ordered fields to POST to the hosted payment page.
@@ -1846,6 +1851,11 @@ components:
             properties:
               name: { type: string, minLength: 1 }
               value: { type: string }
+    CheckoutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        courseSlug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
     WayForPayAcknowledgement:
       type: object
       additionalProperties: false

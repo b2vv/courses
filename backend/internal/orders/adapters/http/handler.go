@@ -71,6 +71,10 @@ type grantRequest struct {
 	Reason string `json:"reason"`
 }
 
+type checkoutRequest struct {
+	CourseSlug string `json:"courseSlug"`
+}
+
 type grantDTO struct {
 	ID        string  `json:"id"`
 	UserID    string  `json:"userId"`
@@ -145,14 +149,40 @@ func (handler *Handler) checkout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, domain.ErrOrderInvalid)
 		return
 	}
+	request, err := decodeCheckout(r)
+	if err != nil {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
 	base := handler.publicBaseURL
-	urls := ports.CheckoutURLs{ReturnURL: base + "/orders/" + r.PathValue("orderId"), ServiceURL: base + "/api/v1/payments/wayforpay/callback"}
+	returnURL := base + "/orders/" + r.PathValue("orderId")
+	if validCourseSlug(request.CourseSlug) {
+		returnURL += "?course=" + url.QueryEscape(request.CourseSlug)
+	}
+	urls := ports.CheckoutURLs{ReturnURL: returnURL, ServiceURL: base + "/api/v1/payments/wayforpay/callback"}
 	form, err := handler.service.Checkout(r.Context(), actor, r.PathValue("orderId"), ports.Buyer{ID: actor.UserID}, urls)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, form)
+}
+
+func decodeCheckout(r *http.Request) (checkoutRequest, error) {
+	if r.Body == nil {
+		return checkoutRequest{}, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maximumGrantBody+1))
+	if err != nil || len(body) > maximumGrantBody || strings.TrimSpace(string(body)) == "" {
+		return checkoutRequest{}, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var request checkoutRequest
+	if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return checkoutRequest{}, domain.ErrOrderInvalid
+	}
+	return request, nil
 }
 
 func (handler *Handler) callbackHandler(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +365,27 @@ func validID(value string) bool {
 	}
 	decoded, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
 	return err == nil && len(decoded) == 16
+}
+
+func validCourseSlug(value string) bool {
+	if len(value) == 0 || len(value) > 120 || value[0] == '-' || value[len(value)-1] == '-' {
+		return false
+	}
+	previousHyphen := false
+	for _, char := range value {
+		if char == '-' {
+			if previousHyphen {
+				return false
+			}
+			previousHyphen = true
+			continue
+		}
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			return false
+		}
+		previousHyphen = false
+	}
+	return true
 }
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }

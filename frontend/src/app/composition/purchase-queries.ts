@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import {
   isSettled,
   type PurchaseErrorCode,
+  type CheckoutForm,
   type PurchaseOrder,
   type PurchaseResult,
 } from '../../domain/purchase/purchase';
@@ -57,5 +58,21 @@ export function createPurchaseQueries(
           return order !== undefined && isSettled(order) ? false : purchasePollMs;
         },
       }),
+    checkout: () =>
+      mutationOptions({
+        mutationFn: async ({
+          orderId,
+          courseSlug,
+        }: {
+          orderId: string;
+          courseSlug?: string | undefined;
+        }) => unwrap(await purchase.checkout(orderId, courseSlug)),
+      }) as ReturnType<
+        typeof mutationOptions<
+          CheckoutForm,
+          PurchaseQueryError,
+          { orderId: string; courseSlug?: string | undefined }
+        >
+      >,
   };
 }

@@ -36,6 +36,7 @@ export * from './authenticatedUserRole.ts';
 export * from './badRequestResponse.ts';
 export * from './checkoutForm.ts';
 export * from './checkoutFormFieldsItem.ts';
+export * from './checkoutRequest.ts';
 export * from './comment.ts';
 export * from './commentAuthor.ts';
 export * from './commentPage.ts';

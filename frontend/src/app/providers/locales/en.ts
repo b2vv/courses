@@ -102,6 +102,8 @@ export const en = {
         locked: 'This lesson opens once you buy the course. Open lessons can be watched now.',
         buy: 'Buy the course',
         starting: 'Creating the order…',
+        checkout: 'Continue to payment',
+        redirecting: 'Redirecting to payment…',
         loading: 'Loading the order…',
         retry: 'Try again',
         openCourse: 'Go to the course',
