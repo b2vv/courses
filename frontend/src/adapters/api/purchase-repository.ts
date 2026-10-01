@@ -47,7 +47,7 @@ function namedError(
   const parsed = errorSchema.safeParse(response.data);
   const code = parsed.success ? parsed.data.error.code : undefined;
   const named = allowed[response.status]?.find((candidate) => candidate === code);
-  return named ?? (unnamedStatusCode(response.status) as PurchaseErrorCode);
+  return named ?? unnamedStatusCode(response.status);
 }
 
 function order(data: unknown, expectedId?: string): PurchaseResult<PurchaseOrder> {
@@ -75,7 +75,7 @@ export function createApiPurchaseRepository(options: TransportOptions = {}): Pur
         201,
         signal,
       );
-      if (!outcome.ok) return failure(outcome.code as PurchaseErrorCode);
+      if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 201) return failure(namedError(outcome, startErrors));
       return order(outcome.data);
     },
@@ -86,7 +86,7 @@ export function createApiPurchaseRepository(options: TransportOptions = {}): Pur
         200,
         signal,
       );
-      if (!outcome.ok) return failure(outcome.code as PurchaseErrorCode);
+      if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, statusErrors));
       return order(outcome.data, orderId);
     },

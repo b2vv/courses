@@ -47,6 +47,7 @@ const tree: CourseTree = {
   createdAt: '2026-09-01T00:00:00.000000Z',
   updatedAt: '2026-09-01T00:00:00.000001Z',
   publishedAt: null,
+  price: null,
   modules: [],
 };
 
@@ -71,8 +72,8 @@ describe('course editor', () => {
           id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
           title: 'Module',
           lessons: [
-            { id: firstLessonId, title: 'First', description: '' },
-            { id: secondLessonId, title: 'Second', description: '' },
+            { id: firstLessonId, title: 'First', description: '', isPreview: false },
+            { id: secondLessonId, title: 'Second', description: '', isPreview: false },
           ],
         },
       ],
@@ -175,7 +176,7 @@ describe('course editor', () => {
         {
           id: asBrandedId('10000000-0000-4000-8000-000000000201', 'module'),
           title: 'Module',
-          lessons: [{ id: lessonId, title: 'Lesson', description: '' }],
+          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
         },
       ],
     } satisfies CourseTree;
@@ -215,7 +216,7 @@ describe('course editor', () => {
         {
           id: asBrandedId('10000000-0000-4000-8000-000000000202', 'module'),
           title: 'Module',
-          lessons: [{ id: lessonId, title: 'Lesson', description: '' }],
+          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
         },
       ],
     } satisfies CourseTree;
@@ -305,11 +306,13 @@ describe('course editor', () => {
               id: asBrandedId('20000000-0000-4000-8000-000000000101', 'lesson'),
               title: 'First lesson',
               description: '',
+              isPreview: false,
             },
             {
               id: asBrandedId('20000000-0000-4000-8000-000000000102', 'lesson'),
               title: 'Second lesson',
               description: '',
+              isPreview: false,
             },
           ],
         },
@@ -351,6 +354,7 @@ describe('course editor', () => {
     {
       status: 'draft',
       publishedAt: null,
+      price: null,
       action: 'Publish',
       deletable: true,
       slugDisabled: false,
@@ -358,6 +362,7 @@ describe('course editor', () => {
     {
       status: 'published',
       publishedAt: '2026-09-01T00:00:00.000001Z',
+      price: null,
       action: 'Archive',
       deletable: false,
       slugDisabled: true,
@@ -365,6 +370,7 @@ describe('course editor', () => {
     {
       status: 'archived',
       publishedAt: '2026-09-01T00:00:00.000001Z',
+      price: null,
       action: 'Restore',
       deletable: false,
       slugDisabled: true,
@@ -418,6 +424,7 @@ describe('course editor', () => {
           ),
           title: `Lesson ${moduleIndex + 1}.${lessonIndex + 1}`,
           description: '',
+          isPreview: false,
         })),
       })),
     };
@@ -704,5 +711,106 @@ describe('course create dialog', () => {
     expect(
       within(dialog).getByRole('link', { name: 'Open the existing course' }).getAttribute('href'),
     ).toBe(`/admin/courses/${tree.id}`);
+  });
+});
+
+describe('course price and previews', () => {
+  const lessonId = asBrandedId('20000000-0000-4000-8000-000000000301', 'lesson');
+  const course: CourseTree = {
+    ...tree,
+    modules: [
+      {
+        id: asBrandedId('10000000-0000-4000-8000-000000000301', 'module'),
+        title: 'Module',
+        lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
+      },
+    ],
+  };
+
+  function renderEditor(
+    onSave: (current: CourseTree, edit: CourseTreeEdit) => Promise<CourseTree>,
+    onSetPrice: (current: CourseTree, price: CourseTree['price']) => Promise<CourseTree>,
+    current: CourseTree = course,
+  ) {
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={current}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={onSave}
+          onSetPrice={onSetPrice}
+          onTransition={async (value) => value}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+  }
+
+  it('saves a lesson preview with the course form, never a price', async () => {
+    const browser = userEvent.setup();
+    const edits: CourseTreeEdit[] = [];
+    renderEditor(
+      async (current, edit) => {
+        edits.push(edit);
+        return current;
+      },
+      async (current) => current,
+    );
+    await browser.click(
+      screen.getByRole('checkbox', { name: 'Open before purchase — lesson 1, module 1' }),
+    );
+    await browser.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0]?.modules[0]?.lessons[0]?.isPreview).toBe(true);
+    expect(edits[0] !== undefined && 'price' in edits[0]).toBe(false);
+  });
+
+  it('sets the first price on its own, and only once the course form is saved', async () => {
+    const browser = userEvent.setup();
+    const prices: Array<CourseTree['price']> = [];
+    renderEditor(
+      async (current) => current,
+      async (current, price) => {
+        prices.push(price);
+        return { ...current, price };
+      },
+    );
+    const amount = screen.getByRole('textbox', { name: 'Price, UAH' });
+    expect(screen.getByText(/Students who already have progress/)).toBeTruthy();
+
+    // An unsaved edit locks the price: saving it would reset the form under the author.
+    await browser.type(screen.getByRole('textbox', { name: /^Title/ }), ' edited');
+    expect(amount.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/Save the course changes first/)).toBeTruthy();
+    await browser.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(amount.hasAttribute('disabled')).toBe(false));
+    await browser.type(amount, '1890,5');
+    await browser.click(screen.getByRole('button', { name: 'Save price' }));
+    await waitFor(() => expect(prices).toEqual([{ minor: 189050, currency: 'UAH' }]));
+
+    await browser.clear(amount);
+    await browser.type(amount, '12.345');
+    await browser.click(screen.getByRole('button', { name: 'Save price' }));
+    expect(screen.getByText(/at most two decimals/)).toBeTruthy();
+    expect(prices).toHaveLength(1);
+  });
+
+  it('makes a paid course free through the same price control', async () => {
+    const browser = userEvent.setup();
+    const prices: Array<CourseTree['price']> = [];
+    renderEditor(
+      async (current) => current,
+      async (current, price) => {
+        prices.push(price);
+        return { ...current, price };
+      },
+      { ...course, price: { minor: 189000, currency: 'UAH' } },
+    );
+    expect(screen.queryByText(/Students who already have progress/)).toBeNull();
+    await browser.click(screen.getByRole('button', { name: 'Make it free' }));
+    await waitFor(() => expect(prices).toEqual([null]));
   });
 });

@@ -27,6 +27,7 @@ const tree: CourseTree = {
   createdAt: '2026-09-01T00:00:00.000000Z',
   updatedAt: '2026-09-01T00:00:00.000001Z',
   publishedAt: null,
+  price: null,
   modules: [],
 };
 const edit: CourseTreeEdit = {

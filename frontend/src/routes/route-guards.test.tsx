@@ -24,6 +24,7 @@ import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
 import { createPurchaseQueries } from '../app/composition/purchase-queries';
+import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
@@ -211,6 +212,9 @@ function createTestRouter(
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
         videos: createAdminVideoQueries(createLessonVideos(lessonVideoRepository)),
         transcripts: createTranscriptQueries(transcriptStub),
+        grants: createAdminGrantQueries({
+          grant: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+        }),
         drafts: createDraftQueries({
           getDraft: async () => ({
             ok: true,
@@ -271,6 +275,7 @@ function adminTree(owner: AuthenticatedUser): CourseTree {
     createdAt: '2026-09-05T10:15:30.000000Z',
     updatedAt: '2026-09-05T10:15:30.000001Z',
     publishedAt: null,
+    price: null,
     modules: [],
   };
 }

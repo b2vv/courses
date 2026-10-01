@@ -145,11 +145,27 @@ type ComboBoxProps = Omit<
   options: readonly ChoiceOption[];
   description?: string;
   errorMessage?: string;
+  /**
+   * 'server': the options are already the server's answer to the typed text, and may arrive
+   * after typing started — so they are passed as controlled items and the list may open empty.
+   */
+  filtering?: 'client' | 'server';
 };
 
-export function ComboBox({ label, options, description, errorMessage, ...props }: ComboBoxProps) {
+export function ComboBox({
+  label,
+  options,
+  description,
+  errorMessage,
+  filtering = 'client',
+  ...props
+}: ComboBoxProps) {
+  const collection =
+    filtering === 'server'
+      ? { items: options, allowsEmptyCollection: true }
+      : { defaultItems: options };
   return (
-    <Aria.ComboBox {...props} defaultItems={options} className="ui-field">
+    <Aria.ComboBox {...props} {...collection} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
       <div className="ui-combobox-input">
         <Aria.Input className="ui-input" />

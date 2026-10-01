@@ -13,6 +13,8 @@ import { createApiDraftRepository } from '../../adapters/api/draft-repository';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
 import { createDraftQueries } from './admin-draft-queries';
 import { createTranscriptQueries } from './transcript-queries';
+import { createApiCourseGrantRepository } from '../../adapters/api/course-grant-repository';
+import { createAdminGrantQueries } from './admin-grant-queries';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -29,7 +31,8 @@ export function createAdminDependencies() {
   );
   const transcripts = createTranscriptQueries(createApiTranscriptRepository());
   const drafts = createDraftQueries(createApiDraftRepository(options));
-  return { ...courses, users, videos, transcripts, drafts };
+  const grants = createAdminGrantQueries(createApiCourseGrantRepository(options));
+  return { ...courses, users, videos, transcripts, drafts, grants };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

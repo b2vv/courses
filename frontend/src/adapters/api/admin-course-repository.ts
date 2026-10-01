@@ -113,6 +113,8 @@ function courseSave(edit: CourseTreeEdit, expectedUpdatedAt: string) {
       summary: edit.summary,
       description: edit.description,
       instructorId: edit.instructorId,
+      // Absent means unchanged on the server; null removes the price.
+      ...(edit.price === undefined ? {} : { price: edit.price }),
     },
     modules: edit.modules.map((module) => ({
       id: module.id,
@@ -121,6 +123,7 @@ function courseSave(edit: CourseTreeEdit, expectedUpdatedAt: string) {
         id: lesson.id,
         title: lesson.title,
         description: lesson.description,
+        isPreview: lesson.isPreview,
       })),
     })),
   };
