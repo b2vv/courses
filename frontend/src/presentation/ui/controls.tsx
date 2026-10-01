@@ -150,6 +150,8 @@ type ComboBoxProps = Omit<
    * after typing started — so they are passed as controlled items and the list may open empty.
    */
   filtering?: 'client' | 'server';
+  loadingLabel?: string;
+  isLoading?: boolean;
 };
 
 export function ComboBox({
@@ -157,6 +159,8 @@ export function ComboBox({
   options,
   description,
   errorMessage,
+  loadingLabel,
+  isLoading = false,
   filtering = 'client',
   ...props
 }: ComboBoxProps) {
@@ -177,7 +181,9 @@ export function ComboBox({
       <Aria.Popover className="ui-popover">
         <Aria.ListBox<ChoiceOption>
           className="ui-listbox"
-          renderEmptyState={() => 'Немає відповідних варіантів'}
+          renderEmptyState={() =>
+            isLoading && loadingLabel ? loadingLabel : 'Немає відповідних варіантів'
+          }
         >
           {(item) => (
             <Aria.ListBoxItem id={item.id} textValue={item.label} className="ui-option">
