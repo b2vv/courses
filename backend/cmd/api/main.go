@@ -28,6 +28,7 @@ import (
 	mediaapplication "courses/internal/media/application"
 	ordershttp "courses/internal/orders/adapters/http"
 	orderspostgres "courses/internal/orders/adapters/postgres"
+	wayforpay "courses/internal/orders/adapters/wayforpay"
 	ordersapplication "courses/internal/orders/application"
 	ordersdomain "courses/internal/orders/domain"
 	playbackhttp "courses/internal/playback/adapters/http"
@@ -69,10 +70,25 @@ func main() {
 		catalog := courseapplication.NewCatalog(courseRepository)
 		learning := courseapplication.NewLearning(courseRepository)
 		ordersRepository := orderspostgres.NewRepository(dependencies.Database)
-		orders := ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID)
+		wayforpayConfig, wayforpayConfigured := wayforpay.FromEnvironment(os.Getenv)
+		var paymentProvider *wayforpay.Provider
+		if wayforpayConfigured {
+			paymentProvider = wayforpay.New(wayforpayConfig)
+		}
+		var orders *ordersapplication.Service
+		if paymentProvider != nil {
+			orders = ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID, paymentProvider)
+		} else {
+			orders = ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID)
+		}
 		authoring := courseapplication.NewAuthoring(courseRepository, time.Now, courseGrandfatherer{orders})
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
-		ordersHandler := ordershttp.NewHandler(orders)
+		var ordersHandler *ordershttp.Handler
+		if paymentProvider != nil {
+			ordersHandler = ordershttp.NewHandlerWithConfig(orders, paymentProvider, wayforpayConfig.PublicBaseURL)
+		} else {
+			ordersHandler = ordershttp.NewHandler(orders)
+		}
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)

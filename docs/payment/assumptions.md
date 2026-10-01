@@ -159,3 +159,24 @@ e2e `purchase.spec.ts` asserts the amount on the locked lesson.
   `firstPriceSet`). The admin form must save the first price as a separate request.
   **How to check:** a save with a new structure and a first price returns 400
   `invalid_request`; the same two changes in two saves return 200 twice.
+
+## 2026-10-01 — How O06 proves a full purchase (owner decision)
+
+**Decision (owner, 2026-10-01):** the automated sandbox journey proves Pay25 through a **server
+status check**: after the buyer returns from WayForPay, our server asks WayForPay for the order's
+status (signed `CHECK_STATUS` request) and, when it is approved, applies the payment through the
+same `ApplyPaymentEvent` as the callback. Plus **one recorded run through a temporary tunnel**
+(cloudflared) in which WayForPay's real `serviceUrl` callback reaches our endpoint, is verified
+and applied; its evidence goes in the phase report. The callback signature is also tested on
+vectors (Pay24).
+**Why:** WayForPay cannot reach `localhost`; a tunnel in every gate run would make the gate
+depend on an external tunnel and network. The status check is also a production feature: a
+delayed or lost callback (WayForPay retries for up to 4 days) no longer leaves a paid buyer
+waiting.
+**Alternatives closed:** status check only (the main production path never exercised end to
+end); a tunnel in every e2e run (flaky gate).
+**Unchanged (A5):** the browser's return never grants anything — only a signature-verified
+callback or a signed server-to-server status answer does.
+**How to check:** the e2e completes a test-card payment on WayForPay's test page and the lesson
+opens with no callback able to reach the stack; the tunnel run's log shows the callback request
+(signature verified, applied once, a replay a no-op).

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -18,22 +19,29 @@ type Actor struct {
 }
 
 type Service struct {
-	courses ports.CourseReader
-	orders  ports.OrderRepository
-	grants  ports.GrantRepository
-	events  ports.PaymentEventRepository
-	now     func() time.Time
-	newID   func() string
+	courses  ports.CourseReader
+	orders   ports.OrderRepository
+	grants   ports.GrantRepository
+	events   ports.PaymentEventRepository
+	provider ports.PaymentProvider
+	statusAt map[string]time.Time
+	statusMu sync.Mutex
+	now      func() time.Time
+	newID    func() string
 }
 
 func New(courses ports.CourseReader, orders ports.OrderRepository, store interface {
 	ports.GrantRepository
 	ports.PaymentEventRepository
-}, now func() time.Time, newID func() string) *Service {
+}, now func() time.Time, newID func() string, provider ...ports.PaymentProvider) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{courses: courses, orders: orders, grants: store, events: store, now: now, newID: newID}
+	var paymentProvider ports.PaymentProvider
+	if len(provider) > 0 {
+		paymentProvider = provider[0]
+	}
+	return &Service{courses: courses, orders: orders, grants: store, events: store, provider: paymentProvider, now: now, newID: newID, statusAt: make(map[string]time.Time)}
 }
 
 func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID, idempotencyKey string) (domain.Order, error) {
@@ -74,7 +82,53 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 }
 
 func (service *Service) PurchaseStatus(ctx context.Context, actor Actor, orderID string) (domain.Order, error) {
-	return service.orders.Get(ctx, actor.UserID, orderID)
+	order, err := service.orders.Get(ctx, actor.UserID, orderID)
+	if err != nil || order.Status() != domain.OrderPending || service.provider == nil {
+		return order, err
+	}
+	now := service.now()
+	service.statusMu.Lock()
+	for trackedOrderID, last := range service.statusAt {
+		if now.Sub(last) >= 3*time.Second {
+			delete(service.statusAt, trackedOrderID)
+		}
+	}
+	last := service.statusAt[orderID]
+	if !last.IsZero() && now.Sub(last) < 3*time.Second {
+		service.statusMu.Unlock()
+		return order, nil
+	}
+	service.statusAt[orderID] = now
+	service.statusMu.Unlock()
+	status, statusErr := service.provider.OrderStatus(ctx, order.ID())
+	if statusErr == nil && status.Event.OrderID != "" {
+		if applyErr := service.ApplyPaymentEvent(ctx, status.Event); applyErr == nil {
+			return service.orders.Get(ctx, actor.UserID, orderID)
+		}
+	}
+	return order, nil
+}
+
+func (service *Service) Checkout(ctx context.Context, actor Actor, orderID string, buyer ports.Buyer, urls ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	if service.provider == nil {
+		return ports.CheckoutForm{}, domain.ErrDependencyUnavailable
+	}
+	order, err := service.orders.Get(ctx, actor.UserID, orderID)
+	if err != nil {
+		return ports.CheckoutForm{}, err
+	}
+	if order.Status() != domain.OrderPending {
+		return ports.CheckoutForm{}, domain.ErrOrderNotFound
+	}
+	if urls.ProductName == "" {
+		if facts, factsErr := service.courses.CourseForPurchase(ctx, order.CourseID()); factsErr == nil {
+			urls.ProductName = facts.Title
+		}
+	}
+	if buyer.ID == "" {
+		buyer.ID = actor.UserID
+	}
+	return service.provider.Checkout(ctx, order, buyer, urls)
 }
 
 func (service *Service) ApplyPaymentEvent(ctx context.Context, event domain.PaymentEvent) error {

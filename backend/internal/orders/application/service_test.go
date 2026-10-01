@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,6 +107,54 @@ func TestPurchaseStatusIsScopedToActor(t *testing.T) {
 	}
 }
 
+func TestPurchaseStatusChecksProviderAndAppliesApprovedOnce(t *testing.T) {
+	store := newFakeStore(t)
+	order := pendingOrder(t)
+	store.order = &order
+	provider := &fakePaymentProvider{status: ports.PaymentStatus{Event: domain.PaymentEvent{Provider: "provider", EventID: "approved-1", OrderID: orderID, Type: domain.PaymentSucceeded, Amount: *money(t, "50000"), ReceivedAt: fixedNow}}}
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" }, provider)
+	if _, err := service.PurchaseStatus(context.Background(), application.Actor{UserID: userID}, orderID); err != nil {
+		t.Fatal(err)
+	}
+	if provider.calls != 1 || store.appliedEvent.EventID != "approved-1" {
+		t.Fatalf("provider calls=%d event=%q", provider.calls, store.appliedEvent.EventID)
+	}
+}
+
+func TestPurchaseStatusIgnoresProviderFailure(t *testing.T) {
+	store := newFakeStore(t)
+	order := pendingOrder(t)
+	store.order = &order
+	provider := &fakePaymentProvider{err: errors.New("provider unavailable")}
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, provider)
+	got, err := service.PurchaseStatus(context.Background(), application.Actor{UserID: userID}, orderID)
+	if err != nil || got.ID() != orderID || got.Status() != domain.OrderPending {
+		t.Fatalf("order=%+v error=%v", got, err)
+	}
+}
+
+func TestPurchaseStatusThrottleIsSafeUnderConcurrentPolling(t *testing.T) {
+	store := newFakeStore(t)
+	order := pendingOrder(t)
+	store.order = &order
+	concurrentStore := &concurrentStatusStore{fakeStore: store}
+	provider := &concurrentPaymentProvider{}
+	service := application.New(concurrentStore, concurrentStore, concurrentStore, func() time.Time { return fixedNow }, func() string { return orderID }, provider)
+
+	var wait sync.WaitGroup
+	for range 32 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			got, err := service.PurchaseStatus(context.Background(), application.Actor{UserID: userID}, orderID)
+			if err != nil || got.Status() != domain.OrderPending {
+				t.Errorf("order=%q error=%v", got.Status(), err)
+			}
+		}()
+	}
+	wait.Wait()
+}
+
 func TestApplyPaymentEventDelegatesTheAtomicOperation(t *testing.T) {
 	store := newFakeStore(t)
 	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" })
@@ -181,6 +230,48 @@ type fakeStore struct {
 	grandfatherExpected time.Time
 	grandfatherUpdated  time.Time
 	grandfatherPrice    domain.Money
+}
+
+type fakePaymentProvider struct {
+	status ports.PaymentStatus
+	err    error
+	calls  int
+}
+
+type concurrentStatusStore struct {
+	*fakeStore
+	mu sync.Mutex
+}
+
+func (store *concurrentStatusStore) Get(_ context.Context, _ string, _ string) (domain.Order, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.order == nil {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	return *store.order, nil
+}
+
+type concurrentPaymentProvider struct {
+	mu sync.Mutex
+}
+
+func (provider *concurrentPaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	return ports.CheckoutForm{}, nil
+}
+
+func (provider *concurrentPaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	return ports.PaymentStatus{}, nil
+}
+
+func (provider *fakePaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	return ports.CheckoutForm{}, nil
+}
+func (provider *fakePaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
+	provider.calls++
+	return provider.status, provider.err
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {

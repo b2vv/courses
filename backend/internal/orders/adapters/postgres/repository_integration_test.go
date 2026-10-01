@@ -3,16 +3,22 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	ordershttp "courses/internal/orders/adapters/http"
 	orderspostgres "courses/internal/orders/adapters/postgres"
 	"courses/internal/orders/application"
 	"courses/internal/orders/domain"
+	"courses/internal/orders/ports"
+	"courses/platform/httpserver"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -142,6 +148,89 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("mismatch rows=%d error=%v", events, err)
 	}
 
+	t.Run("failed payment is terminal and idempotent", func(t *testing.T) {
+		failedIDs := []string{"70000000-0000-0000-0000-000000000010", "70000000-0000-0000-0000-000000000011", "70000000-0000-0000-0000-000000000012"}
+		failedID := func() string {
+			id := failedIDs[0]
+			failedIDs = failedIDs[1:]
+			return id
+		}
+		failedService := application.New(repository, repository, repository, func() time.Time { return now }, failedID)
+		var failedUser string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'failed@example.test','Failed','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&failedUser); err != nil {
+			t.Fatal(err)
+		}
+		failedOrder, err := domain.NewOrder("60000000-0000-0000-0000-000000000010", failedUser, integrationCourseID, order.Amount(), "failed-payment", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.Create(ctx, failedOrder); err != nil {
+			t.Fatal(err)
+		}
+		failedEvent := domain.PaymentEvent{Provider: "wayforpay", EventID: "failed-1", OrderID: failedOrder.ID(), Type: domain.PaymentFailed, Amount: failedOrder.Amount(), ReceivedAt: now.Add(3 * time.Minute)}
+		if err := failedService.ApplyPaymentEvent(ctx, failedEvent); err != nil {
+			t.Fatal(err)
+		}
+		if err := failedService.ApplyPaymentEvent(ctx, failedEvent); err != nil {
+			t.Fatalf("failed replay: %v", err)
+		}
+		status, err := repository.Get(ctx, failedUser, failedOrder.ID())
+		if err != nil || status.Status() != domain.OrderFailed {
+			t.Fatalf("status=%q error=%v", status.Status(), err)
+		}
+		var failedEvents, grants int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE provider='wayforpay' AND event_id='failed-1'`).Scan(&failedEvents); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE order_id=$1`, failedOrder.ID()).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if failedEvents != 1 || grants != 0 {
+			t.Fatalf("failed events=%d grants=%d", failedEvents, grants)
+		}
+		paidAfterFailed := failedEvent
+		paidAfterFailed.EventID = "paid-after-failed"
+		paidAfterFailed.Type = domain.PaymentSucceeded
+		if err := failedService.ApplyPaymentEvent(ctx, paidAfterFailed); err != domain.ErrPaymentEventRejected {
+			t.Fatalf("paid after failed error=%v", err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE order_id=$1`, failedOrder.ID()).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 0 {
+			t.Fatalf("paid after failed granted access: %d", grants)
+		}
+
+		var beforeEventRows, afterEventRows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events`).Scan(&beforeEventRows); err != nil {
+			t.Fatal(err)
+		}
+		beforeOrders, beforeGrants := 0, grants
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE id=$1`, failedOrder.ID()).Scan(&beforeOrders); err != nil {
+			t.Fatal(err)
+		}
+		invalidHandler := ordershttp.NewHandler(failedService, invalidCallbackVerifier{})
+		server := httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
+			invalidHandler.Register(mux, func(next http.Handler) http.Handler { return next }, func(next http.Handler) http.Handler { return next })
+		}})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/payments/wayforpay/callback", bytes.NewReader([]byte(`{"tampered":true}`)))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("bad signature status=%d body=%s", response.Code, response.Body.String())
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE provider='wayforpay' AND event_id='failed-1'`).Scan(&failedEvents); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events`).Scan(&afterEventRows); err != nil {
+			t.Fatal(err)
+		}
+		if failedEvents != 1 || afterEventRows != beforeEventRows || beforeOrders != 1 || beforeGrants != 0 {
+			t.Fatalf("bad signature changed rows events=%d total_before=%d total_after=%d orders=%d grants=%d", failedEvents, beforeEventRows, afterEventRows, beforeOrders, beforeGrants)
+		}
+	})
+
 	grant, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access")
 	if err != nil || grant.Source() != domain.GrantAdmin {
 		t.Fatalf("admin grant=%+v error=%v", grant, err)
@@ -191,6 +280,13 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("grandfather grants=%d error=%v", grants, err)
 	}
 }
+
+type invalidCallbackVerifier struct{}
+
+func (invalidCallbackVerifier) VerifyCallback([]byte, time.Time) (ports.Callback, error) {
+	return ports.Callback{}, domain.ErrPaymentEventRejected
+}
+func (invalidCallbackVerifier) Acknowledge(string, time.Time) []byte { return nil }
 
 func seedOrders(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()

@@ -4,7 +4,10 @@ import "time"
 
 type PaymentEventType string
 
-const PaymentSucceeded PaymentEventType = "paid"
+const (
+	PaymentSucceeded PaymentEventType = "paid"
+	PaymentFailed    PaymentEventType = "failed"
+)
 
 type PaymentEvent struct {
 	Provider   string
@@ -38,7 +41,7 @@ type PaymentEventDecision struct {
 // the domain whether this provider event was already applied.
 func DecidePaymentEvent(event PaymentEvent, order *Order, alreadyApplied bool) (PaymentEventDecision, error) {
 	if event.Provider == "" || event.EventID == "" || event.OrderID == "" || event.ReceivedAt.IsZero() ||
-		event.Type != PaymentSucceeded || event.Amount.MinorUnits() <= 0 || event.Amount.Currency() != CurrencyUAH {
+		event.Type != PaymentSucceeded && event.Type != PaymentFailed || event.Amount.MinorUnits() <= 0 || event.Amount.Currency() != CurrencyUAH {
 		return rejectedPaymentEvent()
 	}
 	if alreadyApplied {
@@ -49,6 +52,13 @@ func DecidePaymentEvent(event PaymentEvent, order *Order, alreadyApplied bool) (
 	}
 	if order.ID() != event.OrderID || order.Status() != OrderPending || !order.Amount().Equal(event.Amount) {
 		return rejectedPaymentEvent()
+	}
+	if event.Type == PaymentFailed {
+		failed, err := order.MarkFailed()
+		if err != nil {
+			return rejectedPaymentEvent()
+		}
+		return PaymentEventDecision{Action: PaymentEventApply, Order: failed}, nil
 	}
 	paid, err := order.MarkPaid(event.ReceivedAt)
 	if err != nil {

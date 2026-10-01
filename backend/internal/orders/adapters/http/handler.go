@@ -9,22 +9,43 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"courses/internal/orders/application"
 	"courses/internal/orders/domain"
+	"courses/internal/orders/ports"
 	"courses/platform/httpserver"
 )
 
 const maximumGrantBody = 8 * 1024
+const maximumCallbackBody = 64 * 1024
 
-type Handler struct{ service *application.Service }
+type Handler struct {
+	service       *application.Service
+	callback      ports.CallbackVerifier
+	publicBaseURL string
+}
 
-func NewHandler(service *application.Service) *Handler { return &Handler{service: service} }
+func NewHandler(service *application.Service, callback ...ports.CallbackVerifier) *Handler {
+	handler := &Handler{service: service}
+	if len(callback) > 0 {
+		handler.callback = callback[0]
+	}
+	return handler
+}
+
+func NewHandlerWithConfig(service *application.Service, callback ports.CallbackVerifier, publicBaseURL string) *Handler {
+	return &Handler{service: service, callback: callback, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
+}
 
 func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
 	mux.Handle("POST /api/v1/learn/courses/{courseId}/purchase", sameOrigin(authenticate(http.HandlerFunc(handler.startPurchase))))
+	mux.Handle("POST /api/v1/learn/orders/{orderId}/checkout", sameOrigin(authenticate(http.HandlerFunc(handler.checkout))))
 	mux.Handle("GET /api/v1/learn/orders/{orderId}", authenticate(http.HandlerFunc(handler.purchaseStatus)))
+	if handler.callback != nil {
+		mux.Handle("POST /api/v1/payments/wayforpay/callback", http.HandlerFunc(handler.callbackHandler))
+	}
 }
 
 func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrigin, administrator func(http.Handler) http.Handler) {
@@ -112,6 +133,59 @@ func (handler *Handler) purchaseStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, mapOrder(order))
+}
+
+func (handler *Handler) checkout(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("orderId")) {
+		writeError(w, r, domain.ErrOrderInvalid)
+		return
+	}
+	base := handler.publicBaseURL
+	urls := ports.CheckoutURLs{ReturnURL: base + "/orders/" + r.PathValue("orderId"), ServiceURL: base + "/api/v1/payments/wayforpay/callback"}
+	form, err := handler.service.Checkout(r.Context(), actor, r.PathValue("orderId"), ports.Buyer{ID: actor.UserID}, urls)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, form)
+}
+
+func (handler *Handler) callbackHandler(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	r.Body = http.MaxBytesReader(w, r.Body, maximumCallbackBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "invalid_callback", "Invalid payment callback")
+		return
+	}
+	now := time.Now()
+	callback, err := handler.callback.VerifyCallback(body, now)
+	if err != nil {
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "invalid_callback", "Invalid payment callback")
+		return
+	}
+	if callback.Event != nil {
+		err = handler.service.ApplyPaymentEvent(r.Context(), *callback.Event)
+		if errors.Is(err, domain.ErrPaymentEventUnmatched) {
+			// WayForPay retries when the service callback does not receive a valid
+			// acknowledgement. An unmatched order is transient: accepting here would
+			// permanently lose a callback delivered before the order commit.
+			writeError(w, r, domain.ErrDependencyUnavailable)
+			return
+		}
+		if err != nil && !errors.Is(err, domain.ErrPaymentEventRejected) {
+			writeError(w, r, err)
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(handler.callback.Acknowledge(callback.OrderReference, now))
 }
 
 func (handler *Handler) grantCourse(w http.ResponseWriter, r *http.Request) {

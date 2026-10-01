@@ -3,10 +3,13 @@ package http_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,12 +32,15 @@ const (
 )
 
 type fakeStore struct {
-	order     domain.Order
-	grant     domain.Grant
-	courseErr error
-	getErr    error
-	grantErr  error
-	active    []domain.Grant
+	order      domain.Order
+	grant      domain.Grant
+	courseErr  error
+	getErr     error
+	grantErr   error
+	active     []domain.Grant
+	applyCalls int
+	applyErr   error
+	grantCalls int
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -67,6 +73,7 @@ func (store *fakeStore) ActiveGrants(context.Context, string, string) ([]domain.
 	return store.active, nil
 }
 func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {
+	store.grantCalls++
 	if store.grantErr != nil {
 		return domain.Grant{}, store.grantErr
 	}
@@ -76,7 +83,10 @@ func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCom
 func (*fakeStore) GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error {
 	return nil
 }
-func (*fakeStore) Apply(context.Context, domain.PaymentEvent, func() string) error { return nil }
+func (store *fakeStore) Apply(context.Context, domain.PaymentEvent, func() string) error {
+	store.applyCalls++
+	return store.applyErr
+}
 
 func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
@@ -245,5 +255,157 @@ func assertContract(t *testing.T, request *http.Request, response *httptest.Resp
 	}
 	if err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Body: io.NopCloser(bytes.NewReader(body))}); err != nil {
 		t.Fatalf("response contract: %v body=%s", err, response.Body.String())
+	}
+}
+
+type fakeCallbackVerifier struct {
+	callback ports.Callback
+	err      error
+	ackCalls int
+}
+
+func (verifier *fakeCallbackVerifier) VerifyCallback([]byte, time.Time) (ports.Callback, error) {
+	return verifier.callback, verifier.err
+}
+
+func (verifier *fakeCallbackVerifier) Acknowledge(orderReference string, now time.Time) []byte {
+	verifier.ackCalls++
+	return []byte(`{"orderReference":"` + orderReference + `","status":"accept","time":` + fmt.Sprint(now.Unix()) + `,"signature":"0123456789abcdef0123456789abcdef"}`)
+}
+
+type fakePaymentProvider struct{}
+
+func (*fakePaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	return ports.CheckoutForm{Action: "https://secure.wayforpay.com/pay", Fields: []ports.CheckoutField{{Name: "merchantAccount", Value: "test"}}}, nil
+}
+func (*fakePaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
+	return ports.PaymentStatus{}, nil
+}
+
+func callbackServer(t *testing.T, store *fakeStore, verifier *fakeCallbackVerifier, provider ports.PaymentProvider) http.Handler {
+	t.Helper()
+	service := application.New(store, store, store, func() time.Time { return time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC) }, func() string { return "40000000-0000-4000-8000-000000000099" }, provider)
+	handler := ordershttp.NewHandler(service, verifier)
+	authenticate := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student"})))
+		})
+	}
+	return httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
+		handler.Register(mux, authenticate, func(next http.Handler) http.Handler { return next })
+	}})
+}
+
+func makeOrder(t *testing.T, status domain.OrderStatus) domain.Order {
+	t.Helper()
+	money, err := domain.NewMoney("50000", "UAH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	var paidAt *time.Time
+	if status == domain.OrderPaid {
+		value := created.Add(time.Minute)
+		paidAt = &value
+	}
+	order, err := domain.RestoreOrder(testOrder, testUser, testCourse, money, status, "purchase-1", created, paidAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return order
+}
+
+func TestWayForPayCallbackHTTPContract(t *testing.T) {
+	amount, err := domain.NewMoney("50000", "UAH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := domain.PaymentEvent{Provider: "wayforpay", EventID: "order:event", OrderID: testOrder, Type: domain.PaymentSucceeded, Amount: amount, ReceivedAt: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)}
+	for _, test := range []struct {
+		name       string
+		verifyErr  error
+		event      *domain.PaymentEvent
+		applyErr   error
+		wantStatus int
+		wantApply  int
+		wantAck    int
+	}{
+		{name: "bad signature", verifyErr: errors.New("bad signature"), wantStatus: http.StatusUnauthorized},
+		{name: "approved", event: &event, wantStatus: http.StatusOK, wantApply: 1, wantAck: 1},
+		{name: "unmatched retries", event: func() *domain.PaymentEvent {
+			copy := event
+			copy.OrderID = "30000000-0000-4000-8000-000000000099"
+			return &copy
+		}(), applyErr: domain.ErrPaymentEventUnmatched, wantStatus: http.StatusServiceUnavailable, wantApply: 1},
+		{name: "ignored status acknowledged", wantStatus: http.StatusOK, wantAck: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := &fakeStore{order: makeOrder(t, domain.OrderPending), applyErr: test.applyErr}
+			verifier := &fakeCallbackVerifier{callback: ports.Callback{Event: test.event, OrderReference: testOrder}}
+			if test.verifyErr != nil {
+				verifier.err = test.verifyErr
+			}
+			server := callbackServer(t, store, verifier, nil)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/payments/wayforpay/callback", bytes.NewReader([]byte(`{"signed":true}`)))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if store.applyCalls != test.wantApply {
+				t.Fatalf("apply calls=%d want=%d", store.applyCalls, test.wantApply)
+			}
+			if verifier.ackCalls != test.wantAck {
+				t.Fatalf("ack calls=%d want=%d", verifier.ackCalls, test.wantAck)
+			}
+			request.Body = io.NopCloser(bytes.NewReader([]byte(`{"signed":true}`)))
+			assertContract(t, request, response)
+		})
+	}
+	t.Run("replay is acknowledged without a second grant", func(t *testing.T) {
+		store := &fakeStore{order: makeOrder(t, domain.OrderPending)}
+		verifier := &fakeCallbackVerifier{callback: ports.Callback{Event: &event, OrderReference: testOrder}}
+		server := callbackServer(t, store, verifier, nil)
+		for range 2 {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/payments/wayforpay/callback", bytes.NewReader([]byte(`{"signed":true}`)))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		}
+		if verifier.ackCalls != 2 || store.grantCalls != 0 {
+			t.Fatalf("ack=%d grant calls=%d", verifier.ackCalls, store.grantCalls)
+		}
+	})
+}
+
+func TestCheckoutHTTPContract(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		store    *fakeStore
+		provider ports.PaymentProvider
+		want     int
+		code     string
+	}{
+		{name: "another user order", store: &fakeStore{getErr: domain.ErrOrderNotFound}, provider: &fakePaymentProvider{}, want: http.StatusNotFound},
+		{name: "non-pending order", store: &fakeStore{order: makeOrder(t, domain.OrderPaid)}, provider: &fakePaymentProvider{}, want: http.StatusNotFound},
+		{name: "provider unavailable", store: &fakeStore{order: makeOrder(t, domain.OrderPending)}, want: http.StatusServiceUnavailable, code: "dependency_unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := callbackServer(t, test.store, nil, test.provider)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/orders/"+testOrder+"/checkout", nil)
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if test.code != "" && !strings.Contains(response.Body.String(), test.code) {
+				t.Fatalf("body=%s", response.Body.String())
+			}
+			assertContract(t, request, response)
+		})
 	}
 }
