@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local smoke generate check-generated check
+.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local tunnel-up tunnel-down smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -52,6 +52,13 @@ e2e:
 # written down and then bypassed within an hour, because the cheap path was the wrong one. This
 # makes the cheap path correct by construction instead of by memory.
 e2e-local: up seed-identities seed e2e
+# Owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md. Needs only
+# WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
+# stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.
+tunnel-up: env
+	sh infrastructure/tunnel/up.sh
+tunnel-down:
+	sh infrastructure/tunnel/down.sh
 # Backlog B-5: Redis runs with `appendonly yes` on the persistent `redis-data` volume and
 # nothing drained the asynq queue between runs, so a run aborted mid-transcode left its task
 # behind. The next `up` starts the worker, `Recover` takes that task, and it eats the 2 CPU /
