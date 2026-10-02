@@ -7,15 +7,20 @@ The secret key stays in your local `.env` only; it never goes into the repo or a
 ## Prerequisites
 - WayForPay test merchant credentials: account, secret key, domain. (The shared public test
   merchant `test_merch_n1` with its wiki key works, or your own account in test mode.)
-- `cloudflared`: `brew install cloudflared` (not installed on this machine yet).
+- Nothing to install: the tunnel runs from Cloudflare's official image `cloudflare/cloudflared`
+  (pulled on first run). (`brew install cloudflared` also works if you prefer the host binary.)
 - Docker as usual: `export DOCKER_CONFIG=/tmp/claude-501/dockercfg` in every terminal below.
 
 ## Steps
-1. **Start the tunnel** to nginx (port 8080) and keep this terminal open:
+1. **Raise the base stack, then start the tunnel in Docker** on the same network, pointing at
+   nginx. The tunnel URL is random, and the api must know it at start — so tunnel first:
    ```
-   cloudflared tunnel --url http://localhost:8080
+   make up
+   docker run -d --name courses-tunnel --network courses_default \
+     cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://nginx:8080
+   sleep 10; docker logs courses-tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1
    ```
-   It prints `https://<random>.trycloudflare.com` — call it `$PUB`.
+   The last command prints `https://<random>.trycloudflare.com` — call it `$PUB`.
 
 2. **Add to your local `.env`** (gitignored; never commit it). Use `$PUB` literally, without a
    trailing slash:
@@ -38,6 +43,8 @@ The secret key stays in your local `.env` only; it never goes into the repo or a
    docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
    make seed-identities seed
    ```
+   This recreates the api with the new environment; the tunnel container keeps running.
+
    Quick check that the provider is configured:
    ```
    curl -s -o /dev/null -w '%{http_code}\n' -X POST "$PUB/api/v1/payments/wayforpay/callback" -d '{}'
@@ -83,7 +90,7 @@ The secret key stays in your local `.env` only; it never goes into the repo or a
 Courses 1 records them in `docs/payment/report.md` as the Pay25-live proof.
 
 ## Teardown
-- Ctrl-C `cloudflared` (throwaway hostname).
+- `docker rm -f courses-tunnel` (throwaway hostname; the public URL dies with it).
 - Remove the six lines from `.env` (or set them back), then
   `docker compose up -d --build` without the override — otherwise smoke's callback-404 guard
   goes red on a configured stack.
