@@ -104,6 +104,11 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   Luhn checksum; WayForPay's own form marks it «Невiрна картка» before submitting (order `09fd19e0…`
   stays pending). The tables circulating for WayForPay test cards look like mixes of other providers'
   test numbers (`4000000000000002` is Stripe's 3-D Secure card); only WayForPay can name the card.
+  **Fourth try:** the 13-digit `4222222222222` (Luhn-valid, also circulated as "WayForPay's Approved
+  card") went through WayForPay's form and came back `Declined`, 1101 "Declined To Card Issuer"
+  (order `6aa2b4f9…` → `failed`, lesson stayed locked). Summary of live outcomes on `test_merch_n1`:
+  4111… → 1105; 5454… → 1101; 4222222222222 → 1101; 4222 2222 2222 2222 → refused by the form
+  (not Luhn-valid). No circulated card yields `Approved`; stop guessing — ask WayForPay support.
 - **Defect found by the live run — closed (B-25, 2026-10-02).** We send the order id as WayForPay's
   `orderReference`, and WayForPay refused a second hosted form for the same pending order
   (`(1112) Duplicate Order ID`), leaving that order unpayable; the stub could not show it. Fixed: a
