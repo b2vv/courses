@@ -125,7 +125,18 @@ func (repository *Repository) GrandfatherOnPriceSet(ctx context.Context, courseI
 		return persistenceError(err)
 	}
 	if result.RowsAffected() != 1 {
-		return domain.ErrCourseModified
+		var currentMinor pgtype.Int8
+		var currentCurrency pgtype.Text
+		if err := tx.QueryRow(ctx, `SELECT price_minor,currency FROM courses WHERE id=$1::text::uuid`, courseID).Scan(&currentMinor, &currentCurrency); err != nil {
+			return persistenceError(err)
+		}
+		if !currentMinor.Valid || !currentCurrency.Valid || currentMinor.Int64 != int64(price.MinorUnits()) || currentCurrency.String != string(price.Currency()) {
+			return domain.ErrCourseModified
+		}
+		// Repeat of the same price-set is a no-op: the first call set the price AND grandfathered,
+		// so there is nothing left to grant. Production never reaches here (authoring grandfathers
+		// only when the stored price is NULL); this keeps a direct repeat idempotent.
+		return persistenceError(tx.Commit(ctx))
 	}
 	_, err = tx.Exec(ctx, `WITH inserted AS (
   INSERT INTO course_grants(user_id,course_id,source,state,granted_at)
