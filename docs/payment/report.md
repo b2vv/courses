@@ -50,7 +50,7 @@ whose proof differs from the plan's wording, or is partial, carry a note — non
 | Pay22 | contract `…/"Pay22 dependency failures are explicit"` (503 dependency_unavailable) | — |
 | Pay23 | integration `access_integration_test.go:"Pay23 active grant lookup uses the partial index"` (EXPLAIN ANALYZE, BUFFERS → Index Scan on `course_grants_one_active_per_user_course`) | index usage asserted; the "≤2× baseline" comparison is **not** asserted — no before/after number is pinned, so that magnitude stays unproven |
 | Pay24 | unit vectors `wayforpay_test.go` (purchase/callback/ack/CHECK_STATUS signatures); HTTP `TestWayForPayCallbackHTTPContract` (bad sig→401 nothing written, approved→apply, replay→accept no second grant) | the wiki's printed purchase hash is a documentation error; the reproducible value `4941ea0c…` is pinned. Real-signature conformance is Pay25-live (§6) |
-| Pay25 | e2e `purchase-wayforpay.spec.ts` against a local stub (checkout→redirect→poll→signed CHECK_STATUS→same ApplyPaymentEvent→lesson opens) | **offline proof only.** The stub signs with a throwaway key, so this proves our wiring, not conformance to the real provider. The phase-closing proof is Pay25-live (§6) — **OPEN** |
+| Pay25 | e2e `purchase-wayforpay.spec.ts` against a local stub (checkout→redirect→poll→signed CHECK_STATUS→same ApplyPaymentEvent→lesson opens); **live run 2026-10-02 against the real WayForPay test merchant** (see §6) | offline proof complete; live: signed purchase form accepted by WayForPay, signed CHECK_STATUS round trip applied through ApplyPaymentEvent, return redirect works. **Still OPEN:** an Approved payment → grant, and the real `serviceUrl` callback arriving (§6) |
 | Pay26 | integration `…/"Pay26 grandfather covers two students and repeats idempotently"` | **extended this phase (O07)** — two students → 2 grants; repeat price-set → still 2 |
 | Pay27 | unit property `access_test.go:TestPurchaseRequiredImpliesCannotView`, `TestCanViewAndPurchaseRequiredUseTheSameCourseFacts` | — |
 
@@ -81,6 +81,24 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   cloudflared tunnel run where the real `serviceUrl` callback reaches, verifies and applies once —
   runbook `work/runbook-o06c-tunnel.md`, run by the owner with the real test-merchant key (kept out
   of the repo). This row is recorded here as open and will be filled from that run.
+- **Pay25-live — partial, run 2026-10-02 by Courses 1** (owner away; public test merchant
+  `test_merch_n1`, tunnel via localhost.run because this network blocks Cloudflare's quick-tunnel API).
+  Proven against the real provider: (1) WayForPay accepted our signed Purchase form and opened its
+  hosted page with the right amount and product — the purchase signature is right (this settles the
+  wiki-vector doubt in Pay24); (2) our signed `CHECK_STATUS` was accepted, its signed answer verified,
+  and a `Declined` result applied through `ApplyPaymentEvent` (order → `failed`, no grant);
+  (3) WayForPay redirected the browser to `returnUrl` with `?course=`. **Not proven:** an `Approved`
+  payment → grant, and the real `serviceUrl` callback arriving. Why: the test card
+  `4111 1111 1111 1111` from WayForPay's API examples is declined by the test merchant
+  (`Declined`, reason 1105 "Invalid card number"), and WayForPay publishes no test-card list; and the
+  free localhost.run tunnel rotated its hostname within minutes, so the callback went to a dead URL.
+  Closing it needs a valid test card or the owner's own test-mode merchant, and a stable public URL
+  (a named Cloudflare tunnel or an ngrok account, or the deployment). Evidence: orders `4009ffdb…`
+  (Declined), `c15523d2…`/`1ab802ce…` (InProcessing, abandoned).
+- **Defect found by the live run — a pending order cannot be re-checked-out.** We send the order id
+  as WayForPay's `orderReference`; a second «Перейти до оплати» for the same pending order (buyer left
+  the payment page and came back) is refused by WayForPay with `(1112) Duplicate Order ID`, so that
+  order is unpayable. The stub could not show this. Backlog B-25; fix before launch.
 - **No production deployment.** Live payments need a ФОП and a public `serviceUrl`; both are a launch
   step (`provider-research.md`). Everything above is proven locally / against the test merchant.
 - **Pay23** pins index usage, not the ≤2× timing. **Pay15** free-regression and **Pay16** repeat-

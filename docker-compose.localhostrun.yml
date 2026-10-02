@@ -1,0 +1,18 @@
+# Owner-run live WayForPay proof (Pay25-live), `make tunnel-up` (the default provider).
+# A localhost.run SSH reverse tunnel to nginx — no account, HTTPS at https://<random>.lhr.life.
+# Used because some networks block Cloudflare's quick-tunnel API (api.trycloudflare.com); the
+# cloudflared variant stays available as TUNNEL_PROVIDER=cloudflared. Needs no variables, so it
+# starts before its random URL is known.
+services:
+  localhostrun:
+    image: alpine:3
+    command:
+      - sh
+      - -c
+      - >-
+        apk add --no-cache openssh-client >/dev/null &&
+        exec ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30
+        -o ExitOnForwardFailure=yes -R 80:nginx:8080 nokey@localhost.run
+    restart: 'no'
+    depends_on:
+      nginx: { condition: service_healthy }

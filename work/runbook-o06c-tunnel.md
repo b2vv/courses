@@ -8,6 +8,19 @@ The secret key stays in your local `.env` only; it never goes into the repo or a
 **Heads-up:** a quick tunnel makes this stack public for as long as it runs, seeded demo accounts
 included. Keep it short and run `make tunnel-down` when done.
 
+## Known limits (first live run, 2026-10-02)
+- **Tunnel provider.** `make tunnel-up` uses localhost.run by default because this network blocks
+  Cloudflare's quick-tunnel API; `TUNNEL_PROVIDER=cloudflared make tunnel-up` selects cloudflared.
+  The free localhost.run tunnel **rotates its hostname within minutes** — the api keeps the old URL,
+  so a callback sent after a rotation is lost. Pay quickly after `tunnel-up`, or use a named tunnel.
+- **Test card.** `4111 1111 1111 1111` (from WayForPay's API examples) is **declined** by
+  `test_merch_n1` (reason 1105). WayForPay publishes no test-card list; an Approved payment needs a
+  card WayForPay documents for test mode, or your own merchant in test mode. Never type a real card
+  into the shared test merchant.
+- **One checkout per order.** Opening «Перейти до оплати» twice for the same order is refused by
+  WayForPay (`1112 Duplicate Order ID`) — start a new purchase for each attempt until B-25 is fixed.
+- **Phone is required** on WayForPay's page.
+
 ## 1. Credentials — once
 Add two lines to your local `.env` (gitignored):
 ```
