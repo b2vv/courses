@@ -21,6 +21,28 @@ included. Keep it short and run `make tunnel-down` when done.
   WayForPay (`1112 Duplicate Order ID`) — start a new purchase for each attempt until B-25 is fixed.
 - **Phone is required** on WayForPay's page.
 
+## Approved needs a real card on your own test-mode shop (decided 2026-10-02)
+No WayForPay test card yields `Approved` (live: 4111… 1105, 5454… 1101, 4222222222222 1101; the wiki
+publishes none). Weblium's WayForPay guide (third-party): test cards "will be processed as
+unsuccessful. For successful payments you need to use a real card using real funds"; "if the store is
+in test mode, all payments are refunded automatically within 15 minutes" — unofficial until WayForPay
+confirms. So:
+1. Register **your own shop** in WayForPay (it starts in test mode; no ФОП needed for that). In the
+   merchant cabinet take its **merchant account** (merchantLogin) and **SecretKey**, and note the
+   **domain** the shop is registered for.
+2. In `.env`, replace the `test_merch_n1` lines with:
+   ```
+   WAYFORPAY_MERCHANT_ACCOUNT=<your merchant account>
+   WAYFORPAY_SECRET_KEY=<your SecretKey>
+   WAYFORPAY_MERCHANT_DOMAIN=<the shop's registered domain>
+   ```
+   (`make tunnel-up` keeps a domain set in `.env`; without it it uses the tunnel host.)
+3. Price the test course at **1 грн**. **You** pay with your own card in your browser — an agent never
+   types a real card. Check in the cabinet that the payment is refunded (expected within 15 minutes);
+   if not, refund it there.
+4. Note: a refund in the cabinet is NOT propagated to the course yet (`Refunded` is ignored — named gap
+   in the report), so the student keeps access after the refund. Expected for this proof.
+
 ## 1. Credentials — once
 Add two lines to your local `.env` (gitignored):
 ```
