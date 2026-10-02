@@ -50,7 +50,7 @@ whose proof differs from the plan's wording, or is partial, carry a note — non
 | Pay22 | contract `…/"Pay22 dependency failures are explicit"` (503 dependency_unavailable) | — |
 | Pay23 | integration `access_integration_test.go:"Pay23 active grant lookup uses the partial index"` (EXPLAIN ANALYZE, BUFFERS → Index Scan on `course_grants_one_active_per_user_course`) | index usage asserted; the "≤2× baseline" comparison is **not** asserted — no before/after number is pinned, so that magnitude stays unproven |
 | Pay24 | unit vectors `wayforpay_test.go` (purchase/callback/ack/CHECK_STATUS signatures); HTTP `TestWayForPayCallbackHTTPContract` (bad sig→401 nothing written, approved→apply, replay→accept no second grant) | the wiki's printed purchase hash is a documentation error; the reproducible value `4941ea0c…` is pinned. Real-signature conformance is Pay25-live (§6) |
-| Pay25 | e2e `purchase-wayforpay.spec.ts` against a local stub (checkout→redirect→poll→signed CHECK_STATUS→same ApplyPaymentEvent→lesson opens); **live run 2026-10-02 against the real WayForPay test merchant** (see §6) | offline proof complete; live: signed purchase form accepted by WayForPay, signed CHECK_STATUS round trip applied through ApplyPaymentEvent, return redirect works. **Still OPEN:** an Approved payment → grant, and the real `serviceUrl` callback arriving (§6) |
+| Pay25 | e2e `purchase-wayforpay.spec.ts` against a local stub (checkout→redirect→poll→signed CHECK_STATUS→same ApplyPaymentEvent→lesson opens); **live Approved run 2026-10-03 on the owner's own test-mode shop** (see §6) | offline proof complete; **live CLOSED:** a real 1-грн card payment on the owner's test-mode shop (`site_ex`/`site.ex`) returned `Approved`; the real `serviceUrl` callback arrived `POST → 200` (`2026-10-02T22:18:55Z`, req `49ef0938`), order `4396fba5…` → `paid` (100 UAH), **exactly one `paid` event and one active `purchase` grant — applied once**. Earlier same-day legs (signed purchase form accepted, signed CHECK_STATUS round trip, return redirect) also hold (§6) |
 | Pay26 | integration `…/"Pay26 grandfather covers two students and repeats idempotently"` | **extended this phase (O07)** — two students → 2 grants; repeat price-set → still 2 |
 | Pay27 | unit property `access_test.go:TestPurchaseRequiredImpliesCannotView`, `TestCanViewAndPurchaseRequiredUseTheSameCourseFacts` | — |
 
@@ -75,19 +75,31 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
 
 ## 6. Limitations (named, not claimed away)
 
-- **Pay25-live is OPEN — the phase does not close until it passes.** AGENTS requires the proof to
-  take the production path, not a fake. The offline stub (Pay25, O06c-auto) proves our wiring with a
-  self-consistent key; it cannot prove the real WayForPay signature. The live proof is a recorded
-  cloudflared tunnel run where the real `serviceUrl` callback reaches, verifies and applies once —
-  runbook `work/runbook-o06c-tunnel.md`, run by the owner with the real test-merchant key (kept out
-  of the repo). This row is recorded here as open and will be filled from that run.
-- **Pay25-live — partial, run 2026-10-02 by Courses 1** (owner away; public test merchant
+- **Pay25-live — CLOSED, live Approved run 2026-10-03 by the owner.** AGENTS requires the proof to
+  take the production path, not a fake; this took it. On the owner's **own WayForPay shop in test mode**
+  (`merchantAccount=site_ex`, `merchantDomainName=site.ex`; SecretKey in local `.env` only), the owner
+  paid the 1-грн `live-pay25-07a81323` course with a **real card** in the browser through a stable
+  **ngrok** tunnel (localhost.run rotated its hostname within minutes — the first URL was dead before
+  payment, so we switched to ngrok, which holds a URL for the session). Observed end to end:
+  checkout `POST → 200`, then WayForPay's real `serviceUrl` callback `POST /api/v1/payments/wayforpay/callback → 200`
+  (`2026-10-02T22:18:55Z`, requestId `49ef0938b982e4c73503962181ff4774`; the body is never logged by
+  design). Applied-once proof, scoped to that order/course: order `4396fba5-0860-4006-970b-e1c1f33f6650`
+  → `paid`, `amount_minor=100` UAH, **1 `paid` event / 1 event total**; **1 active `purchase` grant**
+  for `student@courseforge.local` on `live-pay25-07a81323`; the locked lesson opened. (The global
+  `purchase`-grant count is noise from prior stub/e2e runs — 189000-minor orders — which is why the
+  count is scoped to this course.) The course was archived after the run (published set back to the
+  seeded three) and the tunnel/ngrok torn down. **Decision (owner, 2026-10-03):** the live run used the
+  existing SecretKey (it had appeared in chat) — acceptable for a one-off 1-грн test-mode charge; the
+  key is to be regenerated and the merchant password changed before any further live use (the password
+  is not used by the project and is stored nowhere). Runbook: `work/runbook-o06c-tunnel.md`.
+- **Pay25-live — earlier same-day attempts on the shared test merchant `test_merch_n1` (record).** Run 2026-10-02 by Courses 1 (owner away; public test merchant
   `test_merch_n1`, tunnel via localhost.run because this network blocks Cloudflare's quick-tunnel API).
   Proven against the real provider: (1) WayForPay accepted our signed Purchase form and opened its
   hosted page with the right amount and product — the purchase signature is right (this settles the
   wiki-vector doubt in Pay24); (2) our signed `CHECK_STATUS` was accepted, its signed answer verified,
   and a `Declined` result applied through `ApplyPaymentEvent` (order → `failed`, no grant);
-  (3) WayForPay redirected the browser to `returnUrl` with `?course=`. **Not proven:** an `Approved`
+  (3) WayForPay redirected the browser to `returnUrl` with `?course=`. **Not proven on `test_merch_n1`**
+  (later closed on the owner's own test-mode shop, see the CLOSED bullet above): an `Approved`
   payment → grant, and the real `serviceUrl` callback arriving. Why: the test card
   `4111 1111 1111 1111` from WayForPay's API examples is declined by the test merchant
   (`Declined`, reason 1105 "Invalid card number"), and WayForPay publishes no test-card list; and the
@@ -155,4 +167,6 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
 
 ## 7. Next
 
-Pay25-live (owner tunnel run) → fill the Pay25 row → PR for the payment phase.
+Pay25-live closed (live Approved run 2026-10-03, §6). All Pay01–Pay27 + Pay04b/Pay21b rows proven.
+Remaining: merge PR #3 for the payment phase; before any further live use, rotate the shop SecretKey
+and change its merchant password (owner decision, §6).
