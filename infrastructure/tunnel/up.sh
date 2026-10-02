@@ -1,6 +1,6 @@
 #!/bin/sh
 # `make tunnel-up` — the owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md.
-# Starts a Cloudflare quick tunnel to nginx, then recreates the api with WayForPay configured for
+# Starts a public tunnel to nginx (localhost.run by default, TUNNEL_PROVIDER=cloudflared optional), then recreates the api with WayForPay configured for
 # that tunnel's random public URL. Only two values come from .env (the merchant account and key);
 # the URL and domain are exported here, and shell variables take precedence over .env in Compose,
 # so .env is never edited by this script.
@@ -14,20 +14,28 @@ for name in WAYFORPAY_MERCHANT_ACCOUNT WAYFORPAY_SECRET_KEY; do
   fi
 done
 
-with_tunnel="docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml"
+# localhost.run by default: some networks block Cloudflare's quick-tunnel API outright.
+provider=${TUNNEL_PROVIDER:-localhostrun}
+case $provider in
+  localhostrun) file=docker-compose.localhostrun.yml; pattern='https://[a-z0-9-]+\.lhr\.life' ;;
+  cloudflared) file=docker-compose.cloudflared.yml; pattern='https://[a-z0-9-]+\.trycloudflare\.com' ;;
+  *) echo "TUNNEL_PROVIDER must be localhostrun or cloudflared, not $provider" >&2; exit 1 ;;
+esac
+with_tunnel="docker compose -f docker-compose.yml -f $file"
 
 make up
-$with_tunnel up -d cloudflared
+$with_tunnel up -d "$provider"
 
 url=""
 for _ in $(seq 1 30); do
-  url=$($with_tunnel logs cloudflared 2>&1 \
-    | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | grep -v '^https://api\.' | head -1 || true)
+  # api.trycloudflare.com is cloudflared's own API, never the tunnel.
+  url=$($with_tunnel logs "$provider" 2>&1 \
+    | grep -oE "$pattern" | grep -v '^https://api\.' | head -1 || true)
   [ -n "$url" ] && break
   sleep 2
 done
 if [ -z "$url" ]; then
-  echo "No tunnel URL after 60 s. Inspect: $with_tunnel logs cloudflared" >&2
+  echo "No $provider tunnel URL after 60 s. Inspect: $with_tunnel logs $provider" >&2
   exit 1
 fi
 

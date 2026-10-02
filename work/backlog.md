@@ -1331,3 +1331,25 @@ From `work/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary
 
 Trigger: fold 1/3/4 into a follow-up polish commit on `feat/payment` before or just after the PR
 merges; 2 stays a named limitation.
+
+## B-25 — WayForPay refuses a second checkout of the same pending order (live run, 2026-10-02)
+
+**Found by:** the Pay25-live run against `test_merch_n1`. **Mechanism:** our checkout sends the order
+id as WayForPay's `orderReference`; WayForPay treats `orderReference` as unique, so a second hosted
+form for the same order (the buyer opened «Перейти до оплати», left, came back and pressed it again)
+answers `(1112) Duplicate Order ID`. The status page keeps offering «Перейти до оплати» for a pending
+order, so the buyer hits a dead end; «Спробувати ще раз» appears only for `failed`. **Repro:** start a
+purchase, open the checkout form twice for the same order (two POSTs to
+`/api/v1/learn/orders/{id}/checkout` submitted to WayForPay). **Fix options:** (a) a per-attempt
+`orderReference` (order id + attempt suffix) mapped back to the order in the callback and in
+CHECK_STATUS — the money path must still match one order; (b) on a pending order whose checkout was
+already opened, start a new order (new idempotency key) instead. Decide before launch; (a) keeps one
+order per purchase intent.
+
+## B-26 — the live proof needs a stable public URL and a working test card
+
+Cloudflare's quick-tunnel API (`api.trycloudflare.com`) is unreachable from this network (TCP to its
+IPs times out; cloudflare.com itself works); the localhost.run free tunnel works but rotates its
+hostname within minutes, which breaks `serviceUrl`/`returnUrl` mid-run. The test card from WayForPay's
+API examples (`4111…`) is declined (1105). To close Pay25-live: a named tunnel (Cloudflare account or
+ngrok authtoken) or the deployment, plus a documented test card or the owner's own test-mode merchant.
