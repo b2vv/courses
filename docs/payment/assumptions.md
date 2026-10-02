@@ -223,3 +223,14 @@ order without a grant must carry an explicit, queryable refund trace.
 **How to check:** integration — a second checkout of an opened order creates a new order with a new
 reference; a late Declined of the old order leaves the new one untouched; two Approved orders → one
 grant and the second order flagged for refund.
+
+## 2026-10-02 — Pay25 Approved leg: owner's real card on the owner's test-mode shop (owner decision)
+
+**Decision (owner, 2026-10-02):** WayForPay publishes no test card that yields `Approved` (search of
+the wiki, help centre and official SDK/plugin READMEs; four cards tried live, all declined or refused).
+The Approved → grant → callback leg of Pay25 is proven with the owner's **own WayForPay shop in test
+mode** and the owner's **real card for 1 UAH**, paid by the owner. **Alternatives closed:** waiting for
+WayForPay support; merging with the leg unproven. **Unconfirmed:** the 15-minute automatic refund in
+test mode comes from a third-party guide (Weblium), not WayForPay — the owner checks the refund in the
+cabinet. **How to check:** the runbook run shows `Approved` from the signed CHECK_STATUS, an active
+`purchase` grant, the lesson open, and the `serviceUrl` callback answered 200.

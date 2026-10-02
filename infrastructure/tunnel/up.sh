@@ -41,7 +41,10 @@ fi
 
 PUBLIC_ORIGIN=$url
 PUBLIC_BASE_URL=$url
-WAYFORPAY_MERCHANT_DOMAIN=${url#https://}
+# Your own WayForPay shop is registered for a domain; if .env names it, keep it. Otherwise the
+# tunnel host (the shared test merchant accepts any).
+WAYFORPAY_MERCHANT_DOMAIN=$(sed -n 's/^WAYFORPAY_MERCHANT_DOMAIN=//p' .env | tail -1)
+[ -n "$WAYFORPAY_MERCHANT_DOMAIN" ] || WAYFORPAY_MERCHANT_DOMAIN=${url#https://}
 export PUBLIC_ORIGIN PUBLIC_BASE_URL WAYFORPAY_MERCHANT_DOMAIN
 
 $with_tunnel -f docker-compose.tunnel.yml up -d --build --wait --wait-timeout 180 api
