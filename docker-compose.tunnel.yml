@@ -1,0 +1,13 @@
+# Owner-run live WayForPay proof (Pay25-live): work/runbook-o06c-tunnel.md.
+# Forwards the WayForPay and public-URL settings from your local .env into the api container —
+# the base docker-compose.yml lists the api environment explicitly and does not pass these.
+# No secret lives in this file: every value comes from .env. `:?` fails loudly if one is missing.
+services:
+  api:
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the tunnel URL}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL to the tunnel URL}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      WAYFORPAY_MERCHANT_ACCOUNT: ${WAYFORPAY_MERCHANT_ACCOUNT:?Set the WayForPay test merchant account}
+      WAYFORPAY_SECRET_KEY: ${WAYFORPAY_SECRET_KEY:?Set the WayForPay test secret key}
+      WAYFORPAY_MERCHANT_DOMAIN: ${WAYFORPAY_MERCHANT_DOMAIN:?Set the merchant domain}
