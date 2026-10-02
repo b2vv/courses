@@ -234,3 +234,15 @@ WayForPay support; merging with the leg unproven. **Unconfirmed:** the 15-minute
 test mode comes from a third-party guide (Weblium), not WayForPay — the owner checks the refund in the
 cabinet. **How to check:** the runbook run shows `Approved` from the signed CHECK_STATUS, an active
 `purchase` grant, the lesson open, and the `serviceUrl` callback answered 200.
+
+## 2026-10-03 — Pay25-live done; SecretKey rotation deferred to after the one-off test charge (owner decision)
+
+**Decision (owner, 2026-10-03):** the live Approved run used the shop's existing `WAYFORPAY_SECRET_KEY`
+even though it had appeared in chat, rather than rotating it first. **Alternative closed:** regenerate the
+key and change the merchant password before the run (the fully by-the-book order), which the owner judged
+not worth the delay for a single 1-грн charge on a shop in test mode (low blast radius: a leaked test-mode
+key can at most forge callbacks for that test shop; no real funds, and the shop is archived/idle after).
+**Obligation it creates:** regenerate the SecretKey and change the merchant password **before any further
+live use**; the password is not used by the project and is stored nowhere. **How to check:** the live
+proof is recorded (callback `POST → 200`, order `4396fba5…` → `paid`, one grant/one event — report §6);
+a later `git grep` shows no key in the repo, and `.env` stays gitignored.
