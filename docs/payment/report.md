@@ -87,6 +87,10 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   purchase lack a dedicated e2e / integration leg (covered at other levels, see §2). **Pay02**'s
   exact 50000 is a unit, not the named integration. None of these blocks the access or money
   invariants, which are proven at the levels §2 names.
+- **The status throttle is per process.** `service.go` keeps the CHECK_STATUS throttle in memory, so
+  with N API instances the signed status check fires up to N× as often. Correctness is unaffected —
+  the grant goes through the callback / `ApplyPaymentEvent`, not the throttle — but a shared store
+  (e.g. Redis) would be needed before horizontal scaling. Named, not scheduled.
 - **grandfather** keys on playback progress only: a learner who used a free course solely through
   transcript or discussion, with no video progress, gets no grant on free→paid (plan NB4).
 
