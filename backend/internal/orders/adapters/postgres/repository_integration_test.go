@@ -77,6 +77,98 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	now := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
 	service := application.New(repository, repository, repository, func() time.Time { return now }, newID)
 
+	t.Run("Pay17 price change preserves access and order snapshot", func(t *testing.T) {
+		const pay17UserID = "40000000-0000-4000-8000-000000000010"
+		const pay17CourseID = "50000000-0000-4000-8000-000000000010"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'pay17@example.test','Pay17','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, pay17UserID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency,created_at,updated_at)
+VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',$3,$3)`, pay17CourseID, integrationAdminID, now); err != nil {
+			t.Fatal(err)
+		}
+		pay17IDs := []string{"60000000-0000-4000-8000-000000000010", "60000000-0000-4000-8000-000000000011", "60000000-0000-4000-8000-000000000012"}
+		pay17ID := func() string {
+			id := pay17IDs[0]
+			pay17IDs = pay17IDs[1:]
+			return id
+		}
+		pay17Service := application.New(repository, repository, repository, func() time.Time { return now }, pay17ID)
+		pay17Order, err := pay17Service.StartPurchase(ctx, application.Actor{UserID: pay17UserID}, pay17CourseID, "pay17-purchase")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := pay17Service.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "pay17-paid", OrderID: pay17Order.ID(), Type: domain.PaymentSucceeded, Amount: pay17Order.Amount(), ReceivedAt: now.Add(time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE courses SET price_minor=70000,currency='UAH',updated_at=$2 WHERE id=$1`, pay17CourseID, now.Add(2*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+		grants, err := repository.ActiveGrants(ctx, pay17UserID, pay17CourseID)
+		if err != nil || len(grants) != 1 {
+			t.Fatalf("active grants=%d error=%v", len(grants), err)
+		}
+		var amount int64
+		if err := pool.QueryRow(ctx, `SELECT amount_minor FROM orders WHERE id=$1`, pay17Order.ID()).Scan(&amount); err != nil {
+			t.Fatal(err)
+		}
+		if amount != 50000 {
+			t.Fatalf("order amount_minor=%d, want 50000 after price changed to 70000", amount)
+		}
+	})
+
+	t.Run("Pay26 grandfather covers two students and repeats idempotently", func(t *testing.T) {
+		const pay26CourseID = "50000000-0000-4000-8000-000000000011"
+		const pay26ModuleID = "51000000-0000-4000-8000-000000000011"
+		const pay26LessonID = "52000000-0000-4000-8000-000000000011"
+		const pay26StudentOne = "40000000-0000-4000-8000-000000000011"
+		const pay26StudentTwo = "40000000-0000-4000-8000-000000000012"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'pay26-one@example.test','Pay26 one','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),($2,'pay26-two@example.test','Pay26 two','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, pay26StudentOne, pay26StudentTwo); err != nil {
+			t.Fatal(err)
+		}
+		for _, stmt := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency,created_at,updated_at) VALUES($1,'pay26','Pay26','Summary','Description','published',$2,$3,NULL,NULL,$3,$3)`, []any{pay26CourseID, integrationAdminID, now}},
+			{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1,$2,'Module',0)`, []any{pay26ModuleID, pay26CourseID}},
+			{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1,$2,'Lesson','',0)`, []any{pay26LessonID, pay26ModuleID}},
+			{`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at) VALUES($1,$3,1,1,$4),($2,$3,2,1,$4)`, []any{pay26StudentOne, pay26StudentTwo, pay26LessonID, now}},
+		} {
+			if _, err := pool.Exec(ctx, stmt.sql, stmt.args...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		pay26IDs := []string{"60000000-0000-4000-8000-000000000013"}
+		pay26ID := func() string {
+			id := pay26IDs[0]
+			pay26IDs = pay26IDs[1:]
+			return id
+		}
+		pay26Service := application.New(repository, repository, repository, func() time.Time { return now }, pay26ID)
+		updatedAt := now.Add(time.Microsecond)
+		if err := pay26Service.GrandfatherOnPriceSet(ctx, pay26CourseID, now, 70000, "UAH", updatedAt); err != nil {
+			t.Fatal(err)
+		}
+		var grants int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE course_id=$1 AND source='grandfather' AND state='active'`, pay26CourseID).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 2 {
+			t.Fatalf("first price-set grandfather grants=%d, want 2", grants)
+		}
+		if err := pay26Service.GrandfatherOnPriceSet(ctx, pay26CourseID, now, 70000, "UAH", updatedAt); err != nil {
+			t.Fatalf("repeat price-set: %v", err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE course_id=$1 AND source='grandfather' AND state='active'`, pay26CourseID).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 2 {
+			t.Fatalf("repeat price-set grandfather grants=%d, want 2", grants)
+		}
+	})
+
 	order, err := service.StartPurchase(ctx, application.Actor{UserID: integrationUserID}, integrationCourseID, "purchase-1")
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +208,7 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		t.Fatalf("status=%q error=%v", status.Status(), err)
 	}
 	var grants, events, audits int
-	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE order_id=$1),(SELECT count(*) FROM payment_events WHERE event_id='paid-1'),(SELECT count(*) FROM grant_audit WHERE payment_event_id IS NOT NULL)`, order.ID()).Scan(&grants, &events, &audits); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE order_id=$1),(SELECT count(*) FROM payment_events WHERE event_id='paid-1'),(SELECT count(*) FROM grant_audit WHERE payment_event_id=(SELECT id FROM payment_events WHERE event_id='paid-1'))`, order.ID()).Scan(&grants, &events, &audits); err != nil {
 		t.Fatal(err)
 	}
 	if grants != 1 || events != 1 || audits != 1 {
