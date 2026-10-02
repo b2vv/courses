@@ -109,6 +109,15 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   (order `6aa2b4f9…` → `failed`, lesson stayed locked). Summary of live outcomes on `test_merch_n1`:
   4111… → 1105; 5454… → 1101; 4222222222222 → 1101; 4222 2222 2222 2222 → refused by the form
   (not Luhn-valid). No circulated card yields `Approved`; stop guessing — ask WayForPay support.
+  **Why (search of WayForPay's own material, 2026-10-02):** no WayForPay-owned source — the wiki in
+  uk/ru/en, the help centre, the `github.com/wayforpay` SDK and plugin READMEs — publishes a card that
+  yields `Approved` in test mode. The only concrete description found is third-party (Weblium's
+  WayForPay integration guide): the test cards `4111…` and `5454…` "will be processed as
+  unsuccessful. For successful payments you need to use a real card using real funds", and "if the
+  store is in test mode, all payments are refunded automatically within 15 minutes". That matches every
+  live outcome above. So the Approved → grant leg is provable only with a real card on a merchant in
+  test mode — a step the owner must perform (an agent never enters a real card); the auto-refund is
+  unofficial until WayForPay confirms it. Trace: `work/_wip-wfp-test-cards.md`.
 - **Defect found by the live run — closed (B-25, 2026-10-02).** We send the order id as WayForPay's
   `orderReference`, and WayForPay refused a second hosted form for the same pending order
   (`(1112) Duplicate Order ID`), leaving that order unpayable; the stub could not show it. Fixed: a
