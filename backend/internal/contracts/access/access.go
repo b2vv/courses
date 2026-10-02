@@ -12,10 +12,21 @@ type Subject struct {
 type Course struct {
 	OwnerID   string
 	Published bool
+	Paid      bool
+	Entitled  bool
+	Preview   bool
 }
 
 // CanView reports whether subject may view course.
 func CanView(subject Subject, course Course) bool {
-	// The rule does not trust transport blindly because it will become load-bearing for payment.
-	return subject.Administrator || (subject.UserID != "" && subject.UserID == course.OwnerID) || course.Published
+	return accessExempt(subject, course) || course.Published && (!course.Paid || course.Preview)
+}
+
+// PurchaseRequired reports whether payment is the reason subject may not view course.
+func PurchaseRequired(subject Subject, course Course) bool {
+	return course.Published && course.Paid && !course.Preview && !accessExempt(subject, course)
+}
+
+func accessExempt(subject Subject, course Course) bool {
+	return subject.Administrator || (subject.UserID != "" && subject.UserID == course.OwnerID) || course.Entitled
 }

@@ -38,6 +38,7 @@ type adminLessonDTO struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	IsPreview   bool   `json:"isPreview"`
 }
 
 type adminModuleDTO struct {
@@ -57,15 +58,36 @@ type adminCourseTreeDTO struct {
 	CreatedAt    string           `json:"createdAt"`
 	UpdatedAt    string           `json:"updatedAt"`
 	PublishedAt  *string          `json:"publishedAt"`
+	Price        *priceDTO        `json:"price"`
 	Modules      []adminModuleDTO `json:"modules"`
 }
 
 type adminCourseWriteRequest struct {
-	Slug         *string `json:"slug"`
-	Title        *string `json:"title"`
-	Summary      *string `json:"summary"`
-	Description  *string `json:"description"`
-	InstructorID *string `json:"instructorId"`
+	Slug         *string          `json:"slug"`
+	Title        *string          `json:"title"`
+	Summary      *string          `json:"summary"`
+	Description  *string          `json:"description"`
+	InstructorID *string          `json:"instructorId"`
+	Price        optionalPriceDTO `json:"price"`
+}
+
+type optionalPriceDTO struct {
+	Value *priceDTO
+	Set   bool
+}
+
+func (price *optionalPriceDTO) UnmarshalJSON(data []byte) error {
+	price.Set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		price.Value = nil
+		return nil
+	}
+	var value priceDTO
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	price.Value = &value
+	return nil
 }
 
 type createAdminCourseRequest adminCourseWriteRequest
@@ -74,6 +96,7 @@ type saveAdminLessonRequest struct {
 	ID          *string `json:"id"`
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
+	IsPreview   *bool   `json:"isPreview"`
 }
 
 type saveAdminModuleRequest struct {
@@ -335,7 +358,7 @@ func mapAdminCourseTree(tree domain.CourseTree) adminCourseTreeDTO {
 	for _, module := range tree.Modules {
 		lessons := make([]adminLessonDTO, 0, len(module.Lessons))
 		for _, lesson := range module.Lessons {
-			lessons = append(lessons, adminLessonDTO{ID: lesson.ID, Title: lesson.Title, Description: lesson.Description})
+			lessons = append(lessons, adminLessonDTO{ID: lesson.ID, Title: lesson.Title, Description: lesson.Description, IsPreview: lesson.IsPreview})
 		}
 		modules = append(modules, adminModuleDTO{ID: module.ID, Title: module.Title, Lessons: lessons})
 	}
@@ -343,7 +366,7 @@ func mapAdminCourseTree(tree domain.CourseTree) adminCourseTreeDTO {
 		ID: tree.ID, Slug: tree.Slug, Title: tree.Title, Summary: tree.Summary,
 		Description: tree.Description, Status: string(tree.Status), InstructorID: tree.InstructorID,
 		CreatedAt: formatAdminTime(tree.CreatedAt), UpdatedAt: formatAdminTime(tree.UpdatedAt),
-		PublishedAt: formatOptionalAdminTime(tree.PublishedAt), Modules: modules,
+		PublishedAt: formatOptionalAdminTime(tree.PublishedAt), Price: mapPrice(tree.Price), Modules: modules,
 	}
 }
 
@@ -357,7 +380,7 @@ func (request adminCourseWriteRequest) draft() (domain.CourseDraft, error) {
 	}
 	return domain.CourseDraft{
 		Slug: *request.Slug, Title: *request.Title, Summary: *request.Summary,
-		Description: *request.Description, InstructorID: instructorID,
+		Description: *request.Description, InstructorID: instructorID, Price: domainPrice(request.Price.Value), PriceSet: request.Price.Set,
 	}, nil
 }
 
@@ -383,16 +406,34 @@ func (request saveAdminCourseRequest) tree(id string) (domain.CourseTree, time.T
 			if lesson.ID == nil || lesson.Title == nil || lesson.Description == nil {
 				return domain.CourseTree{}, time.Time{}, domain.ErrInvalidRequest
 			}
+			isPreview := false
+			if lesson.IsPreview != nil {
+				isPreview = *lesson.IsPreview
+			}
 			lessons = append(lessons, domain.Lesson{
-				ID: *lesson.ID, Title: *lesson.Title, Description: *lesson.Description, Position: lessonPosition,
+				ID: *lesson.ID, Title: *lesson.Title, Description: *lesson.Description, Position: lessonPosition, IsPreview: isPreview, PreviewSet: lesson.IsPreview != nil,
 			})
 		}
 		modules = append(modules, domain.Module{ID: *input.ID, Title: *input.Title, Position: modulePosition, Lessons: lessons})
 	}
 	return domain.CourseTree{
 		ID: id, Slug: draft.Slug, Title: draft.Title, Summary: draft.Summary,
-		Description: draft.Description, InstructorID: draft.InstructorID, Modules: modules,
+		Description: draft.Description, InstructorID: draft.InstructorID, Price: draft.Price, PriceSet: draft.PriceSet, Modules: modules,
 	}, expectedUpdatedAt, nil
+}
+
+func mapPrice(price *domain.Price) *priceDTO {
+	if price == nil {
+		return nil
+	}
+	return &priceDTO{Minor: price.Minor, Currency: price.Currency}
+}
+
+func domainPrice(price *priceDTO) *domain.Price {
+	if price == nil {
+		return nil
+	}
+	return &domain.Price{Minor: price.Minor, Currency: price.Currency}
 }
 
 func decodeAdminJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {

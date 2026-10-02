@@ -233,7 +233,7 @@ test.describe('with a stored admin session', () => {
     await page.goto('/');
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
 
-    const administration = page.getByRole('link', { name: 'Адміністрування' });
+    const administration = page.getByRole('link', { name: 'В адмінку' });
     const signOut = page.getByRole('button', { name: 'Вийти' });
     const administrationBox = await administration.boundingBox();
     const signOutBox = await signOut.boundingBox();
@@ -293,6 +293,8 @@ test.describe('with a stored student session', () => {
           createdAt: '2026-09-08T08:00:00Z',
           updatedAt: '2026-09-08T08:00:00Z',
           publishedAt: '2026-09-08T08:00:00Z',
+          price: null,
+          paid: false,
           modules: [
             {
               id: '20000000-0000-4000-8000-000000000001',
@@ -305,6 +307,8 @@ test.describe('with a stored student session', () => {
                   position: 0,
                   completed: false,
                   clientSeq: 0,
+                  isPreview: false,
+                  locked: false,
                 },
               ],
             },

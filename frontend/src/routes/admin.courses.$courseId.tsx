@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { DraftQueryError } from '../app/composition/admin-draft-queries';
@@ -7,7 +13,13 @@ import { VideoQueryError } from '../app/composition/admin-video-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
 import { asBrandedId, validEntityId } from '../domain/course/course';
-import type { CourseId, CourseStatus, CourseTree, CourseTreeEdit } from '../domain/course/course';
+import type {
+  CourseId,
+  CoursePrice,
+  CourseStatus,
+  CourseTree,
+  CourseTreeEdit,
+} from '../domain/course/course';
 import type { DraftErrorCode } from '../domain/transcript/draft';
 import type { AuthenticatedUser } from '../domain/identity/identity';
 import type {
@@ -22,6 +34,9 @@ import type {
   LessonVideoFieldActionResult,
 } from '../presentation/admin/LessonVideoField';
 import { CourseListFailure } from '../presentation/admin/CourseListView';
+import { CourseGrantPanel } from '../presentation/admin/CourseGrantPanel';
+import { GrantQueryError } from '../app/composition/admin-grant-queries';
+import type { GrantErrorCode } from '../domain/purchase/grant';
 
 function courseId(value: string): CourseId {
   if (!validEntityId(value)) throw notFound();
@@ -78,6 +93,7 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
   const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
   const save = useMutation(admin.save(queryClient));
+  const setPrice = useMutation(admin.setPrice(queryClient));
   const transition = useMutation(admin.transition(queryClient));
   const remove = useMutation(admin.delete(queryClient));
   const mintVideo = useMutation(admin.videos.mint(queryClient));
@@ -152,6 +168,8 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
   };
   const actions = {
     onSave: (current: CourseTree, edit: CourseTreeEdit) => save.mutateAsync({ current, edit }),
+    onSetPrice: (current: CourseTree, price: CoursePrice | null) =>
+      setPrice.mutateAsync({ current, price }),
     onTransition: (current: CourseTree, status: CourseStatus) =>
       transition.mutateAsync({ current, status }),
     onDelete: async (current: CourseTree) => {
@@ -178,6 +196,7 @@ function AdminOwnerEditor({
   course,
   actor,
   onSave,
+  onSetPrice,
   onTransition,
   onDelete,
   onAuthenticationRequired,
@@ -186,6 +205,7 @@ function AdminOwnerEditor({
   course: CourseTree;
   actor: AuthenticatedUser;
   onSave: (current: CourseTree, edit: CourseTreeEdit) => Promise<CourseTree>;
+  onSetPrice: (current: CourseTree, price: CoursePrice | null) => Promise<CourseTree>;
   onTransition: (current: CourseTree, status: CourseStatus) => Promise<CourseTree>;
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
@@ -227,7 +247,11 @@ function AdminOwnerEditor({
       course={course}
       actor={actor}
       ownerOptions={instructors.data ?? null}
+      adminTools={
+        <CourseGrantTool courseId={course.id} onAuthenticationRequired={onAuthenticationRequired} />
+      }
       onSave={onSave}
+      onSetPrice={onSetPrice}
       onTransition={onTransition}
       onDelete={onDelete}
       onAuthenticationRequired={onAuthenticationRequired}
@@ -263,6 +287,55 @@ function AdminOwnerEditor({
           return result.ok ? null : result.error.code;
         },
       }}
+    />
+  );
+}
+
+const userSearchDebounceMs = 250;
+
+/** Rendered only in the admin branch; the server refuses everyone else with grant_forbidden. */
+function CourseGrantTool({
+  courseId,
+  onAuthenticationRequired,
+}: {
+  courseId: string;
+  onAuthenticationRequired: () => void;
+}) {
+  const { admin } = Route.useRouteContext();
+  const [typed, setTyped] = useState('');
+  const [search, setSearch] = useState('');
+  // One request per pause in typing, not per keystroke: a burst of keystrokes is a burst of
+  // requests against a rate-limited API.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(typed.trim()), userSearchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [typed]);
+  const users = useQuery({
+    ...admin.users.list({ q: search, limit: 20, offset: 0, status: 'active' }),
+    placeholderData: keepPreviousData,
+  });
+  const grant = useMutation(admin.grants.grant());
+  const options = (users.data?.items ?? []).map((user) => ({
+    id: user.id,
+    label: `${user.displayName} — ${user.email}`,
+  }));
+  const isUserSearchPending = typed.trim() !== search || users.isFetching;
+  async function onGrant(userId: string, reason: string): Promise<GrantErrorCode | null> {
+    try {
+      await grant.mutateAsync({ courseId, userId, reason });
+      return null;
+    } catch (error) {
+      const code = error instanceof GrantQueryError ? error.code : 'dependency_unavailable';
+      if (code === 'authentication_required') onAuthenticationRequired();
+      return code;
+    }
+  }
+  return (
+    <CourseGrantPanel
+      users={options}
+      isUserSearchPending={isUserSearchPending}
+      onSearch={setTyped}
+      onGrant={onGrant}
     />
   );
 }

@@ -1,5 +1,6 @@
 -- name: ListPublishedCourses :many
-SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at
+SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at,
+  price_minor, currency
 FROM courses
 WHERE status = 'published'
   AND (title ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
@@ -27,6 +28,8 @@ SELECT
   courses.created_at,
   courses.updated_at,
   courses.published_at,
+  courses.price_minor,
+  courses.currency,
   COALESCE(modules.id::text, '')::text AS module_id,
   COALESCE(modules.title, '')::text AS module_title,
   COALESCE(lessons.title, '')::text AS lesson_title,
@@ -69,6 +72,8 @@ SELECT
   created_at,
   updated_at,
   published_at
+  , price_minor
+  , currency
 FROM courses
 WHERE id = sqlc.arg(course_id)::text::uuid;
 
@@ -84,6 +89,8 @@ SELECT
   created_at,
   updated_at,
   published_at
+  , price_minor
+  , currency
 FROM courses
 WHERE id = sqlc.arg(course_id)::text::uuid
 FOR UPDATE;
@@ -96,7 +103,7 @@ ORDER BY position, id;
 
 -- name: ListAuthoringLessons :many
 SELECT lessons.id::text AS id, lessons.module_id::text AS module_id,
-  lessons.title, lessons.description, lessons.position
+  lessons.title, lessons.description, lessons.position, lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 WHERE modules.course_id = sqlc.arg(course_id)::text::uuid
@@ -113,7 +120,7 @@ FOR SHARE;
 -- name: CreateAuthoringCourse :one
 INSERT INTO courses (
   id, instructor_id, slug, title, summary, description, status,
-  created_at, updated_at, published_at
+  created_at, updated_at, published_at, price_minor, currency
 )
 VALUES (
   gen_random_uuid(),
@@ -125,6 +132,8 @@ VALUES (
   'draft',
   sqlc.arg(created_at)::timestamptz,
   sqlc.arg(created_at)::timestamptz,
-  NULL
+  NULL,
+  sqlc.narg(price_minor)::bigint,
+  sqlc.narg(currency)::text
 )
 RETURNING id::text AS id;

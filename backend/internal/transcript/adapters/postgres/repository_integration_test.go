@@ -161,14 +161,18 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 					publishedAt = "now()"
 				}
 				var courseID, moduleID, lessonID string
-				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
-					VALUES(gen_random_uuid(),$1,'Access table','Summary','Description',$2,$3,`+publishedAt+`) RETURNING id::text`, slug, test.Status, ownerAccount).Scan(&courseID); err != nil {
+				var price, currency any
+				if test.Paid {
+					price, currency = int64(50000), "UAH"
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency)
+					VALUES(gen_random_uuid(),$1,'Access table','Summary','Description',$2,$3,`+publishedAt+`,$4,$5) RETURNING id::text`, slug, test.Status, ownerAccount, price, currency).Scan(&courseID); err != nil {
 					t.Fatal(err)
 				}
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 
@@ -179,7 +183,12 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 				} else if test.Role == accesstest.Administrator {
 					administrator = true
 				}
-				result, err := repository.GetLessonTranscript(ctx, lessonID, "")
+				if test.Granted {
+					if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, actorID, courseID, ownerAccount); err != nil {
+						t.Fatal(err)
+					}
+				}
+				result, err := repository.GetLessonTranscript(ctx, actorID, lessonID, "")
 				if err != nil {
 					t.Fatal(err)
 				}

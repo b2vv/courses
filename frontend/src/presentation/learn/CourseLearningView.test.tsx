@@ -17,6 +17,7 @@ const course: LearningCourse = {
   summary: 'Курс',
   description: 'Опис',
   status: 'published',
+  price: null,
   continueLessonId: lessonIds[1],
   modules: [
     {
@@ -30,6 +31,8 @@ const course: LearningCourse = {
           position: 300,
           completed: true,
           clientSeq: 2,
+          isPreview: false,
+          locked: false,
         },
         {
           id: lessonIds[1],
@@ -38,6 +41,8 @@ const course: LearningCourse = {
           position: 0,
           completed: false,
           clientSeq: 0,
+          isPreview: false,
+          locked: false,
         },
       ],
     },
@@ -52,6 +57,8 @@ const course: LearningCourse = {
           position: 0,
           completed: false,
           clientSeq: 0,
+          isPreview: false,
+          locked: false,
         },
         {
           id: lessonIds[3],
@@ -60,6 +67,8 @@ const course: LearningCourse = {
           position: 0,
           completed: false,
           clientSeq: 0,
+          isPreview: false,
+          locked: false,
         },
       ],
     },
@@ -103,6 +112,8 @@ test('B19 renders all 120 lesson rows from a renderer-owned boundary fixture', (
         position: 0,
         completed: false,
         clientSeq: 0,
+        isPreview: false,
+        locked: false,
       })),
     })),
   };
@@ -117,4 +128,42 @@ test('B19 renders all 120 lesson rows from a renderer-owned boundary fixture', (
     within(screen.getByRole('navigation', { name: 'Зміст курсу' })).getAllByRole('link'),
   ).toHaveLength(120);
   expect(screen.getByText('Урок 40.3')).toBeTruthy();
+});
+
+test('marks locked lessons, and preview lessons only while something is still locked', () => {
+  const lessons = course.modules[0]?.lessons ?? [];
+  const [first, second] = lessons;
+  if (first === undefined || second === undefined) throw new Error('fixture lessons missing');
+  const withPreview = (locked: boolean): LearningCourse => ({
+    ...course,
+    modules: [
+      {
+        id: 'm',
+        title: 'Основи',
+        lessons: [
+          { ...first, isPreview: true, locked: false },
+          { ...second, isPreview: false, locked },
+        ],
+      },
+    ],
+  });
+
+  const { unmount } = render(
+    <CourseLearningView course={withPreview(true)} currentLessonId={first.id}>
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  const outline = screen.getByRole('navigation');
+  expect(within(outline).getByText('Після покупки')).toBeTruthy();
+  expect(within(outline).getByText('Відкритий урок')).toBeTruthy();
+  unmount();
+
+  // An owner, an admin or a buyer has nothing locked, so "open lesson" would be noise.
+  render(
+    <CourseLearningView course={withPreview(false)} currentLessonId={first.id}>
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  expect(screen.queryByText('Відкритий урок')).toBeNull();
+  expect(screen.queryByText('Після покупки')).toBeNull();
 });

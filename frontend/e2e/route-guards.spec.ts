@@ -105,11 +105,10 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   await page.addInitScript((name) => {
     Reflect.set(window, '__courseforgeAnonymousIdentityFrameSeen', false);
     const observer = new MutationObserver(() => {
-      const navigation = document.querySelector('header nav');
-      if (
-        navigation &&
-        (!navigation.textContent?.includes(name) || navigation.textContent.includes('Увійти'))
-      )
+      // The identity lives in the page header (client: its actions group beside the
+      // primary nav; admin: the top bar), not inside <nav>, so probe the header.
+      const banner = document.querySelector('header');
+      if (banner && (!banner.textContent?.includes(name) || banner.textContent.includes('Увійти')))
         Reflect.set(window, '__courseforgeAnonymousIdentityFrameSeen', true);
     });
     observer.observe(document, { childList: true, subtree: true, characterData: true });
@@ -166,7 +165,12 @@ test('public SPA transitions do not revalidate; learning does, and Back stays si
   await page.goto('/courses', { waitUntil: 'networkidle' });
   await page.getByRole('link', { name: 'CourseForge — головна' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Навички, які');
-  await page.getByRole('link', { name: 'Каталог', exact: true }).click();
+  // The storefront footer also links to the catalog; the header's primary
+  // navigation is the one under test.
+  await page
+    .getByRole('navigation', { name: 'Основна навігація' })
+    .getByRole('link', { name: 'Каталог', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
   expect(currentUserRequests).toBe(0);
   await expect(page.getByText(fixtures.student.name)).toBeVisible();

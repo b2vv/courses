@@ -388,7 +388,7 @@ func writeTeachListError(w http.ResponseWriter, r *http.Request, err error) {
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden):
 		return http.StatusForbidden
 	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull):
 		return http.StatusConflict
@@ -405,6 +405,8 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 	code := err.Error()
 	message := "Request is not valid"
 	switch code {
+	case "course_purchase_required":
+		message = "Purchase is required to access this course"
 	case "course_forbidden":
 		message = "Course access is forbidden"
 	case "comment_forbidden":

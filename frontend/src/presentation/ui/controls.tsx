@@ -66,6 +66,44 @@ export function TextArea({ label, description, errorMessage, placeholder, ...pro
 
 export type ChoiceOption = { id: string; label: string };
 
+export type SegmentedOption = ChoiceOption & { isDisabled?: boolean };
+
+type SegmentedControlProps = Omit<
+  Aria.ToggleButtonGroupProps,
+  'children' | 'className' | 'selectionMode'
+> & {
+  label: string;
+  options: readonly SegmentedOption[];
+};
+
+export function SegmentedControl({
+  label,
+  options,
+  disallowEmptySelection = true,
+  ...props
+}: SegmentedControlProps) {
+  return (
+    <Aria.ToggleButtonGroup
+      {...props}
+      aria-label={label}
+      selectionMode="single"
+      disallowEmptySelection={disallowEmptySelection}
+      className="ui-segmented"
+    >
+      {options.map((option) => (
+        <Aria.ToggleButton
+          key={option.id}
+          id={option.id}
+          isDisabled={option.isDisabled ?? false}
+          className="ui-segment"
+        >
+          {option.label}
+        </Aria.ToggleButton>
+      ))}
+    </Aria.ToggleButtonGroup>
+  );
+}
+
 type SelectProps = Omit<Aria.SelectProps<ChoiceOption>, 'children' | 'className'> & {
   label: string;
   options: readonly ChoiceOption[];
@@ -107,11 +145,31 @@ type ComboBoxProps = Omit<
   options: readonly ChoiceOption[];
   description?: string;
   errorMessage?: string;
+  /**
+   * 'server': the options are already the server's answer to the typed text, and may arrive
+   * after typing started — so they are passed as controlled items and the list may open empty.
+   */
+  filtering?: 'client' | 'server';
+  loadingLabel?: string;
+  isLoading?: boolean;
 };
 
-export function ComboBox({ label, options, description, errorMessage, ...props }: ComboBoxProps) {
+export function ComboBox({
+  label,
+  options,
+  description,
+  errorMessage,
+  loadingLabel,
+  isLoading = false,
+  filtering = 'client',
+  ...props
+}: ComboBoxProps) {
+  const collection =
+    filtering === 'server'
+      ? { items: options, allowsEmptyCollection: true }
+      : { defaultItems: options };
   return (
-    <Aria.ComboBox {...props} defaultItems={options} className="ui-field">
+    <Aria.ComboBox {...props} {...collection} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
       <div className="ui-combobox-input">
         <Aria.Input className="ui-input" />
@@ -123,7 +181,9 @@ export function ComboBox({ label, options, description, errorMessage, ...props }
       <Aria.Popover className="ui-popover">
         <Aria.ListBox<ChoiceOption>
           className="ui-listbox"
-          renderEmptyState={() => 'Немає відповідних варіантів'}
+          renderEmptyState={() =>
+            isLoading && loadingLabel ? loadingLabel : 'Немає відповідних варіантів'
+          }
         >
           {(item) => (
             <Aria.ListBoxItem id={item.id} textValue={item.label} className="ui-option">

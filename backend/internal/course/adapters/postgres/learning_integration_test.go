@@ -82,14 +82,18 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 				if test.Status == "published" {
 					publishedAt = "now()"
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
-					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`) RETURNING id::text`, tableOwner, slug, test.Status).Scan(&courseID); err != nil {
+				var price, currency any
+				if test.Paid {
+					price, currency = int64(50000), "UAH"
+				}
+				if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at,price_minor,currency)
+					VALUES(gen_random_uuid(),$1,$2,'Access table','Summary','Description',$3,`+publishedAt+`,$4,$5) RETURNING id::text`, tableOwner, slug, test.Status, price, currency).Scan(&courseID); err != nil {
 					t.Fatal(err)
 				}
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 
@@ -100,14 +104,66 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 				} else if test.Role == accesstest.Administrator {
 					role = domain.ActorAdmin
 				}
+				if test.Granted {
+					if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, actorID, courseID, tableOwner); err != nil {
+						t.Fatal(err)
+					}
+				}
 				course, err := repository.GetLearningCourse(ctx, actorID, slug)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got := course.CanBeViewedBy(domain.Actor{UserID: actorID, Role: role}); got != test.Want {
-					t.Fatalf("adapter facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", course.Course, actorID, got, test.Want)
+				// Content access for the course module is "outline visible AND lesson not
+				// locked" (owner decision 2026-10-01); the lesson's preview fact comes from SQL.
+				viewer := domain.Actor{UserID: actorID, Role: role}
+				lesson := course.Modules[0].Lessons[0]
+				if lesson.IsPreview != test.Preview {
+					t.Fatalf("lesson preview=%v, want %v from SQL", lesson.IsPreview, test.Preview)
+				}
+				if got := course.CanBeViewedBy(viewer) && !course.PurchaseRequiredBy(viewer, lesson); got != test.Want {
+					t.Fatalf("adapter facts=%+v actor=%+v content visible=%v, want %v", course.Course, actorID, got, test.Want)
 				}
 			})
+		}
+	})
+
+	t.Run("Pay11 preview on a later lesson is that lesson's fact, not the first lesson's", func(t *testing.T) {
+		// The defect: the course took its preview fact from the first row (first lesson),
+		// so a preview on lesson 2 refused the whole course. Three lessons, preview on 2.
+		const owner = "41000000-0000-4000-8000-000000000002"
+		const stranger = "41000000-0000-4000-8000-000000000001"
+		var courseID, moduleID string
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at,price_minor,currency)
+			VALUES(gen_random_uuid(),$1,'preview-on-second','Preview on second','Summary','Description','published',now(),50000,'UAH') RETURNING id::text`, owner).Scan(&courseID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+			t.Fatal(err)
+		}
+		for position, preview := range []bool{false, true, false} {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,$2,'',$3,$4)`, moduleID, fmt.Sprintf("Lesson %d", position+1), position, preview); err != nil {
+				t.Fatal(err)
+			}
+		}
+		course, err := repository.GetLearningCourse(ctx, stranger, "preview-on-second")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The locked lessons ask for this amount, so the outline carries the price itself.
+		if !course.Paid || course.Price == nil || course.Price.Minor != 50000 || course.Price.Currency != "UAH" {
+			t.Fatalf("paid=%v price=%+v, want the stored 50000 UAH", course.Paid, course.Price)
+		}
+		viewer := domain.Actor{UserID: stranger, Role: domain.ActorStudent}
+		if !course.CanBeViewedBy(viewer) {
+			t.Fatal("the outline of a published paid course must be visible to a viewer without access")
+		}
+		var previews, locks []bool
+		for _, lesson := range course.Modules[0].Lessons {
+			previews = append(previews, lesson.IsPreview)
+			locks = append(locks, course.PurchaseRequiredBy(viewer, lesson))
+		}
+		if fmt.Sprint(previews) != "[false true false]" || fmt.Sprint(locks) != "[true false true]" {
+			t.Fatalf("previews=%v locks=%v, want [false true false] and [true false true]", previews, locks)
 		}
 	})
 

@@ -40,7 +40,7 @@ type stubRepository struct {
 	saveErr error
 }
 
-func (stub *stubRepository) GetLessonTranscript(_ context.Context, _ string, language domain.Language) (ports.LessonTranscript, error) {
+func (stub *stubRepository) GetLessonTranscript(_ context.Context, _, _ string, language domain.Language) (ports.LessonTranscript, error) {
 	stub.gotLanguage = language
 	return stub.result, stub.err
 }
@@ -220,6 +220,17 @@ func TestRefusalDoesNotDependOnWhetherATranscriptExists(t *testing.T) {
 			assertContract(t, r, response, true)
 		})
 	}
+}
+
+func TestPay19PaidTranscriptRequiresPurchase(t *testing.T) {
+	result := published(nil, nil, 0, 0)
+	result.Course.Paid = true
+	r := request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript", httpserver.Actor{UserID: viewerID, Role: "student"})
+	response := serve(t, &stubRepository{result: result}, r)
+	if response.Code != http.StatusForbidden || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"course_purchase_required"`)) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response, true)
 }
 
 func TestR09TranscriptForeignDraftDeniedAndPublishedAllowed(t *testing.T) {

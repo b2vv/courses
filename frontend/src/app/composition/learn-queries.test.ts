@@ -11,6 +11,7 @@ const course: LearningCourse = {
   summary: 'Practice',
   description: 'Learn Go.',
   status: 'published',
+  price: null,
   continueLessonId: null,
   modules: [],
 };

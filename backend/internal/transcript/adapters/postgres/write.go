@@ -11,6 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+const getLessonCourse = `SELECT courses.instructor_id::text, courses.status
+FROM course_lessons AS lessons
+JOIN course_modules AS modules ON modules.id = lessons.module_id
+JOIN courses ON courses.id = modules.course_id
+WHERE lessons.id = $1::text::uuid`
+
 func (repository *Repository) LessonCourse(ctx context.Context, lessonID string) (domain.Course, error) {
 	var ownerID, status string
 	err := repository.pool.QueryRow(ctx, getLessonCourse, lessonID).Scan(&ownerID, &status)

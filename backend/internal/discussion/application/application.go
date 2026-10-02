@@ -88,11 +88,14 @@ type QueuePage struct {
 }
 
 func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor string) (Page, error) {
-	facts, err := service.repository.LessonFacts(ctx, lessonID)
+	facts, err := service.repository.LessonFacts(ctx, actor.UserID, lessonID)
 	if err != nil {
 		return Page{}, err
 	}
 	if !facts.Course.CanBeViewedBy(actor) {
+		if facts.Course.PurchaseRequiredBy(actor) {
+			return Page{}, domain.ErrPurchaseRequired
+		}
 		return Page{}, domain.ErrForbidden
 	}
 	page, err := service.repository.List(ctx, lessonID, cursor, 50)
@@ -113,16 +116,19 @@ func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor 
 }
 
 func (service *Service) Publish(ctx context.Context, actor Actor, request PublishRequest) (Comment, error) {
-	facts, err := service.repository.LessonFacts(ctx, request.LessonID)
+	facts, err := service.repository.LessonFacts(ctx, actor.UserID, request.LessonID)
 	if err != nil {
 		return Comment{}, err
 	}
 	if !facts.Course.CanBeViewedBy(actor) {
+		if facts.Course.PurchaseRequiredBy(actor) {
+			return Comment{}, domain.ErrPurchaseRequired
+		}
 		return Comment{}, domain.ErrForbidden
 	}
 	var parent *domain.Comment
 	if request.ParentID != nil {
-		parentRecord, getErr := service.repository.Get(ctx, *request.ParentID)
+		parentRecord, getErr := service.repository.Get(ctx, actor.UserID, *request.ParentID)
 		if getErr == nil {
 			parentComment := parentRecord.Comment
 			parent = &parentComment
@@ -149,7 +155,7 @@ func (service *Service) Publish(ctx context.Context, actor Actor, request Publis
 		return Comment{}, err
 	}
 	if record.Comment.ID != "" {
-		fresh, getErr := service.repository.Get(ctx, record.Comment.ID)
+		fresh, getErr := service.repository.Get(ctx, actor.UserID, record.Comment.ID)
 		if getErr != nil {
 			return Comment{}, getErr
 		}
@@ -162,7 +168,7 @@ func (service *Service) Publish(ctx context.Context, actor Actor, request Publis
 }
 
 func (service *Service) Update(ctx context.Context, actor Actor, commentID, body string) (Comment, error) {
-	record, err := service.repository.Get(ctx, commentID)
+	record, err := service.repository.Get(ctx, actor.UserID, commentID)
 	if err != nil {
 		return Comment{}, err
 	}
@@ -187,7 +193,7 @@ func (service *Service) Update(ctx context.Context, actor Actor, commentID, body
 }
 
 func (service *Service) Remove(ctx context.Context, actor Actor, commentID string) error {
-	record, err := service.repository.Get(ctx, commentID)
+	record, err := service.repository.Get(ctx, actor.UserID, commentID)
 	if err != nil {
 		return err
 	}
@@ -210,11 +216,14 @@ func (service *Service) Remove(ctx context.Context, actor Actor, commentID strin
 }
 
 func (service *Service) ReportComment(ctx context.Context, actor Actor, commentID string) error {
-	record, err := service.repository.Get(ctx, commentID)
+	record, err := service.repository.Get(ctx, actor.UserID, commentID)
 	if err != nil {
 		return err
 	}
 	if !record.Course.CanBeViewedBy(actor) {
+		if record.Course.PurchaseRequiredBy(actor) {
+			return domain.ErrPurchaseRequired
+		}
 		return domain.ErrForbidden
 	}
 	if record.Comment.RemovedAt != nil {
@@ -258,7 +267,7 @@ func (service *Service) Queue(ctx context.Context, actor Actor, courseID, cursor
 }
 
 func (service *Service) DismissReports(ctx context.Context, actor Actor, commentID, reason string) error {
-	record, err := service.repository.Get(ctx, commentID)
+	record, err := service.repository.Get(ctx, actor.UserID, commentID)
 	if err != nil {
 		return err
 	}

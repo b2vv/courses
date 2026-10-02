@@ -8,12 +8,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const loadVideoCourse = `SELECT courses.instructor_id::text, courses.status
+const loadVideoCourse = `SELECT courses.instructor_id::text, courses.status,
+  courses.price_minor IS NOT NULL,
+  grants.id IS NOT NULL,
+  lessons.is_preview
 FROM video_assets AS assets
 JOIN course_lessons AS lessons ON lessons.id=assets.lesson_id
 JOIN course_modules AS modules ON modules.id=lessons.module_id
 JOIN courses ON courses.id=modules.course_id
-WHERE assets.id=$1::text::uuid AND assets.evicted_at IS NULL`
+LEFT JOIN course_grants AS grants
+  ON grants.user_id=$1::text::uuid AND grants.course_id=courses.id AND grants.state='active'
+WHERE assets.id=$2::text::uuid AND assets.evicted_at IS NULL`
 
 type QueryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
@@ -30,10 +35,11 @@ func NewVideoAccessReader(database QueryRower, counter Counter) *VideoAccessRead
 	return &VideoAccessReader{database: database, counter: counter}
 }
 
-func (reader *VideoAccessReader) LoadVideoCourse(ctx context.Context, videoID string) (domain.VideoCourse, error) {
+func (reader *VideoAccessReader) LoadVideoCourse(ctx context.Context, userID, videoID string) (domain.VideoCourse, error) {
 	reader.counter.Inc()
 	var ownerID, status string
-	err := reader.database.QueryRow(ctx, loadVideoCourse, videoID).Scan(&ownerID, &status)
+	var paid, entitled, preview bool
+	err := reader.database.QueryRow(ctx, loadVideoCourse, userID, videoID).Scan(&ownerID, &status, &paid, &entitled, &preview)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.VideoCourse{}, domain.ErrForbidden
 	}
@@ -44,5 +50,5 @@ func (reader *VideoAccessReader) LoadVideoCourse(ctx context.Context, videoID st
 	if ownerID == "" || courseStatus != domain.Draft && courseStatus != domain.Published && courseStatus != domain.Archived {
 		return domain.VideoCourse{}, domain.ErrDependencyUnavailable
 	}
-	return domain.VideoCourse{OwnerID: ownerID, Status: courseStatus}, nil
+	return domain.VideoCourse{OwnerID: ownerID, Status: courseStatus, Paid: paid, Entitled: entitled, Preview: preview}, nil
 }

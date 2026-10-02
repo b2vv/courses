@@ -41,7 +41,7 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	}
 	items := make([]domain.Course, 0, len(rows))
 	for _, row := range rows {
-		course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
+		course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency)
 		if err != nil {
 			return domain.Page{}, err
 		}
@@ -65,7 +65,7 @@ func (r *Repository) GetPublished(ctx context.Context, slug string) (domain.Cour
 		return domain.CourseDetail{}, domain.ErrCourseNotFound
 	}
 	row := rows[0]
-	course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt)
+	course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency)
 	if err != nil {
 		return domain.CourseDetail{}, err
 	}
@@ -100,13 +100,19 @@ func persistenceError(err error) error {
 	return domain.ErrDependencyUnavailable
 }
 
-func mapCourse(id pgtype.UUID, slug, title, summary, description, status string, createdAt, updatedAt, storedPublishedAt pgtype.Timestamptz) (domain.Course, error) {
+func mapCourse(id pgtype.UUID, slug, title, summary, description, status string, createdAt, updatedAt, storedPublishedAt pgtype.Timestamptz, priceMinor pgtype.Int8, currency pgtype.Text) (domain.Course, error) {
 	var publishedAt *time.Time
 	if storedPublishedAt.Valid {
 		value := storedPublishedAt.Time
 		publishedAt = &value
 	}
-	return domain.NewCourse(domain.Course{ID: id.String(), Slug: slug, Title: title, Summary: summary, Description: description, Status: domain.Status(status), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: publishedAt})
+	var price *domain.Price
+	if priceMinor.Valid && currency.Valid {
+		price = &domain.Price{Minor: priceMinor.Int64, Currency: currency.String}
+	} else if priceMinor.Valid != currency.Valid {
+		return domain.Course{}, domain.ErrDependencyUnavailable
+	}
+	return domain.NewCourse(domain.Course{ID: id.String(), Slug: slug, Title: title, Summary: summary, Description: description, Status: domain.Status(status), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: publishedAt, Price: price, Paid: price != nil})
 }
 
 func rollback(tx pgx.Tx) {

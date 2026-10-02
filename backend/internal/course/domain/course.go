@@ -37,6 +37,13 @@ type Course struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	PublishedAt *time.Time
+	Price       *Price
+	Paid        bool
+}
+
+type Price struct {
+	Minor    int64
+	Currency string
 }
 
 type ProgramLesson struct {
@@ -67,6 +74,9 @@ func NewCourse(course Course) (Course, error) {
 		return Course{}, ErrInvalidCourse
 	}
 	if course.PublishedAt != nil && (course.PublishedAt.Before(course.CreatedAt) || course.PublishedAt.After(course.UpdatedAt)) {
+		return Course{}, ErrInvalidCourse
+	}
+	if course.Price != nil && (course.Price.Minor <= 0 || course.Price.Currency != "UAH") || course.Paid != (course.Price != nil) {
 		return Course{}, ErrInvalidCourse
 	}
 	return course, nil

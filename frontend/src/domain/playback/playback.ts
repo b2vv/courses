@@ -7,6 +7,10 @@ export type LearningLesson = {
   readonly position: number;
   readonly completed: boolean;
   readonly clientSeq: number;
+  /** Open to anyone who can see the published course, without a purchase. */
+  readonly isPreview: boolean;
+  /** For this viewer the lesson needs a purchase — decided by the server, never re-derived here. */
+  readonly locked: boolean;
 };
 
 export type LearningModule = {
@@ -22,6 +26,8 @@ export type LearningCourse = {
   readonly summary: string;
   readonly description: string;
   readonly status: 'draft' | 'published' | 'archived';
+  /** Null for a free course; the amount a locked lesson asks for. */
+  readonly price: { readonly minor: number; readonly currency: 'UAH' } | null;
   readonly modules: readonly LearningModule[];
   readonly continueLessonId: string | null;
 };

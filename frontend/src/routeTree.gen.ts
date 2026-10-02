@@ -19,6 +19,7 @@ import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
 import { Route as LearnSplatRouteImport } from './routes/learn.$'
+import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as AdminCoursesCourseIdRouteImport } from './routes/admin.courses.$courseId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as TeachCoursesCourseIdRouteImport } from './routes/teach.courses.$courseId'
@@ -73,6 +74,11 @@ const LearnSplatRoute = LearnSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => LearnRoute,
 } as any)
+const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
+  id: '/orders/$orderId',
+  path: '/orders/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCoursesCourseIdRoute = AdminCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
   path: '/courses/$courseId',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/admin': typeof AdminIndexRoute
   '/courses': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
+  '/orders/$orderId': typeof OrdersOrderIdRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
+    | '/orders/$orderId'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
+    | '/orders/$orderId'
     | '/admin'
     | '/courses'
     | '/admin/courses/$courseId'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
+    | '/orders/$orderId'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   TeachRoute: typeof TeachRouteWithChildren
   CoursesSlugRoute: typeof CoursesSlugRoute
+  OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
 }
 
@@ -263,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnSplatRouteImport
       parentRoute: typeof LearnRoute
     }
+    '/orders/$orderId': {
+      id: '/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/orders/$orderId'
+      preLoaderRoute: typeof OrdersOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/courses/$courseId': {
       id: '/admin/courses/$courseId'
       path: '/courses/$courseId'
@@ -330,8 +350,18 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   TeachRoute: TeachRouteWithChildren,
   CoursesSlugRoute: CoursesSlugRoute,
+  OrdersOrderIdRoute: OrdersOrderIdRoute,
   CoursesIndexRoute: CoursesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

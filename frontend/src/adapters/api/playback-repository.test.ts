@@ -18,6 +18,8 @@ const course = {
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
   publishedAt: '2026-09-01T00:00:00Z',
+  price: null,
+  paid: false,
   continueLessonId: lessonId,
   modules: [
     {
@@ -31,6 +33,8 @@ const course = {
           position: 12,
           completed: false,
           clientSeq: 4,
+          isPreview: false,
+          locked: false,
         },
       ],
     },
@@ -78,10 +82,20 @@ test('maps the authenticated learning model and validates the requested slug', a
       summary: course.summary,
       description: course.description,
       status: course.status,
+      price: null,
       modules: course.modules,
       continueLessonId: course.continueLessonId,
     },
   });
+
+  // A paid course carries its price: a locked lesson asks for exactly this amount.
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>
+      HttpResponse.json({ ...course, price: { minor: 49900, currency: 'UAH' }, paid: true }),
+    ),
+  );
+  const paid = await createApiPlaybackRepository().getCourse('go-basics');
+  expect(paid.ok && paid.value.price).toEqual({ minor: 49900, currency: 'UAH' });
 
   server.use(
     http.get(`${apiOrigin()}/api/v1/learn/courses/go-basics`, () =>
