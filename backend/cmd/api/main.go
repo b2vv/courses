@@ -31,6 +31,7 @@ import (
 	wayforpay "courses/internal/orders/adapters/wayforpay"
 	ordersapplication "courses/internal/orders/application"
 	ordersdomain "courses/internal/orders/domain"
+	ordersports "courses/internal/orders/ports"
 	playbackhttp "courses/internal/playback/adapters/http"
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	playbackredis "courses/internal/playback/adapters/redis"
@@ -71,24 +72,20 @@ func main() {
 		learning := courseapplication.NewLearning(courseRepository)
 		ordersRepository := orderspostgres.NewRepository(dependencies.Database)
 		wayforpayConfig, wayforpayConfigured := wayforpay.FromEnvironment(os.Getenv)
-		var paymentProvider *wayforpay.Provider
+		// Keep these interface-typed and assign only when configured: a nil *wayforpay.Provider
+		// placed in an interface is a non-nil interface, which would make the service and handler
+		// treat an unconfigured provider as present (nil deref instead of the 503/404 contract).
+		var paymentProvider ordersports.PaymentProvider
+		var callbackVerifier ordersports.CallbackVerifier
+		var publicBaseURL string
 		if wayforpayConfigured {
-			paymentProvider = wayforpay.New(wayforpayConfig)
+			provider := wayforpay.New(wayforpayConfig)
+			paymentProvider, callbackVerifier, publicBaseURL = provider, provider, wayforpayConfig.PublicBaseURL
 		}
-		var orders *ordersapplication.Service
-		if paymentProvider != nil {
-			orders = ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID, paymentProvider)
-		} else {
-			orders = ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID)
-		}
+		orders := ordersapplication.New(ordersRepository, ordersRepository, ordersRepository, time.Now, newUUID, paymentProvider)
 		authoring := courseapplication.NewAuthoring(courseRepository, time.Now, courseGrandfatherer{orders})
 		courseHandler := coursehttp.NewHandler(catalog, authoring)
-		var ordersHandler *ordershttp.Handler
-		if paymentProvider != nil {
-			ordersHandler = ordershttp.NewHandlerWithConfig(orders, paymentProvider, wayforpayConfig.PublicBaseURL)
-		} else {
-			ordersHandler = ordershttp.NewHandler(orders)
-		}
+		ordersHandler := ordershttp.NewHandler(orders, callbackVerifier, publicBaseURL)
 		learningHandler := coursehttp.NewLearningHandler(learning)
 		transcriptReading := transcriptapplication.NewReading(transcriptpostgres.NewRepository(dependencies.Database))
 		transcriptHandler := transcripthttp.NewHandler(transcriptReading)

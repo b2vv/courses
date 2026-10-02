@@ -18,8 +18,11 @@ import (
 	"courses/platform/httpserver"
 )
 
-const maximumGrantBody = 8 * 1024
-const maximumCallbackBody = 64 * 1024
+const (
+	maximumGrantBody    = 8 * 1024
+	maximumCallbackBody = 64 * 1024
+	dateTimeLayout      = "2006-01-02T15:04:05.000000Z07:00"
+)
 
 type Handler struct {
 	service       *application.Service
@@ -27,15 +30,7 @@ type Handler struct {
 	publicBaseURL string
 }
 
-func NewHandler(service *application.Service, callback ...ports.CallbackVerifier) *Handler {
-	handler := &Handler{service: service}
-	if len(callback) > 0 {
-		handler.callback = callback[0]
-	}
-	return handler
-}
-
-func NewHandlerWithConfig(service *application.Service, callback ports.CallbackVerifier, publicBaseURL string) *Handler {
+func NewHandler(service *application.Service, callback ports.CallbackVerifier, publicBaseURL string) *Handler {
 	return &Handler{service: service, callback: callback, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
 }
 
@@ -178,6 +173,9 @@ func decodeCheckout(r *http.Request) (checkoutRequest, error) {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
+	if validateUniqueJSONObject(body) != nil {
+		return checkoutRequest{}, domain.ErrOrderInvalid
+	}
 	var request checkoutRequest
 	if err := decoder.Decode(&request); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
 		return checkoutRequest{}, domain.ErrOrderInvalid
@@ -248,7 +246,7 @@ func (handler *Handler) grantCourse(w http.ResponseWriter, r *http.Request) {
 	}
 	httpserver.WriteJSON(w, http.StatusCreated, grantDTO{
 		ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: string(grant.Source()),
-		State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format("2006-01-02T15:04:05.000000Z07:00"), GrantedBy: grant.GrantedBy(),
+		State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format(dateTimeLayout), GrantedBy: grant.GrantedBy(),
 	})
 }
 
@@ -264,10 +262,10 @@ func actorFromRequest(w http.ResponseWriter, r *http.Request) (application.Actor
 func mapOrder(order domain.Order) orderDTO {
 	var paidAt *string
 	if value := order.PaidAt(); value != nil {
-		formatted := value.UTC().Format("2006-01-02T15:04:05.000000Z07:00")
+		formatted := value.UTC().Format(dateTimeLayout)
 		paidAt = &formatted
 	}
-	return orderDTO{ID: order.ID(), CourseID: order.CourseID(), Amount: moneyDTO{Minor: int64(order.Amount().MinorUnits()), Currency: string(order.Amount().Currency())}, Status: string(order.Status()), CreatedAt: order.CreatedAt().UTC().Format("2006-01-02T15:04:05.000000Z07:00"), PaidAt: paidAt}
+	return orderDTO{ID: order.ID(), CourseID: order.CourseID(), Amount: moneyDTO{Minor: int64(order.Amount().MinorUnits()), Currency: string(order.Amount().Currency())}, Status: string(order.Status()), CreatedAt: order.CreatedAt().UTC().Format(dateTimeLayout), PaidAt: paidAt}
 }
 
 func decodeGrant(w http.ResponseWriter, r *http.Request) (grantRequest, error) {

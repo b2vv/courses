@@ -92,6 +92,11 @@ for (const [path, expected] of [['/healthz',200],['/',200],['/metrics',404],['/r
   const response = await fetch(origin+path);
   if(response.status!==expected) throw Error(`${path}: expected ${expected}, got ${response.status}`);
 }
+// WayForPay is not configured in the base stack, so the callback route must be absent (404),
+// not merely erroring. This catches the typed-nil-interface trap: a nil *Provider placed in an
+// interface would register the route (and panic on use) instead of staying unregistered.
+const wfpCallback=await fetch(origin+'/api/v1/payments/wayforpay/callback',{method:'POST',headers:{'Content-Type':'application/json','Origin':origin},body:'{}'});
+if(wfpCallback.status!==404) throw Error(`wayforpay callback unconfigured: expected 404, got ${wfpCallback.status}`);
 const unknownVideoId='10000000-0000-4000-8000-000000000001';
 const unknownUpload=origin+'/uploads/'+unknownVideoId;
 const head=await fetch(unknownUpload,{method:'HEAD',headers:{'Tus-Resumable':'1.0.0'}});

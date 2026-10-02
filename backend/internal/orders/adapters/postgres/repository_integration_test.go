@@ -75,7 +75,7 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	}
 	newID := func() string { id := ids[0]; ids = ids[1:]; return id }
 	now := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
-	service := application.New(repository, repository, repository, func() time.Time { return now }, newID)
+	service := application.New(repository, repository, repository, func() time.Time { return now }, newID, nil)
 
 	t.Run("Pay17 price change preserves access and order snapshot", func(t *testing.T) {
 		const pay17UserID = "40000000-0000-4000-8000-000000000010"
@@ -93,7 +93,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 			pay17IDs = pay17IDs[1:]
 			return id
 		}
-		pay17Service := application.New(repository, repository, repository, func() time.Time { return now }, pay17ID)
+		pay17Service := application.New(repository, repository, repository, func() time.Time { return now }, pay17ID, nil)
 		pay17Order, err := pay17Service.StartPurchase(ctx, application.Actor{UserID: pay17UserID}, pay17CourseID, "pay17-purchase")
 		if err != nil {
 			t.Fatal(err)
@@ -146,7 +146,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 			pay26IDs = pay26IDs[1:]
 			return id
 		}
-		pay26Service := application.New(repository, repository, repository, func() time.Time { return now }, pay26ID)
+		pay26Service := application.New(repository, repository, repository, func() time.Time { return now }, pay26ID, nil)
 		updatedAt := now.Add(time.Microsecond)
 		if err := pay26Service.GrandfatherOnPriceSet(ctx, pay26CourseID, now, 70000, "UAH", updatedAt); err != nil {
 			t.Fatal(err)
@@ -247,7 +247,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 			failedIDs = failedIDs[1:]
 			return id
 		}
-		failedService := application.New(repository, repository, repository, func() time.Time { return now }, failedID)
+		failedService := application.New(repository, repository, repository, func() time.Time { return now }, failedID, nil)
 		var failedUser string
 		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'failed@example.test','Failed','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&failedUser); err != nil {
 			t.Fatal(err)
@@ -301,7 +301,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE id=$1`, failedOrder.ID()).Scan(&beforeOrders); err != nil {
 			t.Fatal(err)
 		}
-		invalidHandler := ordershttp.NewHandler(failedService, invalidCallbackVerifier{})
+		invalidHandler := ordershttp.NewHandler(failedService, invalidCallbackVerifier{}, "")
 		server := httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
 			invalidHandler.Register(mux, func(next http.Handler) http.Handler { return next }, func(next http.Handler) http.Handler { return next })
 		}})
