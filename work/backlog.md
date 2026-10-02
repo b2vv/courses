@@ -1311,3 +1311,71 @@ explicitly to domain entities»).
 Не стверджує, що зараз студенти бачать не той транскрипт: у фазі одна мова на урок, а 4g закриває
 єдиний відомий шлях до другої. Це читальний шлях 7a, не приймання A13 — окремий пункт за рішенням
 користувача Courses 2 (2026-09-24).
+
+## B-24 — payment PR #3 review findings (Courses 2, 2026-10-02, non-blocking)
+
+From `work/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary. Four polish items:
+
+1. **Duplicate-JSON-key check is asymmetric and copy-pasted.** `validateUniqueJSONObject` (reject
+   duplicate keys) lives in `decodeGrant` (orders), and independently in `admin_handler.go` and
+   `discussion/handler.go` — three copies. `decodeCheckout` (same orders module) does NOT have it
+   (only `DisallowUnknownFields`), and has no dup-key refusal test. Resolve by deciding the rule
+   once: if duplicate-key rejection is the contract (it is enforced on 3 write surfaces), lift the
+   helper to a shared platform place and apply it to `decodeCheckout` too, with a test; the checkout
+   impact today is nil (body is only an optional cosmetic slug).
+2. **In-memory status throttle** (`service.go`) → N× CHECK_STATUS with N instances. Recorded in
+   `docs/payment/report.md` §6. A shared store before horizontal scaling; Proxy pattern not worth it now.
+3. **Variadic optional dependency** in `service.New` and `http.NewHandler` (two handler
+   constructors). Prefer one explicit nilable parameter over the variadic + second constructor.
+4. **Date-format literal repeated 3×** in `handler.go` — extract a const.
+
+Trigger: fold 1/3/4 into a follow-up polish commit on `feat/payment` before or just after the PR
+merges; 2 stays a named limitation.
+
+## B-25 — WayForPay refuses a second checkout of the same pending order (live run, 2026-10-02) — CLOSED `f306165`
+
+**Closed** by option (b) plus a refund trace; see `docs/payment/assumptions.md` (2026-10-02) and the
+phase report §6. Kept below as the record of the finding.
+
+
+**Found by:** the Pay25-live run against `test_merch_n1`. **Mechanism:** our checkout sends the order
+id as WayForPay's `orderReference`; WayForPay treats `orderReference` as unique, so a second hosted
+form for the same order (the buyer opened «Перейти до оплати», left, came back and pressed it again)
+answers `(1112) Duplicate Order ID`. The status page keeps offering «Перейти до оплати» for a pending
+order, so the buyer hits a dead end; «Спробувати ще раз» appears only for `failed`. **Repro:** start a
+purchase, open the checkout form twice for the same order (two POSTs to
+`/api/v1/learn/orders/{id}/checkout` submitted to WayForPay). **Fix options:** (a) a per-attempt
+`orderReference` (order id + attempt suffix) mapped back to the order in the callback and in
+CHECK_STATUS — the money path must still match one order; (b) on a pending order whose checkout was
+already opened, start a new order (new idempotency key) instead. Decide before launch; (a) keeps one
+order per purchase intent.
+
+## B-26 — the live proof needs a stable public URL and a working test card
+
+Cloudflare's quick-tunnel API (`api.trycloudflare.com`) is unreachable from this network (TCP to its
+IPs times out; cloudflare.com itself works); the localhost.run free tunnel works but rotates its
+hostname within minutes, which breaks `serviceUrl`/`returnUrl` mid-run. The test card from WayForPay's
+API examples (`4111…`) is declined (1105). To close Pay25-live: a named tunnel (Cloudflare account or
+ngrok authtoken) or the deployment, plus a documented test card or the owner's own test-mode merchant.
+
+### B-26 addendum — what WayForPay's own docs say (researched 2026-10-02)
+Sources: Verify API `wiki.wayforpay.com/view/852189`, Purchase `/view/852102`, response codes `/view/852131`,
+test credentials `/view/852472`.
+- **No test-card list is published anywhere in the wiki.** Test credentials page lists only merchants
+  (`test_merch_n1` + key, `test_merch_p2p`, `p2p_credit`). The "4111 = success, 5454 = failure" claim is
+  not in the wiki; live: 5454 → 1101 (issuer declined) as claimed, 4111 → **1105** ("invalid card number
+  **or card in a prohibited state**"). Ask WayForPay support which card is Approved on `test_merch_n1`.
+- **Codes we saw:** 1100 ok; 1101 issuer declined; 1105 invalid/prohibited card; 1112 duplicate order id
+  (= B-25); 1131 still processing; also 1113 = wrong merchant signature (never seen — our signatures
+  are accepted live).
+- **transactionStatus set:** InProcessing, WaitingAuthComplete (awaiting settlement), Approved, Pending
+  (antifraud review), Expired, Declined, Refunded/Voided, RefundInProcessing. Our mapping
+  (Approved → paid; Declined/Expired → failed; the rest acknowledged, no change) holds for MVP.
+  **Gap to name:** `Refunded`/`Voided` after an `Approved` are ignored today — a refund done in the
+  WayForPay cabinet would leave the buyer's grant active. Belongs with the refund flow (out of MVP).
+- **`orderTimeout` / `orderLifetime`** (Purchase params we do not send): how long the hosted page allows
+  re-trying payment, and how long the order can be paid at all. Setting `orderLifetime` would let
+  WayForPay itself expire abandoned orders (→ `Expired` → our order `failed`), tidying the extra pending
+  rows B-25 option (b) creates.
+- **serviceUrl** response format and the 4-day retry are confirmed — matches our acknowledgement and the
+  Pay21b "unmatched → 503 so WayForPay retries" behaviour.

@@ -67,6 +67,7 @@ export function createApiPlaybackRepository(
         summary: parsed.data.summary,
         description: parsed.data.description,
         status: parsed.data.status,
+        price: parsed.data.price,
         modules: parsed.data.modules.map((module) => ({
           id: module.id,
           title: module.title,
@@ -77,6 +78,8 @@ export function createApiPlaybackRepository(
             position: lesson.position,
             completed: lesson.completed,
             clientSeq: lesson.clientSeq,
+            isPreview: lesson.isPreview,
+            locked: lesson.locked,
           })),
         })),
         continueLessonId: parsed.data.continueLessonId,

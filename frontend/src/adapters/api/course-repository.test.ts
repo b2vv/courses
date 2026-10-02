@@ -14,6 +14,8 @@ const course = {
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
   publishedAt: '2026-09-01T00:00:00Z',
+  price: { minor: 149900, currency: 'UAH' },
+  paid: true,
 };
 const detail = {
   ...course,
@@ -55,6 +57,8 @@ test('maps the ordered title-only program on a published course detail', async (
       summary: course.summary,
       description: course.description,
       publishedAt: course.publishedAt,
+      price: course.price,
+      paid: course.paid,
       program: detail.program,
     },
   });

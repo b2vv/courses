@@ -35,24 +35,41 @@ func TestTheAccessPredicateAgreesAcrossModules(t *testing.T) {
 			if administrator {
 				role = coursedomain.ActorAdmin
 			}
-			viaCourse := coursedomain.LearningCourse{
+			// The course module shows the outline like a preview (owner decision 2026-10-01)
+			// and gates content per lesson, so its content answer is "outline visible AND the
+			// lesson not locked" — that, not the outline alone, must agree with the others.
+			learningCourse := coursedomain.LearningCourse{
 				Course:       coursedomain.Course{Status: coursedomain.Status(test.Status)},
 				InstructorID: owner,
-			}.CanBeViewedBy(coursedomain.Actor{UserID: actor, Role: role})
+				Paid:         test.Paid,
+				Entitled:     test.Granted,
+			}
+			courseActor := coursedomain.Actor{UserID: actor, Role: role}
+			lesson := coursedomain.LearningLesson{IsPreview: test.Preview}
+			viaCourse := learningCourse.CanBeViewedBy(courseActor) && !learningCourse.PurchaseRequiredBy(courseActor, lesson)
 
 			viaPlayback := playbackdomain.VideoCourse{
-				OwnerID: owner,
-				Status:  playbackdomain.CourseStatus(test.Status),
+				OwnerID:  owner,
+				Status:   playbackdomain.CourseStatus(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(playbackdomain.Actor{UserID: actor, Administrator: administrator})
 
 			viaTranscript := transcriptdomain.Course{
-				OwnerID: owner,
-				Status:  transcriptdomain.Status(test.Status),
+				OwnerID:  owner,
+				Status:   transcriptdomain.Status(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(transcriptdomain.Actor{UserID: actor, Administrator: administrator})
 
 			viaDiscussion := discussiondomain.Course{
-				OwnerID: owner,
-				Status:  discussiondomain.Status(test.Status),
+				OwnerID:  owner,
+				Status:   discussiondomain.Status(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
 			}.CanBeViewedBy(discussiondomain.Actor{UserID: actor, Administrator: administrator})
 
 			if viaCourse != test.Want || viaPlayback != test.Want || viaTranscript != test.Want || viaDiscussion != test.Want {

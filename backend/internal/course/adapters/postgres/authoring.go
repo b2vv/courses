@@ -20,11 +20,11 @@ SET title = EXCLUDED.title, position = EXCLUDED.position, updated_at = EXCLUDED.
 WHERE course_modules.course_id = $2::text::uuid`
 
 const upsertAuthoringLesson = `
-INSERT INTO course_lessons (id, module_id, title, description, position, created_at, updated_at)
-VALUES ($1::text::uuid, $3::text::uuid, $4, $5, $6, $7, $7)
+INSERT INTO course_lessons (id, module_id, title, description, position, is_preview, created_at, updated_at)
+VALUES ($1::text::uuid, $3::text::uuid, $4, $5, $6, $7, $8, $8)
 ON CONFLICT (id) DO UPDATE
 SET module_id = EXCLUDED.module_id, title = EXCLUDED.title,
-    description = EXCLUDED.description, position = EXCLUDED.position,
+    description = EXCLUDED.description, position = EXCLUDED.position, is_preview = EXCLUDED.is_preview,
     updated_at = EXCLUDED.updated_at
 WHERE EXISTS (
   SELECT 1
@@ -49,7 +49,7 @@ WHERE course_id = $1::text::uuid
 const updateAuthoringCourse = `
 UPDATE courses
 SET slug = $4, title = $5, summary = $6, description = $7,
-    instructor_id = $8::text::uuid, updated_at = $3
+    instructor_id = $8::text::uuid, price_minor = $9, currency = $10, updated_at = $3
 WHERE id = $1::text::uuid AND updated_at = $2`
 
 const transitionAuthoringCourse = `
@@ -158,6 +158,12 @@ func (r *Repository) Create(ctx context.Context, actor domain.Actor, draft domai
 	}
 
 	createdAt := pgtype.Timestamptz{Time: now.UTC().Truncate(time.Microsecond), Valid: true}
+	var priceMinor pgtype.Int8
+	var currency pgtype.Text
+	if draft.Price != nil {
+		priceMinor = pgtype.Int8{Int64: draft.Price.Minor, Valid: true}
+		currency = pgtype.Text{String: draft.Price.Currency, Valid: true}
+	}
 	id, err := queries.CreateAuthoringCourse(ctx, generated.CreateAuthoringCourseParams{
 		OwnerID:     draft.InstructorID,
 		Slug:        draft.Slug,
@@ -165,6 +171,8 @@ func (r *Repository) Create(ctx context.Context, actor domain.Actor, draft domai
 		Summary:     draft.Summary,
 		Description: draft.Description,
 		CreatedAt:   createdAt,
+		PriceMinor:  priceMinor,
+		Currency:    currency,
 	})
 	if err != nil {
 		if slugTaken(err) {
@@ -224,7 +232,7 @@ func (r *Repository) Save(ctx context.Context, actor domain.Actor, tree domain.C
 	}
 	for _, module := range tree.Modules {
 		for _, lesson := range module.Lessons {
-			result, err := tx.Exec(ctx, upsertAuthoringLesson, lesson.ID, tree.ID, module.ID, lesson.Title, lesson.Description, lesson.Position, writeTime)
+			result, err := tx.Exec(ctx, upsertAuthoringLesson, lesson.ID, tree.ID, module.ID, lesson.Title, lesson.Description, lesson.Position, lesson.IsPreview, writeTime)
 			if err != nil {
 				return domain.CourseTree{}, persistenceError(err)
 			}
@@ -241,9 +249,15 @@ func (r *Repository) Save(ctx context.Context, actor domain.Actor, tree domain.C
 		return domain.CourseTree{}, persistenceError(err)
 	}
 
+	var priceMinor any
+	var currency any
+	if tree.Price != nil {
+		priceMinor = tree.Price.Minor
+		currency = tree.Price.Currency
+	}
 	result, err := tx.Exec(ctx, updateAuthoringCourse,
 		tree.ID, expectedUpdatedAt, writeTime, tree.Slug, tree.Title,
-		tree.Summary, tree.Description, tree.InstructorID,
+		tree.Summary, tree.Description, tree.InstructorID, priceMinor, currency,
 	)
 	if err != nil {
 		if slugTaken(err) {
@@ -357,6 +371,7 @@ func loadAuthoringTree(ctx context.Context, queries *generated.Queries, id strin
 	tree, err := mapAuthoringTree(
 		row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status,
 		row.InstructorID, row.CreatedAt, row.UpdatedAt, row.PublishedAt,
+		row.PriceMinor, row.Currency,
 	)
 	if err != nil {
 		return domain.CourseTree{}, err
@@ -384,7 +399,7 @@ func loadAuthoringTree(ctx context.Context, queries *generated.Queries, id strin
 			return domain.CourseTree{}, domain.ErrDependencyUnavailable
 		}
 		tree.Modules[index].Lessons = append(tree.Modules[index].Lessons, domain.Lesson{
-			ID: lesson.ID, Title: lesson.Title, Description: lesson.Description, Position: int(lesson.Position),
+			ID: lesson.ID, Title: lesson.Title, Description: lesson.Description, Position: int(lesson.Position), IsPreview: lesson.IsPreview,
 		})
 	}
 	return tree, nil
@@ -401,12 +416,14 @@ func lockAuthoringCourse(ctx context.Context, queries *generated.Queries, id str
 	return mapAuthoringTree(
 		row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status,
 		row.InstructorID, row.CreatedAt, row.UpdatedAt, row.PublishedAt,
+		row.PriceMinor, row.Currency,
 	)
 }
 
 func mapAuthoringTree(
 	id, slug, title, summary, description, status, instructorID string,
 	createdAt, updatedAt, publishedAt pgtype.Timestamptz,
+	priceMinor pgtype.Int8, currency pgtype.Text,
 ) (domain.CourseTree, error) {
 	if !createdAt.Valid || !updatedAt.Valid {
 		return domain.CourseTree{}, domain.ErrDependencyUnavailable
@@ -416,10 +433,16 @@ func mapAuthoringTree(
 		value := publishedAt.Time
 		published = &value
 	}
+	var price *domain.Price
+	if priceMinor.Valid && currency.Valid {
+		price = &domain.Price{Minor: priceMinor.Int64, Currency: currency.String}
+	} else if priceMinor.Valid != currency.Valid {
+		return domain.CourseTree{}, domain.ErrDependencyUnavailable
+	}
 	return domain.CourseTree{
 		ID: id, Slug: slug, Title: title, Summary: summary, Description: description,
 		Status: domain.Status(status), InstructorID: instructorID,
-		CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: published,
+		CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: published, Price: price,
 	}, nil
 }
 

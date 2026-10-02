@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local smoke generate check-generated check
+.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local tunnel-up tunnel-down smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -42,15 +42,23 @@ integration:
 build:
 	docker compose build
 e2e:
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 180 api frontend wayforpay-stub nginx
 	cd frontend && npm run e2e
-# Run this, not bare `e2e`, for a standalone browser run. `e2e` is the low-level target the
-# `check` chain composes; on its own it neither raises the stack nor restores the disposable
-# fixtures, so it fails against an api that is still starting (503) or a `delete-me` user a
+# Run this, not bare `e2e`, for a standalone browser run. `e2e` raises the stack with the
+# e2e overlay (api, frontend, nginx and the WayForPay stub, `--wait` so chromium never meets a
+# still-starting 503) but does NOT reseed, so on its own it fails against a `delete-me` user a
 # previous run consumed - and because chromium gates media and playback, one consumed fixture
-# stops the playback block from running at all. Both rules were written down and both were
-# then bypassed within an hour, because the cheap path was the wrong one. This makes the
-# cheap path correct by construction instead of by memory.
+# stops the playback block from running at all. `e2e-local` adds the reseed. The reseed rule was
+# written down and then bypassed within an hour, because the cheap path was the wrong one. This
+# makes the cheap path correct by construction instead of by memory.
 e2e-local: up seed-identities seed e2e
+# Owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md. Needs only
+# WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
+# stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.
+tunnel-up: env
+	sh infrastructure/tunnel/up.sh
+tunnel-down:
+	sh infrastructure/tunnel/down.sh
 # Backlog B-5: Redis runs with `appendonly yes` on the persistent `redis-data` volume and
 # nothing drained the asynq queue between runs, so a run aborted mid-transcode left its task
 # behind. The next `up` starts the worker, `Recover` takes that task, and it eats the 2 CPU /

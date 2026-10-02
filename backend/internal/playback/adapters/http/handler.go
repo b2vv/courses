@@ -153,6 +153,10 @@ func (handler *Handler) authorize(w http.ResponseWriter, r *http.Request) {
 		writeAuthorizationError(w, r, http.StatusForbidden)
 		return
 	}
+	if errors.Is(err, domain.ErrPurchaseRequired) {
+		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
+		return
+	}
 	writeAuthorizationError(w, r, http.StatusServiceUnavailable)
 }
 
@@ -307,6 +311,8 @@ func writePlaybackError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrForbidden):
 		httpserver.WriteError(w, r, http.StatusForbidden, "playback_forbidden", "Playback is not authorized")
+	case errors.Is(err, domain.ErrPurchaseRequired):
+		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
 	case errors.Is(err, domain.ErrLessonNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
 	case errors.Is(err, domain.ErrVideoNotReady):

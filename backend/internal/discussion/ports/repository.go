@@ -73,9 +73,9 @@ type ModerationRepository interface {
 
 type Repository interface {
 	ModerationRepository
-	LessonFacts(context.Context, string) (LessonFacts, error)
+	LessonFacts(context.Context, string, string) (LessonFacts, error)
 	List(context.Context, string, string, int) (CommentPage, error)
-	Get(context.Context, string) (CommentRecord, error)
+	Get(context.Context, string, string) (CommentRecord, error)
 	InsertRoot(context.Context, domain.Comment) (CommentRecord, error)
 	InsertReply(context.Context, domain.Comment) (CommentRecord, error)
 	UpdateBody(context.Context, string, string, string, time.Time) (CommentRecord, error)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useFieldArray, useForm, useController } from 'react-hook-form';
 import type { Control, FieldPathByValue, FieldValues, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,7 @@ import { newLessonId, newModuleId } from '../../domain/course/course';
 import type {
   AdminCourseDraft,
   AuthoringErrorCode,
+  CoursePrice,
   CourseStatus,
   CourseTree,
   CourseTreeEdit,
@@ -14,7 +16,8 @@ import type {
 } from '../../domain/course/course';
 import type { DraftSegment } from '../../domain/transcript/draft';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
-import { Button, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
+import { Button, Checkbox, Dialog, Link, Select, Skeleton, TextArea, TextField } from '../ui';
+import { CoursePriceField } from './CoursePriceField';
 import { LessonDraftField } from './LessonDraftField';
 import type { CourseEditorDrafts } from './LessonDraftField';
 import { LessonVideoField } from './LessonVideoField';
@@ -37,6 +40,7 @@ type CourseFormValues = {
       id: CourseTreeEdit['modules'][number]['lessons'][number]['id'];
       title: string;
       description: string;
+      isPreview: boolean;
     }>;
   }>;
 };
@@ -46,12 +50,15 @@ type CourseEditorViewProps = {
   actor: AuthenticatedUser;
   ownerOptions: readonly InstructorOption[] | null;
   onSave: (current: CourseTree, edit: CourseTreeEdit) => Promise<CourseTree>;
+  onSetPrice?: (current: CourseTree, price: CoursePrice | null) => Promise<CourseTree>;
   onTransition: (current: CourseTree, status: CourseStatus) => Promise<CourseTree>;
   onDelete: (current: CourseTree) => Promise<void>;
   onAuthenticationRequired: () => void;
   video?: CourseEditorVideo;
   drafts?: CourseEditorDrafts;
   transcripts?: CourseEditorTranscripts;
+  /** Admin-only sections, rendered after the course's own (e.g. granting access). */
+  adminTools?: ReactNode;
 };
 
 type CourseCreateDialogProps = {
@@ -231,6 +238,23 @@ function toTranscriptSegment(segment: DraftSegment) {
   return { ...segment, documentIds: [] };
 }
 
+function PreviewField({
+  control,
+  name,
+  label,
+}: {
+  control: Control<CourseFormValues>;
+  name: FieldPathByValue<CourseFormValues, boolean>;
+  label: string;
+}) {
+  const { field } = useController({ control, name });
+  return (
+    <Checkbox isSelected={field.value} onChange={field.onChange} onBlur={field.onBlur}>
+      {label}
+    </Checkbox>
+  );
+}
+
 function LessonFields({
   form,
   moduleIndex,
@@ -289,6 +313,14 @@ function LessonFields({
                 label={t('administration.lessonDescription')}
                 maximum={1000}
                 multiline
+              />
+              <PreviewField
+                control={form.control}
+                name={`modules.${moduleIndex}.lessons.${lessonIndex}.isPreview`}
+                label={t('administration.lessonPreview', {
+                  lesson: lessonIndex + 1,
+                  module: moduleIndex + 1,
+                })}
               />
             </div>
             {video !== undefined && (
@@ -377,7 +409,9 @@ function LessonFields({
         type="button"
         variant="secondary"
         isDisabled={lessonCount >= 120}
-        onPress={() => lessons.append({ id: newLessonId(), title: '', description: '' })}
+        onPress={() =>
+          lessons.append({ id: newLessonId(), title: '', description: '', isPreview: false })
+        }
       >
         {t('administration.addLesson', { number: moduleIndex + 1 })}
       </Button>
@@ -481,12 +515,14 @@ export function CourseEditorView({
   actor,
   ownerOptions,
   onSave,
+  onSetPrice,
   onTransition,
   onDelete,
   onAuthenticationRequired,
   video,
   drafts,
   transcripts,
+  adminTools,
 }: CourseEditorViewProps) {
   const { t } = useTranslation();
   const [message, setMessage] = useState<string>();
@@ -533,6 +569,18 @@ export function CourseEditorView({
       setSavedLessonIds(lessonIds(saved));
       setMessageKind('status');
       setMessage(t('administration.saved'));
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  async function setPrice(current: CourseTree, price: CoursePrice | null) {
+    if (onSetPrice === undefined) return;
+    setMessage(undefined);
+    try {
+      await onSetPrice(current, price);
+      setMessageKind('status');
+      setMessage(t(price === null ? 'administration.price.removed' : 'administration.price.saved'));
     } catch (error) {
       showError(error);
     }
@@ -683,6 +731,16 @@ export function CourseEditorView({
           )}
         </div>
       </section>
+      {onSetPrice !== undefined && (
+        <CoursePriceField
+          key={course.price?.minor ?? 'free'}
+          course={course}
+          hasUnsavedChanges={form.formState.isDirty}
+          isBusy={lifecyclePending || form.formState.isSubmitting}
+          onSetPrice={setPrice}
+        />
+      )}
+      {adminTools}
     </article>
   );
 }

@@ -24,11 +24,14 @@ func (authorizer *Authorizer) Authorize(ctx context.Context, actor domain.Actor,
 	if owner.PlaybackID != playbackID || owner.VideoID != videoID {
 		return domain.ErrForbidden
 	}
-	course, err := authorizer.access.LoadVideoCourse(ctx, videoID)
+	course, err := authorizer.access.LoadVideoCourse(ctx, actor.UserID, videoID)
 	if err != nil {
 		return err
 	}
 	if !course.CanBeViewedBy(actor) {
+		if course.PurchaseRequiredBy(actor) {
+			return domain.ErrPurchaseRequired
+		}
 		return domain.ErrForbidden
 	}
 	return nil

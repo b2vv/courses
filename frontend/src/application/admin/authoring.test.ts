@@ -15,6 +15,7 @@ const tree: CourseTree = {
   createdAt: '2026-09-01T00:00:00.000000Z',
   updatedAt: '2026-09-01T00:00:00.000001Z',
   publishedAt: null,
+  price: null,
   modules: [],
 };
 const edit: CourseTreeEdit = {
@@ -85,6 +86,7 @@ describe('admin authoring use cases', () => {
       ...tree,
       status: 'published',
       publishedAt: '2026-09-01T00:00:00.000001Z',
+      price: null,
     } satisfies CourseTree;
     const authoring = createAuthoring(repository());
     expect(await authoring.transition(published, 'draft')).toEqual({
@@ -99,5 +101,48 @@ describe('admin authoring use cases', () => {
       ok: false,
       error: { code: 'course_not_deletable' },
     });
+  });
+});
+
+describe('course price', () => {
+  test('saves only the price, over the stored tree, and refuses a malformed amount unsent', async () => {
+    const sent: CourseTreeEdit[] = [];
+    const authoring = createAuthoring(
+      repository({
+        save: async (_id, _expected, edit) => {
+          sent.push(edit);
+          return { ok: true, value: tree };
+        },
+      }),
+    );
+
+    expect((await authoring.setPrice(tree, { minor: 189000, currency: 'UAH' })).ok).toBe(true);
+    expect(await authoring.setPrice(tree, { minor: 0, currency: 'UAH' })).toEqual({
+      ok: false,
+      error: { code: 'invalid_request' },
+    });
+    expect(
+      (await authoring.setPrice({ ...tree, price: { minor: 5, currency: 'UAH' } }, null)).ok,
+    ).toBe(true);
+
+    // The stored tree, unchanged, plus the price — a first price is refused with anything else.
+    expect(sent).toEqual([
+      { ...edit, price: { minor: 189000, currency: 'UAH' } },
+      { ...edit, price: null },
+    ]);
+  });
+
+  test('the course form never carries a price', async () => {
+    const sent: CourseTreeEdit[] = [];
+    const authoring = createAuthoring(
+      repository({
+        save: async (_id, _expected, saved) => {
+          sent.push(saved);
+          return { ok: true, value: tree };
+        },
+      }),
+    );
+    await authoring.save(tree, edit);
+    expect('price' in (sent[0] ?? {})).toBe(false);
   });
 });

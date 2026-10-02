@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { priceSchema } from './price-schema';
 
 export const courseSchema = z.object({
   id: z.uuid(),
@@ -10,6 +11,8 @@ export const courseSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
   publishedAt: z.iso.datetime({ offset: true }).nullable(),
+  price: priceSchema.nullable(),
+  paid: z.boolean(),
 });
 const programTitleSchema = z
   .string()

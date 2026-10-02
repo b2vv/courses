@@ -7,11 +7,12 @@ func (e Error) Error() string { return string(e) }
 const (
 	ErrInvalidRequest Error = "invalid_request"
 
-	// ErrForbidden is the answer when the access rule refuses, and it is the SAME answer whether
-	// the lesson has a transcript or not: an absent transcript must not confirm that a course
-	// the caller may not see exists.
-	ErrForbidden Error = "forbidden"
-	ErrNotFound  Error = "not_found"
+	// ErrForbidden and ErrPurchaseRequired preserve the reason for an access refusal while still
+	// answering identically whether the lesson has a transcript: absence must not confirm that a
+	// course the caller may not see exists.
+	ErrForbidden        Error = "forbidden"
+	ErrPurchaseRequired Error = "course_purchase_required"
+	ErrNotFound         Error = "not_found"
 
 	ErrDependencyUnavailable Error = "dependency_unavailable"
 	ErrAlreadyRunning        Error = "already_running"

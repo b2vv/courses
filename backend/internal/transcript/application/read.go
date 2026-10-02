@@ -49,7 +49,7 @@ func (reading *Reading) Get(ctx context.Context, actor domain.Actor, lessonID, r
 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	found, err := reading.repository.GetLessonTranscript(ctx, lessonID, language)
+	found, err := reading.repository.GetLessonTranscript(ctx, actor.UserID, lessonID, language)
 	if err != nil {
 		return Transcript{}, err
 	}
@@ -58,6 +58,9 @@ func (reading *Reading) Get(ctx context.Context, actor domain.Actor, lessonID, r
 	// answer differently from its presence, and "no transcript" would quietly confirm that a
 	// draft course exists — a transcript must not become a second way into a course.
 	if !found.Course.CanBeViewedBy(actor) {
+		if found.Course.PurchaseRequiredBy(actor) {
+			return Transcript{}, domain.ErrPurchaseRequired
+		}
 		return Transcript{}, domain.ErrForbidden
 	}
 	if !found.Found {

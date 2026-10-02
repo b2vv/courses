@@ -12,13 +12,17 @@ const (
 
 // Case is one access-rule truth-table row.
 type Case struct {
-	Name   string
-	Role   Role
-	Status string
-	Want   bool
+	Name         string
+	Role         Role
+	Status       string
+	Paid         bool
+	Granted      bool
+	Preview      bool
+	Want         bool
+	WantPurchase bool
 }
 
-// TruthTable is the nine combinations of subject role and course status.
+// TruthTable is the fourteen access cases across role, status, payment, grant, and preview facts.
 var TruthTable = [...]Case{
 	{Name: "administrator draft", Role: Administrator, Status: "draft", Want: true},
 	{Name: "administrator published", Role: Administrator, Status: "published", Want: true},
@@ -29,4 +33,9 @@ var TruthTable = [...]Case{
 	{Name: "stranger draft", Role: Stranger, Status: "draft", Want: false},
 	{Name: "stranger published", Role: Stranger, Status: "published", Want: true},
 	{Name: "stranger archived", Role: Stranger, Status: "archived", Want: false},
+	{Name: "stranger paid published", Role: Stranger, Status: "published", Paid: true, Want: false, WantPurchase: true},
+	{Name: "stranger entitled paid published", Role: Stranger, Status: "published", Paid: true, Granted: true, Want: true},
+	{Name: "stranger preview paid published", Role: Stranger, Status: "published", Paid: true, Preview: true, Want: true},
+	{Name: "stranger entitled preview paid published", Role: Stranger, Status: "published", Paid: true, Granted: true, Preview: true, Want: true},
+	{Name: "stranger entitled paid archived", Role: Stranger, Status: "archived", Paid: true, Granted: true, Want: true},
 }

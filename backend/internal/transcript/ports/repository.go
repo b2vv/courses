@@ -43,7 +43,7 @@ type TranscriptRepository interface {
 	// error: a lesson simply may not have one yet, and the caller renders that as a state.
 	// Language may be empty, in which case the repository picks the only one, or the first by
 	// normalised code when several exist.
-	GetLessonTranscript(ctx context.Context, lessonID string, language domain.Language) (LessonTranscript, error)
+	GetLessonTranscript(ctx context.Context, userID, lessonID string, language domain.Language) (LessonTranscript, error)
 
 	// LessonCourse returns the course facts the write rule needs without reading the transcript,
 	// so authorization does not depend on whether any text exists yet.

@@ -1,0 +1,11 @@
+# Owner-run live WayForPay proof (Pay25-live), started by `make tunnel-up`.
+# A Cloudflare quick tunnel from the official image to nginx on the compose network. Kept apart
+# from docker-compose.tunnel.yml on purpose: this file needs no variables, so the tunnel can start
+# before its random public URL is known; the api is then recreated with that URL.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: ['tunnel', '--no-autoupdate', '--url', 'http://nginx:8080']
+    restart: 'no'
+    depends_on:
+      nginx: { condition: service_healthy }

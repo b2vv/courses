@@ -9,6 +9,8 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 FROM dependencies AS build
+ARG PUBLIC_WAYFORPAY_PAY_HOST=
+ENV PUBLIC_WAYFORPAY_PAY_HOST=$PUBLIC_WAYFORPAY_PAY_HOST
 COPY frontend/ ./
 RUN npm run build
 

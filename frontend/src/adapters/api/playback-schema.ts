@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { priceSchema } from './price-schema';
 
 const id = z.uuid();
 const title = z
@@ -22,6 +23,10 @@ export const learningCourseSchema = z
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),
     publishedAt: z.iso.datetime({ offset: true }).nullable(),
+    // OpenAPI LearningCourse (payment): required and accepted at the boundary;
+    // the learning model does not map them.
+    price: priceSchema.nullable(),
+    paid: z.boolean(),
     modules: z
       .array(
         z
@@ -38,6 +43,8 @@ export const learningCourseSchema = z
                     position: z.number().finite().nonnegative(),
                     completed: z.boolean(),
                     clientSeq: z.number().int().min(0).max(2_147_483_647),
+                    isPreview: z.boolean(),
+                    locked: z.boolean(),
                   })
                   .strict(),
               )

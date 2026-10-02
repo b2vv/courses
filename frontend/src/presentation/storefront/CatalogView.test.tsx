@@ -22,6 +22,8 @@ const architectureCourse: CourseDetail = {
   summary: 'Побудуйте API з чіткими межами модулів.',
   description: 'Працюємо з портами та адаптерами.\nЗавершуємо наскрізним тестом API.',
   publishedAt: '2026-09-01T09:00:00Z',
+  price: null,
+  paid: false,
   program: [
     {
       title: 'Межі модулів',
@@ -55,6 +57,32 @@ describe('catalog presentation', () => {
       '1–1 із 1',
     );
     expect(screen.queryByRole('link', { name: 'Наступна →' })).toBeNull();
+  });
+
+  it('formats catalog prices and keeps the visual purchase action on course detail', () => {
+    const paidCourse: CourseDetail = {
+      ...architectureCourse,
+      id: '7b823b02-65f6-4875-8e66-65e44fd08330',
+      slug: 'paid-architecture',
+      title: 'Платна архітектура',
+      price: { minor: 149900, currency: 'UAH' },
+      paid: true,
+    };
+    render(
+      <CatalogView
+        page={{ items: [paidCourse], pagination: { limit: 20, offset: 0, total: 1 } }}
+        query={initialQuery}
+      />,
+    );
+
+    // Hryvnia sign, as in the mockup — not the "грн" abbreviation.
+    expect(screen.getByText(/1\s?499\s?₴/u)).toBeTruthy();
+    // The catalog carries the same truthful value strip as the home page.
+    expect(screen.getByRole('heading', { name: 'Що дає навчання' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Транскрипти' })).toBeTruthy();
+    const action = screen.getByText('Купити').closest('a');
+    expect(action?.getAttribute('href')).toBe('/courses/paid-architecture');
+    expect(action?.getAttribute('aria-label')).toBe('Детальніше: Платна архітектура');
   });
 
   it('shows a complete detail description and a course learning entry', () => {

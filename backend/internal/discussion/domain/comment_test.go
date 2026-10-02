@@ -106,7 +106,13 @@ func TestCanBeViewedByMatchesAccessTruthTable(t *testing.T) {
 			if test.Role == accesstest.Owner {
 				actorID = owner
 			}
-			allowed := Course{OwnerID: owner, Status: Status(test.Status)}.CanBeViewedBy(Actor{UserID: actorID, Administrator: test.Role == accesstest.Administrator})
+			allowed := Course{
+				OwnerID:  owner,
+				Status:   Status(test.Status),
+				Paid:     test.Paid,
+				Entitled: test.Granted,
+				Preview:  test.Preview,
+			}.CanBeViewedBy(Actor{UserID: actorID, Administrator: test.Role == accesstest.Administrator})
 			if allowed != test.Want {
 				t.Fatalf("allowed=%v want=%v", allowed, test.Want)
 			}

@@ -151,6 +151,21 @@ func (handler *Handler) RequireSameOrigin(next http.Handler) http.Handler {
 	})
 }
 
+func (handler *Handler) RequireAdministrator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := r.Context().Value(userKey{}).(domain.User)
+		if !ok {
+			writeError(w, r, domain.ErrAuthenticationRequired, "")
+			return
+		}
+		if !user.Role.CanAdministerAccounts() {
+			writeError(w, r, domain.ErrForbidden, "grant_forbidden")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (handler *Handler) listInstructors(w http.ResponseWriter, r *http.Request) {
 	identityHeaders(w)
 	if _, ok := administrator(w, r); !ok {
@@ -262,6 +277,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, override stri
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 	case override == "forbidden":
 		httpserver.WriteError(w, r, http.StatusForbidden, "forbidden", "Permission is required")
+	case override == "grant_forbidden":
+		httpserver.WriteError(w, r, http.StatusForbidden, "grant_forbidden", "Administrator permission is required")
 	case errors.Is(err, domain.ErrUserNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "user_not_found", "User was not found")
 	case errors.Is(err, domain.ErrCannotTargetSelf):

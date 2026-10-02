@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"courses/internal/contracts/access/accesstest"
 	"testing"
 	"time"
 
@@ -115,6 +116,39 @@ func TestO4CourseVisibilityUsesSharedCases(t *testing.T) {
 			}
 			if got := course.CanBeViewedBy(actor); got != test.Want {
 				t.Fatalf("course=%t want=%t", got, test.Want)
+			}
+		})
+	}
+}
+
+// The outline of a published course is visible like a preview (owner decision
+// 2026-10-01): the rule moves to the lesson, where locked equals the shared table's
+// WantPurchase with that lesson's preview fact. Outline visibility is therefore
+// Want || WantPurchase — visible content, or a purchase that would make it visible.
+func TestLearningOutlineAndLessonLockFollowTheSharedTruthTable(t *testing.T) {
+	for _, test := range accesstest.TruthTable {
+		t.Run(test.Name, func(t *testing.T) {
+			course, err := coursedomain.NewLearningCourse(learningCourse([]coursedomain.LearningLesson{
+				{ID: "70000000-0000-4000-8000-000000000001", Title: "Lesson", IsPreview: test.Preview},
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			course.Status = coursedomain.Status(test.Status)
+			course.Paid = test.Paid
+			course.Entitled = test.Granted
+			actor := coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}
+			switch test.Role {
+			case accesstest.Administrator:
+				actor.Role = coursedomain.ActorAdmin
+			case accesstest.Owner:
+				actor = coursedomain.Actor{UserID: learningOwnerID, Role: coursedomain.ActorInstructor}
+			}
+			if got, want := course.CanBeViewedBy(actor), test.Want || test.WantPurchase; got != want {
+				t.Fatalf("outline visible=%t want=%t", got, want)
+			}
+			if got := course.PurchaseRequiredBy(actor, course.Modules[0].Lessons[0]); got != test.WantPurchase {
+				t.Fatalf("lesson locked=%t want=%t", got, test.WantPurchase)
 			}
 		})
 	}

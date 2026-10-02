@@ -11,6 +11,10 @@ export type CatalogErrorCode =
   | 'request_cancelled';
 export type CatalogError = { readonly code: CatalogErrorCode };
 export type CourseStatus = 'draft' | 'published' | 'archived';
+export type CoursePrice = {
+  readonly minor: number;
+  readonly currency: 'UAH';
+};
 export type PublishedCourse = {
   readonly id: string;
   readonly slug: string;
@@ -18,6 +22,9 @@ export type PublishedCourse = {
   readonly summary: string;
   readonly description: string;
   readonly publishedAt: string;
+  readonly price: CoursePrice | null;
+  /** Catalog display metadata: true means the course has a price, not that the viewer owns it. */
+  readonly paid: boolean;
 };
 export type ProgramLesson = { readonly title: string };
 export type ProgramModule = {
@@ -95,6 +102,8 @@ export type AuthoringLesson = {
   readonly id: LessonId;
   readonly title: string;
   readonly description: string;
+  /** Open to every signed-in viewer of a published paid course. */
+  readonly isPreview: boolean;
 };
 export type AuthoringModule = {
   readonly id: ModuleId;
@@ -108,8 +117,14 @@ export type CourseTreeEdit = {
   readonly description: string;
   readonly instructorId: string;
   readonly modules: readonly AuthoringModule[];
+  /**
+   * Omitted means unchanged. The first price (none → some) is refused by the server
+   * together with any other change, so it is sent only by `setPrice` over the stored tree.
+   */
+  readonly price?: CoursePrice | null;
 };
 export type CourseTree = CourseTreeEdit & {
+  readonly price: CoursePrice | null;
   readonly id: CourseId;
   readonly status: CourseStatus;
   readonly createdAt: string;
@@ -170,9 +185,40 @@ export function validCourseDraft(input: AdminCourseDraft): boolean {
   );
 }
 
+/** Minor units of UAH: a positive safe integer. */
+export function validCoursePrice(price: CoursePrice): boolean {
+  return Number.isSafeInteger(price.minor) && price.minor >= 1 && price.currency === 'UAH';
+}
+
+/**
+ * An amount typed in hryvnias ("1890", "1890.50", "1 890,5") as minor units. Anything else —
+ * negative, more than two decimals, zero, beyond a safe integer — is refused, never rounded.
+ */
+export function parseUahAmount(text: string): CoursePrice | null {
+  const normalized = text.replace(/[\s\u00a0]/g, '').replace(',', '.');
+  const match = /^(\d{1,13})(?:\.(\d{1,2}))?$/.exec(normalized);
+  if (match?.[1] === undefined) return null;
+  const minor = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  const price: CoursePrice = { minor, currency: 'UAH' };
+  return validCoursePrice(price) ? price : null;
+}
+
+/** The stored tree as an edit: what `setPrice` sends so nothing but the price changes. */
+export function unchangedEdit(tree: CourseTree): CourseTreeEdit {
+  return {
+    slug: tree.slug,
+    title: tree.title,
+    summary: tree.summary,
+    description: tree.description,
+    instructorId: tree.instructorId,
+    modules: tree.modules,
+  };
+}
+
 export function validCourseTreeEdit(input: CourseTreeEdit): boolean {
   if (!validCourseDraft(input) || !validEntityId(input.instructorId) || input.modules.length > 40)
     return false;
+  if (input.price != null && !validCoursePrice(input.price)) return false;
   const ids = new Set<string>();
   let lessonCount = 0;
   for (const module of input.modules) {
@@ -287,14 +333,23 @@ export function makePublishedCourse(input: {
   description: string;
   status: string;
   publishedAt: string | null;
+  price: { minor: number; currency: string } | null;
+  paid: boolean;
 }): Result<PublishedCourse> {
+  const validPrice =
+    input.price === null ||
+    (Number.isSafeInteger(input.price.minor) &&
+      input.price.minor > 0 &&
+      input.price.currency === 'UAH');
   if (
     input.status !== 'published' ||
     !validSlug(input.slug) ||
     !input.id ||
     !input.title.trim() ||
     !input.publishedAt ||
-    !Number.isFinite(Date.parse(input.publishedAt))
+    !Number.isFinite(Date.parse(input.publishedAt)) ||
+    !validPrice ||
+    input.paid !== (input.price !== null)
   )
     return { ok: false, error: { code: 'invalid_response' } };
   return {
@@ -306,6 +361,8 @@ export function makePublishedCourse(input: {
       summary: input.summary,
       description: input.description,
       publishedAt: input.publishedAt,
+      price: input.price === null ? null : { minor: input.price.minor, currency: 'UAH' },
+      paid: input.paid,
     },
   };
 }

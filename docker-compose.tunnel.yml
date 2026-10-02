@@ -1,0 +1,15 @@
+# Owner-run live WayForPay proof (Pay25-live): `make tunnel-up`, work/runbook-o06c-tunnel.md.
+# Forwards the WayForPay settings into the api container — the base docker-compose.yml lists the
+# api environment explicitly and does not pass them. No secret lives in this file.
+# The two credentials come from your local .env; the tunnel URL and domain are exported by
+# infrastructure/tunnel/up.sh (shell variables take precedence over .env in Compose).
+# `:?` fails loudly when a value is missing instead of starting an unconfigured provider.
+services:
+  api:
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set by make tunnel-up (the tunnel URL)}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set by make tunnel-up (the tunnel URL)}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      WAYFORPAY_MERCHANT_ACCOUNT: ${WAYFORPAY_MERCHANT_ACCOUNT:?Add WAYFORPAY_MERCHANT_ACCOUNT to .env}
+      WAYFORPAY_SECRET_KEY: ${WAYFORPAY_SECRET_KEY:?Add WAYFORPAY_SECRET_KEY to .env}
+      WAYFORPAY_MERCHANT_DOMAIN: ${WAYFORPAY_MERCHANT_DOMAIN:?Set by make tunnel-up (the tunnel host)}

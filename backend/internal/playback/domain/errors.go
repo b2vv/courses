@@ -6,6 +6,7 @@ func (e Error) Error() string { return string(e) }
 
 const (
 	ErrForbidden              Error = "forbidden"
+	ErrPurchaseRequired       Error = "course_purchase_required"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrInvalidProgress        Error = "invalid_progress"
 	ErrLessonNotFound         Error = "lesson_not_found"

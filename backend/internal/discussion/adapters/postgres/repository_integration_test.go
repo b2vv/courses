@@ -284,25 +284,45 @@ func TestDiscussionPostgres(t *testing.T) {
 			if truth.Status == "published" {
 				publishedAt = "now()"
 			}
-			if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES(gen_random_uuid(),$1,'Access','S','D',$2,$3,`+publishedAt+`) RETURNING id::text`, "access-"+string(rune('a'+index)), truth.Status, discussionOwner).Scan(&courseID); err != nil {
+			var price, currency any
+			if truth.Paid {
+				price, currency = int64(50000), "UAH"
+			}
+			if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency) VALUES(gen_random_uuid(),$1,'Access','S','D',$2,$3,`+publishedAt+`,$4,$5) RETURNING id::text`, "access-"+string(rune('a'+index)), truth.Status, discussionOwner, price, currency).Scan(&courseID); err != nil {
 				t.Fatal(err)
 			}
 			if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'M',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 				t.Fatal(err)
 			}
-			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'L','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
-				t.Fatal(err)
-			}
-			facts, err := repository.LessonFacts(ctx, lessonID)
-			if err != nil {
+			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'L','',0,$2) RETURNING id::text`, moduleID, truth.Preview).Scan(&lessonID); err != nil {
 				t.Fatal(err)
 			}
 			actor := domain.Actor{UserID: discussionStudent, Administrator: truth.Role == accesstest.Administrator}
 			if truth.Role == accesstest.Owner {
 				actor.UserID = discussionOwner
 			}
+			if truth.Granted {
+				if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, actor.UserID, courseID, discussionOwner); err != nil {
+					t.Fatal(err)
+				}
+			}
+			facts, err := repository.LessonFacts(ctx, actor.UserID, lessonID)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if got := facts.Course.CanBeViewedBy(actor); got != truth.Want {
 				t.Fatalf("%s: access=%v want=%v", truth.Name, got, truth.Want)
+			}
+			var commentID string
+			if err := pool.QueryRow(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'Access row') RETURNING id::text`, lessonID, discussionOwner).Scan(&commentID); err != nil {
+				t.Fatal(err)
+			}
+			record, err := repository.Get(ctx, actor.UserID, commentID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := record.Course.CanBeViewedBy(actor); got != truth.Want {
+				t.Fatalf("%s comment facts: access=%v want=%v", truth.Name, got, truth.Want)
 			}
 		}
 	})
@@ -441,14 +461,14 @@ func TestDiscussionPostgres(t *testing.T) {
 		}
 	})
 	t.Run("K09a filtered selector and serialized cap", func(t *testing.T) {
-		positiveFacts, err := repository.LessonFacts(ctx, positiveLesson)
+		positiveFacts, err := repository.LessonFacts(ctx, discussionStudent, positiveLesson)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if positiveFacts.AssetID != positiveAsset || positiveFacts.Generation != 1 || positiveFacts.DurationSecs == nil || *positiveFacts.DurationSecs != 45 {
 			t.Fatalf("positive selected asset=%s generation=%d duration=%v", positiveFacts.AssetID, positiveFacts.Generation, positiveFacts.DurationSecs)
 		}
-		facts, err := repository.LessonFacts(ctx, discussionLesson)
+		facts, err := repository.LessonFacts(ctx, discussionStudent, discussionLesson)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -21,9 +21,18 @@ func TestCanView(t *testing.T) {
 			} else if test.Role == accesstest.Stranger {
 				subject = access.Subject{UserID: "stranger"}
 			}
-			course := access.Course{OwnerID: owner, Published: test.Status == "published"}
+			course := access.Course{
+				OwnerID:   owner,
+				Published: test.Status == "published",
+				Paid:      test.Paid,
+				Entitled:  test.Granted,
+				Preview:   test.Preview,
+			}
 			if got := access.CanView(subject, course); got != test.Want {
 				t.Fatalf("CanView() = %v, want %v", got, test.Want)
+			}
+			if got := access.PurchaseRequired(subject, course); got != test.WantPurchase {
+				t.Fatalf("PurchaseRequired() = %v, want %v", got, test.WantPurchase)
 			}
 		})
 	}
@@ -33,4 +42,66 @@ func TestCanView(t *testing.T) {
 			t.Fatal("CanView() = true, want false")
 		}
 	})
+}
+
+func TestPurchaseRequiredImpliesCannotView(t *testing.T) {
+	t.Parallel()
+
+	const owner = "owner"
+	for _, test := range accesstest.TruthTable {
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			subject, course := accessFacts(test, owner)
+			if access.PurchaseRequired(subject, course) && access.CanView(subject, course) {
+				t.Fatal("PurchaseRequired() = true and CanView() = true")
+			}
+		})
+	}
+}
+
+func TestCanViewAndPurchaseRequiredUseTheSameCourseFacts(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name         string
+		subject      access.Subject
+		course       access.Course
+		wantView     bool
+		wantPurchase bool
+	}{
+		{name: "owner", subject: access.Subject{UserID: "owner"}, course: access.Course{OwnerID: "owner", Paid: true}, wantView: true},
+		{name: "unpublished", subject: access.Subject{UserID: "stranger"}, course: access.Course{OwnerID: "owner", Paid: true}},
+		{name: "free published", subject: access.Subject{UserID: "stranger"}, course: access.Course{OwnerID: "owner", Published: true}, wantView: true},
+		{name: "paid published", subject: access.Subject{UserID: "stranger"}, course: access.Course{OwnerID: "owner", Published: true, Paid: true}, wantPurchase: true},
+		{name: "entitled paid published", subject: access.Subject{UserID: "stranger"}, course: access.Course{OwnerID: "owner", Published: true, Paid: true, Entitled: true}, wantView: true},
+		{name: "preview paid published", subject: access.Subject{UserID: "stranger"}, course: access.Course{OwnerID: "owner", Published: true, Paid: true, Preview: true}, wantView: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := access.CanView(test.subject, test.course); got != test.wantView {
+				t.Fatalf("CanView() = %v, want %v", got, test.wantView)
+			}
+			if got := access.PurchaseRequired(test.subject, test.course); got != test.wantPurchase {
+				t.Fatalf("PurchaseRequired() = %v, want %v", got, test.wantPurchase)
+			}
+		})
+	}
+}
+
+func accessFacts(test accesstest.Case, owner string) (access.Subject, access.Course) {
+	subject := access.Subject{UserID: owner}
+	if test.Role == accesstest.Administrator {
+		subject = access.Subject{UserID: "administrator", Administrator: true}
+	} else if test.Role == accesstest.Stranger {
+		subject = access.Subject{UserID: "stranger"}
+	}
+	return subject, access.Course{
+		OwnerID:   owner,
+		Published: test.Status == "published",
+		Paid:      test.Paid,
+		Entitled:  test.Granted,
+		Preview:   test.Preview,
+	}
 }

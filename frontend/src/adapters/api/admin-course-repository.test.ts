@@ -23,6 +23,7 @@ const tree: CourseTree = {
   createdAt: '2026-09-01T00:00:00.000000Z',
   updatedAt: '2026-09-01T00:00:00.000001Z',
   publishedAt: null,
+  price: null,
   modules: [],
 };
 const draft: AdminCourseDraft = {
@@ -177,5 +178,44 @@ describe('admin API repository', () => {
       ok: false,
       error: { code: 'invalid_response' },
     });
+  });
+});
+
+describe('price and preview on the wire', () => {
+  test('a form save states every preview and omits the price; a price save carries it', async () => {
+    const lessonId = asBrandedId('30000000-0000-4000-8000-000000000001', 'lesson');
+    const withLesson: CourseTreeEdit = {
+      ...edit,
+      modules: [
+        {
+          id: asBrandedId('20000000-0000-4000-8000-000000000001', 'module'),
+          title: 'Module',
+          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: true }],
+        },
+      ],
+    };
+    const bodies: unknown[] = [];
+    server.use(
+      http.put(`${apiOrigin()}/api/v1/admin/courses/${tree.id}`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ...tree, modules: withLesson.modules });
+      }),
+    );
+    const authoring = createAuthoring(createApiAdminCourseRepository());
+
+    const saved = await authoring.save(tree, withLesson);
+    expect(saved.ok && saved.value.modules[0]?.lessons[0]?.isPreview).toBe(true);
+    await authoring.setPrice(tree, { minor: 189000, currency: 'UAH' });
+    await authoring.setPrice({ ...tree, price: { minor: 189000, currency: 'UAH' } }, null);
+
+    const [form, price, free] = bodies as Array<{
+      course: Record<string, unknown>;
+      modules: Array<{ lessons: Array<Record<string, unknown>> }>;
+    }>;
+    expect(form?.modules[0]?.lessons[0]?.isPreview).toBe(true);
+    // Absent, not null: null would make the course free.
+    expect(form !== undefined && 'price' in form.course).toBe(false);
+    expect(price?.course.price).toEqual({ minor: 189000, currency: 'UAH' });
+    expect(free !== undefined && 'price' in free.course && free.course.price === null).toBe(true);
   });
 });
