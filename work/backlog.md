@@ -1311,3 +1311,23 @@ explicitly to domain entities»).
 Не стверджує, що зараз студенти бачать не той транскрипт: у фазі одна мова на урок, а 4g закриває
 єдиний відомий шлях до другої. Це читальний шлях 7a, не приймання A13 — окремий пункт за рішенням
 користувача Courses 2 (2026-09-24).
+
+## B-24 — payment PR #3 review findings (Courses 2, 2026-10-02, non-blocking)
+
+From `work/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary. Four polish items:
+
+1. **Duplicate-JSON-key check is asymmetric and copy-pasted.** `validateUniqueJSONObject` (reject
+   duplicate keys) lives in `decodeGrant` (orders), and independently in `admin_handler.go` and
+   `discussion/handler.go` — three copies. `decodeCheckout` (same orders module) does NOT have it
+   (only `DisallowUnknownFields`), and has no dup-key refusal test. Resolve by deciding the rule
+   once: if duplicate-key rejection is the contract (it is enforced on 3 write surfaces), lift the
+   helper to a shared platform place and apply it to `decodeCheckout` too, with a test; the checkout
+   impact today is nil (body is only an optional cosmetic slug).
+2. **In-memory status throttle** (`service.go`) → N× CHECK_STATUS with N instances. Recorded in
+   `docs/payment/report.md` §6. A shared store before horizontal scaling; Proxy pattern not worth it now.
+3. **Variadic optional dependency** in `service.New` and `http.NewHandler` (two handler
+   constructors). Prefer one explicit nilable parameter over the variadic + second constructor.
+4. **Date-format literal repeated 3×** in `handler.go` — extract a const.
+
+Trigger: fold 1/3/4 into a follow-up polish commit on `feat/payment` before or just after the PR
+merges; 2 stays a named limitation.
