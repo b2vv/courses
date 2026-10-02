@@ -1332,7 +1332,11 @@ From `work/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary
 Trigger: fold 1/3/4 into a follow-up polish commit on `feat/payment` before or just after the PR
 merges; 2 stays a named limitation.
 
-## B-25 — WayForPay refuses a second checkout of the same pending order (live run, 2026-10-02)
+## B-25 — WayForPay refuses a second checkout of the same pending order (live run, 2026-10-02) — CLOSED `f306165`
+
+**Closed** by option (b) plus a refund trace; see `docs/payment/assumptions.md` (2026-10-02) and the
+phase report §6. Kept below as the record of the finding.
+
 
 **Found by:** the Pay25-live run against `test_merch_n1`. **Mechanism:** our checkout sends the order
 id as WayForPay's `orderReference`; WayForPay treats `orderReference` as unique, so a second hosted
@@ -1353,3 +1357,25 @@ IPs times out; cloudflare.com itself works); the localhost.run free tunnel works
 hostname within minutes, which breaks `serviceUrl`/`returnUrl` mid-run. The test card from WayForPay's
 API examples (`4111…`) is declined (1105). To close Pay25-live: a named tunnel (Cloudflare account or
 ngrok authtoken) or the deployment, plus a documented test card or the owner's own test-mode merchant.
+
+### B-26 addendum — what WayForPay's own docs say (researched 2026-10-02)
+Sources: Verify API `wiki.wayforpay.com/view/852189`, Purchase `/view/852102`, response codes `/view/852131`,
+test credentials `/view/852472`.
+- **No test-card list is published anywhere in the wiki.** Test credentials page lists only merchants
+  (`test_merch_n1` + key, `test_merch_p2p`, `p2p_credit`). The "4111 = success, 5454 = failure" claim is
+  not in the wiki; live: 5454 → 1101 (issuer declined) as claimed, 4111 → **1105** ("invalid card number
+  **or card in a prohibited state**"). Ask WayForPay support which card is Approved on `test_merch_n1`.
+- **Codes we saw:** 1100 ok; 1101 issuer declined; 1105 invalid/prohibited card; 1112 duplicate order id
+  (= B-25); 1131 still processing; also 1113 = wrong merchant signature (never seen — our signatures
+  are accepted live).
+- **transactionStatus set:** InProcessing, WaitingAuthComplete (awaiting settlement), Approved, Pending
+  (antifraud review), Expired, Declined, Refunded/Voided, RefundInProcessing. Our mapping
+  (Approved → paid; Declined/Expired → failed; the rest acknowledged, no change) holds for MVP.
+  **Gap to name:** `Refunded`/`Voided` after an `Approved` are ignored today — a refund done in the
+  WayForPay cabinet would leave the buyer's grant active. Belongs with the refund flow (out of MVP).
+- **`orderTimeout` / `orderLifetime`** (Purchase params we do not send): how long the hosted page allows
+  re-trying payment, and how long the order can be paid at all. Setting `orderLifetime` would let
+  WayForPay itself expire abandoned orders (→ `Expired` → our order `failed`), tidying the extra pending
+  rows B-25 option (b) creates.
+- **serviceUrl** response format and the 4-day retry are confirmed — matches our acknowledgement and the
+  Pay21b "unmatched → 503 so WayForPay retries" behaviour.
