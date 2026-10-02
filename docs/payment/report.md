@@ -100,6 +100,10 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   `Declined`, 1105 "Invalid card number" again (order `b2f96989…`), although it is commonly cited
   as WayForPay's success card. No test card produced `Approved` on `test_merch_n1`; the Approved →
   grant leg needs a card WayForPay confirms for test mode.
+  **Third try (2026-10-02):** `4222 2222 2222 2222`, suggested as WayForPay's Approved card, fails the
+  Luhn checksum; WayForPay's own form marks it «Невiрна картка» before submitting (order `09fd19e0…`
+  stays pending). The tables circulating for WayForPay test cards look like mixes of other providers'
+  test numbers (`4000000000000002` is Stripe's 3-D Secure card); only WayForPay can name the card.
 - **Defect found by the live run — closed (B-25, 2026-10-02).** We send the order id as WayForPay's
   `orderReference`, and WayForPay refused a second hosted form for the same pending order
   (`(1112) Duplicate Order ID`), leaving that order unpayable; the stub could not show it. Fixed: a
