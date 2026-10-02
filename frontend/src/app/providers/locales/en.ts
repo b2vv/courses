@@ -118,6 +118,7 @@ export const en = {
           session: 'Your session ended. Sign in again to buy the course.',
           notPurchasable: 'This course cannot be bought right now.',
           notFound: 'Order not found.',
+          checkoutAlreadyOpened: 'This payment attempt is already open. Starting a new attempt…',
         },
       },
       transcript: {

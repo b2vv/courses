@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -61,6 +62,39 @@ func (repository *Repository) Create(ctx context.Context, order domain.Order) (d
 
 func (repository *Repository) Get(ctx context.Context, userID, orderID string) (domain.Order, error) {
 	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE id=$1::text::uuid AND user_id=$2::text::uuid`, orderID, userID))
+}
+
+func (repository *Repository) MarkCheckoutOpened(ctx context.Context, userID, orderID string) (domain.Order, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.Order{}, persistenceError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	order, err := scanOrder(tx.QueryRow(ctx, `UPDATE orders
+SET checkout_opened_at=now()
+WHERE id=$1::text::uuid AND user_id=$2::text::uuid AND status='pending' AND checkout_opened_at IS NULL
+RETURNING id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at`, orderID, userID))
+	if err == nil {
+		if err := tx.Commit(ctx); err != nil {
+			return domain.Order{}, persistenceError(err)
+		}
+		return order, nil
+	}
+	if !errors.Is(err, domain.ErrOrderNotFound) {
+		return domain.Order{}, err
+	}
+	var status string
+	var opened pgtype.Timestamptz
+	if err := tx.QueryRow(ctx, `SELECT status,checkout_opened_at FROM orders WHERE id=$1::text::uuid AND user_id=$2::text::uuid`, orderID, userID).Scan(&status, &opened); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Order{}, domain.ErrOrderNotFound
+		}
+		return domain.Order{}, persistenceError(err)
+	}
+	if status == string(domain.OrderPending) && opened.Valid {
+		return domain.Order{}, domain.ErrCheckoutAlreadyOpened
+	}
+	return domain.Order{}, domain.ErrOrderNotFound
 }
 
 func (repository *Repository) ActiveGrants(ctx context.Context, userID, courseID string) ([]domain.Grant, error) {
@@ -187,6 +221,12 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 	}
 	decision, decisionErr := domain.DecidePaymentEvent(event, &order, false)
 	if decision.Action == domain.PaymentEventReject {
+		if event.Type == domain.PaymentSucceeded {
+			if _, err := tx.Exec(ctx, `UPDATE orders SET refund_required=true WHERE id=$1::text::uuid`, order.ID()); err != nil {
+				return persistenceError(err)
+			}
+			slog.Warn("payment event rejected", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID(), "reason", "rejected paid event")
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return persistenceError(err)
 		}
@@ -218,6 +258,11 @@ RETURNING id::text`, grantID, decision.GrantUserID, decision.GrantCourseID, deci
 		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,'grant',$2::text::uuid,$3)`, insertedGrantID, eventDatabaseID, event.ReceivedAt); err != nil {
 			return persistenceError(err)
 		}
+	} else {
+		if _, updateErr := tx.Exec(ctx, `UPDATE orders SET refund_required=true WHERE id=$1::text::uuid`, order.ID()); updateErr != nil {
+			return persistenceError(updateErr)
+		}
+		slog.Warn("paid order requires refund", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID())
 	}
 	return persistenceError(tx.Commit(ctx))
 }

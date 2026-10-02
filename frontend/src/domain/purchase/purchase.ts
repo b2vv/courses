@@ -26,6 +26,7 @@ export type PurchaseErrorCode =
   | 'authentication_required'
   | 'origin_forbidden'
   | 'course_already_owned'
+  | 'checkout_already_opened'
   | 'order_not_found';
 
 export type PurchaseResult<T> =

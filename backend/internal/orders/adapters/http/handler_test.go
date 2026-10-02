@@ -32,15 +32,16 @@ const (
 )
 
 type fakeStore struct {
-	order      domain.Order
-	grant      domain.Grant
-	courseErr  error
-	getErr     error
-	grantErr   error
-	active     []domain.Grant
-	applyCalls int
-	applyErr   error
-	grantCalls int
+	order       domain.Order
+	grant       domain.Grant
+	courseErr   error
+	getErr      error
+	grantErr    error
+	active      []domain.Grant
+	applyCalls  int
+	applyErr    error
+	grantCalls  int
+	checkoutErr error
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -69,6 +70,18 @@ func (store *fakeStore) Get(context.Context, string, string) (domain.Order, erro
 	}
 	return store.order, nil
 }
+func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID string) (domain.Order, error) {
+	if store.checkoutErr != nil {
+		return domain.Order{}, store.checkoutErr
+	}
+	if store.getErr != nil {
+		return domain.Order{}, store.getErr
+	}
+	if store.order.ID() == "" || store.order.Status() != domain.OrderPending {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	return store.order, nil
+}
 func (store *fakeStore) ActiveGrants(context.Context, string, string) ([]domain.Grant, error) {
 	return store.active, nil
 }
@@ -87,7 +100,6 @@ func (store *fakeStore) Apply(context.Context, domain.PaymentEvent, func() strin
 	store.applyCalls++
 	return store.applyErr
 }
-
 func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	store := &fakeStore{}
@@ -240,6 +252,37 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
 	})
+}
+
+func TestCheckoutAlreadyOpenedMatchesOpenAPI(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	store := &fakeStore{}
+	money, err := domain.NewMoney("50000", "UAH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := domain.NewOrder(testOrder, testUser, testCourse, money, "purchase-1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.order = order
+	store.checkoutErr = domain.ErrCheckoutAlreadyOpened
+	service := application.New(store, store, store, func() time.Time { return now }, func() string { return testGrant }, &fakePaymentProvider{})
+	handler := ordershttp.NewHandler(service, nil, "https://courses.test")
+	server := httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
+		handler.Register(mux, func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student"})))
+			})
+		}, func(next http.Handler) http.Handler { return next })
+	}})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/orders/"+testOrder+"/checkout", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"checkout_already_opened"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, request, response)
 }
 
 func assertContract(t *testing.T, request *http.Request, response *httptest.ResponseRecorder) {

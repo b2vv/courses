@@ -133,6 +133,24 @@ func TestPurchaseStatusIgnoresProviderFailure(t *testing.T) {
 	}
 }
 
+func TestCheckoutClaimsAnOrderOnce(t *testing.T) {
+	store := newFakeStore(t)
+	order := pendingOrder(t)
+	store.order = &order
+	provider := &fakePaymentProvider{}
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, provider)
+
+	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
+		t.Fatalf("first checkout: %v", err)
+	}
+	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); !errors.Is(err, domain.ErrCheckoutAlreadyOpened) {
+		t.Fatalf("second checkout error=%v want=%v", err, domain.ErrCheckoutAlreadyOpened)
+	}
+	if provider.checkoutCalls != 1 {
+		t.Fatalf("provider checkout calls=%d want=1", provider.checkoutCalls)
+	}
+}
+
 func TestPurchaseStatusThrottleIsSafeUnderConcurrentPolling(t *testing.T) {
 	store := newFakeStore(t)
 	order := pendingOrder(t)
@@ -220,6 +238,7 @@ type fakeStore struct {
 	createReturns       *domain.Order
 	activeGrant         bool
 	createCalls         int
+	checkoutCalls       int
 	order               *domain.Order
 	getUserID           string
 	appliedEvent        domain.PaymentEvent
@@ -233,9 +252,10 @@ type fakeStore struct {
 }
 
 type fakePaymentProvider struct {
-	status ports.PaymentStatus
-	err    error
-	calls  int
+	status        ports.PaymentStatus
+	err           error
+	calls         int
+	checkoutCalls int
 }
 
 type concurrentStatusStore struct {
@@ -267,6 +287,7 @@ func (provider *concurrentPaymentProvider) OrderStatus(context.Context, string) 
 }
 
 func (provider *fakePaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	provider.checkoutCalls++
 	return ports.CheckoutForm{}, nil
 }
 func (provider *fakePaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
@@ -300,6 +321,18 @@ func (store *fakeStore) Get(_ context.Context, userID, _ string) (domain.Order, 
 	if store.order == nil {
 		return domain.Order{}, domain.ErrOrderNotFound
 	}
+	return *store.order, nil
+}
+
+func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID string) (domain.Order, error) {
+	store.getUserID = userID
+	if store.order == nil || store.order.ID() != orderID {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	if store.checkoutCalls > 0 {
+		return domain.Order{}, domain.ErrCheckoutAlreadyOpened
+	}
+	store.checkoutCalls++
 	return *store.order, nil
 }
 

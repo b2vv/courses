@@ -1099,6 +1099,54 @@ test('O05 a failed order retries under a new idempotency key (assumptions, O05 p
   expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
 });
 
+test('a paid order survives the checkout-409 then already-owned retry race', async () => {
+  const student = user('student');
+  const keys: string[] = [];
+  let statusCalls = 0;
+  answerWith(student);
+  const router = createTestRouter(
+    `/orders/${pendingOrder.id}?course=paid-go`,
+    student,
+    'uk',
+    [],
+    {},
+    [],
+    {},
+    {},
+    transcriptStub,
+    discussionStub,
+    undefined,
+    {
+      start: async (_courseId, key) => {
+        keys.push(key);
+        return { ok: false, error: { code: 'course_already_owned' as const } };
+      },
+      status: async () => {
+        statusCalls += 1;
+        return statusCalls === 1
+          ? { ok: true, value: pendingOrder }
+          : {
+              ok: true,
+              value: { ...pendingOrder, status: 'paid', paidAt: '2026-10-01T10:01:00Z' },
+            };
+      },
+      checkout: async () => ({ ok: false, error: { code: 'checkout_already_opened' as const } }),
+    },
+  );
+
+  await router.load();
+  renderRouter(router);
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Перейти до оплати' }));
+  expect(
+    await screen.findByText('Не вдалося зв’язатися з сервером. Спробуйте ще раз.'),
+  ).toBeTruthy();
+  expect(await screen.findByText('Оплату зараховано — курс відкрито.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Перейти до курсу' })).toBeTruthy();
+  expect(router.state.location.pathname).toBe(`/orders/${pendingOrder.id}`);
+  expect(keys).toHaveLength(1);
+});
+
 test('Pay13 a paid order re-reads the course outline so its lessons unlock', async () => {
   const student = user('student');
   const paid: PurchaseOrder = { ...pendingOrder, status: 'paid', paidAt: '2026-10-01T10:01:00Z' };

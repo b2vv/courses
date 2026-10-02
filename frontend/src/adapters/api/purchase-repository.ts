@@ -67,6 +67,7 @@ const checkoutErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
   404: ['order_not_found'],
+  409: ['checkout_already_opened'],
   503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly PurchaseErrorCode[]>>;
 

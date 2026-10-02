@@ -205,3 +205,21 @@ own code paths end to end; the live run proves the one thing a stub cannot — t
 callback reaches and satisfies us.
 **How to check:** the gate's e2e passes with no network to WayForPay; the runbook's recorded run
 shows the real callback (signature verified, applied once, replay a no-op) and the lesson open.
+
+## 2026-10-02 — B-25: a repeat checkout starts a new order; a double payment leaves an explicit trace
+
+**Decision (Courses 1 on Courses 2's money-path analysis, 2026-10-02; the owner was away and may
+overturn it):** when a pending order's checkout was already opened, «Перейти до оплати» starts a
+**new order** (new idempotency key, new `orderReference`) instead of re-submitting the old one —
+option (b) of backlog B-25. **Alternative closed:** (a) a per-attempt `orderReference` on one order.
+**Mechanism that closes it:** `DecidePaymentEvent` rejects any event for a non-pending order and
+`Apply` fails the order on Declined/Expired; with several attempts on one order, a late Declined of
+attempt 1 fails the order and the Approved of attempt 2 is then rejected — money taken, no grant.
+Avoiding that needs attempt-level state (a new table, model and `Apply`); (b) isolates each attempt in
+its own order for free.
+**Also (applies today, independent of B-25):** two paid orders for one course (two tabs) — the second
+`Apply` marks its order paid while the grant insert hits `ON CONFLICT DO NOTHING`, silently. A paid
+order without a grant must carry an explicit, queryable refund trace.
+**How to check:** integration — a second checkout of an opened order creates a new order with a new
+reference; a late Declined of the old order leaves the new one untouched; two Approved orders → one
+grant and the second order flagged for refund.

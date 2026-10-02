@@ -109,12 +109,9 @@ func (service *Service) Checkout(ctx context.Context, actor Actor, orderID strin
 	if service.provider == nil {
 		return ports.CheckoutForm{}, domain.ErrDependencyUnavailable
 	}
-	order, err := service.orders.Get(ctx, actor.UserID, orderID)
+	order, err := service.orders.MarkCheckoutOpened(ctx, actor.UserID, orderID)
 	if err != nil {
 		return ports.CheckoutForm{}, err
-	}
-	if order.Status() != domain.OrderPending {
-		return ports.CheckoutForm{}, domain.ErrOrderNotFound
 	}
 	if urls.ProductName == "" {
 		if facts, factsErr := service.courses.CourseForPurchase(ctx, order.CourseID()); factsErr == nil {

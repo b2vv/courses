@@ -21,6 +21,7 @@ type OrderRepository interface {
 	FindByIdempotencyKey(context.Context, string, string) (domain.Order, error)
 	Create(context.Context, domain.Order) (domain.Order, error)
 	Get(context.Context, string, string) (domain.Order, error)
+	MarkCheckoutOpened(context.Context, string, string) (domain.Order, error)
 }
 
 type GrantCommand struct {

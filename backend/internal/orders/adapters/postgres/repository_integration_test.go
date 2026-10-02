@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -76,6 +77,151 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	newID := func() string { id := ids[0]; ids = ids[1:]; return id }
 	now := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
 	service := application.New(repository, repository, repository, func() time.Time { return now }, newID, nil)
+
+	t.Run("B25 repeat checkout uses a new order and preserves independent outcomes", func(t *testing.T) {
+		const courseID = integrationCourseID
+		for _, user := range []struct{ id, email string }{
+			{"40000000-0000-4000-8000-000000000020", "b25-declined@example.test"},
+			{"40000000-0000-4000-8000-000000000021", "b25-approved@example.test"},
+		} {
+			_, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,$2,'B25','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, user.id, user.email)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		checkoutProvider := &integrationPaymentProvider{}
+		declinedID := subtestIDs("61")
+		declinedService := application.New(repository, repository, repository, func() time.Time { return now }, declinedID, checkoutProvider)
+		old, err := declinedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000020"}, courseID, "b25-old")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID()}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID()}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != domain.ErrCheckoutAlreadyOpened {
+			t.Fatalf("second checkout error=%v", err)
+		}
+		newOrder, err := declinedService.StartPurchase(ctx, application.Actor{UserID: old.UserID()}, courseID, "b25-new")
+		if err != nil || newOrder.ID() == old.ID() {
+			t.Fatalf("new order=%q old=%q error=%v", newOrder.ID(), old.ID(), err)
+		}
+		if err := declinedService.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "b25-declined", OrderID: old.ID(), Type: domain.PaymentFailed, Amount: old.Amount(), ReceivedAt: now.Add(time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		status, err := repository.Get(ctx, old.UserID(), newOrder.ID())
+		if err != nil || status.Status() != domain.OrderPending {
+			t.Fatalf("new order after late decline status=%q error=%v", status.Status(), err)
+		}
+
+		approvedID := subtestIDs("62")
+		approvedService := application.New(repository, repository, repository, func() time.Time { return now }, approvedID, checkoutProvider)
+		approvedOld, err := approvedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000021"}, courseID, "b25-approved-old")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := approvedService.StartPurchase(ctx, application.Actor{UserID: approvedOld.UserID()}, courseID, "b25-approved-new"); err != nil {
+			t.Fatal(err)
+		}
+		if err := approvedService.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "b25-approved-declined", OrderID: approvedOld.ID(), Type: domain.PaymentFailed, Amount: approvedOld.Amount(), ReceivedAt: now.Add(90 * time.Second)}); err != nil {
+			t.Fatalf("decline old order error=%v", err)
+		}
+		if err := approvedService.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "b25-approved", OrderID: approvedOld.ID(), Type: domain.PaymentSucceeded, Amount: approvedOld.Amount(), ReceivedAt: now.Add(2 * time.Minute)}); err != domain.ErrPaymentEventRejected {
+			t.Fatalf("paid after failed error=%v", err)
+		}
+		var refundRequired bool
+		if err := pool.QueryRow(ctx, `SELECT refund_required FROM orders WHERE id=$1`, approvedOld.ID()).Scan(&refundRequired); err != nil {
+			t.Fatal(err)
+		}
+		if !refundRequired {
+			t.Fatal("rejected paid event did not mark failed order for refund")
+		}
+		var grants int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE order_id=$1`, approvedOld.ID()).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 0 {
+			t.Fatalf("rejected paid event granted access: %d", grants)
+		}
+		var pending int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE user_id=$1 AND idempotency_key='b25-approved-new' AND status='pending'`, approvedOld.UserID()).Scan(&pending); err != nil || pending != 1 {
+			t.Fatalf("new pending orders=%d error=%v", pending, err)
+		}
+	})
+
+	t.Run("B25 duplicate payment marks the paid order for refund", func(t *testing.T) {
+		const userID = "40000000-0000-4000-8000-000000000022"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'b25-refund@example.test','B25 refund','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
+			t.Fatal(err)
+		}
+		newID := subtestIDs("63")
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, newID, nil)
+		first, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-refund-one")
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-refund-two")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range []struct {
+			id    string
+			order domain.Order
+		}{{"b25-refund-first", first}, {"b25-refund-second", second}} {
+			if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: item.id, OrderID: item.order.ID(), Type: domain.PaymentSucceeded, Amount: item.order.Amount(), ReceivedAt: now.Add(3 * time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var grants, refunds int
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE user_id=$1 AND course_id=$2 AND state='active'), (SELECT count(*) FROM orders WHERE user_id=$1 AND course_id=$2 AND status='paid' AND refund_required)`, userID, integrationCourseID).Scan(&grants, &refunds); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 1 || refunds != 1 {
+			t.Fatalf("active grants=%d refund orders=%d", grants, refunds)
+		}
+		var secondRefundRequired bool
+		if err := pool.QueryRow(ctx, `SELECT refund_required FROM orders WHERE id=$1`, second.ID()).Scan(&secondRefundRequired); err != nil {
+			t.Fatal(err)
+		}
+		if !secondRefundRequired {
+			t.Fatalf("second paid order %s was not marked for refund", second.ID())
+		}
+	})
+
+	t.Run("B1 foreign paid amount marks pending order for refund", func(t *testing.T) {
+		const userID = "40000000-0000-4000-0000-000000000023"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'b25-mismatch@example.test','B25 mismatch','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
+			t.Fatal(err)
+		}
+		ids := subtestIDs("64")
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, ids, nil)
+		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-mismatch")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrongAmount, err := domain.NewMoney("70000", "UAH")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "b25-mismatch", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: wrongAmount, ReceivedAt: now.Add(4 * time.Minute)}); err != domain.ErrPaymentEventRejected {
+			t.Fatalf("foreign amount error=%v", err)
+		}
+		var status string
+		var refundRequired bool
+		if err := pool.QueryRow(ctx, `SELECT status,refund_required FROM orders WHERE id=$1`, order.ID()).Scan(&status, &refundRequired); err != nil {
+			t.Fatal(err)
+		}
+		if status != string(domain.OrderPending) || !refundRequired {
+			t.Fatalf("status=%s refund_required=%v, want pending/true", status, refundRequired)
+		}
+		var grants int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE order_id=$1`, order.ID()).Scan(&grants); err != nil {
+			t.Fatal(err)
+		}
+		if grants != 0 {
+			t.Fatalf("foreign amount granted access: %d", grants)
+		}
+	})
 
 	t.Run("Pay17 price change preserves access and order snapshot", func(t *testing.T) {
 		const pay17UserID = "40000000-0000-4000-8000-000000000010"
@@ -213,6 +359,16 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 	}
 	if grants != 1 || events != 1 || audits != 1 {
 		t.Fatalf("purchase grants=%d events=%d audits=%d", grants, events, audits)
+	}
+	// Pay04b keeps the refund trace honest: a repeat of the same paid event is a no-op before
+	// DecidePaymentEvent only because EventID = orderReference:status. If that format ever changes,
+	// a repeated callback for a paid order would reach the reject branch and raise a false refund flag.
+	var refundRequired bool
+	if err := pool.QueryRow(ctx, `SELECT refund_required FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&refundRequired); err != nil {
+		t.Fatal(err)
+	}
+	if refundRequired {
+		t.Fatal("a repeated paid event raised refund_required on a correctly paid order")
 	}
 
 	unknown := event
@@ -373,6 +529,16 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 	}
 }
 
+type integrationPaymentProvider struct{}
+
+func (*integrationPaymentProvider) Checkout(context.Context, domain.Order, ports.Buyer, ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	return ports.CheckoutForm{Action: "https://secure.wayforpay.com/pay"}, nil
+}
+
+func (*integrationPaymentProvider) OrderStatus(context.Context, string) (ports.PaymentStatus, error) {
+	return ports.PaymentStatus{}, nil
+}
+
 type invalidCallbackVerifier struct{}
 
 func (invalidCallbackVerifier) VerifyCallback([]byte, time.Time) (ports.Callback, error) {
@@ -393,5 +559,16 @@ INSERT INTO course_lessons(id,module_id,title,description,position) VALUES('5200
 INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at) VALUES('40000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001',1,1,'2026-09-30T08:30:00Z')`)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// subtestIDs gives a subtest its own unbounded id source: a fixed slice runs dry the moment the code
+// under test calls newID once more (three subtests in this file have panicked that way). The prefix
+// keeps each subtest's ids apart from every other fixture.
+func subtestIDs(prefix string) func() string {
+	next := 0
+	return func() string {
+		next++
+		return fmt.Sprintf("%s000000-0000-4000-8000-%012d", prefix, next)
 	}
 }
