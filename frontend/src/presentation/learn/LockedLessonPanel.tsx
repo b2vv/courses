@@ -50,7 +50,7 @@ export function LockedLessonPanel({
 
 export function purchaseErrorKey(
   code: PurchaseErrorCode,
-): 'unavailable' | 'session' | 'notPurchasable' | 'notFound' {
+): 'unavailable' | 'session' | 'notPurchasable' | 'notFound' | 'checkoutAlreadyOpened' {
   switch (code) {
     case 'authentication_required':
     case 'origin_forbidden':
@@ -59,6 +59,8 @@ export function purchaseErrorKey(
       return 'notPurchasable';
     case 'order_not_found':
       return 'notFound';
+    case 'checkout_already_opened':
+      return 'checkoutAlreadyOpened';
     default:
       return 'unavailable';
   }

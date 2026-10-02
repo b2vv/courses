@@ -80,7 +80,13 @@ docker compose exec -T postgres psql -U courses -d courses -c "
 Expected: exactly one active `purchase` grant; one `paid` event per WayForPay event id; the order
 `paid`. If step 4 shows the callback more than once, the counts must still be one.
 
-## 6. Stop
+## 6. Archive the test course, then stop
+Published courses are counted by the catalog and by the e2e suite (`recovery.spec.ts` expects exactly
+the seeded three): **archive every course you published for this run** before `make tunnel-down` —
+in the admin editor («Архівувати») or via `POST /api/v1/admin/courses/{id}/status`
+`{"status":"archived"}`. The first live run left five published `live-…` courses and turned the
+ordered gate red until they were archived.
+
 ```
 make tunnel-down
 ```

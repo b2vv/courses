@@ -21,6 +21,7 @@ export const ErrorResponseErrorCode = {
   course_forbidden: 'course_forbidden',
   course_purchase_required: 'course_purchase_required',
   course_already_owned: 'course_already_owned',
+  checkout_already_opened: 'checkout_already_opened',
   grant_forbidden: 'grant_forbidden',
   payment_event_rejected: 'payment_event_rejected',
   invalid_callback: 'invalid_callback',

@@ -147,3 +147,18 @@ test('names checkout not-found and unavailable responses', async () => {
     error: { code: 'dependency_unavailable' },
   });
 });
+
+test('names checkout_already_opened conflicts', async () => {
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, () =>
+      HttpResponse.json(
+        { error: { code: 'checkout_already_opened', message: 'x', requestId: 'a'.repeat(32) } },
+        { status: 409 },
+      ),
+    ),
+  );
+  expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+    ok: false,
+    error: { code: 'checkout_already_opened' },
+  });
+});

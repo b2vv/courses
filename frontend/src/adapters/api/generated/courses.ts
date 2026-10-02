@@ -394,6 +394,11 @@ export type createPurchaseCheckoutResponse404 = {
   status: 404
 }
 
+export type createPurchaseCheckoutResponse409 = {
+  data: PurchaseConflictResponse
+  status: 409
+}
+
 export type createPurchaseCheckoutResponse503 = {
   data: UnavailableResponse
   status: 503
@@ -402,7 +407,7 @@ export type createPurchaseCheckoutResponse503 = {
 export type createPurchaseCheckoutResponseSuccess = (createPurchaseCheckoutResponse200) & {
   headers: Headers;
 };
-export type createPurchaseCheckoutResponseError = (createPurchaseCheckoutResponse400 | createPurchaseCheckoutResponse401 | createPurchaseCheckoutResponse404 | createPurchaseCheckoutResponse503) & {
+export type createPurchaseCheckoutResponseError = (createPurchaseCheckoutResponse400 | createPurchaseCheckoutResponse401 | createPurchaseCheckoutResponse404 | createPurchaseCheckoutResponse409 | createPurchaseCheckoutResponse503) & {
   headers: Headers;
 };
 

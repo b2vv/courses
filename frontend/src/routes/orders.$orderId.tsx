@@ -78,7 +78,43 @@ function OrderRoute() {
         if (order.data === undefined || order.data.status !== 'pending') return;
         checkout.mutate(
           { orderId: order.data.id, courseSlug: slug },
-          { onSuccess: (form) => submitCheckoutForm(form) },
+          {
+            onSuccess: (form) => submitCheckoutForm(form),
+            onError: (error) => {
+              if (error.code !== 'checkout_already_opened') return;
+              retry.mutate(
+                { courseId: order.data.courseId },
+                {
+                  onSuccess: (next) => {
+                    checkout.mutate(
+                      { orderId: next.id, courseSlug: slug },
+                      {
+                        onSuccess: (form) => {
+                          void navigate({
+                            to: '/orders/$orderId',
+                            params: { orderId: next.id },
+                            search: slug === undefined ? {} : { course: slug },
+                          });
+                          submitCheckoutForm(form);
+                        },
+                      },
+                    );
+                  },
+                  onError: (error) => {
+                    if (
+                      error instanceof PurchaseQueryError &&
+                      error.code === 'course_already_owned'
+                    ) {
+                      void queryClient.invalidateQueries({
+                        queryKey: learn.purchase.status(order.data.id).queryKey,
+                        exact: true,
+                      });
+                    }
+                  },
+                },
+              );
+            },
+          },
         );
       }}
     />

@@ -396,6 +396,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "course_already_owned", "Course is already owned")
 	case errors.Is(err, domain.ErrOrderNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "order_not_found", "Order was not found")
+	case errors.Is(err, domain.ErrCheckoutAlreadyOpened):
+		httpserver.WriteError(w, r, http.StatusConflict, "checkout_already_opened", "Checkout was already opened")
 	case errors.Is(err, domain.ErrGrantForbidden):
 		httpserver.WriteError(w, r, http.StatusForbidden, "grant_forbidden", "Administrator permission is required")
 	case errors.Is(err, domain.ErrPaymentEventRejected), errors.Is(err, domain.ErrPaymentEventUnmatched):

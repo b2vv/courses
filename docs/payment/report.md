@@ -100,10 +100,28 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   `Declined`, 1105 "Invalid card number" again (order `b2f96989…`), although it is commonly cited
   as WayForPay's success card. No test card produced `Approved` on `test_merch_n1`; the Approved →
   grant leg needs a card WayForPay confirms for test mode.
-- **Defect found by the live run — a pending order cannot be re-checked-out.** We send the order id
-  as WayForPay's `orderReference`; a second «Перейти до оплати» for the same pending order (buyer left
-  the payment page and came back) is refused by WayForPay with `(1112) Duplicate Order ID`, so that
-  order is unpayable. The stub could not show this. Backlog B-25; fix before launch.
+- **Defect found by the live run — closed (B-25, 2026-10-02).** We send the order id as WayForPay's
+  `orderReference`, and WayForPay refused a second hosted form for the same pending order
+  (`(1112) Duplicate Order ID`), leaving that order unpayable; the stub could not show it. Fixed: a
+  repeat «Перейти до оплати» on an order whose checkout was already opened gets 409
+  `checkout_already_opened` and the page starts a new order (decision in `assumptions.md`,
+  2026-10-02; option b, money-path reasoning there).
+- **Refund trace has no screen yet.** B-25 (2026-10-02) marks `orders.refund_required = true` when money
+  arrives without a grant: a paid order for a course already granted, a paid event rejected for an
+  order that had already failed, or a paid event with a foreign amount (Pay21). Each also writes a
+  structured warning log. There is no admin view or API for it (no production consumer, so no port);
+  until one exists, find refunds with:
+  ```sql
+  SELECT o.id AS order_id, o.user_id, o.course_id, o.status,
+         o.amount_minor AS order_amount_minor,
+         e.event_id, e.amount_minor AS charged_amount_minor, e.received_at
+    FROM orders o
+    JOIN payment_events e ON e.order_id = o.id AND e.type = 'paid'
+   WHERE o.refund_required
+   ORDER BY e.received_at;
+  ```
+  **Refund `charged_amount_minor`, not `order_amount_minor`:** for a foreign-amount event (Pay21)
+  WayForPay charged the event's amount, which differs from the order's snapshot.
 - **No production deployment.** Live payments need a ФОП and a public `serviceUrl`; both are a launch
   step (`provider-research.md`). Everything above is proven locally / against the test merchant.
 - **Pay23** pins index usage, not the ≤2× timing. **Pay15** free-regression and **Pay16** repeat-
