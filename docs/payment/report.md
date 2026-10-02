@@ -95,6 +95,11 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   Closing it needs a valid test card or the owner's own test-mode merchant, and a stable public URL
   (a named Cloudflare tunnel or an ngrok account, or the deployment). Evidence: orders `4009ffdb…`
   (Declined), `c15523d2…`/`1ab802ce…` (InProcessing, abandoned).
+  **Second run, same day, by card:** `5454 5454 5454 5454` → `Declined`, 1101 "Declined To Card
+  Issuer" (order `ea6492a4…` → `failed` through the signed CHECK_STATUS); `4111 1111 1111 1111` →
+  `Declined`, 1105 "Invalid card number" again (order `b2f96989…`), although it is commonly cited
+  as WayForPay's success card. No test card produced `Approved` on `test_merch_n1`; the Approved →
+  grant leg needs a card WayForPay confirms for test mode.
 - **Defect found by the live run — a pending order cannot be re-checked-out.** We send the order id
   as WayForPay's `orderReference`; a second «Перейти до оплати» for the same pending order (buyer left
   the payment page and came back) is refused by WayForPay with `(1112) Duplicate Order ID`, so that
