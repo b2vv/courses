@@ -96,8 +96,8 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		id := ids[0]
 		ids = ids[1:]
 		return id
-	})
-	handler := ordershttp.NewHandler(service)
+	}, nil)
+	handler := ordershttp.NewHandler(service, nil, "")
 	authenticate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-store")
@@ -229,6 +229,17 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		request.Body = io.NopCloser(bytes.NewReader(grantBody))
 		assertContract(t, request, response)
 	})
+
+	t.Run("duplicate JSON keys are rejected", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/courses/"+testCourse+"/grants", strings.NewReader(`{"userId":"`+testUser+`","userId":"`+testUser+`","reason":"support resolution"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_request") {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
 }
 
 func assertContract(t *testing.T, request *http.Request, response *httptest.ResponseRecorder) {
@@ -288,7 +299,7 @@ func (*fakePaymentProvider) OrderStatus(context.Context, string) (ports.PaymentS
 func callbackServer(t *testing.T, store *fakeStore, verifier *fakeCallbackVerifier, provider ports.PaymentProvider) http.Handler {
 	t.Helper()
 	service := application.New(store, store, store, func() time.Time { return time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC) }, func() string { return "40000000-0000-4000-8000-000000000099" }, provider)
-	handler := ordershttp.NewHandler(service, verifier)
+	handler := ordershttp.NewHandler(service, verifier, "")
 	authenticate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student"})))
@@ -440,4 +451,13 @@ func TestCheckoutReturnURLCarriesOnlyAValidCourseSlug(t *testing.T) {
 			}
 		})
 	}
+	t.Run("duplicate courseSlug is rejected", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/orders/"+testOrder+"/checkout", strings.NewReader(`{"courseSlug":"go-basics","courseSlug":"other-course"}`))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_request") {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
 }

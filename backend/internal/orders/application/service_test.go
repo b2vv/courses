@@ -24,7 +24,7 @@ var fixedNow = time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
 func TestStartPurchaseSnapshotsPublishedPaidCoursePrice(t *testing.T) {
 	store := newFakeStore(t)
 	store.course = ports.CourseFacts{Published: true, Price: money(t, "50000")}
-	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID })
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
 
 	order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID}, courseID, "purchase-key")
 	if err != nil {
@@ -77,7 +77,7 @@ func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testi
 		t.Run(test.name, func(t *testing.T) {
 			store := newFakeStore(t)
 			test.configure(store)
-			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID })
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
 			order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID}, courseID, "purchase-key")
 			if !errors.Is(err, test.want) {
 				t.Fatalf("error=%v want=%v", err, test.want)
@@ -96,7 +96,7 @@ func TestPurchaseStatusIsScopedToActor(t *testing.T) {
 	store := newFakeStore(t)
 	existing := pendingOrder(t)
 	store.order = &existing
-	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID })
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
 
 	got, err := service.PurchaseStatus(context.Background(), application.Actor{UserID: userID}, orderID)
 	if err != nil {
@@ -157,7 +157,7 @@ func TestPurchaseStatusThrottleIsSafeUnderConcurrentPolling(t *testing.T) {
 
 func TestApplyPaymentEventDelegatesTheAtomicOperation(t *testing.T) {
 	store := newFakeStore(t)
-	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" })
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" }, nil)
 	event := domain.PaymentEvent{Provider: "provider", EventID: "event-1", OrderID: orderID, Type: domain.PaymentSucceeded, Amount: *money(t, "50000"), ReceivedAt: fixedNow}
 
 	if err := service.ApplyPaymentEvent(context.Background(), event); err != nil {
@@ -180,7 +180,7 @@ func TestGrantCourseRequiresAdministratorAndWritesAudit(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := newFakeStore(t)
-			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" })
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" }, nil)
 			grant, err := service.GrantCourse(context.Background(), application.Actor{UserID: adminID, Administrator: test.admin}, userID, courseID, "support decision")
 			if !errors.Is(err, test.want) {
 				t.Fatalf("error=%v want=%v", err, test.want)
@@ -197,7 +197,7 @@ func TestGrantCourseRequiresAdministratorAndWritesAudit(t *testing.T) {
 
 func TestGrandfatherOnPriceSetUsesOneRepositoryOperation(t *testing.T) {
 	store := newFakeStore(t)
-	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID })
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
 
 	updatedAt := fixedNow.Add(time.Microsecond)
 	err := service.GrandfatherOnPriceSet(context.Background(), courseID, fixedNow, 50000, "UAH", updatedAt)

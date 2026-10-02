@@ -33,15 +33,11 @@ type Service struct {
 func New(courses ports.CourseReader, orders ports.OrderRepository, store interface {
 	ports.GrantRepository
 	ports.PaymentEventRepository
-}, now func() time.Time, newID func() string, provider ...ports.PaymentProvider) *Service {
+}, now func() time.Time, newID func() string, provider ports.PaymentProvider) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	var paymentProvider ports.PaymentProvider
-	if len(provider) > 0 {
-		paymentProvider = provider[0]
-	}
-	return &Service{courses: courses, orders: orders, grants: store, events: store, provider: paymentProvider, now: now, newID: newID, statusAt: make(map[string]time.Time)}
+	return &Service{courses: courses, orders: orders, grants: store, events: store, provider: provider, now: now, newID: newID, statusAt: make(map[string]time.Time)}
 }
 
 func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID, idempotencyKey string) (domain.Order, error) {
