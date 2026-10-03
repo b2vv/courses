@@ -15,6 +15,7 @@ import (
 	passwords "courses/internal/identity/adapters/argon2id"
 	"courses/internal/identity/domain"
 	"courses/internal/identity/ports"
+	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -43,12 +44,14 @@ type administrationHarness struct {
 func TestAdministrationRepositoryAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5",
-		postgrescontainer.WithDatabase("administration_test"),
-		postgrescontainer.WithUsername("courses"),
-		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
-	)
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5",
+			postgrescontainer.WithDatabase("administration_test"),
+			postgrescontainer.WithUsername("courses"),
+			postgrescontainer.WithPassword("ephemeral-test-only"),
+			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}
