@@ -28,6 +28,22 @@ const reviewSelect = `SELECT r.id::text, r.course_id::text, r.author_id::text, r
  r.completed_lessons, r.total_lessons, r.created_at, r.edited_at, r.removed_at, r.removed_by::text, u.display_name
 FROM discussion_reviews r LEFT JOIN users u ON u.id=r.author_id AND u.deleted_at IS NULL`
 
+func (repository *Repository) PublishedReviewCourse(ctx context.Context, slug string) (string, error) {
+	var id string
+	err := repository.pool.QueryRow(ctx, `SELECT id::text FROM courses WHERE slug=$1 AND status='published'`, slug).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrNotFound
+	}
+	if err != nil {
+		return "", persistenceError(err)
+	}
+	return id, nil
+}
+
+func (repository *Repository) GetReview(ctx context.Context, reviewID string) (ports.ReviewRecord, error) {
+	return repository.getReview(ctx, ` WHERE r.id=$1::text::uuid`, reviewID)
+}
+
 func (repository *Repository) ReviewFacts(ctx context.Context, courseID, userID string) (ports.ReviewFactsRecord, error) {
 	var result ports.ReviewFactsRecord
 	var status string
@@ -44,7 +60,7 @@ func (repository *Repository) ReviewFacts(ctx context.Context, courseID, userID 
 
 func (repository *Repository) CreateReview(ctx context.Context, review ports.ReviewRecord) (ports.ReviewRecord, error) {
 	row := repository.pool.QueryRow(ctx, `INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at)
-VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5,$6,$7,$8)
+VALUES(COALESCE(NULLIF($1,'')::uuid, gen_random_uuid()),$2::text::uuid,$3::text::uuid,$4,$5,$6,$7,$8)
 ON CONFLICT(course_id,author_id) DO NOTHING RETURNING id::text, course_id::text, author_id::text, stars, body, completed_lessons, total_lessons, created_at, edited_at, removed_at, removed_by::text, NULL::text`, review.ID, review.CourseID, review.AuthorID, review.Stars, review.Body, review.CompletedLessons, review.TotalLessons, review.CreatedAt)
 	created, err := scanReview(row)
 	if err == nil {

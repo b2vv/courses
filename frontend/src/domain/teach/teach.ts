@@ -33,7 +33,18 @@ export type TeachCommentPage = {
 };
 
 export type ModerationQueueItem = {
-  readonly comment: TeachComment;
+  readonly kind: 'comment' | 'review';
+  readonly comment: TeachComment | null;
+  readonly review: {
+    readonly id: string;
+    readonly authorDisplayName: string | null;
+    readonly stars: number;
+    readonly body: string;
+    readonly completedLessons: number;
+    readonly totalLessons: number;
+    readonly createdAt: string;
+    readonly editedAt: string | null;
+  } | null;
   readonly openReports: number;
 };
 

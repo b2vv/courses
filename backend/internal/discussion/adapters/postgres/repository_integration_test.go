@@ -330,6 +330,46 @@ func TestDiscussionPostgres(t *testing.T) {
 				t.Fatalf("tables=%d columns=%d triggers=%d", tables, columns, triggers)
 			}
 		})
+		t.Run("moderation log rejects both targets and neither target", func(t *testing.T) {
+			// T03 review №1: the one-target CHECK (num_nonnulls = 1). Both statements must fail; nothing is left behind.
+			for name, statement := range map[string]string{
+				"both":    `INSERT INTO discussion_moderation_log(course_id,comment_id,review_id,actor_id,actor_role,action) VALUES ($1::uuid,gen_random_uuid(),$2::uuid,$3::uuid,'admin','remove')`,
+				"neither": `INSERT INTO discussion_moderation_log(course_id,comment_id,review_id,actor_id,actor_role,action) VALUES ($1::uuid,NULL,NULL,$2::uuid,'admin','remove')`,
+			} {
+				args := []any{fx.course, fx.reviewA, fx.admin}
+				if name == "neither" {
+					args = []any{fx.course, fx.admin}
+				}
+				_, err := pool.Exec(ctx, statement, args...)
+				var pgErr *pgconn.PgError
+				if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "discussion_moderation_log_one_target" {
+					t.Fatalf("%s target: want CHECK violation on discussion_moderation_log_one_target, got %v", name, err)
+				}
+			}
+		})
+		t.Run("ListReviews pages newest first with a keyset cursor", func(t *testing.T) {
+			all, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil || len(all.Items) < 3 {
+				t.Fatalf("need at least 3 visible reviews in the fixture course: %d err=%v", len(all.Items), err)
+			}
+			first, err := repository.ListReviews(ctx, fx.course, "", 2)
+			if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
+				t.Fatalf("first page=%d cursor=%q err=%v", len(first.Items), first.NextCursor, err)
+			}
+			rest, err := repository.ListReviews(ctx, fx.course, first.NextCursor, 50)
+			if err != nil || len(first.Items)+len(rest.Items) != len(all.Items) || rest.NextCursor != "" {
+				t.Fatalf("rest=%d total=%d cursor=%q err=%v", len(rest.Items), len(all.Items), rest.NextCursor, err)
+			}
+			paged := append(append([]ports.ReviewRecord{}, first.Items...), rest.Items...)
+			for i := range paged {
+				if paged[i].ID != all.Items[i].ID {
+					t.Fatalf("position %d: paged %s, unpaged %s", i, paged[i].ID, all.Items[i].ID)
+				}
+				if i > 0 && paged[i].CreatedAt.After(paged[i-1].CreatedAt) {
+					t.Fatalf("not newest first at %d", i)
+				}
+			}
+		})
 	})
 
 	t.Run("I02 course-wide moderation repository", func(t *testing.T) {

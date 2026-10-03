@@ -3,6 +3,8 @@ package domain
 import (
 	"strings"
 	"unicode/utf8"
+
+	"courses/internal/contracts/rating"
 )
 
 const (
@@ -71,4 +73,18 @@ func (progress ReviewProgress) Percent() int {
 		return 0
 	}
 	return (progress.Completed*100 + progress.Total/2) / progress.Total
+}
+
+// RatingSummary is the course-page rating: shown only from the contract's threshold, rounded by it.
+type RatingSummary struct {
+	Average float64
+	Count   int
+}
+
+// NewRatingSummary maps counted reviews through contracts/rating; nil when the rating is not shown.
+func NewRatingSummary(count, starsSum int) *RatingSummary {
+	if average, visible := rating.Summary(count, starsSum); visible {
+		return &RatingSummary{Average: average, Count: count}
+	}
+	return nil
 }

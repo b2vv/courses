@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ const (
 	discussionOtherOwner = "40000000-0000-4000-8000-000000000005"
 	discussionComment    = "70000000-0000-4000-8000-0000000000aa"
 	discussionReply      = "70000000-0000-4000-8000-0000000000bb"
+	discussionReview     = "70000000-0000-4000-8000-0000000000cc"
 )
 
 type fakeRepository struct {
@@ -44,43 +47,118 @@ type fakeRepository struct {
 	reports        []domain.Report
 	dismissed      []string
 	moderationLogs []ports.ModerationLogEntry
+	reviewFacts    ports.ReviewFactsRecord
+	reviews        map[string]ports.ReviewRecord
+	publicCourse   string
+	publicErr      error
+	reviewPage     ports.ReviewPage
+	reviewCount    int
+	reviewSum      int
+	reviewReports  map[string]bool
 }
 
 // ReviewRepository is embedded in the production repository contract. The HTTP
 // fixture exercises comment routes only; these deliberately inert methods keep
 // that fixture honest without inventing review behaviour in this slice.
+func (fake *fakeRepository) PublishedReviewCourse(context.Context, string) (string, error) {
+	if fake.publicErr != nil {
+		return "", fake.publicErr
+	}
+	return fake.publicCourse, nil
+}
+func (fake *fakeRepository) GetReview(_ context.Context, id string) (ports.ReviewRecord, error) {
+	review, ok := fake.reviews[id]
+	if !ok {
+		return ports.ReviewRecord{}, domain.ErrNotFound
+	}
+	return review, nil
+}
 func (fake *fakeRepository) ReviewFacts(context.Context, string, string) (ports.ReviewFactsRecord, error) {
-	return ports.ReviewFactsRecord{}, domain.ErrNotFound
+	return fake.reviewFacts, nil
 }
-func (fake *fakeRepository) CreateReview(context.Context, ports.ReviewRecord) (ports.ReviewRecord, error) {
+func (fake *fakeRepository) CreateReview(_ context.Context, review ports.ReviewRecord) (ports.ReviewRecord, error) {
+	if fake.reviewFacts.Removed {
+		return ports.ReviewRecord{}, domain.ErrReviewRemoved
+	}
+	if fake.reviewFacts.Exists {
+		return ports.ReviewRecord{}, domain.ErrReviewAlreadyExists
+	}
+	fake.reviewFacts.Exists = true
+	fake.reviews[review.ID] = review
+	return review, nil
+}
+func (fake *fakeRepository) UpdateReview(_ context.Context, _ string, author string, content domain.ReviewContent, progress domain.ReviewProgress, now time.Time) (ports.ReviewRecord, error) {
+	for id, review := range fake.reviews {
+		if review.AuthorID == author {
+			if review.RemovedAt != nil {
+				return ports.ReviewRecord{}, domain.ErrReviewRemoved
+			}
+			review.Stars, review.Body, review.CompletedLessons, review.TotalLessons, review.EditedAt = content.Stars, content.Body, progress.Completed, progress.Total, &now
+			fake.reviews[id] = review
+			return review, nil
+		}
+	}
 	return ports.ReviewRecord{}, domain.ErrNotFound
 }
-func (fake *fakeRepository) UpdateReview(context.Context, string, string, domain.ReviewContent, domain.ReviewProgress, time.Time) (ports.ReviewRecord, error) {
-	return ports.ReviewRecord{}, domain.ErrNotFound
-}
-func (fake *fakeRepository) DeleteReview(context.Context, string, string) error {
+func (fake *fakeRepository) DeleteReview(_ context.Context, _ string, author string) error {
+	for id, review := range fake.reviews {
+		if review.AuthorID == author {
+			if review.RemovedAt != nil {
+				return domain.ErrReviewRemoved
+			}
+			delete(fake.reviews, id)
+			return nil
+		}
+	}
 	return domain.ErrNotFound
 }
-func (fake *fakeRepository) GetOwnReview(context.Context, string, string) (*ports.ReviewRecord, error) {
+func (fake *fakeRepository) GetOwnReview(_ context.Context, _ string, author string) (*ports.ReviewRecord, error) {
+	for _, review := range fake.reviews {
+		if review.AuthorID == author {
+			return &review, nil
+		}
+	}
 	return nil, nil
 }
 func (fake *fakeRepository) ListReviews(context.Context, string, string, int) (ports.ReviewPage, error) {
-	return ports.ReviewPage{}, nil
+	return fake.reviewPage, nil
 }
 func (fake *fakeRepository) ReviewSummary(context.Context, string) (int, int, error) {
-	return 0, 0, nil
+	return fake.reviewCount, fake.reviewSum, nil
 }
-func (fake *fakeRepository) InsertReviewReport(context.Context, string, string, time.Time) error {
+func (fake *fakeRepository) InsertReviewReport(_ context.Context, reviewID, actor string, _ time.Time) error {
+	review, ok := fake.reviews[reviewID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if review.AuthorID == actor {
+		return domain.ErrReportOwnReview
+	}
+	fake.reviewReports[reviewID+actor] = true
 	return nil
 }
 func (fake *fakeRepository) DismissReviewReports(context.Context, string, string, time.Time) error {
 	return nil
 }
-func (fake *fakeRepository) RemoveReview(context.Context, string, string, string, *string, time.Time) error {
+func (fake *fakeRepository) RemoveReview(_ context.Context, id, actor, _ string, _ *string, now time.Time) error {
+	review, ok := fake.reviews[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	review.RemovedAt = &now
+	review.RemovedBy = &actor
+	fake.reviews[id] = review
 	return nil
 }
 func (fake *fakeRepository) ListModerationQueue(context.Context, string, string, int) (ports.ModerationQueuePage, error) {
-	return ports.ModerationQueuePage{}, nil
+	items := make([]ports.ModerationQueueItem, len(fake.queue.Items))
+	for i, item := range fake.queue.Items {
+		record := item.ModerationCommentRecord
+		items[i] = ports.ModerationQueueItem{Kind: "comment", ID: record.Comment.ID, DisplayName: record.DisplayName, Body: record.Comment.Body, CreatedAt: record.Comment.CreatedAt, OpenReports: item.OpenReports, LessonID: &record.Comment.LessonID, LessonTitle: &record.LessonTitle}
+	}
+	stars := 5
+	items = append(items, ports.ModerationQueueItem{Kind: "review", ID: discussionReview, DisplayName: stringPointer("Review author"), Stars: &stars, Body: "a sufficiently long review body", CreatedAt: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), OpenReports: 1})
+	return ports.ModerationQueuePage{Items: items, NextCursor: fake.queue.NextCursor}, nil
 }
 
 func (fake *fakeRepository) LessonFacts(context.Context, string, string) (ports.LessonFacts, error) {
@@ -173,8 +251,9 @@ func newFake() *fakeRepository {
 			Threads:  []ports.Thread{{Root: root}},
 			Comments: []ports.ModerationCommentRecord{moderation},
 		},
-		comments: map[string]ports.CommentRecord{discussionComment: root},
-		queue:    ports.QueuePage{Items: []ports.QueueItem{{ModerationCommentRecord: moderation, OpenReports: 1}}},
+		comments:     map[string]ports.CommentRecord{discussionComment: root},
+		queue:        ports.QueuePage{Items: []ports.QueueItem{{ModerationCommentRecord: moderation, OpenReports: 1}}},
+		publicCourse: "course", reviews: map[string]ports.ReviewRecord{}, reviewReports: map[string]bool{}, reviewFacts: ports.ReviewFactsRecord{Facts: domain.ReviewFacts{Status: domain.Published, HasProgress: true}, CompletedLessons: 1, TotalLessons: 2},
 	}
 }
 
@@ -570,15 +649,19 @@ func TestI03ModerationContracts(t *testing.T) {
 		}
 		var body struct {
 			Items []struct {
-				Comment struct {
+				Kind    string `json:"kind"`
+				Comment *struct {
 					LessonTitle string `json:"lessonTitle"`
 				} `json:"comment"`
+				Review *struct {
+					Stars int `json:"stars"`
+				} `json:"review"`
 			} `json:"items"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if len(body.Items) != 1 || body.Items[0].Comment.LessonTitle != "Lesson one" {
+		if len(body.Items) != 2 || body.Items[0].Kind != "comment" || body.Items[0].Comment == nil || body.Items[0].Comment.LessonTitle != "Lesson one" || body.Items[1].Kind != "review" || body.Items[1].Review == nil || body.Items[1].Review.Stars != 5 {
 			t.Fatalf("items=%+v", body.Items)
 		}
 	})
@@ -644,4 +727,118 @@ func assertContract(t *testing.T, request *http.Request, response *httptest.Resp
 	if err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: response.Code, Header: response.Header(), Body: io.NopCloser(bytes.NewReader(content))}); err != nil {
 		t.Fatalf("response contract: %v; body=%s", err, response.Body.String())
 	}
+}
+
+func TestT05ReviewRoutesContract(t *testing.T) {
+	valid := strings.Repeat("a", 20)
+	t.Run("put boundaries eligibility and update", func(t *testing.T) {
+		fake := newFake()
+		put := func(stars int, body string) *httptest.ResponseRecorder {
+			return serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", fmt.Sprintf(`{"stars":%d,"body":"%s"}`, stars, body), actor(discussionAuthor, "student"), true)
+		}
+		badPut := func(stars int, body string) *httptest.ResponseRecorder {
+			return serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", fmt.Sprintf(`{"stars":%d,"body":"%s"}`, stars, body), actor(discussionAuthor, "student"), false)
+		}
+		requireError(t, badPut(3, strings.Repeat("a", 19)), http.StatusBadRequest, "review_invalid")
+		first := put(3, valid)
+		if first.Code != http.StatusCreated {
+			t.Fatalf("first=%d %s", first.Code, first.Body.String())
+		}
+		if put(3, strings.Repeat("a", 2000)).Code != http.StatusOK {
+			t.Fatal("2000 should update")
+		}
+		requireError(t, badPut(3, strings.Repeat("a", 2001)), http.StatusBadRequest, "review_invalid")
+		requireError(t, badPut(0, valid), http.StatusBadRequest, "review_invalid")
+		requireError(t, badPut(6, valid), http.StatusBadRequest, "review_invalid")
+		fake.reviewFacts.Facts.OwnerID = discussionOwner
+		requireError(t, serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":3,"body":"aaaaaaaaaaaaaaaaaaaa"}`, actor(discussionOwner, "instructor"), true), http.StatusForbidden, "review_owner_forbidden")
+		fake.reviewFacts.Facts.OwnerID = ""
+		fake.reviewFacts.Facts.HasProgress = false
+		requireError(t, put(3, valid), http.StatusForbidden, "review_not_started")
+		fake.reviewFacts.Facts.HasProgress = true
+		fake.reviewFacts.Facts.Paid = true
+		requireError(t, put(3, valid), http.StatusForbidden, "review_purchase_required")
+	})
+	t.Run("own delete report remove dismiss", func(t *testing.T) {
+		fake := newFake()
+		now := time.Now()
+		fake.reviews[discussionReview] = ports.ReviewRecord{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: now}
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Published, HasProgress: true}
+		get := serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/review", "", actor(discussionAuthor, "student"), true)
+		if get.Code != 200 {
+			t.Fatal(get.Code)
+		}
+		requireError(t, serve(t, fake, http.MethodPost, "/api/v1/learn/reviews/"+discussionReview+"/reports", "", actor(discussionAuthor, "student"), true), 403, "report_own_review")
+		if serve(t, fake, http.MethodPost, "/api/v1/learn/reviews/"+discussionReview+"/reports", "", actor(discussionViewer, "student"), true).Code != 204 {
+			t.Fatal("report")
+		}
+		requireError(t, serve(t, fake, http.MethodPost, "/api/v1/teach/reviews/"+discussionReview+"/remove", `{"reason":"reason"}`, actor(discussionOwner, "instructor"), true), 403, "review_moderation_forbidden")
+		if serve(t, fake, http.MethodPost, "/api/v1/teach/reviews/"+discussionReview+"/remove", `{"reason":"reason"}`, actor(discussionAdmin, "admin"), true).Code != 204 {
+			t.Fatal("remove")
+		}
+		if serve(t, fake, http.MethodPost, "/api/v1/teach/reviews/"+discussionReview+"/remove", `{"reason":"reason"}`, actor(discussionAdmin, "admin"), true).Code != 204 {
+			t.Fatal("reremove")
+		}
+		requireError(t, serve(t, fake, http.MethodDelete, "/api/v1/learn/courses/"+discussionOwner+"/review", "", actor(discussionAuthor, "student"), true), 409, "review_removed")
+	})
+	t.Run("public anonymous empty rating and visible number", func(t *testing.T) {
+		fake := newFake()
+		response := serve(t, fake, http.MethodGet, "/api/v1/courses/discussion/reviews", "", nil, true)
+		if response.Code != 200 {
+			t.Fatal(response.Code)
+		}
+		fake.reviewCount, fake.reviewSum = 3, 14
+		response = serve(t, fake, http.MethodGet, "/api/v1/courses/discussion/reviews", "", nil, true)
+		var body struct {
+			Rating struct {
+				Average float64 `json:"average"`
+				Count   int     `json:"count"`
+			} `json:"rating"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.Rating.Average != 4.7 || body.Rating.Count != 3 {
+			t.Fatalf("rating=%s err=%v", response.Body.String(), err)
+		}
+		fake.publicErr = domain.ErrNotFound
+		requireError(t, serve(t, fake, http.MethodGet, "/api/v1/courses/archived/reviews", "", nil, true), 404, "course_not_found")
+	})
+}
+
+// Gaps closed by Courses 1 after the T05 contract test: anonymous writes, the public page cursor, and
+// the dismiss route. Cross-origin refusal is not testable here (sameOrigin is a pass-through in this
+// harness); the browser suite exercises the real middleware.
+func TestT05ReviewRoutesGaps(t *testing.T) {
+	valid := strings.Repeat("a", 20)
+	t.Run("anonymous review writes are refused", func(t *testing.T) {
+		fake := newFake()
+		requireError(t, serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":3,"body":"`+valid+`"}`, nil, true), http.StatusUnauthorized, "authentication_required")
+		requireError(t, serve(t, fake, http.MethodDelete, "/api/v1/learn/courses/"+discussionOwner+"/review", "", nil, true), http.StatusUnauthorized, "authentication_required")
+		requireError(t, serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/review", "", nil, true), http.StatusUnauthorized, "authentication_required")
+	})
+	t.Run("public page carries twenty items and the next cursor", func(t *testing.T) {
+		fake := newFake()
+		items := make([]ports.ReviewRecord, 20)
+		for i := range items {
+			items[i] = ports.ReviewRecord{ID: fmt.Sprintf("75000000-0000-4000-8000-%012d", i+1), CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC).Add(-time.Duration(i) * time.Minute)}
+		}
+		fake.reviewPage = ports.ReviewPage{Items: items, NextCursor: "next-page"}
+		response := serve(t, fake, http.MethodGet, "/api/v1/courses/discussion/reviews", "", nil, true)
+		var body struct {
+			Items      []json.RawMessage `json:"items"`
+			NextCursor *string           `json:"nextCursor"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK || len(body.Items) != 20 || body.NextCursor == nil || *body.NextCursor != "next-page" {
+			t.Fatalf("status=%d items=%d cursor=%v err=%v body=%s", response.Code, len(body.Items), body.NextCursor, err, response.Body.String())
+		}
+	})
+	t.Run("dismiss review reports: owner allowed, unrelated student refused", func(t *testing.T) {
+		fake := newFake()
+		fake.reviews[discussionReview] = ports.ReviewRecord{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: time.Now()}
+		if response := serve(t, fake, http.MethodPost, "/api/v1/teach/reviews/"+discussionReview+"/dismiss-report", `{"reason":"not abusive"}`, actor(discussionOwner, "instructor"), true); response.Code != http.StatusNoContent {
+			t.Fatalf("owner dismiss=%d %s", response.Code, response.Body.String())
+		}
+		response := serve(t, fake, http.MethodPost, "/api/v1/teach/reviews/"+discussionReview+"/dismiss-report", `{"reason":"not abusive"}`, actor(discussionViewer, "student"), true)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("student dismiss=%d %s", response.Code, response.Body.String())
+		}
+	})
 }

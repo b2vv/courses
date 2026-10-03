@@ -66,14 +66,21 @@ function queuePage(value: unknown): value is ModerationQueuePage {
     Array.isArray(value.items) &&
     value.items.length <= 50 &&
     typeof value.nextCursor === 'string' &&
-    value.items.every(
-      (item) =>
-        record(item) &&
-        typeof item.openReports === 'number' &&
-        Number.isInteger(item.openReports) &&
-        item.openReports > 0 &&
-        comment(item.comment),
-    )
+    value.items.every((item) => {
+      if (
+        !record(item) ||
+        typeof item.openReports !== 'number' ||
+        !Number.isInteger(item.openReports) ||
+        item.openReports <= 0
+      )
+        return false;
+      // T06 renders review queue rows. Preserve the existing teach surface until then,
+      // while accepting the additive wire variant here.
+      return (
+        (item.kind === 'comment' && comment(item.comment) && item.review === null) ||
+        (item.kind === 'review' && item.comment === null && record(item.review))
+      );
+    })
   );
 }
 function failure(code: TeachErrorCode): TeachResult<never> {
