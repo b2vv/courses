@@ -79,6 +79,7 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 		}
 		modules = append(modules, LearningModule{ID: module.ID, Title: module.Title, Lessons: lessons})
 	}
+	course.LessonCount = lessonCount
 
 	result := LearningCourse{
 		Course: course, InstructorID: input.InstructorID, Modules: modules,
@@ -99,6 +100,12 @@ func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
 // lesson's own preview fact.
 func (course LearningCourse) PurchaseRequiredBy(actor Actor, lesson LearningLesson) bool {
 	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: lesson.IsPreview})
+}
+
+// CanPurchaseBy controls whether the learning outline presents a purchase entry.
+// Unlike viewing access, an administrator without a grant may buy the course.
+func (course LearningCourse) CanPurchaseBy(actor Actor) bool {
+	return course.Status == Published && course.Paid && !course.Entitled && actor.UserID != course.InstructorID
 }
 
 func (state LearningVideoState) Valid() bool {
