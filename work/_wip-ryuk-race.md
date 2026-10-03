@@ -56,3 +56,11 @@ Answer, with source lines (module cache, v0.44.0):
 mitigate (detached bounded context + `t.Cleanup(Terminate)`, never retrying `created`, never removing
 ryuk). Truly keeping ryuk needs an upstream-quality fork with a cross-process reaper-creation protocol —
 out of proportion here. Raw consult output: `work/codex-ryuk-consult.run.log`.
+
+## Correction (Courses 2, 2026-10-03, research-ryuk.md §7–§8 — verified)
+The observed failure is the **transient** create→start window on the reuse path (`reaper.go:335`
+`fromContainer`; `wait/log.go:170` checks state on the first poll; `wait.go:55`; `retryError` permanent), not
+#3918's permanent orphan — "one package fails, rerun passes" fits the transient race. So PR #3868 (retry
+`created` inside `lookupContainer`, backoff up to 20 s) **would** fix our case; the consult's caveat applies to
+#3918 orphans only. Decision unchanged: ryuk stays disabled until a release contains #3868. The
+`integration.sh` comment was reworded accordingly.
