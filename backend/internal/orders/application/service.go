@@ -132,6 +132,9 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 	if !actor.Administrator {
 		return domain.Grant{}, domain.ErrGrantForbidden
 	}
+	if userID == actor.UserID {
+		return domain.Grant{}, domain.ErrGrantSelfForbidden
+	}
 	reason = strings.TrimSpace(reason)
 	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
 		return domain.Grant{}, domain.ErrGrantInvalid

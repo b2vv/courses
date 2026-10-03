@@ -205,6 +205,20 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		})
 	}
 
+	t.Run("admin cannot grant themselves", func(t *testing.T) {
+		body := []byte(`{"userId":"` + testAdmin + `","reason":"support resolution"}`)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/courses/"+testCourse+"/grants", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"grant_self_forbidden"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		request.Body = io.NopCloser(bytes.NewReader(body))
+		assertContract(t, request, response)
+	})
+
 	t.Run("Pay22 dependency failures are explicit", func(t *testing.T) {
 		store.courseErr = domain.ErrDependencyUnavailable
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
