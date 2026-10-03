@@ -172,10 +172,16 @@ Average is rounded to one decimal on the server; count is the counted reviews.
 
 ## 9. R6 measurement
 
-Seed for the measurement (not for e2e): 100 published courses, 20 000 reviews spread unevenly
-(Zipf-like, the top course 2 000). `EXPLAIN (ANALYZE, BUFFERS)` on `ListPublishedCourses` with
-and without the aggregate, page size of the catalog, 5 runs, median. Record both plans and timings
-in `report.md`. **> 2×** → R6 trigger (materialized view), recorded as a decision before any change.
+Seed for the measurement (not for e2e): 100 published courses with 3 lessons each, 20 000 reviews spread
+unevenly (Zipf-like, the top course 2 000), then `VACUUM ANALYZE` (steady state, as autovacuum leaves a
+running database). `EXPLAIN (ANALYZE, BUFFERS)` on the production `ListPublishedCourses` text with the
+catalog defaults (empty search, sort `recent`, page 20), 5 runs after a warm-up, median. Harness:
+`backend/internal/course/adapters/postgres/catalog_measure_test.go`, build tag `measure` (not in the gate).
+**Budget: median ≤ 5 ms** (owner, 2026-10-03; replaced the earlier ">2× the query without the aggregate",
+see `assumptions.md`). Over budget → R6 step up (materialized view), recorded as a decision first.
+
+**Measured 2026-10-03 (T04, `f598d0e`):** 1.306 ms median with the aggregate (index-only scans, 0 heap
+fetches); the same query without it 16 µs. Within budget — the read-time aggregate stays.
 
 ## 10. Constitution (AGENTS.md)
 

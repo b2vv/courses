@@ -92,12 +92,15 @@ forbids: a module reads only its own facts. Any write path that forgets to updat
 a stale average in the catalog. A read-time aggregate cannot go stale. The volume is small: the
 catalog publishes a handful of courses.
 
-**R6 — trigger to revisit (magnitude):** measure the catalog list query with the aggregate against the
-same query without it, using `EXPLAIN ANALYZE` on the data volume `plan.md` fixes, the same method as
-payment's Pay23. If the aggregate costs more than **2×** the same query without it, take the first step
-up: a materialized view refreshed after review writes and removals. A summary table comes only after
-that view proves insufficient. "Derived table" in the SQL sense (a subquery in `FROM`) is a query
-technique and stays allowed. This decision does not cover it.
+**R6 — trigger to revisit (magnitude), revised 2026-10-03 by the owner:** measure the production catalog
+list query (`ListPublishedCourses`, default arguments: empty search, sort `recent`, page 20) with
+`EXPLAIN (ANALYZE, BUFFERS)` on the data volume `plan.md` §9 fixes, after `VACUUM ANALYZE`, median of 5.
+If the median execution time exceeds **5 ms**, take the first step up: a materialized view refreshed after
+review writes and removals. A summary table comes only after that view proves insufficient. The first
+version of this trigger — "more than 2× the same query without the aggregate" — was replaced because its
+baseline is an index scan of ~16 µs, so any join exceeds it many times over and the ratio measures nothing
+(measured 2026-10-03: 1.306 ms vs 16 µs, 81.6×; `assumptions.md`). "Derived table" in the SQL sense (a
+subquery in `FROM`) is a query technique and stays allowed. This decision does not cover it.
 
 ## GATE 1 decisions (owner, 2026-10-03)
 

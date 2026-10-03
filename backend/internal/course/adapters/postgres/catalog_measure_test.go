@@ -92,6 +92,11 @@ LIMIT 20 OFFSET 0`
 	withoutTimes, withoutPlan := explainRuns(t, ctx, db, withoutAggregate)
 	withMedian, withoutMedian := median(withTimes), median(withoutTimes)
 	t.Logf("R6 catalog aggregate median=%s baseline median=%s ratio=%.2fx\nWITH:\n%s\nWITHOUT:\n%s", withMedian, withoutMedian, float64(withMedian)/float64(withoutMedian), withPlan, withoutPlan)
+	// R6 budget (owner, 2026-10-03, docs/ratings/assumptions.md): the catalog page with the aggregate
+	// must stay within 5 ms; the baseline and ratio are printed for context only.
+	if budget := 5 * time.Millisecond; withMedian > budget {
+		t.Fatalf("R6 budget exceeded: catalog page median %s > %s — next step is the materialized view (spec R6)", withMedian, budget)
+	}
 }
 
 func seedCatalogMeasurement(t *testing.T, ctx context.Context, db *sql.DB) {
