@@ -814,6 +814,39 @@ func TestT05ReviewRoutesGaps(t *testing.T) {
 		requireError(t, serve(t, fake, http.MethodDelete, "/api/v1/learn/courses/"+discussionOwner+"/review", "", nil, true), http.StatusUnauthorized, "authentication_required")
 		requireError(t, serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/review", "", nil, true), http.StatusUnauthorized, "authentication_required")
 	})
+	t.Run("learning list permits an archived course grant holder", func(t *testing.T) {
+		fake := newFake()
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true}
+		fake.reviewCount, fake.reviewSum = 3, 14
+		fake.reviewPage = ports.ReviewPage{Items: []ports.ReviewRecord{{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: strings.Repeat("a", 20), CreatedAt: time.Now()}}}
+		response := serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/reviews", "", actor(discussionViewer, "student"), true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Rating *struct {
+				Average float64 `json:"average"`
+				Count   int     `json:"count"`
+			} `json:"rating"`
+			Items []json.RawMessage `json:"items"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.Rating == nil || body.Rating.Average != 4.7 || body.Rating.Count != 3 || len(body.Items) != 1 {
+			t.Fatalf("body=%s err=%v", response.Body.String(), err)
+		}
+	})
+	t.Run("learning list refuses a viewer without a right", func(t *testing.T) {
+		fake := newFake()
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true}
+		requireError(t, serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/reviews", "", actor(discussionViewer, "student"), true), http.StatusForbidden, "course_forbidden")
+	})
+	t.Run("anonymous learning list is refused", func(t *testing.T) {
+		fake := newFake()
+		requireError(t, serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/reviews", "", nil, true), http.StatusUnauthorized, "authentication_required")
+	})
+	t.Run("delete without a review is review not found", func(t *testing.T) {
+		fake := newFake()
+		requireError(t, serve(t, fake, http.MethodDelete, "/api/v1/learn/courses/"+discussionOwner+"/review", "", actor(discussionAuthor, "student"), true), http.StatusNotFound, "review_not_found")
+	})
 	t.Run("public page carries twenty items and the next cursor", func(t *testing.T) {
 		fake := newFake()
 		items := make([]ports.ReviewRecord, 20)

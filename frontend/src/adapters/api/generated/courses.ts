@@ -51,6 +51,7 @@ import type {
   ListAdminUsersParams,
   ListCourseDocuments200,
   ListCourseReviewsParams,
+  ListLearningCourseReviewsParams,
   ListLessonCommentsParams,
   ListPublishedCoursesParams,
   ListTeachCourseCommentsParams,
@@ -2812,6 +2813,82 @@ export const listCourseReviews = async (slug: string,
 
   const data: listCourseReviewsResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listCourseReviewsResponse
+}
+
+
+
+export type listLearningCourseReviewsResponse200 = {
+  data: PublicReviewPage
+  status: 200
+}
+
+export type listLearningCourseReviewsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listLearningCourseReviewsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listLearningCourseReviewsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listLearningCourseReviewsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listLearningCourseReviewsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listLearningCourseReviewsResponseSuccess = (listLearningCourseReviewsResponse200) & {
+  headers: Headers;
+};
+export type listLearningCourseReviewsResponseError = (listLearningCourseReviewsResponse400 | listLearningCourseReviewsResponse401 | listLearningCourseReviewsResponse403 | listLearningCourseReviewsResponse404 | listLearningCourseReviewsResponse503) & {
+  headers: Headers;
+};
+
+export type listLearningCourseReviewsResponse = (listLearningCourseReviewsResponseSuccess | listLearningCourseReviewsResponseError)
+
+export const getListLearningCourseReviewsUrl = (courseId: string,
+    params?: ListLearningCourseReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews`
+}
+
+export const listLearningCourseReviews = async (courseId: string,
+    params?: ListLearningCourseReviewsParams, options?: RequestInit): Promise<listLearningCourseReviewsResponse> => {
+
+  const res = await fetch(getListLearningCourseReviewsUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLearningCourseReviewsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listLearningCourseReviewsResponse
 }
 
 

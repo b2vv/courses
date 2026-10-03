@@ -1049,6 +1049,24 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/reviews:
+    get:
+      operationId: listLearningCourseReviews
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200': { description: Reviews visible to the learner, content: { application/json: { schema: { $ref: '#/components/schemas/PublicReviewPage' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/learn/courses/{courseId}/review:
     get:
       operationId: getOwnCourseReview

@@ -84,6 +84,7 @@ export * from './listAdminUsersParams.ts';
 export * from './listAdminUsersStatus.ts';
 export * from './listCourseDocuments200.ts';
 export * from './listCourseReviewsParams.ts';
+export * from './listLearningCourseReviewsParams.ts';
 export * from './listLessonCommentsParams.ts';
 export * from './listPublishedCoursesParams.ts';
 export * from './listPublishedCoursesSort.ts';

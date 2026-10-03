@@ -304,6 +304,22 @@ func (service *Service) PublicReviews(ctx context.Context, slug, cursor string) 
 	if err != nil {
 		return PublicReviewPage{}, err
 	}
+	return service.listReviews(ctx, courseID, cursor)
+}
+
+func (service *Service) LearningReviews(ctx context.Context, actor Actor, courseID, cursor string) (PublicReviewPage, error) {
+	facts, err := service.repository.ReviewFacts(ctx, courseID, actor.UserID)
+	if err != nil {
+		return PublicReviewPage{}, err
+	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled}
+	if !course.CanBeViewedBy(actor) {
+		return PublicReviewPage{}, domain.ErrForbidden
+	}
+	return service.listReviews(ctx, courseID, cursor)
+}
+
+func (service *Service) listReviews(ctx context.Context, courseID, cursor string) (PublicReviewPage, error) {
 	count, sum, err := service.repository.ReviewSummary(ctx, courseID)
 	if err != nil {
 		return PublicReviewPage{}, err

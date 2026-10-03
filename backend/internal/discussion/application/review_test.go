@@ -17,6 +17,7 @@ const reviewID = "70000000-0000-4000-8000-000000000001"
 
 type reviewFake struct {
 	facts                    ports.ReviewFactsRecord
+	factsErr                 error
 	own                      *ports.ReviewRecord
 	byID                     map[string]ports.ReviewRecord
 	publicID                 string
@@ -38,7 +39,7 @@ func (f *reviewFake) PublishedReviewCourse(context.Context, string) (string, err
 	return f.publicID, nil
 }
 func (f *reviewFake) ReviewFacts(context.Context, string, string) (ports.ReviewFactsRecord, error) {
-	return f.facts, nil
+	return f.facts, f.factsErr
 }
 func (f *reviewFake) GetReview(_ context.Context, id string) (ports.ReviewRecord, error) {
 	r, ok := f.byID[id]
@@ -174,6 +175,54 @@ func TestPutReviewCreatesThenUpdatesRecapturedProgress(t *testing.T) {
 		t.Fatalf("update created=%v err=%v progress=%+v", created, err, f.lastProgress)
 	}
 }
+
+func TestPutReviewRefusesEditAfterAccessIsLost(t *testing.T) {
+	f := newReviewFake()
+	stored := f.byID[reviewID]
+	f.own = &stored
+	f.facts.Exists = true
+	f.facts.Facts = domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}
+
+	_, _, err := reviewService(f).PutReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, 5, "another review body with enough characters")
+	if !errors.Is(err, domain.ErrReviewPurchaseRequired) {
+		t.Fatalf("err=%v", err)
+	}
+	if f.updated != 0 || f.own.Stars != stored.Stars || f.own.Body != stored.Body {
+		t.Fatalf("stored review changed: %+v", f.own)
+	}
+}
+
+func TestLearningReviews(t *testing.T) {
+	t.Run("grant holder can list archived course reviews", func(t *testing.T) {
+		f := newReviewFake()
+		f.facts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true}
+		f.summaryCount, f.summarySum = 3, 14
+		f.page = ports.ReviewPage{Items: []ports.ReviewRecord{f.byID[reviewID]}, NextCursor: "next-page"}
+
+		page, err := reviewService(f).LearningReviews(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, "")
+		if err != nil || page.Rating == nil || page.Rating.Average != 4.7 || page.Rating.Count != 3 || len(page.Items) != 1 || page.NextCursor != "next-page" {
+			t.Fatalf("page=%+v err=%v", page, err)
+		}
+	})
+	t.Run("without a viewing right is forbidden", func(t *testing.T) {
+		f := newReviewFake()
+		f.facts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true}
+
+		_, err := reviewService(f).LearningReviews(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, "")
+		if !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+	t.Run("unknown course is not found", func(t *testing.T) {
+		f := newReviewFake()
+		f.factsErr = domain.ErrNotFound
+
+		_, err := reviewService(f).LearningReviews(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, "")
+		if !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+}
 func TestReviewDeleteReportRemoveAndPublic(t *testing.T) {
 	f := newReviewFake()
 	s := reviewService(f)
@@ -194,15 +243,6 @@ func TestReviewDeleteReportRemoveAndPublic(t *testing.T) {
 	if err := s.ReportReview(context.Background(), Actor{UserID: reviewAuthor}, reviewID); !errors.Is(err, domain.ErrReportOwnReview) {
 		t.Fatal(err)
 	}
-	if err := s.RemoveReview(context.Background(), Actor{UserID: reviewOwner}, reviewID, "reason"); !errors.Is(err, domain.ErrReviewModerationForbidden) {
-		t.Fatal(err)
-	}
-	if err := s.RemoveReview(context.Background(), Actor{UserID: "admin", Administrator: true}, reviewID, "reason"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.RemoveReview(context.Background(), Actor{UserID: "admin", Administrator: true}, reviewID, "reason"); err != nil {
-		t.Fatal(err)
-	}
 	f.publicID = reviewCourse
 	f.summaryCount, f.summarySum = 2, 9
 	page, err := s.PublicReviews(context.Background(), "slug", "")
@@ -212,5 +252,23 @@ func TestReviewDeleteReportRemoveAndPublic(t *testing.T) {
 	f.publicID = ""
 	if _, err := s.PublicReviews(context.Background(), "archived", ""); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+func TestRemoveReviewIsNoopWhenAlreadyRemoved(t *testing.T) {
+	f := newReviewFake()
+	s := reviewService(f)
+	if err := s.RemoveReview(context.Background(), Actor{UserID: reviewOwner}, reviewID, "reason"); !errors.Is(err, domain.ErrReviewModerationForbidden) {
+		t.Fatal(err)
+	}
+	admin := Actor{UserID: "admin", Administrator: true}
+	if err := s.RemoveReview(context.Background(), admin, reviewID, "reason"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveReview(context.Background(), admin, reviewID, "reason"); err != nil {
+		t.Fatal(err)
+	}
+	if f.removed != 1 {
+		t.Fatalf("repository remove calls=%d want 1", f.removed)
 	}
 }
