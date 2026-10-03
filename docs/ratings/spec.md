@@ -1,7 +1,7 @@
 # Course ratings and reviews — spec (draft)
 
-Status: **draft, not started.** Scheduled **after the payment phase closes** (owner, 2026-09-30).
-Next step when it starts: GATE 1 (`grilling`) on this file, then `plan.md` (spec-flow).
+Status: **draft, not started — next phase.** The payment phase closed on 2026-10-03 (PR #3), so R5 is
+met. Next step: GATE 1 (`grilling`) on this file, then `plan.md` (spec-flow).
 
 ## Problem
 
@@ -20,6 +20,26 @@ Each closes an alternative; each has a way to check it once built.
 | R3 | **Format:** 1–5 stars **plus a text review**; one review per student per course, editable. Text reviews are **moderated**, reusing the instructor moderation workspace (queue, remove, audit). | Stars only. | A removed review disappears from the course page and from the average; the audit log records who removed it. |
 | R4 | **Display threshold:** the card shows average and count only from **3 ratings**; below that it shows «Новий курс». | Showing from the first rating (★ 5.0 (1) overstates). | A course with 2 ratings renders «Новий курс»; with 3 it renders `★ avg (3)`. |
 | R5 | **Order:** after payment (O05–O07) closes. | Before O05. | — |
+
+## Decisions taken (owner, 2026-10-03)
+
+| # | Decision | Alternative closed | How to check |
+|---|---|---|---|
+| R6 | **No derived (summary) table for ratings.** The average, the count and `lessonCount` on the catalog card are computed at read time by an aggregate query (`GROUP BY course_id` over reviews that are not removed, backed by an index on `course_id`). | A stored summary table (`course_rating_summary` with avg/count), a trigger-maintained counter, or a materialized view. | The migration adds no summary table, counter column or trigger for ratings; the catalog query reads reviews directly. |
+
+**Why (mechanism, not a guess):** under R3 the average must change both when a student edits a review
+and when an instructor removes one. Removal happens in the `discussion` moderation workspace, so a
+stored summary would need a second writer from that module, or a cross-module call, which ADR 013
+forbids: a module reads only its own facts. Any write path that forgets to update the summary leaves
+a stale average in the catalog. A read-time aggregate cannot go stale. The volume is small: the
+catalog publishes a handful of courses.
+
+**Trigger to revisit (magnitude):** measure the catalog list query with the aggregate against the
+same query without it, using `EXPLAIN ANALYZE` on the data volume `plan.md` fixes, the same method as
+payment's Pay23. If the aggregate costs more than **2×** the same query without it, take the first step
+up: a materialized view refreshed after review writes and removals. A summary table comes only after
+that view proves insufficient. "Derived table" in the SQL sense (a subquery in `FROM`) is a query
+technique and stays allowed. This decision does not cover it.
 
 ## Also in scope (same catalog-contract change)
 
