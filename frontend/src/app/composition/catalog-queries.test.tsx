@@ -149,6 +149,12 @@ describe('catalog query boundary', () => {
           pending.push({ query, signal, resolve });
         }),
       getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+      listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+      reportReview: async () => ({ ok: true, value: undefined }),
+      ownReview: async () => ({
+        ok: true,
+        value: { eligibility: 'review_not_started', review: null },
+      }),
     };
     const queries = createCatalogQueries(createCatalog(repository));
     const client = clientForTest();
@@ -206,6 +212,12 @@ describe('catalog query boundary', () => {
         value: coursePage(++reads === 1 ? 'Перший набір' : 'Новий набір'),
       }),
       getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+      listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+      reportReview: async () => ({ ok: true, value: undefined }),
+      ownReview: async () => ({
+        ok: true,
+        value: { eligibility: 'review_not_started', review: null },
+      }),
     };
     const queries = createCatalogQueries(createCatalog(repository));
     const client = clientForTest();
@@ -228,6 +240,15 @@ describe('catalog query boundary', () => {
       const repository: CourseRepository = {
         listPublished: async () => ({ ok: true, value: coursePage(title) }),
         getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+        listReviews: async () => ({
+          ok: true,
+          value: { rating: null, items: [], nextCursor: null },
+        }),
+        reportReview: async () => ({ ok: true, value: undefined }),
+        ownReview: async () => ({
+          ok: true,
+          value: { eligibility: 'review_not_started', review: null },
+        }),
       };
       return createCatalogQueries(createCatalog(repository));
     }
@@ -257,6 +278,12 @@ describe('catalog query boundary', () => {
     const repository: CourseRepository = {
       listPublished: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
       getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+      listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+      reportReview: async () => ({ ok: true, value: undefined }),
+      ownReview: async () => ({
+        ok: true,
+        value: { eligibility: 'review_not_started', review: null },
+      }),
     };
     const queries = createCatalogQueries(createCatalog(repository));
     const client = clientForTest();
@@ -286,6 +313,12 @@ function delayedCatalog() {
         pending.push({ signal, resolve });
       }),
     getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+    listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+    reportReview: async () => ({ ok: true, value: undefined }),
+    ownReview: async () => ({
+      ok: true,
+      value: { eligibility: 'review_not_started', review: null },
+    }),
   };
   return { queries: createCatalogQueries(createCatalog(repository)), pending };
 }

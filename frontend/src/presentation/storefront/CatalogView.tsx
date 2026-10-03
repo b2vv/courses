@@ -3,6 +3,7 @@ import { ValueStrip } from './ValueStrip';
 import { Button, EmptyState, Link, TextField } from '../ui';
 import { useTranslation } from 'react-i18next';
 import { formatPrice } from '../format-price';
+import { RatingSummary } from './RatingSummary';
 
 export function CatalogView({ page, query }: { page: CoursePage; query: CatalogQuery }) {
   const { t } = useTranslation();
@@ -102,6 +103,8 @@ function CourseCard({ course }: { course: PublishedCourse }) {
               ? t('catalog.free')
               : formatPrice(course.price, i18n.resolvedLanguage)}
           </span>
+          <RatingSummary rating={course.rating ?? null} className="course-rating" />
+          <span>{t('ratings.lessons', { count: course.lessonCount ?? 0 })}</span>
           <Link
             href={`/courses/${course.slug}`}
             aria-label={t('catalog.details', { title: course.title })}

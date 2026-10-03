@@ -143,6 +143,12 @@ function createTestRouter(
       },
     }),
     getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+    listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+    reportReview: async () => ({ ok: true, value: undefined }),
+    ownReview: async () => ({
+      ok: true,
+      value: { eligibility: 'review_not_started', review: null },
+    }),
   };
   const adminRepository: AdminCourseRepository = {
     list: async (query) => {

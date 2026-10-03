@@ -4,6 +4,7 @@ import {
   makeAdminCourseQuery,
   makeCatalogQuery,
   makePublishedCourse,
+  reviewPercent,
   parseUahAmount,
   validCourseTree,
   validCourseTreeEdit,
@@ -13,6 +14,18 @@ import {
 import type { CourseTreeEdit } from './course';
 
 describe('public catalog rules', () => {
+  test('rounds review progress half up', () => {
+    expect(
+      [
+        [0, 4],
+        [1, 3],
+        [2, 3],
+        [1, 8],
+        [4, 4],
+        [0, 0],
+      ].map(([done, total]) => reviewPercent(done ?? 0, total ?? 0)),
+    ).toEqual([0, 33, 67, 13, 100, 0]);
+  });
   test('normalizes search and rejects unbounded pagination', () => {
     expect(makeCatalogQuery({ q: '  Go  ' })).toEqual({
       ok: true,

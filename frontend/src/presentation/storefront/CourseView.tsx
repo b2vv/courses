@@ -1,8 +1,34 @@
 import type { CourseDetail } from '../../domain/course/course';
-import { Link } from '../ui';
+import type { PublicReviewPage } from '../../domain/course/course';
+import { Button, Link } from '../ui';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
+import { RatingSummary } from './RatingSummary';
+import { formatDate } from '../format-timestamp';
 
-export function CourseView({ course }: { course: CourseDetail }) {
+export function CourseView({
+  course,
+  reviews,
+  reviewsError = false,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore = () => {},
+  onRetry = () => {},
+  signedIn = false,
+  ownReviewId,
+  onReport = async () => {},
+}: {
+  course: CourseDetail;
+  reviews?: PublicReviewPage | undefined;
+  reviewsError?: boolean | undefined;
+  hasMore?: boolean | undefined;
+  isLoadingMore?: boolean | undefined;
+  onLoadMore?: (() => void) | undefined;
+  onRetry?: (() => void) | undefined;
+  signedIn?: boolean | undefined;
+  ownReviewId?: string | undefined;
+  onReport?: ((id: string) => Promise<void>) | undefined;
+}) {
   const { t } = useTranslation();
   return (
     <article className="course-detail">
@@ -10,6 +36,9 @@ export function CourseView({ course }: { course: CourseDetail }) {
         <Link href="/courses">{t('course.all')}</Link>
         <p className="eyebrow">{t('catalog.kind')}</p>
         <h1>{course.title}</h1>
+        <p>
+          <RatingSummary rating={course.rating ?? null} />
+        </p>
         <p className="lede">{course.summary}</p>
       </div>
       <div className="detail-body">
@@ -37,6 +66,17 @@ export function CourseView({ course }: { course: CourseDetail }) {
               </ol>
             </section>
           )}
+          <Reviews
+            reviews={reviews}
+            error={reviewsError}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={onLoadMore}
+            onRetry={onRetry}
+            signedIn={signedIn}
+            ownReviewId={ownReviewId}
+            onReport={onReport}
+          />
         </div>
         <aside className="availability">
           <h2>{t('course.learningTitle')}</h2>
@@ -45,5 +85,129 @@ export function CourseView({ course }: { course: CourseDetail }) {
         </aside>
       </div>
     </article>
+  );
+}
+
+function Reviews({
+  reviews,
+  error,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  onRetry,
+  signedIn,
+  ownReviewId,
+  onReport,
+}: {
+  reviews: PublicReviewPage | undefined;
+  error: boolean;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+  onRetry: () => void;
+  signedIn: boolean;
+  ownReviewId: string | undefined;
+  onReport: (id: string) => Promise<void>;
+}) {
+  const { t, i18n } = useTranslation();
+  if (error)
+    return (
+      <section aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading">{t('ratings.heading')}</h2>
+        <div role="alert">
+          <p>{t('ratings.failure')}</p>
+          <Button onPress={onRetry}>{t('ratings.retry')}</Button>
+        </div>
+      </section>
+    );
+  if (reviews === undefined)
+    return (
+      <section aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading">{t('ratings.heading')}</h2>
+      </section>
+    );
+  return (
+    <section aria-labelledby="reviews-heading">
+      <h2 id="reviews-heading">{t('ratings.heading')}</h2>
+      {reviews.items.length === 0 ? (
+        <p>{t('ratings.empty')}</p>
+      ) : (
+        <ol aria-label={t('ratings.list')}>
+          {reviews.items.map((review) => (
+            <ReviewCard
+              key={review.id}
+              review={review}
+              signedIn={signedIn}
+              ownReviewId={ownReviewId}
+              onReport={onReport}
+              locale={i18n.resolvedLanguage ?? 'uk'}
+            />
+          ))}
+        </ol>
+      )}
+      {hasMore ? (
+        <>
+          <Button variant="secondary" isDisabled={isLoadingMore} onPress={onLoadMore}>
+            {t('ratings.more')}
+          </Button>
+          <output aria-live="polite" className="sr-only">
+            {isLoadingMore ? t('ratings.loading') : ''}
+          </output>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function ReviewCard({
+  review,
+  signedIn,
+  ownReviewId,
+  onReport,
+  locale,
+}: {
+  review: PublicReviewPage['items'][number];
+  signedIn: boolean;
+  ownReviewId: string | undefined;
+  onReport: (id: string) => Promise<void>;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const [reported, setReported] = useState(false);
+  const [reportError, setReportError] = useState<string>();
+  return (
+    <li>
+      <article>
+        <header>
+          <strong>{review.authorDisplayName ?? t('ratings.formerAuthor')}</strong>
+          <span aria-hidden="true">{'★'.repeat(review.stars)}</span>
+          <span className="sr-only">{t('ratings.stars', { count: review.stars })}</span>
+          <time dateTime={review.createdAt}>{formatDate(review.createdAt, locale)}</time>
+          {review.editedAt ? <span>{t('ratings.edited')}</span> : null}
+        </header>
+        <p style={{ whiteSpace: 'pre-line' }}>{review.body}</p>
+        <p>{t('ratings.progress', { percent: review.percent })}</p>
+        {signedIn && review.id !== ownReviewId ? (
+          <Button
+            variant="secondary"
+            isDisabled={reported}
+            onPress={() =>
+              void onReport(review.id)
+                .then(() => setReported(true))
+                .catch((error: unknown) =>
+                  setReportError(
+                    error instanceof Error && error.message === 'report_own_review'
+                      ? t('ratings.ownReportError')
+                      : t('ratings.reportError'),
+                  ),
+                )
+            }
+          >
+            {reported ? t('ratings.reported') : t('ratings.report')}
+          </Button>
+        ) : null}
+        {reportError === undefined ? null : <p role="alert">{reportError}</p>}
+      </article>
+    </li>
   );
 }
