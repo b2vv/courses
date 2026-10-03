@@ -46,6 +46,43 @@ type fakeRepository struct {
 	moderationLogs []ports.ModerationLogEntry
 }
 
+// ReviewRepository is embedded in the production repository contract. The HTTP
+// fixture exercises comment routes only; these deliberately inert methods keep
+// that fixture honest without inventing review behaviour in this slice.
+func (fake *fakeRepository) ReviewFacts(context.Context, string, string) (ports.ReviewFactsRecord, error) {
+	return ports.ReviewFactsRecord{}, domain.ErrNotFound
+}
+func (fake *fakeRepository) CreateReview(context.Context, ports.ReviewRecord) (ports.ReviewRecord, error) {
+	return ports.ReviewRecord{}, domain.ErrNotFound
+}
+func (fake *fakeRepository) UpdateReview(context.Context, string, string, domain.ReviewContent, domain.ReviewProgress, time.Time) (ports.ReviewRecord, error) {
+	return ports.ReviewRecord{}, domain.ErrNotFound
+}
+func (fake *fakeRepository) DeleteReview(context.Context, string, string) error {
+	return domain.ErrNotFound
+}
+func (fake *fakeRepository) GetOwnReview(context.Context, string, string) (*ports.ReviewRecord, error) {
+	return nil, nil
+}
+func (fake *fakeRepository) ListReviews(context.Context, string, string, int) (ports.ReviewPage, error) {
+	return ports.ReviewPage{}, nil
+}
+func (fake *fakeRepository) ReviewSummary(context.Context, string) (int, int, error) {
+	return 0, 0, nil
+}
+func (fake *fakeRepository) InsertReviewReport(context.Context, string, string, time.Time) error {
+	return nil
+}
+func (fake *fakeRepository) DismissReviewReports(context.Context, string, string, time.Time) error {
+	return nil
+}
+func (fake *fakeRepository) RemoveReview(context.Context, string, string, string, *string, time.Time) error {
+	return nil
+}
+func (fake *fakeRepository) ListModerationQueue(context.Context, string, string, int) (ports.ModerationQueuePage, error) {
+	return ports.ModerationQueuePage{}, nil
+}
+
 func (fake *fakeRepository) LessonFacts(context.Context, string, string) (ports.LessonFacts, error) {
 	return fake.facts, fake.factsErr
 }
