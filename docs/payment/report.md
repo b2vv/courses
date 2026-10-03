@@ -89,9 +89,10 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   `purchase`-grant count is noise from prior stub/e2e runs — 189000-minor orders — which is why the
   count is scoped to this course.) The course was archived after the run (published set back to the
   seeded three) and the tunnel/ngrok torn down. **Decision (owner, 2026-10-03):** the live run used the
-  existing SecretKey (it had appeared in chat) — acceptable for a one-off 1-грн test-mode charge; the
-  key is to be regenerated and the merchant password changed before any further live use (the password
-  is not used by the project and is stored nowhere). Runbook: `work/runbook-o06c-tunnel.md`.
+  existing SecretKey (it had appeared in chat) — acceptable for a one-off 1-грн test-mode charge.
+  **Superseded the same day (owner, 2026-10-03):** the `site_ex` shop is to be deleted, so the leaked
+  key dies with it and no rotation is needed; a future live run uses a new shop and a new key. The
+  password is not used by the project and is stored nowhere. Runbook: `work/runbook-o06c-tunnel.md`.
 - **Pay25-live — earlier same-day attempts on the shared test merchant `test_merch_n1` (record).** Run 2026-10-02 by Courses 1 (owner away; public test merchant
   `test_merch_n1`, tunnel via localhost.run because this network blocks Cloudflare's quick-tunnel API).
   Proven against the real provider: (1) WayForPay accepted our signed Purchase form and opened its
@@ -168,5 +169,5 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
 ## 7. Next
 
 Pay25-live closed (live Approved run 2026-10-03, §6). All Pay01–Pay27 + Pay04b/Pay21b rows proven.
-Remaining: merge PR #3 for the payment phase; before any further live use, rotate the shop SecretKey
-and change its merchant password (owner decision, §6).
+PR #3 merged into `main` (`df5b3802`) — the payment phase is closed. The test shop `site_ex` is to be
+deleted by the owner, so its leaked key needs no rotation (§6).

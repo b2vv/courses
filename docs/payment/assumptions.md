@@ -246,3 +246,12 @@ key can at most forge callbacks for that test shop; no real funds, and the shop 
 live use**; the password is not used by the project and is stored nowhere. **How to check:** the live
 proof is recorded (callback `POST → 200`, order `4396fba5…` → `paid`, one grant/one event — report §6);
 a later `git grep` shows no key in the repo, and `.env` stays gitignored.
+
+## 2026-10-03 — Test shop `site_ex` to be deleted; key rotation dropped (owner decision, supersedes the entry above)
+
+**Decision (owner, 2026-10-03):** the owner deletes the `site_ex` test-mode shop used for Pay25-live,
+so the SecretKey that appeared in chat dies with it. **Alternative closed:** regenerating the key and
+changing the merchant password (the obligation in the previous entry) — moot once the shop no longer
+exists. A future live run (deployment, Р1) uses a new shop with a new key. **How to check:** in the
+WayForPay cabinet the `site_ex` shop is gone; a signed request with the old key fails. The local `.env`
+lines for `site_ex` then point at nothing and may be removed.
