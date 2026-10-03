@@ -73,6 +73,11 @@ Semantics that the shape carries:
   lessons" means the lessons of the published course. `completed_lessons` counts this author's
   `lesson_progress` rows with `completed_at` set (≥ 95 %, `playback/domain/progress.go:74`).
 - **Counted review** (R4, AC8) = a row with `removed_at IS NULL`; a deleted one no longer exists.
+- **A lesson without a ready video can never be completed** (`completed_at` needs a duration,
+  `progress.go:73-74`), yet it is in `total_lessons`. So a course with such a lesson caps every
+  review below 100 %. This is deliberate: the percentage states how much of the course as published
+  the author had done, and an uncompletable lesson is part of that course. Named as a limitation in
+  the report; Rt12/Rt13 use a course whose lessons all have ready videos.
 
 ## 4. Eligibility — one domain function
 
@@ -85,7 +90,10 @@ progress for the actor, completed lessons, total lessons. Order of checks and co
 3. paid and no active grant → `review_purchase_required` (G1, G2: role access and preview do not count)
 4. no lesson with progress → `review_not_started` (R1)
 
-Writes: create (`review_already_exists` if a row exists, `review_removed` if it is removed),
+Writes: create is `INSERT … ON CONFLICT (course_id, author_id) DO NOTHING`; zero rows inserted means a
+row already exists, and a follow-up read maps it to `review_removed` when it is removed or
+`review_already_exists` otherwise — so two concurrent creates give one 201 and one 409, never a raw
+constraint error. Codes: create (`review_already_exists` if a row exists, `review_removed` if it is removed),
 edit (same eligibility; `review_removed`), delete (author only; `review_removed` if removed),
 format (`review_invalid` for stars or body). Remove (admin only, G9): `review_moderation_forbidden`
 for anyone else, owner included.
@@ -99,10 +107,10 @@ for anyone else, owner included.
 | `PUT /api/v1/learn/courses/{courseId}/review` | signed in | create or edit own review; codes from §4 |
 | `DELETE /api/v1/learn/courses/{courseId}/review` | author | 204; `review_removed` |
 | `POST /api/v1/learn/reviews/{reviewId}/reports` | signed in, not the author | 201 or 200 on repeat (UNIQUE) |
-| teach queue (existing route) | owner ∨ admin | lists review reports next to comment reports, with `kind` |
+| teach queue (existing route) | owner ∨ admin | lists review reports next to comment reports, with `kind`. One SQL: `UNION ALL` of the two open-report aggregates (comments as in `moderation.go:32-49`, reviews from `discussion_review_reports`), ordered by the existing key `(open_count DESC, latest_report DESC)` then `(kind, id) DESC`; the cursor carries all four. A review row has no lesson (lesson fields null). |
 | `POST /api/v1/teach/reviews/{reviewId}/remove` | admin | 200; log entry with `review_id` |
 | `POST /api/v1/teach/reviews/{reviewId}/reports/dismiss` | owner ∨ admin | as for comments |
-| catalog `Course` | anyone | `+ rating: {average, count} \| null`, `+ lessonCount` |
+| catalog `Course` | anyone | `+ rating: {average, count} \| null`, `+ lessonCount`. **No duration field in this phase** (AC11 makes it conditional): a real total needs the current ready asset of every lesson — a per-lesson `LATERAL` like `discussion/…/repository.go:28-34` — inside the hottest public read, and any lesson without a ready video makes the total false. Decision recorded in `assumptions.md`. |
 | learning course | signed in | `+ canPurchase` = published ∧ paid ∧ no active grant ∧ not owner (role ignored) |
 | admin grant (existing) | admin | `+ grant_self_forbidden` when target = actor (G5) |
 
@@ -111,8 +119,7 @@ Average is rounded to one decimal on the server; count is the counted reviews.
 ## 6. Frontend
 
 - **Catalog card** (`presentation/storefront/CatalogView.tsx`): `★ avg (count)` or «Новий курс»,
-  and the lesson count. Duration only if `video_assets.duration_seconds` gives it for every lesson
-  (AC11); otherwise not shown — no estimate.
+  and the lesson count. No duration in this phase (§5).
 - **Course page** (`CourseView.tsx`): rating summary and a reviews section, newest first, «Показати
   ще» by cursor; each review shows name, stars (accessible name «4 з 5»), text, «пройдено N% на
   момент відгуку», date and a report button for signed-in non-authors.
@@ -127,14 +134,30 @@ Average is rounded to one decimal on the server; count is the counted reviews.
 ## 7. Side effects
 
 - **Shared persisted state:** a new published-content kind counted on public pages. e2e that
-  publish courses must clean up reviews with the course (FK cascade covers it). The catalog e2e
-  expects exact cards (`recovery.spec.ts` counts courses): adding fields does not change counts.
-- **Moderation log contract change:** `comment_id` becomes nullable. Every reader of the log (the
-  audit view, I03 queries) must handle a review entry; the integration test for the log covers both.
+  publish courses must clean up reviews with the course (FK cascade covers it). Two e2e count
+  published courses — `catalog.spec.ts:52` (cards) and `recovery.spec.ts:91` (`pagination.total: 3`):
+  adding fields does not change counts, but a ratings e2e that publishes a course must archive it.
+- **Moderation log contract change:** `comment_id` becomes nullable. The log is write-only today —
+  the only SQL touching it is the `INSERT` at `moderation.go:118`, no reader exists — so nothing
+  breaks; the integration test of the table asserts both entry kinds and the CHECK.
 - **Catalog query cost:** an aggregate join on the hottest public read. Measured in §9 against R6.
 - **orders change (G5):** a new refusal in `GrantCourse`; existing admin-grant e2e (Pay10) grants to
   another user and stays green. Self-grants already present in a database are left as they are.
 - **Abuse surface:** writes are per user per course (UNIQUE) and behind auth and `zone=api`.
+- **Dependency failure.** The only dependency is Postgres; nothing new is external.
+  - *Catalog:* the aggregate is a join inside `ListPublishedCourses`, the same statement on the same
+    database, so it cannot fail apart from the catalog. When Postgres fails, the catalog fails as it
+    does today: `dependency_unavailable` 503 and the existing error state (`CatalogStates.tsx`).
+    Degrading to `rating: null` would need a second query, which R6 rejects; no partial card is
+    shown.
+  - *Course page:* the reviews list is its own request (`GET /courses/{slug}/reviews`). On failure the
+    reviews section shows an error with «Спробувати ще», and the rest of the page (description,
+    outline) renders from its own query (Rt28).
+  - *Learning page:* the own-review request fails → the review block shows the same error state; the
+    lesson and player are unaffected. A failed write keeps the typed text in the form (Rt29).
+  - *Writes and moderation:* a repository error maps to `dependency_unavailable` 503 through the
+    existing `statusFor` (`discussion/adapters/http/handler.go:394-395`); nothing is half-written,
+    because each write is one statement or one transaction (remove = update + log insert together).
 
 ## 8. Migration plan and rollback
 
@@ -169,7 +192,7 @@ in `report.md`. **> 2×** → R6 trigger (materialized view), recorded as a deci
 
 ## 11. Acceptance scenarios
 
-Groups: happy path (Rt01–Rt05), boundaries (Rt06–Rt14), refusals (Rt15–Rt27). Levels: unit (domain),
+Groups: happy path (Rt01–Rt05), boundaries (Rt06–Rt14), refusals and failures (Rt15–Rt29). Levels: unit (domain),
 contract (HTTP), integration (SQL against Postgres), e2e (browser against Compose).
 
 | # | Scenario | Precondition | Action | Observable result | Verified by | AC |
@@ -201,6 +224,8 @@ contract (HTTP), integration (SQL against Postgres), e2e (browser against Compos
 | Rt25 | Report own review refused / repeat | author; another user reports twice | report | author: 403; repeat: one report row | contract; integration | AC7 |
 | Rt26 | Archive keeps reviews | course with reviews archived, grant holder | opens the course and edits | reviews visible; edit 200; after re-publish the card shows the rating | integration; e2e | AC10, G3 |
 | Rt27 | No summary table | migration applied | inspect schema | no summary table, counter column or trigger for reviews | integration (catalog of `information_schema`) | AC12, R6 |
+| Rt28 | Reviews request fails | the reviews request returns 503 | visitor opens the course page | the reviews section shows an error with «Спробувати ще»; the outline is shown | FE unit (presentation, query error state) | AC9 |
+| Rt29 | Write fails | the review write returns 503 | eligible student submits | an error message is shown and the typed text stays in the form | FE unit | AC4 |
 
 Manual rows: **0**. Every row has an automated level.
 
@@ -213,7 +238,7 @@ Manual rows: **0**. Every row has an automated level.
 | T03 | Migration 00013 + discussion repository (review facts, CRUD, reports, log) — integration | Rt02, Rt09, Rt12, Rt13, Rt16, Rt17, Rt20, Rt22, Rt25–Rt27 |
 | T04 | Catalog SQL aggregate + `lessonCount` + `canPurchase`; R6 measurement | Rt07, Rt09, §9 |
 | T05 | Application + HTTP + OpenAPI + Orval; contract tests | Rt01–Rt04, Rt10, Rt11, Rt14–Rt19, Rt21, Rt23–Rt25 |
-| T06 | Frontend: card, course page, form, admin buy entry, teach queue | UI parts of Rt01–Rt09, Rt14, Rt21, Rt22, Rt26 |
+| T06 | Frontend: card, course page, form, admin buy entry, teach queue | UI parts of Rt01–Rt09, Rt14, Rt21, Rt22, Rt26; Rt28, Rt29 |
 | T07 | e2e `ratings.spec.ts` + a11y | e2e column |
 | T08 | Ordered `make check`, report row by row, PR | all |
 
