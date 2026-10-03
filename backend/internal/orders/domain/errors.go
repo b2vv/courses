@@ -16,6 +16,7 @@ const (
 	ErrOrderNotFound          Error = "order_not_found"
 	ErrCheckoutAlreadyOpened  Error = "checkout_already_opened"
 	ErrGrantForbidden         Error = "grant_forbidden"
+	ErrGrantSelfForbidden     Error = "grant_self_forbidden"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrCourseModified         Error = "course_modified"
 )

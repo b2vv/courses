@@ -270,8 +270,8 @@ Courses 2 на opus-4-8); §24 п.21/п.22, ADR 013→014, шви `docs/readines
 
 | ID | Назва | Est | Depends | Status | Result / закриває |
 |---|---|---:|---|---|---|
-| T01 | `contracts/rating.Summary` (поріг 3, округлення) + домен `discussion`: `CanReview` (порядок відмов §4), формат 20–2000/1–5, захоплення прогресу; unit-таблиці | 2h | — | planned | Rt10, Rt11, Rt15, Rt18; unit-частини Rt06–Rt08 |
-| T02 | `orders.GrantCourse`: заборона самогранту (`grant_self_forbidden`), unit + contract + integration | 1h | — | planned | Rt24 |
+| T01 | `contracts/rating.Summary` (поріг 3, округлення) + домен `discussion`: `CanReview` (порядок відмов §4), формат 20–2000/1–5, захоплення прогресу; unit-таблиці | 2h | — | in_progress | Rt10, Rt11, Rt15, Rt18; unit-частини Rt06–Rt08 |
+| T02 | `orders.GrantCourse`: заборона самогранту (`grant_self_forbidden`), unit + contract + integration | 1h | — | in_progress | Rt24 |
 | T03 | Міграція 00013 (reviews, review_reports, журнал: comment_id nullable + review_id + CHECK) + репозиторій discussion (review facts, CRUD з ON CONFLICT, звіти, черга UNION ALL, зняття+журнал однією транзакцією); integration | 3.5h | T01 | planned | Rt02, Rt09, Rt12, Rt13, Rt16, Rt17, Rt20, Rt22, Rt25–Rt27 |
 | T04 | Каталог: агрегат `count`/`sum(stars)` + `lessonCount` у `ListPublishedCourses`/`GetPublishedCourse`; `canPurchase` у навчальному курсі; R6-замір (§9) у звіт | 2.5h | T01, T03 | planned | Rt07, Rt09; §9 |
 | T05 | Application + HTTP + OpenAPI + Orval (§5): публічний список, власний відгук, PUT/DELETE, скарга, черга з `kind`, зняття адміном; contract-тести | 3h | T02–T04 | planned | Rt01–Rt04, Rt10, Rt11, Rt14–Rt19, Rt21, Rt23–Rt25 |

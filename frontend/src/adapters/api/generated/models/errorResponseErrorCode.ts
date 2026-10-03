@@ -23,6 +23,7 @@ export const ErrorResponseErrorCode = {
   course_already_owned: 'course_already_owned',
   checkout_already_opened: 'checkout_already_opened',
   grant_forbidden: 'grant_forbidden',
+  grant_self_forbidden: 'grant_self_forbidden',
   payment_event_rejected: 'payment_event_rejected',
   invalid_callback: 'invalid_callback',
   order_not_found: 'order_not_found',

@@ -190,16 +190,18 @@ func TestGrantCourseRequiresAdministratorAndWritesAudit(t *testing.T) {
 	for _, test := range []struct {
 		name      string
 		admin     bool
+		targetID  string
 		want      error
 		wantCalls int
 	}{
-		{name: "administrator grants", admin: true, wantCalls: 1},
-		{name: "student is forbidden", want: domain.ErrGrantForbidden},
+		{name: "administrator grants another user", admin: true, targetID: userID, wantCalls: 1},
+		{name: "administrator cannot grant themselves", admin: true, targetID: adminID, want: domain.ErrGrantSelfForbidden},
+		{name: "student is forbidden", targetID: userID, want: domain.ErrGrantForbidden},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := newFakeStore(t)
 			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" }, nil)
-			grant, err := service.GrantCourse(context.Background(), application.Actor{UserID: adminID, Administrator: test.admin}, userID, courseID, "support decision")
+			grant, err := service.GrantCourse(context.Background(), application.Actor{UserID: adminID, Administrator: test.admin}, test.targetID, courseID, "support decision")
 			if !errors.Is(err, test.want) {
 				t.Fatalf("error=%v want=%v", err, test.want)
 			}

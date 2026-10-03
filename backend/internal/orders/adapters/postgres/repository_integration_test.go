@@ -479,10 +479,23 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
-	grant, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access")
-	if err != nil || grant.Source() != domain.GrantAdmin {
-		t.Fatalf("admin grant=%+v error=%v", grant, err)
-	}
+	t.Run("administrator cannot grant themselves or create a row", func(t *testing.T) {
+		selfGrantIDs := subtestIDs("72")
+		selfGrantService := application.New(repository, repository, repository, func() time.Time { return now }, selfGrantIDs, nil)
+		var before, after int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&before); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := selfGrantService.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access"); err != domain.ErrGrantSelfForbidden {
+			t.Fatalf("self grant error=%v", err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&after); err != nil {
+			t.Fatal(err)
+		}
+		if after != before {
+			t.Fatalf("self grant rows before=%d after=%d", before, after)
+		}
+	})
 
 	t.Run("paid event settles when active admin grant already exists", func(t *testing.T) {
 		var userID string
