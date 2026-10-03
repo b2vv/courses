@@ -221,7 +221,7 @@ contract (HTTP), integration (SQL against Postgres), e2e (browser against Compos
 | Rt16 | Preview only refused | paid course, user watched a preview lesson, no grant | sends a review | 403 `review_purchase_required` | integration; contract | AC1, G1 |
 | Rt17 | Admin by role refused | admin, paid course, no grant, has progress | sends a review | 403 `review_purchase_required` | integration; contract | AC1, G2 |
 | Rt18 | No progress refused | free course, signed in, no progress | sends a review | 403 `review_not_started` | unit; contract | AC1 |
-| Rt19 | Second review refused | own review exists | sends a create | 409 `review_already_exists` | contract | AC4 |
+| Rt19 | One review per user | own review exists | sends PUT again (create-or-edit) | 200; still exactly one review row for this author and course. Two concurrent first creates → one 201, one 409 `review_already_exists` | contract; integration (T03 concurrency subtest) | AC4 |
 | Rt20 | Lost access: no edit | grant revoked after the review (fixture) | edits | 403 `review_purchase_required`; the review still shows and counts | integration | AC6, G4 |
 | Rt21 | Owner cannot remove | owner, reported review on own course | calls remove | 403 `review_moderation_forbidden`; the review stays | contract; e2e (no «Зняти» button) | AC7, G9 |
 | Rt22 | Admin removes | reported review | admin removes | the review leaves the page; the log shows the admin and `review_id` | e2e; integration | AC7 |
