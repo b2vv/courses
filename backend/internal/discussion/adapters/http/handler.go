@@ -22,6 +22,7 @@ func NewHandler(service *application.Service) *Handler { return &Handler{service
 
 func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
 	mux.Handle("GET /api/v1/courses/{slug}/reviews", http.HandlerFunc(handler.publicReviews))
+	mux.Handle("GET /api/v1/learn/courses/{courseId}/reviews", authenticate(http.HandlerFunc(handler.learningReviews)))
 	mux.Handle("GET /api/v1/learn/courses/{courseId}/review", authenticate(http.HandlerFunc(handler.ownReview)))
 	mux.Handle("PUT /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.putReview))))
 	mux.Handle("DELETE /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.deleteReview))))
@@ -307,6 +308,32 @@ func (handler *Handler) publicReviews(w http.ResponseWriter, r *http.Request) {
 	}
 	httpserver.WriteJSON(w, http.StatusOK, result)
 }
+func (handler *Handler) learningReviews(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	page, err := handler.service.LearningReviews(r.Context(), actor, r.PathValue("courseId"), query.Get("cursor"))
+	if err != nil {
+		writeReviewError(w, r, err, "course_not_found")
+		return
+	}
+	items := make([]reviewDTO, len(page.Items))
+	for i, review := range page.Items {
+		items[i] = mapReview(review)
+	}
+	result := publicReviewsDTO{Items: items, NextCursor: page.NextCursor}
+	if page.Rating != nil {
+		result.Rating = &reviewRatingDTO{Average: page.Rating.Average, Count: page.Rating.Count}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, result)
+}
 func (handler *Handler) ownReview(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
 	actor, ok := actorFromRequest(w, r)
@@ -354,7 +381,7 @@ func (handler *Handler) deleteReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := handler.service.DeleteReview(r.Context(), actor, r.PathValue("courseId")); err != nil {
-		writeReviewError(w, r, err, "course_not_found")
+		writeReviewError(w, r, err, "review_not_found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
