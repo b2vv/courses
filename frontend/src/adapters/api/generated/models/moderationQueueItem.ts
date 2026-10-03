@@ -5,10 +5,14 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { ModerationQueueItemKind } from './moderationQueueItemKind.ts';
+import type { Review } from './review.ts';
 import type { TeachComment } from './teachComment.ts';
 
 export interface ModerationQueueItem {
-  comment: TeachComment;
+  kind: ModerationQueueItemKind;
+  comment: TeachComment | null;
+  review: Review | null;
   /** @minimum 1 */
   openReports: number;
 }

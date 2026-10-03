@@ -55,6 +55,7 @@ type QueuePage struct {
 type ModerationLogEntry struct {
 	CourseID  string
 	CommentID string
+	ReviewID  string
 	ActorID   string
 	ActorRole string
 	Action    string
@@ -111,7 +112,9 @@ type ModerationQueuePage struct {
 }
 
 type ReviewRepository interface {
+	PublishedReviewCourse(context.Context, string) (string, error)
 	ReviewFacts(context.Context, string, string) (ReviewFactsRecord, error)
+	GetReview(context.Context, string) (ReviewRecord, error)
 	CreateReview(context.Context, ReviewRecord) (ReviewRecord, error)
 	UpdateReview(context.Context, string, string, domain.ReviewContent, domain.ReviewProgress, time.Time) (ReviewRecord, error)
 	DeleteReview(context.Context, string, string) error

@@ -115,8 +115,8 @@ WHERE comment_id=$1::text::uuid AND dismissed_at IS NULL`, commentID, dismissedB
 }
 
 func (repository *Repository) WriteModerationLog(ctx context.Context, entry ports.ModerationLogEntry) error {
-	_, err := repository.pool.Exec(ctx, `INSERT INTO discussion_moderation_log(course_id, comment_id, actor_id, actor_role, action, reason, created_at)
-VALUES($1::text::uuid, $2::text::uuid, $3::text::uuid, $4, $5, $6, $7)`, entry.CourseID, entry.CommentID, entry.ActorID, entry.ActorRole, entry.Action, entry.Reason, entry.CreatedAt)
+	_, err := repository.pool.Exec(ctx, `INSERT INTO discussion_moderation_log(course_id, comment_id, review_id, actor_id, actor_role, action, reason, created_at)
+VALUES($1::text::uuid, NULLIF($2,'')::uuid, NULLIF($3,'')::uuid, $4::text::uuid, $5, $6, $7, $8)`, entry.CourseID, entry.CommentID, entry.ReviewID, entry.ActorID, entry.ActorRole, entry.Action, entry.Reason, entry.CreatedAt)
 	if err != nil {
 		return persistenceError(err)
 	}

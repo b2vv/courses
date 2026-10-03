@@ -12,6 +12,12 @@ function courseId(value: string): string {
   return value;
 }
 
+function isCommentQueueItem(
+  item: ModerationQueueItem,
+): item is ModerationQueueItem & { readonly kind: 'comment'; readonly comment: TeachComment } {
+  return item.kind === 'comment' && item.comment !== null;
+}
+
 export const Route = createFileRoute('/teach/courses/$courseId')({
   ssr: false,
   loader: async ({ context, params }) => {
@@ -60,7 +66,7 @@ function TeachCourseRoute() {
     [comments.data],
   );
   const queueItems = useMemo(
-    () => queue.data?.pages.flatMap((page) => page.items) ?? [],
+    () => (queue.data?.pages.flatMap((page) => page.items) ?? []).filter(isCommentQueueItem),
     [queue.data],
   );
   const run = async (action: () => Promise<unknown>) => {
@@ -173,7 +179,7 @@ function ModerationRow({
   onDismiss,
   onRemove,
 }: {
-  readonly item: ModerationQueueItem;
+  readonly item: ModerationQueueItem & { readonly kind: 'comment'; readonly comment: TeachComment };
   readonly busy: boolean;
   readonly onDismiss: (reason: string) => void;
   readonly onRemove: () => void;

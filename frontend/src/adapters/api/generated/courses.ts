@@ -50,6 +50,7 @@ import type {
   ListAdminCoursesParams,
   ListAdminUsersParams,
   ListCourseDocuments200,
+  ListCourseReviewsParams,
   ListLessonCommentsParams,
   ListPublishedCoursesParams,
   ListTeachCourseCommentsParams,
@@ -64,6 +65,7 @@ import type {
   NotFoundResponse,
   OrderNotFoundResponse,
   OriginForbiddenResponse,
+  OwnReview,
   PlaybackExpiredResponse,
   PlaybackForbiddenResponse,
   PlaybackHeartbeatRequest,
@@ -71,13 +73,16 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
+  PublicReviewPage,
   PublishCommentRequest,
   PublishLessonDraft200,
   PublishLessonDraftRequest,
   PurchaseConflictResponse,
   PurchaseOrder,
+  PutReviewRequest,
   ReceiveWayForPayCallbackBody,
   RegenerateLessonDraftRequest,
+  Review,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
@@ -2745,6 +2750,337 @@ const res = await fetch(getPublishLessonDraftUrl(lessonId),
 
 
 
+export type listCourseReviewsResponse200 = {
+  data: PublicReviewPage
+  status: 200
+}
+
+export type listCourseReviewsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listCourseReviewsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listCourseReviewsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listCourseReviewsResponseSuccess = (listCourseReviewsResponse200) & {
+  headers: Headers;
+};
+export type listCourseReviewsResponseError = (listCourseReviewsResponse400 | listCourseReviewsResponse404 | listCourseReviewsResponse503) & {
+  headers: Headers;
+};
+
+export type listCourseReviewsResponse = (listCourseReviewsResponseSuccess | listCourseReviewsResponseError)
+
+export const getListCourseReviewsUrl = (slug: string,
+    params?: ListCourseReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/courses/${slug}/reviews?${stringifiedParams}` : `${apiOrigin()}/api/v1/courses/${slug}/reviews`
+}
+
+export const listCourseReviews = async (slug: string,
+    params?: ListCourseReviewsParams, options?: RequestInit): Promise<listCourseReviewsResponse> => {
+
+  const res = await fetch(getListCourseReviewsUrl(slug,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCourseReviewsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listCourseReviewsResponse
+}
+
+
+
+export type getOwnCourseReviewResponse200 = {
+  data: OwnReview
+  status: 200
+}
+
+export type getOwnCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getOwnCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getOwnCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getOwnCourseReviewResponseSuccess = (getOwnCourseReviewResponse200) & {
+  headers: Headers;
+};
+export type getOwnCourseReviewResponseError = (getOwnCourseReviewResponse401 | getOwnCourseReviewResponse404 | getOwnCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type getOwnCourseReviewResponse = (getOwnCourseReviewResponseSuccess | getOwnCourseReviewResponseError)
+
+export const getGetOwnCourseReviewUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/review`
+}
+
+export const getOwnCourseReview = async (courseId: string, options?: RequestInit): Promise<getOwnCourseReviewResponse> => {
+
+  const res = await fetch(getGetOwnCourseReviewUrl(courseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getOwnCourseReviewResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getOwnCourseReviewResponse
+}
+
+
+
+export type putCourseReviewResponse200 = {
+  data: Review
+  status: 200
+}
+
+export type putCourseReviewResponse201 = {
+  data: Review
+  status: 201
+}
+
+export type putCourseReviewResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type putCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type putCourseReviewResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type putCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type putCourseReviewResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type putCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type putCourseReviewResponseSuccess = (putCourseReviewResponse200 | putCourseReviewResponse201) & {
+  headers: Headers;
+};
+export type putCourseReviewResponseError = (putCourseReviewResponse400 | putCourseReviewResponse401 | putCourseReviewResponse403 | putCourseReviewResponse404 | putCourseReviewResponse409 | putCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type putCourseReviewResponse = (putCourseReviewResponseSuccess | putCourseReviewResponseError)
+
+export const getPutCourseReviewUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/review`
+}
+
+export const putCourseReview = async (courseId: string,
+    putReviewRequest: PutReviewRequest, options?: RequestInit): Promise<putCourseReviewResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPutCourseReviewUrl(courseId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(putReviewRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putCourseReviewResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as putCourseReviewResponse
+}
+
+
+
+export type deleteCourseReviewResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type deleteCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type deleteCourseReviewResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type deleteCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type deleteCourseReviewResponseSuccess = (deleteCourseReviewResponse204) & {
+  headers: Headers;
+};
+export type deleteCourseReviewResponseError = (deleteCourseReviewResponse401 | deleteCourseReviewResponse404 | deleteCourseReviewResponse409 | deleteCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type deleteCourseReviewResponse = (deleteCourseReviewResponseSuccess | deleteCourseReviewResponseError)
+
+export const getDeleteCourseReviewUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/review`
+}
+
+export const deleteCourseReview = async (courseId: string, options?: RequestInit): Promise<deleteCourseReviewResponse> => {
+
+  const res = await fetch(getDeleteCourseReviewUrl(courseId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteCourseReviewResponse
+}
+
+
+
+export type reportCourseReviewResponse204 = {
+  data: void
+  status: 204
+}
+
+export type reportCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseReviewResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseReviewResponseSuccess = (reportCourseReviewResponse204) & {
+  headers: Headers;
+};
+export type reportCourseReviewResponseError = (reportCourseReviewResponse401 | reportCourseReviewResponse403 | reportCourseReviewResponse404 | reportCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseReviewResponse = (reportCourseReviewResponseSuccess | reportCourseReviewResponseError)
+
+export const getReportCourseReviewUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/reviews/${reviewId}/reports`
+}
+
+export const reportCourseReview = async (reviewId: string, options?: RequestInit): Promise<reportCourseReviewResponse> => {
+
+  const res = await fetch(getReportCourseReviewUrl(reviewId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as reportCourseReviewResponse
+}
+
+
+
 export type listLessonCommentsResponse200 = {
   data: CommentPage
   status: 200
@@ -3139,6 +3475,154 @@ export const reportLessonComment = async (commentId: string, options?: RequestIn
 
   const data: reportLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as reportLessonCommentResponse
+}
+
+
+
+export type removeCourseReviewResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeCourseReviewResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type removeCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type removeCourseReviewResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type removeCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type removeCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type removeCourseReviewResponseSuccess = (removeCourseReviewResponse204) & {
+  headers: Headers;
+};
+export type removeCourseReviewResponseError = (removeCourseReviewResponse400 | removeCourseReviewResponse401 | removeCourseReviewResponse403 | removeCourseReviewResponse404 | removeCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type removeCourseReviewResponse = (removeCourseReviewResponseSuccess | removeCourseReviewResponseError)
+
+export const getRemoveCourseReviewUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/remove`
+}
+
+export const removeCourseReview = async (reviewId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<removeCourseReviewResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRemoveCourseReviewUrl(reviewId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(dismissReportsRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeCourseReviewResponse
+}
+
+
+
+export type dismissCourseReviewReportsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissCourseReviewReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type dismissCourseReviewReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type dismissCourseReviewReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type dismissCourseReviewReportsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type dismissCourseReviewReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type dismissCourseReviewReportsResponseSuccess = (dismissCourseReviewReportsResponse204) & {
+  headers: Headers;
+};
+export type dismissCourseReviewReportsResponseError = (dismissCourseReviewReportsResponse400 | dismissCourseReviewReportsResponse401 | dismissCourseReviewReportsResponse403 | dismissCourseReviewReportsResponse404 | dismissCourseReviewReportsResponse503) & {
+  headers: Headers;
+};
+
+export type dismissCourseReviewReportsResponse = (dismissCourseReviewReportsResponseSuccess | dismissCourseReviewReportsResponseError)
+
+export const getDismissCourseReviewReportsUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/dismiss-report`
+}
+
+export const dismissCourseReviewReports = async (reviewId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCourseReviewReportsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDismissCourseReviewReportsUrl(reviewId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(dismissReportsRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissCourseReviewReportsResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as dismissCourseReviewReportsResponse
 }
 
 
