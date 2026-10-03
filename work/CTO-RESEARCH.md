@@ -212,7 +212,8 @@ ADR, обов'язкові перед відповідними шарами: `00
 ## 7. Що читати далі
 
 `AGENTS.md` — контракт репо. `work/AGENDA.md` — ранжування наступного ходу: фаза оплати закрита,
-наступний хід — **GATE 1 на `docs/ratings/spec.md`** (або розгортання/enrollment, див. агенду).
+наступний хід — **GATE 1 на `docs/ratings/spec.md`**. Деплой відкладено (власник, 2026-10-03: поки
+все в тестовому варіанті, без прод-сервера).
 `docs/payment/{spec,plan,
 assumptions,provider-research,iban-qr-research}.md` — уся фаза оплати, рішення A1–A7, провайдер.
 `docs/design/portal-redesign.md` — дизайн-прохід D-a…D-d. `docs/ratings/spec.md` — наступна
