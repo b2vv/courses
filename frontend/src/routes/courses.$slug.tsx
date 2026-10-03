@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
 import { CourseView } from '../presentation/storefront/CourseView';
 import {
@@ -38,7 +38,35 @@ export const Route = createFileRoute('/courses/$slug')({
 });
 function CourseRoute() {
   const { slug } = Route.useParams();
-  const { catalog } = Route.useRouteContext();
+  const { catalog, identityDependencies } = Route.useRouteContext();
   const { data } = useSuspenseQuery(catalog.detail(slug));
-  return <CourseView course={data} />;
+  const reviews = useInfiniteQuery(catalog.reviews(slug));
+  const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
+  const ownReview = useQuery({
+    ...catalog.ownReview(data.id),
+    enabled: session.data !== null && session.data !== undefined,
+  });
+  const report = useMutation(catalog.report());
+  const page =
+    reviews.data === undefined
+      ? undefined
+      : {
+          rating: reviews.data.pages[0]?.rating ?? null,
+          items: reviews.data.pages.flatMap((value) => value.items),
+          nextCursor: reviews.data.pages.at(-1)?.nextCursor ?? null,
+        };
+  return (
+    <CourseView
+      course={data}
+      reviews={page}
+      reviewsError={reviews.isError}
+      hasMore={reviews.hasNextPage}
+      isLoadingMore={reviews.isFetchingNextPage}
+      onLoadMore={() => void reviews.fetchNextPage()}
+      onRetry={() => void reviews.refetch()}
+      signedIn={session.data !== null && session.data !== undefined}
+      ownReviewId={ownReview.data?.review?.id}
+      onReport={(reviewId) => report.mutateAsync({ reviewId })}
+    />
+  );
 }

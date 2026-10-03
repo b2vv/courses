@@ -16,6 +16,8 @@ const course = {
   publishedAt: '2026-09-01T00:00:00Z',
   price: { minor: 149900, currency: 'UAH' },
   paid: true,
+  rating: { average: 4.7, count: 3 },
+  lessonCount: 3,
 };
 const detail = {
   ...course,
@@ -59,6 +61,8 @@ test('maps the ordered title-only program on a published course detail', async (
       publishedAt: course.publishedAt,
       price: course.price,
       paid: course.paid,
+      rating: course.rating,
+      lessonCount: course.lessonCount,
       program: detail.program,
     },
   });
@@ -114,4 +118,79 @@ test('preserves not-found and distinguishes deadline from caller cancellation', 
     ok: false,
     error: { code: 'request_cancelled' },
   });
+});
+
+const reviewItem = {
+  id: '75000000-0000-4000-8000-000000000001',
+  authorDisplayName: 'Автор',
+  stars: 4,
+  body: 'Корисний курс, усе по ділу.',
+  completedLessons: 1,
+  totalLessons: 8,
+  createdAt: '2026-10-01T09:00:00Z',
+  editedAt: null,
+};
+const errorBody = (code: string) => ({ error: { code, message: code, requestId: 'a'.repeat(32) } });
+
+test('maps a public reviews page with its cursor and the frozen percentage', async () => {
+  let cursor: string | null = 'unset';
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/courses/go-basics/reviews`, ({ request }) => {
+      cursor = new URL(request.url).searchParams.get('cursor');
+      return HttpResponse.json({
+        rating: { average: 4.7, count: 3 },
+        items: [reviewItem],
+        nextCursor: 'next',
+      });
+    }),
+  );
+  const repository = createApiCourseRepository();
+  const result = await repository.listReviews('go-basics', 'page-2');
+  expect(cursor).toBe('page-2');
+  expect(result).toEqual({
+    ok: true,
+    value: {
+      rating: { average: 4.7, count: 3 },
+      nextCursor: 'next',
+      items: [{ ...reviewItem, percent: 13 }],
+    },
+  });
+});
+
+test('reads the viewer’s own review with its eligibility', async () => {
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/courses/${course.id}/review`, () =>
+      HttpResponse.json({ review: reviewItem, eligibility: 'ok' }),
+    ),
+  );
+  const result = await createApiCourseRepository().ownReview(course.id);
+  expect(result).toEqual({
+    ok: true,
+    value: { eligibility: 'ok', review: { ...reviewItem, percent: 13 } },
+  });
+});
+
+test('maps review report outcomes to named codes', async () => {
+  const outcomes: Array<[number, ReturnType<typeof errorBody> | null, unknown]> = [
+    [204, null, { ok: true, value: undefined }],
+    [403, errorBody('report_own_review'), { ok: false, error: { code: 'report_own_review' } }],
+    [
+      401,
+      errorBody('authentication_required'),
+      { ok: false, error: { code: 'authentication_required' } },
+    ],
+    [
+      503,
+      errorBody('dependency_unavailable'),
+      { ok: false, error: { code: 'dependency_unavailable' } },
+    ],
+  ];
+  for (const [status, body, expected] of outcomes) {
+    server.use(
+      http.post(`${apiOrigin()}/api/v1/learn/reviews/${reviewItem.id}/reports`, () =>
+        status === 204 ? new HttpResponse(null, { status }) : HttpResponse.json(body, { status }),
+      ),
+    );
+    expect(await createApiCourseRepository().reportReview(reviewItem.id)).toEqual(expected);
+  }
 });

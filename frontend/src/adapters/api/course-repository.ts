@@ -1,8 +1,26 @@
-import { makePublishedCourse } from '../../domain/course/course';
-import type { CatalogError, CourseDetail, CoursePage, Result } from '../../domain/course/course';
+import { makePublishedCourse, reviewPercent } from '../../domain/course/course';
+import type {
+  CatalogError,
+  CourseDetail,
+  CoursePage,
+  OwnReview,
+  Result,
+} from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
-import { getPublishedCourse, listPublishedCourses } from './generated/courses';
-import { courseDetailSchema, errorSchema, pageSchema } from './course-schema';
+import {
+  getPublishedCourse,
+  getOwnCourseReview,
+  listCourseReviews,
+  listPublishedCourses,
+  reportCourseReview,
+} from './generated/courses';
+import {
+  courseDetailSchema,
+  errorSchema,
+  pageSchema,
+  publicReviewPageSchema,
+  ownReviewSchema,
+} from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 
@@ -20,6 +38,12 @@ function wireError(response: WireResponse): CatalogError {
         break;
       case 'invalid_query':
         if (response.status === 400) return { code: 'invalid_query' };
+        break;
+      case 'authentication_required':
+        if (response.status === 401) return { code: 'authentication_required' };
+        break;
+      case 'report_own_review':
+        if (response.status === 403) return { code: 'report_own_review' };
         break;
     }
   }
@@ -88,6 +112,70 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
                 title: module.title,
                 lessons: module.lessons.map((lesson) => ({ title: lesson.title })),
               })),
+            },
+          };
+        },
+        signal,
+      );
+    },
+    listReviews(slug, cursor, signal) {
+      return request(
+        'reviews.list',
+        (init) =>
+          listCourseReviews(
+            encodeURIComponent(slug),
+            cursor === undefined ? undefined : { cursor },
+            init,
+          ),
+        (raw) => {
+          const parsed = publicReviewPageSchema.safeParse(raw);
+          if (!parsed.success) return invalid;
+          return {
+            ok: true,
+            value: {
+              rating: parsed.data.rating,
+              nextCursor: parsed.data.nextCursor,
+              items: parsed.data.items.map((review) => ({
+                ...review,
+                percent: reviewPercent(review.completedLessons, review.totalLessons),
+              })),
+            },
+          };
+        },
+        signal,
+      );
+    },
+    async reportReview(reviewId, signal) {
+      const outcome = await send(
+        'reviews.report',
+        (init) => reportCourseReview(encodeURIComponent(reviewId), init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : { ok: false, error: wireError(outcome) };
+    },
+    ownReview(courseId, signal) {
+      return request<OwnReview>(
+        'reviews.own',
+        (init) => getOwnCourseReview(encodeURIComponent(courseId), init),
+        (raw) => {
+          const parsed = ownReviewSchema.safeParse(raw);
+          if (!parsed.success) return invalid;
+          const review = parsed.data.review;
+          return {
+            ok: true,
+            value: {
+              eligibility: parsed.data.eligibility,
+              review:
+                review === null
+                  ? null
+                  : {
+                      ...review,
+                      percent: reviewPercent(review.completedLessons, review.totalLessons),
+                    },
             },
           };
         },

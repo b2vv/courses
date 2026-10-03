@@ -5,6 +5,9 @@ import type { CourseRepository } from '../../ports/CourseRepository';
 const unavailable: CourseRepository = {
   listPublished: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
   getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+  listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
+  reportReview: async () => ({ ok: true, value: undefined }),
+  ownReview: async () => ({ ok: true, value: { eligibility: 'review_not_started', review: null } }),
 };
 test('rejects invalid input before an unavailable dependency and preserves dependency failure', async () => {
   const catalog = createCatalog(unavailable);
