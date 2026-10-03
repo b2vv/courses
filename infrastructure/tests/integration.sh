@@ -236,7 +236,16 @@ for fixture in student instructor admin; do
   done
 done
 
+# Ryuk (the shared reaper) is disabled (decided 2026-10-03, work/_wip-ryuk-race.md). All package binaries
+# of one `go test ./...` share a session id and so one reaper; testcontainers-go v0.44.0 (the latest
+# release) can leave that reaper half-created under daemon load and then treats "created" as fatal with no
+# retry — upstream #3918 and #3867, fix PR #3868 unreleased. It failed `make integration` three times in a
+# day. Every test that starts a container terminates it in cleanup, so the reaper only guarded hard kills
+# (a `go test -timeout` panic, Ctrl-C). After one of those, list leftovers with
+# `docker ps -a --filter label=org.testcontainers=true` and remove only this repository's.
+# Revisit when a release contains #3868.
 docker run --rm "$@" \
+  -e TESTCONTAINERS_RYUK_DISABLED=true \
   -v "$task_root/backend:/work" -w /work \
   -v "$task_socket:/var/run/docker.sock" \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
