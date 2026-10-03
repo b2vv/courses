@@ -1608,7 +1608,7 @@ components:
     LearningCourse:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, modules, continueLessonId]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount, modules, continueLessonId, canPurchase]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1621,6 +1621,15 @@ components:
         publishedAt: { type: string, format: date-time, nullable: true }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
         modules:
           type: array
           maxItems: 40
@@ -1629,10 +1638,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        canPurchase:
+          type: boolean
+          description: "True when this actor can buy this published paid course: no active grant and not its owner. Administrators are deliberately not exempt."
     Course:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1648,6 +1660,15 @@ components:
         publishedAt: { type: string, format: date-time, nullable: true }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
     ProgramLesson:
       type: object
       additionalProperties: false
@@ -1667,7 +1688,7 @@ components:
     CourseDetail:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, program]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount, program]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1682,6 +1703,15 @@ components:
         publishedAt: { type: string, format: date-time }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
         program:
           type: array
           maxItems: 40

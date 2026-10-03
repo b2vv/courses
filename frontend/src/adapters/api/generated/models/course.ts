@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { CourseRating } from './courseRating.ts';
 import type { CourseStatus } from './courseStatus.ts';
 import type { NullablePrice } from './nullablePrice.ts';
 
@@ -40,4 +41,8 @@ export interface Course {
   price: NullablePrice | null;
   /** True when the course has a price; this is display metadata, not an access decision. */
   paid: boolean;
+  /** @nullable */
+  rating: CourseRating;
+  /** @minimum 0 */
+  lessonCount: number;
 }

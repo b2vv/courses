@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { LearningCourseRating } from './learningCourseRating.ts';
 import type { LearningCourseStatus } from './learningCourseStatus.ts';
 import type { LearningModule } from './learningModule.ts';
 import type { NullablePrice } from './nullablePrice.ts';
@@ -39,8 +40,14 @@ export interface LearningCourse {
   publishedAt: string | null;
   price: NullablePrice | null;
   paid: boolean;
+  /** @nullable */
+  rating: LearningCourseRating;
+  /** @minimum 0 */
+  lessonCount: number;
   /** @maxItems 40 */
   modules: LearningModule[];
   /** @nullable */
   continueLessonId: string | null;
+  /** True when this actor can buy this published paid course: no active grant and not its owner. Administrators are deliberately not exempt. */
+  canPurchase: boolean;
 }
