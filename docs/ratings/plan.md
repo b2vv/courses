@@ -1,6 +1,6 @@
 # Course ratings and reviews — plan
 
-Status: **draft for GATE 2** (2026-10-03). Spec: [spec.md](spec.md) (GATE 1 passed, AC1–AC12,
+Status: **GATE 2 passed 2026-10-03** — critique green (0 blocking, 6 non-blocking closed), defense green after one re-check (Q2 closed), constitution: one violation fixed (threshold → `contracts/rating`). Reviewers: two fresh `gate-reviewer` subagents (Opus 4.8); trace in `work/_wip-ratings-gate2-{critique,defense}.md`. Spec: [spec.md](spec.md) (GATE 1 passed, AC1–AC12,
 G1–G10). Branch `feat/ratings`. Threshold (`.claude/standards.md` §Поріг): **met** — new subsystem,
 public API change (catalog `Course`), both backend and frontend layers.
 
@@ -156,7 +156,7 @@ Average is rounded to one decimal on the server; count is the counted reviews.
   - *Learning page:* the own-review request fails → the review block shows the same error state; the
     lesson and player are unaffected. A failed write keeps the typed text in the form (Rt29).
   - *Writes and moderation:* a repository error maps to `dependency_unavailable` 503 through the
-    existing `statusFor` (`discussion/adapters/http/handler.go:394-395`); nothing is half-written,
+    existing `statusFor` (`discussion/adapters/http/handler.go:395-396`); nothing is half-written,
     because each write is one statement or one transaction (remove = update + log insert together).
 
 ## 8. Migration plan and rollback

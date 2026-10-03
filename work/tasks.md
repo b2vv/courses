@@ -258,3 +258,23 @@ Courses 2 на opus-4-8); §24 п.21/п.22, ADR 013→014, шви `docs/readines
 | O05 | Фронт: ціна/«платний» у каталозі; «Купити»→старт; «оплата в обробці» з опитуванням; «потрібна покупка» + прев'ю-позначки; адмін-видача; авторинг ціни/прев'ю; a11y | 3h | O04 | done | `16371d2` (повний зміст платного курсу, замки пер-урок; дефект Pay11), `94b6db6` (UI покупки студента, сторінка замовлення; дефект: ціна не читалась), `81dfa14` (ціна/прев'ю в редакторі, адмін-видача Pay10), `9e239a6` («Шукаємо…»); гейт 532/532 + e2e 88/88 (перший прогін червоний на R23 — відкрита підозра); рев'ю Courses 2 — 0 blocking. Pay07/09/10/11/13(UI) |
 | O06 | **WayForPay** (рішення власника 2026-10-01, `provider-research.md` → Decision; доказ Pay25 — `assumptions.md` 2026-10-01). Порт+перший адаптер: checkout(redirect), callback(підпис→ApplyPaymentEvent), CHECK_STATUS, повернення→статус; ключі лише env. Зрізи: **O06a** бекенд — done `aeff91c` (Codex, 5 раундів; рев'ю: гонка statusAt знайдена й виправлена; гейт без e2e); **O06b** фронт-редирект на WayForPay і повернення — planned; **O06c** sandbox-e2e через CHECK_STATUS + один записаний тунельний прогін callback — planned | 3h | O04 | done | O06a `aeff91c`, O06b `3b7213e`, O06c-auto `98499db`; Pay24; Pay25 офлайн-стаб (Pay25-live тунель — відкрито, власник) |
 | O07 | Упорядкований make check (exit 0, rstest 539/e2e 89); звіт Pay01–Pay27+Pay04b/21b по рядках — `docs/payment/report.md`; gap-тести Pay17/Pay26 `2f430d3`; PR відкрито | 1.5h | O01–O06 | done | **фазу закрито 2026-10-03**: Pay25-live доведено живою Approved-оплатою 1 грн (callback `POST→200`, ордер `4396fba5…`→`paid`, застосовано рівно раз — `docs/payment/report.md` §6, `203befb`); локальний `make check` exit 0 (rstest 541, e2e 89); PR #3 змерджено в `main` (`df5b3802`). Тест-магазин `site_ex` власник видаляє — ротація ключа не потрібна (assumptions 2026-10-03) |
+
+## Рейтинги й відгуки
+
+Джерело scope: [spec](../docs/ratings/spec.md) (GATE 1 2026-10-03, AC1–AC12, G1–G10),
+[plan](../docs/ratings/plan.md) (GATE 2 зелений 2026-10-03: критика 0 blocking, захист зелений після
+повторної перевірки, конституція — поріг у `contracts/rating`). Відгуки в модулі `discussion`
+(переюз скарг/журналу/черги), агрегат каталогу — SQL модуля `course`, G5 — `orders`. Ролі: Courses 1 —
+план/гейти/коміти; код — Codex; рев'ю — Courses 2. Гілка `feat/ratings`. Тест-режим, без прод-сервера.
+Кожен таск закриває названі рядки приймання Rt01–Rt29.
+
+| ID | Назва | Est | Depends | Status | Result / закриває |
+|---|---|---:|---|---|---|
+| T01 | `contracts/rating.Summary` (поріг 3, округлення) + домен `discussion`: `CanReview` (порядок відмов §4), формат 20–2000/1–5, захоплення прогресу; unit-таблиці | 2h | — | planned | Rt10, Rt11, Rt15, Rt18; unit-частини Rt06–Rt08 |
+| T02 | `orders.GrantCourse`: заборона самогранту (`grant_self_forbidden`), unit + contract + integration | 1h | — | planned | Rt24 |
+| T03 | Міграція 00013 (reviews, review_reports, журнал: comment_id nullable + review_id + CHECK) + репозиторій discussion (review facts, CRUD з ON CONFLICT, звіти, черга UNION ALL, зняття+журнал однією транзакцією); integration | 3.5h | T01 | planned | Rt02, Rt09, Rt12, Rt13, Rt16, Rt17, Rt20, Rt22, Rt25–Rt27 |
+| T04 | Каталог: агрегат `count`/`sum(stars)` + `lessonCount` у `ListPublishedCourses`/`GetPublishedCourse`; `canPurchase` у навчальному курсі; R6-замір (§9) у звіт | 2.5h | T01, T03 | planned | Rt07, Rt09; §9 |
+| T05 | Application + HTTP + OpenAPI + Orval (§5): публічний список, власний відгук, PUT/DELETE, скарга, черга з `kind`, зняття адміном; contract-тести | 3h | T02–T04 | planned | Rt01–Rt04, Rt10, Rt11, Rt14–Rt19, Rt21, Rt23–Rt25 |
+| T06 | Фронт: картка (★/«Новий курс»/уроки), сторінка курсу (зведення, список, «Показати ще», скарга), форма на навчальній сторінці, кнопка «Купити курс» для адміна, черга інструктора; стани помилок; a11y | 3.5h | T05 | planned | UI-частини Rt01–Rt09, Rt14, Rt21, Rt22, Rt26; Rt28, Rt29 |
+| T07 | e2e `ratings.spec.ts` + axe; курси, опубліковані тестом, архівуються | 2.5h | T06 | planned | e2e-стовпець Rt01, Rt03–Rt09, Rt14, Rt21, Rt22, Rt26 |
+| T08 | Упорядкований `make check`; звіт `docs/ratings/report.md` Rt01–Rt29 по рядках + R6-замір + обмеження; PR | 1.5h | T01–T07 | planned | усі |
