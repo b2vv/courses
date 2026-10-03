@@ -4,6 +4,23 @@ Items that have been decided as *worth doing* but not placed in a phase. Not an 
 `work/AGENDA.md` ranks the next move and is rebuilt each time. An item leaves here by
 becoming a phase in `work/PRODUCT-BRIEF.md` §21 or a task in `work/tasks.md`.
 
+## B-27 — TEMPORARY retry for the testcontainers reaper race
+
+**Raised:** 2026-10-03, integration-gate reliability follow-up.
+
+**What:** `internal/testsupport/containers.Start` retries only testcontainers-go's transient
+Ryuk create→start race, terminating the partially created target returned by the library before
+each retry. Integration call sites use it and Ryuk is enabled again.
+
+**Why:** testcontainers-go v0.44.0 can find a sibling process's Ryuk container in `created`
+state and permanently fail rather than retry; upstream [PR #3868](https://github.com/testcontainers/testcontainers-go/pull/3868)
+adds the library-level retry. See also the related [issue #3918](https://github.com/testcontainers/testcontainers-go/issues/3918).
+
+**Trigger:** a testcontainers-go release containing #3868.
+
+**Removal:** delete `internal/testsupport/containers` and every call site, then run
+`make integration` three times.
+
 ## B-23 — e2e B39 впав раз у повному гейті; механізм не знайдено
 
 **Raised:** 2026-09-29, під час гейта Phase 7b D04 (Courses; розбір разом із Courses 2).

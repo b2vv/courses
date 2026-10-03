@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"courses/internal/contracts/access/accesstest"
+	containers "courses/internal/testsupport/containers"
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
 	"courses/internal/transcript/application"
 	"courses/internal/transcript/domain"
@@ -108,12 +109,14 @@ func fixtures() []string {
 func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5",
-		postgrescontainer.WithDatabase("transcript_test"),
-		postgrescontainer.WithUsername("courses"),
-		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
-	)
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5",
+			postgrescontainer.WithDatabase("transcript_test"),
+			postgrescontainer.WithUsername("courses"),
+			postgrescontainer.WithPassword("ephemeral-test-only"),
+			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}

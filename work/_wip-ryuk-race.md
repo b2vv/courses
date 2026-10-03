@@ -64,3 +64,12 @@ The observed failure is the **transient** create→start window on the reuse pat
 `created` inside `lookupContainer`, backoff up to 20 s) **would** fix our case; the consult's caveat applies to
 #3918 orphans only. Decision unchanged: ryuk stays disabled until a release contains #3868. The
 `integration.sh` comment was reworded accordingly.
+
+## Superseded 2026-10-03 (owner): ryuk back on, temporary retry
+Owner: fix it until upstream ships, with a removal note. `internal/testsupport/containers.Start` retries only
+the race error, terminating the target the library returns with that error (`docker.go:1360-1361`,
+`generic.go:136-137`, `postgres.go:168-182`) before each retry; each start gets the caller's context (the
+30 s budget bounds only the loop). All 19 starts in 17 files wrapped; `TESTCONTAINERS_RYUK_DISABLED` removed.
+Marker `TEMPORARY(testcontainers-go#3868)`, backlog B-27. Verified: full gate + 4 integration runs green; one
+run under `docker events` showed exactly one ryuk start (shared reaper) and 0 leftovers after. The race did
+not occur in those runs, so the retry path is proven by unit tests (fakes), not yet by a live race.

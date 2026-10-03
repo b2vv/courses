@@ -15,6 +15,7 @@ import (
 	playbackredis "courses/internal/playback/adapters/redis"
 	"courses/internal/playback/application"
 	"courses/internal/playback/domain"
+	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -31,12 +32,14 @@ func (authorizationCounter) Inc() {}
 func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	redisContainer, err := testcontainers.Run(
-		ctx,
-		"redis:7.4-bookworm",
-		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
-	)
+	redisContainer, err := containers.Start(ctx, func(ctx context.Context) (*testcontainers.DockerContainer, error) {
+		return testcontainers.Run(
+			ctx,
+			"redis:7.4-bookworm",
+			testcontainers.WithExposedPorts("6379/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("sessions integration requires Docker Redis: %v", err)
 	}
@@ -52,12 +55,14 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 	redisConnection := redisclient.NewClient(&redisclient.Options{Addr: redisEndpoint})
 	t.Cleanup(func() { _ = redisConnection.Close() })
 
-	postgresContainer, err := postgrescontainer.Run(ctx, "postgres:17.5",
-		postgrescontainer.WithDatabase("playback_sessions_test"),
-		postgrescontainer.WithUsername("courses"),
-		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
-	)
+	postgresContainer, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5",
+			postgrescontainer.WithDatabase("playback_sessions_test"),
+			postgrescontainer.WithUsername("courses"),
+			postgrescontainer.WithPassword("ephemeral-test-only"),
+			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("sessions integration requires Docker PostgreSQL: %v", err)
 	}
