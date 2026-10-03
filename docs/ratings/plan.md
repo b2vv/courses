@@ -13,7 +13,7 @@ review by Courses 2. Test mode only — no production server (owner, 2026-10-03)
 |---|---|---|
 | Reviews: write, edit, delete, list, eligibility | `backend/internal/discussion/{domain,application,ports,adapters}` | `discussion` already owns user-written course content, the report queue, the moderation log and the instructor workspace (I01–I03). R3 requires reusing them. A new module would copy the whole moderation path. |
 | Rating summary and `lessonCount` on the catalog card | `backend/sql/queries/courses.sql` (`ListPublishedCourses`, `GetPublishedCourse`) — `course` module | The catalog query belongs to `course`. It reads the reviews table in its own SQL, the same way four modules already read `course_grants` (ADR 013 rule B, ADR 014; e.g. `discussion/adapters/postgres/repository.go:20-27`). No package import, no port. |
-| Display threshold R4 (≥ 3) | `backend/internal/course/domain` (catalog) and `discussion/domain` (course page summary) | A business rule, not presentation: the API returns `rating: null` below 3, so no client can show a premature average. The number 3 is one constant per module, pinned by the same unit table in both (behaviour test, like `platform/architecture/shared_rules_test.go`). |
+| Display threshold R4 (≥ 3) and the rounded average | `backend/internal/contracts/rating` — one pure function `Summary(count, starsSum) (average, visible)` | A business rule, not presentation: the API returns `rating: null` below 3, so no client can show a premature average. Two modules need it (`course` for the card, `discussion` for the course page), and AGENTS puts a cross-module rule in `internal/contracts/…` as a domain-safe pure function; copies pinned by a behaviour test are option C that ADR 013 rejected. Each module's SQL returns only `count` and `sum(stars)`; the contract decides visibility and rounding. |
 | No self-grant (G5) | `backend/internal/orders/application/service.go` `GrantCourse` | The rule is about grants; `orders` owns them. |
 | Buy entry for an admin (G2) | `course` learning response + `frontend/src/presentation/learn` | Today the only buy entry is a locked lesson (`LockedLessonPanel.tsx`), never shown to an admin because `PurchaseRequired` is false for them (`access.go:26-31`). |
 | Frontend | `frontend/src/{domain,application,adapters,presentation,app,routes}` per manifest | — |
@@ -158,7 +158,8 @@ in `report.md`. **> 2×** → R6 trigger (materialized view), recorded as a deci
 
 | Rule | How this plan keeps it |
 |---|---|
-| Domain imports only std lib and `internal/contracts` | eligibility and threshold are pure functions in `discussion/domain` and `course/domain` |
+| Domain imports only std lib and `internal/contracts` | eligibility is a pure function in `discussion/domain`; the threshold and rounding are one pure function in `internal/contracts/rating`, imported by `course/domain` and `discussion/domain` |
+| Cross-module rule lives in `internal/contracts` (ADR 013) | `contracts/rating` imports no module; the existing test that forbids `contracts` from importing a module covers it |
 | Modules never import each other | catalog reads the reviews table in `course` SQL; no package import (ADR 013/014 precedent) |
 | Ports only for real external dependencies | no new port: reviews use the existing discussion repository port extended with methods |
 | Generated models stay in adapters | sqlc/Orval types mapped explicitly |
@@ -207,7 +208,7 @@ Manual rows: **0**. Every row has an automated level.
 
 | ID | Slice | Closes |
 |---|---|---|
-| T01 | Domain: eligibility, format, threshold, progress capture — unit tables | Rt10, Rt11, Rt15, Rt18, unit parts of Rt06–Rt08 |
+| T01 | `contracts/rating.Summary` + discussion domain: eligibility, format, progress capture — unit tables | Rt10, Rt11, Rt15, Rt18, unit parts of Rt06–Rt08 |
 | T02 | `orders`: no self-grant | Rt24 |
 | T03 | Migration 00013 + discussion repository (review facts, CRUD, reports, log) — integration | Rt02, Rt09, Rt12, Rt13, Rt16, Rt17, Rt20, Rt22, Rt25–Rt27 |
 | T04 | Catalog SQL aggregate + `lessonCount` + `canPurchase`; R6 measurement | Rt07, Rt09, §9 |
