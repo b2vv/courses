@@ -14,4 +14,7 @@ var (
 	ErrReviewPurchaseRequired = errors.New("review_purchase_required")
 	ErrReviewNotStarted       = errors.New("review_not_started")
 	ErrReviewInvalid          = errors.New("review_invalid")
+	ErrReviewAlreadyExists    = errors.New("review_already_exists")
+	ErrReviewRemoved          = errors.New("review_removed")
+	ErrReportOwnReview        = errors.New("report_own_review")
 )
