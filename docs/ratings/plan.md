@@ -108,7 +108,8 @@ for anyone else, owner included.
 | `DELETE /api/v1/learn/courses/{courseId}/review` | author | 204; `review_removed` |
 | `POST /api/v1/learn/reviews/{reviewId}/reports` | signed in, not the author | 201 or 200 on repeat (UNIQUE) |
 | teach queue (existing route) | owner ∨ admin | lists review reports next to comment reports, with `kind`. One SQL: `UNION ALL` of the two open-report aggregates (comments as in `moderation.go:32-49`, reviews from `discussion_review_reports`), ordered by the existing key `(open_count DESC, latest_report DESC)` then `(kind, id) DESC`; the cursor carries all four. A review row has no lesson (lesson fields null). |
-| `POST /api/v1/teach/reviews/{reviewId}/remove` | admin | 200; log entry with `review_id` |
+| `POST /api/v1/teach/reviews/{reviewId}/remove` | admin | 204 (also when already removed, as comment removal); log entry with `review_id` |
+| `GET /api/v1/learn/courses/{courseId}/reviews?cursor=` | anyone who can view the course (incl. archived for grant holders) | same shape as the public list — added 2026-10-03 for AC10 (`assumptions.md`) |
 | `POST /api/v1/teach/reviews/{reviewId}/reports/dismiss` | owner ∨ admin | as for comments |
 | catalog `Course` | anyone | `+ rating: {average, count} \| null`, `+ lessonCount`. **No duration field in this phase** (AC11 makes it conditional): a real total needs the current ready asset of every lesson — a per-lesson `LATERAL` like `discussion/…/repository.go:28-34` — inside the hottest public read, and any lesson without a ready video makes the total false. Decision recorded in `assumptions.md`. |
 | learning course | signed in | `+ canPurchase` = published ∧ paid ∧ no active grant ∧ not owner (role ignored) |
@@ -198,7 +199,7 @@ fetches); the same query without it 16 µs. Within budget — the read-time aggr
 
 ## 11. Acceptance scenarios
 
-Groups: happy path (Rt01–Rt05), boundaries (Rt06–Rt14), refusals and failures (Rt15–Rt29). Levels: unit (domain),
+Groups: happy path (Rt01–Rt05), boundaries (Rt06–Rt14), refusals and failures (Rt15–Rt30). Levels: unit (domain),
 contract (HTTP), integration (SQL against Postgres), e2e (browser against Compose).
 
 | # | Scenario | Precondition | Action | Observable result | Verified by | AC |
@@ -232,6 +233,7 @@ contract (HTTP), integration (SQL against Postgres), e2e (browser against Compos
 | Rt27 | No summary table | migration applied | inspect schema | no summary table, counter column or trigger for reviews | integration (catalog of `information_schema`) | AC12, R6 |
 | Rt28 | Reviews request fails | the reviews request returns 503 | visitor opens the course page | the reviews section shows an error with «Спробувати ще»; the outline is shown | FE unit (presentation, query error state) | AC9 |
 | Rt29 | Write fails | the review write returns 503 | eligible student submits | an error message is shown and the typed text stays in the form | FE unit | AC4 |
+| Rt30 | Archived course list for its viewers | archived course with 3 reviews; a grant holder | opens the learning page | the reviews are listed via the learning API; the public list for the same course is 404; a user without a right gets 403 | contract; e2e | AC10, G3 |
 
 Manual rows: **0**. Every row has an automated level.
 

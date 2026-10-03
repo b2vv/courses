@@ -34,3 +34,13 @@ The baseline is a 2-buffer index scan, so any join exceeds 2× — the ratio fir
 measures nothing; 1.3 ms is within the budget. Before `VACUUM ANALYZE` the same run gave 2.63 ms / 175×
 (heap fetches on an empty visibility map, guessed row counts) — not the steady state. **How to check:**
 run the harness; it prints the median and fails when it exceeds 5 ms.
+
+## 2026-10-03 — Archived course: the review list for its viewers comes through the learning API (owner)
+
+**Decision (owner, 2026-10-03):** a learning-scoped list `GET /api/v1/learn/courses/{courseId}/reviews`
+serves the reviews to anyone who can view the course (grant holder, owner, admin — the existing
+`CanBeViewedBy`), including an archived course; the public `GET /courses/{slug}/reviews` stays
+published-only. **Alternatives closed:** making the public route session-aware for entitled viewers;
+showing an archived course's viewers only their own review (narrowing AC10). **Why:** AC10 says reviews
+stay visible to those who can see the course; the public list returns 404 for an archived course (T05,
+plan §5), found by Courses 2 in the T05 review. **How to check:** acceptance row Rt30.
