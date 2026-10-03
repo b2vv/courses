@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -96,5 +97,28 @@ func TestStartRetriesTheRealReaperCreatedRace(t *testing.T) {
 	first := attempts[0]
 	if first == nil || !strings.Contains(first.Error(), "wait for reaper") || !strings.Contains(first.Error(), `unexpected container status "created"`) {
 		t.Fatalf("first attempt was not the reaper race: %v", first)
+	}
+
+	// Only the returned target may survive: every earlier attempt's target must have been terminated.
+	dockerClient, err := testcontainers.NewDockerClientWithOpts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dockerClient.Close()
+	listed, err := dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All: true,
+		Filters: make(client.Filters).
+			Add("label", "org.testcontainers.sessionId="+raceSessionID).
+			Add("ancestor", "postgres:17.5"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].ID != pg.GetContainerID() {
+		ids := make([]string, 0, len(listed.Items))
+		for _, item := range listed.Items {
+			ids = append(ids, item.ID[:12])
+		}
+		t.Fatalf("want only the returned postgres %s of this session, found %v after %d attempts", pg.GetContainerID()[:12], ids, len(attempts))
 	}
 }
