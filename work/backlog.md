@@ -18,8 +18,19 @@ adds the library-level retry. See also the related [issue #3918](https://github.
 
 **Trigger:** a testcontainers-go release containing #3868.
 
-**Removal:** delete `internal/testsupport/containers` and every call site, then run
-`make integration` three times.
+**Removal:** delete `internal/testsupport/containers` (it also holds the real-path race test and the two
+guards below) and every call site, then run `make integration` three times.
+
+**Proof (2026-10-03):** `race_integration_test.go` makes the race deterministic — a reaper for an isolated
+`TESTCONTAINERS_SESSION_ID` is created but not started, then started 1 s later; the first postgres start fails
+with the library's own `wait for reaper … unexpected container status "created"`, the target is terminated, the
+retry reuses the running reaper. Passed 3 of 3 separate runs, 0 leftovers. Guards: `TestPinnedTo…` fails when
+testcontainers-go leaves v0.44.0 (forces this decision on upgrade); `TestNoCallSiteUsesContainerReuse` fails if a
+call site starts using container reuse (Start would terminate a shared container).
+
+**Known bound:** a permanent #3918 orphan (a reaper that never starts) matches the same text, so each package
+spends the full 30 s budget (~15 create/terminate cycles) and then fails loudly naming #3868. Bounded, not hidden.
+Review: Courses 2, `work/review-ryuk-retry.md` (approve, 0 blocking).
 
 ## B-23 — e2e B39 впав раз у повному гейті; механізм не знайдено
 
