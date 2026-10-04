@@ -83,8 +83,11 @@ export function RadioGroup({
       className="ui-radio-group"
     >
       {options.map((option) => (
-        <Aria.Radio key={option.id} value={option.id} className="ui-radio">
-          {option.label}
+        // Same primitive as Checkbox: .ui-choice carries the 44px target, focus ring and disabled state; the
+        // label box is the click target (an unstyled label let the group intercept pointer events).
+        <Aria.Radio key={option.id} value={option.id} className="ui-choice ui-radio">
+          <span className="ui-radio-mark" aria-hidden="true" />
+          <span>{option.label}</span>
         </Aria.Radio>
       ))}
     </Aria.RadioGroup>

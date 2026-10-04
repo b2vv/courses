@@ -230,6 +230,14 @@ function OpenLesson({
     <CourseLearningView
       course={course}
       currentLessonId={lessonId}
+      buying={startPurchase.isPending}
+      buyError={
+        startPurchase.error instanceof PurchaseQueryError
+          ? startPurchase.error.code
+          : startPurchase.error === null
+            ? undefined
+            : 'dependency_unavailable'
+      }
       onBuy={() =>
         startPurchase.mutate(
           { courseId: course.id },
@@ -288,6 +296,8 @@ function OpenLesson({
       />
       <ReviewBlock
         own={ownReview.data}
+        ownError={ownReview.isError}
+        onRetryOwn={() => void ownReview.refetch()}
         reviews={
           reviewsQuery.data
             ? {
@@ -297,7 +307,9 @@ function OpenLesson({
               }
             : undefined
         }
-        reviewsError={reviewsQuery.error !== null}
+        // Section error only without data: TanStack v5 also sets an error for a failed next page, and that
+        // must keep the reviews already shown (nextPageError carries the inline retry).
+        reviewsError={reviewsQuery.isError && reviewsQuery.data === undefined}
         hasMore={reviewsQuery.hasNextPage}
         loadingMore={reviewsQuery.isFetchingNextPage}
         nextPageError={reviewsQuery.isFetchNextPageError}

@@ -1,14 +1,17 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LearningCourse } from '../../domain/playback/playback';
-import { Link } from '../ui';
-import { Button } from '../ui';
+import type { PurchaseErrorCode } from '../../domain/purchase/purchase';
+import { Button, Link } from '../ui';
+import { purchaseErrorKey } from './LockedLessonPanel';
 
 type CourseLearningViewProps = {
   readonly course: LearningCourse;
   readonly currentLessonId: string;
   readonly children: ReactNode;
   readonly onBuy?: (() => void) | undefined;
+  readonly buying?: boolean | undefined;
+  readonly buyError?: PurchaseErrorCode | undefined;
 };
 
 export function CourseLearningView({
@@ -16,6 +19,8 @@ export function CourseLearningView({
   currentLessonId,
   children,
   onBuy,
+  buying = false,
+  buyError,
 }: CourseLearningViewProps) {
   const { t } = useTranslation();
   // The preview badge only means something to a viewer who still has locked lessons.
@@ -27,8 +32,17 @@ export function CourseLearningView({
         <header className="course-outline-heading">
           <p className="eyebrow">{t('learn.program')}</p>
           <h2 id="course-outline-heading">{t('learn.outline')}</h2>
-          {course.canPurchase && onBuy ? (
-            <Button onPress={onBuy}>{t('learn.purchase.buy')}</Button>
+          {/* Only for a viewer with no locked lesson (an admin, G2): a student already gets the buy
+              path on the locked lesson, and two would be a duplicate. */}
+          {course.canPurchase && !hasLocked && onBuy ? (
+            <>
+              <Button onPress={onBuy} isPending={buying}>
+                {buying ? t('learn.purchase.starting') : t('learn.purchase.buy')}
+              </Button>
+              {buyError === undefined ? null : (
+                <p role="alert">{t(`learn.purchase.errors.${purchaseErrorKey(buyError)}`)}</p>
+              )}
+            </>
           ) : null}
         </header>
         <ol className="course-outline-modules">

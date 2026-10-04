@@ -44,3 +44,14 @@ published-only. **Alternatives closed:** making the public route session-aware f
 showing an archived course's viewers only their own review (narrowing AC10). **Why:** AC10 says reviews
 stay visible to those who can see the course; the public list returns 404 for an archived course (T05,
 plan §5), found by Courses 2 in the T05 review. **How to check:** acceptance row Rt30.
+
+## 2026-10-04 — A review removed by moderation: the author's own-review read says so (Courses 1)
+
+**Decision (Courses 1, 2026-10-04, from Courses 2's T06b review №3):** `GET /learn/courses/{id}/review`
+returns `review: null` and `eligibility: "review_removed"` when the author's review was removed by an admin.
+**Alternative closed:** adding a `removed`/`removedAt` field to the review DTO (it would expose moderation
+state on every review shape and every reader would need to filter it). **Why:** before, the endpoint returned
+the removed review as if it were live, so the author saw a moderated-away review and an edit button that the
+server would refuse (`review_removed`); `eligibility` is already a free string in the contract and the locale
+already names the case. **How to check:** unit `TestOwnReviewRemovedByModerationIsNotShownAsLive`; the
+learning page shows «Відгук знято модератором» and no form.

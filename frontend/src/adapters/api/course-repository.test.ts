@@ -259,3 +259,19 @@ test('maps a learning review page with cursor', async () => {
     value: { rating: null, items: [{ ...reviewItem, percent: 13 }], nextCursor: 'next' },
   });
 });
+
+test("treats the API's empty last-page cursor as no next page", async () => {
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/courses/go-basics/reviews`, () =>
+      HttpResponse.json({ rating: null, items: [reviewItem], nextCursor: '' }),
+    ),
+    http.get(`${apiOrigin()}/api/v1/learn/courses/${course.id}/reviews`, () =>
+      HttpResponse.json({ rating: null, items: [reviewItem], nextCursor: '' }),
+    ),
+  );
+  const repository = createApiCourseRepository();
+  const publicPage = await repository.listReviews('go-basics');
+  const learningPage = await repository.listLearningReviews(course.id);
+  expect(publicPage.ok && publicPage.value.nextCursor).toBeNull();
+  expect(learningPage.ok && learningPage.value.nextCursor).toBeNull();
+});

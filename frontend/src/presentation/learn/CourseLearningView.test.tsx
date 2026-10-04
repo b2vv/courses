@@ -191,3 +191,35 @@ test('shows the admin purchase entry only when the course can be purchased and s
   );
   expect(screen.queryByRole('button', { name: 'Купити курс' })).toBeNull();
 });
+
+test('hides the outline purchase entry when a lesson is locked and shows progress while starting', () => {
+  // A student with a locked lesson already has the buy path on that lesson; a second one would be a duplicate.
+  const lockedCourse = {
+    ...course,
+    canPurchase: true,
+    modules: course.modules.map((module, moduleIndex) => ({
+      ...module,
+      lessons: module.lessons.map((lesson, lessonIndex) => ({
+        ...lesson,
+        locked: moduleIndex === 0 && lessonIndex === 0,
+      })),
+    })),
+  };
+  const { rerender } = render(
+    <CourseLearningView course={lockedCourse} currentLessonId={lessonIds[0]} onBuy={() => {}}>
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  expect(screen.queryByRole('button', { name: 'Купити курс' })).toBeNull();
+  rerender(
+    <CourseLearningView
+      course={{ ...course, canPurchase: true }}
+      currentLessonId={lessonIds[0]}
+      onBuy={() => {}}
+      buying
+    >
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  expect(screen.getByRole('button', { name: 'Створюємо замовлення…' })).toBeTruthy();
+});

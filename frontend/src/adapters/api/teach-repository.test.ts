@@ -66,3 +66,51 @@ test('parses a review item in the moderation queue', async () => {
   expect(result.ok).toBe(true);
   if (result.ok) expect(result.value.items[0]?.kind).toBe('review');
 });
+
+test('rejects a malformed review row in the moderation queue', async () => {
+  // A negative star count would crash the queue ('★'.repeat throws), so the row is rejected at the edge.
+  for (const review of [
+    {
+      id: reviewId,
+      authorDisplayName: 'Олена',
+      stars: -1,
+      body: 'x',
+      completedLessons: 0,
+      totalLessons: 1,
+      createdAt: '2026-10-01T09:00:00Z',
+      editedAt: null,
+    },
+    {
+      id: 'not-a-uuid',
+      authorDisplayName: null,
+      stars: 3,
+      body: 'x',
+      completedLessons: 0,
+      totalLessons: 1,
+      createdAt: '2026-10-01T09:00:00Z',
+      editedAt: null,
+    },
+    {
+      id: reviewId,
+      authorDisplayName: null,
+      stars: 3,
+      completedLessons: 0,
+      totalLessons: 1,
+      createdAt: '2026-10-01T09:00:00Z',
+      editedAt: null,
+    },
+  ]) {
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/teach/courses/${courseId}/moderation-queue`, () =>
+        HttpResponse.json({
+          items: [{ kind: 'review', comment: null, review, openReports: 1 }],
+          nextCursor: '',
+        }),
+      ),
+    );
+    expect(await createApiTeachRepository().listModerationQueue(courseId)).toEqual({
+      ok: false,
+      error: { code: 'invalid_response' },
+    });
+  }
+});

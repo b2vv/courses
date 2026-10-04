@@ -351,6 +351,12 @@ func (service *Service) OwnReview(ctx context.Context, actor Actor, courseID str
 	if err := domain.CanReview(facts.Facts, actor); err != nil {
 		result.Eligibility = err.Error()
 	}
+	if review != nil && review.RemovedAt != nil {
+		// A review removed by moderation is not the author's live review: they see why, and cannot write a
+		// replacement (AC7). Decision 2026-10-04, docs/ratings/assumptions.md.
+		result.Eligibility = domain.ErrReviewRemoved.Error()
+		return result, nil
+	}
 	if review != nil {
 		rendered := service.presentReview(*review)
 		result.Review = &rendered

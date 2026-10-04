@@ -97,6 +97,9 @@ export const en = {
       starsLabel: 'Rating',
       minimum: 'At least 20 characters',
       writeFailure: 'Could not save, try again',
+      deleteFailure: 'Could not delete the review, try again',
+      ownFailure: 'Could not load your review',
+      tooLong: 'The text is longer than 2000 characters',
       removed: 'Review removed by moderation',
       eligibility: {
         review_owner_forbidden: 'You are the course author and cannot rate it',

@@ -174,7 +174,9 @@ export function Reviews({
       )}
       {hasMore ? (
         <>
-          <Button variant="secondary" isDisabled={isLoadingMore} onPress={onLoadMore}>
+          {/* isPending, not isDisabled: a native `disabled` on the focused button sends focus to <body>
+              (HTML focus fixup) while the next page loads. */}
+          <Button variant="secondary" isPending={isLoadingMore} onPress={onLoadMore}>
             {t('ratings.more')}
           </Button>
           {isNextPageError ? (
@@ -230,22 +232,25 @@ function ReviewCard({
         {signedIn && review.id !== ownReviewId ? (
           <Button
             variant="secondary"
-            isDisabled={reported || isReporting}
-            aria-busy={isReporting}
+            // Never natively disabled while focused (focus would drop to <body>): pending while sending, then
+            // the press is a no-op once the report is sent.
+            isPending={isReporting}
             onPress={() =>
-              void (setIsReporting(true), onReport(review.id))
-                .then(() => {
-                  setReported(true);
-                  setReportError(undefined);
-                })
-                .catch((error: unknown) =>
-                  setReportError(
-                    error instanceof Error && error.message === 'report_own_review'
-                      ? t('ratings.ownReportError')
-                      : t('ratings.reportError'),
-                  ),
-                )
-                .finally(() => setIsReporting(false))
+              reported
+                ? undefined
+                : void (setIsReporting(true), onReport(review.id))
+                    .then(() => {
+                      setReported(true);
+                      setReportError(undefined);
+                    })
+                    .catch((error: unknown) =>
+                      setReportError(
+                        error instanceof Error && error.message === 'report_own_review'
+                          ? t('ratings.ownReportError')
+                          : t('ratings.reportError'),
+                      ),
+                    )
+                    .finally(() => setIsReporting(false))
             }
           >
             {isReporting

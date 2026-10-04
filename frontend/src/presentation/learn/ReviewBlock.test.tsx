@@ -1,5 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
+import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import userEvent from '@testing-library/user-event';
 import type { OwnReview, PublicReviewPage } from '../../domain/course/course';
 import { ReviewBlock } from './ReviewBlock';
@@ -52,7 +53,11 @@ test('disables review submission at star and text boundaries and announces the c
   expect((submit as HTMLButtonElement).disabled).toBe(false);
   await user.type(body, 'a');
   expect((submit as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.getByText('2001 / 2000').getAttribute('aria-live')).toBe('polite');
+  // The visible counter is silent; only crossing the limit is announced politely.
+  expect(screen.getByText('2001 / 2000').getAttribute('aria-live')).toBeNull();
+  expect(screen.getByText('Текст довший за 2000 символів').getAttribute('aria-live')).toBe(
+    'polite',
+  );
 });
 test('submits, renders the saved review, and opens edit prefilled', async () => {
   const user = userEvent.setup();
@@ -127,4 +132,90 @@ test('names the rating radio group and all star choices', () => {
   expect(screen.getByRole('radiogroup', { name: 'Оцінка' })).toBeTruthy();
   for (let stars = 1; stars <= 5; stars += 1)
     expect(screen.getByRole('radio', { name: `${stars} з 5` })).toBeTruthy();
+});
+
+test('counts runes after trimming, as the server does', async () => {
+  const user = userEvent.setup();
+  renderBlock({ review: null, eligibility: 'ok' });
+  await user.click(screen.getByRole('radio', { name: '5 з 5' }));
+  await user.click(screen.getByRole('textbox'));
+  // Ten emoji are twenty UTF-16 units but ten characters: still below the minimum.
+  await user.paste('😀'.repeat(10));
+  expect(screen.getByText('10 / 2000')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Зберегти' }).hasAttribute('disabled')).toBe(true);
+});
+
+test('names the star choices in the current locale', () => {
+  render(
+    <I18nProvider instance={createI18n('en')}>
+      <ReviewBlock
+        own={{ review: null, eligibility: 'ok' }}
+        reviews={page}
+        reviewsError={false}
+        hasMore={false}
+        loadingMore={false}
+        nextPageError={false}
+        onMore={() => {}}
+        onRetry={() => {}}
+        onRetryMore={() => {}}
+        onSave={async () => {}}
+        onDelete={async () => {}}
+      />
+    </I18nProvider>,
+  );
+  expect(screen.getByRole('radio', { name: '4 out of 5' })).toBeTruthy();
+});
+
+test('shows the reason instead of Edit when the author lost the right (G4)', () => {
+  renderBlock({ review, eligibility: 'review_purchase_required' });
+  expect(screen.queryByRole('button', { name: 'Редагувати' })).toBeNull();
+  expect(screen.getByText('Відгук можна залишити після покупки курсу')).toBeTruthy();
+});
+
+test('names a review removed by moderation and offers no form', () => {
+  renderBlock({ review: null, eligibility: 'review_removed' });
+  expect(screen.getByText('Відгук знято модератором')).toBeTruthy();
+  expect(screen.queryByRole('textbox')).toBeNull();
+});
+
+test('shows a delete failure instead of swallowing it', async () => {
+  const user = userEvent.setup();
+  renderBlock(
+    { review, eligibility: 'ok' },
+    async () => {},
+    async () => {
+      throw new Error('dependency_unavailable');
+    },
+  );
+  await user.click(screen.getByRole('button', { name: 'Видалити' }));
+  const dialog = screen.getByRole('dialog');
+  await user.click(within(dialog).getByRole('button', { name: 'Видалити' }));
+  expect(await screen.findByText('Не вдалося видалити відгук, спробуйте ще')).toBeTruthy();
+});
+
+test('offers a retry when the own review cannot be loaded', async () => {
+  const user = userEvent.setup();
+  let retried = 0;
+  render(
+    <ReviewBlock
+      own={undefined}
+      ownError
+      onRetryOwn={() => {
+        retried += 1;
+      }}
+      reviews={page}
+      reviewsError={false}
+      hasMore={false}
+      loadingMore={false}
+      nextPageError={false}
+      onMore={() => {}}
+      onRetry={() => {}}
+      onRetryMore={() => {}}
+      onSave={async () => {}}
+      onDelete={async () => {}}
+    />,
+  );
+  expect(screen.getByRole('alert').textContent).toContain('Не вдалося завантажити ваш відгук');
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще' }));
+  expect(retried).toBe(1);
 });

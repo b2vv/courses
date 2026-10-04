@@ -22,6 +22,12 @@ export function ownReviewQueryKey(courseId: string, userId: string) {
 export function learningReviewsQueryKey(courseId: string) {
   return ['learn', 'reviews', courseId] as const;
 }
+function invalidateReviews(client: QueryClient, courseId: string) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: ['learn', 'review', courseId] }),
+    client.invalidateQueries({ queryKey: learningReviewsQueryKey(courseId) }),
+  ]);
+}
 
 export function createLearnQueries(playback: PlaybackRepository, courses: CourseRepository) {
   return {
@@ -40,12 +46,7 @@ export function createLearnQueries(playback: PlaybackRepository, courses: Course
         queryKey: ownReviewQueryKey(courseId, userId),
         queryFn: async ({ signal }) => {
           const result = await courses.ownReview(courseId, signal);
-          if (result === undefined || !result.ok)
-            throw new LearnQueryError(
-              result === undefined
-                ? 'dependency_unavailable'
-                : (result.error.code as PlaybackErrorCode),
-            );
+          if (!result.ok) throw new LearnQueryError(result.error.code as PlaybackErrorCode);
           return result.value;
         },
       }),
@@ -55,12 +56,7 @@ export function createLearnQueries(playback: PlaybackRepository, courses: Course
         initialPageParam: undefined as string | undefined,
         queryFn: async ({ signal, pageParam }) => {
           const result = await courses.listLearningReviews(courseId, pageParam, signal);
-          if (result === undefined || !result.ok)
-            throw new LearnQueryError(
-              result === undefined
-                ? 'dependency_unavailable'
-                : (result.error.code as PlaybackErrorCode),
-            );
+          if (!result.ok) throw new LearnQueryError(result.error.code as PlaybackErrorCode);
           return result.value;
         },
         getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -77,30 +73,20 @@ export function createLearnQueries(playback: PlaybackRepository, courses: Course
           body: string;
         }) => {
           const result = await courses.putReview(courseId, { stars, body });
-          if (result === undefined || !result.ok)
-            throw new LearnQueryError(
-              result === undefined
-                ? 'dependency_unavailable'
-                : (result.error.code as PlaybackErrorCode),
-            );
+          if (!result.ok) throw new LearnQueryError(result.error.code as PlaybackErrorCode);
           return result.value;
         },
-        onSuccess: (_, variables) =>
-          client.invalidateQueries({ queryKey: ['learn', 'review', variables.courseId] }),
+        // Both the own review and the learning-scoped list change: invalidating only the own review left
+        // the list showing the old or deleted review.
+        onSuccess: (_, variables) => invalidateReviews(client, variables.courseId),
       }),
     deleteReview: (client: QueryClient) =>
       mutationOptions({
         mutationFn: async (courseId: string) => {
           const result = await courses.deleteReview(courseId);
-          if (result === undefined || !result.ok)
-            throw new LearnQueryError(
-              result === undefined
-                ? 'dependency_unavailable'
-                : (result.error.code as PlaybackErrorCode),
-            );
+          if (!result.ok) throw new LearnQueryError(result.error.code as PlaybackErrorCode);
         },
-        onSuccess: (_, courseId) =>
-          client.invalidateQueries({ queryKey: ['learn', 'review', courseId] }),
+        onSuccess: (_, courseId) => invalidateReviews(client, courseId),
       }),
   };
 }
