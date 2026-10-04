@@ -54,6 +54,14 @@ export const learningCourseSchema = z
       )
       .max(40),
     continueLessonId: id.nullable(),
+    canPurchase: z.boolean(),
+    // The API sends the catalog summary on the learning course too (T04); a strict schema without these
+    // fields rejected every real learning course as invalid_response.
+    rating: z
+      .object({ average: z.number().min(1).max(5), count: z.number().int().min(3) })
+      .strict()
+      .nullable(),
+    lessonCount: z.number().int().min(0),
   })
   .strict();
 

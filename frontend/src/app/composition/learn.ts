@@ -11,6 +11,7 @@ import { createTranscriptQueries } from './transcript-queries';
 import { createDiscussionQueries } from './discussion-queries';
 import { createApiPurchaseRepository } from '../../adapters/api/purchase-repository';
 import { createPurchaseQueries } from './purchase-queries';
+import { createApiCourseRepository } from '../../adapters/api/course-repository';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
@@ -20,6 +21,7 @@ export function createLearnDependencies(queryClient: QueryClient) {
   return {
     ...createLearnQueries(
       createApiPlaybackRepository(requestOptions(), () => takeAv1ProbeResult(queryClient)),
+      createApiCourseRepository(requestOptions()),
     ),
     ...createTranscriptQueries(createApiTranscriptRepository(requestOptions())),
     discussion: createDiscussionQueries(createApiDiscussionRepository(requestOptions())),

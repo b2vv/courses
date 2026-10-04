@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"courses/internal/playback/domain"
+	containers "courses/internal/testsupport/containers"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -16,12 +17,14 @@ import (
 func TestRenewOwnershipLuaAgainstRedis(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := testcontainers.Run(
-		ctx,
-		"redis:7.4-bookworm",
-		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
-	)
+	container, err := containers.Start(ctx, func(ctx context.Context) (*testcontainers.DockerContainer, error) {
+		return testcontainers.Run(
+			ctx,
+			"redis:7.4-bookworm",
+			testcontainers.WithExposedPorts("6379/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("Redis integration requires Docker: %v", err)
 	}

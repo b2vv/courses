@@ -19,6 +19,7 @@ import (
 	"courses/internal/orders/application"
 	"courses/internal/orders/domain"
 	"courses/internal/orders/ports"
+	containers "courses/internal/testsupport/containers"
 	"courses/platform/httpserver"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -38,7 +39,9 @@ const (
 func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("courses_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("courses_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}
@@ -479,10 +482,23 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
-	grant, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access")
-	if err != nil || grant.Source() != domain.GrantAdmin {
-		t.Fatalf("admin grant=%+v error=%v", grant, err)
-	}
+	t.Run("administrator cannot grant themselves or create a row", func(t *testing.T) {
+		selfGrantIDs := subtestIDs("72")
+		selfGrantService := application.New(repository, repository, repository, func() time.Time { return now }, selfGrantIDs, nil)
+		var before, after int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&before); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := selfGrantService.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access"); err != domain.ErrGrantSelfForbidden {
+			t.Fatalf("self grant error=%v", err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&after); err != nil {
+			t.Fatal(err)
+		}
+		if after != before {
+			t.Fatalf("self grant rows before=%d after=%d", before, after)
+		}
+	})
 
 	t.Run("paid event settles when active admin grant already exists", func(t *testing.T) {
 		var userID string

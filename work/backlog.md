@@ -4,6 +4,34 @@ Items that have been decided as *worth doing* but not placed in a phase. Not an 
 `work/AGENDA.md` ranks the next move and is rebuilt each time. An item leaves here by
 becoming a phase in `work/PRODUCT-BRIEF.md` §21 or a task in `work/tasks.md`.
 
+## B-27 — TEMPORARY retry for the testcontainers reaper race
+
+**Raised:** 2026-10-03, integration-gate reliability follow-up.
+
+**What:** `internal/testsupport/containers.Start` retries only testcontainers-go's transient
+Ryuk create→start race, terminating the partially created target returned by the library before
+each retry. Integration call sites use it and Ryuk is enabled again.
+
+**Why:** testcontainers-go v0.44.0 can find a sibling process's Ryuk container in `created`
+state and permanently fail rather than retry; upstream [PR #3868](https://github.com/testcontainers/testcontainers-go/pull/3868)
+adds the library-level retry. See also the related [issue #3918](https://github.com/testcontainers/testcontainers-go/issues/3918).
+
+**Trigger:** a testcontainers-go release containing #3868.
+
+**Removal:** delete `internal/testsupport/containers` (it also holds the real-path race test and the two
+guards below) and every call site, then run `make integration` three times.
+
+**Proof (2026-10-03):** `race_integration_test.go` makes the race deterministic — a reaper for an isolated
+`TESTCONTAINERS_SESSION_ID` is created but not started, then started 1 s later; the first postgres start fails
+with the library's own `wait for reaper … unexpected container status "created"`, the target is terminated, the
+retry reuses the running reaper. Passed 3 of 3 separate runs, 0 leftovers. Guards: `TestPinnedTo…` fails when
+testcontainers-go leaves v0.44.0 (forces this decision on upgrade); `TestNoCallSiteUsesContainerReuse` fails if a
+call site starts using container reuse (Start would terminate a shared container).
+
+**Known bound:** a permanent #3918 orphan (a reaper that never starts) matches the same text, so each package
+spends the full 30 s budget (~15 create/terminate cycles) and then fails loudly naming #3868. Bounded, not hidden.
+Review: Courses 2, `work/review-ryuk-retry.md` (approve, 0 blocking).
+
 ## B-23 — e2e B39 впав раз у повному гейті; механізм не знайдено
 
 **Raised:** 2026-09-29, під час гейта Phase 7b D04 (Courses; розбір разом із Courses 2).
@@ -40,6 +68,15 @@ playback-сесії; новий рантайм-ефект — один `GET …/
 Лише повним гейтом: A/B HEAD-до-D04 проти D04, по 2 повні прогони. Ізольований повтор інформації не
 дає. Повторюючи окремий e2e, пересівати фікстури перед кожним прогоном і судити за рядком самого тесту:
 `-g` тягне 46 тестів залежних проєктів, і `admin-users P08` витрачає `delete-me`.
+
+### Повтор 2026-10-04 (фаза рейтингів, гілка feat/ratings)
+
+Повний `make check` на T06b+T07: B39 упав ще раз — `playback.spec.ts:1139`
+`expect(restoreWrite?.assigned).toBeGreaterThanOrEqual(preRemint - 1)`, отримано `undefined` (запис відновлення
+позиції не зафіксовано), 76 passed / 1 failed / 21 did not run. Перед ним на тій самій гілці 5 повних прогонів
+дійшли до кінця playback без падіння B39. Зміни фази рейтингів playback не торкаються (відгуки — окремий блок
+сторінки уроку; `LessonPlayer` не змінювався). Діагнозу нема — лише ще одна точка спостереження; повний гейт
+перезапущено.
 
 ## B-22 — Duplicated current-video selectors
 
@@ -1379,3 +1416,13 @@ test credentials `/view/852472`.
   rows B-25 option (b) creates.
 - **serviceUrl** response format and the 4-day retry are confirmed — matches our acknowledgement and the
   Pay21b "unmatched → 503 so WayForPay retries" behaviour.
+
+## B-28 — Review list cursor: the API sends "" for "no next page"
+
+**Raised:** 2026-10-04, ratings phase (found by e2e; Courses 2 T06b-fixes review №3).
+**What:** `GET /courses/{slug}/reviews` and `GET /learn/courses/{id}/reviews` return `nextCursor: ""` on the last
+page (the discussion repository's cursor encoding). The frontend maps `""` → `null` at the adapter boundary
+(`course-repository.ts`, test «treats the API's empty last-page cursor as no next page»), so behaviour is right.
+**Why still open:** the contract says "string", so every future client has to know the `""` convention. Fix:
+the HTTP layer returns `null` and OpenAPI marks `nextCursor` nullable; then the frontend mapping can go.
+**Trigger:** the next change to the review list contract, or a second client.

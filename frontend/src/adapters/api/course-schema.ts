@@ -13,6 +13,10 @@ export const courseSchema = z.object({
   publishedAt: z.iso.datetime({ offset: true }).nullable(),
   price: priceSchema.nullable(),
   paid: z.boolean(),
+  rating: z
+    .object({ average: z.number().min(1).max(5), count: z.number().int().min(3) })
+    .nullable(),
+  lessonCount: z.number().int().nonnegative(),
 });
 const programTitleSchema = z
   .string()
@@ -39,4 +43,27 @@ export const pageSchema = z.object({
 });
 export const errorSchema = z.object({
   error: z.object({ code: z.string(), message: z.string(), requestId: z.string() }),
+});
+export const reviewSchema = z
+  .object({
+    id: z.uuid(),
+    authorDisplayName: z.string().nullable(),
+    stars: z.number().int().min(1).max(5),
+    body: z.string(),
+    completedLessons: z.number().int().nonnegative(),
+    totalLessons: z.number().int().nonnegative(),
+    createdAt: z.iso.datetime({ offset: true }),
+    editedAt: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .refine((review) => review.totalLessons >= review.completedLessons);
+export const publicReviewPageSchema = z.object({
+  rating: z
+    .object({ average: z.number().min(1).max(5), count: z.number().int().min(3) })
+    .nullable(),
+  items: z.array(reviewSchema).max(20),
+  nextCursor: z.string().nullable(),
+});
+export const ownReviewSchema = z.object({
+  review: reviewSchema.nullable(),
+  eligibility: z.string(),
 });

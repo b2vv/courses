@@ -47,6 +47,8 @@ func TestLearningHTTPMatchesOpenAPIAndConcreteProgressContract(t *testing.T) {
 	}
 	var body struct {
 		ContinueLessonID *string `json:"continueLessonId"`
+		CanPurchase      bool    `json:"canPurchase"`
+		LessonCount      int     `json:"lessonCount"`
 		Modules          []struct {
 			ID      string `json:"id"`
 			Lessons []struct {
@@ -63,6 +65,12 @@ func TestLearningHTTPMatchesOpenAPIAndConcreteProgressContract(t *testing.T) {
 	}
 	if body.ContinueLessonID == nil || *body.ContinueLessonID != learningHTTPLessonID || len(body.Modules) != 1 || body.Modules[0].ID != learningHTTPModuleID || len(body.Modules[0].Lessons) != 1 {
 		t.Fatalf("learning body=%s", response.Body.String())
+	}
+	if body.CanPurchase {
+		t.Fatal("free learning fixture must not offer purchase")
+	}
+	if body.LessonCount != len(body.Modules[0].Lessons) {
+		t.Fatalf("lessonCount=%d modules=%+v", body.LessonCount, body.Modules)
 	}
 	lesson := body.Modules[0].Lessons[0]
 	if lesson.ID != learningHTTPLessonID || lesson.VideoState != nil || lesson.Position != 0 || lesson.Completed || lesson.ClientSeq != 0 {

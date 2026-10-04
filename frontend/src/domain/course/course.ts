@@ -8,7 +8,16 @@ export type CatalogErrorCode =
   | 'dependency_unavailable'
   | 'invalid_response'
   | 'request_timeout'
-  | 'request_cancelled';
+  | 'request_cancelled'
+  | 'report_own_review'
+  | 'authentication_required'
+  | 'review_invalid'
+  | 'review_removed'
+  | 'review_not_found'
+  | 'review_owner_forbidden'
+  | 'review_purchase_required'
+  | 'review_not_started'
+  | 'review_not_available';
 export type CatalogError = { readonly code: CatalogErrorCode };
 export type CourseStatus = 'draft' | 'published' | 'archived';
 export type CoursePrice = {
@@ -25,7 +34,33 @@ export type PublishedCourse = {
   readonly price: CoursePrice | null;
   /** Catalog display metadata: true means the course has a price, not that the viewer owns it. */
   readonly paid: boolean;
+  readonly rating?: Rating | null;
+  readonly lessonCount?: number;
 };
+export type Rating = { readonly average: number; readonly count: number };
+export type Review = {
+  readonly id: string;
+  readonly authorDisplayName: string | null;
+  readonly stars: number;
+  readonly body: string;
+  readonly completedLessons: number;
+  readonly totalLessons: number;
+  readonly createdAt: string;
+  readonly editedAt: string | null;
+  readonly percent: number;
+};
+export type PublicReviewPage = {
+  readonly rating: Rating | null;
+  readonly items: readonly Review[];
+  readonly nextCursor: string | null;
+};
+export type OwnReview = { readonly review: Review | null; readonly eligibility: string };
+export type ReviewWrite = { readonly stars: number; readonly body: string };
+export function reviewPercent(completedLessons: number, totalLessons: number): number {
+  return totalLessons === 0
+    ? 0
+    : Math.floor((completedLessons * 100 + totalLessons / 2) / totalLessons);
+}
 export type ProgramLesson = { readonly title: string };
 export type ProgramModule = {
   readonly title: string;
@@ -335,6 +370,8 @@ export function makePublishedCourse(input: {
   publishedAt: string | null;
   price: { minor: number; currency: string } | null;
   paid: boolean;
+  rating?: Rating | null;
+  lessonCount?: number;
 }): Result<PublishedCourse> {
   const validPrice =
     input.price === null ||
@@ -349,7 +386,16 @@ export function makePublishedCourse(input: {
     !input.publishedAt ||
     !Number.isFinite(Date.parse(input.publishedAt)) ||
     !validPrice ||
-    input.paid !== (input.price !== null)
+    input.paid !== (input.price !== null) ||
+    (input.lessonCount !== undefined &&
+      (!Number.isSafeInteger(input.lessonCount) || input.lessonCount < 0)) ||
+    (input.rating !== undefined &&
+      input.rating !== null &&
+      (!Number.isFinite(input.rating.average) ||
+        input.rating.average < 1 ||
+        input.rating.average > 5 ||
+        !Number.isSafeInteger(input.rating.count) ||
+        input.rating.count < 3))
   )
     return { ok: false, error: { code: 'invalid_response' } };
   return {
@@ -363,6 +409,10 @@ export function makePublishedCourse(input: {
       publishedAt: input.publishedAt,
       price: input.price === null ? null : { minor: input.price.minor, currency: 'UAH' },
       paid: input.paid,
+      ...(input.rating === undefined
+        ? {}
+        : { rating: input.rating === null ? null : { ...input.rating } }),
+      ...(input.lessonCount === undefined ? {} : { lessonCount: input.lessonCount }),
     },
   };
 }

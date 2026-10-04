@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	containers "courses/internal/testsupport/containers"
 	"courses/internal/transcript/domain"
 	"courses/internal/transcript/ports"
 	asynqlib "github.com/hibiken/asynq"
@@ -19,9 +20,11 @@ import (
 func TestQueueTaskMarkersSurviveCompletedAndArchivedKeys(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := testcontainers.Run(ctx, "redis:7.4-bookworm",
-		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)))
+	container, err := containers.Start(ctx, func(ctx context.Context) (*testcontainers.DockerContainer, error) {
+		return testcontainers.Run(ctx, "redis:7.4-bookworm",
+			testcontainers.WithExposedPorts("6379/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)))
+	})
 	if err != nil {
 		t.Fatalf("Redis integration requires Docker: %v", err)
 	}
@@ -85,9 +88,11 @@ func TestQueueTaskMarkersSurviveCompletedAndArchivedKeys(t *testing.T) {
 func TestQueueWithoutMarkerIsIdempotent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := testcontainers.Run(ctx, "redis:7.4-bookworm",
-		testcontainers.WithExposedPorts("6379/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)))
+	container, err := containers.Start(ctx, func(ctx context.Context) (*testcontainers.DockerContainer, error) {
+		return testcontainers.Run(ctx, "redis:7.4-bookworm",
+			testcontainers.WithExposedPorts("6379/tcp"),
+			testcontainers.WithWaitStrategy(wait.ForLog("Ready to accept connections").WithStartupTimeout(3*time.Minute)))
+	})
 	if err != nil {
 		t.Fatalf("Redis integration requires Docker: %v", err)
 	}

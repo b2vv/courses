@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"courses/internal/contracts/rating"
 	"courses/internal/course/adapters/postgres/generated"
 	"courses/internal/course/domain"
 	"github.com/jackc/pgx/v5"
@@ -41,7 +42,7 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	}
 	items := make([]domain.Course, 0, len(rows))
 	for _, row := range rows {
-		course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency)
+		course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency, row.ReviewCount, row.ReviewStarsSum, row.LessonCount)
 		if err != nil {
 			return domain.Page{}, err
 		}
@@ -65,7 +66,7 @@ func (r *Repository) GetPublished(ctx context.Context, slug string) (domain.Cour
 		return domain.CourseDetail{}, domain.ErrCourseNotFound
 	}
 	row := rows[0]
-	course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency)
+	course, err := mapCourse(row.ID, row.Slug, row.Title, row.Summary, row.Description, row.Status, row.CreatedAt, row.UpdatedAt, row.PublishedAt, row.PriceMinor, row.Currency, row.ReviewCount, row.ReviewStarsSum, row.LessonCount)
 	if err != nil {
 		return domain.CourseDetail{}, err
 	}
@@ -100,7 +101,7 @@ func persistenceError(err error) error {
 	return domain.ErrDependencyUnavailable
 }
 
-func mapCourse(id pgtype.UUID, slug, title, summary, description, status string, createdAt, updatedAt, storedPublishedAt pgtype.Timestamptz, priceMinor pgtype.Int8, currency pgtype.Text) (domain.Course, error) {
+func mapCourse(id pgtype.UUID, slug, title, summary, description, status string, createdAt, updatedAt, storedPublishedAt pgtype.Timestamptz, priceMinor pgtype.Int8, currency pgtype.Text, reviewCount, reviewStarsSum, lessonCount int64) (domain.Course, error) {
 	var publishedAt *time.Time
 	if storedPublishedAt.Valid {
 		value := storedPublishedAt.Time
@@ -112,7 +113,15 @@ func mapCourse(id pgtype.UUID, slug, title, summary, description, status string,
 	} else if priceMinor.Valid != currency.Valid {
 		return domain.Course{}, domain.ErrDependencyUnavailable
 	}
-	return domain.NewCourse(domain.Course{ID: id.String(), Slug: slug, Title: title, Summary: summary, Description: description, Status: domain.Status(status), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: publishedAt, Price: price, Paid: price != nil})
+	if reviewCount < 0 || reviewStarsSum < 0 || lessonCount < 0 || reviewCount > int64(^uint(0)>>1) || reviewStarsSum > int64(^uint(0)>>1) || lessonCount > int64(^uint(0)>>1) {
+		return domain.Course{}, domain.ErrDependencyUnavailable
+	}
+	count, sum := int(reviewCount), int(reviewStarsSum)
+	var ratingSummary *domain.Rating
+	if average, visible := rating.Summary(count, sum); visible {
+		ratingSummary = &domain.Rating{Average: average, Count: count}
+	}
+	return domain.NewCourse(domain.Course{ID: id.String(), Slug: slug, Title: title, Summary: summary, Description: description, Status: domain.Status(status), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, PublishedAt: publishedAt, Price: price, Paid: price != nil, Rating: ratingSummary, LessonCount: int(lessonCount)})
 }
 
 func rollback(tx pgx.Tx) {

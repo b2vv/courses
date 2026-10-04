@@ -16,6 +16,7 @@ import (
 
 	"courses/internal/course/adapters/postgres"
 	"courses/internal/course/domain"
+	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -28,7 +29,9 @@ import (
 func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("courses_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("courses_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}
@@ -555,6 +558,69 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			course.Program[0].Lessons[1].Title != "Contracts" || len(course.Program[1].Lessons) != 1 ||
 			course.Program[1].Lessons[0].Title != "Transactions" {
 			t.Fatalf("wrong public program order: %+v", course.Program)
+		}
+	})
+	t.Run("Rt07 Rt09 catalog aggregates count only active reviews without lesson multiplication", func(t *testing.T) {
+		// This subtest writes to the shared seeded course; it restores it so later subtests and the
+		// catalog's published set see the seed unchanged (AGENTS: whoever adds a counted thing cleans up).
+		t.Cleanup(func() {
+			for _, statement := range []string{
+				`DELETE FROM discussion_reviews WHERE id IN ('80000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000002','80000000-0000-4000-8000-000000000003','80000000-0000-4000-8000-000000000004')`,
+				`DELETE FROM users WHERE id='40000000-0000-4000-8000-000000000004'`,
+				`UPDATE courses SET status='published', published_at='2026-09-03 10:00:00+00' WHERE id='10000000-0000-4000-8000-000000000001'`,
+			} {
+				if _, err := pool.Exec(context.Background(), statement); err != nil {
+					t.Errorf("cleanup %q: %v", statement, err)
+				}
+			}
+		})
+		if _, err := pool.Exec(ctx, `INSERT INTO users (id,email,display_name,role,password_hash) VALUES ('40000000-0000-4000-8000-000000000004','rating-reviewer@courseforge.local','Rating reviewer','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_reviews (id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES
+			('80000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',4,'This review body is deliberately long enough.',0,3,now()),
+			('80000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000002',5,'Another review body is deliberately long enough.',0,3,now()),
+			('80000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000003',5,'Third review body is deliberately long enough.',0,3,now())`); err != nil {
+			t.Fatal(err)
+		}
+		got, err := repository.GetPublished(ctx, "go-backend-foundations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.LessonCount != 3 || got.Rating == nil || got.Rating.Count != 3 || got.Rating.Average != 4.7 {
+			t.Fatalf("Rt07 detail=%+v", got.Course)
+		}
+		// A review that is already removed must not count (Rt09): insert it removed.
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_reviews (id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at,removed_at) VALUES
+			('80000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000004',1,'Removed review body is deliberately long enough.',0,3,now(),now())`); err != nil {
+			t.Fatal(err)
+		}
+		got, err = repository.GetPublished(ctx, "go-backend-foundations")
+		if err != nil || got.Rating == nil || got.Rating.Count != 3 {
+			t.Fatalf("Rt09 removed extra rating=%+v err=%v", got.Rating, err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE discussion_reviews SET removed_at=now() WHERE id='80000000-0000-4000-8000-000000000003'`); err != nil {
+			t.Fatal(err)
+		}
+		got, err = repository.GetPublished(ctx, "go-backend-foundations")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Rating != nil {
+			t.Fatalf("Rt09 removed review should leave rating null: %+v", got.Rating)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE courses SET status='archived', published_at=NULL WHERE id='10000000-0000-4000-8000-000000000001'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.GetPublished(ctx, "go-backend-foundations"); !errors.Is(err, domain.ErrCourseNotFound) {
+			t.Fatalf("archived catalog course: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE courses SET status='published', published_at='2026-09-03 10:00:00+00' WHERE id='10000000-0000-4000-8000-000000000001'`); err != nil {
+			t.Fatal(err)
+		}
+		got, err = repository.GetPublished(ctx, "go-backend-foundations")
+		if err != nil || got.Rating != nil {
+			t.Fatalf("republished rating=%+v err=%v", got.Rating, err)
 		}
 	})
 	t.Run("database constraints reject invalid entities", func(t *testing.T) {

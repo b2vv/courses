@@ -55,11 +55,76 @@ type QueuePage struct {
 type ModerationLogEntry struct {
 	CourseID  string
 	CommentID string
+	ReviewID  string
 	ActorID   string
 	ActorRole string
 	Action    string
 	Reason    *string
 	CreatedAt time.Time
+}
+
+type ReviewRecord struct {
+	ID               string
+	CourseID         string
+	AuthorID         string
+	Stars            int
+	Body             string
+	CompletedLessons int
+	TotalLessons     int
+	CreatedAt        time.Time
+	EditedAt         *time.Time
+	RemovedAt        *time.Time
+	RemovedBy        *string
+	DisplayName      *string
+}
+
+type ReviewFactsRecord struct {
+	Facts            domain.ReviewFacts
+	CompletedLessons int
+	TotalLessons     int
+	Exists           bool
+	Removed          bool
+}
+
+type ReviewPage struct {
+	Items      []ReviewRecord
+	NextCursor string
+}
+
+type ModerationQueueItem struct {
+	Kind         string
+	ID           string
+	CourseID     string
+	AuthorID     string
+	DisplayName  *string
+	Stars        *int
+	Body         string
+	CreatedAt    time.Time
+	OpenReports  int
+	LatestReport time.Time
+	LessonID     *string
+	LessonTitle  *string
+}
+
+type ModerationQueuePage struct {
+	Items      []ModerationQueueItem
+	NextCursor string
+}
+
+type ReviewRepository interface {
+	PublishedReviewCourse(context.Context, string) (string, error)
+	ReviewFacts(context.Context, string, string) (ReviewFactsRecord, error)
+	GetReview(context.Context, string) (ReviewRecord, error)
+	CreateReview(context.Context, ReviewRecord) (ReviewRecord, error)
+	UpdateReview(context.Context, string, string, domain.ReviewContent, domain.ReviewProgress, time.Time) (ReviewRecord, error)
+	DeleteReview(context.Context, string, string) error
+	GetOwnReview(context.Context, string, string) (*ReviewRecord, error)
+	ListReviews(context.Context, string, string, int) (ReviewPage, error)
+	ReviewSummary(context.Context, string) (int, int, error)
+	InsertReviewReport(context.Context, string, string, time.Time) error
+	DismissReviewReports(context.Context, string, string, time.Time) error
+	RemoveReview(context.Context, string, string, string, *string, time.Time) error
+	ListModerationQueue(context.Context, string, string, int) (ModerationQueuePage, error)
 }
 
 type ModerationRepository interface {
@@ -73,6 +138,7 @@ type ModerationRepository interface {
 
 type Repository interface {
 	ModerationRepository
+	ReviewRepository
 	LessonFacts(context.Context, string, string) (LessonFacts, error)
 	List(context.Context, string, string, int) (CommentPage, error)
 	Get(context.Context, string, string) (CommentRecord, error)
