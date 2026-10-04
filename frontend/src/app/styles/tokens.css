@@ -288,6 +288,26 @@
   border: 2px solid var(--color-border);
   border-radius: var(--radius-control);
 }
+/* Radio group (review stars): a wrapping row of choices, each a full .ui-choice target. */
+.ui-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.ui-radio {
+  padding-inline: var(--space-2);
+}
+.ui-radio-mark {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: none;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+}
+.ui-choice[data-selected] .ui-radio-mark {
+  border-color: var(--color-primary);
+  background: radial-gradient(circle, var(--color-primary) 45%, transparent 50%);
+}
 .ui-choice[data-selected] .ui-checkbox-mark {
   background: var(--color-primary);
   border-color: var(--color-primary);
@@ -804,6 +824,7 @@
     border-color: ButtonText;
   }
   .ui-choice[data-selected] .ui-checkbox-mark,
+  .ui-choice[data-selected] .ui-radio-mark,
   .ui-choice[data-selected] .ui-switch-track {
     background: Highlight;
     color: HighlightText;

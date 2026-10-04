@@ -314,6 +314,10 @@ test.describe('with a stored student session', () => {
             },
           ],
           continueLessonId: lessonId,
+          // Required by the LearningCourse contract since the ratings phase (T04).
+          rating: null,
+          lessonCount: 1,
+          canPurchase: false,
         }),
       });
     });

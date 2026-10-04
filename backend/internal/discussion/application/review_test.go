@@ -272,3 +272,21 @@ func TestRemoveReviewIsNoopWhenAlreadyRemoved(t *testing.T) {
 		t.Fatalf("repository remove calls=%d want 1", f.removed)
 	}
 }
+
+func TestOwnReviewRemovedByModerationIsNotShownAsLive(t *testing.T) {
+	f := newReviewFake()
+	removedAt := time.Now()
+	removed := ports.ReviewRecord{ID: reviewID, CourseID: reviewCourse, AuthorID: reviewAuthor, Stars: 2, Body: "this review body has enough characters", CreatedAt: removedAt, RemovedAt: &removedAt}
+	f.own = &removed
+	got, err := reviewService(f).OwnReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse)
+	if err != nil || got.Review != nil || got.Eligibility != domain.ErrReviewRemoved.Error() {
+		t.Fatalf("own review after removal = %+v, %v; want no review and eligibility %q", got, err, domain.ErrReviewRemoved.Error())
+	}
+	live := removed
+	live.RemovedAt = nil
+	f.own = &live
+	got, err = reviewService(f).OwnReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse)
+	if err != nil || got.Review == nil || got.Eligibility != "ok" {
+		t.Fatalf("live own review = %+v, %v", got, err)
+	}
+}

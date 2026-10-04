@@ -6,6 +6,7 @@ import {
   dismissCourseReviewReports,
   removeCourseReview,
 } from './generated/courses';
+import { reviewSchema } from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 import type { TeachRepository } from '../../ports/TeachRepository';
@@ -76,11 +77,13 @@ function queuePage(value: unknown): value is ModerationQueuePage {
         item.openReports <= 0
       )
         return false;
-      // T06 renders review queue rows. Preserve the existing teach surface until then,
-      // while accepting the additive wire variant here.
+      // A review row is validated as strictly as a comment row: its fields reach the queue UI directly
+      // ('★'.repeat(stars) throws on a negative or infinite count).
       return (
         (item.kind === 'comment' && comment(item.comment) && item.review === null) ||
-        (item.kind === 'review' && item.comment === null && record(item.review))
+        (item.kind === 'review' &&
+          item.comment === null &&
+          reviewSchema.safeParse(item.review).success)
       );
     })
   );
