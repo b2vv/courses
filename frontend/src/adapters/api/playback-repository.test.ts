@@ -20,6 +20,9 @@ const course = {
   publishedAt: '2026-09-01T00:00:00Z',
   price: null,
   paid: false,
+  rating: null,
+  lessonCount: 1,
+  canPurchase: false,
   continueLessonId: lessonId,
   modules: [
     {
@@ -85,6 +88,7 @@ test('maps the authenticated learning model and validates the requested slug', a
       price: null,
       modules: course.modules,
       continueLessonId: course.continueLessonId,
+      canPurchase: false,
     },
   });
 

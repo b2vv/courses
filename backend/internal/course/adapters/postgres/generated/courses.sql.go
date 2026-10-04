@@ -160,11 +160,25 @@ SELECT
   courses.published_at,
   courses.price_minor,
   courses.currency,
+  COALESCE(reviews.review_count, 0)::bigint AS review_count,
+  COALESCE(reviews.review_stars_sum, 0)::bigint AS review_stars_sum,
+  COALESCE(lesson_counts.lesson_count, 0)::bigint AS lesson_count,
   COALESCE(modules.id::text, '')::text AS module_id,
   COALESCE(modules.title, '')::text AS module_title,
   COALESCE(lessons.title, '')::text AS lesson_title,
   (lessons.id IS NOT NULL)::boolean AS lesson_present
 FROM courses
+LEFT JOIN LATERAL (
+  SELECT count(*) AS review_count, COALESCE(sum(stars), 0)::bigint AS review_stars_sum
+  FROM discussion_reviews
+  WHERE course_id = courses.id AND removed_at IS NULL
+) AS reviews ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS lesson_count
+  FROM course_lessons AS counted_lessons
+  JOIN course_modules AS counted_modules ON counted_modules.id = counted_lessons.module_id
+  WHERE counted_modules.course_id = courses.id
+) AS lesson_counts ON true
 LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
 LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 WHERE courses.slug = $1 AND courses.status = 'published'
@@ -172,21 +186,24 @@ ORDER BY modules.position, modules.id, lessons.position, lessons.id
 `
 
 type GetPublishedCourseRow struct {
-	ID            pgtype.UUID
-	Slug          string
-	Title         string
-	Summary       string
-	Description   string
-	Status        string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
-	PublishedAt   pgtype.Timestamptz
-	PriceMinor    pgtype.Int8
-	Currency      pgtype.Text
-	ModuleID      string
-	ModuleTitle   string
-	LessonTitle   string
-	LessonPresent bool
+	ID             pgtype.UUID
+	Slug           string
+	Title          string
+	Summary        string
+	Description    string
+	Status         string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	PublishedAt    pgtype.Timestamptz
+	PriceMinor     pgtype.Int8
+	Currency       pgtype.Text
+	ReviewCount    int64
+	ReviewStarsSum int64
+	LessonCount    int64
+	ModuleID       string
+	ModuleTitle    string
+	LessonTitle    string
+	LessonPresent  bool
 }
 
 func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) ([]GetPublishedCourseRow, error) {
@@ -210,6 +227,9 @@ func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) ([]GetPub
 			&i.PublishedAt,
 			&i.PriceMinor,
 			&i.Currency,
+			&i.ReviewCount,
+			&i.ReviewStarsSum,
+			&i.LessonCount,
 			&i.ModuleID,
 			&i.ModuleTitle,
 			&i.LessonTitle,
@@ -369,9 +389,23 @@ func (q *Queries) ListAuthoringModules(ctx context.Context, courseID string) ([]
 }
 
 const listPublishedCourses = `-- name: ListPublishedCourses :many
-SELECT id, slug, title, summary, description, status, created_at, updated_at, published_at,
-  price_minor, currency
+SELECT courses.id, courses.slug, courses.title, courses.summary, courses.description, courses.status, courses.created_at, courses.updated_at, courses.published_at,
+  courses.price_minor, courses.currency,
+  COALESCE(reviews.review_count, 0)::bigint AS review_count,
+  COALESCE(reviews.review_stars_sum, 0)::bigint AS review_stars_sum,
+  COALESCE(lessons.lesson_count, 0)::bigint AS lesson_count
 FROM courses
+LEFT JOIN LATERAL (
+  SELECT count(*) AS review_count, COALESCE(sum(stars), 0)::bigint AS review_stars_sum
+  FROM discussion_reviews
+  WHERE course_id = courses.id AND removed_at IS NULL
+) AS reviews ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS lesson_count
+  FROM course_lessons
+  JOIN course_modules ON course_modules.id = course_lessons.module_id
+  WHERE course_modules.course_id = courses.id
+) AS lessons ON true
 WHERE status = 'published'
   AND (title ILIKE '%' || $1::text || '%' ESCAPE '!'
        OR summary ILIKE '%' || $1::text || '%' ESCAPE '!')
@@ -390,17 +424,20 @@ type ListPublishedCoursesParams struct {
 }
 
 type ListPublishedCoursesRow struct {
-	ID          pgtype.UUID
-	Slug        string
-	Title       string
-	Summary     string
-	Description string
-	Status      string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	PublishedAt pgtype.Timestamptz
-	PriceMinor  pgtype.Int8
-	Currency    pgtype.Text
+	ID             pgtype.UUID
+	Slug           string
+	Title          string
+	Summary        string
+	Description    string
+	Status         string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	PublishedAt    pgtype.Timestamptz
+	PriceMinor     pgtype.Int8
+	Currency       pgtype.Text
+	ReviewCount    int64
+	ReviewStarsSum int64
+	LessonCount    int64
 }
 
 func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCoursesParams) ([]ListPublishedCoursesRow, error) {
@@ -429,6 +466,9 @@ func (q *Queries) ListPublishedCourses(ctx context.Context, arg ListPublishedCou
 			&i.PublishedAt,
 			&i.PriceMinor,
 			&i.Currency,
+			&i.ReviewCount,
+			&i.ReviewStarsSum,
+			&i.LessonCount,
 		); err != nil {
 			return nil, err
 		}

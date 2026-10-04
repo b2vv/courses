@@ -57,5 +57,35 @@ export function createTeachQueries(teach: TeachRepository) {
           teach.removeComment(commentId).then(unwrap),
         onSuccess: () => invalidateWorkspace(client),
       }),
+    dismissReview: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: async ({
+          reviewId,
+          input,
+        }: {
+          reviewId: string;
+          input: DismissReportsInput;
+        }) => {
+          const result = await teach.dismissReviewReport(reviewId, input);
+          if (result === undefined) throw new TeachQueryError('dependency_unavailable');
+          return unwrap(result);
+        },
+        onSuccess: () => invalidateWorkspace(client),
+      }),
+    removeReview: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: async ({
+          reviewId,
+          input,
+        }: {
+          reviewId: string;
+          input: DismissReportsInput;
+        }) => {
+          const result = await teach.removeReview(reviewId, input);
+          if (result === undefined) throw new TeachQueryError('dependency_unavailable');
+          return unwrap(result);
+        },
+        onSuccess: () => invalidateWorkspace(client),
+      }),
   };
 }

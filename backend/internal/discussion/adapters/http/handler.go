@@ -21,6 +21,12 @@ type Handler struct{ service *application.Service }
 func NewHandler(service *application.Service) *Handler { return &Handler{service: service} }
 
 func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/courses/{slug}/reviews", http.HandlerFunc(handler.publicReviews))
+	mux.Handle("GET /api/v1/learn/courses/{courseId}/reviews", authenticate(http.HandlerFunc(handler.learningReviews)))
+	mux.Handle("GET /api/v1/learn/courses/{courseId}/review", authenticate(http.HandlerFunc(handler.ownReview)))
+	mux.Handle("PUT /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.putReview))))
+	mux.Handle("DELETE /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.deleteReview))))
+	mux.Handle("POST /api/v1/learn/reviews/{reviewId}/reports", sameOrigin(authenticate(http.HandlerFunc(handler.reportReview))))
 	mux.Handle("GET /api/v1/learn/lessons/{lessonId}/comments", authenticate(http.HandlerFunc(handler.list)))
 	mux.Handle("POST /api/v1/learn/lessons/{lessonId}/comments", sameOrigin(authenticate(http.HandlerFunc(handler.publish))))
 	mux.Handle("PATCH /api/v1/learn/comments/{commentId}", sameOrigin(authenticate(http.HandlerFunc(handler.update))))
@@ -32,6 +38,8 @@ func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrig
 	mux.Handle("GET /api/v1/teach/courses/{courseId}/moderation-queue", authenticate(http.HandlerFunc(handler.queue)))
 	mux.Handle("POST /api/v1/teach/comments/{commentId}/dismiss-report", sameOrigin(authenticate(http.HandlerFunc(handler.dismissReports))))
 	mux.Handle("POST /api/v1/learn/comments/{commentId}/reports", sameOrigin(authenticate(http.HandlerFunc(handler.reportComment))))
+	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/remove", sameOrigin(authenticate(http.HandlerFunc(handler.removeReview))))
+	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/dismiss-report", sameOrigin(authenticate(http.HandlerFunc(handler.dismissReviewReports))))
 }
 
 type authorDTO struct {
@@ -93,8 +101,38 @@ type courseCommentsDTO struct {
 }
 
 type queueItemDTO struct {
-	Comment     moderationCommentDTO `json:"comment"`
-	OpenReports int                  `json:"openReports"`
+	Kind        string                `json:"kind"`
+	Comment     *moderationCommentDTO `json:"comment"`
+	Review      *reviewDTO            `json:"review"`
+	OpenReports int                   `json:"openReports"`
+}
+
+type reviewDTO struct {
+	ID                string     `json:"id"`
+	AuthorDisplayName *string    `json:"authorDisplayName"`
+	Stars             int        `json:"stars"`
+	Body              string     `json:"body"`
+	CompletedLessons  int        `json:"completedLessons"`
+	TotalLessons      int        `json:"totalLessons"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	EditedAt          *time.Time `json:"editedAt"`
+}
+type reviewRatingDTO struct {
+	Average float64 `json:"average"`
+	Count   int     `json:"count"`
+}
+type publicReviewsDTO struct {
+	Rating     *reviewRatingDTO `json:"rating"`
+	Items      []reviewDTO      `json:"items"`
+	NextCursor string           `json:"nextCursor"`
+}
+type ownReviewDTO struct {
+	Review      *reviewDTO `json:"review"`
+	Eligibility string     `json:"eligibility"`
+}
+type putReviewRequest struct {
+	Stars int    `json:"stars"`
+	Body  string `json:"body"`
 }
 
 type queueDTO struct {
@@ -235,9 +273,164 @@ func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]queueItemDTO, len(page.Items))
 	for i, item := range page.Items {
-		items[i] = queueItemDTO{Comment: mapModerationComment(item.Comment), OpenReports: item.OpenReports}
+		items[i] = queueItemDTO{Kind: item.Kind, OpenReports: item.OpenReports}
+		if item.Comment != nil {
+			comment := mapModerationComment(*item.Comment)
+			items[i].Comment = &comment
+		}
+		if item.Review != nil {
+			review := mapReview(*item.Review)
+			items[i].Review = &review
+		}
 	}
 	httpserver.WriteJSON(w, http.StatusOK, queueDTO{Items: items, NextCursor: page.NextCursor})
+}
+
+func (handler *Handler) publicReviews(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	page, err := handler.service.PublicReviews(r.Context(), r.PathValue("slug"), query.Get("cursor"))
+	if err != nil {
+		writeReviewError(w, r, err, "course_not_found")
+		return
+	}
+	items := make([]reviewDTO, len(page.Items))
+	for i, review := range page.Items {
+		items[i] = mapReview(review)
+	}
+	result := publicReviewsDTO{Items: items, NextCursor: page.NextCursor}
+	if page.Rating != nil {
+		result.Rating = &reviewRatingDTO{Average: page.Rating.Average, Count: page.Rating.Count}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, result)
+}
+func (handler *Handler) learningReviews(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	page, err := handler.service.LearningReviews(r.Context(), actor, r.PathValue("courseId"), query.Get("cursor"))
+	if err != nil {
+		writeReviewError(w, r, err, "course_not_found")
+		return
+	}
+	items := make([]reviewDTO, len(page.Items))
+	for i, review := range page.Items {
+		items[i] = mapReview(review)
+	}
+	result := publicReviewsDTO{Items: items, NextCursor: page.NextCursor}
+	if page.Rating != nil {
+		result.Rating = &reviewRatingDTO{Average: page.Rating.Average, Count: page.Rating.Count}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, result)
+}
+func (handler *Handler) ownReview(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	result, err := handler.service.OwnReview(r.Context(), actor, r.PathValue("courseId"))
+	if err != nil {
+		writeReviewError(w, r, err, "course_not_found")
+		return
+	}
+	dto := ownReviewDTO{Eligibility: result.Eligibility}
+	if result.Review != nil {
+		review := mapReview(*result.Review)
+		dto.Review = &review
+	}
+	httpserver.WriteJSON(w, http.StatusOK, dto)
+}
+func (handler *Handler) putReview(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[putReviewRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	review, created, err := handler.service.PutReview(r.Context(), actor, r.PathValue("courseId"), input.Stars, input.Body)
+	if err != nil {
+		writeReviewError(w, r, err, "course_not_found")
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	httpserver.WriteJSON(w, status, mapReview(review))
+}
+func (handler *Handler) deleteReview(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := handler.service.DeleteReview(r.Context(), actor, r.PathValue("courseId")); err != nil {
+		writeReviewError(w, r, err, "review_not_found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (handler *Handler) reportReview(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := handler.service.ReportReview(r.Context(), actor, r.PathValue("reviewId")); err != nil {
+		writeReviewError(w, r, err, "review_not_found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (handler *Handler) removeReview(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[dismissReportsRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if err = handler.service.RemoveReview(r.Context(), actor, r.PathValue("reviewId"), input.Reason); err != nil {
+		writeReviewError(w, r, err, "review_not_found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (handler *Handler) dismissReviewReports(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[dismissReportsRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if err = handler.service.DismissReviewReports(r.Context(), actor, r.PathValue("reviewId"), input.Reason); err != nil {
+		writeReviewError(w, r, err, "review_not_found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (handler *Handler) dismissReports(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +521,9 @@ func mapModerationComment(comment application.ModerationComment) moderationComme
 		Author: authorDTO{DisplayName: comment.Author}, Body: comment.Body, PositionMs: comment.PositionMs,
 		CreatedAt: comment.CreatedAt, EditedAt: comment.EditedAt, Removed: comment.Removed}
 }
+func mapReview(review application.Review) reviewDTO {
+	return reviewDTO{ID: review.ID, AuthorDisplayName: review.AuthorDisplayName, Stars: review.Stars, Body: review.Body, CompletedLessons: review.CompletedLessons, TotalLessons: review.TotalLessons, CreatedAt: review.CreatedAt, EditedAt: review.EditedAt}
+}
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
 func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
@@ -385,16 +581,23 @@ func writeTeachListError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	writeError(w, r, statusFor(err), err)
 }
+func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFound string) {
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, r, http.StatusNotFound, errors.New(notFound))
+		return
+	}
+	writeError(w, r, statusFor(err), err)
+}
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
 		return http.StatusForbidden
-	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull):
+	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull), errors.Is(err, domain.ErrReviewAlreadyExists), errors.Is(err, domain.ErrReviewRemoved):
 		return http.StatusConflict
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		return http.StatusServiceUnavailable
-	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest):
+	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest), errors.Is(err, domain.ErrReviewInvalid):
 		return http.StatusBadRequest
 	default:
 		return http.StatusBadRequest

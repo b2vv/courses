@@ -1,4 +1,9 @@
-import { QueryObserver, queryOptions } from '@tanstack/react-query';
+import {
+  QueryObserver,
+  infiniteQueryOptions,
+  mutationOptions,
+  queryOptions,
+} from '@tanstack/react-query';
 import type { FetchQueryOptions, QueryClient, QueryKey } from '@tanstack/react-query';
 import type { createCatalog } from '../../application/catalog/catalog';
 import type { CatalogError, CatalogQuery, Result } from '../../domain/course/course';
@@ -62,6 +67,24 @@ export function createCatalogQueries(catalog: ReturnType<typeof createCatalog>) 
       queryOptions({
         queryKey: ['course', slug],
         queryFn: async ({ signal }) => unwrap(await catalog.get(slug, signal)),
+      }),
+    reviews: (slug: string) =>
+      infiniteQueryOptions({
+        queryKey: ['course', slug, 'reviews'],
+        initialPageParam: undefined as string | undefined,
+        queryFn: async ({ signal, pageParam }) =>
+          unwrap(await catalog.reviews(slug, pageParam, signal)),
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+      }),
+    ownReview: (courseId: string, userId: string) =>
+      queryOptions({
+        queryKey: ['course', courseId, 'own-review', userId],
+        queryFn: async ({ signal }) => unwrap(await catalog.ownReview(courseId, signal)),
+      }),
+    report: () =>
+      mutationOptions({
+        mutationFn: async ({ reviewId }: { reviewId: string }) =>
+          unwrap(await catalog.report(reviewId)),
       }),
   };
 }

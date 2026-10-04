@@ -78,13 +78,39 @@ type CourseCommentPage struct {
 }
 
 type QueueItem struct {
-	Comment     ModerationComment
+	Kind        string
+	Comment     *ModerationComment
+	Review      *Review
 	OpenReports int
 }
 
 type QueuePage struct {
 	Items      []QueueItem
 	NextCursor string
+}
+
+type Rating struct {
+	Average float64
+	Count   int
+}
+type Review struct {
+	ID                string
+	AuthorDisplayName *string
+	Stars             int
+	Body              string
+	CompletedLessons  int
+	TotalLessons      int
+	CreatedAt         time.Time
+	EditedAt          *time.Time
+}
+type PublicReviewPage struct {
+	Rating     *Rating
+	Items      []Review
+	NextCursor string
+}
+type OwnReview struct {
+	Review      *Review
+	Eligibility string
 }
 
 func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor string) (Page, error) {
@@ -255,15 +281,172 @@ func (service *Service) Queue(ctx context.Context, actor Actor, courseID, cursor
 	if err := service.requireModerationAccess(ctx, actor, courseID); err != nil {
 		return QueuePage{}, err
 	}
-	page, err := service.repository.ListQueue(ctx, courseID, cursor, 50)
+	page, err := service.repository.ListModerationQueue(ctx, courseID, cursor, 50)
 	if err != nil {
 		return QueuePage{}, err
 	}
 	result := QueuePage{NextCursor: page.NextCursor, Items: make([]QueueItem, len(page.Items))}
 	for i, item := range page.Items {
-		result.Items[i] = QueueItem{Comment: service.presentModeration(item.ModerationCommentRecord), OpenReports: item.OpenReports}
+		result.Items[i] = QueueItem{Kind: item.Kind, OpenReports: item.OpenReports}
+		if item.Kind == "review" {
+			review := service.presentReview(ports.ReviewRecord{ID: item.ID, DisplayName: item.DisplayName, Stars: *item.Stars, Body: item.Body, CreatedAt: item.CreatedAt})
+			result.Items[i].Review = &review
+		} else {
+			comment := ModerationComment{ID: item.ID, LessonID: dereference(item.LessonID), LessonTitle: dereference(item.LessonTitle), Author: item.DisplayName, Body: &item.Body, CreatedAt: item.CreatedAt}
+			result.Items[i].Comment = &comment
+		}
 	}
 	return result, nil
+}
+
+func (service *Service) PublicReviews(ctx context.Context, slug, cursor string) (PublicReviewPage, error) {
+	courseID, err := service.repository.PublishedReviewCourse(ctx, slug)
+	if err != nil {
+		return PublicReviewPage{}, err
+	}
+	return service.listReviews(ctx, courseID, cursor)
+}
+
+func (service *Service) LearningReviews(ctx context.Context, actor Actor, courseID, cursor string) (PublicReviewPage, error) {
+	facts, err := service.repository.ReviewFacts(ctx, courseID, actor.UserID)
+	if err != nil {
+		return PublicReviewPage{}, err
+	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled}
+	if !course.CanBeViewedBy(actor) {
+		return PublicReviewPage{}, domain.ErrForbidden
+	}
+	return service.listReviews(ctx, courseID, cursor)
+}
+
+func (service *Service) listReviews(ctx context.Context, courseID, cursor string) (PublicReviewPage, error) {
+	count, sum, err := service.repository.ReviewSummary(ctx, courseID)
+	if err != nil {
+		return PublicReviewPage{}, err
+	}
+	page, err := service.repository.ListReviews(ctx, courseID, cursor, 20)
+	if err != nil {
+		return PublicReviewPage{}, err
+	}
+	result := PublicReviewPage{Items: make([]Review, len(page.Items)), NextCursor: page.NextCursor}
+	if summary := domain.NewRatingSummary(count, sum); summary != nil {
+		result.Rating = &Rating{Average: summary.Average, Count: summary.Count}
+	}
+	for i, item := range page.Items {
+		result.Items[i] = service.presentReview(item)
+	}
+	return result, nil
+}
+
+func (service *Service) OwnReview(ctx context.Context, actor Actor, courseID string) (OwnReview, error) {
+	facts, err := service.repository.ReviewFacts(ctx, courseID, actor.UserID)
+	if err != nil {
+		return OwnReview{}, err
+	}
+	review, err := service.repository.GetOwnReview(ctx, courseID, actor.UserID)
+	if err != nil {
+		return OwnReview{}, err
+	}
+	result := OwnReview{Eligibility: "ok"}
+	if err := domain.CanReview(facts.Facts, actor); err != nil {
+		result.Eligibility = err.Error()
+	}
+	if review != nil && review.RemovedAt != nil {
+		// A review removed by moderation is not the author's live review: they see why, and cannot write a
+		// replacement (AC7). Decision 2026-10-04, docs/ratings/assumptions.md.
+		result.Eligibility = domain.ErrReviewRemoved.Error()
+		return result, nil
+	}
+	if review != nil {
+		rendered := service.presentReview(*review)
+		result.Review = &rendered
+	}
+	return result, nil
+}
+
+func (service *Service) PutReview(ctx context.Context, actor Actor, courseID string, stars int, body string) (Review, bool, error) {
+	facts, err := service.repository.ReviewFacts(ctx, courseID, actor.UserID)
+	if err != nil {
+		return Review{}, false, err
+	}
+	if err := domain.CanReview(facts.Facts, actor); err != nil {
+		return Review{}, false, err
+	}
+	content, err := domain.NewReviewContent(stars, body)
+	if err != nil {
+		return Review{}, false, err
+	}
+	progress, err := domain.NewReviewProgress(facts.CompletedLessons, facts.TotalLessons)
+	if err != nil {
+		return Review{}, false, err
+	}
+	if facts.Removed {
+		return Review{}, false, domain.ErrReviewRemoved
+	}
+	var stored ports.ReviewRecord
+	created := !facts.Exists
+	if created {
+		stored, err = service.repository.CreateReview(ctx, ports.ReviewRecord{CourseID: courseID, AuthorID: actor.UserID, Stars: content.Stars, Body: content.Body, CompletedLessons: progress.Completed, TotalLessons: progress.Total, CreatedAt: service.now()})
+	} else {
+		stored, err = service.repository.UpdateReview(ctx, courseID, actor.UserID, content, progress, service.now())
+	}
+	if err != nil {
+		return Review{}, false, err
+	}
+	return service.presentReview(stored), created, nil
+}
+
+func (service *Service) DeleteReview(ctx context.Context, actor Actor, courseID string) error {
+	return service.repository.DeleteReview(ctx, courseID, actor.UserID)
+}
+func (service *Service) ReportReview(ctx context.Context, actor Actor, reviewID string) error {
+	return service.repository.InsertReviewReport(ctx, reviewID, actor.UserID, service.now())
+}
+
+func (service *Service) RemoveReview(ctx context.Context, actor Actor, reviewID, reason string) error {
+	if !actor.Administrator {
+		return domain.ErrReviewModerationForbidden
+	}
+	review, err := service.repository.GetReview(ctx, reviewID)
+	if err != nil {
+		return err
+	}
+	if review.RemovedAt != nil {
+		return nil
+	}
+	reason = strings.TrimSpace(reason)
+	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return domain.ErrInvalidRequest
+	}
+	return service.repository.RemoveReview(ctx, reviewID, actor.UserID, "admin", &reason, service.now())
+}
+
+func (service *Service) DismissReviewReports(ctx context.Context, actor Actor, reviewID, reason string) error {
+	review, err := service.repository.GetReview(ctx, reviewID)
+	if err != nil {
+		return err
+	}
+	if err := service.requireModerationAccess(ctx, actor, review.CourseID); err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return domain.ErrInvalidRequest
+	}
+	if err := service.repository.DismissReviewReports(ctx, reviewID, actor.UserID, service.now()); err != nil {
+		return err
+	}
+	return service.repository.WriteModerationLog(ctx, ports.ModerationLogEntry{CourseID: review.CourseID, ReviewID: reviewID, ActorID: actor.UserID, ActorRole: actorRole(actor), Action: "dismiss", Reason: &reason, CreatedAt: service.now()})
+}
+
+func (service *Service) presentReview(review ports.ReviewRecord) Review {
+	return Review{ID: review.ID, AuthorDisplayName: review.DisplayName, Stars: review.Stars, Body: review.Body, CompletedLessons: review.CompletedLessons, TotalLessons: review.TotalLessons, CreatedAt: review.CreatedAt, EditedAt: review.EditedAt}
+}
+func dereference(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (service *Service) DismissReports(ctx context.Context, actor Actor, commentID, reason string) error {

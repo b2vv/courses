@@ -3,7 +3,10 @@ import {
   listTeachCourseComments,
   listTeachModerationQueue,
   removeLessonComment,
+  dismissCourseReviewReports,
+  removeCourseReview,
 } from './generated/courses';
+import { reviewSchema } from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 import type { TeachRepository } from '../../ports/TeachRepository';
@@ -66,14 +69,23 @@ function queuePage(value: unknown): value is ModerationQueuePage {
     Array.isArray(value.items) &&
     value.items.length <= 50 &&
     typeof value.nextCursor === 'string' &&
-    value.items.every(
-      (item) =>
-        record(item) &&
-        typeof item.openReports === 'number' &&
-        Number.isInteger(item.openReports) &&
-        item.openReports > 0 &&
-        comment(item.comment),
-    )
+    value.items.every((item) => {
+      if (
+        !record(item) ||
+        typeof item.openReports !== 'number' ||
+        !Number.isInteger(item.openReports) ||
+        item.openReports <= 0
+      )
+        return false;
+      // A review row is validated as strictly as a comment row: its fields reach the queue UI directly
+      // ('★'.repeat(stars) throws on a negative or infinite count).
+      return (
+        (item.kind === 'comment' && comment(item.comment) && item.review === null) ||
+        (item.kind === 'review' &&
+          item.comment === null &&
+          reviewSchema.safeParse(item.review).success)
+      );
+    })
   );
 }
 function failure(code: TeachErrorCode): TeachResult<never> {
@@ -104,6 +116,21 @@ const removeErrors = {
   401: ['authentication_required'],
   403: ['comment_forbidden'],
   404: ['comment_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+
+// Review moderation: only an admin removes (G9) — the course owner gets review_moderation_forbidden; owner or
+// admin dismisses — anyone else gets course_forbidden.
+const reviewDismissErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['course_forbidden'],
+  404: ['review_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+const reviewRemoveErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['review_moderation_forbidden'],
+  404: ['review_not_found'],
 } as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
 
 export function createApiTeachRepository(options: TransportOptions = {}): TeachRepository {
@@ -168,6 +195,30 @@ export function createApiTeachRepository(options: TransportOptions = {}): TeachR
       if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
       if (outcome.status !== 204) return failure(namedError(outcome, removeErrors));
       return { ok: true, value: undefined };
+    },
+    async dismissReviewReport(reviewId, input, signal) {
+      const outcome = await send(
+        'teach.reviews.dismiss',
+        (init) => dismissCourseReviewReports(reviewId, input, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, reviewDismissErrors));
+    },
+    async removeReview(reviewId, input, signal) {
+      const outcome = await send(
+        'teach.reviews.remove',
+        (init) => removeCourseReview(reviewId, input, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, reviewRemoveErrors));
     },
   };
 }

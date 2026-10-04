@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"courses/internal/contracts/rating"
 	"courses/internal/course/domain"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -22,6 +23,8 @@ const getLearningCourse = `SELECT
   courses.price_minor,
   courses.currency,
   grants.id IS NOT NULL,
+  COALESCE(reviews.review_count, 0)::bigint,
+  COALESCE(reviews.review_stars_sum, 0)::bigint,
   COALESCE(lessons.is_preview, false),
   COALESCE(modules.id::text, ''),
   COALESCE(modules.title, ''),
@@ -41,6 +44,11 @@ const getLearningCourse = `SELECT
 FROM courses
 LEFT JOIN course_grants AS grants
   ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+LEFT JOIN LATERAL (
+  SELECT count(*) AS review_count, COALESCE(sum(stars), 0)::bigint AS review_stars_sum
+  FROM discussion_reviews
+  WHERE course_id = courses.id AND removed_at IS NULL
+) AS reviews ON true
 LEFT JOIN course_modules AS modules ON modules.course_id = courses.id
 LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 LEFT JOIN LATERAL (
@@ -63,6 +71,7 @@ type learningCourseRow struct {
 	priceMinor                                                  pgtype.Int8
 	currency                                                    pgtype.Text
 	entitled, preview                                           bool
+	reviewCount, reviewStarsSum                                 int64
 }
 
 func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slug string) (domain.LearningCourse, error) {
@@ -87,7 +96,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 		if err := rows.Scan(
 			&courseRow.id, &courseRow.slug, &courseRow.title, &courseRow.summary, &courseRow.description, &courseRow.status,
 			&courseRow.createdAt, &courseRow.updatedAt, &courseRow.publishedAt, &courseRow.instructorID,
-			&courseRow.priceMinor, &courseRow.currency, &courseRow.entitled, &courseRow.preview,
+			&courseRow.priceMinor, &courseRow.currency, &courseRow.entitled, &courseRow.reviewCount, &courseRow.reviewStarsSum, &courseRow.preview,
 			&storedModuleID, &moduleTitle, &lessonID, &lessonTitle, &videoState,
 			&duration, &position, &completed, &clientSequence,
 		); err != nil {
@@ -151,9 +160,16 @@ func mapLearningCourseRow(row learningCourseRow) (domain.Course, error) {
 	} else if row.priceMinor.Valid != row.currency.Valid {
 		return domain.Course{}, domain.ErrDependencyUnavailable
 	}
+	if row.reviewCount < 0 || row.reviewStarsSum < 0 || row.reviewCount > int64(^uint(0)>>1) || row.reviewStarsSum > int64(^uint(0)>>1) {
+		return domain.Course{}, domain.ErrDependencyUnavailable
+	}
+	var summary *domain.Rating
+	if average, visible := rating.Summary(int(row.reviewCount), int(row.reviewStarsSum)); visible {
+		summary = &domain.Rating{Average: average, Count: int(row.reviewCount)}
+	}
 	return domain.NewCourse(domain.Course{
 		ID: row.id, Slug: row.slug, Title: row.title, Summary: row.summary, Description: row.description,
 		Status: domain.Status(row.status), CreatedAt: row.createdAt.Time, UpdatedAt: row.updatedAt.Time, PublishedAt: publishedAt,
-		Price: price, Paid: price != nil,
+		Price: price, Paid: price != nil, Rating: summary,
 	})
 }

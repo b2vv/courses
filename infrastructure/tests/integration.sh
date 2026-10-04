@@ -236,6 +236,10 @@ for fixture in student instructor admin; do
   done
 done
 
+# Ryuk is on; its create-to-start race is handled by internal/testsupport/containers.Start.
+# TEMPORARY(testcontainers-go#3868): remove both when a release contains #3868 (backlog B-27).
+# After a hard kill, list leftovers with `docker ps -a --filter label=org.testcontainers=true` and remove
+# only this repository's.
 docker run --rm "$@" \
   -v "$task_root/backend:/work" -w /work \
   -v "$task_socket:/var/run/docker.sock" \

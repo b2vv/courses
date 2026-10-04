@@ -16,6 +16,7 @@ import (
 	coursepostgres "courses/internal/course/adapters/postgres"
 	"courses/internal/course/application"
 	"courses/internal/course/domain"
+	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -27,12 +28,14 @@ import (
 func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5",
-		postgrescontainer.WithDatabase("learning_test"),
-		postgrescontainer.WithUsername("courses"),
-		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
-	)
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5",
+			postgrescontainer.WithDatabase("learning_test"),
+			postgrescontainer.WithUsername("courses"),
+			postgrescontainer.WithPassword("ephemeral-test-only"),
+			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}
@@ -70,6 +73,70 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	repository := coursepostgres.NewRepository(pool)
+
+	t.Run("ratings and lesson count match the public catalog", func(t *testing.T) {
+		// The fixture course is shared with later subtests (B27 counts its program): remove everything
+		// this subtest adds once it ends.
+		t.Cleanup(func() {
+			for _, statement := range []string{
+				`DELETE FROM discussion_reviews WHERE id IN ('81000000-0000-4000-8000-000000000011','81000000-0000-4000-8000-000000000012','81000000-0000-4000-8000-000000000013','81000000-0000-4000-8000-000000000021','81000000-0000-4000-8000-000000000022')`,
+				`DELETE FROM course_lessons WHERE id='71000000-0000-4000-8000-000000000011'`,
+				`DELETE FROM course_modules WHERE id='61000000-0000-4000-8000-000000000011'`,
+				`DELETE FROM users WHERE id IN ('41000000-0000-4000-8000-000000000011','41000000-0000-4000-8000-000000000012','41000000-0000-4000-8000-000000000013')`,
+			} {
+				if _, err := pool.Exec(context.Background(), statement); err != nil {
+					t.Errorf("cleanup %q: %v", statement, err)
+				}
+			}
+		})
+		// One statement per Exec: a parameterised query cannot carry several commands (SQLSTATE 42601).
+		for _, fixture := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+			('41000000-0000-4000-8000-000000000011','rating-one@learning.test','Rating one','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+			('41000000-0000-4000-8000-000000000012','rating-two@learning.test','Rating two','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+			('41000000-0000-4000-8000-000000000013','rating-three@learning.test','Rating three','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')`, nil},
+			{`INSERT INTO course_modules(id,course_id,title,position) VALUES ('61000000-0000-4000-8000-000000000011',$1,'Second module',1)`, []any{learningCourseID}},
+			{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('71000000-0000-4000-8000-000000000011','61000000-0000-4000-8000-000000000011','Second module lesson','',0)`, nil},
+			{`INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES
+			('81000000-0000-4000-8000-000000000011',$1,'41000000-0000-4000-8000-000000000011',4,'First learning rating is long enough.',0,5,now()),
+			('81000000-0000-4000-8000-000000000012',$1,'41000000-0000-4000-8000-000000000012',5,'Second learning rating is long enough.',0,5,now()),
+			('81000000-0000-4000-8000-000000000013',$1,'41000000-0000-4000-8000-000000000013',5,'Third learning rating is long enough.',0,5,now())`, []any{learningCourseID}},
+		} {
+			if _, err := pool.Exec(ctx, fixture.sql, fixture.args...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		learning, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-reader")
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog, err := repository.GetPublished(ctx, "learning-reader")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if learning.LessonCount != 5 || catalog.LessonCount != 5 || learning.Rating == nil || catalog.Rating == nil || *learning.Rating != *catalog.Rating || learning.Rating.Average != 4.7 || learning.Rating.Count != 3 {
+			t.Fatalf("learning=%+v catalog=%+v", learning.Course, catalog.Course)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES
+			('81000000-0000-4000-8000-000000000021',$1,'41000000-0000-4000-8000-000000000011',4,'First below threshold review body.',0,1,now()),
+			('81000000-0000-4000-8000-000000000022',$1,'41000000-0000-4000-8000-000000000012',5,'Second below threshold review body.',0,1,now())`, learningB08Course); err != nil {
+			t.Fatal(err)
+		}
+		learning, err = repository.GetLearningCourse(ctx, learningViewerID, "learning-b08")
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog, err = repository.GetPublished(ctx, "learning-b08")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if learning.Rating != nil || catalog.Rating != nil {
+			t.Fatalf("below threshold learning=%+v catalog=%+v", learning.Rating, catalog.Rating)
+		}
+	})
 
 	t.Run("R06 SQL facts cover the access truth table", func(t *testing.T) {
 		const tableOwner = "41000000-0000-4000-8000-000000000002"

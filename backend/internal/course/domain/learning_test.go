@@ -154,6 +154,36 @@ func TestLearningOutlineAndLessonLockFollowTheSharedTruthTable(t *testing.T) {
 	}
 }
 
+func TestLearningCourseCanPurchaseBy(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		actor    coursedomain.Actor
+		paid     bool
+		entitled bool
+		status   coursedomain.Status
+		want     bool
+	}{
+		{name: "admin without grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorAdmin}, paid: true, status: coursedomain.Published, want: true},
+		{name: "admin with grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorAdmin}, paid: true, entitled: true, status: coursedomain.Published},
+		{name: "owner", actor: coursedomain.Actor{UserID: learningOwnerID, Role: coursedomain.ActorInstructor}, paid: true, status: coursedomain.Published},
+		{name: "student with grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}, paid: true, entitled: true, status: coursedomain.Published},
+		{name: "student without grant paid", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}, paid: true, status: coursedomain.Published, want: true},
+		{name: "free course", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}, status: coursedomain.Published},
+		{name: "draft", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}, paid: true, status: coursedomain.Draft},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			course, err := coursedomain.NewLearningCourse(learningCourse(nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			course.Paid, course.Entitled, course.Status = test.paid, test.entitled, test.status
+			if got := course.CanPurchaseBy(test.actor); got != test.want {
+				t.Fatalf("canPurchase=%t want=%t", got, test.want)
+			}
+		})
+	}
+}
+
 func learningCourse(lessons []coursedomain.LearningLesson) coursedomain.LearningCourse {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	return coursedomain.LearningCourse{

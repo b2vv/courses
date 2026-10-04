@@ -37,6 +37,8 @@ test('W01/W04/W05/W07/W08 loads pages and invalidates teach and learn after mode
       removed += 1;
       return { ok: true, value: undefined };
     },
+    dismissReviewReport: async () => ({ ok: true, value: undefined }),
+    removeReview: async () => ({ ok: true, value: undefined }),
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const learnKey = ['learn', 'discussion', lessonId] as const;

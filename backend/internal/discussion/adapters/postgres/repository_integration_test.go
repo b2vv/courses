@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
 	"courses/internal/discussion/ports"
+	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -44,12 +46,14 @@ const (
 func TestDiscussionPostgres(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	container, err := postgrescontainer.Run(ctx, "postgres:17.5",
-		postgrescontainer.WithDatabase("discussion_test"),
-		postgrescontainer.WithUsername("courses"),
-		postgrescontainer.WithPassword("ephemeral-test-only"),
-		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
-	)
+	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
+		return postgrescontainer.Run(ctx, "postgres:17.5",
+			postgrescontainer.WithDatabase("discussion_test"),
+			postgrescontainer.WithUsername("courses"),
+			postgrescontainer.WithPassword("ephemeral-test-only"),
+			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)),
+		)
+	})
 	if err != nil {
 		t.Fatalf("PostgreSQL integration requires Docker: %v", err)
 	}
@@ -78,6 +82,309 @@ func TestDiscussionPostgres(t *testing.T) {
 	defer pool.Close()
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
+
+	t.Run("ratings repository", func(t *testing.T) {
+		ctx := context.Background()
+		fx := seedRatings(t, pool)
+		create := func(t *testing.T, id, author string, stars int) ports.ReviewRecord {
+			t.Helper()
+			record, err := repository.CreateReview(ctx, ports.ReviewRecord{ID: id, CourseID: fx.course, AuthorID: author, Stars: stars, Body: "a sufficiently long review body", CompletedLessons: 2, TotalLessons: 4, CreatedAt: time.Now().UTC()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return record
+		}
+		t.Run("Rt02 facts for buyer grant and progress", func(t *testing.T) {
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.buyer)
+			if err != nil || !facts.Facts.Entitled || !facts.Facts.HasProgress || !facts.Facts.Paid {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+		t.Run("Rt16 preview only refused", func(t *testing.T) {
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.preview)
+			if err != nil || facts.Facts.Entitled || !facts.Facts.HasProgress || !facts.Facts.Paid {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.preview}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
+				t.Fatalf("CanReview=%v", err)
+			}
+		})
+		t.Run("Rt17 admin role is not entitlement", func(t *testing.T) {
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.admin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.admin, Administrator: true}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
+				t.Fatalf("CanReview=%v", err)
+			}
+		})
+		t.Run("Rt12 frozen progress and Rt13 edit recaptures", func(t *testing.T) {
+			review := create(t, fx.reviewA, fx.buyer, 4)
+			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1::uuid,$2::uuid,'five','',4),($3::uuid,$2::uuid,'six','',5)`, fx.lesson5, fx.module, fx.lesson6); err != nil {
+				t.Fatal(err)
+			}
+			for _, lesson := range []string{fx.lesson3, fx.lesson4, fx.lesson5, fx.lesson6} {
+				if _, err := pool.Exec(ctx, `INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES($1::uuid,$2::uuid,100,now(),1,now()) ON CONFLICT(user_id,lesson_id) DO UPDATE SET completed_at=now()`, fx.buyer, lesson); err != nil {
+					t.Fatal(err)
+				}
+			}
+			stored, err := repository.GetOwnReview(ctx, fx.course, fx.buyer)
+			if err != nil || stored.CompletedLessons != 2 || stored.TotalLessons != 4 {
+				t.Fatalf("stored=%+v err=%v", stored, err)
+			}
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.buyer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			content, _ := domain.NewReviewContent(5, "an updated sufficiently long review")
+			progress, _ := domain.NewReviewProgress(facts.CompletedLessons, facts.TotalLessons)
+			updated, err := repository.UpdateReview(ctx, fx.course, fx.buyer, content, progress, time.Now().UTC())
+			if err != nil || updated.CompletedLessons != 6 || updated.TotalLessons != 6 || updated.EditedAt == nil || updated.ID != review.ID {
+				t.Fatalf("updated=%+v err=%v", updated, err)
+			}
+		})
+		t.Run("Rt20 revocation preserves review", func(t *testing.T) {
+			if _, err := pool.Exec(ctx, `UPDATE course_grants SET state='revoked' WHERE course_id=$1::uuid AND user_id=$2::uuid`, fx.course, fx.buyer); err != nil {
+				t.Fatal(err)
+			}
+			page, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil || len(page.Items) != 1 {
+				t.Fatalf("page=%+v err=%v", page, err)
+			}
+			count, _, err := repository.ReviewSummary(ctx, fx.course)
+			if err != nil || count != 1 {
+				t.Fatalf("count=%d err=%v", count, err)
+			}
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.buyer)
+			if err != nil || facts.Facts.Entitled {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+		t.Run("Rt09 removed review is omitted from summary and list", func(t *testing.T) {
+			second := create(t, "75000000-0000-4000-8000-000000000002", fx.preview, 2)
+			third := create(t, "75000000-0000-4000-8000-000000000003", fx.admin, 5)
+			if err := repository.RemoveReview(ctx, third.ID, discussionOwner, "admin", nil, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			count, sum, err := repository.ReviewSummary(ctx, fx.course)
+			if err != nil || count != 2 || sum != 7 {
+				t.Fatalf("count=%d sum=%d err=%v", count, sum, err)
+			}
+			page, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil || len(page.Items) != 2 {
+				t.Fatalf("page=%+v err=%v", page, err)
+			}
+			for _, item := range page.Items {
+				if item.ID == third.ID {
+					t.Fatalf("removed review listed")
+				}
+			}
+			_ = second
+		})
+		t.Run("Rt22 removal logs atomically", func(t *testing.T) {
+			review := create(t, "75000000-0000-4000-8000-000000000004", fx.grantee, 3)
+			if err := repository.RemoveReview(ctx, review.ID, discussionOwner, "admin", nil, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			var reviewID, actor string
+			if err := pool.QueryRow(ctx, `SELECT review_id::text,actor_id::text FROM discussion_moderation_log WHERE review_id=$1::uuid`, review.ID).Scan(&reviewID, &actor); err != nil || reviewID != review.ID || actor != discussionOwner {
+				t.Fatalf("log review=%q actor=%q err=%v", reviewID, actor, err)
+			}
+			blocked := create(t, "75000000-0000-4000-8000-000000000005", fx.reporter, 1)
+			if _, err := pool.Exec(ctx, `ALTER TABLE discussion_moderation_log ADD CONSTRAINT test_force_fail CHECK (reason IS DISTINCT FROM 'force-fail') NOT VALID`); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				_, _ = pool.Exec(context.Background(), `ALTER TABLE discussion_moderation_log DROP CONSTRAINT test_force_fail`)
+			})
+			reason := "force-fail"
+			if err := repository.RemoveReview(ctx, blocked.ID, discussionOwner, "admin", &reason, time.Now().UTC()); err == nil {
+				t.Fatal("expected forced log failure")
+			}
+			var removed bool
+			var logs int
+			if err := pool.QueryRow(ctx, `SELECT removed_at IS NOT NULL FROM discussion_reviews WHERE id=$1::uuid`, blocked.ID).Scan(&removed); err != nil {
+				t.Fatal(err)
+			}
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_moderation_log WHERE review_id=$1::uuid`, blocked.ID).Scan(&logs); err != nil {
+				t.Fatal(err)
+			}
+			if removed || logs != 0 {
+				t.Fatalf("removed=%v logs=%d", removed, logs)
+			}
+		})
+		t.Run("concurrent create and removed/delete semantics", func(t *testing.T) {
+			base := ports.ReviewRecord{ID: "75000000-0000-4000-8000-000000000006", CourseID: fx.course, AuthorID: fx.concurrent, Stars: 4, Body: "a sufficiently long review body", CompletedLessons: 0, TotalLessons: 0, CreatedAt: time.Now().UTC()}
+			results := make(chan error, 2)
+			for i := 0; i < 2; i++ {
+				go func() { _, err := repository.CreateReview(context.Background(), base); results <- err }()
+			}
+			var successes, duplicates int
+			for i := 0; i < 2; i++ {
+				err := <-results
+				if err == nil {
+					successes++
+				} else if errors.Is(err, domain.ErrReviewAlreadyExists) {
+					duplicates++
+				} else {
+					t.Fatalf("create=%v", err)
+				}
+			}
+			if successes != 1 || duplicates != 1 {
+				t.Fatalf("success=%d duplicate=%d", successes, duplicates)
+			}
+			if err := repository.RemoveReview(ctx, base.ID, discussionOwner, "admin", nil, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repository.CreateReview(ctx, base); !errors.Is(err, domain.ErrReviewRemoved) {
+				t.Fatalf("create removed=%v", err)
+			}
+			if err := repository.DeleteReview(ctx, fx.course, base.AuthorID); !errors.Is(err, domain.ErrReviewRemoved) {
+				t.Fatalf("delete removed=%v", err)
+			}
+			// A hard delete frees its unique slot.
+			rewrite := ports.ReviewRecord{ID: "75000000-0000-4000-8000-000000000008", CourseID: fx.course, AuthorID: fx.preview, Stars: 4, Body: "a sufficiently long review body", CreatedAt: time.Now().UTC()}
+			if err := repository.DeleteReview(ctx, fx.course, fx.preview); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repository.CreateReview(ctx, rewrite); err != nil {
+				t.Fatal(err)
+			}
+		})
+		t.Run("ListModerationQueue mixes kinds and keyset pages", func(t *testing.T) {
+			comment, err := repository.InsertRoot(ctx, domain.Comment{LessonID: "74000000-0000-4000-8000-000000000001", AuthorID: fx.concurrent, Body: "queue comment"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.InsertReport(ctx, domain.Report{CommentID: comment.Comment.ID, ReporterID: fx.admin}, time.Now().UTC().Add(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			// The queue must hold one open report of each kind; this subtest files its own review
+			// report instead of relying on a later subtest. Review ...0005 (fx.reporter's, from the
+			// atomic-removal subtest) is asserted there to stay not removed; Rt25 counts reviewA only.
+			if err := repository.InsertReviewReport(ctx, "75000000-0000-4000-8000-000000000005", fx.buyer, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			queue, err := repository.ListModerationQueue(ctx, fx.course, "", 1)
+			if err != nil || len(queue.Items) != 1 || queue.NextCursor == "" {
+				t.Fatalf("queue=%+v err=%v", queue, err)
+			}
+			second, err := repository.ListModerationQueue(ctx, fx.course, queue.NextCursor, 1)
+			if err != nil || len(second.Items) != 1 {
+				t.Fatalf("second=%+v err=%v", second, err)
+			}
+			if queue.Items[0].Kind == second.Items[0].Kind || (queue.Items[0].Kind != "comment" && queue.Items[0].Kind != "review") || (second.Items[0].Kind != "comment" && second.Items[0].Kind != "review") {
+				t.Fatalf("kinds=%q,%q", queue.Items[0].Kind, second.Items[0].Kind)
+			}
+		})
+		t.Run("Rt25 own report refused and duplicate idempotent", func(t *testing.T) {
+			if err := repository.InsertReviewReport(ctx, fx.reviewA, fx.buyer, time.Now().UTC()); !errors.Is(err, domain.ErrReportOwnReview) {
+				t.Fatalf("own report=%v", err)
+			}
+			if err := repository.InsertReviewReport(ctx, fx.reviewA, fx.reporter, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.InsertReviewReport(ctx, fx.reviewA, fx.reporter, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_review_reports WHERE review_id=$1::uuid`, fx.reviewA).Scan(&count); err != nil || count != 1 {
+				t.Fatalf("count=%d err=%v", count, err)
+			}
+		})
+		t.Run("Rt26 archive changes review reads and facts", func(t *testing.T) {
+			// Compare before and after: the course's review count depends on earlier subtests.
+			before, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeCount, beforeSum, err := repository.ReviewSummary(ctx, fx.course)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `UPDATE courses SET status='archived' WHERE id=$1::uuid`, fx.course); err != nil {
+				t.Fatal(err)
+			}
+			page, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil || len(page.Items) != len(before.Items) || len(page.Items) == 0 {
+				t.Fatalf("before=%d after=%d err=%v", len(before.Items), len(page.Items), err)
+			}
+			afterCount, afterSum, err := repository.ReviewSummary(ctx, fx.course)
+			if err != nil || afterCount != beforeCount || afterSum != beforeSum {
+				t.Fatalf("summary before=(%d,%d) after=(%d,%d) err=%v", beforeCount, beforeSum, afterCount, afterSum, err)
+			}
+			facts, err := repository.ReviewFacts(ctx, fx.course, fx.grantee)
+			if err != nil || !facts.Facts.Entitled {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+		t.Run("Rt27 no derived rating storage anywhere in the schema", func(t *testing.T) {
+			// Word-boundary match: course_lessons.is_preview contains "review" and is not rating storage.
+			// R6: ratings are computed at read time. Any summary table, view, matview, counter column or trigger
+			// that stores derived review data fails here — not only the two names the migration happens to use.
+			queries := []struct {
+				name  string
+				sql   string
+				allow int
+			}{
+				{"relations named review/rating (tables, views, matviews)", `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','v','m','p') AND c.relname ~* '(^|_)(reviews?|ratings?)(_|$)' AND c.relname NOT IN ('discussion_reviews','discussion_review_reports')`, 0},
+				{"columns named review/rating outside the review tables", `SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name NOT IN ('discussion_reviews','discussion_review_reports') AND column_name ~* '(^|_)(reviews?|ratings?)(_|$)' AND NOT (table_name='discussion_moderation_log' AND column_name='review_id')`, 0},
+				{"triggers whose function touches reviews", `SELECT count(*) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE NOT t.tgisinternal AND (p.prosrc ILIKE '%review%' OR p.prosrc ILIKE '%rating%')`, 0},
+				{"triggers on the review tables", `SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN ('discussion_reviews'::regclass,'discussion_review_reports'::regclass)`, 0},
+				{"views or matviews depending on discussion_reviews", `SELECT count(*) FROM pg_depend d JOIN pg_rewrite r ON r.oid=d.objid WHERE d.refobjid='discussion_reviews'::regclass`, 0},
+			}
+			for _, q := range queries {
+				var got int
+				if err := pool.QueryRow(ctx, q.sql).Scan(&got); err != nil {
+					t.Fatalf("%s: %v", q.name, err)
+				}
+				if got != q.allow {
+					t.Fatalf("%s: found %d, want %d", q.name, got, q.allow)
+				}
+			}
+		})
+
+		t.Run("moderation log rejects both targets and neither target", func(t *testing.T) {
+			// T03 review №1: the one-target CHECK (num_nonnulls = 1). Both statements must fail; nothing is left behind.
+			for name, statement := range map[string]string{
+				"both":    `INSERT INTO discussion_moderation_log(course_id,comment_id,review_id,actor_id,actor_role,action) VALUES ($1::uuid,gen_random_uuid(),$2::uuid,$3::uuid,'admin','remove')`,
+				"neither": `INSERT INTO discussion_moderation_log(course_id,comment_id,review_id,actor_id,actor_role,action) VALUES ($1::uuid,NULL,NULL,$2::uuid,'admin','remove')`,
+			} {
+				args := []any{fx.course, fx.reviewA, fx.admin}
+				if name == "neither" {
+					args = []any{fx.course, fx.admin}
+				}
+				_, err := pool.Exec(ctx, statement, args...)
+				var pgErr *pgconn.PgError
+				if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "discussion_moderation_log_one_target" {
+					t.Fatalf("%s target: want CHECK violation on discussion_moderation_log_one_target, got %v", name, err)
+				}
+			}
+		})
+		t.Run("ListReviews pages newest first with a keyset cursor", func(t *testing.T) {
+			all, err := repository.ListReviews(ctx, fx.course, "", 50)
+			if err != nil || len(all.Items) < 3 {
+				t.Fatalf("need at least 3 visible reviews in the fixture course: %d err=%v", len(all.Items), err)
+			}
+			first, err := repository.ListReviews(ctx, fx.course, "", 2)
+			if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
+				t.Fatalf("first page=%d cursor=%q err=%v", len(first.Items), first.NextCursor, err)
+			}
+			rest, err := repository.ListReviews(ctx, fx.course, first.NextCursor, 50)
+			if err != nil || len(first.Items)+len(rest.Items) != len(all.Items) || rest.NextCursor != "" {
+				t.Fatalf("rest=%d total=%d cursor=%q err=%v", len(rest.Items), len(all.Items), rest.NextCursor, err)
+			}
+			paged := append(append([]ports.ReviewRecord{}, first.Items...), rest.Items...)
+			for i := range paged {
+				if paged[i].ID != all.Items[i].ID {
+					t.Fatalf("position %d: paged %s, unpaged %s", i, paged[i].ID, all.Items[i].ID)
+				}
+				if i > 0 && paged[i].CreatedAt.After(paged[i-1].CreatedAt) {
+					t.Fatalf("not newest first at %d", i)
+				}
+			}
+		})
+	})
 
 	t.Run("I02 course-wide moderation repository", func(t *testing.T) {
 		ctx := context.Background()
@@ -560,6 +867,56 @@ func seedDiscussion(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(ctx, `UPDATE video_assets SET evicted_at=now() WHERE id = ANY($1::uuid[])`, []string{discussionAsset, "50000000-0000-4000-8000-0000000000c4"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type ratingsFixture struct {
+	course, module                                       string
+	buyer, preview, admin, grantee, reporter, concurrent string
+	lesson3, lesson4, lesson5, lesson6                   string
+	reviewA                                              string
+}
+
+func seedRatings(t *testing.T, pool *pgxpool.Pool) ratingsFixture {
+	t.Helper()
+	fx := ratingsFixture{
+		course: "71000000-0000-4000-8000-000000000001", module: "72000000-0000-4000-8000-000000000001",
+		buyer: "73000000-0000-4000-8000-000000000001", preview: "73000000-0000-4000-8000-000000000002", admin: "73000000-0000-4000-8000-000000000003", grantee: "73000000-0000-4000-8000-000000000004", reporter: "73000000-0000-4000-8000-000000000005", concurrent: "73000000-0000-4000-8000-000000000006",
+		lesson3: "74000000-0000-4000-8000-000000000003", lesson4: "74000000-0000-4000-8000-000000000004", lesson5: "74000000-0000-4000-8000-000000000005", lesson6: "74000000-0000-4000-8000-000000000006", reviewA: "75000000-0000-4000-8000-000000000001",
+	}
+	ctx := context.Background()
+	hash := "$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is"
+	for i, user := range []struct{ id, role string }{{fx.buyer, "student"}, {fx.preview, "student"}, {fx.admin, "admin"}, {fx.grantee, "student"}, {fx.reporter, "student"}, {fx.concurrent, "student"}} {
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1::uuid,$2,$3,$4,$5)`, user.id, "rating"+strconv.Itoa(i)+"@test.local", "Rating", user.role, hash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	statements := []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency) VALUES($1::uuid,'ratings-fixture','ratings','s','d','published',$2::uuid,now(),100,'UAH')`, []any{fx.course, discussionOwner}},
+		{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1::uuid,$2::uuid,'ratings',0)`, []any{fx.module, fx.course}},
+		{`INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES('74000000-0000-4000-8000-000000000001',$1::uuid,'one','',0,false),('74000000-0000-4000-8000-000000000002',$1::uuid,'two','',1,true),($2::uuid,$1::uuid,'three','',2,false),($3::uuid,$1::uuid,'four','',3,false)`, []any{fx.module, fx.lesson3, fx.lesson4}},
+		{`INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($1::uuid,$3::uuid,'admin','active',now()),($2::uuid,$3::uuid,'admin','active',now())`, []any{fx.buyer, fx.grantee, fx.course}},
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(ctx, statement.sql, statement.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []struct {
+		user, lesson string
+		complete     bool
+	}{{fx.buyer, "74000000-0000-4000-8000-000000000001", true}, {fx.buyer, "74000000-0000-4000-8000-000000000002", true}, {fx.preview, "74000000-0000-4000-8000-000000000002", false}, {fx.admin, "74000000-0000-4000-8000-000000000001", false}} {
+		var completed any
+		if row.complete {
+			completed = time.Now().UTC()
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES($1::uuid,$2::uuid,10,$3,1,now())`, row.user, row.lesson, completed); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return fx
 }
 
 func insertModerationRoot(t *testing.T, repository *Repository, lessonID, authorID, body string) ports.CommentRecord {

@@ -1,8 +1,30 @@
-import { makePublishedCourse } from '../../domain/course/course';
-import type { CatalogError, CourseDetail, CoursePage, Result } from '../../domain/course/course';
+import { makePublishedCourse, reviewPercent } from '../../domain/course/course';
+import type {
+  CatalogError,
+  CourseDetail,
+  CoursePage,
+  OwnReview,
+  Result,
+} from '../../domain/course/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
-import { getPublishedCourse, listPublishedCourses } from './generated/courses';
-import { courseDetailSchema, errorSchema, pageSchema } from './course-schema';
+import {
+  getPublishedCourse,
+  getOwnCourseReview,
+  putCourseReview,
+  deleteCourseReview,
+  listLearningCourseReviews,
+  listCourseReviews,
+  listPublishedCourses,
+  reportCourseReview,
+} from './generated/courses';
+import {
+  courseDetailSchema,
+  errorSchema,
+  pageSchema,
+  publicReviewPageSchema,
+  ownReviewSchema,
+  reviewSchema,
+} from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 
@@ -21,6 +43,20 @@ function wireError(response: WireResponse): CatalogError {
       case 'invalid_query':
         if (response.status === 400) return { code: 'invalid_query' };
         break;
+      case 'authentication_required':
+        if (response.status === 401) return { code: 'authentication_required' };
+        break;
+      case 'report_own_review':
+        if (response.status === 403) return { code: 'report_own_review' };
+        break;
+      case 'review_invalid':
+      case 'review_removed':
+      case 'review_not_found':
+      case 'review_owner_forbidden':
+      case 'review_purchase_required':
+      case 'review_not_started':
+      case 'review_not_available':
+        return { code: parsed.data.error.code };
     }
   }
   return { code: unnamedStatusCode(response.status) };
@@ -90,6 +126,133 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
               })),
             },
           };
+        },
+        signal,
+      );
+    },
+    listReviews(slug, cursor, signal) {
+      return request(
+        'reviews.list',
+        (init) =>
+          listCourseReviews(
+            encodeURIComponent(slug),
+            cursor === undefined ? undefined : { cursor },
+            init,
+          ),
+        (raw) => {
+          const parsed = publicReviewPageSchema.safeParse(raw);
+          if (!parsed.success) return invalid;
+          return {
+            ok: true,
+            value: {
+              rating: parsed.data.rating,
+              // The API sends "" on the last page; a non-null cursor would keep «Показати ще» forever.
+              nextCursor: parsed.data.nextCursor === '' ? null : parsed.data.nextCursor,
+              items: parsed.data.items.map((review) => ({
+                ...review,
+                percent: reviewPercent(review.completedLessons, review.totalLessons),
+              })),
+            },
+          };
+        },
+        signal,
+      );
+    },
+    async reportReview(reviewId, signal) {
+      const outcome = await send(
+        'reviews.report',
+        (init) => reportCourseReview(encodeURIComponent(reviewId), init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : { ok: false, error: wireError(outcome) };
+    },
+    ownReview(courseId, signal) {
+      return request<OwnReview>(
+        'reviews.own',
+        (init) => getOwnCourseReview(encodeURIComponent(courseId), init),
+        (raw) => {
+          const parsed = ownReviewSchema.safeParse(raw);
+          if (!parsed.success) return invalid;
+          const review = parsed.data.review;
+          return {
+            ok: true,
+            value: {
+              eligibility: parsed.data.eligibility,
+              review:
+                review === null
+                  ? null
+                  : {
+                      ...review,
+                      percent: reviewPercent(review.completedLessons, review.totalLessons),
+                    },
+            },
+          };
+        },
+        signal,
+      );
+    },
+    async putReview(courseId, input, signal) {
+      const outcome = await send(
+        'reviews.put',
+        (init) => putCourseReview(encodeURIComponent(courseId), input, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      if (outcome.status !== 200 && outcome.status !== 201)
+        return { ok: false, error: wireError(outcome) };
+      const parsed = reviewSchema.safeParse(outcome.data);
+      return parsed.success
+        ? {
+            ok: true,
+            value: {
+              ...parsed.data,
+              percent: reviewPercent(parsed.data.completedLessons, parsed.data.totalLessons),
+            },
+          }
+        : invalid;
+    },
+    async deleteReview(courseId, signal) {
+      const outcome = await send(
+        'reviews.delete',
+        (init) => deleteCourseReview(encodeURIComponent(courseId), init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : { ok: false, error: wireError(outcome) };
+    },
+    listLearningReviews(courseId, cursor, signal) {
+      return request(
+        'reviews.learning.list',
+        (init) =>
+          listLearningCourseReviews(
+            encodeURIComponent(courseId),
+            cursor === undefined ? undefined : { cursor },
+            init,
+          ),
+        (raw) => {
+          const parsed = publicReviewPageSchema.safeParse(raw);
+          return parsed.success
+            ? {
+                ok: true,
+                value: {
+                  rating: parsed.data.rating,
+                  // The API sends "" on the last page; a non-null cursor would keep «Показати ще» forever.
+                  nextCursor: parsed.data.nextCursor === '' ? null : parsed.data.nextCursor,
+                  items: parsed.data.items.map((review) => ({
+                    ...review,
+                    percent: reviewPercent(review.completedLessons, review.totalLessons),
+                  })),
+                },
+              }
+            : invalid;
         },
         signal,
       );

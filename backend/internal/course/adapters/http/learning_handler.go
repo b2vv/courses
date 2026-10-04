@@ -41,6 +41,7 @@ type learningCourseDTO struct {
 	courseDTO
 	Modules          []learningModuleDTO `json:"modules"`
 	ContinueLessonID *string             `json:"continueLessonId"`
+	CanPurchase      bool                `json:"canPurchase"`
 }
 
 func (handler *LearningHandler) getCourse(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +60,7 @@ func (handler *LearningHandler) getCourse(w http.ResponseWriter, r *http.Request
 		writeLearningError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusOK, mapLearningCourse(course))
+	httpserver.WriteJSON(w, http.StatusOK, mapLearningCourse(course, actor))
 }
 
 func learningActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
@@ -76,7 +77,7 @@ func learningActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) 
 	return actor, true
 }
 
-func mapLearningCourse(course domain.LearningCourse) learningCourseDTO {
+func mapLearningCourse(course domain.LearningCourse, actor domain.Actor) learningCourseDTO {
 	base := mapCourse(course.Course)
 	base.Paid = course.Paid
 	modules := make([]learningModuleDTO, 0, len(course.Modules))
@@ -102,7 +103,7 @@ func mapLearningCourse(course domain.LearningCourse) learningCourseDTO {
 		continueLessonID = &value
 	}
 	return learningCourseDTO{
-		courseDTO: base, Modules: modules, ContinueLessonID: continueLessonID,
+		courseDTO: base, Modules: modules, ContinueLessonID: continueLessonID, CanPurchase: course.CanPurchaseBy(actor),
 	}
 }
 

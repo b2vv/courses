@@ -64,6 +64,36 @@ export function TextArea({ label, description, errorMessage, placeholder, ...pro
   );
 }
 
+export function RadioGroup({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (value: string) => void;
+  options: readonly ChoiceOption[];
+}) {
+  return (
+    <Aria.RadioGroup
+      aria-label={label}
+      value={value ?? null}
+      onChange={onChange}
+      className="ui-radio-group"
+    >
+      {options.map((option) => (
+        // Same primitive as Checkbox: .ui-choice carries the 44px target, focus ring and disabled state; the
+        // label box is the click target (an unstyled label let the group intercept pointer events).
+        <Aria.Radio key={option.id} value={option.id} className="ui-choice ui-radio">
+          <span className="ui-radio-mark" aria-hidden="true" />
+          <span>{option.label}</span>
+        </Aria.Radio>
+      ))}
+    </Aria.RadioGroup>
+  );
+}
+
 export type ChoiceOption = { id: string; label: string };
 
 export type SegmentedOption = ChoiceOption & { isDisabled?: boolean };

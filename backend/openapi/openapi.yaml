@@ -1033,6 +1033,81 @@ paths:
         '404': { $ref: '#/components/responses/LessonNotFound' }
         '409': { $ref: '#/components/responses/TranscriptConflict' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/courses/{slug}/reviews:
+    get:
+      operationId: listCourseReviews
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200': { description: Public reviews, content: { application/json: { schema: { $ref: '#/components/schemas/PublicReviewPage' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/reviews:
+    get:
+      operationId: listLearningCourseReviews
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200': { description: Reviews visible to the learner, content: { application/json: { schema: { $ref: '#/components/schemas/PublicReviewPage' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/review:
+    get:
+      operationId: getOwnCourseReview
+      parameters: [ { name: courseId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Own review and current eligibility, content: { application/json: { schema: { $ref: '#/components/schemas/OwnReview' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    put:
+      operationId: putCourseReview
+      parameters: [ { name: courseId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PutReviewRequest' } } } }
+      responses:
+        '200': { description: Updated review, content: { application/json: { schema: { $ref: '#/components/schemas/Review' } } } }
+        '201': { description: Created review, content: { application/json: { schema: { $ref: '#/components/schemas/Review' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      operationId: deleteCourseReview
+      parameters: [ { name: courseId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '204': { description: Review deleted }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/TranscriptConflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/reviews/{reviewId}/reports:
+    post:
+      operationId: reportCourseReview
+      parameters: [ { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '204': { description: Report accepted }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/learn/lessons/{lessonId}/comments:
     get:
       operationId: listLessonComments
@@ -1158,6 +1233,30 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/reviews/{reviewId}/remove:
+    post:
+      operationId: removeCourseReview
+      parameters: [ { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DismissReportsRequest' } } } }
+      responses:
+        '204': { description: Review removed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/reviews/{reviewId}/dismiss-report:
+    post:
+      operationId: dismissCourseReviewReports
+      parameters: [ { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DismissReportsRequest' } } } }
+      responses:
+        '204': { description: Review reports dismissed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/teach/courses/{courseId}/comments:
     get:
@@ -1350,6 +1449,48 @@ components:
       required: [reason]
       properties:
         reason: { type: string, minLength: 1, maxLength: 500 }
+    PutReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [stars, body]
+      properties:
+        stars: { type: integer, minimum: 1, maximum: 5 }
+        body: { type: string, minLength: 20, maxLength: 2000 }
+    Review:
+      type: object
+      additionalProperties: false
+      required: [id, authorDisplayName, stars, body, completedLessons, totalLessons, createdAt, editedAt]
+      properties:
+        id: { type: string, format: uuid }
+        authorDisplayName: { type: string, nullable: true }
+        stars: { type: integer, minimum: 1, maximum: 5 }
+        body: { type: string }
+        completedLessons: { type: integer, minimum: 0 }
+        totalLessons: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+    Rating:
+      type: object
+      additionalProperties: false
+      required: [average, count]
+      properties:
+        average: { type: number, format: double }
+        count: { type: integer, minimum: 3 }
+    PublicReviewPage:
+      type: object
+      additionalProperties: false
+      required: [rating, items, nextCursor]
+      properties:
+        rating: { allOf: [ { $ref: '#/components/schemas/Rating' } ], nullable: true }
+        items: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/Review' } }
+        nextCursor: { type: string }
+    OwnReview:
+      type: object
+      additionalProperties: false
+      required: [review, eligibility]
+      properties:
+        review: { allOf: [ { $ref: '#/components/schemas/Review' } ], nullable: true }
+        eligibility: { type: string }
     TeachComment:
       type: object
       additionalProperties: false
@@ -1378,9 +1519,11 @@ components:
     ModerationQueueItem:
       type: object
       additionalProperties: false
-      required: [comment, openReports]
+      required: [kind, comment, review, openReports]
       properties:
-        comment: { $ref: '#/components/schemas/TeachComment' }
+        kind: { type: string, enum: [comment, review] }
+        comment: { allOf: [ { $ref: '#/components/schemas/TeachComment' } ], nullable: true }
+        review: { allOf: [ { $ref: '#/components/schemas/Review' } ], nullable: true }
         openReports: { type: integer, minimum: 1 }
     ModerationQueuePage:
       type: object
@@ -1608,7 +1751,7 @@ components:
     LearningCourse:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, modules, continueLessonId]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount, modules, continueLessonId, canPurchase]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1621,6 +1764,15 @@ components:
         publishedAt: { type: string, format: date-time, nullable: true }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
         modules:
           type: array
           maxItems: 40
@@ -1629,10 +1781,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        canPurchase:
+          type: boolean
+          description: "True when this actor can buy this published paid course: no active grant and not its owner. Administrators are deliberately not exempt."
     Course:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1648,6 +1803,15 @@ components:
         publishedAt: { type: string, format: date-time, nullable: true }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
     ProgramLesson:
       type: object
       additionalProperties: false
@@ -1667,7 +1831,7 @@ components:
     CourseDetail:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, program]
+      required: [id, slug, title, summary, description, status, createdAt, updatedAt, publishedAt, price, paid, rating, lessonCount, program]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -1682,6 +1846,15 @@ components:
         publishedAt: { type: string, format: date-time }
         price: { $ref: '#/components/schemas/NullablePrice' }
         paid: { type: boolean, description: "True when the course has a price; this is display metadata, not an access decision." }
+        rating:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [average, count]
+          properties:
+            average: { type: number, format: double, minimum: 1, maximum: 5 }
+            count: { type: integer, minimum: 3 }
+        lessonCount: { type: integer, minimum: 0 }
         program:
           type: array
           maxItems: 40
@@ -2007,7 +2180,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, checkout_already_opened, grant_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

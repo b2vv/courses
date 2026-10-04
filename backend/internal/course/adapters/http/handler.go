@@ -37,6 +37,12 @@ type courseDTO struct {
 	PublishedAt *time.Time `json:"publishedAt"`
 	Price       *priceDTO  `json:"price"`
 	Paid        bool       `json:"paid"`
+	Rating      *ratingDTO `json:"rating"`
+	LessonCount int        `json:"lessonCount"`
+}
+type ratingDTO struct {
+	Average float64 `json:"average"`
+	Count   int     `json:"count"`
 }
 type priceDTO struct {
 	Minor    int64  `json:"minor"`
@@ -153,7 +159,11 @@ func mapCourse(course domain.Course) courseDTO {
 	if course.Price != nil {
 		price = &priceDTO{Minor: course.Price.Minor, Currency: course.Price.Currency}
 	}
-	return courseDTO{ID: course.ID, Slug: course.Slug, Title: course.Title, Summary: course.Summary, Description: course.Description, Status: string(course.Status), CreatedAt: course.CreatedAt, UpdatedAt: course.UpdatedAt, PublishedAt: course.PublishedAt, Price: price, Paid: course.Paid}
+	var summary *ratingDTO
+	if course.Rating != nil {
+		summary = &ratingDTO{Average: course.Rating.Average, Count: course.Rating.Count}
+	}
+	return courseDTO{ID: course.ID, Slug: course.Slug, Title: course.Title, Summary: course.Summary, Description: course.Description, Status: string(course.Status), CreatedAt: course.CreatedAt, UpdatedAt: course.UpdatedAt, PublishedAt: course.PublishedAt, Price: price, Paid: course.Paid, Rating: summary, LessonCount: course.LessonCount}
 }
 
 func mapCourseDetail(course domain.CourseDetail) courseDetailDTO {

@@ -39,6 +39,13 @@ type Course struct {
 	PublishedAt *time.Time
 	Price       *Price
 	Paid        bool
+	Rating      *Rating
+	LessonCount int
+}
+
+type Rating struct {
+	Average float64
+	Count   int
 }
 
 type Price struct {
