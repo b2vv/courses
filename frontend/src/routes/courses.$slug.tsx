@@ -43,7 +43,7 @@ function CourseRoute() {
   const reviews = useInfiniteQuery(catalog.reviews(slug));
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
   const ownReview = useQuery({
-    ...catalog.ownReview(data.id),
+    ...catalog.ownReview(data.id, session.data?.id ?? 'anonymous'),
     enabled: session.data !== null && session.data !== undefined,
   });
   const report = useMutation(catalog.report());
@@ -60,10 +60,12 @@ function CourseRoute() {
       course={data}
       reviews={page}
       reviewsError={reviews.isError}
+      isNextPageError={reviews.isFetchNextPageError}
       hasMore={reviews.hasNextPage}
       isLoadingMore={reviews.isFetchingNextPage}
       onLoadMore={() => void reviews.fetchNextPage()}
       onRetry={() => void reviews.refetch()}
+      onRetryMore={() => void reviews.fetchNextPage()}
       signedIn={session.data !== null && session.data !== undefined}
       ownReviewId={ownReview.data?.review?.id}
       onReport={(reviewId) => report.mutateAsync({ reviewId })}

@@ -194,3 +194,68 @@ test('maps review report outcomes to named codes', async () => {
     expect(await createApiCourseRepository().reportReview(reviewItem.id)).toEqual(expected);
   }
 });
+
+test('maps created and updated own reviews', async () => {
+  for (const status of [201, 200]) {
+    server.use(
+      http.put(`${apiOrigin()}/api/v1/learn/courses/${course.id}/review`, () =>
+        HttpResponse.json(reviewItem, { status }),
+      ),
+    );
+    const result = await createApiCourseRepository().putReview(course.id, {
+      stars: 4,
+      body: reviewItem.body,
+    });
+    expect(result).toEqual({ ok: true, value: { ...reviewItem, percent: 13 } });
+  }
+});
+test('maps own-review refusal codes', async () => {
+  for (const code of [
+    'review_owner_forbidden',
+    'review_purchase_required',
+    'review_not_started',
+    'review_not_available',
+    'review_invalid',
+    'review_removed',
+  ]) {
+    server.use(
+      http.put(`${apiOrigin()}/api/v1/learn/courses/${course.id}/review`, () =>
+        HttpResponse.json(errorBody(code), {
+          status: code === 'review_invalid' ? 400 : code === 'review_removed' ? 409 : 403,
+        }),
+      ),
+    );
+    expect(
+      await createApiCourseRepository().putReview(course.id, { stars: 4, body: reviewItem.body }),
+    ).toEqual({ ok: false, error: { code } });
+  }
+});
+test('maps own-review deletion and named refusal outcomes', async () => {
+  for (const [status, code] of [
+    [204, undefined],
+    [409, 'review_removed'],
+    [404, 'review_not_found'],
+  ] as const) {
+    server.use(
+      http.delete(`${apiOrigin()}/api/v1/learn/courses/${course.id}/review`, () =>
+        code === undefined
+          ? new HttpResponse(null, { status })
+          : HttpResponse.json(errorBody(code), { status }),
+      ),
+    );
+    expect(await createApiCourseRepository().deleteReview(course.id)).toEqual(
+      code === undefined ? { ok: true, value: undefined } : { ok: false, error: { code } },
+    );
+  }
+});
+test('maps a learning review page with cursor', async () => {
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/courses/${course.id}/reviews`, () =>
+      HttpResponse.json({ rating: null, items: [reviewItem], nextCursor: 'next' }),
+    ),
+  );
+  expect(await createApiCourseRepository().listLearningReviews(course.id)).toEqual({
+    ok: true,
+    value: { rating: null, items: [{ ...reviewItem, percent: 13 }], nextCursor: 'next' },
+  });
+});

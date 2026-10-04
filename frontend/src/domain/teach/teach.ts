@@ -8,7 +8,9 @@ export type TeachErrorCode =
   | 'course_forbidden'
   | 'course_not_found'
   | 'comment_not_found'
-  | 'comment_forbidden';
+  | 'comment_forbidden'
+  | 'review_not_found'
+  | 'review_moderation_forbidden';
 
 export type TeachResult<T> =
   | { readonly ok: true; readonly value: T }

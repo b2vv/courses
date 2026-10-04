@@ -23,6 +23,7 @@ import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';
 import type { DiscussionErrorCode, DiscussionPage } from '../domain/discussion/discussion';
+import { ReviewBlock } from '../presentation/learn/ReviewBlock';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
@@ -142,8 +143,10 @@ function OpenLesson({
   readonly course: LearningCourse;
   readonly lesson: LearningLesson;
 }) {
-  const { learn } = Route.useRouteContext();
+  const { learn, identity } = Route.useRouteContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const startPurchase = useMutation(learn.purchase.start(queryClient));
   const lessonId = lesson.id;
   const actions = useMemo(
     () => ({
@@ -168,6 +171,12 @@ function OpenLesson({
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
   const { data: transcript } = useQuery(learn.lesson(lessonId));
   const discussionQuery = useInfiniteQuery(learn.discussion.lesson(lessonId));
+  const ownReview = useQuery(
+    learn.ownReview(course.id, identity.status === 'signed-in' ? identity.user.id : 'anonymous'),
+  );
+  const reviewsQuery = useInfiniteQuery(learn.reviews(course.id));
+  const putReview = useMutation(learn.putReview(queryClient));
+  const deleteReview = useMutation(learn.deleteReview(queryClient));
   const [discussionMutationError, setDiscussionMutationError] = useState<DiscussionErrorCode>();
   const publishDiscussion = useMutation(learn.discussion.publish(queryClient));
   const updateDiscussion = useMutation(learn.discussion.update(queryClient));
@@ -218,7 +227,23 @@ function OpenLesson({
         ? undefined
         : 'dependency_unavailable');
   return (
-    <CourseLearningView course={course} currentLessonId={lessonId}>
+    <CourseLearningView
+      course={course}
+      currentLessonId={lessonId}
+      onBuy={() =>
+        startPurchase.mutate(
+          { courseId: course.id },
+          {
+            onSuccess: (order) =>
+              void navigate({
+                to: '/orders/$orderId',
+                params: { orderId: order.id },
+                search: { course: course.slug },
+              }),
+          },
+        )
+      }
+    >
       <LessonPlayer
         courseTitle={course.title}
         lesson={lesson}
@@ -260,6 +285,29 @@ function OpenLesson({
         onReport={(commentId) =>
           runDiscussionMutation(() => reportDiscussion.mutateAsync({ lessonId, commentId }))
         }
+      />
+      <ReviewBlock
+        own={ownReview.data}
+        reviews={
+          reviewsQuery.data
+            ? {
+                rating: reviewsQuery.data.pages[0]?.rating ?? null,
+                items: reviewsQuery.data.pages.flatMap((page) => page.items),
+                nextCursor: reviewsQuery.data.pages.at(-1)?.nextCursor ?? null,
+              }
+            : undefined
+        }
+        reviewsError={reviewsQuery.error !== null}
+        hasMore={reviewsQuery.hasNextPage}
+        loadingMore={reviewsQuery.isFetchingNextPage}
+        nextPageError={reviewsQuery.isFetchNextPageError}
+        onMore={() => void reviewsQuery.fetchNextPage()}
+        onRetry={() => void reviewsQuery.refetch()}
+        onRetryMore={() => void reviewsQuery.fetchNextPage()}
+        onSave={(stars, body) =>
+          putReview.mutateAsync({ courseId: course.id, stars, body }).then(() => undefined)
+        }
+        onDelete={() => deleteReview.mutateAsync(course.id)}
       />
     </CourseLearningView>
   );

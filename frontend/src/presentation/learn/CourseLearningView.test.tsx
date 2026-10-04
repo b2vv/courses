@@ -167,3 +167,27 @@ test('marks locked lessons, and preview lessons only while something is still lo
   expect(screen.queryByText('Відкритий урок')).toBeNull();
   expect(screen.queryByText('Після покупки')).toBeNull();
 });
+
+test('shows the admin purchase entry only when the course can be purchased and starts it', async () => {
+  const user = (await import('@testing-library/user-event')).default.setup();
+  let started = 0;
+  const { rerender } = render(
+    <CourseLearningView
+      course={{ ...course, canPurchase: true }}
+      currentLessonId={lessonIds[0]}
+      onBuy={() => {
+        started += 1;
+      }}
+    >
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Купити курс' }));
+  expect(started).toBe(1);
+  rerender(
+    <CourseLearningView course={{ ...course, canPurchase: false }} currentLessonId={lessonIds[0]}>
+      <p>player</p>
+    </CourseLearningView>,
+  );
+  expect(screen.queryByRole('button', { name: 'Купити курс' })).toBeNull();
+});

@@ -73,6 +73,41 @@ describe('catalog card rating', () => {
 });
 
 describe('course page reviews', () => {
+  it('keeps rendered reviews and offers an inline retry after a next-page failure', async () => {
+    const retry = rs.fn();
+    render(
+      <CourseView
+        course={course}
+        reviews={page(20, 'next')}
+        hasMore
+        isNextPageError
+        onRetryMore={retry}
+      />,
+    );
+    // Scope to the reviews list: the course program on the same page is also a list.
+    const list = screen.getByRole('list', { name: 'Відгуки про курс' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    const [inlineRetry] = screen.getAllByRole('button', { name: 'Спробувати ще' });
+    if (inlineRetry === undefined) throw new Error('inline retry button missing');
+    await userEvent.click(inlineRetry);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+  it('shows the section error only when the first reviews page fails', () => {
+    render(<CourseView course={course} reviewsError />);
+    expect(screen.getByRole('alert').textContent).toContain('Не вдалося завантажити відгуки');
+  });
+  it('announces added and completed pages and focuses the first final addition', async () => {
+    const { rerender } = render(<CourseView course={course} reviews={page(1, 'next')} hasMore />);
+    rerender(<CourseView course={course} reviews={page(2)} />);
+    expect(await screen.findByText('Усі відгуки показано')).toBeTruthy();
+    expect(document.activeElement).not.toBe(document.body);
+  });
+  it('renders learning-scoped reviews for an archived course viewer (Rt30)', () => {
+    render(
+      <CourseView course={{ ...course, status: 'archived' } as CourseDetail} reviews={page(1)} />,
+    );
+    expect(screen.getByText('Автор 1')).toBeTruthy();
+  });
   it('shows the rating summary or «Новий курс» on the course page (Rt08)', () => {
     const { rerender } = render(<CourseView course={course} reviews={page(0)} />);
     expect(screen.getByText('Новий курс')).toBeTruthy();
@@ -105,7 +140,7 @@ describe('course page reviews', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(20);
     expect(within(list).getAllByText('4 з 5')).toHaveLength(20);
     expect(within(list).getAllByText('пройдено 33% на момент відгуку')).toHaveLength(20);
-    expect(within(list).getByText('змінено')).toBeTruthy();
+    expect(within(list).getByText(/^змінено /)).toBeTruthy();
     expect(document.querySelector('output[aria-live="polite"]')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Показати ще' }));
     expect(onLoadMore).toHaveBeenCalledTimes(1);

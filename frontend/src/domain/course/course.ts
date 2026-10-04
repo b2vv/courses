@@ -10,7 +10,14 @@ export type CatalogErrorCode =
   | 'request_timeout'
   | 'request_cancelled'
   | 'report_own_review'
-  | 'authentication_required';
+  | 'authentication_required'
+  | 'review_invalid'
+  | 'review_removed'
+  | 'review_not_found'
+  | 'review_owner_forbidden'
+  | 'review_purchase_required'
+  | 'review_not_started'
+  | 'review_not_available';
 export type CatalogError = { readonly code: CatalogErrorCode };
 export type CourseStatus = 'draft' | 'published' | 'archived';
 export type CoursePrice = {
@@ -48,6 +55,7 @@ export type PublicReviewPage = {
   readonly nextCursor: string | null;
 };
 export type OwnReview = { readonly review: Review | null; readonly eligibility: string };
+export type ReviewWrite = { readonly stars: number; readonly body: string };
 export function reviewPercent(completedLessons: number, totalLessons: number): number {
   return totalLessons === 0
     ? 0

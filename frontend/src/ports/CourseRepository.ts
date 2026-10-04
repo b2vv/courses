@@ -4,6 +4,8 @@ import type {
   CoursePage,
   OwnReview,
   PublicReviewPage,
+  Review,
+  ReviewWrite,
   Result,
 } from '../domain/course/course';
 
@@ -17,4 +19,11 @@ export interface CourseRepository {
   ): Promise<Result<PublicReviewPage>>;
   reportReview(reviewId: string, signal?: AbortSignal): Promise<Result<void>>;
   ownReview(courseId: string, signal?: AbortSignal): Promise<Result<OwnReview>>;
+  putReview(courseId: string, input: ReviewWrite, signal?: AbortSignal): Promise<Result<Review>>;
+  deleteReview(courseId: string, signal?: AbortSignal): Promise<Result<void>>;
+  listLearningReviews(
+    courseId: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<Result<PublicReviewPage>>;
 }

@@ -145,6 +145,12 @@ function createTestRouter(
     getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
     listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
     reportReview: async () => ({ ok: true, value: undefined }),
+    putReview: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+    deleteReview: async () => ({ ok: true, value: undefined }),
+    listLearningReviews: async () => ({
+      ok: true,
+      value: { rating: null, items: [], nextCursor: null },
+    }),
     ownReview: async () => ({
       ok: true,
       value: { eligibility: 'review_not_started', review: null },
@@ -245,7 +251,7 @@ function createTestRouter(
       identityDependencies,
       catalog: createCatalogQueries(createCatalog(catalogRepository)),
       learn: {
-        ...createLearnQueries(playbackRepository),
+        ...createLearnQueries(playbackRepository, catalogRepository),
         ...createTranscriptQueries(transcriptRepository),
         discussion: createDiscussionQueries(discussionRepository),
         purchase: createPurchaseQueries(purchaseRepository),

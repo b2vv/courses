@@ -64,6 +64,33 @@ export function TextArea({ label, description, errorMessage, placeholder, ...pro
   );
 }
 
+export function RadioGroup({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (value: string) => void;
+  options: readonly ChoiceOption[];
+}) {
+  return (
+    <Aria.RadioGroup
+      aria-label={label}
+      value={value ?? null}
+      onChange={onChange}
+      className="ui-radio-group"
+    >
+      {options.map((option) => (
+        <Aria.Radio key={option.id} value={option.id} className="ui-radio">
+          {option.label}
+        </Aria.Radio>
+      ))}
+    </Aria.RadioGroup>
+  );
+}
+
 export type ChoiceOption = { id: string; label: string };
 
 export type SegmentedOption = ChoiceOption & { isDisabled?: boolean };

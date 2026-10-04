@@ -8,6 +8,12 @@ const unavailable: CourseRepository = {
   listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
   reportReview: async () => ({ ok: true, value: undefined }),
   ownReview: async () => ({ ok: true, value: { eligibility: 'review_not_started', review: null } }),
+  putReview: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+  deleteReview: async () => ({ ok: true, value: undefined }),
+  listLearningReviews: async () => ({
+    ok: true,
+    value: { rating: null, items: [], nextCursor: null },
+  }),
 };
 test('rejects invalid input before an unavailable dependency and preserves dependency failure', async () => {
   const catalog = createCatalog(unavailable);

@@ -3,6 +3,8 @@ import {
   listTeachCourseComments,
   listTeachModerationQueue,
   removeLessonComment,
+  dismissCourseReviewReports,
+  removeCourseReview,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
@@ -113,6 +115,21 @@ const removeErrors = {
   404: ['comment_not_found'],
 } as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
 
+// Review moderation: only an admin removes (G9) — the course owner gets review_moderation_forbidden; owner or
+// admin dismisses — anyone else gets course_forbidden.
+const reviewDismissErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['course_forbidden'],
+  404: ['review_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+const reviewRemoveErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['review_moderation_forbidden'],
+  404: ['review_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+
 export function createApiTeachRepository(options: TransportOptions = {}): TeachRepository {
   const send = createApiTransport(options);
   return {
@@ -175,6 +192,30 @@ export function createApiTeachRepository(options: TransportOptions = {}): TeachR
       if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
       if (outcome.status !== 204) return failure(namedError(outcome, removeErrors));
       return { ok: true, value: undefined };
+    },
+    async dismissReviewReport(reviewId, input, signal) {
+      const outcome = await send(
+        'teach.reviews.dismiss',
+        (init) => dismissCourseReviewReports(reviewId, input, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, reviewDismissErrors));
+    },
+    async removeReview(reviewId, input, signal) {
+      const outcome = await send(
+        'teach.reviews.remove',
+        (init) => removeCourseReview(reviewId, input, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, reviewRemoveErrors));
     },
   };
 }

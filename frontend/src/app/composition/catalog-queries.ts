@@ -76,9 +76,9 @@ export function createCatalogQueries(catalog: ReturnType<typeof createCatalog>) 
           unwrap(await catalog.reviews(slug, pageParam, signal)),
         getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       }),
-    ownReview: (courseId: string) =>
+    ownReview: (courseId: string, userId: string) =>
       queryOptions({
-        queryKey: ['course', courseId, 'own-review'],
+        queryKey: ['course', courseId, 'own-review', userId],
         queryFn: async ({ signal }) => unwrap(await catalog.ownReview(courseId, signal)),
       }),
     report: () =>
