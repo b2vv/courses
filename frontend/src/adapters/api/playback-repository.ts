@@ -83,6 +83,7 @@ export function createApiPlaybackRepository(
           })),
         })),
         continueLessonId: parsed.data.continueLessonId,
+        canPurchase: parsed.data.canPurchase,
       };
       return { ok: true, value: course };
     },

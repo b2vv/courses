@@ -10,6 +10,9 @@ import type { CourseRepository } from '../../ports/CourseRepository';
 import {
   getPublishedCourse,
   getOwnCourseReview,
+  putCourseReview,
+  deleteCourseReview,
+  listLearningCourseReviews,
   listCourseReviews,
   listPublishedCourses,
   reportCourseReview,
@@ -20,6 +23,7 @@ import {
   pageSchema,
   publicReviewPageSchema,
   ownReviewSchema,
+  reviewSchema,
 } from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
@@ -45,6 +49,14 @@ function wireError(response: WireResponse): CatalogError {
       case 'report_own_review':
         if (response.status === 403) return { code: 'report_own_review' };
         break;
+      case 'review_invalid':
+      case 'review_removed':
+      case 'review_not_found':
+      case 'review_owner_forbidden':
+      case 'review_purchase_required':
+      case 'review_not_started':
+      case 'review_not_available':
+        return { code: parsed.data.error.code };
     }
   }
   return { code: unnamedStatusCode(response.status) };
@@ -178,6 +190,67 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
                     },
             },
           };
+        },
+        signal,
+      );
+    },
+    async putReview(courseId, input, signal) {
+      const outcome = await send(
+        'reviews.put',
+        (init) => putCourseReview(encodeURIComponent(courseId), input, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      if (outcome.status !== 200 && outcome.status !== 201)
+        return { ok: false, error: wireError(outcome) };
+      const parsed = reviewSchema.safeParse(outcome.data);
+      return parsed.success
+        ? {
+            ok: true,
+            value: {
+              ...parsed.data,
+              percent: reviewPercent(parsed.data.completedLessons, parsed.data.totalLessons),
+            },
+          }
+        : invalid;
+    },
+    async deleteReview(courseId, signal) {
+      const outcome = await send(
+        'reviews.delete',
+        (init) => deleteCourseReview(encodeURIComponent(courseId), init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : { ok: false, error: wireError(outcome) };
+    },
+    listLearningReviews(courseId, cursor, signal) {
+      return request(
+        'reviews.learning.list',
+        (init) =>
+          listLearningCourseReviews(
+            encodeURIComponent(courseId),
+            cursor === undefined ? undefined : { cursor },
+            init,
+          ),
+        (raw) => {
+          const parsed = publicReviewPageSchema.safeParse(raw);
+          return parsed.success
+            ? {
+                ok: true,
+                value: {
+                  rating: parsed.data.rating,
+                  nextCursor: parsed.data.nextCursor,
+                  items: parsed.data.items.map((review) => ({
+                    ...review,
+                    percent: reviewPercent(review.completedLessons, review.totalLessons),
+                  })),
+                },
+              }
+            : invalid;
         },
         signal,
       );

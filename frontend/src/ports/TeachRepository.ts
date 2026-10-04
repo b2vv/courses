@@ -22,4 +22,14 @@ export interface TeachRepository {
     signal?: AbortSignal,
   ): Promise<TeachResult<void>>;
   removeComment(commentId: string, signal?: AbortSignal): Promise<TeachResult<void>>;
+  dismissReviewReport(
+    reviewId: string,
+    input: DismissReportsInput,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
+  removeReview(
+    reviewId: string,
+    input: DismissReportsInput,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
 }

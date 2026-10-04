@@ -9,6 +9,7 @@ export {
   Switch,
   FileUpload,
   SegmentedControl,
+  RadioGroup,
 } from './controls';
 export type { ChoiceOption, SegmentedOption } from './controls';
 export { Dialog, Menu, Tabs, Tooltip, Toast } from './overlays';

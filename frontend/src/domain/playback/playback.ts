@@ -30,6 +30,7 @@ export type LearningCourse = {
   readonly price: { readonly minor: number; readonly currency: 'UAH' } | null;
   readonly modules: readonly LearningModule[];
   readonly continueLessonId: string | null;
+  readonly canPurchase?: boolean;
 };
 
 export type PlaybackSession = {

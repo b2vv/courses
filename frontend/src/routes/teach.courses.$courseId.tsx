@@ -5,7 +5,10 @@ import { TeachQueryError } from '../app/composition/teach-queries';
 import { validEntityId } from '../domain/course/course';
 import type { ModerationQueueItem, TeachComment } from '../domain/teach/teach';
 import { formatTimestamp } from '../presentation/format-timestamp';
+import { ReviewModerationRow } from '../presentation/teach/ReviewModerationRow';
 import { Button } from '../presentation/ui';
+
+const moderationReason = 'moderation_reviewed';
 
 function courseId(value: string): string {
   if (!validEntityId(value)) throw notFound();
@@ -16,6 +19,12 @@ function isCommentQueueItem(
   item: ModerationQueueItem,
 ): item is ModerationQueueItem & { readonly kind: 'comment'; readonly comment: TeachComment } {
   return item.kind === 'comment' && item.comment !== null;
+}
+function isReviewQueueItem(item: ModerationQueueItem): item is ModerationQueueItem & {
+  readonly kind: 'review';
+  readonly review: NonNullable<ModerationQueueItem['review']>;
+} {
+  return item.kind === 'review' && item.review !== null;
 }
 
 export const Route = createFileRoute('/teach/courses/$courseId')({
@@ -54,19 +63,22 @@ function commentLabel(comment: TeachComment): string {
 
 function TeachCourseRoute() {
   const { teach } = Route.useRouteContext();
+  const { identity } = Route.useRouteContext();
   const { courseId: id } = Route.useLoaderData();
   const queryClient = useQueryClient();
   const comments = useInfiniteQuery(teach.courseComments(id));
   const queue = useInfiniteQuery(teach.moderationQueue(id));
   const dismiss = useMutation(teach.dismiss(queryClient));
   const remove = useMutation(teach.remove(queryClient));
+  const dismissReview = useMutation(teach.dismissReview(queryClient));
+  const removeReview = useMutation(teach.removeReview(queryClient));
   const [actionError, setActionError] = useState<string>();
   const commentItems = useMemo(
     () => comments.data?.pages.flatMap((page) => page.comments) ?? [],
     [comments.data],
   );
   const queueItems = useMemo(
-    () => (queue.data?.pages.flatMap((page) => page.items) ?? []).filter(isCommentQueueItem),
+    () => queue.data?.pages.flatMap((page) => page.items) ?? [],
     [queue.data],
   );
   const run = async (action: () => Promise<unknown>) => {
@@ -137,26 +149,51 @@ function TeachCourseRoute() {
         {actionError ? <p role="alert">{actionError}</p> : null}
         {queueItems.length > 0 ? (
           <ul aria-label="Черга модерації">
-            {queueItems.map((item) => (
-              <ModerationRow
-                key={item.comment.id}
-                item={item}
-                busy={dismiss.isPending || remove.isPending}
-                onDismiss={(reason) =>
-                  void run(() =>
-                    dismiss.mutateAsync({ commentId: item.comment.id, input: { reason } }),
-                  )
-                }
-                onRemove={() =>
-                  void run(() =>
-                    remove.mutateAsync({
-                      lessonId: item.comment.lessonId,
-                      commentId: item.comment.id,
-                    }),
-                  )
-                }
-              />
-            ))}
+            {queueItems.map((item) =>
+              isCommentQueueItem(item) ? (
+                <ModerationRow
+                  key={item.comment.id}
+                  item={item}
+                  busy={dismiss.isPending || remove.isPending}
+                  onDismiss={(reason) =>
+                    void run(() =>
+                      dismiss.mutateAsync({ commentId: item.comment.id, input: { reason } }),
+                    )
+                  }
+                  onRemove={() =>
+                    void run(() =>
+                      remove.mutateAsync({
+                        lessonId: item.comment.lessonId,
+                        commentId: item.comment.id,
+                      }),
+                    )
+                  }
+                />
+              ) : isReviewQueueItem(item) ? (
+                <ReviewModerationRow
+                  key={item.review.id}
+                  item={item}
+                  busy={dismissReview.isPending || removeReview.isPending}
+                  admin={identity.status === 'signed-in' && identity.user.role === 'admin'}
+                  onDismiss={() =>
+                    void run(() =>
+                      dismissReview.mutateAsync({
+                        reviewId: item.review.id,
+                        input: { reason: moderationReason },
+                      }),
+                    )
+                  }
+                  onRemove={() =>
+                    void run(() =>
+                      removeReview.mutateAsync({
+                        reviewId: item.review.id,
+                        input: { reason: moderationReason },
+                      }),
+                    )
+                  }
+                />
+              ) : null,
+            )}
           </ul>
         ) : null}
         {queue.hasNextPage ? (
@@ -190,11 +227,7 @@ function ModerationRow({
         <p>{commentLabel(item.comment)}</p>
         <p>Скарг: {item.openReports}</p>
         <div className="discussion-actions">
-          <Button
-            variant="secondary"
-            isDisabled={busy}
-            onPress={() => onDismiss('moderation_reviewed')}
-          >
+          <Button variant="secondary" isDisabled={busy} onPress={() => onDismiss(moderationReason)}>
             Відхилити скарги
           </Button>
           <Button variant="danger" isDisabled={busy || item.comment.removed} onPress={onRemove}>

@@ -2,14 +2,21 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LearningCourse } from '../../domain/playback/playback';
 import { Link } from '../ui';
+import { Button } from '../ui';
 
 type CourseLearningViewProps = {
   readonly course: LearningCourse;
   readonly currentLessonId: string;
   readonly children: ReactNode;
+  readonly onBuy?: (() => void) | undefined;
 };
 
-export function CourseLearningView({ course, currentLessonId, children }: CourseLearningViewProps) {
+export function CourseLearningView({
+  course,
+  currentLessonId,
+  children,
+  onBuy,
+}: CourseLearningViewProps) {
   const { t } = useTranslation();
   // The preview badge only means something to a viewer who still has locked lessons.
   const hasLocked = course.modules.some((module) => module.lessons.some((lesson) => lesson.locked));
@@ -20,6 +27,9 @@ export function CourseLearningView({ course, currentLessonId, children }: Course
         <header className="course-outline-heading">
           <p className="eyebrow">{t('learn.program')}</p>
           <h2 id="course-outline-heading">{t('learn.outline')}</h2>
+          {course.canPurchase && onBuy ? (
+            <Button onPress={onBuy}>{t('learn.purchase.buy')}</Button>
+          ) : null}
         </header>
         <ol className="course-outline-modules">
           {course.modules.map((module, moduleIndex) => (
