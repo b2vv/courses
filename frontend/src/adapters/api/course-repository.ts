@@ -146,8 +146,7 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
             ok: true,
             value: {
               rating: parsed.data.rating,
-              // The API sends "" on the last page; a non-null cursor would keep «Показати ще» forever.
-              nextCursor: parsed.data.nextCursor === '' ? null : parsed.data.nextCursor,
+              nextCursor: parsed.data.nextCursor,
               items: parsed.data.items.map((review) => ({
                 ...review,
                 percent: reviewPercent(review.completedLessons, review.totalLessons),
@@ -244,8 +243,7 @@ export function createApiCourseRepository(options: TransportOptions = {}): Cours
                 ok: true,
                 value: {
                   rating: parsed.data.rating,
-                  // The API sends "" on the last page; a non-null cursor would keep «Показати ще» forever.
-                  nextCursor: parsed.data.nextCursor === '' ? null : parsed.data.nextCursor,
+                  nextCursor: parsed.data.nextCursor,
                   items: parsed.data.items.map((review) => ({
                     ...review,
                     percent: reviewPercent(review.completedLessons, review.totalLessons),

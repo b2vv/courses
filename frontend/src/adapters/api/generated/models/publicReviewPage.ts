@@ -12,5 +12,6 @@ export interface PublicReviewPage {
   rating: Rating | null;
   /** @maxItems 20 */
   items: Review[];
-  nextCursor: string;
+  /** @nullable */
+  nextCursor: string | null;
 }
