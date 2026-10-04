@@ -170,6 +170,9 @@ async function writeReviewInUI(page: Page, stars: number, body: string) {
   await expect(form.getByRole('radio', { name: `${stars} з 5` })).toBeChecked();
   await form.getByRole('textbox', { name: 'Текст відгуку' }).fill(body);
   await form.getByRole('button', { name: 'Зберегти' }).click();
+  // The save must land: the form closes and the stored review is shown with its Edit action.
+  await expect(form.getByRole('button', { name: 'Редагувати' })).toBeVisible();
+  await expect(form.getByText(body)).toBeVisible();
 }
 
 test.use({ storageState: authStatePath('student') });
@@ -248,6 +251,7 @@ test('Rt03 edits 4 stars to 2 and Rt04 deletes through the dialog then writes ag
   await own.locator('label.ui-radio').filter({ hasText: '2 з 5' }).click();
   await expect(own.getByRole('radio', { name: '2 з 5' })).toBeChecked();
   await own.getByRole('button', { name: 'Зберегти' }).click();
+  await expect(own.getByRole('button', { name: 'Редагувати' })).toBeVisible();
   await page.goto(`/courses/${course.slug}`);
   await expect(page.getByText('2 з 5')).toBeVisible();
   await expect(page.getByText(/змінено/)).toBeVisible();
@@ -348,6 +352,13 @@ test('Rt09 Rt21 Rt22 and report: report reaches the owner queue, owner has no re
     .filter({ hasText: `Moderation 0 ${runNamespace}` })
     .getByRole('button', { name: 'Зняти' })
     .click();
+  // Wait for the removal to land before reading the public page (navigating at once could race it).
+  await expect(
+    adminPage
+      .getByRole('region', { name: 'Черга модерації' })
+      .locator('article')
+      .filter({ hasText: `Moderation 0 ${runNamespace}` }),
+  ).toHaveCount(0);
   await page.goto(`/courses/${course.slug}`);
   await expect(page.getByText(`Moderation 0 ${runNamespace}`)).toHaveCount(0);
   await page.goto('/courses');

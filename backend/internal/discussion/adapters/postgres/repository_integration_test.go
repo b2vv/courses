@@ -318,21 +318,32 @@ func TestDiscussionPostgres(t *testing.T) {
 				t.Fatalf("facts=%+v err=%v", facts, err)
 			}
 		})
-		t.Run("Rt27 schema has only review tables and no review trigger", func(t *testing.T) {
-			var tables, columns, triggers int
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('discussion_reviews','discussion_review_reports')`).Scan(&tables); err != nil {
-				t.Fatal(err)
+		t.Run("Rt27 no derived rating storage anywhere in the schema", func(t *testing.T) {
+			// Word-boundary match: course_lessons.is_preview contains "review" and is not rating storage.
+			// R6: ratings are computed at read time. Any summary table, view, matview, counter column or trigger
+			// that stores derived review data fails here — not only the two names the migration happens to use.
+			queries := []struct {
+				name  string
+				sql   string
+				allow int
+			}{
+				{"relations named review/rating (tables, views, matviews)", `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','v','m','p') AND c.relname ~* '(^|_)(reviews?|ratings?)(_|$)' AND c.relname NOT IN ('discussion_reviews','discussion_review_reports')`, 0},
+				{"columns named review/rating outside the review tables", `SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name NOT IN ('discussion_reviews','discussion_review_reports') AND column_name ~* '(^|_)(reviews?|ratings?)(_|$)' AND NOT (table_name='discussion_moderation_log' AND column_name='review_id')`, 0},
+				{"triggers whose function touches reviews", `SELECT count(*) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid WHERE NOT t.tgisinternal AND (p.prosrc ILIKE '%review%' OR p.prosrc ILIKE '%rating%')`, 0},
+				{"triggers on the review tables", `SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN ('discussion_reviews'::regclass,'discussion_review_reports'::regclass)`, 0},
+				{"views or matviews depending on discussion_reviews", `SELECT count(*) FROM pg_depend d JOIN pg_rewrite r ON r.oid=d.objid WHERE d.refobjid='discussion_reviews'::regclass`, 0},
 			}
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='courses' AND column_name ILIKE '%rating%'`).Scan(&columns); err != nil {
-				t.Fatal(err)
-			}
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_trigger WHERE tgrelid='discussion_reviews'::regclass AND NOT tgisinternal`).Scan(&triggers); err != nil {
-				t.Fatal(err)
-			}
-			if tables != 2 || columns != 0 || triggers != 0 {
-				t.Fatalf("tables=%d columns=%d triggers=%d", tables, columns, triggers)
+			for _, q := range queries {
+				var got int
+				if err := pool.QueryRow(ctx, q.sql).Scan(&got); err != nil {
+					t.Fatalf("%s: %v", q.name, err)
+				}
+				if got != q.allow {
+					t.Fatalf("%s: found %d, want %d", q.name, got, q.allow)
+				}
 			}
 		})
+
 		t.Run("moderation log rejects both targets and neither target", func(t *testing.T) {
 			// T03 review №1: the one-target CHECK (num_nonnulls = 1). Both statements must fail; nothing is left behind.
 			for name, statement := range map[string]string{

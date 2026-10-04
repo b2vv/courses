@@ -808,6 +808,17 @@ func TestT05ReviewRoutesContract(t *testing.T) {
 // harness); the browser suite exercises the real middleware.
 func TestT05ReviewRoutesGaps(t *testing.T) {
 	valid := strings.Repeat("a", 20)
+	t.Run("Rt26 a grant holder edits their review on an archived course", func(t *testing.T) {
+		// G3: archive changes nothing for reviews — a grant holder with progress may still edit (200).
+		fake := newFake()
+		fake.reviews[discussionReview] = ports.ReviewRecord{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: time.Now()}
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true, HasProgress: true}
+		fake.reviewFacts.Exists = true
+		response := serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":2,"body":"`+valid+`"}`, actor(discussionAuthor, "student"), true)
+		if response.Code != http.StatusOK || fake.reviews[discussionReview].Stars != 2 {
+			t.Fatalf("archived edit status=%d stars=%d body=%s", response.Code, fake.reviews[discussionReview].Stars, response.Body.String())
+		}
+	})
 	t.Run("anonymous review writes are refused", func(t *testing.T) {
 		fake := newFake()
 		requireError(t, serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":3,"body":"`+valid+`"}`, nil, true), http.StatusUnauthorized, "authentication_required")

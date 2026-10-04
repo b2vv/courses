@@ -33,7 +33,7 @@ row has an automated level; manual rows: 0.
 | Rt02 | integration `TestDiscussionPostgres/ratings_repository/Rt02_facts_for_buyer_grant_and_progress` | integration | proven |
 | Rt03 | e2e «Rt03 edits 4 stars to 2…»; FE `ReviewBlock.test` «submits… and opens edit prefilled» | e2e, unit | proven |
 | Rt04 | e2e «…Rt04 deletes through the dialog then writes again»; integration «concurrent create and removed/delete semantics» (delete frees the slot) | e2e, integration | proven |
-| Rt05 | e2e «Rt05 an admin buys a paid course through the offline WayForPay stub…»; FE `CourseLearningView.test` purchase-entry tests; unit `TestLearningCourseCanPurchaseBy` | e2e, unit | proven (stub, not live WayForPay — §6) |
+| Rt05 | e2e «Rt05 an admin buys a paid course through the offline WayForPay stub…» (after purchase and progress the review is saved and shown — `writeReviewInUI` asserts the stored review and its Edit action); FE `CourseLearningView.test` purchase-entry tests; unit `TestLearningCourseCanPurchaseBy` | e2e, unit | proven (stub, not live WayForPay — §6) |
 | Rt06 | FE `ratings.test.tsx` «shows «Новий курс» below the threshold»; e2e «Rt06/Rt07/Rt08…»; unit `TestSummary` | unit, e2e | proven |
 | Rt07 | integration course `Rt07_Rt09_catalog_aggregates…`; FE `ratings.test.tsx` Rt07; e2e | integration, unit, e2e | proven |
 | Rt08 | FE `ratings.test.tsx` Rt08; e2e | unit, e2e | proven |
@@ -54,11 +54,19 @@ row has an automated level; manual rows: 0.
 | Rt23 | contract `own delete report remove dismiss` (delete after removal 409); integration «concurrent create…» (create after removal → `review_removed`) | contract, integration | proven |
 | Rt24 | unit `TestGrantCourseRequiresAdministratorAndWritesAudit/administrator cannot grant themselves`; contract `TestPurchaseAndGrantHTTPMatchOpenAPI/admin cannot grant themselves`; integration orders «administrator cannot grant themselves or create a row» | unit, contract, integration | proven |
 | Rt25 | integration `Rt25_own_report_refused_and_duplicate_idempotent`; contract (report own 403) | integration, contract | proven |
-| Rt26 | integration `Rt26_archive_changes_review_reads_and_facts`; e2e «Rt26 Rt30…» (republish restores the card) | integration, e2e | proven |
-| Rt27 | integration `Rt27_schema_has_only_review_tables_and_no_review_trigger` | integration | proven |
+| Rt26 | integration `Rt26_archive_changes_review_reads_and_facts` (list, summary, facts unchanged); contract `TestT05ReviewRoutesGaps/Rt26 a grant holder edits their review on an archived course` (PUT → 200); e2e «Rt26 Rt30…» (republish restores the card) | integration, contract, e2e | proven |
+| Rt27 | integration `Rt27_no_derived_rating_storage_anywhere_in_the_schema` — no table/view/matview named review/rating besides the two, no such column elsewhere (word-boundary match), no trigger whose function touches reviews, no view depending on `discussion_reviews` | integration | proven |
 | Rt28 | FE `ratings.test.tsx` «keeps the program visible and offers a retry when reviews fail» and «shows the section error only when the first reviews page fails» | unit | proven |
-| Rt29 | FE `ReviewBlock.test` «keeps failed text and names a removed review» | unit | proven |
+| Rt29 | FE `ReviewBlock.test` «keeps the typed text when a save fails (Rt29)»; «names a save refused because the review was removed meanwhile» | unit | proven |
 | Rt30 | e2e «Rt26 Rt30…» (grant holder sees reviews on the learning page, public page 404); contract `TestT05ReviewRoutesGaps/learning list permits an archived course grant holder`, `…/learning list refuses a viewer without a right` | e2e, contract | proven |
+
+Notes from the independent row check (Courses 2, `work/review-ratings-report.md`), recorded rather than
+rounded up: **Rt12** proves the freeze; the capture from real facts at write time is proven by the application
+tests and on the real path only at 0 % (Rt01). **Rt20**'s refusal to edit after revocation is an application unit
+with a fake (the integration row proves the review stays). **Rt04** shows the review gone; the count drop is
+implied by its absence. **Rt16/Rt17** also have a generic contract 403. Three rows that were weaker than
+claimed — Rt05 (save outcome not asserted), Rt26 (archived edit not asserted), Rt27 (schema check too narrow) —
+were strengthened before this report was closed.
 
 Also verified beyond the rows: cross-origin review PUT refused (e2e — the handler harness stubs `sameOrigin`);
 axe (`wcag2a`, `wcag2aa`, `wcag21aa`) on the course page with reviews, the learning form and the teach queue.
@@ -67,8 +75,8 @@ axe (`wcag2a`, `wcag2aa`, `wcag21aa`) on the course page with reviews, the learn
 
 Ordered `make check` on the branch head (2026-10-04): format-check, lint (incl. the frontend architecture
 check), typecheck, test, integration, check-generated, build, up, drain-queue, seed-identities, seed, smoke,
-e2e — **exit 0**. Frontend unit **588 passed / 0 failed**; Go unit and integration: no `FAIL`; e2e **98 passed
-of 98** in 11.6 min, all nine `ratings.spec.ts` scenarios among them. The run was made with the owner's other
+e2e — **exit 0**. Frontend unit **589 passed / 0 failed**; Go unit and integration: no `FAIL`; e2e **98 passed
+of 98** in 11.4 min (final run after the row check; the run before it: 588 / 98 of 98), all nine `ratings.spec.ts` scenarios among them. The run was made with the owner's other
 Docker stacks (cassiopeia, cargotrans — 15 containers) paused by the owner's leave, because `cassiopeia-webapi`
 held 6.6 of the Docker VM's 15.35 GiB and the gate ran 1.2 h with 503s and container-start failures; all 15
 were restarted after the run (15/15).

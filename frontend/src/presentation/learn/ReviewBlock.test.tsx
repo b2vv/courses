@@ -115,7 +115,7 @@ test('shows every eligibility refusal without a form', () => {
     unmount();
   }
 });
-test('keeps failed text and names a removed review', async () => {
+test('keeps the typed text when a save fails (Rt29)', async () => {
   const user = userEvent.setup();
   renderBlock({ review: null, eligibility: 'ok' }, async () => {
     throw new Error('dependency_unavailable');
@@ -126,6 +126,17 @@ test('keeps failed text and names a removed review', async () => {
   await user.click(screen.getByRole('button', { name: 'Зберегти' }));
   expect((body as HTMLTextAreaElement).value).toBe(review.body);
   expect(screen.getByRole('alert').textContent).toContain('Не вдалося зберегти');
+});
+test('names a save refused because the review was removed meanwhile', async () => {
+  const user = userEvent.setup();
+  renderBlock({ review: null, eligibility: 'ok' }, async () => {
+    throw new Error('review_removed');
+  });
+  await user.click(screen.getByRole('radio', { name: '3 з 5' }));
+  await user.click(screen.getByRole('textbox'));
+  await user.paste(review.body);
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(screen.getByRole('alert').textContent).toContain('Відгук знято модератором');
 });
 test('names the rating radio group and all star choices', () => {
   renderBlock({ review: null, eligibility: 'ok' });
