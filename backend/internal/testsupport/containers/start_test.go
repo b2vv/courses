@@ -67,14 +67,23 @@ func TestStartReturnsNonRaceErrorAndContainerUnchanged(t *testing.T) {
 
 func TestStartNamesUpstreamFixWhenRetryBudgetExpires(t *testing.T) {
 	withTinyRetryConfig(t)
-	retryConfig.budget = 3 * time.Millisecond
+	// Deterministic exhaustion: the second wait reports the budget as spent. A 3 ms real budget made the
+	// number of attempts depend on how long the first attempt took (it failed once under a full gate).
+	waits := 0
+	retryConfig.wait = func(context.Context, time.Duration) error {
+		waits++
+		if waits >= 2 {
+			return context.DeadlineExceeded
+		}
+		return nil
+	}
 	calls := 0
 	got, err := Start(context.Background(), func(context.Context) (*fakeContainer, error) {
 		calls++
 		return &fakeContainer{}, raceError()
 	})
 	// The last race container was terminated, so none is handed back (no double Terminate in the caller).
-	if got != nil || err == nil || !strings.Contains(err.Error(), "#3868") || calls < 2 {
+	if got != nil || err == nil || !strings.Contains(err.Error(), "#3868") || calls != 2 {
 		t.Fatalf("Start() = (%p, %v), calls=%d", got, err, calls)
 	}
 }
