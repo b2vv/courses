@@ -819,6 +819,12 @@ func TestT05ReviewRoutesGaps(t *testing.T) {
 			t.Fatalf("archived edit status=%d stars=%d body=%s", response.Code, fake.reviews[discussionReview].Stars, response.Body.String())
 		}
 	})
+	t.Run("B-28 the last page says null, not an empty cursor", func(t *testing.T) {
+		response := serve(t, newFake(), http.MethodGet, "/api/v1/courses/discussion/reviews", "", nil, true)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"nextCursor":null`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
 	t.Run("anonymous review writes are refused", func(t *testing.T) {
 		fake := newFake()
 		requireError(t, serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":3,"body":"`+valid+`"}`, nil, true), http.StatusUnauthorized, "authentication_required")

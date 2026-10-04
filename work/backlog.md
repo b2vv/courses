@@ -32,7 +32,7 @@ call site starts using container reuse (Start would terminate a shared container
 spends the full 30 s budget (~15 create/terminate cycles) and then fails loudly naming #3868. Bounded, not hidden.
 Review: Courses 2, `work/review-ryuk-retry.md` (approve, 0 blocking).
 
-## B-23 — e2e B39 впав раз у повному гейті; механізм не знайдено
+## B-23 — e2e B39 впав раз у повному гейті — ЗАКРИТО 2026-10-04: дефект тесту (застарілий знімок)
 
 **Raised:** 2026-09-29, під час гейта Phase 7b D04 (Courses; розбір разом із Courses 2).
 **Shape:** спостережене падіння, не діагноз. Слово «flaky» тут навмисно не вживається — це ярлик, а
@@ -77,6 +77,17 @@ playback-сесії; новий рантайм-ефект — один `GET …/
 дійшли до кінця playback без падіння B39. Зміни фази рейтингів playback не торкаються (відгуки — окремий блок
 сторінки уроку; `LessonPlayer` не змінювався). Діагнозу нема — лише ще одна точка спостереження; повний гейт
 перезапущено.
+
+
+### Закрито 2026-10-04 — механізм знайдено (Courses 1)
+
+Не плеєр, а тест. `playback.spec.ts` B39 знімав `writes` (записи `currentTime`) **до** `expect.poll`, потім до
+30 с чекав, поки потрібний запис з'явиться в **живому** масиві відео, і після успіху poll перевіряв
+`restoreWrite`, обчислений зі **старого** знімка. Коли запис відновлення ставав між знімком і успіхом poll,
+`restoreWrite` був `undefined` при щойно доведеному записі — рівно спостережене падіння (рядок перевірки після
+poll, `Received: undefined`; обидва зафіксовані падіння — 2026-09-29 і 2026-10-04 — мали цю форму). Виправлення:
+фінальні перевірки рахуються зі знімка, перечитаного після poll (`readWrites()` + `findRestore`), ранній вивід
+діагностики лишився. Перевірка: повний гейт фази після виправлення (гілка `fix/b28-review-cursor-null`).
 
 ## B-22 — Duplicated current-video selectors
 
@@ -1417,7 +1428,7 @@ test credentials `/view/852472`.
 - **serviceUrl** response format and the 4-day retry are confirmed — matches our acknowledgement and the
   Pay21b "unmatched → 503 so WayForPay retries" behaviour.
 
-## B-28 — Review list cursor: the API sends "" for "no next page"
+## B-28 — Review list cursor: the API sends "" for "no next page" — CLOSED 2026-10-04
 
 **Raised:** 2026-10-04, ratings phase (found by e2e; Courses 2 T06b-fixes review №3).
 **What:** `GET /courses/{slug}/reviews` and `GET /learn/courses/{id}/reviews` return `nextCursor: ""` on the last
@@ -1426,3 +1437,8 @@ page (the discussion repository's cursor encoding). The frontend maps `""` → `
 **Why still open:** the contract says "string", so every future client has to know the `""` convention. Fix:
 the HTTP layer returns `null` and OpenAPI marks `nextCursor` nullable; then the frontend mapping can go.
 **Trigger:** the next change to the review list contract, or a second client.
+
+### B-28 closed 2026-10-04
+The review list handlers return `nextCursor: null` on the last page (`nextCursorOrNull`); OpenAPI marks it nullable;
+Orval regenerated; the frontend `""` mapping is gone. Contract test «B-28 the last page says null, not an empty
+cursor»; repository test passes the null through. Comment and queue lists keep their older `""` (out of scope).

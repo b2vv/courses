@@ -124,7 +124,7 @@ type reviewRatingDTO struct {
 type publicReviewsDTO struct {
 	Rating     *reviewRatingDTO `json:"rating"`
 	Items      []reviewDTO      `json:"items"`
-	NextCursor string           `json:"nextCursor"`
+	NextCursor *string          `json:"nextCursor"`
 }
 type ownReviewDTO struct {
 	Review      *reviewDTO `json:"review"`
@@ -302,7 +302,7 @@ func (handler *Handler) publicReviews(w http.ResponseWriter, r *http.Request) {
 	for i, review := range page.Items {
 		items[i] = mapReview(review)
 	}
-	result := publicReviewsDTO{Items: items, NextCursor: page.NextCursor}
+	result := publicReviewsDTO{Items: items, NextCursor: nextCursorOrNull(page.NextCursor)}
 	if page.Rating != nil {
 		result.Rating = &reviewRatingDTO{Average: page.Rating.Average, Count: page.Rating.Count}
 	}
@@ -328,7 +328,7 @@ func (handler *Handler) learningReviews(w http.ResponseWriter, r *http.Request) 
 	for i, review := range page.Items {
 		items[i] = mapReview(review)
 	}
-	result := publicReviewsDTO{Items: items, NextCursor: page.NextCursor}
+	result := publicReviewsDTO{Items: items, NextCursor: nextCursorOrNull(page.NextCursor)}
 	if page.Rating != nil {
 		result.Rating = &reviewRatingDTO{Average: page.Rating.Average, Count: page.Rating.Count}
 	}
@@ -637,4 +637,13 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 		message = "A dependency is unavailable"
 	}
 	httpserver.WriteError(w, r, status, code, message)
+}
+
+// nextCursorOrNull: the review lists say "no next page" with null (backlog B-28); the repository's keyset
+// encoding uses "" for that.
+func nextCursorOrNull(cursor string) *string {
+	if cursor == "" {
+		return nil
+	}
+	return &cursor
 }

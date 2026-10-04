@@ -1085,21 +1085,23 @@ test.describe('T7 playback milestone', () => {
       // Read and print the measurements BEFORE asserting on them. This test exists to produce
       // numbers; printing them after the assertion hid them on exactly the runs where they were
       // needed - the same failure shape as evidence that disappears when a container restarts.
-      const writes = await page.locator('video').evaluate((video) => {
-        const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
-        if (!Array.isArray(value)) return [];
-        return value.flatMap((entry) => {
-          if (typeof entry !== 'object' || entry === null) return [];
-          const beforeWrite = Reflect.get(entry, 'before');
-          const assigned = Reflect.get(entry, 'assigned');
-          return typeof beforeWrite === 'number' && typeof assigned === 'number'
-            ? [{ before: beforeWrite, assigned }]
-            : [];
+      const readWrites = () =>
+        page.locator('video').evaluate((video) => {
+          const value: unknown = Reflect.get(video, '__o1CurrentTimeWrites');
+          if (!Array.isArray(value)) return [];
+          return value.flatMap((entry) => {
+            if (typeof entry !== 'object' || entry === null) return [];
+            const beforeWrite = Reflect.get(entry, 'before');
+            const assigned = Reflect.get(entry, 'assigned');
+            return typeof beforeWrite === 'number' && typeof assigned === 'number'
+              ? [{ before: beforeWrite, assigned }]
+              : [];
+          });
         });
-      });
-      const restoreWrite = writes.find(
-        ({ assigned }, index) => index > 0 && Math.abs(assigned - preRemint) <= 1,
-      );
+      const findRestore = (all: Array<{ before: number; assigned: number }>) =>
+        all.find(({ assigned }, index) => index > 0 && Math.abs(assigned - preRemint) <= 1);
+      const writes = await readWrites();
+      const restoreWrite = findRestore(writes);
       const stopLoadObservation =
         activeImmediatelyBeforeRemint === 0
           ? 'inconclusive: no old request was in flight immediately before remint'
@@ -1136,8 +1138,12 @@ test.describe('T7 playback milestone', () => {
         .toBe(true);
       expect(activeImmediatelyBeforeRemint).toBeGreaterThan(0);
       expect(activeAtMint).toBe(0);
-      expect(restoreWrite?.assigned).toBeGreaterThanOrEqual(preRemint - 1);
-      expect(restoreWrite?.assigned).toBeLessThanOrEqual(preRemint + 1);
+      // B-23: assert on a snapshot taken after the poll. The early snapshot above is printed for diagnosis,
+      // but the restore write can land between it and the poll's success — asserting on it failed with
+      // `undefined` even though the poll had just proven the write.
+      const settledRestore = findRestore(await readWrites());
+      expect(settledRestore?.assigned).toBeGreaterThanOrEqual(preRemint - 1);
+      expect(settledRestore?.assigned).toBeLessThanOrEqual(preRemint + 1);
       await expect.poll(() => videoTime(page)).toBeGreaterThanOrEqual(preRemint - 1);
     });
 
