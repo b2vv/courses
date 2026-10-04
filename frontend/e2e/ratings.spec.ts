@@ -179,20 +179,29 @@ test.afterAll(async ({ browser, baseURL }) => {
   // Cleanup is several API calls plus one SQL delete; under a loaded Docker host it outran the default 30 s.
   test.setTimeout(120_000);
   if (baseURL === undefined) return;
-  // Users are counted too: the admin users list is paged, and leftover reviewers pushed admin-users P08's
-  // fixture rows off the first page. Remove every reviewer this run created (their reviews cascade).
-  await sql(`DELETE FROM users WHERE email LIKE ${literal(`${runNamespace}-%@example.test`)}`);
   const admin = await openAs(browser, baseURL, 'admin');
   try {
+    // Archive first: published courses are counted by catalog.spec and recovery.spec. Each course re-reads its
+    // current version, so a test that failed half-way (stale token) or already archived does not turn the
+    // cleanup into a second failure.
     for (const course of published) {
+      const current = await admin.request.get(`/api/v1/admin/courses/${course.id}`);
+      if (!current.ok()) continue;
+      const tree = (await current.json()) as object;
+      const status = contractField<AdminCourseTree>(tree, 'status');
+      const updatedAt = contractField<AdminCourseTree>(tree, 'updatedAt');
+      if (status === 'archived' || typeof updatedAt !== 'string') continue;
       const response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
+        data: { expectedUpdatedAt: updatedAt, status: 'archived' },
         headers: origin(baseURL),
       });
       expect(response.status(), await response.text()).toBe(200);
     }
   } finally {
     await admin.close();
+    // Users are counted too: the admin users list is paged, and leftover reviewers pushed admin-users P08's
+    // fixture rows off the first page. Remove every reviewer this run created (their reviews cascade).
+    await sql(`DELETE FROM users WHERE email LIKE ${literal(`${runNamespace}-%@example.test`)}`);
   }
 });
 
@@ -349,7 +358,7 @@ test('Rt09 Rt21 Rt22 and report: report reaches the owner queue, owner has no re
   await administrator.close();
 });
 
-test('Rt14 shows 20 newest reviews, loads five more by keyboard, focuses the final addition, and announces completion', async ({
+test('Rt14 pages 20 + 20 + 5 by keyboard, keeps focus on «Показати ще» between pages, focuses the first final addition, and announces completion', async ({
   browser,
   page,
   baseURL,
@@ -362,17 +371,25 @@ test('Rt14 shows 20 newest reviews, loads five more by keyboard, focuses the fin
   } finally {
     await admin.close();
   }
-  for (let index = 0; index < 25; index += 1)
-    await seedReview(course, index + 30, 5, `Rt14 review ${index} ${runNamespace}`);
+  // 45 reviews make an intermediate page: a natively disabled button would lose focus to <body> there, while
+  // the last page restores focus on its own and would hide that defect.
+  for (let index = 0; index < 45; index += 1)
+    // Indices 200–244: every scenario seeds a disjoint index range (the reviewer email embeds it).
+    await seedReview(course, index + 200, 5, `Rt14 review ${index} ${runNamespace}`);
   await page.goto(`/courses/${course.slug}`);
   const list = page.getByRole('list', { name: 'Відгуки про курс' });
-  await expect(list.getByRole('listitem')).toHaveCount(20);
-  await expect(list.getByRole('listitem').first()).toContainText(`Rt14 review 24 ${runNamespace}`);
+  const items = list.getByRole('listitem');
+  await expect(items).toHaveCount(20);
+  await expect(items.first()).toContainText(`Rt14 review 44 ${runNamespace}`);
   const more = page.getByRole('button', { name: 'Показати ще' });
   await more.focus();
   await page.keyboard.press('Enter');
-  await expect(list.getByRole('listitem')).toHaveCount(25);
-  await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+  await expect(items).toHaveCount(40);
+  await expect(more).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(items).toHaveCount(45);
+  await expect(more).toHaveCount(0);
+  await expect(items.nth(40)).toBeFocused();
   await expect(page.locator('output[aria-live="polite"]')).toContainText('Усі відгуки показано');
 });
 

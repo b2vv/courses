@@ -49,6 +49,7 @@ export function ReviewBlock({
   const [stars, setStars] = useState<string>();
   const [body, setBody] = useState('');
   const [error, setError] = useState<string>();
+  const [deleteError, setDeleteError] = useState<string>();
   const choices = [1, 2, 3, 4, 5].map((value) => ({
     id: String(value),
     label: t('ratings.stars', { count: value }),
@@ -116,11 +117,11 @@ export function ReviewBlock({
     }
   };
   const remove = async () => {
-    setError(undefined);
+    setDeleteError(undefined);
     try {
       await onDelete();
     } catch {
-      setError(t('ratings.deleteFailure'));
+      setDeleteError(t('ratings.deleteFailure'));
     }
   };
   return (
@@ -153,6 +154,8 @@ export function ReviewBlock({
               closeLabel={t('common.close')}
             >
               <p>{t('ratings.deletePrompt')}</p>
+              {/* Inside the modal: an alert outside an open modal dialog is not heard by assistive tech. */}
+              {deleteError ? <p role="alert">{deleteError}</p> : null}
               <Button variant="danger" onPress={() => void remove()}>
                 {t('ratings.delete')}
               </Button>

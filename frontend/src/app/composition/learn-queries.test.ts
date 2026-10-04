@@ -78,5 +78,8 @@ test('a review write or delete refreshes both the own review and the learning li
   expect(invalidated).toEqual([
     ['learn', 'review', '10000000-0000-4000-8000-000000000001'],
     ['learn', 'reviews', '10000000-0000-4000-8000-000000000001'],
+    ['learn', 'course'],
+    ['catalog'],
+    ['course'],
   ]);
 });
