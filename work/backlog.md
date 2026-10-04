@@ -1416,3 +1416,13 @@ test credentials `/view/852472`.
   rows B-25 option (b) creates.
 - **serviceUrl** response format and the 4-day retry are confirmed — matches our acknowledgement and the
   Pay21b "unmatched → 503 so WayForPay retries" behaviour.
+
+## B-28 — Review list cursor: the API sends "" for "no next page"
+
+**Raised:** 2026-10-04, ratings phase (found by e2e; Courses 2 T06b-fixes review №3).
+**What:** `GET /courses/{slug}/reviews` and `GET /learn/courses/{id}/reviews` return `nextCursor: ""` on the last
+page (the discussion repository's cursor encoding). The frontend maps `""` → `null` at the adapter boundary
+(`course-repository.ts`, test «treats the API's empty last-page cursor as no next page»), so behaviour is right.
+**Why still open:** the contract says "string", so every future client has to know the `""` convention. Fix:
+the HTTP layer returns `null` and OpenAPI marks `nextCursor` nullable; then the frontend mapping can go.
+**Trigger:** the next change to the review list contract, or a second client.

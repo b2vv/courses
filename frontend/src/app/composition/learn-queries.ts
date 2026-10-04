@@ -23,9 +23,15 @@ export function learningReviewsQueryKey(courseId: string) {
   return ['learn', 'reviews', courseId] as const;
 }
 function invalidateReviews(client: QueryClient, courseId: string) {
+  // A review changes the own review, the learning list and the rating summary shown on the learning course,
+  // the catalog card and the course page. The mutation knows only the course id, so the slug-keyed
+  // summaries are refreshed by prefix.
   return Promise.all([
     client.invalidateQueries({ queryKey: ['learn', 'review', courseId] }),
     client.invalidateQueries({ queryKey: learningReviewsQueryKey(courseId) }),
+    client.invalidateQueries({ queryKey: ['learn', 'course'] }),
+    client.invalidateQueries({ queryKey: ['catalog'] }),
+    client.invalidateQueries({ queryKey: ['course'] }),
   ]);
 }
 
