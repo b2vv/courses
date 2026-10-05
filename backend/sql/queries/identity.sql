@@ -34,7 +34,7 @@ SET totp_secret = NULL,
 WHERE id = sqlc.arg(user_id)::text::uuid
   AND deleted_at IS NULL;
 
--- name: InsertRecoveryCodes :copyfrom
+-- name: InsertRecoveryCode :exec
 INSERT INTO recovery_codes (id, user_id, code_hash)
 VALUES (sqlc.arg(id)::text::uuid, sqlc.arg(user_id)::text::uuid, sqlc.arg(code_hash)::text);
 

@@ -36,6 +36,8 @@ type Repository struct {
 var _ ports.UserWriter = (*Repository)(nil)
 var _ ports.TokenStore = (*Repository)(nil)
 var _ ports.UserReader = (*Repository)(nil)
+var _ ports.TwoFactorStore = (*Repository)(nil)
+var _ ports.RecoveryCodeStore = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
 	return newRepository(pool, passwords, rand.Reader)
@@ -291,6 +293,99 @@ func (repository *Repository) InvalidateByPurpose(ctx context.Context, userID st
 	return nil
 }
 
+func (repository *Repository) GetTwoFactor(ctx context.Context, userID string) (ports.TwoFactor, error) {
+	row, err := generated.New(repository.pool).GetUserTwoFactor(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.TwoFactor{}, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return ports.TwoFactor{}, persistenceError(err)
+	}
+	secret := ""
+	if row.TotpSecret.Valid {
+		secret = row.TotpSecret.String
+	}
+	return ports.TwoFactor{Secret: secret, Enabled: row.TotpEnabled}, nil
+}
+
+func (repository *Repository) SetTotpSecret(ctx context.Context, userID, secret string) error {
+	rows, err := generated.New(repository.pool).SetUserTotpSecret(ctx, generated.SetUserTotpSecretParams{UserID: userID, TotpSecret: secret})
+	if err != nil {
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) EnableTotp(ctx context.Context, userID string) error {
+	rows, err := generated.New(repository.pool).EnableUserTotp(ctx, userID)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) DisableTotp(ctx context.Context, userID string) error {
+	rows, err := generated.New(repository.pool).DisableUserTotp(ctx, userID)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) InsertCodes(ctx context.Context, userID string, digests [][32]byte) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	queries := generated.New(tx)
+	for _, digest := range digests {
+		id, err := repository.newUUID()
+		if err != nil {
+			rollback(tx)
+			return domain.ErrDependencyUnavailable
+		}
+		if err := queries.InsertRecoveryCode(ctx, generated.InsertRecoveryCodeParams{
+			ID: id, UserID: userID, CodeHash: hex.EncodeToString(digest[:]),
+		}); err != nil {
+			rollback(tx)
+			return persistenceError(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
+func (repository *Repository) ConsumeCode(ctx context.Context, userID string, digest [32]byte) (bool, error) {
+	_, err := generated.New(repository.pool).ConsumeRecoveryCode(ctx, generated.ConsumeRecoveryCodeParams{
+		UserID: userID, CodeHash: hex.EncodeToString(digest[:]),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, persistenceError(err)
+	}
+	return true, nil
+}
+
+func (repository *Repository) DeleteCodes(ctx context.Context, userID string) error {
+	if _, err := generated.New(repository.pool).DeleteRecoveryCodesForUser(ctx, userID); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
 func (repository *Repository) ListInstructors(ctx context.Context) ([]domain.User, error) {
 	rows, err := generated.New(repository.pool).ListInstructors(ctx)
 	if err != nil {
@@ -312,15 +407,23 @@ func (repository *Repository) newSessionMaterial() (string, [32]byte, string, er
 	if _, err := io.ReadFull(repository.random, raw); err != nil {
 		return "", [32]byte{}, "", err
 	}
+	sessionID, err := repository.newUUID()
+	if err != nil {
+		return "", [32]byte{}, "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	digest := sha256.Sum256(raw)
+	return token, digest, sessionID, nil
+}
+
+func (repository *Repository) newUUID() (string, error) {
 	uuidBytes := make([]byte, 16)
 	if _, err := io.ReadFull(repository.random, uuidBytes); err != nil {
-		return "", [32]byte{}, "", err
+		return "", err
 	}
 	uuidBytes[6] = uuidBytes[6]&0x0f | 0x40
 	uuidBytes[8] = uuidBytes[8]&0x3f | 0x80
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	digest := sha256.Sum256(raw)
-	return token, digest, formatUUID(uuidBytes), nil
+	return formatUUID(uuidBytes), nil
 }
 
 func formatUUID(value []byte) string {
