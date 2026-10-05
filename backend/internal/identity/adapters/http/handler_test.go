@@ -38,6 +38,39 @@ type accountsService struct {
 	err                                                                                                           error
 }
 
+type twoFactorService struct {
+	enrollResult                                                                               application.EnrollTwoFactorResult
+	confirmResult                                                                              application.ConfirmTwoFactorResult
+	completeResult                                                                             application.CompleteTwoFactorResult
+	err                                                                                        error
+	enrollCalls, confirmCalls, completeCalls, disableCalls, regenerateCalls, adminDisableCalls int
+}
+
+func (service *twoFactorService) EnrollTwoFactor(context.Context, string, ...string) (application.EnrollTwoFactorResult, error) {
+	service.enrollCalls++
+	return service.enrollResult, service.err
+}
+func (service *twoFactorService) ConfirmTwoFactor(context.Context, string, string) (application.ConfirmTwoFactorResult, error) {
+	service.confirmCalls++
+	return service.confirmResult, service.err
+}
+func (service *twoFactorService) CompleteTwoFactor(context.Context, application.CompleteTwoFactorInput) (application.CompleteTwoFactorResult, error) {
+	service.completeCalls++
+	return service.completeResult, service.err
+}
+func (service *twoFactorService) DisableTwoFactor(context.Context, string, string, string) error {
+	service.disableCalls++
+	return service.err
+}
+func (service *twoFactorService) RegenerateRecoveryCodes(context.Context, string, string) (application.ConfirmTwoFactorResult, error) {
+	service.regenerateCalls++
+	return service.confirmResult, service.err
+}
+func (service *twoFactorService) AdminDisableTwoFactor(context.Context, domain.User, string) error {
+	service.adminDisableCalls++
+	return service.err
+}
+
 func (service *accountsService) Register(_ context.Context, _ application.RegisterInput, _ string) (application.RegisterResult, error) {
 	service.registerCalls++
 	return service.registerResult, service.err
@@ -303,6 +336,93 @@ func testHandlerWithAccounts(t *testing.T, service *identityService, accounts *a
 	}
 	adapter := identityhttp.NewHandler(service, service, nil, config, accounts)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
+}
+
+func testHandlerWithTwoFactor(t *testing.T, service *identityService, twoFactor *twoFactorService) http.Handler {
+	t.Helper()
+	config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := identityhttp.NewHandler(service, service, nil, config).WithTwoFactor(twoFactor)
+	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
+}
+
+func TestTwoFactorHTTPContract(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	user := domain.User{ID: "40000000-0000-4000-8000-000000000001", Email: "student@courseforge.local", DisplayName: "Student", Role: domain.Student, CreatedAt: now, UpdatedAt: now}
+	identity := &identityService{user: user}
+	twoFactor := &twoFactorService{
+		enrollResult:   application.EnrollTwoFactorResult{Secret: "JBSWY3DPEHPK3PXP", URI: "otpauth://totp/CourseForge:student?secret=JBSWY3DPEHPK3PXP"},
+		confirmResult:  application.ConfirmTwoFactorResult{RecoveryCodes: []string{"one", "two"}},
+		completeResult: application.CompleteTwoFactorResult{Token: strings.Repeat("A", 43), Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: user.ID, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}},
+	}
+	handler := testHandlerWithTwoFactor(t, identity, twoFactor)
+	token := strings.Repeat("B", 43)
+
+	request := requestWithOrigin("POST", "/api/v1/auth/2fa/enroll", "")
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: token})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || twoFactor.enrollCalls != 1 || !strings.Contains(response.Body.String(), `"otpauthUri"`) {
+		t.Fatalf("enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	request = requestWithOrigin("POST", "/api/v1/auth/2fa/confirm", `{"code":"123456"}`)
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: token})
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || twoFactor.confirmCalls != 1 || !strings.Contains(response.Body.String(), `"recoveryCodes"`) {
+		t.Fatalf("confirm status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	identity.loginResult = application.LoginResult{PendingID: "pending"}
+	identity.err = domain.ErrTwoFactorRequired
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/login", `{"email":"student@courseforge.local","password":"password"}`))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"two_factor_required"`) || len(response.Result().Cookies()) != 0 {
+		t.Fatalf("login status=%d body=%s cookies=%v", response.Code, response.Body.String(), response.Result().Cookies())
+	}
+	identity.err = nil
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/2fa/complete", `{"pendingId":"pending","code":"123456"}`))
+	if response.Code != http.StatusNoContent || twoFactor.completeCalls != 1 || len(response.Result().Cookies()) != 1 {
+		t.Fatalf("complete status=%d cookies=%v", response.Code, response.Result().Cookies())
+	}
+
+	request = requestWithOrigin("POST", "/api/v1/auth/2fa/disable", `{"password":"password","code":"123456"}`)
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: token})
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || twoFactor.disableCalls != 1 {
+		t.Fatalf("disable status=%d", response.Code)
+	}
+
+	request = requestWithOrigin("POST", "/api/v1/auth/2fa/recovery-codes", `{"code":"123456"}`)
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: token})
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || twoFactor.regenerateCalls != 1 || !strings.Contains(response.Body.String(), `"recoveryCodes"`) {
+		t.Fatalf("recovery status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	admin := &identityService{user: domain.User{ID: "40000000-0000-4000-8000-000000000002", Email: "admin@courseforge.local", DisplayName: "Admin", Role: domain.Admin, CreatedAt: now, UpdatedAt: now}}
+	adminHandler := testHandlerWithTwoFactor(t, admin, twoFactor)
+	request = requestWithOrigin("POST", "/api/v1/admin/users/40000000-0000-4000-8000-000000000001/2fa/disable", "")
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: token})
+	response = httptest.NewRecorder()
+	adminHandler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || twoFactor.adminDisableCalls != 1 {
+		t.Fatalf("admin-disable status=%d", response.Code)
+	}
+
+	studentHandler := testHandlerWithTwoFactor(t, &identityService{user: user}, twoFactor)
+	response = httptest.NewRecorder()
+	studentHandler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || twoFactor.adminDisableCalls != 1 {
+		t.Fatalf("admin gate status=%d calls=%d", response.Code, twoFactor.adminDisableCalls)
+	}
 }
 
 func requestWithOrigin(method, path, body string) *http.Request {

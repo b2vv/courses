@@ -38,6 +38,7 @@ var _ ports.TokenStore = (*Repository)(nil)
 var _ ports.UserReader = (*Repository)(nil)
 var _ ports.TwoFactorStore = (*Repository)(nil)
 var _ ports.RecoveryCodeStore = (*Repository)(nil)
+var _ ports.PasswordVerifier = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
 	return newRepository(pool, passwords, rand.Reader)
@@ -70,6 +71,34 @@ func (repository *Repository) VerifyCredentials(ctx context.Context, email, pass
 		return domain.User{}, domain.ErrInvalidCredentials
 	}
 	return user, nil
+}
+
+// VerifyPassword is the narrow re-authentication seam. It deliberately returns
+// the same credential error for a missing, deleted, disabled, or non-matching
+// account so an authenticated caller learns no additional account state.
+func (repository *Repository) VerifyPassword(ctx context.Context, userID, password string) error {
+	var hash string
+	err := repository.pool.QueryRow(ctx, `
+		SELECT password_hash
+		FROM users
+		WHERE id = $1::uuid AND deleted_at IS NULL AND disabled_at IS NULL`, userID).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if repository.passwords.VerifyDummy(password) != nil {
+			return domain.ErrDependencyUnavailable
+		}
+		return domain.ErrInvalidCredentials
+	}
+	if err != nil {
+		return persistenceError(err)
+	}
+	matched, err := repository.passwords.Verify(hash, password)
+	if err != nil {
+		return domain.ErrDependencyUnavailable
+	}
+	if !matched {
+		return domain.ErrInvalidCredentials
+	}
+	return nil
 }
 
 // FindUser is the narrow account-service read seam. It accepts either the stable

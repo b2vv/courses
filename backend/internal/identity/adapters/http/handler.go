@@ -36,6 +36,15 @@ type accountsService interface {
 	ConfirmEmailChange(context.Context, string) error
 }
 
+type twoFactorService interface {
+	EnrollTwoFactor(context.Context, string, ...string) (application.EnrollTwoFactorResult, error)
+	ConfirmTwoFactor(context.Context, string, string) (application.ConfirmTwoFactorResult, error)
+	CompleteTwoFactor(context.Context, application.CompleteTwoFactorInput) (application.CompleteTwoFactorResult, error)
+	DisableTwoFactor(context.Context, string, string, string) error
+	RegenerateRecoveryCodes(context.Context, string, string) (application.ConfirmTwoFactorResult, error)
+	AdminDisableTwoFactor(context.Context, domain.User, string) error
+}
+
 type instructorLister interface {
 	ListInstructors(context.Context) ([]domain.User, error)
 }
@@ -53,6 +62,7 @@ type Handler struct {
 	administration administrationService
 	config         Config
 	accounts       accountsService
+	twoFactor      twoFactorService
 }
 
 type userKey struct{}
@@ -85,6 +95,13 @@ func NewHandler(identity identityService, instructors instructorLister, administ
 	return handler
 }
 
+// WithTwoFactor connects the optional account-security use cases without
+// broadening the constructor used by older composition roots and tests.
+func (handler *Handler) WithTwoFactor(service twoFactorService) *Handler {
+	handler.twoFactor = service
+	return handler
+}
+
 func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/auth/login", handler.RequireSameOrigin(http.HandlerFunc(handler.login)))
 	mux.Handle("POST /api/v1/auth/register", handler.RequireSameOrigin(http.HandlerFunc(handler.register)))
@@ -95,6 +112,11 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/auth/password/change", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.changePassword))))
 	mux.Handle("POST /api/v1/auth/email/change", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.requestEmailChange))))
 	mux.Handle("POST /api/v1/auth/email/change/confirm", handler.RequireSameOrigin(http.HandlerFunc(handler.confirmEmailChange)))
+	mux.Handle("POST /api/v1/auth/2fa/enroll", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.enrollTwoFactor))))
+	mux.Handle("POST /api/v1/auth/2fa/confirm", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.confirmTwoFactor))))
+	mux.Handle("POST /api/v1/auth/2fa/complete", handler.RequireSameOrigin(http.HandlerFunc(handler.completeTwoFactor)))
+	mux.Handle("POST /api/v1/auth/2fa/disable", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.disableTwoFactor))))
+	mux.Handle("POST /api/v1/auth/2fa/recovery-codes", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.regenerateRecoveryCodes))))
 	mux.Handle("GET /api/v1/auth/me", handler.Authenticate(http.HandlerFunc(handler.me)))
 	mux.Handle("POST /api/v1/auth/logout", handler.RequireSameOrigin(http.HandlerFunc(handler.logout)))
 	mux.Handle("GET /api/v1/admin/instructors", handler.Authenticate(http.HandlerFunc(handler.listInstructors)))
@@ -102,6 +124,7 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/admin/users/{id}/status", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.setUserStatus))))
 	mux.Handle("DELETE /api/v1/admin/users/{id}", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.deleteUser))))
 	mux.Handle("POST /api/v1/admin/users/{id}/password", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.resetUserPassword))))
+	mux.Handle("POST /api/v1/admin/users/{id}/2fa/disable", handler.RequireSameOrigin(handler.Authenticate(http.HandlerFunc(handler.adminDisableTwoFactor))))
 }
 
 func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -117,12 +140,153 @@ func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := handler.identity.Login(r.Context(), application.LoginInput{Email: input.Email, Password: input.Password, RememberMe: input.RememberMe, PresentedToken: presented, IP: clientIP(r)})
+	if errors.Is(err, domain.ErrTwoFactorRequired) {
+		httpserver.WriteJSON(w, http.StatusOK, twoFactorRequiredDTO{Status: string(domain.ErrTwoFactorRequired), PendingID: result.PendingID})
+		return
+	}
 	if err != nil {
 		writeError(w, r, err, "")
 		return
 	}
 	http.SetCookie(w, handler.sessionCookie(result.Token, result.Session.ExpiresAt, int(result.Session.ExpiresAt.Sub(result.Session.CreatedAt).Seconds())))
 	httpserver.WriteJSON(w, http.StatusOK, mapUser(result.User))
+}
+
+type twoFactorRequiredDTO struct {
+	Status    string `json:"status"`
+	PendingID string `json:"pendingId"`
+}
+type enrollTwoFactorDTO struct {
+	Secret     string `json:"secret"`
+	OTPAuthURI string `json:"otpauthUri"`
+}
+type recoveryCodesDTO struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
+}
+type twoFactorCodeRequest struct{ Code string }
+type completeTwoFactorRequest struct {
+	PendingID string
+	Code      string
+}
+type disableTwoFactorRequest struct {
+	Password string
+	Code     string
+}
+
+func (handler *Handler) twoFactorUnavailable(w http.ResponseWriter, r *http.Request) bool {
+	if handler.twoFactor != nil {
+		return false
+	}
+	writeError(w, r, domain.ErrDependencyUnavailable, "")
+	return true
+}
+
+func currentUser(w http.ResponseWriter, r *http.Request) (domain.User, bool) {
+	user, ok := r.Context().Value(userKey{}).(domain.User)
+	if !ok {
+		writeError(w, r, domain.ErrAuthenticationRequired, "")
+	}
+	return user, ok
+}
+
+func (handler *Handler) enrollTwoFactor(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	user, ok := currentUser(w, r)
+	if !ok || handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	result, err := handler.twoFactor.EnrollTwoFactor(r.Context(), user.ID, user.Email)
+	if err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, enrollTwoFactorDTO{Secret: result.Secret, OTPAuthURI: result.URI})
+}
+
+func (handler *Handler) confirmTwoFactor(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	user, ok := currentUser(w, r)
+	request, err := decodeTwoFactorCode(w, r, true)
+	if !ok || err != nil {
+		if err != nil {
+			writeError(w, r, err, "invalid_request")
+		}
+		return
+	}
+	if handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	result, err := handler.twoFactor.ConfirmTwoFactor(r.Context(), user.ID, request.Code)
+	if err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, recoveryCodesDTO{RecoveryCodes: result.RecoveryCodes})
+}
+
+func (handler *Handler) completeTwoFactor(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	request, err := decodeCompleteTwoFactor(w, r)
+	if err != nil {
+		writeError(w, r, err, "invalid_request")
+		return
+	}
+	if handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	presented, duplicate := sessionCookie(r)
+	if duplicate {
+		writeError(w, r, domain.ErrInvalidUser, "invalid_request")
+		return
+	}
+	result, err := handler.twoFactor.CompleteTwoFactor(r.Context(), application.CompleteTwoFactorInput{PendingID: request.PendingID, Code: request.Code, PresentedToken: presented})
+	if err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	http.SetCookie(w, handler.sessionCookie(result.Token, result.Session.ExpiresAt, int(result.Session.ExpiresAt.Sub(result.Session.CreatedAt).Seconds())))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) disableTwoFactor(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	user, ok := currentUser(w, r)
+	request, err := decodeDisableTwoFactor(w, r)
+	if !ok || err != nil {
+		if err != nil {
+			writeError(w, r, err, "invalid_request")
+		}
+		return
+	}
+	if handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	if err := handler.twoFactor.DisableTwoFactor(r.Context(), user.ID, request.Password, request.Code); err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) regenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	user, ok := currentUser(w, r)
+	request, err := decodeTwoFactorCode(w, r, true)
+	if !ok || err != nil {
+		if err != nil {
+			writeError(w, r, err, "invalid_request")
+		}
+		return
+	}
+	if handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	result, err := handler.twoFactor.RegenerateRecoveryCodes(r.Context(), user.ID, request.Code)
+	if err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, recoveryCodesDTO{RecoveryCodes: result.RecoveryCodes})
 }
 
 func (handler *Handler) register(w http.ResponseWriter, r *http.Request) {
@@ -518,6 +682,42 @@ func decodeNewEmail(w http.ResponseWriter, r *http.Request) (newEmailRequest, er
 	err := decodeObject(w, r, map[string]func(json.RawMessage) error{"newEmail": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.NewEmail) }}, "newEmail")
 	return result, err
 }
+func decodeTwoFactorCode(w http.ResponseWriter, r *http.Request, required bool) (twoFactorCodeRequest, error) {
+	var result twoFactorCodeRequest
+	requiredFields := []string{}
+	if required {
+		requiredFields = append(requiredFields, "code")
+	}
+	err := decodeObject(w, r, map[string]func(json.RawMessage) error{
+		"code": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Code) },
+	}, requiredFields...)
+	if err != nil || result.Code == "" || len(result.Code) > 128 {
+		return twoFactorCodeRequest{}, domain.ErrInvalidUser
+	}
+	return result, nil
+}
+func decodeCompleteTwoFactor(w http.ResponseWriter, r *http.Request) (completeTwoFactorRequest, error) {
+	var result completeTwoFactorRequest
+	err := decodeObject(w, r, map[string]func(json.RawMessage) error{
+		"pendingId": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.PendingID) },
+		"code":      func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Code) },
+	}, "pendingId", "code")
+	if err != nil || result.PendingID == "" || len(result.PendingID) > 128 || result.Code == "" || len(result.Code) > 128 {
+		return completeTwoFactorRequest{}, domain.ErrInvalidUser
+	}
+	return result, nil
+}
+func decodeDisableTwoFactor(w http.ResponseWriter, r *http.Request) (disableTwoFactorRequest, error) {
+	var result disableTwoFactorRequest
+	err := decodeObject(w, r, map[string]func(json.RawMessage) error{
+		"password": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Password) },
+		"code":     func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Code) },
+	}, "password", "code")
+	if err != nil || result.Password == "" || len(result.Password) > 1024 || result.Code == "" || len(result.Code) > 128 {
+		return disableTwoFactorRequest{}, domain.ErrInvalidUser
+	}
+	return result, nil
+}
 
 func decodeObject(w http.ResponseWriter, r *http.Request, fields map[string]func(json.RawMessage) error, required ...string) error {
 	if mediaType := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]); mediaType != "application/json" {
@@ -625,6 +825,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, override stri
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_account_token", "Token is invalid")
 	case errors.Is(err, domain.ErrRateLimited):
 		httpserver.WriteError(w, r, http.StatusTooManyRequests, "rate_limited", "Too many requests")
+	case errors.Is(err, domain.ErrInvalidTOTP):
+		httpserver.WriteError(w, r, http.StatusUnprocessableEntity, "invalid_totp", "Two-factor code is invalid")
+	case errors.Is(err, domain.ErrRecoveryCodeInvalid):
+		httpserver.WriteError(w, r, http.StatusUnauthorized, "recovery_code_invalid", "Recovery code is invalid")
+	case errors.Is(err, domain.ErrTwoFactorAlreadyEnabled):
+		httpserver.WriteError(w, r, http.StatusConflict, "twofactor_already_enabled", "Two-factor authentication is already enabled")
+	case errors.Is(err, domain.ErrTwoFactorNotEnabled):
+		httpserver.WriteError(w, r, http.StatusConflict, "twofactor_not_enabled", "Two-factor authentication is not enabled")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Identity service is temporarily unavailable")
 	default:
