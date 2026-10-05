@@ -13,6 +13,14 @@ type UserWriter interface {
 	UpdateEmail(context.Context, string, string) error
 }
 
+type UserReader interface {
+	FindUser(context.Context, string) (domain.User, error)
+}
+
+type PasswordHasher interface {
+	Hash(string) (string, error)
+}
+
 type TokenStore interface {
 	Issue(context.Context, domain.AccountToken, []byte) error
 	Consume(context.Context, domain.AccountTokenPurpose, []byte) (userID string, newEmail string, err error)
