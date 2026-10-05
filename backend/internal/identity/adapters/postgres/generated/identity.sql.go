@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeAccountToken = `-- name: ConsumeAccountToken :one
+UPDATE account_tokens
+SET consumed_at = now()
+WHERE token_digest = $1::bytea
+  AND purpose = $2::text
+  AND consumed_at IS NULL
+  AND expires_at > now()
+RETURNING user_id::text AS user_id, new_email
+`
+
+type ConsumeAccountTokenParams struct {
+	TokenDigest []byte
+	Purpose     string
+}
+
+type ConsumeAccountTokenRow struct {
+	UserID   string
+	NewEmail pgtype.Text
+}
+
+func (q *Queries) ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTokenParams) (ConsumeAccountTokenRow, error) {
+	row := q.db.QueryRow(ctx, consumeAccountToken, arg.TokenDigest, arg.Purpose)
+	var i ConsumeAccountTokenRow
+	err := row.Scan(&i.UserID, &i.NewEmail)
+	return i, err
+}
+
 const countAdminUsers = `-- name: CountAdminUsers :one
 SELECT count(*)
 FROM users
@@ -83,6 +110,68 @@ func (q *Queries) CreateIdentitySession(ctx context.Context, arg CreateIdentityS
 	return i, err
 }
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (id, email, display_name, role, password_hash, email_verified, created_at, updated_at)
+VALUES (
+  $1::text::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::text,
+  $6::boolean,
+  $7::timestamptz,
+  $8::timestamptz
+)
+RETURNING id::text AS id, email, display_name, role, email_verified, created_at, updated_at, disabled_at
+`
+
+type CreateUserParams struct {
+	UserID        string
+	Email         string
+	DisplayName   string
+	Role          string
+	PasswordHash  string
+	EmailVerified bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type CreateUserRow struct {
+	ID            string
+	Email         string
+	DisplayName   string
+	Role          string
+	EmailVerified bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DisabledAt    pgtype.Timestamptz
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.UserID,
+		arg.Email,
+		arg.DisplayName,
+		arg.Role,
+		arg.PasswordHash,
+		arg.EmailVerified,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i CreateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.Role,
+		&i.EmailVerified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const deleteExpiredIdentitySession = `-- name: DeleteExpiredIdentitySession :execrows
 DELETE FROM user_sessions
 WHERE token_digest = $1::bytea
@@ -122,6 +211,25 @@ WHERE user_id = $1::text::uuid
 
 func (q *Queries) DeleteIdentitySessionsForUser(ctx context.Context, userID string) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteIdentitySessionsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteUserSessionsExceptCurrent = `-- name: DeleteUserSessionsExceptCurrent :execrows
+DELETE FROM user_sessions
+WHERE user_id = $1::text::uuid
+  AND token_digest <> $2::bytea
+`
+
+type DeleteUserSessionsExceptCurrentParams struct {
+	UserID      string
+	TokenDigest []byte
+}
+
+func (q *Queries) DeleteUserSessionsExceptCurrent(ctx context.Context, arg DeleteUserSessionsExceptCurrentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserSessionsExceptCurrent, arg.UserID, arg.TokenDigest)
 	if err != nil {
 		return 0, err
 	}
@@ -194,6 +302,63 @@ func (q *Queries) GetIdentityCredential(ctx context.Context, email string) (GetI
 		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const insertAccountToken = `-- name: InsertAccountToken :exec
+INSERT INTO account_tokens (id, user_id, purpose, token_digest, new_email, expires_at, created_at)
+VALUES (
+  $1::text::uuid,
+  $2::text::uuid,
+  $3::text,
+  $4::bytea,
+  $5::text,
+  $6::timestamptz,
+  $7::timestamptz
+)
+`
+
+type InsertAccountTokenParams struct {
+	TokenID     string
+	UserID      string
+	Purpose     string
+	TokenDigest []byte
+	NewEmail    pgtype.Text
+	ExpiresAt   pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) InsertAccountToken(ctx context.Context, arg InsertAccountTokenParams) error {
+	_, err := q.db.Exec(ctx, insertAccountToken,
+		arg.TokenID,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenDigest,
+		arg.NewEmail,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const invalidateAccountTokensByPurpose = `-- name: InvalidateAccountTokensByPurpose :execrows
+UPDATE account_tokens
+SET consumed_at = now()
+WHERE user_id = $1::text::uuid
+  AND purpose = $2::text
+  AND consumed_at IS NULL
+`
+
+type InvalidateAccountTokensByPurposeParams struct {
+	UserID  string
+	Purpose string
+}
+
+func (q *Queries) InvalidateAccountTokensByPurpose(ctx context.Context, arg InvalidateAccountTokensByPurposeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, invalidateAccountTokensByPurpose, arg.UserID, arg.Purpose)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listAdminUsers = `-- name: ListAdminUsers :many
@@ -385,6 +550,7 @@ SELECT
   users.email,
   users.display_name,
   users.role,
+  users.email_verified,
   users.created_at,
   users.updated_at,
   users.disabled_at
@@ -402,13 +568,14 @@ type ResolveIdentitySessionParams struct {
 }
 
 type ResolveIdentitySessionRow struct {
-	ID          string
-	Email       string
-	DisplayName string
-	Role        string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-	DisabledAt  pgtype.Timestamptz
+	ID            string
+	Email         string
+	DisplayName   string
+	Role          string
+	EmailVerified bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DisabledAt    pgtype.Timestamptz
 }
 
 func (q *Queries) ResolveIdentitySession(ctx context.Context, arg ResolveIdentitySessionParams) (ResolveIdentitySessionRow, error) {
@@ -419,6 +586,7 @@ func (q *Queries) ResolveIdentitySession(ctx context.Context, arg ResolveIdentit
 		&i.Email,
 		&i.DisplayName,
 		&i.Role,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DisabledAt,
@@ -442,6 +610,22 @@ type SetUserDisabledAtParams struct {
 
 func (q *Queries) SetUserDisabledAt(ctx context.Context, arg SetUserDisabledAtParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setUserDisabledAt, arg.DisabledAt, arg.UpdatedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserEmailVerified = `-- name: SetUserEmailVerified :execrows
+UPDATE users
+SET email_verified = true,
+    updated_at = now()
+WHERE id = $1::text::uuid
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) SetUserEmailVerified(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserEmailVerified, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -486,6 +670,49 @@ type SoftDeleteUserParams struct {
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error) {
 	result, err := q.db.Exec(ctx, softDeleteUser, arg.DeletedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserEmail = `-- name: UpdateUserEmail :execrows
+UPDATE users
+SET email = $1::text,
+    email_verified = true,
+    updated_at = now()
+WHERE id = $2::text::uuid
+  AND deleted_at IS NULL
+`
+
+type UpdateUserEmailParams struct {
+	Email  string
+	UserID string
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserEmail, arg.Email, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :execrows
+UPDATE users
+SET password_hash = $1::text,
+    updated_at = now()
+WHERE id = $2::text::uuid
+  AND deleted_at IS NULL
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string
+	UserID       string
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserPassword, arg.PasswordHash, arg.UserID)
 	if err != nil {
 		return 0, err
 	}

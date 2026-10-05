@@ -10,6 +10,8 @@ const (
 	ErrInvalidDisplayName     Error = "invalid_display_name"
 	ErrWeakPassword           Error = "weak_password"
 	ErrPasswordUnchanged      Error = "password_unchanged"
+	ErrEmailTaken             Error = "email_taken"
+	ErrTokenUsed              Error = "token_used"
 	ErrInvalidAccountToken    Error = "invalid_account_token"
 	ErrInvalidSession         Error = "invalid_session"
 	ErrInvalidCredentials     Error = "invalid_credentials"
