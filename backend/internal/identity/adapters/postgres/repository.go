@@ -35,6 +35,7 @@ type Repository struct {
 
 var _ ports.UserWriter = (*Repository)(nil)
 var _ ports.TokenStore = (*Repository)(nil)
+var _ ports.UserReader = (*Repository)(nil)
 
 func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
 	return newRepository(pool, passwords, rand.Reader)
@@ -65,6 +66,31 @@ func (repository *Repository) VerifyCredentials(ctx context.Context, email, pass
 	}
 	if !matched || !user.Active() {
 		return domain.User{}, domain.ErrInvalidCredentials
+	}
+	return user, nil
+}
+
+// FindUser is the narrow account-service read seam. It accepts either the stable
+// user ID (for an authenticated resend/change flow) or a normalized email.
+// This query intentionally stays in the adapter until the next sqlc generation;
+// A06 must not edit generated output.
+func (repository *Repository) FindUser(ctx context.Context, identifier string) (domain.User, error) {
+	row := repository.pool.QueryRow(ctx, `
+		SELECT id, email, display_name, role, email_verified, created_at, updated_at, disabled_at
+		FROM users
+		WHERE deleted_at IS NULL AND (id::text = $1 OR email = $1)
+	`, identifier)
+	var id, email, displayName, role string
+	var emailVerified bool
+	var createdAt, updatedAt, disabledAt pgtype.Timestamptz
+	if err := row.Scan(&id, &email, &displayName, &role, &emailVerified, &createdAt, &updatedAt, &disabledAt); errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, domain.ErrUserNotFound
+	} else if err != nil {
+		return domain.User{}, persistenceError(err)
+	}
+	user, err := mapUser(id, email, displayName, role, emailVerified, createdAt, updatedAt, disabledAt)
+	if err != nil {
+		return domain.User{}, domain.ErrDependencyUnavailable
 	}
 	return user, nil
 }

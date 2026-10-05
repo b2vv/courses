@@ -10,6 +10,7 @@ import {
 } from '../api-origin';
 
 import type {
+  AccountValidationFailedResponse,
   AdminCourseDeleteRequest,
   AdminCoursePage,
   AdminCourseSaveRequest,
@@ -26,6 +27,7 @@ import type {
   AdminWriteBadRequestResponse,
   AuthenticatedUser,
   BadRequestResponse,
+  ChangePasswordRequest,
   CheckoutForm,
   CheckoutRequest,
   Comment,
@@ -36,11 +38,14 @@ import type {
   CourseVideos,
   DismissReportsRequest,
   DraftConflictResponse,
+  EmailRequest,
+  EmailTakenResponse,
   ForbiddenResponse,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
   Instructor,
   InternalErrorResponse,
+  InvalidAccountTokenResponse,
   InvalidRequestResponse,
   LearningCourse,
   LearningForbiddenResponse,
@@ -63,7 +68,9 @@ import type {
   MediaUploadTicket,
   MediaVideo,
   ModerationQueuePage,
+  NewEmailRequest,
   NotFoundResponse,
+  OptionalEmailRequest,
   OrderNotFoundResponse,
   OriginForbiddenResponse,
   OwnReview,
@@ -81,12 +88,17 @@ import type {
   PurchaseConflictResponse,
   PurchaseOrder,
   PutReviewRequest,
+  RateLimitedResponse,
   ReceiveWayForPayCallbackBody,
   RegenerateLessonDraftRequest,
+  RegisterRequest,
+  ResetPasswordRequest,
   Review,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
+  TokenRequest,
+  TokenUsedResponse,
   TranscriptConflictResponse,
   TranscriptDocumentLink,
   UnauthenticatedResponse,
@@ -1810,6 +1822,506 @@ const res = await fetch(getLoginUrl(),
 
   const data: loginResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as loginResponse
+}
+
+
+
+export type registerResponse201 = {
+  data: AuthenticatedUser
+  status: 201
+}
+
+export type registerResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type registerResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type registerResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type registerResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type registerResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type registerResponseSuccess = (registerResponse201) & {
+  headers: Headers;
+};
+export type registerResponseError = (registerResponse400 | registerResponse409 | registerResponse422 | registerResponse429 | registerResponse503) & {
+  headers: Headers;
+};
+
+export type registerResponse = (registerResponseSuccess | registerResponseError)
+
+export const getRegisterUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/register`
+}
+
+/**
+ * @summary Register and start a session
+ */
+export const register = async (registerRequest: RegisterRequest, options?: RequestInit): Promise<registerResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegisterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(registerRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as registerResponse
+}
+
+
+
+export type verifyEmailResponse204 = {
+  data: void
+  status: 204
+}
+
+export type verifyEmailResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type verifyEmailResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type verifyEmailResponseSuccess = (verifyEmailResponse204) & {
+  headers: Headers;
+};
+export type verifyEmailResponseError = (verifyEmailResponse400 | verifyEmailResponse410) & {
+  headers: Headers;
+};
+
+export type verifyEmailResponse = (verifyEmailResponseSuccess | verifyEmailResponseError)
+
+export const getVerifyEmailUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/verify-email`
+}
+
+export const verifyEmail = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<verifyEmailResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getVerifyEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tokenRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: verifyEmailResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as verifyEmailResponse
+}
+
+
+
+export type resendVerificationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resendVerificationResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type resendVerificationResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resendVerificationResponseSuccess = (resendVerificationResponse204) & {
+  headers: Headers;
+};
+export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401) & {
+  headers: Headers;
+};
+
+export type resendVerificationResponse = (resendVerificationResponseSuccess | resendVerificationResponseError)
+
+export const getResendVerificationUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/resend-verification`
+}
+
+export const resendVerification = async (optionalEmailRequest: OptionalEmailRequest, options?: RequestInit): Promise<resendVerificationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResendVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(optionalEmailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resendVerificationResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resendVerificationResponse
+}
+
+
+
+export type requestPasswordResetResponse200 = {
+  data: void
+  status: 200
+}
+
+export type requestPasswordResetResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type requestPasswordResetResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type requestPasswordResetResponseSuccess = (requestPasswordResetResponse200) & {
+  headers: Headers;
+};
+export type requestPasswordResetResponseError = (requestPasswordResetResponse400 | requestPasswordResetResponse429) & {
+  headers: Headers;
+};
+
+export type requestPasswordResetResponse = (requestPasswordResetResponseSuccess | requestPasswordResetResponseError)
+
+export const getRequestPasswordResetUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/forgot`
+}
+
+/**
+ * Returns 200 whether or not the email identifies an account.
+ */
+export const requestPasswordReset = async (emailRequest: EmailRequest, options?: RequestInit): Promise<requestPasswordResetResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRequestPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(emailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestPasswordResetResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as requestPasswordResetResponse
+}
+
+
+
+export type resetPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetPasswordResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type resetPasswordResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type resetPasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type resetPasswordResponseSuccess = (resetPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetPasswordResponseError = (resetPasswordResponse400 | resetPasswordResponse410 | resetPasswordResponse422) & {
+  headers: Headers;
+};
+
+export type resetPasswordResponse = (resetPasswordResponseSuccess | resetPasswordResponseError)
+
+export const getResetPasswordUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/reset`
+}
+
+export const resetPassword = async (resetPasswordRequest: ResetPasswordRequest, options?: RequestInit): Promise<resetPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resetPasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetPasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resetPasswordResponse
+}
+
+
+
+export type changePasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type changePasswordResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type changePasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type changePasswordResponseSuccess = (changePasswordResponse204) & {
+  headers: Headers;
+};
+export type changePasswordResponseError = (changePasswordResponse401 | changePasswordResponse422) & {
+  headers: Headers;
+};
+
+export type changePasswordResponse = (changePasswordResponseSuccess | changePasswordResponseError)
+
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/change`
+}
+
+export const changePassword = async (changePasswordRequest: ChangePasswordRequest, options?: RequestInit): Promise<changePasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changePasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: changePasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as changePasswordResponse
+}
+
+
+
+export type requestEmailChangeResponse204 = {
+  data: void
+  status: 204
+}
+
+export type requestEmailChangeResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type requestEmailChangeResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type requestEmailChangeResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type requestEmailChangeResponseSuccess = (requestEmailChangeResponse204) & {
+  headers: Headers;
+};
+export type requestEmailChangeResponseError = (requestEmailChangeResponse401 | requestEmailChangeResponse409 | requestEmailChangeResponse422) & {
+  headers: Headers;
+};
+
+export type requestEmailChangeResponse = (requestEmailChangeResponseSuccess | requestEmailChangeResponseError)
+
+export const getRequestEmailChangeUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/email/change`
+}
+
+export const requestEmailChange = async (newEmailRequest: NewEmailRequest, options?: RequestInit): Promise<requestEmailChangeResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRequestEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(newEmailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestEmailChangeResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as requestEmailChangeResponse
+}
+
+
+
+export type confirmEmailChangeResponse204 = {
+  data: void
+  status: 204
+}
+
+export type confirmEmailChangeResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type confirmEmailChangeResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type confirmEmailChangeResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type confirmEmailChangeResponseSuccess = (confirmEmailChangeResponse204) & {
+  headers: Headers;
+};
+export type confirmEmailChangeResponseError = (confirmEmailChangeResponse400 | confirmEmailChangeResponse409 | confirmEmailChangeResponse410) & {
+  headers: Headers;
+};
+
+export type confirmEmailChangeResponse = (confirmEmailChangeResponseSuccess | confirmEmailChangeResponseError)
+
+export const getConfirmEmailChangeUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/email/change/confirm`
+}
+
+export const confirmEmailChange = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<confirmEmailChangeResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getConfirmEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tokenRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: confirmEmailChangeResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as confirmEmailChangeResponse
 }
 
 

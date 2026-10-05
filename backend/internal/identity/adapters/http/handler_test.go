@@ -26,13 +26,54 @@ type identityService struct {
 	loginCalls, authenticateCalls, logoutCalls, listInstructorCalls int
 	logoutTokens                                                    []string
 	loginResult                                                     application.LoginResult
+	loginInput                                                      application.LoginInput
 	user                                                            domain.User
 	instructors                                                     []domain.User
 	err                                                             error
 }
 
-func (service *identityService) Login(context.Context, application.LoginInput) (application.LoginResult, error) {
+type accountsService struct {
+	registerCalls, forgotCalls, resetCalls, changeCalls, emailChangeCalls, verifyCalls, confirmCalls, resendCalls int
+	registerResult                                                                                                application.RegisterResult
+	err                                                                                                           error
+}
+
+func (service *accountsService) Register(_ context.Context, _ application.RegisterInput, _ string) (application.RegisterResult, error) {
+	service.registerCalls++
+	return service.registerResult, service.err
+}
+func (service *accountsService) VerifyEmail(context.Context, string) error {
+	service.verifyCalls++
+	return service.err
+}
+func (service *accountsService) ResendVerification(context.Context, string, string) (bool, error) {
+	service.resendCalls++
+	return true, service.err
+}
+func (service *accountsService) RequestPasswordReset(context.Context, string, string, string) error {
+	service.forgotCalls++
+	return service.err
+}
+func (service *accountsService) ResetPassword(context.Context, string, string) error {
+	service.resetCalls++
+	return service.err
+}
+func (service *accountsService) ChangePassword(context.Context, string, string, string, []byte) error {
+	service.changeCalls++
+	return service.err
+}
+func (service *accountsService) RequestEmailChange(context.Context, string, string, string) error {
+	service.emailChangeCalls++
+	return service.err
+}
+func (service *accountsService) ConfirmEmailChange(context.Context, string) error {
+	service.confirmCalls++
+	return service.err
+}
+
+func (service *identityService) Login(_ context.Context, input application.LoginInput) (application.LoginResult, error) {
 	service.loginCalls++
+	service.loginInput = input
 	return service.loginResult, service.err
 }
 func (service *identityService) Authenticate(context.Context, string) (domain.User, error) {
@@ -67,6 +108,12 @@ func TestLoginHTTPValidationAndCookie(t *testing.T) {
 	}
 	if response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("X-Request-ID") == "" {
 		t.Fatalf("headers=%v", response.Header())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/login", `{"email":"student@courseforge.local","password":"demo","rememberMe":true}`))
+	if response.Code != http.StatusOK || !service.loginInput.RememberMe {
+		t.Fatalf("remember-me status=%d input=%+v", response.Code, service.loginInput)
 	}
 
 	for _, body := range []string{`{`, `{}`, `{"email":1,"password":"x"}`, `{"email":"a@b","email":"c@d","password":"x"}`, `{"email":"a@b","password":"x","role":"admin"}`} {
@@ -204,6 +251,40 @@ func TestIdentityHTTPExplicitErrorMatrix(t *testing.T) {
 	}
 }
 
+func TestAccountSelfServiceRoutes(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	user := domain.User{ID: "40000000-0000-4000-8000-000000000001", Email: "student@courseforge.local", DisplayName: "Студентка", Role: domain.Student, EmailVerified: false, CreatedAt: now, UpdatedAt: now}
+	identity := &identityService{user: user}
+	accounts := &accountsService{registerResult: application.RegisterResult{User: user, Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: user.ID, CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: strings.Repeat("A", 43)}}
+	handler := testHandlerWithAccounts(t, identity, accounts)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/register", `{"email":"new@courseforge.local","password":"password1","displayName":"New"}`))
+	if response.Code != http.StatusCreated || accounts.registerCalls != 1 || len(response.Result().Cookies()) != 1 || !strings.Contains(response.Body.String(), `"emailVerified":false`) {
+		t.Fatalf("register status=%d calls=%d cookie=%v body=%s", response.Code, accounts.registerCalls, response.Result().Cookies(), response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/password/forgot", `{"email":"missing@courseforge.local"}`))
+	if response.Code != http.StatusOK || accounts.forgotCalls != 1 {
+		t.Fatalf("forgot status=%d calls=%d", response.Code, accounts.forgotCalls)
+	}
+
+	accounts.err = domain.ErrEmailTaken
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/register", `{"email":"taken@courseforge.local","password":"password1","displayName":"Taken"}`))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"email_taken"`) {
+		t.Fatalf("taken status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	accounts.err = domain.ErrTokenUsed
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/verify-email", `{"token":"bad"}`))
+	if response.Code != http.StatusGone || !strings.Contains(response.Body.String(), `"code":"token_used"`) {
+		t.Fatalf("token status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func testHandler(t *testing.T, service *identityService) http.Handler {
 	t.Helper()
 	config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
@@ -211,6 +292,16 @@ func testHandler(t *testing.T, service *identityService) http.Handler {
 		t.Fatal(err)
 	}
 	adapter := identityhttp.NewHandler(service, service, nil, config)
+	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
+}
+
+func testHandlerWithAccounts(t *testing.T, service *identityService, accounts *accountsService) http.Handler {
+	t.Helper()
+	config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := identityhttp.NewHandler(service, service, nil, config, accounts)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: adapter.Register})
 }
 

@@ -19,6 +19,7 @@ export interface AuthenticatedUser {
      * @maxLength 120
      */
   displayName: string;
+  emailVerified: boolean;
   /** student may learn; instructor and admin may enter the administration shell. */
   role: AuthenticatedUserRole;
 }
