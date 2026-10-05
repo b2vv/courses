@@ -27,4 +27,5 @@ const (
 	ErrTwoFactorAlreadyEnabled Error = "twofactor_already_enabled"
 	ErrTwoFactorNotEnabled     Error = "twofactor_not_enabled"
 	ErrRecoveryCodeInvalid     Error = "recovery_code_invalid"
+	ErrTwoFactorRequired       Error = "two_factor_required"
 )

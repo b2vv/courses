@@ -26,6 +26,7 @@ type Identity struct {
 	credentials ports.CredentialVerifier
 	sessions    ports.SessionStore
 	limiter     ports.RateLimiter
+	twoFactor   *TwoFactor
 	now         Clock
 }
 
@@ -38,9 +39,17 @@ type LoginInput struct {
 }
 
 type LoginResult struct {
-	User    domain.User
-	Session domain.Session
-	Token   string
+	User      domain.User
+	Session   domain.Session
+	Token     string
+	PendingID string
+}
+
+// WithTwoFactor adds the optional second-factor step. It is a separate
+// composition-root concern until the persistence adapter exists in A13b.
+func (identity *Identity) WithTwoFactor(twoFactor *TwoFactor) *Identity {
+	identity.twoFactor = twoFactor
+	return identity
 }
 
 func NewIdentity(credentials ports.CredentialVerifier, sessions ports.SessionStore, now Clock, limiters ...ports.RateLimiter) *Identity {
@@ -67,6 +76,24 @@ func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginRes
 	}
 	if _, err := domain.NewUser(user); err != nil || !user.Active() {
 		return LoginResult{}, domain.ErrInvalidCredentials
+	}
+	if identity.twoFactor != nil {
+		state, err := identity.twoFactor.store.GetTwoFactor(ctx, user.ID)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		if state.Enabled {
+			pendingID, err := identity.twoFactor.StartLogin(ctx, user.ID, input.RememberMe)
+			if err != nil {
+				return LoginResult{}, err
+			}
+			if identity.limiter != nil {
+				if err := identity.limiter.Reset(ctx, loginRateLimitKey(input.Email, input.IP)); err != nil {
+					return LoginResult{}, err
+				}
+			}
+			return LoginResult{User: user, PendingID: pendingID}, domain.ErrTwoFactorRequired
+		}
 	}
 	now := identity.timestamp()
 	lifetime := sessionLifetime

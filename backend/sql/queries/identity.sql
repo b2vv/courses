@@ -4,6 +4,52 @@ FROM users
 WHERE email = sqlc.arg(email)::text
   AND deleted_at IS NULL;
 
+-- name: GetUserTwoFactor :one
+SELECT totp_secret, totp_enabled
+FROM users
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: SetUserTotpSecret :execrows
+UPDATE users
+SET totp_secret = sqlc.arg(totp_secret)::text,
+    totp_enabled = false,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: EnableUserTotp :execrows
+UPDATE users
+SET totp_enabled = true,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND totp_secret IS NOT NULL
+  AND deleted_at IS NULL;
+
+-- name: DisableUserTotp :execrows
+UPDATE users
+SET totp_secret = NULL,
+    totp_enabled = false,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: InsertRecoveryCodes :copyfrom
+INSERT INTO recovery_codes (id, user_id, code_hash)
+VALUES (sqlc.arg(id)::text::uuid, sqlc.arg(user_id)::text::uuid, sqlc.arg(code_hash)::text);
+
+-- name: ConsumeRecoveryCode :one
+UPDATE recovery_codes
+SET consumed_at = now()
+WHERE user_id = sqlc.arg(user_id)::text::uuid
+  AND code_hash = sqlc.arg(code_hash)::text
+  AND consumed_at IS NULL
+RETURNING id::text AS id;
+
+-- name: DeleteRecoveryCodesForUser :execrows
+DELETE FROM recovery_codes
+WHERE user_id = sqlc.arg(user_id)::text::uuid;
+
 -- name: CreateUser :one
 INSERT INTO users (id, email, display_name, role, password_hash, email_verified, created_at, updated_at)
 VALUES (
