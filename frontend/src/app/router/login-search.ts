@@ -2,9 +2,12 @@ import type { SearchSchemaInput } from '@tanstack/react-router';
 import { z } from 'zod';
 import { safeReturnTo } from '../../domain/identity/identity';
 
-const searchSchema = z.object({ returnTo: z.string().optional() });
+const searchSchema = z.object({
+  returnTo: z.string().optional(),
+  notice: z.enum(['password-reset']).optional(),
+});
 
-export type LoginSearch = { readonly returnTo?: string };
+export type LoginSearch = { readonly returnTo?: string; readonly notice?: 'password-reset' };
 
 /**
  * The return target arrives from the URL, so it is narrowed to an internal path
@@ -20,7 +23,12 @@ export function parseLoginSearch(search: SearchSchemaInput & Partial<LoginSearch
 export function validateLoginSearch(search: unknown): LoginSearch {
   const parsed = searchSchema.safeParse(search);
   const candidate = parsed.success ? parsed.data.returnTo : undefined;
-  if (candidate === undefined) return {};
+  const notice = parsed.success ? parsed.data.notice : undefined;
+  if (candidate === undefined) return notice === undefined ? {} : { notice };
   const safe = safeReturnTo(candidate, '');
-  return safe === '' ? {} : { returnTo: safe };
+  return safe === ''
+    ? notice === undefined
+      ? {}
+      : { notice }
+    : { returnTo: safe, ...(notice === undefined ? {} : { notice }) };
 }

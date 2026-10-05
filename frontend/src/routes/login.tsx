@@ -38,7 +38,7 @@ function LoginFailure() {
 }
 
 function LoginRoute() {
-  const { returnTo } = Route.useSearch();
+  const { returnTo, notice } = Route.useSearch();
   const destination = safeReturnTo(returnTo);
   const { identity, identityDependencies } = Route.useRouteContext();
   const client = useQueryClient();
@@ -63,6 +63,7 @@ function LoginRoute() {
       user={user}
       isPending={logIn.isPending}
       errorCode={failure instanceof SessionQueryError ? failure.code : undefined}
+      notice={notice}
       onSubmit={(input) => logIn.mutate(input)}
       onContinue={goToReturnTo}
     />
