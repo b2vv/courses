@@ -21,6 +21,7 @@ import (
 	passwords "courses/internal/identity/adapters/argon2id"
 	identityhttp "courses/internal/identity/adapters/http"
 	identitypostgres "courses/internal/identity/adapters/postgres"
+	identityredis "courses/internal/identity/adapters/redis"
 	identityapplication "courses/internal/identity/application"
 	mediaasynq "courses/internal/media/adapters/asynq"
 	mediahttp "courses/internal/media/adapters/http"
@@ -100,7 +101,11 @@ func main() {
 		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
 		draftHandler := transcripthttp.NewDraftHandler(drafting)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
-		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
+		loginLimiter, err := identityredis.NewRateLimiter(dependencies.Redis, 5, 15*time.Minute, logger)
+		if err != nil {
+			return err
+		}
+		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now, loginLimiter)
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
 		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig)
 		mediaRepository := mediapostgres.NewRepository(dependencies.Database)

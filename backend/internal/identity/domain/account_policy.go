@@ -53,6 +53,7 @@ type AccountToken struct {
 	ID         string
 	UserID     string
 	Purpose    AccountTokenPurpose
+	NewEmail   string
 	ExpiresAt  time.Time
 	ConsumedAt *time.Time
 	CreatedAt  time.Time
@@ -60,6 +61,14 @@ type AccountToken struct {
 
 func NewAccountToken(token AccountToken) (AccountToken, error) {
 	if !validID(token.ID) || !validID(token.UserID) || !token.Purpose.Valid() || token.CreatedAt.IsZero() || !token.ExpiresAt.After(token.CreatedAt) {
+		return AccountToken{}, ErrInvalidAccountToken
+	}
+	if token.Purpose == EmailChangeToken {
+		newEmail, err := NormalizeEmail(token.NewEmail)
+		if err != nil || newEmail != token.NewEmail {
+			return AccountToken{}, ErrInvalidAccountToken
+		}
+	} else if token.NewEmail != "" {
 		return AccountToken{}, ErrInvalidAccountToken
 	}
 	if token.ConsumedAt != nil && token.ConsumedAt.Before(token.CreatedAt) {
@@ -77,6 +86,13 @@ func ValidatePasswordChange(current, next string) error {
 		return ErrPasswordUnchanged
 	}
 	if !validPassword(next) {
+		return ErrWeakPassword
+	}
+	return nil
+}
+
+func ValidatePassword(password string) error {
+	if !validPassword(password) {
 		return ErrWeakPassword
 	}
 	return nil

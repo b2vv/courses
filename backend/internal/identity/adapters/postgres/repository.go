@@ -168,6 +168,13 @@ func (repository *Repository) DeleteUserSessionsExceptCurrent(ctx context.Contex
 	return nil
 }
 
+func (repository *Repository) DeleteIdentitySessionsForUser(ctx context.Context, userID string) error {
+	if _, err := generated.New(repository.pool).DeleteIdentitySessionsForUser(ctx, userID); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
 func (repository *Repository) CreateUser(ctx context.Context, user domain.User, passwordHash string) (domain.User, error) {
 	row, err := generated.New(repository.pool).CreateUser(ctx, generated.CreateUserParams{
 		UserID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role), PasswordHash: passwordHash,

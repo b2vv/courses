@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/base64"
+	"strings"
 	"time"
 
 	"courses/internal/identity/domain"
@@ -10,8 +11,9 @@ import (
 )
 
 const (
-	sessionLifetime  = 12 * time.Hour
-	operationTimeout = 3 * time.Second
+	sessionLifetime    = 12 * time.Hour
+	RememberMeLifetime = 3 * 24 * time.Hour
+	operationTimeout   = 3 * time.Second
 	// Session timestamps are written to the session store and read back before
 	// they are trusted. Stores persist them at microsecond resolution, so a
 	// clock reading is normalized before it becomes part of that round trip.
@@ -23,6 +25,7 @@ type Clock func() time.Time
 type Identity struct {
 	credentials ports.CredentialVerifier
 	sessions    ports.SessionStore
+	limiter     ports.RateLimiter
 	now         Clock
 }
 
@@ -30,6 +33,8 @@ type LoginInput struct {
 	Email          string
 	Password       string
 	PresentedToken string
+	RememberMe     bool
+	IP             string
 }
 
 type LoginResult struct {
@@ -38,8 +43,12 @@ type LoginResult struct {
 	Token   string
 }
 
-func NewIdentity(credentials ports.CredentialVerifier, sessions ports.SessionStore, now Clock) *Identity {
-	return &Identity{credentials: credentials, sessions: sessions, now: now}
+func NewIdentity(credentials ports.CredentialVerifier, sessions ports.SessionStore, now Clock, limiters ...ports.RateLimiter) *Identity {
+	identity := &Identity{credentials: credentials, sessions: sessions, now: now}
+	if len(limiters) > 0 {
+		identity.limiter = limiters[0]
+	}
+	return identity
 }
 
 func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginResult, error) {
@@ -49,6 +58,9 @@ func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginRes
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
+	if err := identity.allow(ctx, loginRateLimitKey(input.Email, input.IP)); err != nil {
+		return LoginResult{}, err
+	}
 	user, err := identity.credentials.VerifyCredentials(ctx, email, input.Password)
 	if err != nil {
 		return LoginResult{}, err
@@ -57,15 +69,42 @@ func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginRes
 		return LoginResult{}, domain.ErrInvalidCredentials
 	}
 	now := identity.timestamp()
-	issued, err := identity.sessions.Rotate(ctx, user.ID, input.PresentedToken, now, now.Add(sessionLifetime))
+	lifetime := sessionLifetime
+	if input.RememberMe {
+		lifetime = RememberMeLifetime
+	}
+	issued, err := identity.sessions.Rotate(ctx, user.ID, input.PresentedToken, now, now.Add(lifetime))
 	if err != nil {
 		return LoginResult{}, err
 	}
 	session, err := domain.NewSession(issued.Session)
-	if err != nil || session.UserID != user.ID || !session.CreatedAt.Equal(now) || !session.ExpiresAt.Equal(now.Add(sessionLifetime)) || !validToken(issued.Token) {
+	if err != nil || session.UserID != user.ID || !session.CreatedAt.Equal(now) || !session.ExpiresAt.Equal(now.Add(lifetime)) || !validToken(issued.Token) {
 		return LoginResult{}, domain.ErrDependencyUnavailable
 	}
+	if identity.limiter != nil {
+		if err := identity.limiter.Reset(ctx, loginRateLimitKey(input.Email, input.IP)); err != nil {
+			return LoginResult{}, err
+		}
+	}
 	return LoginResult{User: user, Session: session, Token: issued.Token}, nil
+}
+
+func (identity *Identity) allow(ctx context.Context, key string) error {
+	if identity.limiter == nil {
+		return nil
+	}
+	allowed, err := identity.limiter.Allow(ctx, key)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return domain.ErrRateLimited
+	}
+	return nil
+}
+
+func loginRateLimitKey(email, ip string) string {
+	return "login:" + strings.ToLower(strings.TrimSpace(email)) + ":" + ip
 }
 
 func (identity *Identity) Authenticate(ctx context.Context, token string) (domain.User, error) {
