@@ -57,6 +57,10 @@ func TestIdentityErrorsAreStable(t *testing.T) {
 	for errorValue, want := range map[error]string{
 		domain.ErrInvalidUser:            "invalid_user",
 		domain.ErrInvalidEmail:           "invalid_email",
+		domain.ErrInvalidDisplayName:     "invalid_display_name",
+		domain.ErrWeakPassword:           "weak_password",
+		domain.ErrPasswordUnchanged:      "password_unchanged",
+		domain.ErrInvalidAccountToken:    "invalid_account_token",
 		domain.ErrInvalidSession:         "invalid_session",
 		domain.ErrInvalidCredentials:     "invalid_credentials",
 		domain.ErrAuthenticationRequired: "authentication_required",
