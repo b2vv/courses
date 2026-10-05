@@ -4,6 +4,70 @@ FROM users
 WHERE email = sqlc.arg(email)::text
   AND deleted_at IS NULL;
 
+-- name: CreateUser :one
+INSERT INTO users (id, email, display_name, role, password_hash, email_verified, created_at, updated_at)
+VALUES (
+  sqlc.arg(user_id)::text::uuid,
+  sqlc.arg(email)::text,
+  sqlc.arg(display_name)::text,
+  sqlc.arg(role)::text,
+  sqlc.arg(password_hash)::text,
+  sqlc.arg(email_verified)::boolean,
+  sqlc.arg(created_at)::timestamptz,
+  sqlc.arg(updated_at)::timestamptz
+)
+RETURNING id::text AS id, email, display_name, role, email_verified, created_at, updated_at, disabled_at;
+
+-- name: SetUserEmailVerified :execrows
+UPDATE users
+SET email_verified = true,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: UpdateUserPassword :execrows
+UPDATE users
+SET password_hash = sqlc.arg(password_hash)::text,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: UpdateUserEmail :execrows
+UPDATE users
+SET email = sqlc.arg(email)::text,
+    email_verified = true,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: InsertAccountToken :exec
+INSERT INTO account_tokens (id, user_id, purpose, token_digest, new_email, expires_at, created_at)
+VALUES (
+  sqlc.arg(token_id)::text::uuid,
+  sqlc.arg(user_id)::text::uuid,
+  sqlc.arg(purpose)::text,
+  sqlc.arg(token_digest)::bytea,
+  sqlc.narg(new_email)::text,
+  sqlc.arg(expires_at)::timestamptz,
+  sqlc.arg(created_at)::timestamptz
+);
+
+-- name: ConsumeAccountToken :one
+UPDATE account_tokens
+SET consumed_at = now()
+WHERE token_digest = sqlc.arg(token_digest)::bytea
+  AND purpose = sqlc.arg(purpose)::text
+  AND consumed_at IS NULL
+  AND expires_at > now()
+RETURNING user_id::text AS user_id, new_email;
+
+-- name: InvalidateAccountTokensByPurpose :execrows
+UPDATE account_tokens
+SET consumed_at = now()
+WHERE user_id = sqlc.arg(user_id)::text::uuid
+  AND purpose = sqlc.arg(purpose)::text
+  AND consumed_at IS NULL;
+
 -- name: LockActiveIdentityUser :one
 SELECT id::text AS id
 FROM users
@@ -36,6 +100,7 @@ SELECT
   users.email,
   users.display_name,
   users.role,
+  users.email_verified,
   users.created_at,
   users.updated_at,
   users.disabled_at
@@ -129,3 +194,8 @@ WHERE id = sqlc.arg(user_id)::text::uuid
 -- name: DeleteIdentitySessionsForUser :execrows
 DELETE FROM user_sessions
 WHERE user_id = sqlc.arg(user_id)::text::uuid;
+
+-- name: DeleteUserSessionsExceptCurrent :execrows
+DELETE FROM user_sessions
+WHERE user_id = sqlc.arg(user_id)::text::uuid
+  AND token_digest <> sqlc.arg(token_digest)::bytea;

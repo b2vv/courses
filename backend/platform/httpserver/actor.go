@@ -5,8 +5,9 @@ import "context"
 type actorKey struct{}
 
 type Actor struct {
-	UserID string
-	Role   string
+	UserID        string
+	Role          string
+	EmailVerified bool
 }
 
 func WithActor(ctx context.Context, actor Actor) context.Context {
