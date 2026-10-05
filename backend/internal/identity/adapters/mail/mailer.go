@@ -50,8 +50,8 @@ type messageKind struct{ path, ukSubject, enSubject, ukText, enText string }
 
 var (
 	verification  = messageKind{"/verify-email", "Підтвердьте електронну пошту", "Verify your email", "Підтвердьте електронну пошту", "Verify your email"}
-	passwordReset = messageKind{"/reset-password", "Скиньте пароль", "Reset your password", "Скиньте пароль", "Reset your password"}
-	emailChange   = messageKind{"/change-email", "Підтвердьте зміну електронної пошти", "Confirm your email change", "Підтвердьте зміну електронної пошти", "Confirm your email change"}
+	passwordReset = messageKind{"/password/reset", "Скиньте пароль", "Reset your password", "Скиньте пароль", "Reset your password"}
+	emailChange   = messageKind{"/email/change/confirm", "Підтвердьте зміну електронної пошти", "Confirm your email change", "Підтвердьте зміну електронної пошти", "Confirm your email change"}
 )
 
 func (mailer *Mailer) send(ctx context.Context, recipient, token, lang string, kind messageKind) error {

@@ -183,7 +183,9 @@ async function login(page: Page, email: string, value: string, rememberMe = fals
   await page.goto('/login');
   await page.getByRole('textbox', { name: 'Електронна пошта' }).fill(email);
   await page.getByLabel('Пароль').fill(value);
-  if (rememberMe) await page.getByRole('checkbox', { name: 'Запам’ятати мене' }).check();
+  // The checkbox input is visually hidden (sr-only); click its label, as a user does, rather than
+  // the clipped input, which the label would intercept.
+  if (rememberMe) await page.getByText('Запам’ятати мене').click();
   await page.getByRole('button', { name: 'Увійти' }).click();
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 }
@@ -263,7 +265,7 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   await expect(page.getByText('A course visible before email verification.')).toBeVisible();
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
   await expect(
-    page.getByRole('heading', { name: 'Підтвердьте пошту, щоб дивитися' }),
+    page.getByRole('heading', { name: 'Підтвердіть пошту, щоб дивитися' }),
   ).toBeVisible();
   const denied = await page.request.post(`/api/v1/learn/courses/${course.id}/purchase`, {
     headers: { ...origin(baseURL), 'Idempotency-Key': randomUUID() },
@@ -276,7 +278,7 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   await page.goto('/');
   await expect(page.getByLabel('Підтвердження пошти')).toHaveCount(0);
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
-  await expect(page.getByRole('heading', { name: 'Підтвердьте пошту, щоб дивитися' })).toHaveCount(
+  await expect(page.getByRole('heading', { name: 'Підтвердіть пошту, щоб дивитися' })).toHaveCount(
     0,
   );
 
@@ -291,6 +293,11 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   await page.goto(resetLink);
   await page.getByLabel('Новий пароль').fill(resetPassword);
   await page.getByRole('button', { name: 'Зберегти пароль' }).click();
+  // Reset deletes every session server-side, but this browser did it while still carrying its old
+  // signed-in identity in the client cache; a real user resets while logged out. Reload so the client
+  // re-reads /me (now 401) and lands on the anonymous login page that carries the notice.
+  await page.waitForURL(/\/login/);
+  await page.reload();
   await expect(page.getByText('Пароль оновлено')).toBeVisible();
   try {
     expect((await resetSession.request.get('/api/v1/auth/me')).status()).toBe(401);
@@ -299,10 +306,12 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   }
   await login(page, initialEmail, resetPassword);
 
+  // A distinct second session (its own login, not a clone of page's cookie) so change-password keeps
+  // the current one and deletes this one; cloning page's storageState would share the current session.
+  const otherPasswordSession = await browser.newContext();
+  const otherPasswordPage = await otherPasswordSession.newPage();
+  await login(otherPasswordPage, initialEmail, resetPassword);
   await page.goto('/settings/account');
-  const otherPasswordSession = await browser.newContext({
-    storageState: await page.context().storageState(),
-  });
   const passwordForm = page.getByRole('heading', { name: 'Змінити пароль' }).locator('..');
   await passwordForm.getByLabel('Поточний пароль').fill(resetPassword);
   await passwordForm.getByLabel('Новий пароль').fill(changedPassword);
@@ -318,7 +327,7 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   const emailForm = page.getByRole('heading', { name: 'Змінити електронну пошту' }).locator('..');
   await emailForm.getByRole('textbox', { name: 'Нова електронна пошта' }).fill(changedEmail);
   await emailForm.getByRole('button', { name: 'Змінити пошту' }).click();
-  await expect(emailForm.getByText('Перевірте нову пошту')).toBeVisible();
+  await expect(emailForm.getByText('Підтвердіть зміну на новій адресі.')).toBeVisible();
   const changeLink = await readMailLink(changedEmail, '/email/change/confirm');
   expect(
     await page.request.get('/api/v1/auth/me').then((response) => response.json()),
