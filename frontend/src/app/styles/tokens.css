@@ -287,6 +287,8 @@
   color: transparent;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-control);
+  /* Decorative mark: let clicks reach the real checkbox input instead of being intercepted. */
+  pointer-events: none;
 }
 /* Radio group (review stars): a wrapping row of choices, each a full .ui-choice target. */
 .ui-radio-group {
