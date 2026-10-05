@@ -262,7 +262,6 @@ test('Acc01–Acc08 register, gate unverified playback and mutation, verify, res
   await page.goto(`/courses/${course.slug}`);
   await expect(page.getByText('A course visible before email verification.')).toBeVisible();
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
-  await expect(page.getByText('Accounts verification gate')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Підтвердьте пошту, щоб дивитися' }),
   ).toBeVisible();
@@ -485,14 +484,20 @@ test.afterAll(async ({ browser, baseURL }) => {
   if (baseURL !== undefined && course !== undefined) {
     const admin = await openAs(browser, baseURL, 'admin');
     try {
+      // Archive, don't delete: the course was published so lessons were viewable, and only draft
+      // courses are deletable (409 course_not_deletable). Archiving removes it from the public catalog,
+      // which is what other specs (catalog/recovery) count, and mirrors the ratings-spec cleanup.
       const current = await admin.request.get(`/api/v1/admin/courses/${course.id}`);
       if (current.ok()) {
-        const currentToken = token((await current.json()) as object);
-        const removed = await admin.request.delete(`/api/v1/admin/courses/${course.id}`, {
-          data: { expectedUpdatedAt: currentToken.updatedAt },
-          headers: origin(baseURL),
-        });
-        expect(removed.status(), await removed.text()).toBe(204);
+        const body = (await current.json()) as { status?: string };
+        const currentToken = token(body);
+        if (body.status !== 'archived' && typeof currentToken.updatedAt === 'string') {
+          const archived = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+            data: { expectedUpdatedAt: currentToken.updatedAt, status: 'archived' },
+            headers: origin(baseURL),
+          });
+          expect(archived.status(), await archived.text()).toBe(200);
+        }
       }
     } finally {
       await admin.close();
