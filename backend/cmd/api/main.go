@@ -113,14 +113,22 @@ func main() {
 		if err != nil {
 			return err
 		}
-		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now, loginLimiter)
+		pendingTwoFactor, err := identityredis.NewPendingTwoFactorStore(dependencies.Redis)
+		if err != nil {
+			return err
+		}
+		twoFactor := identityapplication.NewTwoFactor(
+			identityRepository, identityRepository, pendingTwoFactor, identityRepository, time.Now,
+			identityapplication.TwoFactorDependency{Passwords: identityRepository, Limiter: loginLimiter, Logger: logger},
+		)
+		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now, loginLimiter).WithTwoFactor(twoFactor)
 		identityMailer, err := identitymail.New(platformmail.NewSender(mailConfig), os.Getenv("PUBLIC_ORIGIN"))
 		if err != nil {
 			return err
 		}
 		accounts := identityapplication.NewAccounts(identityRepository, identityRepository, passwords.NewVerifier(), identityRepository, identityMailer, identityRepository, time.Now, newUUID, identityapplication.AccountsDependency{Limiter: loginLimiter, Credentials: identityRepository})
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
-		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig, accounts)
+		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig, accounts).WithTwoFactor(twoFactor)
 		mediaRepository := mediapostgres.NewRepository(dependencies.Database)
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)

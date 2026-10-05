@@ -130,6 +130,31 @@ func (handler *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (handler *Handler) adminDisableTwoFactor(w http.ResponseWriter, r *http.Request) {
+	identityHeaders(w)
+	if _, ok := administrator(w, r); !ok {
+		return
+	}
+	if handler.twoFactorUnavailable(w, r) {
+		return
+	}
+	id := r.PathValue("id")
+	if !validAdministrationID(id) || !emptyAdministrationQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrInvalidUser, "invalid_request")
+		return
+	}
+	actor, ok := r.Context().Value(userKey{}).(domain.User)
+	if !ok {
+		writeError(w, r, domain.ErrAuthenticationRequired, "")
+		return
+	}
+	if err := handler.twoFactor.AdminDisableTwoFactor(r.Context(), actor, id); err != nil {
+		writeError(w, r, err, "")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func administrator(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
 	user, ok := r.Context().Value(userKey{}).(domain.User)
 	if !ok {
