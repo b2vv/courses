@@ -38,6 +38,27 @@ func (q *Queries) ConsumeAccountToken(ctx context.Context, arg ConsumeAccountTok
 	return i, err
 }
 
+const consumeRecoveryCode = `-- name: ConsumeRecoveryCode :one
+UPDATE recovery_codes
+SET consumed_at = now()
+WHERE user_id = $1::text::uuid
+  AND code_hash = $2::text
+  AND consumed_at IS NULL
+RETURNING id::text AS id
+`
+
+type ConsumeRecoveryCodeParams struct {
+	UserID   string
+	CodeHash string
+}
+
+func (q *Queries) ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, consumeRecoveryCode, arg.UserID, arg.CodeHash)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const countAdminUsers = `-- name: CountAdminUsers :one
 SELECT count(*)
 FROM users
@@ -217,6 +238,19 @@ func (q *Queries) DeleteIdentitySessionsForUser(ctx context.Context, userID stri
 	return result.RowsAffected(), nil
 }
 
+const deleteRecoveryCodesForUser = `-- name: DeleteRecoveryCodesForUser :execrows
+DELETE FROM recovery_codes
+WHERE user_id = $1::text::uuid
+`
+
+func (q *Queries) DeleteRecoveryCodesForUser(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRecoveryCodesForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUserSessionsExceptCurrent = `-- name: DeleteUserSessionsExceptCurrent :execrows
 DELETE FROM user_sessions
 WHERE user_id = $1::text::uuid
@@ -230,6 +264,40 @@ type DeleteUserSessionsExceptCurrentParams struct {
 
 func (q *Queries) DeleteUserSessionsExceptCurrent(ctx context.Context, arg DeleteUserSessionsExceptCurrentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserSessionsExceptCurrent, arg.UserID, arg.TokenDigest)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const disableUserTotp = `-- name: DisableUserTotp :execrows
+UPDATE users
+SET totp_secret = NULL,
+    totp_enabled = false,
+    updated_at = now()
+WHERE id = $1::text::uuid
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) DisableUserTotp(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, disableUserTotp, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const enableUserTotp = `-- name: EnableUserTotp :execrows
+UPDATE users
+SET totp_enabled = true,
+    updated_at = now()
+WHERE id = $1::text::uuid
+  AND totp_secret IS NOT NULL
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) EnableUserTotp(ctx context.Context, userID string) (int64, error) {
+	result, err := q.db.Exec(ctx, enableUserTotp, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -304,6 +372,25 @@ func (q *Queries) GetIdentityCredential(ctx context.Context, email string) (GetI
 	return i, err
 }
 
+const getUserTwoFactor = `-- name: GetUserTwoFactor :one
+SELECT totp_secret, totp_enabled
+FROM users
+WHERE id = $1::text::uuid
+  AND deleted_at IS NULL
+`
+
+type GetUserTwoFactorRow struct {
+	TotpSecret  pgtype.Text
+	TotpEnabled bool
+}
+
+func (q *Queries) GetUserTwoFactor(ctx context.Context, userID string) (GetUserTwoFactorRow, error) {
+	row := q.db.QueryRow(ctx, getUserTwoFactor, userID)
+	var i GetUserTwoFactorRow
+	err := row.Scan(&i.TotpSecret, &i.TotpEnabled)
+	return i, err
+}
+
 const insertAccountToken = `-- name: InsertAccountToken :exec
 INSERT INTO account_tokens (id, user_id, purpose, token_digest, new_email, expires_at, created_at)
 VALUES (
@@ -337,6 +424,22 @@ func (q *Queries) InsertAccountToken(ctx context.Context, arg InsertAccountToken
 		arg.ExpiresAt,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const insertRecoveryCode = `-- name: InsertRecoveryCode :exec
+INSERT INTO recovery_codes (id, user_id, code_hash)
+VALUES ($1::text::uuid, $2::text::uuid, $3::text)
+`
+
+type InsertRecoveryCodeParams struct {
+	ID       string
+	UserID   string
+	CodeHash string
+}
+
+func (q *Queries) InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error {
+	_, err := q.db.Exec(ctx, insertRecoveryCode, arg.ID, arg.UserID, arg.CodeHash)
 	return err
 }
 
@@ -648,6 +751,28 @@ type SetUserPasswordHashParams struct {
 
 func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setUserPasswordHash, arg.PasswordHash, arg.UpdatedAt, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserTotpSecret = `-- name: SetUserTotpSecret :execrows
+UPDATE users
+SET totp_secret = $1::text,
+    totp_enabled = false,
+    updated_at = now()
+WHERE id = $2::text::uuid
+  AND deleted_at IS NULL
+`
+
+type SetUserTotpSecretParams struct {
+	TotpSecret string
+	UserID     string
+}
+
+func (q *Queries) SetUserTotpSecret(ctx context.Context, arg SetUserTotpSecretParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserTotpSecret, arg.TotpSecret, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
