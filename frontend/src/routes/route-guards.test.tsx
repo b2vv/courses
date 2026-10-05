@@ -369,6 +369,12 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
       { id: '/verify-email', path: 'verify-email', fullPath: '/verify-email' },
       { id: '/password/forgot', path: 'password/forgot', fullPath: '/password/forgot' },
       { id: '/password/reset', path: 'password/reset', fullPath: '/password/reset' },
+      {
+        id: '/email/change/confirm',
+        path: 'email/change/confirm',
+        fullPath: '/email/change/confirm',
+      },
+      { id: '/settings/account', path: 'settings/account', fullPath: '/settings/account' },
       { id: '/orders/$orderId', path: 'orders/$orderId', fullPath: '/orders/$orderId' },
       { id: '/teach', path: 'teach', fullPath: '/teach' },
       {
