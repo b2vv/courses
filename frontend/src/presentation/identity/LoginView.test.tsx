@@ -22,6 +22,7 @@ function view(props: Partial<Parameters<typeof LoginView>[0]> = {}, locale: 'uk'
         user={null}
         isPending={false}
         errorCode={undefined}
+        notice={undefined}
         onSubmit={(input) => submitted.push(input)}
         onContinue={() => continued.push(1)}
         {...props}
@@ -37,7 +38,9 @@ test('submits what the visitor typed', async () => {
   await user.type(screen.getByLabelText('Електронна пошта'), 'Student@CourseForge.Local');
   await user.type(screen.getByLabelText('Пароль'), 'secret');
   await user.click(screen.getByRole('button', { name: 'Увійти' }));
-  expect(submitted).toEqual([{ email: 'Student@CourseForge.Local', password: 'secret' }]);
+  expect(submitted).toEqual([
+    { email: 'Student@CourseForge.Local', password: 'secret', rememberMe: false },
+  ]);
 });
 
 test('submits from the keyboard alone', async () => {
@@ -48,9 +51,21 @@ test('submits from the keyboard alone', async () => {
   await user.tab();
   await user.keyboard('secret');
   await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Запам’ятати мене' }));
+  await user.tab();
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Увійти' }));
   await user.keyboard('{Enter}');
-  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret' }]);
+  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret', rememberMe: false }]);
+});
+
+test('includes remember-me when the visitor chooses it', async () => {
+  const user = userEvent.setup();
+  const { submitted } = view();
+  await user.type(screen.getByLabelText('Електронна пошта'), 'a@b.co');
+  await user.type(screen.getByLabelText('Пароль'), 'secret');
+  await user.click(screen.getByRole('checkbox', { name: 'Запам’ятати мене' }));
+  await user.click(screen.getByRole('button', { name: 'Увійти' }));
+  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret', rememberMe: true }]);
 });
 
 test('announces every refusal in the same place with the same wording', () => {

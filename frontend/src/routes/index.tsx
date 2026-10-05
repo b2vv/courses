@@ -1,3 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { HomeView } from '../presentation/storefront/HomeView';
-export const Route = createFileRoute('/')({ component: HomeView });
+import { parseHomeSearch } from '../app/router/home-search';
+export const Route = createFileRoute('/')({
+  validateSearch: parseHomeSearch,
+  component: HomeRoute,
+});
+function HomeRoute() {
+  return <HomeView notice={Route.useSearch().notice} />;
+}

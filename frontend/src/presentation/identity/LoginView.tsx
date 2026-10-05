@@ -6,20 +6,29 @@ import type {
   CredentialsInput,
   SessionErrorCode,
 } from '../../domain/identity/identity';
-import { Button, TextField } from '../ui';
+import { Button, Checkbox, TextField } from '../ui';
 
 type LoginViewProps = {
   readonly user: AuthenticatedUser | null;
   readonly isPending: boolean;
   readonly errorCode: SessionErrorCode | undefined;
+  readonly notice: 'password-reset' | undefined;
   readonly onSubmit: (input: CredentialsInput) => void;
   readonly onContinue: () => void;
 };
 
-export function LoginView({ user, isPending, errorCode, onSubmit, onContinue }: LoginViewProps) {
+export function LoginView({
+  user,
+  isPending,
+  errorCode,
+  notice,
+  onSubmit,
+  onContinue,
+}: LoginViewProps) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   if (user)
     return (
@@ -33,7 +42,8 @@ export function LoginView({ user, isPending, errorCode, onSubmit, onContinue }: 
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isPending) onSubmit({ email, password });
+    if (!isPending && event.currentTarget.checkValidity())
+      onSubmit({ email, password, rememberMe });
   }
 
   return (
@@ -41,6 +51,7 @@ export function LoginView({ user, isPending, errorCode, onSubmit, onContinue }: 
       <p className="eyebrow">{t('login.label')}</p>
       <h1>{t('login.title')}</h1>
       <p>{t('login.description')}</p>
+      {notice === 'password-reset' && <output>{t('login.passwordReset')}</output>}
       <form onSubmit={submit} noValidate aria-busy={isPending}>
         {/*
           Every refusal renders the same message in the same place, so the form
@@ -70,6 +81,9 @@ export function LoginView({ user, isPending, errorCode, onSubmit, onContinue }: 
           onChange={setPassword}
           isRequired
         />
+        <Checkbox isSelected={rememberMe} onChange={setRememberMe}>
+          {t('login.rememberMe')}
+        </Checkbox>
         <Button type="submit" isDisabled={isPending}>
           {isPending ? t('login.submitting') : t('login.submit')}
         </Button>
