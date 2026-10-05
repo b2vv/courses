@@ -14,6 +14,10 @@ ON CONFLICT (id) DO UPDATE SET
     role = EXCLUDED.role,
     password_hash = EXCLUDED.password_hash,
     email_verified = EXCLUDED.email_verified,
+    -- Reset two-factor so re-seeding gives a deterministic clean slate: seeded users carry no 2FA,
+    -- and a stray enrollment cannot persist across runs and block the auth.setup session.
+    totp_secret = NULL,
+    totp_enabled = false,
     disabled_at = NULL,
     deleted_at = NULL,
     updated_at = now();
