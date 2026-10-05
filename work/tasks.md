@@ -279,3 +279,24 @@ Courses 2 на opus-4-8); §24 п.21/п.22, ADR 013→014, шви `docs/readines
 | T06 | Фронт: картка (★/«Новий курс»/уроки), сторінка курсу (зведення, список, «Показати ще», скарга), форма на навчальній сторінці, кнопка «Купити курс» для адміна, черга інструктора; стани помилок; a11y | 3.5h | T05, T05b | done | T06a `c5468dc` (рев'ю APPROVE); T06b `c9bbd2b` + виправлення за рев'ю (closed); повний make check exit 0, e2e 98/98. Фазу закрито PR #5 `14aeb3b`. UI-частини Rt01–Rt09, Rt14, Rt21, Rt22, Rt26; Rt28, Rt29 |
 | T07 | e2e `ratings.spec.ts` + axe; курси, опубліковані тестом, архівуються | 2.5h | T06 | done | e2e-стовпець Rt01, Rt03–Rt09, Rt14, Rt21, Rt22, Rt26 |
 | T08 | Упорядкований `make check`; звіт `docs/ratings/report.md` Rt01–Rt29 по рядках + R6-замір + обмеження; PR | 1.5h | T01–T07 | done | звіт `docs/ratings/report.md` (30/30 після незалежної звірки Courses 2: 3 рядки посилено); make check exit 0, e2e 98/98, фронт 589/0; PR у main. усі |
+
+## Фаза `accounts` — self-service облікові записи
+
+Джерело scope: [spec](../docs/accounts/spec.md) (GATE 1 2026-10-05, AC1–AC13, G1–G12),
+[plan](../docs/accounts/plan.md) (GATE 2 зелений 2026-10-05: 1-й прохід ЧЕРВОНИЙ 3 blocking+defense,
+дописано B1–B3/Q2–Q4/E1–E4; re-review ЗЕЛЕНИЙ, усі закрито; робочі файли `work/_wip-accounts-gate2-*.md`).
+Ролі: план/гейти/коміти — Courses 1; код — Codex; рев'ю — Courses 2. Гілка `feat/accounts-selfservice`.
+Тест-режим, без прод-сервера; email — Mailpit у Compose.
+
+| ID | Опис | Оцінка | Залежить | Статус | Результат / Acc |
+|---|---|---|---|---|---|
+| A01 | `platform/mail` (SMTP-sender + шаблони uk/en) + Mailpit у base та e2e compose + `platform/config` SMTP | 2h | — | planned | Acc11, Acc18 |
+| A02 | Міграція 00014 (`users.email_verified` default false; `account_tokens`: purpose CHECK, token_digest, new_email, expires_at, consumed_at; індекси) + seed verified у INSERT+ON CONFLICT + domain (`User.EmailVerified`, політики реєстрації/токена/пароля 8–128/ім'я 1–100, change-password, change-email) | 3h | — | planned | Acc12, Acc17, Acc20 |
+| A03 | Шов B2: `SessionStore.Resolve` несе EmailVerified → `httpserver.Actor.EmailVerified` → `identity.Authenticate`; ports (`UserWriter`,`TokenStore`,`Mailer`,`RateLimiter`); postgres/redis/mail адаптери; `DeleteUserSessionsExceptCurrent`; мапінг pg 23505→`email_taken`; атомарний consume | 3.5h | A01, A02 | planned | Acc05, Acc06, Acc21, Acc24 |
+| A04 | Application use-cases: Register/VerifyEmail/ResendVerification/RequestPasswordReset/ResetPassword/ChangePassword/RequestEmailChange/ConfirmEmailChange + Login remember-me; failure-path §4b (SMTP-даун, Redis fail-open, TOCTOU email); rate-limit ключ з поданого email | 3.5h | A03 | planned | Acc01, Acc03, Acc04, Acc07, Acc13, Acc14, Acc15, Acc16, Acc22, Acc23 |
+| A05 | `contracts/access.CanStream` (+юніт, окремо від CanBeViewedBy) + застосування у use-case playback (Play/mint) і transcript; гейти мутацій `email_not_verified` у StartPurchase+Checkout, Publish+ReportComment+PutReview+ReportReview; мапінг Actor.EmailVerified→Subject у 4 модулях+orders | 3h | A03 | planned | Acc02, Acc08, Acc09 |
+| A06 | HTTP-маршрути `/api/v1/auth/*` (register/verify/resend/password.forgot/reset/change/email.change/confirm) + openapi.yaml + Orval; `GET /auth/me` DTO += `email_verified` (N1) | 2.5h | A04, A05 | planned | Acc01–Acc14, Acc22 |
+| A07 | Фронт `SessionRepository` += 7 методів + application + zod-схеми (валідація зовнішніх даних) | 2h | A06 | planned | Acc10, Acc17 |
+| A08 | Фронт екрани: register, verify-email, password/forgot, password/reset, settings/account (зміна пароля+email), remember-me на login; банер «підтвердіть пошту»; гейт кнопки «грати» для неверифікованого; i18n uk/en | 4h | A07 | planned | Acc01–Acc08, Acc19 |
+| A09 | e2e `accounts.spec.ts` + axe; читання листів через Mailpit API; аудит інлайн-створених юзерів (E1) | 3h | A08 | planned | Acc01–Acc24 (e2e-стовпець) |
+| A10 | Упорядкований `make check` (повний e2e — крос-модульна зміна access); звіт `docs/accounts/report.md` Acc01–Acc24 порядково + обмеження; PR | 1.5h | A01–A09 | planned | усі |
