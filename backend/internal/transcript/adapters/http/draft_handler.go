@@ -59,7 +59,7 @@ func (handler *DraftHandler) getDraft(w http.ResponseWriter, r *http.Request) {
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}
+	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
 	draft, err := handler.drafting.GetDraft(r.Context(), actor, r.PathValue("lessonId"))
 	if err != nil {
@@ -121,7 +121,7 @@ func (handler *DraftHandler) publish(w http.ResponseWriter, r *http.Request) {
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}
+	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
 	var request publishRequest
 	if r.ContentLength > 0 {
@@ -162,7 +162,7 @@ func (handler *DraftHandler) regenerate(w http.ResponseWriter, r *http.Request) 
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}
+	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
 	var language domain.Language
 	if r.ContentLength > 0 {

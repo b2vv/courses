@@ -15,6 +15,7 @@ const (
 type Actor struct {
 	UserID        string
 	Administrator bool
+	EmailVerified bool
 }
 
 type Course struct {
@@ -37,6 +38,10 @@ func (course Course) CanBeEditedBy(actor Actor) bool {
 // copies do: a transcript is not a second way into a course (A6).
 func (course Course) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+}
+
+func (course Course) CanStreamBy(actor Actor) bool {
+	return access.CanStream(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator, EmailVerified: actor.EmailVerified}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
 
 func (course Course) PurchaseRequiredBy(actor Actor) bool {

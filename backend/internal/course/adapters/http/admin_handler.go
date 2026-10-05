@@ -334,7 +334,7 @@ func adminActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return domain.Actor{}, false
 	}
-	actor := domain.Actor{UserID: transportActor.UserID}
+	actor := domain.Actor{UserID: transportActor.UserID, EmailVerified: transportActor.EmailVerified}
 	switch transportActor.Role {
 	case string(domain.ActorStudent):
 		actor.Role = domain.ActorStudent

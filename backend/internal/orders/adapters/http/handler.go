@@ -256,7 +256,7 @@ func actorFromRequest(w http.ResponseWriter, r *http.Request) (application.Actor
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return application.Actor{}, false
 	}
-	return application.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin"}, true
+	return application.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin", EmailVerified: actor.EmailVerified}, true
 }
 
 func mapOrder(order domain.Order) orderDTO {
@@ -390,6 +390,8 @@ func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store"
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, domain.ErrEmailNotVerified):
+		httpserver.WriteError(w, r, http.StatusForbidden, "email_not_verified", "Email verification is required")
 	case errors.Is(err, domain.ErrOrderInvalid), errors.Is(err, domain.ErrGrantInvalid), errors.Is(err, domain.ErrMoneyInvalid), errors.Is(err, domain.ErrCourseNotPurchasable):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrCourseAlreadyOwned):

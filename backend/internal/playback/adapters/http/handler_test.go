@@ -136,6 +136,9 @@ func rejectedAuthentication(status int) func(http.Handler) http.Handler {
 }
 
 func authenticated(actor httpserver.Actor) func(http.Handler) http.Handler {
+	if actor.UserID != "" {
+		actor.EmailVerified = true
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), actor)))
@@ -202,7 +205,7 @@ func TestAuthorizeReturnsNoContentForAnAllowedMediaRequest(t *testing.T) {
 	if response.Code != http.StatusNoContent || response.Body.Len() != 0 {
 		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
-	if service.actor != (domain.Actor{UserID: "40000000-0000-4000-8000-000000000001"}) || service.playbackID != "11111111111111111111111111111111" || service.videoID != "50000000-0000-4000-8000-000000000001" {
+	if service.actor != (domain.Actor{UserID: "40000000-0000-4000-8000-000000000001", EmailVerified: true}) || service.playbackID != "11111111111111111111111111111111" || service.videoID != "50000000-0000-4000-8000-000000000001" {
 		t.Fatalf("actor=%+v playback=%q video=%q", service.actor, service.playbackID, service.videoID)
 	}
 }
@@ -325,7 +328,7 @@ func TestPlayMintsServerSelectedSession(t *testing.T) {
 	if body.MediaPath != wantPath || body.ClientSequence != 12 || body.HeartbeatSeconds != 30 || body.OwnershipTTLSeconds != 180 {
 		t.Fatalf("body=%+v", body)
 	}
-	if service.actor != (domain.Actor{UserID: userID}) || service.lessonID != lessonID || service.playCalls != 1 {
+	if service.actor != (domain.Actor{UserID: userID, EmailVerified: true}) || service.lessonID != lessonID || service.playCalls != 1 {
 		t.Fatalf("service=%+v", service)
 	}
 }

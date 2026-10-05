@@ -63,6 +63,9 @@ func (reading *Reading) Get(ctx context.Context, actor domain.Actor, lessonID, r
 		}
 		return Transcript{}, domain.ErrForbidden
 	}
+	if !found.Course.CanStreamBy(actor) {
+		return Transcript{}, domain.ErrEmailNotVerified
+	}
 	if !found.Found {
 		return Transcript{Found: false}, nil
 	}

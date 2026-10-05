@@ -69,7 +69,7 @@ func learningActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) 
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return domain.Actor{}, false
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Role: domain.ActorRole(transportActor.Role)}
+	actor := domain.Actor{UserID: transportActor.UserID, Role: domain.ActorRole(transportActor.Role), EmailVerified: transportActor.EmailVerified}
 	if !actor.Role.Valid() {
 		writeLearningError(w, r, domain.ErrForbidden)
 		return domain.Actor{}, false
