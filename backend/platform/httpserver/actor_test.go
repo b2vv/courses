@@ -8,7 +8,7 @@ import (
 func TestActorFromContext(t *testing.T) {
 	t.Parallel()
 
-	want := Actor{UserID: "40000000-0000-4000-8000-000000000003", Role: "admin"}
+	want := Actor{UserID: "40000000-0000-4000-8000-000000000003", Role: "admin", EmailVerified: true}
 	for _, test := range []struct {
 		name string
 		ctx  context.Context

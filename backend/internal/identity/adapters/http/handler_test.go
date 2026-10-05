@@ -143,6 +143,32 @@ func TestDuplicateSessionCookieFailsClosed(t *testing.T) {
 	}
 }
 
+func TestAuthenticateAddsEmailVerificationToActor(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	user := domain.User{ID: "40000000-0000-4000-8000-000000000001", Email: "student@courseforge.local", DisplayName: "Студентка", Role: domain.Student, EmailVerified: true, CreatedAt: now, UpdatedAt: now}
+	service := &identityService{user: user}
+	config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := identityhttp.NewHandler(service, service, nil, config)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := httpserver.ActorFromContext(r.Context())
+		if !ok || actor.UserID != user.ID || actor.Role != string(user.Role) || !actor.EmailVerified {
+			t.Fatalf("actor=(%+v, %v)", actor, ok)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Cookie", identityhttp.SessionCookieName+"="+strings.Repeat("A", 43))
+	response := httptest.NewRecorder()
+	handler.Authenticate(next).ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || service.authenticateCalls != 1 {
+		t.Fatalf("status=%d calls=%d", response.Code, service.authenticateCalls)
+	}
+}
+
 func TestIdentityHTTPExplicitErrorMatrix(t *testing.T) {
 	token := strings.Repeat("A", 43)
 	service := &identityService{err: domain.ErrInvalidCredentials}

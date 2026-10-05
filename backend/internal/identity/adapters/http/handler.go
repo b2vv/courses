@@ -134,7 +134,7 @@ func (handler *Handler) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), userKey{}, user)
-		ctx = httpserver.WithActor(ctx, httpserver.Actor{UserID: user.ID, Role: string(user.Role)})
+		ctx = httpserver.WithActor(ctx, httpserver.Actor{UserID: user.ID, Role: string(user.Role), EmailVerified: user.EmailVerified})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
