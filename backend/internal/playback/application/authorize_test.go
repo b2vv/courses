@@ -68,7 +68,7 @@ func TestOwnerOfMatchingPlaybackCanViewPublishedCourse(t *testing.T) {
 	access := &accessReader{access: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published}}
 	authorizer := application.NewAuthorizer(ownership, access)
 
-	err := authorizer.Authorize(context.Background(), domain.Actor{UserID: userID}, playbackID, videoID)
+	err := authorizer.Authorize(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, videoID)
 	if err != nil {
 		t.Fatalf("authorize published course: %v", err)
 	}
@@ -87,8 +87,8 @@ func TestCourseVisibilityPolicyRunsOnlyAfterMatchingOwnership(t *testing.T) {
 	}{
 		{name: "student cannot view archived course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}, want: domain.ErrForbidden},
 		{name: "student must purchase paid course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}, want: domain.ErrPurchaseRequired},
-		{name: "owner can view archived course", actor: domain.Actor{UserID: userID}, course: domain.VideoCourse{OwnerID: userID, Status: domain.Archived}},
-		{name: "administrator can view draft course", actor: domain.Actor{UserID: userID, Administrator: true}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}},
+		{name: "owner can view archived course", actor: domain.Actor{UserID: userID, EmailVerified: true}, course: domain.VideoCourse{OwnerID: userID, Status: domain.Archived}},
+		{name: "administrator can view draft course", actor: domain.Actor{UserID: userID, Administrator: true, EmailVerified: true}, course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

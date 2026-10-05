@@ -6,6 +6,7 @@ package access
 type Subject struct {
 	UserID        string
 	Administrator bool
+	EmailVerified bool
 }
 
 // Course contains the neutral facts about the course used by CanView.
@@ -20,6 +21,11 @@ type Course struct {
 // CanView reports whether subject may view course.
 func CanView(subject Subject, course Course) bool {
 	return accessExempt(subject, course) || course.Published && (!course.Paid || course.Preview)
+}
+
+// CanStream reports whether subject may consume lesson content.
+func CanStream(subject Subject, course Course) bool {
+	return CanView(subject, course) && subject.EmailVerified
 }
 
 // PurchaseRequired reports whether payment is the reason subject may not view course.

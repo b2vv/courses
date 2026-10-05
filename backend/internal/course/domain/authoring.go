@@ -44,8 +44,9 @@ const (
 )
 
 type Actor struct {
-	UserID string
-	Role   ActorRole
+	UserID        string
+	Role          ActorRole
+	EmailVerified bool
 }
 
 type CourseDraft struct {

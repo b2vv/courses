@@ -150,7 +150,7 @@ func TestPutReviewEligibilityOrder(t *testing.T) {
 		facts domain.ReviewFacts
 		actor Actor
 		want  error
-	}{{"anonymous", domain.ReviewFacts{Status: domain.Published, HasProgress: true}, Actor{}, domain.ErrForbidden}, {"owner", domain.ReviewFacts{OwnerID: reviewOwner, Status: domain.Published, HasProgress: true}, Actor{UserID: reviewOwner}, domain.ErrReviewOwnerForbidden}, {"unavailable", domain.ReviewFacts{Status: domain.Archived, HasProgress: true}, Actor{UserID: reviewAuthor}, domain.ErrReviewNotAvailable}, {"purchase", domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}, Actor{UserID: reviewAuthor}, domain.ErrReviewPurchaseRequired}, {"not started", domain.ReviewFacts{Status: domain.Published}, Actor{UserID: reviewAuthor}, domain.ErrReviewNotStarted}}
+	}{{"anonymous", domain.ReviewFacts{Status: domain.Published, HasProgress: true}, Actor{}, ErrEmailNotVerified}, {"owner", domain.ReviewFacts{OwnerID: reviewOwner, Status: domain.Published, HasProgress: true}, Actor{UserID: reviewOwner, EmailVerified: true}, domain.ErrReviewOwnerForbidden}, {"unavailable", domain.ReviewFacts{Status: domain.Archived, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotAvailable}, {"purchase", domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewPurchaseRequired}, {"not started", domain.ReviewFacts{Status: domain.Published}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotStarted}}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newReviewFake()
@@ -165,12 +165,12 @@ func TestPutReviewEligibilityOrder(t *testing.T) {
 func TestPutReviewCreatesThenUpdatesRecapturedProgress(t *testing.T) {
 	f := newReviewFake()
 	s := reviewService(f)
-	_, created, err := s.PutReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, 4, "this review body has enough characters")
+	_, created, err := s.PutReview(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, reviewCourse, 4, "this review body has enough characters")
 	if err != nil || !created || f.created != 1 {
 		t.Fatalf("create %v %v %d", created, err, f.created)
 	}
 	f.facts.CompletedLessons, f.facts.TotalLessons = 4, 6
-	_, created, err = s.PutReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, 5, "another review body with enough characters")
+	_, created, err = s.PutReview(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, reviewCourse, 5, "another review body with enough characters")
 	if err != nil || created || f.updated != 1 || f.lastProgress != (domain.ReviewProgress{Completed: 4, Total: 6}) {
 		t.Fatalf("update created=%v err=%v progress=%+v", created, err, f.lastProgress)
 	}
@@ -183,7 +183,7 @@ func TestPutReviewRefusesEditAfterAccessIsLost(t *testing.T) {
 	f.facts.Exists = true
 	f.facts.Facts = domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}
 
-	_, _, err := reviewService(f).PutReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse, 5, "another review body with enough characters")
+	_, _, err := reviewService(f).PutReview(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, reviewCourse, 5, "another review body with enough characters")
 	if !errors.Is(err, domain.ErrReviewPurchaseRequired) {
 		t.Fatalf("err=%v", err)
 	}
@@ -240,7 +240,7 @@ func TestReviewDeleteReportRemoveAndPublic(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.reportErr = domain.ErrReportOwnReview
-	if err := s.ReportReview(context.Background(), Actor{UserID: reviewAuthor}, reviewID); !errors.Is(err, domain.ErrReportOwnReview) {
+	if err := s.ReportReview(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, reviewID); !errors.Is(err, domain.ErrReportOwnReview) {
 		t.Fatal(err)
 	}
 	f.publicID = reviewCourse

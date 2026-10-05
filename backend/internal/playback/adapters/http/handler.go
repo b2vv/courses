@@ -143,7 +143,7 @@ func (handler *Handler) authorize(w http.ResponseWriter, r *http.Request) {
 		writeAuthorizationError(w, r, http.StatusForbidden)
 		return
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}
+	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 	err := handler.authorization.Authorize(r.Context(), actor, r.Header.Get("X-Playback-Id"), r.Header.Get("X-Video-Id"))
 	if err == nil {
 		w.WriteHeader(http.StatusNoContent)
@@ -155,6 +155,10 @@ func (handler *Handler) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, domain.ErrPurchaseRequired) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
+		return
+	}
+	if errors.Is(err, domain.ErrEmailNotVerified) {
+		httpserver.WriteError(w, r, http.StatusForbidden, "email_not_verified", "Email verification is required")
 		return
 	}
 	writeAuthorizationError(w, r, http.StatusServiceUnavailable)
@@ -263,7 +267,7 @@ func playbackActor(r *http.Request) (domain.Actor, bool) {
 	if !ok || actor.UserID == "" {
 		return domain.Actor{}, false
 	}
-	return domain.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin"}, true
+	return domain.Actor{UserID: actor.UserID, Administrator: actor.Role == "admin", EmailVerified: actor.EmailVerified}, true
 }
 
 func freshPlaybackID() (string, error) {
@@ -313,6 +317,8 @@ func writePlaybackError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "playback_forbidden", "Playback is not authorized")
 	case errors.Is(err, domain.ErrPurchaseRequired):
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
+	case errors.Is(err, domain.ErrEmailNotVerified):
+		httpserver.WriteError(w, r, http.StatusForbidden, "email_not_verified", "Email verification is required")
 	case errors.Is(err, domain.ErrLessonNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
 	case errors.Is(err, domain.ErrVideoNotReady):

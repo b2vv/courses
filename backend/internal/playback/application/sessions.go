@@ -77,5 +77,8 @@ func (sessions *Sessions) loadViewablePlayback(ctx context.Context, actor domain
 		}
 		return domain.LessonPlayback{}, domain.ErrForbidden
 	}
+	if !playback.Course.CanStreamBy(actor) {
+		return domain.LessonPlayback{}, domain.ErrEmailNotVerified
+	}
 	return playback, nil
 }

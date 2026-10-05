@@ -16,6 +16,7 @@ import (
 type Actor struct {
 	UserID        string
 	Administrator bool
+	EmailVerified bool
 }
 
 type Service struct {
@@ -41,6 +42,9 @@ func New(courses ports.CourseReader, orders ports.OrderRepository, store interfa
 }
 
 func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID, idempotencyKey string) (domain.Order, error) {
+	if !actor.EmailVerified {
+		return domain.Order{}, domain.ErrEmailNotVerified
+	}
 	facts, err := service.courses.CourseForPurchase(ctx, courseID)
 	if err != nil {
 		return domain.Order{}, err
@@ -106,6 +110,9 @@ func (service *Service) PurchaseStatus(ctx context.Context, actor Actor, orderID
 }
 
 func (service *Service) Checkout(ctx context.Context, actor Actor, orderID string, buyer ports.Buyer, urls ports.CheckoutURLs) (ports.CheckoutForm, error) {
+	if !actor.EmailVerified {
+		return ports.CheckoutForm{}, domain.ErrEmailNotVerified
+	}
 	if service.provider == nil {
 		return ports.CheckoutForm{}, domain.ErrDependencyUnavailable
 	}

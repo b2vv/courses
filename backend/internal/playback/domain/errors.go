@@ -13,4 +13,5 @@ const (
 	ErrVideoNotReady          Error = "video_not_ready"
 	ErrPlaybackTakenOver      Error = "playback_taken_over"
 	ErrPlaybackSessionExpired Error = "playback_session_expired"
+	ErrEmailNotVerified       Error = "email_not_verified"
 )

@@ -13,6 +13,7 @@ const (
 type Actor struct {
 	UserID        string
 	Administrator bool
+	EmailVerified bool
 }
 
 type Course struct {
