@@ -30,6 +30,9 @@ func TestHealthAndReadiness(t *testing.T) {
 			if response.Header().Get("X-Request-ID") == "" {
 				t.Fatal("missing request ID")
 			}
+			if got := response.Header().Get("Content-Security-Policy"); got != "default-src 'none'; frame-ancestors 'none'" {
+				t.Fatalf("Content-Security-Policy=%q", got)
+			}
 		})
 	}
 }
