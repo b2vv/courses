@@ -62,6 +62,7 @@ func TestAccountTokenPolicy(t *testing.T) {
 		{name: "unknown purpose", change: func(token *domain.AccountToken) { token.Purpose = "unknown" }, wantErr: domain.ErrInvalidAccountToken},
 		{name: "bad id", change: func(token *domain.AccountToken) { token.ID = "bad" }, wantErr: domain.ErrInvalidAccountToken},
 		{name: "expiry equals creation", change: func(token *domain.AccountToken) { token.ExpiresAt = token.CreatedAt }, wantErr: domain.ErrInvalidAccountToken},
+		{name: "non-email-change cannot carry new email", change: func(token *domain.AccountToken) { token.NewEmail = "new@example.test" }, wantErr: domain.ErrInvalidAccountToken},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
@@ -78,6 +79,17 @@ func TestAccountTokenPolicy(t *testing.T) {
 				t.Fatalf("token validity: token=%+v err=%v", got, err)
 			}
 		})
+	}
+
+	emailChange := valid
+	emailChange.Purpose = domain.EmailChangeToken
+	emailChange.NewEmail = "new@example.test"
+	if _, err := domain.NewAccountToken(emailChange); err != nil {
+		t.Fatalf("valid email-change token: %v", err)
+	}
+	emailChange.NewEmail = "not-an-email"
+	if _, err := domain.NewAccountToken(emailChange); !errors.Is(err, domain.ErrInvalidAccountToken) {
+		t.Fatalf("invalid email-change token: %v", err)
 	}
 
 	consumed := valid

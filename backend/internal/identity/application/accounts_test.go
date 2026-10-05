@@ -17,6 +17,8 @@ type accountUsers struct {
 	verified             []string
 	found                domain.User
 	findErr              error
+	updatedPassword      string
+	updatedEmail         string
 }
 
 func (f *accountUsers) CreateUser(_ context.Context, user domain.User, _ string) (domain.User, error) {
@@ -30,25 +32,36 @@ func (f *accountUsers) SetEmailVerified(_ context.Context, id string) error {
 	f.verified = append(f.verified, id)
 	return f.verifyErr
 }
-func (f *accountUsers) UpdatePassword(context.Context, string, string) error { return nil }
-func (f *accountUsers) UpdateEmail(context.Context, string, string) error    { return nil }
+func (f *accountUsers) UpdatePassword(_ context.Context, _ string, hash string) error {
+	f.updatedPassword = hash
+	return nil
+}
+func (f *accountUsers) UpdateEmail(_ context.Context, _ string, email string) error {
+	f.updatedEmail = email
+	return nil
+}
 func (f *accountUsers) FindUser(context.Context, string) (domain.User, error) {
 	return f.found, f.findErr
 }
 
 type accountHasher struct {
-	hash string
-	err  error
+	hash     string
+	err      error
+	password string
 }
 
-func (f accountHasher) Hash(string) (string, error) { return f.hash, f.err }
+func (f *accountHasher) Hash(password string) (string, error) {
+	f.password = password
+	return f.hash, f.err
+}
 
 type accountTokens struct {
-	issued      []domain.AccountToken
-	digest      []byte
-	consumeID   string
-	consumeErr  error
-	invalidated []string
+	issued       []domain.AccountToken
+	digest       []byte
+	consumeID    string
+	consumeEmail string
+	consumeErr   error
+	invalidated  []string
 }
 
 func (f *accountTokens) Issue(_ context.Context, token domain.AccountToken, digest []byte) error {
@@ -58,7 +71,7 @@ func (f *accountTokens) Issue(_ context.Context, token domain.AccountToken, dige
 }
 func (f *accountTokens) Consume(_ context.Context, _ domain.AccountTokenPurpose, digest []byte) (string, string, error) {
 	f.digest = append([]byte(nil), digest...)
-	return f.consumeID, "", f.consumeErr
+	return f.consumeID, f.consumeEmail, f.consumeErr
 }
 func (f *accountTokens) InvalidateByPurpose(_ context.Context, id string, _ domain.AccountTokenPurpose) error {
 	f.invalidated = append(f.invalidated, id)
@@ -66,16 +79,22 @@ func (f *accountTokens) InvalidateByPurpose(_ context.Context, id string, _ doma
 }
 
 type accountMailer struct {
-	calls int
-	err   error
+	calls, passwordResets, emailChanges int
+	err                                 error
 }
 
 func (f *accountMailer) SendVerification(context.Context, string, string, string) error {
 	f.calls++
 	return f.err
 }
-func (f *accountMailer) SendPasswordReset(context.Context, string, string, string) error { return nil }
-func (f *accountMailer) SendEmailChange(context.Context, string, string, string) error   { return nil }
+func (f *accountMailer) SendPasswordReset(context.Context, string, string, string) error {
+	f.passwordResets++
+	return f.err
+}
+func (f *accountMailer) SendEmailChange(context.Context, string, string, string) error {
+	f.emailChanges++
+	return f.err
+}
 
 func TestRegisterCreatesUnverifiedUserIssuesTokenAndContinuesAfterMailFailure(t *testing.T) {
 	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
@@ -83,7 +102,7 @@ func TestRegisterCreatesUnverifiedUserIssuesTokenAndContinuesAfterMailFailure(t 
 	tokens := &accountTokens{}
 	mailer := &accountMailer{err: errors.New("smtp unavailable")}
 	session := &sessions{issued: ports.IssuedSession{Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: "40000000-0000-4000-8000-000000000001", CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: validToken('A')}}
-	accounts := application.NewAccounts(users, users, accountHasher{hash: "hash"}, tokens, mailer, session, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+	accounts := application.NewAccounts(users, users, &accountHasher{hash: "hash"}, tokens, mailer, session, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
 	result, err := accounts.Register(context.Background(), application.RegisterInput{Email: " Student@CourseForge.Local ", Password: "correct password", DisplayName: "Student"}, "en")
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +118,7 @@ func TestRegisterCreatesUnverifiedUserIssuesTokenAndContinuesAfterMailFailure(t 
 func TestRegisterReturnsEmailTakenWithoutSession(t *testing.T) {
 	users := &accountUsers{createErr: domain.ErrEmailTaken}
 	session := &sessions{}
-	accounts := application.NewAccounts(users, users, accountHasher{hash: "hash"}, &accountTokens{}, &accountMailer{}, session, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+	accounts := application.NewAccounts(users, users, &accountHasher{hash: "hash"}, &accountTokens{}, &accountMailer{}, session, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
 	_, err := accounts.Register(context.Background(), application.RegisterInput{Email: "student@example.test", Password: "correct password", DisplayName: "Student"}, "uk")
 	if !errors.Is(err, domain.ErrEmailTaken) || session.rotateCalls != 0 {
 		t.Fatalf("err=%v sessions=%d", err, session.rotateCalls)
@@ -109,7 +128,7 @@ func TestRegisterReturnsEmailTakenWithoutSession(t *testing.T) {
 func TestVerifyEmailConsumesTokenAndMarksUserVerified(t *testing.T) {
 	users := &accountUsers{}
 	tokens := &accountTokens{consumeID: "40000000-0000-4000-8000-000000000001"}
-	accounts := application.NewAccounts(users, users, accountHasher{}, tokens, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
 	if err := accounts.VerifyEmail(context.Background(), validToken('A')); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +143,7 @@ func TestVerifyEmailReturnsUsedAndExpiredTokenStoreErrors(t *testing.T) {
 		err  error
 	}{{name: "used", err: domain.ErrTokenUsed}, {name: "expired", err: domain.ErrTokenUsed}} {
 		t.Run(test.name, func(t *testing.T) {
-			accounts := application.NewAccounts(&accountUsers{}, &accountUsers{}, accountHasher{}, &accountTokens{consumeErr: test.err}, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+			accounts := application.NewAccounts(&accountUsers{}, &accountUsers{}, &accountHasher{}, &accountTokens{consumeErr: test.err}, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
 			if err := accounts.VerifyEmail(context.Background(), validToken('A')); !errors.Is(err, test.err) {
 				t.Fatal(err)
 			}
@@ -137,12 +156,130 @@ func TestResendVerificationInvalidatesThenIssuesUnlessAlreadyVerified(t *testing
 	users := &accountUsers{found: validUser(now)}
 	tokens := &accountTokens{}
 	mailer := &accountMailer{}
-	accounts := application.NewAccounts(users, users, accountHasher{}, tokens, mailer, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, mailer, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
 	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "uk"); err != nil || !sent || len(tokens.invalidated) != 1 || len(tokens.issued) != 1 {
 		t.Fatalf("sent=%v err=%v tokens=%+v", sent, err, tokens)
 	}
 	users.found.EmailVerified = true
 	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "uk"); err != nil || sent || len(tokens.invalidated) != 1 {
 		t.Fatalf("idempotence: sent=%v err=%v", sent, err)
+	}
+}
+
+func TestRequestPasswordResetIsNeutralAndRateLimitedBySubmittedEmailAndIP(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name    string
+		findErr error
+		issued  int
+	}{
+		{name: "existing account", issued: 1},
+		{name: "missing account", findErr: domain.ErrUserNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			users := &accountUsers{found: validUser(now), findErr: test.findErr}
+			tokens := &accountTokens{}
+			accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, &accountMailer{}, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+			if err := accounts.RequestPasswordReset(context.Background(), "Student@CourseForge.Local", "203.0.113.9", "uk"); err != nil {
+				t.Fatal(err)
+			}
+			if len(tokens.issued) != test.issued {
+				t.Fatalf("issued=%d", len(tokens.issued))
+			}
+		})
+	}
+}
+
+func TestRequestPasswordResetStopsBeforeLookupWhenRateLimited(t *testing.T) {
+	users := &accountUsers{found: validUser(time.Now())}
+	attempts := &limiter{}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, &accountTokens{}, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" }, application.AccountsDependency{Limiter: attempts})
+	if err := accounts.RequestPasswordReset(context.Background(), "Student@CourseForge.Local", "203.0.113.9", "uk"); !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatal(err)
+	}
+	if users.updatedPassword != "" || attempts.allowCalls != 1 || attempts.key == "" {
+		t.Fatalf("rate limit did not stop reset: users=%+v limiter=%+v", users, attempts)
+	}
+}
+
+func TestResetPasswordConsumesValidTokenAndDeletesAllSessions(t *testing.T) {
+	users := &accountUsers{}
+	hasher := &accountHasher{hash: "new-hash"}
+	sessionStore := &sessions{}
+	accounts := application.NewAccounts(users, users, hasher, &accountTokens{consumeID: "40000000-0000-4000-8000-000000000001"}, &accountMailer{}, sessionStore, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if err := accounts.ResetPassword(context.Background(), validToken('A'), "new correct password"); err != nil {
+		t.Fatal(err)
+	}
+	if hasher.password != "new correct password" || users.updatedPassword != "new-hash" || sessionStore.deleteAllCalls != 1 {
+		t.Fatalf("password reset side effects are wrong: hasher=%+v users=%+v sessions=%+v", hasher, users, sessionStore)
+	}
+}
+
+func TestResetPasswordRejectsUsedAndExpiredTokens(t *testing.T) {
+	for _, name := range []string{"used", "expired"} {
+		t.Run(name, func(t *testing.T) {
+			accounts := application.NewAccounts(&accountUsers{}, &accountUsers{}, &accountHasher{}, &accountTokens{consumeErr: domain.ErrTokenUsed}, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+			if err := accounts.ResetPassword(context.Background(), validToken('A'), "new correct password"); !errors.Is(err, domain.ErrTokenUsed) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestChangePasswordVerifiesOldPasswordAndKeepsCurrentSession(t *testing.T) {
+	now := time.Now()
+	users := &accountUsers{found: validUser(now)}
+	hasher := &accountHasher{hash: "new-hash"}
+	store := &sessions{}
+	digest := make([]byte, 32)
+	accounts := application.NewAccounts(users, users, hasher, &accountTokens{}, &accountMailer{}, store, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" }, application.AccountsDependency{Credentials: &credentials{user: users.found}})
+	if err := accounts.ChangePassword(context.Background(), users.found.ID, "old correct password", "new correct password", digest); err != nil {
+		t.Fatal(err)
+	}
+	if store.deleteExceptCalls != 1 || string(store.currentDigest) != string(digest) || users.updatedPassword != "new-hash" {
+		t.Fatalf("change password side effects are wrong: %+v %+v", users, store)
+	}
+	accounts = application.NewAccounts(users, users, hasher, &accountTokens{}, &accountMailer{}, store, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" }, application.AccountsDependency{Credentials: &credentials{err: domain.ErrInvalidCredentials}})
+	if err := accounts.ChangePassword(context.Background(), users.found.ID, "wrong", "new correct password", digest); !errors.Is(err, domain.ErrInvalidCredentials) {
+		t.Fatal(err)
+	}
+}
+
+func TestEmailChangePrechecksAndRechecksUniqueness(t *testing.T) {
+	now := time.Now()
+	newEmail := "new@example.test"
+	users := &accountUsers{findErr: domain.ErrUserNotFound}
+	tokens := &accountTokens{}
+	mailer := &accountMailer{}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, mailer, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if err := accounts.RequestEmailChange(context.Background(), "40000000-0000-4000-8000-000000000001", newEmail, "en"); err != nil || len(tokens.issued) != 1 || tokens.issued[0].NewEmail != newEmail || mailer.emailChanges != 1 {
+		t.Fatalf("request email change: err=%v tokens=%+v mailer=%+v", err, tokens, mailer)
+	}
+	users.found = validUser(now)
+	users.findErr = nil
+	tokens.consumeID, tokens.consumeEmail = "40000000-0000-4000-8000-000000000001", newEmail
+	if err := accounts.ConfirmEmailChange(context.Background(), validToken('A')); !errors.Is(err, domain.ErrEmailTaken) {
+		t.Fatal(err)
+	}
+	if users.updatedEmail != "" {
+		t.Fatalf("TOCTOU collision updated email: %q", users.updatedEmail)
+	}
+}
+
+func TestEmailChangeRejectsTakenAddressOnRequestAndUpdatesOnConfirm(t *testing.T) {
+	now := time.Now()
+	users := &accountUsers{found: validUser(now)}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, &accountTokens{}, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if err := accounts.RequestEmailChange(context.Background(), users.found.ID, "taken@example.test", "uk"); !errors.Is(err, domain.ErrEmailTaken) {
+		t.Fatal(err)
+	}
+	users.findErr = domain.ErrUserNotFound
+	tokens := &accountTokens{consumeID: users.found.ID, consumeEmail: "new@example.test"}
+	accounts = application.NewAccounts(users, users, &accountHasher{}, tokens, &accountMailer{}, &sessions{}, time.Now, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if err := accounts.ConfirmEmailChange(context.Background(), validToken('A')); err != nil {
+		t.Fatal(err)
+	}
+	if users.updatedEmail != "new@example.test" {
+		t.Fatalf("email was not updated and verified: %+v", users)
 	}
 }

@@ -15,6 +15,7 @@ const (
 	ErrInvalidAccountToken    Error = "invalid_account_token"
 	ErrInvalidSession         Error = "invalid_session"
 	ErrInvalidCredentials     Error = "invalid_credentials"
+	ErrRateLimited            Error = "rate_limited"
 	ErrAuthenticationRequired Error = "authentication_required"
 	ErrForbidden              Error = "forbidden"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
