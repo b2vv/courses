@@ -195,7 +195,7 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got := result.Course.CanBeViewedBy(domain.Actor{UserID: actorID, Administrator: administrator}); got != test.Want {
+				if got := result.Course.CanBeViewedBy(domain.Actor{UserID: actorID, Administrator: administrator, EmailVerified: true}); got != test.Want {
 					t.Fatalf("facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", result.Course, actorID, got, test.Want)
 				}
 			})
@@ -203,8 +203,8 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 	})
 	reading := application.NewReading(repository)
 	authoring := application.NewAuthoring(repository)
-	student := domain.Actor{UserID: strangerAccount}
-	courseOwner := domain.Actor{UserID: ownerAccount}
+	student := domain.Actor{UserID: strangerAccount, EmailVerified: true}
+	courseOwner := domain.Actor{UserID: ownerAccount, EmailVerified: true}
 
 	t.Run("a transcript reads whole, with its documents", func(t *testing.T) {
 		got, err := reading.Get(ctx, student, publishedLesson, "")

@@ -95,17 +95,17 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		checkoutProvider := &integrationPaymentProvider{}
 		declinedID := subtestIDs("61")
 		declinedService := application.New(repository, repository, repository, func() time.Time { return now }, declinedID, checkoutProvider)
-		old, err := declinedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000020"}, courseID, "b25-old")
+		old, err := declinedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000020", EmailVerified: true}, courseID, "b25-old")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID()}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
+		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID(), EmailVerified: true}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID()}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != domain.ErrCheckoutAlreadyOpened {
+		if _, err := declinedService.Checkout(ctx, application.Actor{UserID: old.UserID(), EmailVerified: true}, old.ID(), ports.Buyer{}, ports.CheckoutURLs{}); err != domain.ErrCheckoutAlreadyOpened {
 			t.Fatalf("second checkout error=%v", err)
 		}
-		newOrder, err := declinedService.StartPurchase(ctx, application.Actor{UserID: old.UserID()}, courseID, "b25-new")
+		newOrder, err := declinedService.StartPurchase(ctx, application.Actor{UserID: old.UserID(), EmailVerified: true}, courseID, "b25-new")
 		if err != nil || newOrder.ID() == old.ID() {
 			t.Fatalf("new order=%q old=%q error=%v", newOrder.ID(), old.ID(), err)
 		}
@@ -119,11 +119,11 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 
 		approvedID := subtestIDs("62")
 		approvedService := application.New(repository, repository, repository, func() time.Time { return now }, approvedID, checkoutProvider)
-		approvedOld, err := approvedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000021"}, courseID, "b25-approved-old")
+		approvedOld, err := approvedService.StartPurchase(ctx, application.Actor{UserID: "40000000-0000-4000-8000-000000000021", EmailVerified: true}, courseID, "b25-approved-old")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := approvedService.StartPurchase(ctx, application.Actor{UserID: approvedOld.UserID()}, courseID, "b25-approved-new"); err != nil {
+		if _, err := approvedService.StartPurchase(ctx, application.Actor{UserID: approvedOld.UserID(), EmailVerified: true}, courseID, "b25-approved-new"); err != nil {
 			t.Fatal(err)
 		}
 		if err := approvedService.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "b25-approved-declined", OrderID: approvedOld.ID(), Type: domain.PaymentFailed, Amount: approvedOld.Amount(), ReceivedAt: now.Add(90 * time.Second)}); err != nil {
@@ -159,11 +159,11 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		newID := subtestIDs("63")
 		svc := application.New(repository, repository, repository, func() time.Time { return now }, newID, nil)
-		first, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-refund-one")
+		first, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "b25-refund-one")
 		if err != nil {
 			t.Fatal(err)
 		}
-		second, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-refund-two")
+		second, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "b25-refund-two")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +198,7 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		ids := subtestIDs("64")
 		svc := application.New(repository, repository, repository, func() time.Time { return now }, ids, nil)
-		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "b25-mismatch")
+		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "b25-mismatch")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -243,7 +243,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 			return id
 		}
 		pay17Service := application.New(repository, repository, repository, func() time.Time { return now }, pay17ID, nil)
-		pay17Order, err := pay17Service.StartPurchase(ctx, application.Actor{UserID: pay17UserID}, pay17CourseID, "pay17-purchase")
+		pay17Order, err := pay17Service.StartPurchase(ctx, application.Actor{UserID: pay17UserID, EmailVerified: true}, pay17CourseID, "pay17-purchase")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,11 +318,11 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
-	order, err := service.StartPurchase(ctx, application.Actor{UserID: integrationUserID}, integrationCourseID, "purchase-1")
+	order, err := service.StartPurchase(ctx, application.Actor{UserID: integrationUserID, EmailVerified: true}, integrationCourseID, "purchase-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	repeated, err := service.StartPurchase(ctx, application.Actor{UserID: integrationUserID}, integrationCourseID, "purchase-1")
+	repeated, err := service.StartPurchase(ctx, application.Actor{UserID: integrationUserID, EmailVerified: true}, integrationCourseID, "purchase-1")
 	if err != nil || repeated.ID() != order.ID() {
 		t.Fatalf("idempotent repeat=%q error=%v", repeated.ID(), err)
 	}
@@ -352,7 +352,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 	if err := service.ApplyPaymentEvent(ctx, event); err != nil {
 		t.Fatalf("duplicate event: %v", err)
 	}
-	status, err := service.PurchaseStatus(ctx, application.Actor{UserID: integrationUserID}, order.ID())
+	status, err := service.PurchaseStatus(ctx, application.Actor{UserID: integrationUserID, EmailVerified: true}, order.ID())
 	if err != nil || status.Status() != domain.OrderPaid {
 		t.Fatalf("status=%q error=%v", status.Status(), err)
 	}
@@ -383,7 +383,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE event_id='unknown'`).Scan(&events); err != nil || events != 0 {
 		t.Fatalf("unknown event rows=%d error=%v", events, err)
 	}
-	mismatchOrder, err := service.StartPurchase(ctx, application.Actor{UserID: integrationAdminID}, integrationCourseID, "purchase-mismatch")
+	mismatchOrder, err := service.StartPurchase(ctx, application.Actor{UserID: integrationAdminID, EmailVerified: true}, integrationCourseID, "purchase-mismatch")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +489,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&before); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := selfGrantService.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, integrationAdminID, integrationCourseID, "manual access"); err != domain.ErrGrantSelfForbidden {
+		if _, err := selfGrantService.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, integrationAdminID, integrationCourseID, "manual access"); err != domain.ErrGrantSelfForbidden {
 			t.Fatalf("self grant error=%v", err)
 		}
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND source='admin'`, integrationAdminID, integrationCourseID).Scan(&after); err != nil {
@@ -506,18 +506,18 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 (gen_random_uuid(),'paid-with-admin-grant@example.test','Paid with admin grant','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {
 			t.Fatal(err)
 		}
-		order, err := service.StartPurchase(ctx, application.Actor{UserID: userID}, integrationCourseID, "purchase-with-admin-grant")
+		order, err := service.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "purchase-with-admin-grant")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, userID, integrationCourseID, "issued while payment was pending"); err != nil {
+		if _, err := service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, userID, integrationCourseID, "issued while payment was pending"); err != nil {
 			t.Fatal(err)
 		}
 		event := domain.PaymentEvent{Provider: "provider", EventID: "paid-with-admin-grant", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(3 * time.Minute)}
 		if err := service.ApplyPaymentEvent(ctx, event); err != nil {
 			t.Fatalf("ApplyPaymentEvent with existing active grant: %v", err)
 		}
-		status, err := service.PurchaseStatus(ctx, application.Actor{UserID: userID}, order.ID())
+		status, err := service.PurchaseStatus(ctx, application.Actor{UserID: userID, EmailVerified: true}, order.ID())
 		if err != nil || status.Status() != domain.OrderPaid {
 			t.Fatalf("status=%q error=%v", status.Status(), err)
 		}
