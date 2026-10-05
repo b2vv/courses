@@ -7,12 +7,31 @@ import type {
   PasswordResetInput,
   RegisterInput,
   SessionResult,
+  LoginResult,
+  TwoFactorEnrollment,
+  RecoveryCodes,
   TokenInput,
 } from '../domain/identity/identity';
 
 export interface SessionRepository {
   /** Browser-only: the server requires an Origin header a server-side call cannot send. */
-  logIn(credentials: Credentials, signal?: AbortSignal): Promise<SessionResult<AuthenticatedUser>>;
+  logIn(credentials: Credentials, signal?: AbortSignal): Promise<SessionResult<LoginResult>>;
+  enrollTwoFactor(signal?: AbortSignal): Promise<SessionResult<TwoFactorEnrollment>>;
+  confirmTwoFactor(code: string, signal?: AbortSignal): Promise<SessionResult<RecoveryCodes>>;
+  completeTwoFactor(
+    pendingId: string,
+    code: string,
+    signal?: AbortSignal,
+  ): Promise<SessionResult<null>>;
+  disableTwoFactor(
+    password: string,
+    code: string,
+    signal?: AbortSignal,
+  ): Promise<SessionResult<null>>;
+  regenerateRecoveryCodes(
+    code: string,
+    signal?: AbortSignal,
+  ): Promise<SessionResult<RecoveryCodes>>;
   register(input: RegisterInput, signal?: AbortSignal): Promise<SessionResult<AuthenticatedUser>>;
   verifyEmail(input: TokenInput, signal?: AbortSignal): Promise<SessionResult<null>>;
   resendVerification(

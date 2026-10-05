@@ -8,6 +8,7 @@ function user(role: Role): AuthenticatedUser {
     email: 'a@b.co',
     displayName: 'A',
     emailVerified: true,
+    twoFactorEnabled: false,
     role,
   };
 }

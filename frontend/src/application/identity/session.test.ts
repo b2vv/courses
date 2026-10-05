@@ -8,6 +8,7 @@ const signedIn: AuthenticatedUser = {
   email: 'student@courseforge.local',
   displayName: 'Студентка',
   emailVerified: true,
+  twoFactorEnabled: false,
   role: 'student',
 };
 
@@ -41,6 +42,17 @@ function repository(overrides: Partial<SessionRepository> = {}) {
     changePassword: () => Promise.resolve({ ok: true, value: null }),
     requestEmailChange: () => Promise.resolve({ ok: true, value: null }),
     confirmEmailChange: () => Promise.resolve({ ok: true, value: null }),
+    enrollTwoFactor: () =>
+      Promise.resolve({
+        ok: true,
+        value: { secret: 'A'.repeat(16), otpauthUri: 'otpauth://totp/test' },
+      }),
+    confirmTwoFactor: () =>
+      Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } }),
+    completeTwoFactor: () => Promise.resolve({ ok: true, value: null }),
+    disableTwoFactor: () => Promise.resolve({ ok: true, value: null }),
+    regenerateRecoveryCodes: () =>
+      Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } }),
   };
   return { calls, port: { ...base, ...overrides } };
 }
@@ -113,5 +125,47 @@ describe('session application', () => {
     await session.verify({ token: 'verification-token' });
     await session.confirmEmailChange({ token: 'email-token' });
     expect(seen).toEqual(['register', 'verify', 'confirm-email']);
+  });
+
+  it('forwards two-factor commands and their proofs through the application seam', async () => {
+    const seen: unknown[] = [];
+    const { port } = repository({
+      enrollTwoFactor: () => {
+        seen.push('enroll');
+        return Promise.resolve({
+          ok: true,
+          value: { secret: 'A'.repeat(16), otpauthUri: 'otpauth://totp/test' },
+        });
+      },
+      confirmTwoFactor: (code) => {
+        seen.push(['confirm', code]);
+        return Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } });
+      },
+      completeTwoFactor: (pendingId, code) => {
+        seen.push(['complete', pendingId, code]);
+        return Promise.resolve({ ok: true, value: null });
+      },
+      disableTwoFactor: (password, code) => {
+        seen.push(['disable', password, code]);
+        return Promise.resolve({ ok: true, value: null });
+      },
+      regenerateRecoveryCodes: (code) => {
+        seen.push(['regenerate', code]);
+        return Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } });
+      },
+    });
+    const session = createSession(port);
+    await session.enrollTwoFactor();
+    await session.confirmTwoFactor('123456');
+    await session.completeTwoFactor('pending', '123456');
+    await session.disableTwoFactor('password', '123456');
+    await session.regenerateRecoveryCodes('123456');
+    expect(seen).toEqual([
+      'enroll',
+      ['confirm', '123456'],
+      ['complete', 'pending', '123456'],
+      ['disable', 'password', '123456'],
+      ['regenerate', '123456'],
+    ]);
   });
 });

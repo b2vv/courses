@@ -4,6 +4,7 @@ export type AuthenticatedUser = {
   readonly email: string;
   readonly displayName: string;
   readonly emailVerified: boolean;
+  readonly twoFactorEnabled: boolean;
   readonly role: Role;
 };
 export type SessionErrorCode =
@@ -18,6 +19,10 @@ export type SessionErrorCode =
   | 'invalid_request'
   | 'origin_forbidden'
   | 'authentication_required'
+  | 'invalid_totp'
+  | 'recovery_code_invalid'
+  | 'twofactor_already_enabled'
+  | 'twofactor_not_enabled'
   | 'dependency_unavailable'
   | 'invalid_response'
   | 'request_timeout'
@@ -26,6 +31,13 @@ export type SessionError = { readonly code: SessionErrorCode };
 export type SessionResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: SessionError };
+export type TwoFactorRequired = {
+  readonly status: 'two_factor_required';
+  readonly pendingId: string;
+};
+export type LoginResult = AuthenticatedUser | TwoFactorRequired;
+export type TwoFactorEnrollment = { readonly secret: string; readonly otpauthUri: string };
+export type RecoveryCodes = { readonly recoveryCodes: readonly string[] };
 export type Credentials = {
   readonly email: string;
   readonly password: string;

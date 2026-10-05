@@ -147,6 +147,7 @@ SELECT
   users.display_name,
   users.role,
   users.email_verified,
+  users.totp_enabled,
   users.created_at,
   users.updated_at,
   users.disabled_at

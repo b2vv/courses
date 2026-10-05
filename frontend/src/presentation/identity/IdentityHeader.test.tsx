@@ -11,6 +11,7 @@ function signedIn(role: Role): AuthenticatedUser {
     email: `${role}@courseforge.local`,
     displayName: role,
     emailVerified: true,
+    twoFactorEnabled: false,
     role,
   };
 }

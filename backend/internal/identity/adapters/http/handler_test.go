@@ -293,7 +293,7 @@ func TestAccountSelfServiceRoutes(t *testing.T) {
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, requestWithOrigin("POST", "/api/v1/auth/register", `{"email":"new@courseforge.local","password":"password1","displayName":"New"}`))
-	if response.Code != http.StatusCreated || accounts.registerCalls != 1 || len(response.Result().Cookies()) != 1 || !strings.Contains(response.Body.String(), `"emailVerified":false`) {
+	if response.Code != http.StatusCreated || accounts.registerCalls != 1 || len(response.Result().Cookies()) != 1 || !strings.Contains(response.Body.String(), `"emailVerified":false`) || !strings.Contains(response.Body.String(), `"twoFactorEnabled":false`) {
 		t.Fatalf("register status=%d calls=%d cookie=%v body=%s", response.Code, accounts.registerCalls, response.Result().Cookies(), response.Body.String())
 	}
 

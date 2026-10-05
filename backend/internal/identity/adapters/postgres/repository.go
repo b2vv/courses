@@ -119,7 +119,7 @@ func (repository *Repository) FindUser(ctx context.Context, identifier string) (
 	} else if err != nil {
 		return domain.User{}, persistenceError(err)
 	}
-	user, err := mapUser(id, email, displayName, role, emailVerified, createdAt, updatedAt, disabledAt)
+	user, err := mapUser(id, email, displayName, role, emailVerified, false, createdAt, updatedAt, disabledAt)
 	if err != nil {
 		return domain.User{}, domain.ErrDependencyUnavailable
 	}
@@ -243,7 +243,7 @@ func (repository *Repository) CreateUser(ctx context.Context, user domain.User, 
 		}
 		return domain.User{}, persistenceError(err)
 	}
-	created, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	created, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 	if err != nil {
 		return domain.User{}, domain.ErrDependencyUnavailable
 	}
@@ -422,7 +422,7 @@ func (repository *Repository) ListInstructors(ctx context.Context) ([]domain.Use
 	}
 	users := make([]domain.User, 0, len(rows))
 	for _, row := range rows {
-		user, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+		user, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 		if err != nil {
 			return nil, domain.ErrDependencyUnavailable
 		}
@@ -473,14 +473,14 @@ func timestamp(value time.Time) pgtype.Timestamptz {
 }
 
 func mapCredential(row generated.GetIdentityCredentialRow) (domain.User, error) {
-	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 }
 
 func mapResolved(row generated.ResolveIdentitySessionRow) (domain.User, error) {
-	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, row.TotpEnabled, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 }
 
-func mapUser(id, email, displayName, role string, emailVerified bool, createdAt, updatedAt, disabledAt pgtype.Timestamptz) (domain.User, error) {
+func mapUser(id, email, displayName, role string, emailVerified, twoFactorEnabled bool, createdAt, updatedAt, disabledAt pgtype.Timestamptz) (domain.User, error) {
 	var disabled *time.Time
 	if disabledAt.Valid {
 		value := disabledAt.Time
@@ -489,7 +489,7 @@ func mapUser(id, email, displayName, role string, emailVerified bool, createdAt,
 	if !createdAt.Valid || !updatedAt.Valid {
 		return domain.User{}, domain.ErrInvalidUser
 	}
-	return domain.NewUser(domain.User{ID: id, Email: email, DisplayName: displayName, Role: domain.Role(role), EmailVerified: emailVerified, CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, DisabledAt: disabled})
+	return domain.NewUser(domain.User{ID: id, Email: email, DisplayName: displayName, Role: domain.Role(role), EmailVerified: emailVerified, TwoFactorEnabled: twoFactorEnabled, CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, DisabledAt: disabled})
 }
 
 func mapSession(row generated.CreateIdentitySessionRow) (domain.Session, error) {

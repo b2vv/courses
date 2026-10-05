@@ -25,6 +25,7 @@ test('gates only an unverified signed-in learner', () => {
     id: 'id',
     email: 'user@example.com',
     displayName: 'User',
+    twoFactorEnabled: false,
     role: 'student' as const,
   };
   expect(

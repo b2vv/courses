@@ -10,6 +10,7 @@ const signedIn: AuthenticatedUser = {
   email: 'student@courseforge.local',
   displayName: 'Студентка Курсу',
   emailVerified: true,
+  twoFactorEnabled: false,
   role: 'student',
 };
 
@@ -114,4 +115,21 @@ test('never renders the password as readable text', async () => {
   const password = screen.getByLabelText('Пароль');
   await user.type(password, 'secret');
   expect(password.getAttribute('type')).toBe('password');
+});
+
+test('submits authenticator and recovery codes on the second login step', async () => {
+  const user = userEvent.setup();
+  const codes: string[] = [];
+  view({ pendingId: 'pending-login', onComplete: (code) => codes.push(code) });
+  await user.type(screen.getByLabelText('Шестизначний код'), '123456');
+  await user.click(screen.getByRole('button', { name: 'Підтвердити вхід' }));
+  await user.click(screen.getByRole('button', { name: 'Ввести резервний код' }));
+  await user.type(screen.getByLabelText('Резервний код'), 'recovery-code');
+  await user.click(screen.getByRole('button', { name: 'Підтвердити вхід' }));
+  expect(codes).toEqual(['123456', 'recovery-code']);
+});
+
+test('shows an invalid second-factor refusal', () => {
+  view({ pendingId: 'pending-login', errorCode: 'invalid_totp' });
+  expect(screen.getByRole('alert').textContent).toBe('Код автентифікатора неправильний.');
 });

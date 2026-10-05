@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { sessionQueryKey, SessionQueryError } from '../app/composition/identity-queries';
 import { parseLoginSearch } from '../app/router/login-search';
 import { LoginView } from '../presentation/identity/LoginView';
 import { safeReturnTo } from '../domain/identity/identity';
-import type { AuthenticatedUser, CredentialsInput } from '../domain/identity/identity';
+import type { AuthenticatedUser, CredentialsInput, LoginResult } from '../domain/identity/identity';
 
 export const Route = createFileRoute('/login')({
   validateSearch: parseLoginSearch,
@@ -45,14 +46,33 @@ function LoginRoute() {
   const navigate = useNavigate();
   const user = identity.status === 'signed-in' ? identity.user : null;
   const goToReturnTo = () => void navigate({ href: destination });
+  const [pendingId, setPendingId] = useState<string>();
   const logIn = useMutation({
     mutationFn: (input: CredentialsInput) =>
       identityDependencies.session
         .logIn(input)
         .then((result) => identityDependencies.unwrap(result)),
-    onSuccess: (signedIn: AuthenticatedUser) => {
+    onSuccess: (result: LoginResult) => {
+      if ('status' in result) {
+        setPendingId(result.pendingId);
+        return;
+      }
+      const signedIn: AuthenticatedUser = result;
       // Replace the identity outright rather than refetching: the answer is
       // already authoritative and a refetch would race the navigation.
+      client.setQueryData(sessionQueryKey, signedIn);
+      goToReturnTo();
+    },
+  });
+  const complete = useMutation({
+    mutationFn: async (code: string) => {
+      if (pendingId === undefined) throw new Error('missing pending login');
+      await identityDependencies.unwrap(
+        await identityDependencies.session.completeTwoFactor(pendingId, code),
+      );
+      return identityDependencies.unwrap(await identityDependencies.session.current());
+    },
+    onSuccess: (signedIn) => {
       client.setQueryData(sessionQueryKey, signedIn);
       goToReturnTo();
     },
@@ -61,10 +81,18 @@ function LoginRoute() {
   return (
     <LoginView
       user={user}
-      isPending={logIn.isPending}
-      errorCode={failure instanceof SessionQueryError ? failure.code : undefined}
+      isPending={logIn.isPending || complete.isPending}
+      errorCode={
+        failure instanceof SessionQueryError
+          ? failure.code
+          : complete.error instanceof SessionQueryError
+            ? complete.error.code
+            : undefined
+      }
       notice={notice}
       onSubmit={(input) => logIn.mutate(input)}
+      {...(pendingId === undefined ? {} : { pendingId })}
+      onComplete={(code) => complete.mutate(code)}
       onContinue={goToReturnTo}
     />
   );

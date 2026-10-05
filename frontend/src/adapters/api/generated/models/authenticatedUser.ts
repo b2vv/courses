@@ -20,6 +20,7 @@ export interface AuthenticatedUser {
      */
   displayName: string;
   emailVerified: boolean;
+  twoFactorEnabled: boolean;
   /** student may learn; instructor and admin may enter the administration shell. */
   role: AuthenticatedUserRole;
 }

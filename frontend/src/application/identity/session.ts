@@ -8,20 +8,46 @@ import type {
   PasswordResetInput,
   RegisterInput,
   SessionResult,
+  LoginResult,
+  TwoFactorEnrollment,
+  RecoveryCodes,
   TokenInput,
 } from '../../domain/identity/identity';
 import type { SessionRepository } from '../../ports/SessionRepository';
 
 export function createSession(repository: SessionRepository) {
   return {
-    logIn(
-      input: CredentialsInput,
-      signal?: AbortSignal,
-    ): Promise<SessionResult<AuthenticatedUser>> {
+    logIn(input: CredentialsInput, signal?: AbortSignal): Promise<SessionResult<LoginResult>> {
       const credentials = makeCredentials(input);
       return credentials.ok
         ? repository.logIn(credentials.value, signal)
         : Promise.resolve(credentials);
+    },
+    enrollTwoFactor(signal?: AbortSignal): Promise<SessionResult<TwoFactorEnrollment>> {
+      return repository.enrollTwoFactor(signal);
+    },
+    confirmTwoFactor(code: string, signal?: AbortSignal): Promise<SessionResult<RecoveryCodes>> {
+      return repository.confirmTwoFactor(code, signal);
+    },
+    completeTwoFactor(
+      pendingId: string,
+      code: string,
+      signal?: AbortSignal,
+    ): Promise<SessionResult<null>> {
+      return repository.completeTwoFactor(pendingId, code, signal);
+    },
+    disableTwoFactor(
+      password: string,
+      code: string,
+      signal?: AbortSignal,
+    ): Promise<SessionResult<null>> {
+      return repository.disableTwoFactor(password, code, signal);
+    },
+    regenerateRecoveryCodes(
+      code: string,
+      signal?: AbortSignal,
+    ): Promise<SessionResult<RecoveryCodes>> {
+      return repository.regenerateRecoveryCodes(code, signal);
     },
     register(
       input: RegisterInput,

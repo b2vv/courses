@@ -21,6 +21,7 @@ const admin: AuthenticatedUser = {
   email: 'admin@courseforge.local',
   displayName: 'Admin',
   emailVerified: true,
+  twoFactorEnabled: false,
   role: 'admin',
 };
 const tree: CourseTree = {
