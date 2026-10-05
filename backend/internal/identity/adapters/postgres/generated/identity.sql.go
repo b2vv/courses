@@ -654,6 +654,7 @@ SELECT
   users.display_name,
   users.role,
   users.email_verified,
+  users.totp_enabled,
   users.created_at,
   users.updated_at,
   users.disabled_at
@@ -676,6 +677,7 @@ type ResolveIdentitySessionRow struct {
 	DisplayName   string
 	Role          string
 	EmailVerified bool
+	TotpEnabled   bool
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
 	DisabledAt    pgtype.Timestamptz
@@ -690,6 +692,7 @@ func (q *Queries) ResolveIdentitySession(ctx context.Context, arg ResolveIdentit
 		&i.DisplayName,
 		&i.Role,
 		&i.EmailVerified,
+		&i.TotpEnabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DisabledAt,

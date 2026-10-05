@@ -9,6 +9,7 @@ const signedIn = {
   email: 'student@courseforge.local',
   displayName: 'Студентка',
   emailVerified: false,
+  twoFactorEnabled: false,
   role: 'student',
 };
 const credentials = { email: 'student@courseforge.local', password: 'secret' };

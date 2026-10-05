@@ -10,6 +10,7 @@ const signedIn: AuthenticatedUser = {
   email: 'student@courseforge.local',
   displayName: 'Студентка',
   emailVerified: true,
+  twoFactorEnabled: false,
   role: 'student',
 };
 
@@ -26,6 +27,17 @@ function queries(currentUser: () => Promise<SessionResult<AuthenticatedUser | nu
     changePassword: () => Promise.resolve({ ok: true, value: null }),
     requestEmailChange: () => Promise.resolve({ ok: true, value: null }),
     confirmEmailChange: () => Promise.resolve({ ok: true, value: null }),
+    enrollTwoFactor: () =>
+      Promise.resolve({
+        ok: true,
+        value: { secret: 'A'.repeat(16), otpauthUri: 'otpauth://totp/test' },
+      }),
+    confirmTwoFactor: () =>
+      Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } }),
+    completeTwoFactor: () => Promise.resolve({ ok: true, value: null }),
+    disableTwoFactor: () => Promise.resolve({ ok: true, value: null }),
+    regenerateRecoveryCodes: () =>
+      Promise.resolve({ ok: true, value: { recoveryCodes: Array(10).fill('code') } }),
   };
   return createSessionQueries(createSession(port));
 }

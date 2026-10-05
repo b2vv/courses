@@ -74,11 +74,12 @@ type loginRequest struct {
 }
 
 type userDTO struct {
-	ID            string `json:"id"`
-	Email         string `json:"email"`
-	DisplayName   string `json:"displayName"`
-	Role          string `json:"role"`
-	EmailVerified bool   `json:"emailVerified"`
+	ID               string `json:"id"`
+	Email            string `json:"email"`
+	DisplayName      string `json:"displayName"`
+	Role             string `json:"role"`
+	EmailVerified    bool   `json:"emailVerified"`
+	TwoFactorEnabled bool   `json:"twoFactorEnabled"`
 }
 
 type instructorDTO struct {
@@ -784,7 +785,7 @@ func identityHeaders(w http.ResponseWriter) {
 }
 
 func mapUser(user domain.User) userDTO {
-	return userDTO{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role), EmailVerified: user.EmailVerified}
+	return userDTO{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role), EmailVerified: user.EmailVerified, TwoFactorEnabled: user.TwoFactorEnabled}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error, override string) {

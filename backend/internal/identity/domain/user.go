@@ -33,15 +33,16 @@ func (role Role) CanAdministerAccounts() bool {
 }
 
 type User struct {
-	ID            string
-	Email         string
-	DisplayName   string
-	Role          Role
-	EmailVerified bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	DisabledAt    *time.Time
-	DeletedAt     *time.Time
+	ID               string
+	Email            string
+	DisplayName      string
+	Role             Role
+	EmailVerified    bool
+	TwoFactorEnabled bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DisabledAt       *time.Time
+	DeletedAt        *time.Time
 }
 
 func NewUser(user User) (User, error) {
