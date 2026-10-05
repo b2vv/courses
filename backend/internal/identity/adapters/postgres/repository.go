@@ -33,6 +33,9 @@ type Repository struct {
 	random    io.Reader
 }
 
+var _ ports.UserWriter = (*Repository)(nil)
+var _ ports.TokenStore = (*Repository)(nil)
+
 func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
 	return newRepository(pool, passwords, rand.Reader)
 }
@@ -158,6 +161,103 @@ func (repository *Repository) Revoke(ctx context.Context, token string) error {
 	return nil
 }
 
+func (repository *Repository) DeleteUserSessionsExceptCurrent(ctx context.Context, userID string, currentDigest []byte) error {
+	if _, err := generated.New(repository.pool).DeleteUserSessionsExceptCurrent(ctx, generated.DeleteUserSessionsExceptCurrentParams{UserID: userID, TokenDigest: currentDigest}); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
+func (repository *Repository) CreateUser(ctx context.Context, user domain.User, passwordHash string) (domain.User, error) {
+	row, err := generated.New(repository.pool).CreateUser(ctx, generated.CreateUserParams{
+		UserID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role), PasswordHash: passwordHash,
+		EmailVerified: user.EmailVerified, CreatedAt: timestamp(user.CreatedAt), UpdatedAt: timestamp(user.UpdatedAt),
+	})
+	if err != nil {
+		if emailTaken(err) {
+			return domain.User{}, domain.ErrEmailTaken
+		}
+		return domain.User{}, persistenceError(err)
+	}
+	created, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	if err != nil {
+		return domain.User{}, domain.ErrDependencyUnavailable
+	}
+	return created, nil
+}
+
+func (repository *Repository) SetEmailVerified(ctx context.Context, userID string) error {
+	rows, err := generated.New(repository.pool).SetUserEmailVerified(ctx, userID)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
+	rows, err := generated.New(repository.pool).UpdateUserPassword(ctx, generated.UpdateUserPasswordParams{UserID: userID, PasswordHash: passwordHash})
+	if err != nil {
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) UpdateEmail(ctx context.Context, userID, email string) error {
+	rows, err := generated.New(repository.pool).UpdateUserEmail(ctx, generated.UpdateUserEmailParams{UserID: userID, Email: email})
+	if err != nil {
+		if emailTaken(err) {
+			return domain.ErrEmailTaken
+		}
+		return persistenceError(err)
+	}
+	if rows != 1 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (repository *Repository) Issue(ctx context.Context, token domain.AccountToken, digest []byte) error {
+	newEmail := pgtype.Text{}
+	if token.NewEmail != "" {
+		newEmail = pgtype.Text{String: token.NewEmail, Valid: true}
+	}
+	if err := generated.New(repository.pool).InsertAccountToken(ctx, generated.InsertAccountTokenParams{
+		TokenID: token.ID, UserID: token.UserID, Purpose: string(token.Purpose), TokenDigest: digest, NewEmail: newEmail,
+		ExpiresAt: timestamp(token.ExpiresAt), CreatedAt: timestamp(token.CreatedAt),
+	}); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
+func (repository *Repository) Consume(ctx context.Context, purpose domain.AccountTokenPurpose, digest []byte) (string, string, error) {
+	row, err := generated.New(repository.pool).ConsumeAccountToken(ctx, generated.ConsumeAccountTokenParams{Purpose: string(purpose), TokenDigest: digest})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", domain.ErrTokenUsed
+	}
+	if err != nil {
+		return "", "", persistenceError(err)
+	}
+	newEmail := ""
+	if row.NewEmail.Valid {
+		newEmail = row.NewEmail.String
+	}
+	return row.UserID, newEmail, nil
+}
+
+func (repository *Repository) InvalidateByPurpose(ctx context.Context, userID string, purpose domain.AccountTokenPurpose) error {
+	if _, err := generated.New(repository.pool).InvalidateAccountTokensByPurpose(ctx, generated.InvalidateAccountTokensByPurposeParams{UserID: userID, Purpose: string(purpose)}); err != nil {
+		return persistenceError(err)
+	}
+	return nil
+}
+
 func (repository *Repository) ListInstructors(ctx context.Context) ([]domain.User, error) {
 	rows, err := generated.New(repository.pool).ListInstructors(ctx)
 	if err != nil {
@@ -165,7 +265,7 @@ func (repository *Repository) ListInstructors(ctx context.Context) ([]domain.Use
 	}
 	users := make([]domain.User, 0, len(rows))
 	for _, row := range rows {
-		user, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+		user, err := mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 		if err != nil {
 			return nil, domain.ErrDependencyUnavailable
 		}
@@ -208,14 +308,14 @@ func timestamp(value time.Time) pgtype.Timestamptz {
 }
 
 func mapCredential(row generated.GetIdentityCredentialRow) (domain.User, error) {
-	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, false, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 }
 
 func mapResolved(row generated.ResolveIdentitySessionRow) (domain.User, error) {
-	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
+	return mapUser(row.ID, row.Email, row.DisplayName, row.Role, row.EmailVerified, row.CreatedAt, row.UpdatedAt, row.DisabledAt)
 }
 
-func mapUser(id, email, displayName, role string, createdAt, updatedAt, disabledAt pgtype.Timestamptz) (domain.User, error) {
+func mapUser(id, email, displayName, role string, emailVerified bool, createdAt, updatedAt, disabledAt pgtype.Timestamptz) (domain.User, error) {
 	var disabled *time.Time
 	if disabledAt.Valid {
 		value := disabledAt.Time
@@ -224,7 +324,7 @@ func mapUser(id, email, displayName, role string, createdAt, updatedAt, disabled
 	if !createdAt.Valid || !updatedAt.Valid {
 		return domain.User{}, domain.ErrInvalidUser
 	}
-	return domain.NewUser(domain.User{ID: id, Email: email, DisplayName: displayName, Role: domain.Role(role), CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, DisabledAt: disabled})
+	return domain.NewUser(domain.User{ID: id, Email: email, DisplayName: displayName, Role: domain.Role(role), EmailVerified: emailVerified, CreatedAt: createdAt.Time, UpdatedAt: updatedAt.Time, DisabledAt: disabled})
 }
 
 func mapSession(row generated.CreateIdentitySessionRow) (domain.Session, error) {
@@ -237,6 +337,11 @@ func mapSession(row generated.CreateIdentitySessionRow) (domain.Session, error) 
 func uniqueCollision(err error) bool {
 	var postgresError *pgconn.PgError
 	return errors.As(err, &postgresError) && postgresError.Code == "23505" && (postgresError.ConstraintName == "user_sessions_token_digest_key" || postgresError.ConstraintName == "user_sessions_pkey")
+}
+
+func emailTaken(err error) bool {
+	var postgresError *pgconn.PgError
+	return errors.As(err, &postgresError) && postgresError.Code == "23505"
 }
 
 func persistenceError(_ error) error {
