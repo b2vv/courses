@@ -98,6 +98,63 @@
 - **Rate-limit ключ (E3):** per-email ключ береться з **поданого** email незалежно від існування акаунта —
   інакше лічильник стає оракулом існування, що зводить нанівець constant-time login.
 
+## 4c. Двофакторна автентифікація TOTP (G14)
+
+- **Без нової зовнішньої залежності на бекенді:** TOTP (RFC 6238, 30с, 6 цифр, SHA1) — stdlib
+  `crypto/hmac`+`crypto/sha1`+`encoding/base32`; звірка constant-time з вікном ±1 крок. QR **не** малюємо
+  на бекенді: HTTP віддає `secret` + `otpauth://` URI, QR рендерить фронт (мала QR-бібліотека — нова
+  залежність фронту, використовується → дозволено AGENTS).
+- **Домен** (`identity/domain`): `TwoFactor` (секрет, enabled), політика enroll (підтвердити кодом перед
+  увімкненням), резервні коди (генерація, одноразовість), disable (вимагає пароль + код/резервний).
+- **Login стає двокроковим (змінює наявний `Login`):** якщо `totp_enabled`, `Login` **не видає сесію**,
+  а повертає `two_factor_required` + короткоживучий **одноразовий** pending-токен (Redis, ~5 хв, прив'язаний
+  до user+IP, видаляється при першому успішному `CompleteTwoFactor` або вичерпанні спроб). Pending **несе
+  прапор remember-me**, обраний на кроці 1 (щоб крок 2 видав сесію потрібної тривалості). Новий use-case
+  `CompleteTwoFactor` звіряє TOTP **або** резервний код і лише тоді видає сесію.
+- **Rate-limit 2FA (N5):** RateLimiter ключем per-user+pending-токен — **5 спроб на pending** (вичерпання
+  знищує pending → повторний логін, який лімітований per-email+IP, AC8); це обмежує перебір 6-значного коду.
+- **Резервні коди (N2):** consume **атомарно**, як account_tokens — `UPDATE recovery_codes SET consumed_at=now()
+  WHERE user_id=$1 AND code_hash=$2 AND consumed_at IS NULL RETURNING id`; 0 рядків → невірний/вжитий.
+  Зберігаються лише як hash; регенерація видаляє всі попередні (consumed і ні).
+- **Відновлення від локауту:** резервні коди — основний шлях; втрата пристрою+кодів → **адмін вимикає 2FA**
+  користувачу (нова адмін-дія, поряд із наявним reset пароля). Без цього втрата = перманентний локаут.
+  **Журнал (N1):** identity не має audit-таблиці (її нема в модулі), тож дію пишемо **структурованим
+  лог-івентом** без секретів (не нова БД-таблиця — audit-таблиця identity поза скоупом фази). Це ж
+  стосується наявного адмінського reset пароля, який теж не має DB-audit.
+- **Сайд-ефект на існуючі e2e входи:** усі сідовані/інлайн-юзери `totp_enabled=false` за замовчуванням →
+  наявний однокроковий вхід не змінюється для них. 2FA-гілку покриває лише новий e2e.
+
+## 4d. CSP (G13)
+
+**Поверхня (виправлено за GATE 2 B1):** скрипти-гідрацію несе **SSR-HTML з Node `frontend/server.mjs`**
+через TanStack `<Scripts/>` (`routes/__root.tsx`), НЕ Go `platform/httpserver` (той віддає лише JSON
+/api/v1 — браузер його як документ не рендерить). Тому:
+- **Первинний CSP — на HTML-документі:** per-request **nonce** генерується у SSR-entry (`server.mjs`/роутер
+  через `router.options.ssr.nonce`, який TanStack `<Scripts/>`/`ScriptOnce` вбудовано ставлять на кожен
+  скрипт) і заголовок `Content-Security-Policy` ставить `server.mjs`:
+  `default-src 'self'; script-src 'self' 'nonce-…'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+  media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self';
+  frame-ancestors 'none'`.
+- **`media-src`/`worker-src` з `blob:` обов'язкові (NB3)** — щоб не зламати вже-закриту Phase 6 playback:
+  hls.js (`adapters/playback/hls-media.ts`) грає через MSE → `blob:` URL (media-src), `enableWorker:true`
+  плодить blob-Web-Worker (worker-src), а VTT-субтитри (`learn/LessonPlayer.tsx`) теж `blob:`. `connect-src 'self'`
+  покриває fetch HLS-сегментів (той самий origin). CSP — зміна, що зачіпає весь застосунок, тож повний e2e
+  включно з playback обов'язковий (а не лише accounts).
+  **`script-src` — без `unsafe-inline`** (nonce). **`style-src` лишає `'unsafe-inline'`** (NB1): є inline-`style`
+  атрибути (ProgressBar/Meter width — `ui/data.tsx`, React Aria оверлеї позиціонуються inline у рантаймі),
+  які React Aria не nonce-ить; зняти їх — не ціль цієї фази, тож це **назване обмеження** (мета — script-CSP).
+- **nginx** додає базовий CSP (`add_header … always`) **лише на `/api`, `/media` та error-локаціях** —
+  НЕ на `location /` (SSR): інакше другий заголовок AND-иться з nonce-CSP із `server.mjs` і без nonce
+  заблокує inline hydration-скрипти (NB2).
+- **Go `platform/httpserver`** — базовий CSP на JSON-відповідях (defense-in-depth), але це **не** скрипто-несуча
+  поверхня; AC14 «строгий CSP» стосується саме HTML-документа.
+- **Метод — report-only-first (щоб не вгадувати директиви):** спершу вмикаємо `Content-Security-Policy-Report-Only`
+  з цільовою директивою вище, ганяємо **повний** e2e (включно з playback/ASR/медіа), збираємо реальні
+  порушення з report у консолі/endpoint — це емпірично виявляє будь-яку пропущену директиву (media/worker/
+  font/connect тощо) замість здогадок. Потім перемикаємо на enforcing `Content-Security-Policy`. Якщо
+  enforcing-перемикання у цій фазі лишиться ризиковим — фіксуємо report-only + число/перелік порушень як
+  назване обмеження у звіті (магнітуда, не обіцянка).
+
 ## 5. Сайд-ефекти · міграція · rollback
 
 **Сайд-ефекти:**
@@ -108,10 +165,10 @@
 - Нові маршрути в `openapi.yaml` + Orval → `check-generated`.
 
 **Міграція `00014_accounts.sql`:**
-- UP: `ALTER TABLE users ADD COLUMN email_verified boolean NOT NULL DEFAULT false`; `CREATE TABLE account_tokens (id, user_id FK, purpose text CHECK IN ('email_verify','password_reset','email_change'), token_digest bytea/char, new_email text NULL, expires_at, consumed_at NULL, created_at)`; індекс на (user_id, purpose) і на token_digest.
+- UP: `ALTER TABLE users ADD COLUMN email_verified boolean NOT NULL DEFAULT false`; **`ADD COLUMN totp_secret text NULL`, `ADD COLUMN totp_enabled boolean NOT NULL DEFAULT false`**; `CREATE TABLE account_tokens (id, user_id FK, purpose text CHECK IN ('email_verify','password_reset','email_change'), token_digest bytea/char, new_email text NULL, expires_at, consumed_at NULL, created_at)`; **`CREATE TABLE recovery_codes (id, user_id FK, code_hash, consumed_at NULL, created_at)`**; індекс на (user_id, purpose), на token_digest, на (user_id) recovery_codes.
 - Одноразовість: `consumed_at IS NULL` + `expires_at > now()`; «повторне надсилання робить попередній недійсним» → при видачі нового інвалідуємо попередні того ж purpose (consumed_at=now() або delete).
 - Дані: `seed-identities.sql` ставить `email_verified=true` 6 сідованим акаунтам (у тому ж UPSERT).
-- DOWN: `DROP TABLE account_tokens; ALTER TABLE users DROP COLUMN email_verified;`
+- DOWN: `DROP TABLE recovery_codes; DROP TABLE account_tokens; ALTER TABLE users DROP COLUMN totp_enabled, DROP COLUMN totp_secret, DROP COLUMN email_verified;`
 
 **Rollback:** міграція down чиста (нова таблиця + колонка). Контрактну зміну відкочуємо git-revert гілки до мерджу (FF-гілка, не в main до зеленого гейта). Compose-сервіс mailpit — видалення сервісу, решта стека не залежить.
 
@@ -120,6 +177,11 @@
 - **Домен чистий**: політики реєстрації/токенів/паролів — standard lib + contracts; без I/O, без framework. ✔
 - **Application — домен+порти**: Mailer/TokenStore/RateLimiter/UserWriter як порти, адаптери всередину. ✔
 - **Порт вимагає реальної зовнішньої залежності**: Mailer→SMTP, RateLimiter→Redis, UserWriter/TokenStore→Postgres. ✔ (жодного спекулятивного шва; Google-логін — задокументований майбутній шов, без інтерфейсу зараз).
+- **2FA/TOTP — stdlib, без нової бекенд-залежності** (`crypto/hmac`,`sha1`,`base32`); QR — на фронті (мала бібліотека, використовується). Секрет TOTP у БД як є (тест-режим) — названо обмеженням, прод-шифрування окремо. ✔
+- **CSP**: `script-src` без `unsafe-inline` (nonce); `style-src 'self' 'unsafe-inline'` (inline-стилі React
+  Aria/ProgressBar — назване обмеження, NB1); `media-src/worker-src 'self' blob:` щоб не зламати Phase 6
+  playback (hls.js MSE+worker, VTT blob, NB3); nonce лише на HTML (server.mjs), nginx-CSP не на SSR (NB2);
+  метод report-only-first із заміром. Defense-in-depth, рішення/замір у звіт. ✔
 - **contracts — лише чисті предикати**: `CanStream` — чиста функція, standard lib, без імпорту модулів; **окрема від `CanBeViewedBy`**, тож `access_mapping_ast_test` і `shared_rules` TruthTable лишаються зеленими без змін (B1). ✔
 - **Генерований sqlc/Orval у адаптерах**, явний маппінг у домен. ✔
 - **Без ORM / service locator / глобального мутабельного клієнта**: SMTP/Redis клієнти request-scoped через композицію. ✔
@@ -157,6 +219,14 @@
 | Acc23 | SMTP недоступний при signup (відмова залежності) | Mailpit зупинено | signup | user+сесія створені, `verificationEmailSent:false`; resend потім надсилає | I |
 | Acc24 | Атомарний consume токена (межа) | дійсний verify/reset токен | подвійний submit лінка | перший успіх, другий — `token_used`; стан не подвоюється | I |
 
+| Acc25 | CSP присутній, playback цілий (межа) | — | повний e2e (вкл. playback/медіа) | HTML несе CSP (script-src nonce, style/media/worker за §4d); **повний e2e зелений, консоль без CSP-порушень** (report-only+замір, якщо enforcing ризиковий) | E |
+| Acc26 | 2FA enroll (happy) | авторизований без 2FA | ввести дійсний TOTP у налаштуваннях | 2FA увімкнено; набір резервних кодів показано один раз | E |
+| Acc27 | Двокроковий вхід (happy) | 2FA увімкнено | пароль → TOTP | сесія лише після коду; невірний код — відмова, лімітується | E |
+| Acc28 | Резервний код (межа) | 2FA увімкнено, пристрій недоступний | вхід резервним кодом | успіх один раз, код згорає; повтор — відмова | I/E |
+| Acc29 | Вимкнення 2FA + адмін-reset (відмова/межа) | 2FA увімкнено | disable без пароля/коду; окремо — адмін вимикає | без пароля+коду відмова; адмін-дія знімає 2FA (анти-локаут), журналюється | C/E |
+| Acc30 | 2FA pending не дає доступу (відмова) | 2FA увімкнено, лише пароль введено | спроба API до CompleteTwoFactor | сесії немає; доступ відмовлено; pending одноразовий | I |
+| Acc31 | Регенерація резервних кодів (межа) | 2FA увімкнено, коди видано | перегенерувати | новий набір; усі старі коди недійсні | I |
+
 Ручних рядків: 0.
 
 ## 8. Нотатки до розбивки на таски
@@ -176,5 +246,16 @@
 - (T7) фронт `SessionRepository` + application + zod.
 - (T8) фронт екрани (register/verify/forgot/reset/settings) + банер + гейт кнопки «грати» + remember-me + i18n.
 - (T9) e2e `accounts.spec.ts` + axe + читання Mailpit API; аудит інлайн-юзерів (E1).
-- (T10) впорядкований `make check` (повний e2e — крос-модульна зміна) + звіт Acc01–Acc24 порядково + PR.
-Кожен таск посилається на рядки Acc.
+- (T10) впорядкований `make check` (повний e2e — крос-модульна зміна) + звіт Acc01–Acc30 порядково + PR.
+- **(T11) CSP** (G13): nonce + строгий CSP на HTML-документі у **`frontend/server.mjs`** (TanStack
+  `<Scripts/>`); базовий CSP на рівні nginx-сервера; базовий CSP на JSON у Go (defense-in-depth). Fallback
+  report-only + замір, рішення у звіт. → Acc25.
+- **(T12) 2FA домен+міграція** (G14): `totp_secret`/`totp_enabled`/`recovery_codes` у 00014; домен TwoFactor,
+  TOTP RFC6238 (stdlib), резервні коди. → Acc26–Acc29.
+- **(T13) 2FA application**: enroll/CompleteTwoFactor/disable/regenerate-codes + двокроковий Login
+  (pending-токен у Redis) + адмін-disable-2FA; rate-limit 2FA. → Acc26–Acc30.
+- **(T14) 2FA HTTP+openapi+Orval**: `/auth/2fa/*` (enroll/confirm/complete/disable/recovery), адмін-маршрут;
+  зміна контракту Login (two_factor_required). → Acc26–Acc30.
+- **(T15) 2FA фронт**: налаштування (QR+секрет+резервні коди), другий крок входу, i18n, a11y; QR-бібліотека. → Acc26–Acc29.
+Порядок: T11 незалежний (паралельно). 2FA (T12→T13→T14→T15) після базового кластера A03/A04 (шов сесії),
+вливається в e2e (T9) і гейт (T10). Кожен таск посилається на рядки Acc.
