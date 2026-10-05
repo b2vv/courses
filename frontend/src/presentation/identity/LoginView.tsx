@@ -67,7 +67,11 @@ export function LoginView({
           <h2>{t('login.twoFactor.title')}</h2>
           {errorCode && (
             <p className="ui-field-error" role="alert">
-              {t(`login.error.${errorCode}`)}
+              {/* The server tries the code as both TOTP and recovery and reports one invalid_totp;
+                  in recovery mode name it as a recovery-code failure, matching what the user entered. */}
+              {t(
+                `login.error.${recovery && errorCode === 'invalid_totp' ? 'recovery_code_invalid' : errorCode}`,
+              )}
             </p>
           )}
           <TextField
