@@ -7,8 +7,13 @@ services:
       PUBLIC_BASE_URL: http://localhost:8080
       WAYFORPAY_PAY_URL: http://localhost:8090/pay
       WAYFORPAY_STATUS_URL: http://wayforpay-stub:8080/api
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      MAIL_FROM: no-reply@courseforge.local
     depends_on:
       wayforpay-stub: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
+  mailpit: {}
   frontend:
     build:
       args:
