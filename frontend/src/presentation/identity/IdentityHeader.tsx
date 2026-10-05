@@ -23,6 +23,9 @@ export function IdentityHeader({ user, isSigningOut, onSignOut }: IdentityHeader
   return (
     <div className="header-identity">
       <span className="header-identity-name">{user.displayName}</span>
+      <Link href="/settings/account" className="header-cross-nav">
+        {t('common.footerAccount')}
+      </Link>
       {user.role === 'admin' && (
         <Link href="/admin" className="header-cross-nav">
           {t('common.toAdmin')}

@@ -24,6 +24,10 @@ import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';
 import type { DiscussionErrorCode, DiscussionPage } from '../domain/discussion/discussion';
 import { ReviewBlock } from '../presentation/learn/ReviewBlock';
+import {
+  EmailVerificationGate,
+  shouldGateLessonPlayback,
+} from '../presentation/learn/EmailVerificationGate';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
@@ -143,10 +147,13 @@ function OpenLesson({
   readonly course: LearningCourse;
   readonly lesson: LearningLesson;
 }) {
-  const { learn, identity } = Route.useRouteContext();
+  const { learn, identity, identityDependencies } = Route.useRouteContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const startPurchase = useMutation(learn.purchase.start(queryClient));
+  const resendVerification = useMutation({
+    mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
+  });
   const lessonId = lesson.id;
   const actions = useMemo(
     () => ({
@@ -252,15 +259,22 @@ function OpenLesson({
         )
       }
     >
-      <LessonPlayer
-        courseTitle={course.title}
-        lesson={lesson}
-        actions={actions}
-        createMedia={learn.createMedia}
-        {...(captions === undefined ? {} : { captions })}
-        {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
-        onPlaybackChannel={onPlaybackChannel}
-      />
+      {shouldGateLessonPlayback(identity) ? (
+        <EmailVerificationGate
+          isPending={resendVerification.isPending}
+          onResend={() => resendVerification.mutate()}
+        />
+      ) : (
+        <LessonPlayer
+          courseTitle={course.title}
+          lesson={lesson}
+          actions={actions}
+          createMedia={learn.createMedia}
+          {...(captions === undefined ? {} : { captions })}
+          {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
+          onPlaybackChannel={onPlaybackChannel}
+        />
+      )}
       {transcript === undefined ? null : (
         <TranscriptPanel
           transcript={transcript}

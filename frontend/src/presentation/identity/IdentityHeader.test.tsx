@@ -111,6 +111,8 @@ test('G29 reaches and activates sign-out from the keyboard without focusing the 
 
   expect(screen.getByText('student').getAttribute('tabindex')).toBeNull();
   await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Акаунт' }));
+  await user.tab();
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Вийти' }));
   await user.keyboard('{Enter}');
   expect(signOuts).toBe(1);

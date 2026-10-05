@@ -24,8 +24,10 @@ import { Route as LearnSplatRouteImport } from './routes/learn.$'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as PasswordForgotRouteImport } from './routes/password.forgot'
 import { Route as PasswordResetRouteImport } from './routes/password.reset'
+import { Route as SettingsAccountRouteImport } from './routes/settings.account'
 import { Route as AdminCoursesCourseIdRouteImport } from './routes/admin.courses.$courseId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
+import { Route as EmailChangeConfirmRouteImport } from './routes/email.change.confirm'
 import { Route as TeachCoursesCourseIdRouteImport } from './routes/teach.courses.$courseId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -103,6 +105,11 @@ const PasswordResetRoute = PasswordResetRouteImport.update({
   path: '/password/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsAccountRoute = SettingsAccountRouteImport.update({
+  id: '/settings/account',
+  path: '/settings/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCoursesCourseIdRoute = AdminCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
   path: '/courses/$courseId',
@@ -112,6 +119,11 @@ const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
   getParentRoute: () => AdminRoute,
+} as any)
+const EmailChangeConfirmRoute = EmailChangeConfirmRouteImport.update({
+  id: '/email/change/confirm',
+  path: '/email/change/confirm',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const TeachCoursesCourseIdRoute = TeachCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
@@ -133,9 +145,11 @@ export interface FileRoutesByFullPath {
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -152,9 +166,11 @@ export interface FileRoutesByTo {
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin': typeof AdminIndexRoute
   '/courses': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users': typeof AdminUsersIndexRoute
 }
@@ -173,9 +189,11 @@ export interface FileRoutesById {
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -195,9 +213,11 @@ export interface FileRouteTypes {
     | '/orders/$orderId'
     | '/password/forgot'
     | '/password/reset'
+    | '/settings/account'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users/'
   fileRoutesByTo: FileRoutesByTo
@@ -214,9 +234,11 @@ export interface FileRouteTypes {
     | '/orders/$orderId'
     | '/password/forgot'
     | '/password/reset'
+    | '/settings/account'
     | '/admin'
     | '/courses'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users'
   id:
@@ -234,9 +256,11 @@ export interface FileRouteTypes {
     | '/orders/$orderId'
     | '/password/forgot'
     | '/password/reset'
+    | '/settings/account'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users/'
   fileRoutesById: FileRoutesById
@@ -253,7 +277,9 @@ export interface RootRouteChildren {
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   PasswordForgotRoute: typeof PasswordForgotRoute
   PasswordResetRoute: typeof PasswordResetRoute
+  SettingsAccountRoute: typeof SettingsAccountRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
+  EmailChangeConfirmRoute: typeof EmailChangeConfirmRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -363,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PasswordResetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/account': {
+      id: '/settings/account'
+      path: '/settings/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof SettingsAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/courses/$courseId': {
       id: '/admin/courses/$courseId'
       path: '/courses/$courseId'
@@ -376,6 +409,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users/'
       preLoaderRoute: typeof AdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/email/change/confirm': {
+      id: '/email/change/confirm'
+      path: '/email/change/confirm'
+      fullPath: '/email/change/confirm'
+      preLoaderRoute: typeof EmailChangeConfirmRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/teach/courses/$courseId': {
       id: '/teach/courses/$courseId'
@@ -435,7 +475,9 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   PasswordForgotRoute: PasswordForgotRoute,
   PasswordResetRoute: PasswordResetRoute,
+  SettingsAccountRoute: SettingsAccountRoute,
   CoursesIndexRoute: CoursesIndexRoute,
+  EmailChangeConfirmRoute: EmailChangeConfirmRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
