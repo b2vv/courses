@@ -1,4 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import type { createSession } from '../../application/identity/session';
 import type { SessionError, SessionResult } from '../../domain/identity/identity';
 
@@ -31,6 +32,9 @@ export function createSessionQueries(session: ReturnType<typeof createSession>) 
         // race SSR dehydration.
         staleTime: 0,
       }),
+    /** Identity-changing commands call this after success; active readers refetch `/me`. */
+    refresh: (client: QueryClient) =>
+      client.invalidateQueries({ queryKey: sessionQueryKey, exact: true }),
     unwrap,
   };
 }

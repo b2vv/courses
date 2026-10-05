@@ -9,6 +9,7 @@ const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',
   email: 'student@courseforge.local',
   displayName: 'Студентка',
+  emailVerified: true,
   role: 'student',
 };
 
@@ -17,6 +18,14 @@ function queries(currentUser: () => Promise<SessionResult<AuthenticatedUser | nu
     logIn: () => Promise.resolve({ ok: true, value: signedIn }),
     currentUser,
     logOut: () => Promise.resolve({ ok: true, value: null }),
+    register: () => Promise.resolve({ ok: true, value: signedIn }),
+    verifyEmail: () => Promise.resolve({ ok: true, value: null }),
+    resendVerification: () => Promise.resolve({ ok: true, value: null }),
+    forgotPassword: () => Promise.resolve({ ok: true, value: null }),
+    resetPassword: () => Promise.resolve({ ok: true, value: null }),
+    changePassword: () => Promise.resolve({ ok: true, value: null }),
+    requestEmailChange: () => Promise.resolve({ ok: true, value: null }),
+    confirmEmailChange: () => Promise.resolve({ ok: true, value: null }),
   };
   return createSessionQueries(createSession(port));
 }
@@ -75,4 +84,12 @@ test('a login result replaces the identity under the shared key', () => {
   const client = clientForTest();
   client.setQueryData(sessionQueryKey, signedIn);
   expect(client.getQueryData(sessionQueryKey)).toEqual(signedIn);
+});
+
+test('exposes a session-cache refresh for verification and email-change commands', async () => {
+  const client = clientForTest();
+  const identity = queries(() => Promise.resolve({ ok: true, value: signedIn }));
+  await client.ensureQueryData(identity.current());
+  await identity.refresh(client);
+  expect(client.getQueryState(sessionQueryKey)?.isInvalidated).toBe(true);
 });

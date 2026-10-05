@@ -3,7 +3,13 @@ import { canAccessAdministration, canLearn, makeCredentials, safeReturnTo } from
 import type { AuthenticatedUser, Role } from './identity';
 
 function user(role: Role): AuthenticatedUser {
-  return { id: '40000000-0000-4000-8000-000000000001', email: 'a@b.co', displayName: 'A', role };
+  return {
+    id: '40000000-0000-4000-8000-000000000001',
+    email: 'a@b.co',
+    displayName: 'A',
+    emailVerified: true,
+    role,
+  };
 }
 
 describe('identity domain', () => {
@@ -18,6 +24,14 @@ describe('identity domain', () => {
     const result = makeCredentials({ email: 'a@b.co', password });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.password).toBe(password);
+  });
+
+  it('preserves an explicit remember-me decision', () => {
+    const result = makeCredentials({ email: 'a@b.co', password: 'secret', rememberMe: false });
+    expect(result).toEqual({
+      ok: true,
+      value: { email: 'a@b.co', password: 'secret', rememberMe: false },
+    });
   });
 
   it.each([
