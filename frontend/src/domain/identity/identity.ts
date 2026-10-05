@@ -3,10 +3,18 @@ export type AuthenticatedUser = {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
+  readonly emailVerified: boolean;
   readonly role: Role;
 };
 export type SessionErrorCode =
   | 'invalid_credentials'
+  | 'email_taken'
+  | 'email_not_verified'
+  | 'weak_password'
+  | 'password_unchanged'
+  | 'invalid_account_token'
+  | 'token_used'
+  | 'rate_limited'
   | 'invalid_request'
   | 'origin_forbidden'
   | 'authentication_required'
@@ -18,8 +26,26 @@ export type SessionError = { readonly code: SessionErrorCode };
 export type SessionResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: SessionError };
-export type Credentials = { readonly email: string; readonly password: string };
-export type CredentialsInput = { readonly email: string; readonly password: string };
+export type Credentials = {
+  readonly email: string;
+  readonly password: string;
+  readonly rememberMe?: boolean;
+};
+export type CredentialsInput = {
+  readonly email: string;
+  readonly password: string;
+  readonly rememberMe?: boolean;
+};
+export type RegisterInput = {
+  readonly email: string;
+  readonly password: string;
+  readonly displayName: string;
+};
+export type EmailInput = { readonly email: string };
+export type PasswordResetInput = { readonly token: string; readonly password: string };
+export type PasswordChangeInput = { readonly oldPassword: string; readonly newPassword: string };
+export type EmailChangeInput = { readonly newEmail: string };
+export type TokenInput = { readonly token: string };
 
 const roles: readonly Role[] = ['student', 'instructor', 'admin'];
 
@@ -59,7 +85,14 @@ export function makeCredentials(input: CredentialsInput): SessionResult<Credenti
     input.password.length > 1024
   )
     return { ok: false, error: { code: 'invalid_credentials' } };
-  return { ok: true, value: { email, password: input.password } };
+  return {
+    ok: true,
+    value: {
+      email,
+      password: input.password,
+      ...(input.rememberMe === undefined ? {} : { rememberMe: input.rememberMe }),
+    },
+  };
 }
 
 /**

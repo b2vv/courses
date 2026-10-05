@@ -145,12 +145,14 @@ test('G23 keeps concurrent SSR identities isolated by request and response', asy
       email: 'student@courseforge.local',
       displayName: 'Запит A',
       role: 'student',
+      emailVerified: true,
     },
     {
       id: '40000000-0000-4000-8000-000000000002',
       email: 'admin@courseforge.local',
       displayName: 'Запит B',
       role: 'admin',
+      emailVerified: true,
     },
   ] as const;
   let arrivals = 0;

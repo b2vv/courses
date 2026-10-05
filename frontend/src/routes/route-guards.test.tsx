@@ -110,6 +110,7 @@ function user(role: Role): AuthenticatedUser {
     id: `40000000-0000-4000-8000-00000000000${role === 'student' ? '1' : role === 'instructor' ? '2' : '3'}`,
     email: `${role}@courseforge.local`,
     displayName: role,
+    emailVerified: true,
     role,
   };
 }

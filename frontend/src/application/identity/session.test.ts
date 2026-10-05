@@ -7,6 +7,7 @@ const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',
   email: 'student@courseforge.local',
   displayName: 'Студентка',
+  emailVerified: true,
   role: 'student',
 };
 
@@ -32,6 +33,14 @@ function repository(overrides: Partial<SessionRepository> = {}) {
       calls.logOut += 1;
       return Promise.resolve({ ok: true, value: null });
     },
+    register: () => Promise.resolve({ ok: true, value: signedIn }),
+    verifyEmail: () => Promise.resolve({ ok: true, value: null }),
+    resendVerification: () => Promise.resolve({ ok: true, value: null }),
+    forgotPassword: () => Promise.resolve({ ok: true, value: null }),
+    resetPassword: () => Promise.resolve({ ok: true, value: null }),
+    changePassword: () => Promise.resolve({ ok: true, value: null }),
+    requestEmailChange: () => Promise.resolve({ ok: true, value: null }),
+    confirmEmailChange: () => Promise.resolve({ ok: true, value: null }),
   };
   return { calls, port: { ...base, ...overrides } };
 }
@@ -77,5 +86,32 @@ describe('session application', () => {
     const result = await createSession(port).logIn({ email: 'a@b.co', password: 'secret' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('dependency_unavailable');
+  });
+
+  it('exposes self-service commands through the application seam', async () => {
+    const seen: string[] = [];
+    const { port } = repository({
+      register: () => {
+        seen.push('register');
+        return Promise.resolve({ ok: true, value: signedIn });
+      },
+      verifyEmail: () => {
+        seen.push('verify');
+        return Promise.resolve({ ok: true, value: null });
+      },
+      confirmEmailChange: () => {
+        seen.push('confirm-email');
+        return Promise.resolve({ ok: true, value: null });
+      },
+    });
+    const session = createSession(port);
+    await session.register({
+      email: 'new@courseforge.local',
+      password: 'password1',
+      displayName: 'New',
+    });
+    await session.verify({ token: 'verification-token' });
+    await session.confirmEmailChange({ token: 'email-token' });
+    expect(seen).toEqual(['register', 'verify', 'confirm-email']);
   });
 });
