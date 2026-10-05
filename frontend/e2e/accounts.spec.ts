@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import axe from 'axe-core';
@@ -188,6 +188,54 @@ async function login(page: Page, email: string, value: string, rememberMe = fals
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 }
 
+function decodeBase32(value: string) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0;
+  let buffer = 0;
+  const bytes: number[] = [];
+  for (const character of value.replaceAll('=', '').toUpperCase()) {
+    const digit = alphabet.indexOf(character);
+    if (digit === -1) throw new Error('TOTP secret is not base32');
+    buffer = (buffer << 5) | digit;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push((buffer >> bits) & 0xff);
+    }
+  }
+  return Buffer.from(bytes);
+}
+
+// RFC 6238's SHA-1 / 30-second / six-digit profile, matching the server.
+function totp(secret: string, now = Date.now()) {
+  const counter = BigInt(Math.floor(now / 30_000));
+  const message = Buffer.alloc(8);
+  message.writeBigUInt64BE(counter);
+  const digest = createHmac('sha1', decodeBase32(secret)).update(message).digest();
+  const lastByte = digest[digest.length - 1];
+  if (lastByte === undefined) throw new Error('TOTP digest is empty');
+  const offset = lastByte & 0x0f;
+  const byteAt = (index: number) => {
+    const byte = digest[index];
+    if (byte === undefined) throw new Error('TOTP digest is too short');
+    return byte;
+  };
+  const value =
+    ((byteAt(offset) & 0x7f) << 24) |
+    (byteAt(offset + 1) << 16) |
+    (byteAt(offset + 2) << 8) |
+    byteAt(offset + 3);
+  return (value % 1_000_000).toString().padStart(6, '0');
+}
+
+async function startTwoFactorLogin(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('textbox', { name: 'Електронна пошта' }).fill(changedEmail);
+  await page.getByLabel('Пароль').fill(changedPassword);
+  await page.getByRole('button', { name: 'Увійти' }).click();
+  await expect(page.getByRole('heading', { name: 'Підтвердьте вхід' })).toBeVisible();
+}
+
 test('Acc01–Acc08 register, gate unverified playback and mutation, verify, reset, and change account credentials', async ({
   page,
   browser,
@@ -324,6 +372,113 @@ test('Acc10, Acc16, and Acc19 cover duplicate signup, cookie lifetimes, and axe'
   );
   expect(remembered?.expires).toBeGreaterThan(Date.now() / 1000 + 71 * 60 * 60);
   expect(remembered?.expires).toBeLessThan(Date.now() / 1000 + 73 * 60 * 60);
+});
+
+test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regeneration, and axe', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  await login(page, changedEmail, changedPassword);
+  const me = await page.request.get('/api/v1/auth/me');
+  expect(me.status()).toBe(200);
+  const user = await me.json();
+  if (typeof user !== 'object' || user === null || !('id' in user) || typeof user.id !== 'string')
+    throw new Error('authenticated user response must carry an id');
+  const userID = user.id;
+
+  await page.goto('/settings/account');
+  const twoFactor = page.getByRole('heading', { name: 'Двофакторна автентифікація' }).locator('..');
+  await twoFactor.getByRole('button', { name: 'Увімкнути 2FA' }).click();
+  await expect(twoFactor.getByLabel('QR-код для двофакторної автентифікації')).toBeVisible();
+  const secret = await twoFactor.getByLabel('Секрет для ручного налаштування').inputValue();
+  await expect(twoFactor.getByLabel('Секрет для ручного налаштування')).toHaveValue(secret);
+  await axeClean(page);
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(totp(secret));
+  await twoFactor.getByRole('button', { name: 'Підтвердити 2FA' }).click();
+  const recoveryList = twoFactor.getByRole('list', {
+    name: 'Збережіть ці резервні коди: вдруге їх не буде показано.',
+  });
+  await expect(recoveryList).toHaveCount(1);
+  const recoveryCodes = await recoveryList.locator('code').allTextContents();
+  expect(recoveryCodes).toHaveLength(10);
+  const [usedRecoveryCode, staleRecoveryCode] = recoveryCodes;
+  if (usedRecoveryCode === undefined || staleRecoveryCode === undefined)
+    throw new Error('2FA enrollment did not return recovery codes');
+  await page.reload();
+  await expect(recoveryList).toHaveCount(0);
+  await expect(twoFactor.getByText('2FA увімкнено.')).toBeVisible();
+
+  await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
+  await startTwoFactorLogin(page);
+  await axeClean(page);
+  await page.getByLabel('Шестизначний код').fill('000000');
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByRole('alert')).toContainText('Код автентифікатора неправильний.');
+  // A failed proof consumes the one-time pending challenge, so begin a fresh login.
+  await startTwoFactorLogin(page);
+  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
+
+  await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
+  await startTwoFactorLogin(page);
+  await page.getByRole('button', { name: 'Ввести резервний код' }).click();
+  await page.getByLabel('Резервний код').fill(usedRecoveryCode);
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
+
+  await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
+  await startTwoFactorLogin(page);
+  await page.getByRole('button', { name: 'Ввести резервний код' }).click();
+  await page.getByLabel('Резервний код').fill(usedRecoveryCode);
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByRole('alert')).toContainText('Резервний код неправильний.');
+  await startTwoFactorLogin(page);
+  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
+
+  await page.goto('/settings/account');
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').last().fill(totp(secret));
+  await twoFactor.getByRole('button', { name: 'Перегенерувати резервні коди' }).click();
+  await expect(recoveryList).toHaveCount(1);
+  await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
+  await startTwoFactorLogin(page);
+  await page.getByRole('button', { name: 'Ввести резервний код' }).click();
+  await page.getByLabel('Резервний код').fill(staleRecoveryCode);
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  await expect(page.getByRole('alert')).toContainText('Резервний код неправильний.');
+  await startTwoFactorLogin(page);
+  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+
+  await page.goto('/settings/account');
+  await twoFactor.getByLabel('Поточний пароль').last().fill(changedPassword);
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').first().fill(totp(secret));
+  await twoFactor.getByRole('button', { name: 'Вимкнути 2FA' }).click();
+  await expect(twoFactor.getByText('Захист 2FA ще не ввімкнено.')).toBeVisible();
+
+  await twoFactor.getByRole('button', { name: 'Увімкнути 2FA' }).click();
+  const adminResetSecret = await twoFactor
+    .getByLabel('Секрет для ручного налаштування')
+    .inputValue();
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(totp(adminResetSecret));
+  await twoFactor.getByRole('button', { name: 'Підтвердити 2FA' }).click();
+  const admin = await openAs(browser, baseURL, 'admin');
+  try {
+    const disabled = await admin.request.post(`/api/v1/admin/users/${userID}/2fa/disable`, {
+      headers: origin(baseURL),
+    });
+    expect(disabled.status(), await disabled.text()).toBe(204);
+  } finally {
+    await admin.close();
+  }
+  await page.reload();
+  await expect(twoFactor.getByText('Захист 2FA ще не ввімкнено.')).toBeVisible();
+  await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
+  await login(page, changedEmail, changedPassword);
 });
 
 test.afterAll(async ({ browser, baseURL }) => {
