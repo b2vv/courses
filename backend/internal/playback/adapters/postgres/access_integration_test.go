@@ -216,8 +216,8 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		if err := rows.Err(); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(plan.String(), "course_grants_one_active_per_user_course") {
-			t.Fatalf("loadVideoCourse plan does not use active-grant partial index:\n%s", plan.String())
+		if !strings.Contains(plan.String(), "course_grants_one_per_user_course") {
+			t.Fatalf("loadVideoCourse plan does not use the per-user-course membership index:\n%s", plan.String())
 		}
 	})
 	playback, err := playbackReader.LoadLessonPlayback(ctx, viewerID, lessonID)
