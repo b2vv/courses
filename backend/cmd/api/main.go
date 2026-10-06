@@ -20,7 +20,9 @@ import (
 	discussionapplication "courses/internal/discussion/application"
 	passwords "courses/internal/identity/adapters/argon2id"
 	identityhttp "courses/internal/identity/adapters/http"
+	identitymail "courses/internal/identity/adapters/mail"
 	identitypostgres "courses/internal/identity/adapters/postgres"
+	identityredis "courses/internal/identity/adapters/redis"
 	identityapplication "courses/internal/identity/application"
 	mediaasynq "courses/internal/media/adapters/asynq"
 	mediahttp "courses/internal/media/adapters/http"
@@ -41,7 +43,9 @@ import (
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
 	transcriptapplication "courses/internal/transcript/application"
 
+	"courses/platform/config"
 	"courses/platform/httpserver"
+	platformmail "courses/platform/mail"
 	"courses/platform/observability"
 	"courses/platform/runtime"
 )
@@ -51,6 +55,11 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	identityConfig, err := identityhttp.ConfigFromEnvironment(os.Getenv)
+	if err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
+	mailConfig, err := config.MailConfig(os.Getenv)
 	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
@@ -100,9 +109,26 @@ func main() {
 		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
 		draftHandler := transcripthttp.NewDraftHandler(drafting)
 		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
-		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now)
+		loginLimiter, err := identityredis.NewRateLimiter(dependencies.Redis, 5, 15*time.Minute, logger)
+		if err != nil {
+			return err
+		}
+		pendingTwoFactor, err := identityredis.NewPendingTwoFactorStore(dependencies.Redis)
+		if err != nil {
+			return err
+		}
+		twoFactor := identityapplication.NewTwoFactor(
+			identityRepository, identityRepository, pendingTwoFactor, identityRepository, time.Now,
+			identityapplication.TwoFactorDependency{Passwords: identityRepository, Limiter: loginLimiter, Logger: logger},
+		)
+		identity := identityapplication.NewIdentity(identityRepository, identityRepository, time.Now, loginLimiter).WithTwoFactor(twoFactor)
+		identityMailer, err := identitymail.New(platformmail.NewSender(mailConfig), os.Getenv("PUBLIC_ORIGIN"))
+		if err != nil {
+			return err
+		}
+		accounts := identityapplication.NewAccounts(identityRepository, identityRepository, passwords.NewVerifier(), identityRepository, identityMailer, identityRepository, time.Now, newUUID, identityapplication.AccountsDependency{Limiter: loginLimiter, Credentials: identityRepository})
 		administration := identityapplication.NewAdministration(identityRepository, time.Now)
-		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig)
+		identityHandler := identityhttp.NewHandler(identity, identityRepository, administration, identityConfig, accounts).WithTwoFactor(twoFactor)
 		mediaRepository := mediapostgres.NewRepository(dependencies.Database)
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)

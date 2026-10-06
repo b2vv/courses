@@ -18,8 +18,8 @@ func segment(id, text string, startMs, endMs int64, documentIDs ...string) domai
 }
 
 func runWriteTests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, authoring *application.Authoring, reading *application.Reading) {
-	owner := domain.Actor{UserID: ownerAccount}
-	stranger := domain.Actor{UserID: strangerAccount}
+	owner := domain.Actor{UserID: ownerAccount, EmailVerified: true}
+	stranger := domain.Actor{UserID: strangerAccount, EmailVerified: true}
 
 	t.Run("a stranger cannot write, including the very first transcript", func(t *testing.T) {
 		// Authorization reads the course directly, so writing the first transcript of a lesson is
@@ -129,8 +129,8 @@ func runWriteTests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, author
 }
 
 func runLibraryTests(t *testing.T, ctx context.Context, library *application.Library, authoring *application.Authoring) {
-	owner := domain.Actor{UserID: ownerAccount}
-	stranger := domain.Actor{UserID: strangerAccount}
+	owner := domain.Actor{UserID: ownerAccount, EmailVerified: true}
+	stranger := domain.Actor{UserID: strangerAccount, EmailVerified: true}
 	const courseID = "10000000-0000-4000-8000-0000000000c1"
 	const docA = "61000000-0000-4000-8000-000000000001"
 	const docB = "61000000-0000-4000-8000-000000000002"

@@ -318,6 +318,23 @@ paths:
         '404': { $ref: '#/components/responses/UserNotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/users/{id}/2fa/disable:
+    post:
+      operationId: adminDisableUserTwoFactor
+      summary: Disable two-factor authentication for an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Two-factor authentication disabled and recovery codes removed. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/AdminUserMutationForbidden' }
+        '404': { $ref: '#/components/responses/UserNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/courses:
     get:
       operationId: listAdminCourses
@@ -650,19 +667,144 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: The authenticated user; the session token is returned only in the cookie.
+          description: The authenticated user, or a pending two-factor challenge. A session cookie is set only for the authenticated-user variant.
           headers:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
             Cache-Control: { $ref: '#/components/headers/NoStore' }
             Set-Cookie: { $ref: '#/components/headers/SessionCookie' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AuthenticatedUser' }
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/AuthenticatedUser' }
+                  - { $ref: '#/components/schemas/TwoFactorRequired' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/PlaybackForbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/2fa/enroll:
+    post:
+      operationId: enrollTwoFactor
+      summary: Create an unconfirmed TOTP secret for the authenticated account
+      responses:
+        '200': { description: 'Scan or record this secret, then confirm it. The secret is returned only by this endpoint.', content: { application/json: { schema: { $ref: '#/components/schemas/TwoFactorEnrollment' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/TwoFactorConflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/2fa/confirm:
+    post:
+      operationId: confirmTwoFactor
+      summary: Confirm a TOTP secret and receive one-time recovery codes
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TwoFactorCodeRequest' } } } }
+      responses:
+        '200': { description: 'Two-factor authentication is enabled; save recovery codes now because they are not shown again.', content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryCodes' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/TwoFactorConflict' }
+        '422': { $ref: '#/components/responses/TwoFactorInvalidCode' }
+  /api/v1/auth/2fa/complete:
+    post:
+      operationId: completeTwoFactor
+      summary: Complete a pending login using a TOTP or recovery code
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CompleteTwoFactorRequest' } } } }
+      responses:
+        '204': { description: Session cookie issued. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/TwoFactorInvalidCode' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/auth/2fa/disable:
+    post:
+      operationId: disableTwoFactor
+      summary: Disable two-factor authentication after password and factor proof
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DisableTwoFactorRequest' } } } }
+      responses:
+        '204': { description: Two-factor authentication disabled. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/TwoFactorConflict' }
+        '422': { $ref: '#/components/responses/TwoFactorInvalidCode' }
+  /api/v1/auth/2fa/recovery-codes:
+    post:
+      operationId: regenerateRecoveryCodes
+      summary: Replace recovery codes after a TOTP or recovery-code proof
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TwoFactorCodeRequest' } } } }
+      responses:
+        '200': { description: 'New recovery codes, returned only once.', content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryCodes' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/TwoFactorConflict' }
+        '422': { $ref: '#/components/responses/TwoFactorInvalidCode' }
+  /api/v1/auth/register:
+    post:
+      operationId: register
+      summary: Register and start a session
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } } }
+      responses:
+        '201': { description: Registered user and session cookie, content: { application/json: { schema: { $ref: '#/components/schemas/AuthenticatedUser' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '409': { $ref: '#/components/responses/EmailTaken' }
+        '422': { $ref: '#/components/responses/AccountValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/auth/verify-email:
+    post:
+      operationId: verifyEmail
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenRequest' } } } }
+      responses:
+        '204': { description: Email verified. }
+        '400': { $ref: '#/components/responses/InvalidAccountToken' }
+        '410': { $ref: '#/components/responses/TokenUsed' }
+  /api/v1/auth/resend-verification:
+    post:
+      operationId: resendVerification
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OptionalEmailRequest' } } } }
+      responses:
+        '204': { description: Verification email was requested. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/auth/password/forgot:
+    post:
+      operationId: requestPasswordReset
+      description: Returns 200 whether or not the email identifies an account.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EmailRequest' } } } }
+      responses:
+        '200': { description: Reset request accepted. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/auth/password/reset:
+    post:
+      operationId: resetPassword
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResetPasswordRequest' } } } }
+      responses:
+        '204': { description: Password reset and all sessions revoked. }
+        '400': { $ref: '#/components/responses/InvalidAccountToken' }
+        '410': { $ref: '#/components/responses/TokenUsed' }
+        '422': { $ref: '#/components/responses/AccountValidationFailed' }
+  /api/v1/auth/password/change:
+    post:
+      operationId: changePassword
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChangePasswordRequest' } } } }
+      responses:
+        '204': { description: Password changed; other sessions revoked. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/AccountValidationFailed' }
+  /api/v1/auth/email/change:
+    post:
+      operationId: requestEmailChange
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/NewEmailRequest' } } } }
+      responses:
+        '204': { description: Confirmation email requested. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/EmailTaken' }
+        '422': { $ref: '#/components/responses/AccountValidationFailed' }
+  /api/v1/auth/email/change/confirm:
+    post:
+      operationId: confirmEmailChange
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TokenRequest' } } } }
+      responses:
+        '204': { description: Email changed and verified. }
+        '400': { $ref: '#/components/responses/InvalidAccountToken' }
+        '409': { $ref: '#/components/responses/EmailTaken' }
+        '410': { $ref: '#/components/responses/TokenUsed' }
   /api/v1/auth/me:
     get:
       operationId: getCurrentUser
@@ -2156,14 +2298,102 @@ components:
       properties:
         email: { type: string, minLength: 3, maxLength: 254 }
         password: { type: string, minLength: 1, maxLength: 1024 }
+        rememberMe: { type: boolean }
+    TwoFactorRequired:
+      type: object
+      additionalProperties: false
+      required: [status, pendingId]
+      properties:
+        status: { type: string, enum: [two_factor_required] }
+        pendingId: { type: string, minLength: 1, maxLength: 128 }
+    TwoFactorEnrollment:
+      type: object
+      additionalProperties: false
+      required: [secret, otpauthUri]
+      properties:
+        secret: { type: string, minLength: 16 }
+        otpauthUri: { type: string, format: uri }
+    TwoFactorCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 128 }
+    CompleteTwoFactorRequest:
+      type: object
+      additionalProperties: false
+      required: [pendingId, code]
+      properties:
+        pendingId: { type: string, minLength: 1, maxLength: 128 }
+        code: { type: string, minLength: 1, maxLength: 128 }
+    DisableTwoFactorRequest:
+      type: object
+      additionalProperties: false
+      required: [password, code]
+      properties:
+        password: { type: string, minLength: 1, maxLength: 1024 }
+        code: { type: string, minLength: 1, maxLength: 128 }
+    RecoveryCodes:
+      type: object
+      additionalProperties: false
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 128 }
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+    TokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties: { token: { type: string, minLength: 1, maxLength: 128 } }
+    EmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties: { email: { type: string, minLength: 3, maxLength: 254 } }
+    OptionalEmailRequest:
+      type: object
+      additionalProperties: false
+      properties: { email: { type: string, minLength: 3, maxLength: 254 } }
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 128 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string, minLength: 1, maxLength: 128 }
+        newPassword: { type: string, minLength: 8, maxLength: 128 }
+    NewEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [newEmail]
+      properties: { newEmail: { type: string, minLength: 3, maxLength: 254 } }
     AuthenticatedUser:
       type: object
       additionalProperties: false
-      required: [id, email, displayName, role]
+      required: [id, email, displayName, role, emailVerified, twoFactorEnabled]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, minLength: 3, maxLength: 254 }
         displayName: { type: string, minLength: 1, maxLength: 120 }
+        emailVerified: { type: boolean }
+        twoFactorEnabled: { type: boolean }
         role:
           type: string
           enum: [student, instructor, admin]
@@ -2180,10 +2410,20 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, course_forbidden, course_purchase_required, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, course_forbidden, course_purchase_required, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    TwoFactorConflict:
+      description: Two-factor authentication is already enabled or is not enabled.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TwoFactorInvalidCode:
+      description: The supplied TOTP or recovery code is invalid.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     PurchaseConflict:
       description: The course is already owned or the price operation conflicted.
       headers:
@@ -2425,3 +2665,18 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    EmailTaken:
+      description: The email is already registered.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    AccountValidationFailed:
+      description: Account input is invalid.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    TokenUsed:
+      description: The one-time token has expired or was already used.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    InvalidAccountToken:
+      description: The account token is malformed.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    RateLimited:
+      description: Too many requests.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }

@@ -10,6 +10,7 @@ import {
 } from '../api-origin';
 
 import type {
+  AccountValidationFailedResponse,
   AdminCourseDeleteRequest,
   AdminCoursePage,
   AdminCourseSaveRequest,
@@ -26,21 +27,27 @@ import type {
   AdminWriteBadRequestResponse,
   AuthenticatedUser,
   BadRequestResponse,
+  ChangePasswordRequest,
   CheckoutForm,
   CheckoutRequest,
   Comment,
   CommentPage,
+  CompleteTwoFactorRequest,
   CourseDetail,
   CourseGrant,
   CoursePage,
   CourseVideos,
+  DisableTwoFactorRequest,
   DismissReportsRequest,
   DraftConflictResponse,
+  EmailRequest,
+  EmailTakenResponse,
   ForbiddenResponse,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
   Instructor,
   InternalErrorResponse,
+  InvalidAccountTokenResponse,
   InvalidRequestResponse,
   LearningCourse,
   LearningForbiddenResponse,
@@ -63,7 +70,9 @@ import type {
   MediaUploadTicket,
   MediaVideo,
   ModerationQueuePage,
+  NewEmailRequest,
   NotFoundResponse,
+  OptionalEmailRequest,
   OrderNotFoundResponse,
   OriginForbiddenResponse,
   OwnReview,
@@ -81,14 +90,25 @@ import type {
   PurchaseConflictResponse,
   PurchaseOrder,
   PutReviewRequest,
+  RateLimitedResponse,
   ReceiveWayForPayCallbackBody,
+  RecoveryCodes,
   RegenerateLessonDraftRequest,
+  RegisterRequest,
+  ResetPasswordRequest,
   Review,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
+  TokenRequest,
+  TokenUsedResponse,
   TranscriptConflictResponse,
   TranscriptDocumentLink,
+  TwoFactorCodeRequest,
+  TwoFactorConflictResponse,
+  TwoFactorEnrollment,
+  TwoFactorInvalidCodeResponse,
+  TwoFactorRequired,
   UnauthenticatedResponse,
   UnavailableResponse,
   UpdateCommentRequest,
@@ -931,6 +951,81 @@ const res = await fetch(getResetAdminUserPasswordUrl(id),
 
 
 
+export type adminDisableUserTwoFactorResponse204 = {
+  data: void
+  status: 204
+}
+
+export type adminDisableUserTwoFactorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type adminDisableUserTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type adminDisableUserTwoFactorResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type adminDisableUserTwoFactorResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type adminDisableUserTwoFactorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type adminDisableUserTwoFactorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type adminDisableUserTwoFactorResponseSuccess = (adminDisableUserTwoFactorResponse204) & {
+  headers: Headers;
+};
+export type adminDisableUserTwoFactorResponseError = (adminDisableUserTwoFactorResponse400 | adminDisableUserTwoFactorResponse401 | adminDisableUserTwoFactorResponse403 | adminDisableUserTwoFactorResponse404 | adminDisableUserTwoFactorResponse500 | adminDisableUserTwoFactorResponse503) & {
+  headers: Headers;
+};
+
+export type adminDisableUserTwoFactorResponse = (adminDisableUserTwoFactorResponseSuccess | adminDisableUserTwoFactorResponseError)
+
+export const getAdminDisableUserTwoFactorUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}/2fa/disable`
+}
+
+/**
+ * @summary Disable two-factor authentication for an account
+ */
+export const adminDisableUserTwoFactor = async (id: string, options?: RequestInit): Promise<adminDisableUserTwoFactorResponse> => {
+
+  const res = await fetch(getAdminDisableUserTwoFactorUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: adminDisableUserTwoFactorResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as adminDisableUserTwoFactorResponse
+}
+
+
+
 export type listAdminCoursesResponse200 = {
   data: AdminCoursePage
   status: 200
@@ -1738,7 +1833,7 @@ export const listInstructors = async ( options?: RequestInit): Promise<listInstr
 
 
 export type loginResponse200 = {
-  data: AuthenticatedUser
+  data: AuthenticatedUser | TwoFactorRequired
   status: 200
 }
 
@@ -1810,6 +1905,835 @@ const res = await fetch(getLoginUrl(),
 
   const data: loginResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as loginResponse
+}
+
+
+
+export type enrollTwoFactorResponse200 = {
+  data: TwoFactorEnrollment
+  status: 200
+}
+
+export type enrollTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type enrollTwoFactorResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type enrollTwoFactorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type enrollTwoFactorResponseSuccess = (enrollTwoFactorResponse200) & {
+  headers: Headers;
+};
+export type enrollTwoFactorResponseError = (enrollTwoFactorResponse401 | enrollTwoFactorResponse409 | enrollTwoFactorResponse503) & {
+  headers: Headers;
+};
+
+export type enrollTwoFactorResponse = (enrollTwoFactorResponseSuccess | enrollTwoFactorResponseError)
+
+export const getEnrollTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/enroll`
+}
+
+/**
+ * @summary Create an unconfirmed TOTP secret for the authenticated account
+ */
+export const enrollTwoFactor = async ( options?: RequestInit): Promise<enrollTwoFactorResponse> => {
+
+  const res = await fetch(getEnrollTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as enrollTwoFactorResponse
+}
+
+
+
+export type confirmTwoFactorResponse200 = {
+  data: RecoveryCodes
+  status: 200
+}
+
+export type confirmTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type confirmTwoFactorResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type confirmTwoFactorResponse422 = {
+  data: TwoFactorInvalidCodeResponse
+  status: 422
+}
+
+export type confirmTwoFactorResponseSuccess = (confirmTwoFactorResponse200) & {
+  headers: Headers;
+};
+export type confirmTwoFactorResponseError = (confirmTwoFactorResponse401 | confirmTwoFactorResponse409 | confirmTwoFactorResponse422) & {
+  headers: Headers;
+};
+
+export type confirmTwoFactorResponse = (confirmTwoFactorResponseSuccess | confirmTwoFactorResponseError)
+
+export const getConfirmTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/confirm`
+}
+
+/**
+ * @summary Confirm a TOTP secret and receive one-time recovery codes
+ */
+export const confirmTwoFactor = async (twoFactorCodeRequest: TwoFactorCodeRequest, options?: RequestInit): Promise<confirmTwoFactorResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getConfirmTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(twoFactorCodeRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: confirmTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as confirmTwoFactorResponse
+}
+
+
+
+export type completeTwoFactorResponse204 = {
+  data: void
+  status: 204
+}
+
+export type completeTwoFactorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type completeTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type completeTwoFactorResponse422 = {
+  data: TwoFactorInvalidCodeResponse
+  status: 422
+}
+
+export type completeTwoFactorResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type completeTwoFactorResponseSuccess = (completeTwoFactorResponse204) & {
+  headers: Headers;
+};
+export type completeTwoFactorResponseError = (completeTwoFactorResponse400 | completeTwoFactorResponse401 | completeTwoFactorResponse422 | completeTwoFactorResponse429) & {
+  headers: Headers;
+};
+
+export type completeTwoFactorResponse = (completeTwoFactorResponseSuccess | completeTwoFactorResponseError)
+
+export const getCompleteTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/complete`
+}
+
+/**
+ * @summary Complete a pending login using a TOTP or recovery code
+ */
+export const completeTwoFactor = async (completeTwoFactorRequest: CompleteTwoFactorRequest, options?: RequestInit): Promise<completeTwoFactorResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getCompleteTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(completeTwoFactorRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeTwoFactorResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as completeTwoFactorResponse
+}
+
+
+
+export type disableTwoFactorResponse204 = {
+  data: void
+  status: 204
+}
+
+export type disableTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type disableTwoFactorResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type disableTwoFactorResponse422 = {
+  data: TwoFactorInvalidCodeResponse
+  status: 422
+}
+
+export type disableTwoFactorResponseSuccess = (disableTwoFactorResponse204) & {
+  headers: Headers;
+};
+export type disableTwoFactorResponseError = (disableTwoFactorResponse401 | disableTwoFactorResponse409 | disableTwoFactorResponse422) & {
+  headers: Headers;
+};
+
+export type disableTwoFactorResponse = (disableTwoFactorResponseSuccess | disableTwoFactorResponseError)
+
+export const getDisableTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/disable`
+}
+
+/**
+ * @summary Disable two-factor authentication after password and factor proof
+ */
+export const disableTwoFactor = async (disableTwoFactorRequest: DisableTwoFactorRequest, options?: RequestInit): Promise<disableTwoFactorResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDisableTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(disableTwoFactorRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disableTwoFactorResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as disableTwoFactorResponse
+}
+
+
+
+export type regenerateRecoveryCodesResponse200 = {
+  data: RecoveryCodes
+  status: 200
+}
+
+export type regenerateRecoveryCodesResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type regenerateRecoveryCodesResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type regenerateRecoveryCodesResponse422 = {
+  data: TwoFactorInvalidCodeResponse
+  status: 422
+}
+
+export type regenerateRecoveryCodesResponseSuccess = (regenerateRecoveryCodesResponse200) & {
+  headers: Headers;
+};
+export type regenerateRecoveryCodesResponseError = (regenerateRecoveryCodesResponse401 | regenerateRecoveryCodesResponse409 | regenerateRecoveryCodesResponse422) & {
+  headers: Headers;
+};
+
+export type regenerateRecoveryCodesResponse = (regenerateRecoveryCodesResponseSuccess | regenerateRecoveryCodesResponseError)
+
+export const getRegenerateRecoveryCodesUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/recovery-codes`
+}
+
+/**
+ * @summary Replace recovery codes after a TOTP or recovery-code proof
+ */
+export const regenerateRecoveryCodes = async (twoFactorCodeRequest: TwoFactorCodeRequest, options?: RequestInit): Promise<regenerateRecoveryCodesResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegenerateRecoveryCodesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(twoFactorCodeRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateRecoveryCodesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as regenerateRecoveryCodesResponse
+}
+
+
+
+export type registerResponse201 = {
+  data: AuthenticatedUser
+  status: 201
+}
+
+export type registerResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type registerResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type registerResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type registerResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type registerResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type registerResponseSuccess = (registerResponse201) & {
+  headers: Headers;
+};
+export type registerResponseError = (registerResponse400 | registerResponse409 | registerResponse422 | registerResponse429 | registerResponse503) & {
+  headers: Headers;
+};
+
+export type registerResponse = (registerResponseSuccess | registerResponseError)
+
+export const getRegisterUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/register`
+}
+
+/**
+ * @summary Register and start a session
+ */
+export const register = async (registerRequest: RegisterRequest, options?: RequestInit): Promise<registerResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegisterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(registerRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as registerResponse
+}
+
+
+
+export type verifyEmailResponse204 = {
+  data: void
+  status: 204
+}
+
+export type verifyEmailResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type verifyEmailResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type verifyEmailResponseSuccess = (verifyEmailResponse204) & {
+  headers: Headers;
+};
+export type verifyEmailResponseError = (verifyEmailResponse400 | verifyEmailResponse410) & {
+  headers: Headers;
+};
+
+export type verifyEmailResponse = (verifyEmailResponseSuccess | verifyEmailResponseError)
+
+export const getVerifyEmailUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/verify-email`
+}
+
+export const verifyEmail = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<verifyEmailResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getVerifyEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tokenRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: verifyEmailResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as verifyEmailResponse
+}
+
+
+
+export type resendVerificationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resendVerificationResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type resendVerificationResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resendVerificationResponseSuccess = (resendVerificationResponse204) & {
+  headers: Headers;
+};
+export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401) & {
+  headers: Headers;
+};
+
+export type resendVerificationResponse = (resendVerificationResponseSuccess | resendVerificationResponseError)
+
+export const getResendVerificationUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/resend-verification`
+}
+
+export const resendVerification = async (optionalEmailRequest: OptionalEmailRequest, options?: RequestInit): Promise<resendVerificationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResendVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(optionalEmailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resendVerificationResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resendVerificationResponse
+}
+
+
+
+export type requestPasswordResetResponse200 = {
+  data: void
+  status: 200
+}
+
+export type requestPasswordResetResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type requestPasswordResetResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type requestPasswordResetResponseSuccess = (requestPasswordResetResponse200) & {
+  headers: Headers;
+};
+export type requestPasswordResetResponseError = (requestPasswordResetResponse400 | requestPasswordResetResponse429) & {
+  headers: Headers;
+};
+
+export type requestPasswordResetResponse = (requestPasswordResetResponseSuccess | requestPasswordResetResponseError)
+
+export const getRequestPasswordResetUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/forgot`
+}
+
+/**
+ * Returns 200 whether or not the email identifies an account.
+ */
+export const requestPasswordReset = async (emailRequest: EmailRequest, options?: RequestInit): Promise<requestPasswordResetResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRequestPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(emailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestPasswordResetResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as requestPasswordResetResponse
+}
+
+
+
+export type resetPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetPasswordResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type resetPasswordResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type resetPasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type resetPasswordResponseSuccess = (resetPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetPasswordResponseError = (resetPasswordResponse400 | resetPasswordResponse410 | resetPasswordResponse422) & {
+  headers: Headers;
+};
+
+export type resetPasswordResponse = (resetPasswordResponseSuccess | resetPasswordResponseError)
+
+export const getResetPasswordUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/reset`
+}
+
+export const resetPassword = async (resetPasswordRequest: ResetPasswordRequest, options?: RequestInit): Promise<resetPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resetPasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetPasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resetPasswordResponse
+}
+
+
+
+export type changePasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type changePasswordResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type changePasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type changePasswordResponseSuccess = (changePasswordResponse204) & {
+  headers: Headers;
+};
+export type changePasswordResponseError = (changePasswordResponse401 | changePasswordResponse422) & {
+  headers: Headers;
+};
+
+export type changePasswordResponse = (changePasswordResponseSuccess | changePasswordResponseError)
+
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/change`
+}
+
+export const changePassword = async (changePasswordRequest: ChangePasswordRequest, options?: RequestInit): Promise<changePasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changePasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: changePasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as changePasswordResponse
+}
+
+
+
+export type requestEmailChangeResponse204 = {
+  data: void
+  status: 204
+}
+
+export type requestEmailChangeResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type requestEmailChangeResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type requestEmailChangeResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type requestEmailChangeResponseSuccess = (requestEmailChangeResponse204) & {
+  headers: Headers;
+};
+export type requestEmailChangeResponseError = (requestEmailChangeResponse401 | requestEmailChangeResponse409 | requestEmailChangeResponse422) & {
+  headers: Headers;
+};
+
+export type requestEmailChangeResponse = (requestEmailChangeResponseSuccess | requestEmailChangeResponseError)
+
+export const getRequestEmailChangeUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/email/change`
+}
+
+export const requestEmailChange = async (newEmailRequest: NewEmailRequest, options?: RequestInit): Promise<requestEmailChangeResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRequestEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(newEmailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestEmailChangeResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as requestEmailChangeResponse
+}
+
+
+
+export type confirmEmailChangeResponse204 = {
+  data: void
+  status: 204
+}
+
+export type confirmEmailChangeResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type confirmEmailChangeResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type confirmEmailChangeResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type confirmEmailChangeResponseSuccess = (confirmEmailChangeResponse204) & {
+  headers: Headers;
+};
+export type confirmEmailChangeResponseError = (confirmEmailChangeResponse400 | confirmEmailChangeResponse409 | confirmEmailChangeResponse410) & {
+  headers: Headers;
+};
+
+export type confirmEmailChangeResponse = (confirmEmailChangeResponseSuccess | confirmEmailChangeResponseError)
+
+export const getConfirmEmailChangeUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/email/change/confirm`
+}
+
+export const confirmEmailChange = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<confirmEmailChangeResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getConfirmEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tokenRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: confirmEmailChangeResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as confirmEmailChangeResponse
 }
 
 

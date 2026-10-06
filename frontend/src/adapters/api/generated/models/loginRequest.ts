@@ -17,4 +17,5 @@ export interface LoginRequest {
      * @maxLength 1024
      */
   password: string;
+  rememberMe?: boolean;
 }

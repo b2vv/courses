@@ -118,7 +118,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 			if role == "admin" {
 				userID = testAdmin
 			}
-			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: userID, Role: role})))
+			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: userID, Role: role, EmailVerified: true})))
 		})
 	}
 	identity := func(next http.Handler) http.Handler { return next }
@@ -286,7 +286,7 @@ func TestCheckoutAlreadyOpenedMatchesOpenAPI(t *testing.T) {
 	server := httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
 		handler.Register(mux, func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student"})))
+				next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student", EmailVerified: true})))
 			})
 		}, func(next http.Handler) http.Handler { return next })
 	}})
@@ -359,7 +359,7 @@ func callbackServer(t *testing.T, store *fakeStore, verifier *fakeCallbackVerifi
 	handler := ordershttp.NewHandler(service, verifier, "")
 	authenticate := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student"})))
+			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: testUser, Role: "student", EmailVerified: true})))
 		})
 	}
 	return httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {

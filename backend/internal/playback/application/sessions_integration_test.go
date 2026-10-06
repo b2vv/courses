@@ -134,7 +134,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		playbackredis.NewOwnershipReader(redisConnection),
 		playbackpostgres.NewVideoAccessReader(pool, authorizationCounter{}),
 	)
-	actor := domain.Actor{UserID: userID}
+	actor := domain.Actor{UserID: userID, EmailVerified: true}
 
 	t.Run("B17 B31 repeated play takes a fresh id and preserves saved sequence", func(t *testing.T) {
 		first, err := sessions.Play(ctx, actor, lessonID, playbackID)
@@ -351,7 +351,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 				t.Errorf("restore published course: %v", err)
 			}
 		})
-		student := domain.Actor{UserID: restrictedStudentID}
+		student := domain.Actor{UserID: restrictedStudentID, EmailVerified: true}
 		if err := sessions.Heartbeat(ctx, student, playbackID, lessonID, update(30, 4)); !errors.Is(err, domain.ErrForbidden) {
 			t.Fatalf("heartbeat: %v", err)
 		}

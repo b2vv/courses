@@ -55,17 +55,27 @@ func TestSessionInvariantsAndExpiryBoundary(t *testing.T) {
 func TestIdentityErrorsAreStable(t *testing.T) {
 	t.Parallel()
 	for errorValue, want := range map[error]string{
-		domain.ErrInvalidUser:            "invalid_user",
-		domain.ErrInvalidEmail:           "invalid_email",
-		domain.ErrInvalidSession:         "invalid_session",
-		domain.ErrInvalidCredentials:     "invalid_credentials",
-		domain.ErrAuthenticationRequired: "authentication_required",
-		domain.ErrForbidden:              "forbidden",
-		domain.ErrDependencyUnavailable:  "dependency_unavailable",
-		domain.ErrCannotTargetSelf:       "cannot_target_self",
-		domain.ErrAdminImmutable:         "admin_immutable",
-		domain.ErrLastAdmin:              "last_admin",
-		domain.ErrUserNotFound:           "user_not_found",
+		domain.ErrInvalidUser:             "invalid_user",
+		domain.ErrInvalidEmail:            "invalid_email",
+		domain.ErrInvalidDisplayName:      "invalid_display_name",
+		domain.ErrWeakPassword:            "weak_password",
+		domain.ErrPasswordUnchanged:       "password_unchanged",
+		domain.ErrEmailTaken:              "email_taken",
+		domain.ErrTokenUsed:               "token_used",
+		domain.ErrInvalidAccountToken:     "invalid_account_token",
+		domain.ErrInvalidSession:          "invalid_session",
+		domain.ErrInvalidCredentials:      "invalid_credentials",
+		domain.ErrAuthenticationRequired:  "authentication_required",
+		domain.ErrForbidden:               "forbidden",
+		domain.ErrDependencyUnavailable:   "dependency_unavailable",
+		domain.ErrCannotTargetSelf:        "cannot_target_self",
+		domain.ErrAdminImmutable:          "admin_immutable",
+		domain.ErrLastAdmin:               "last_admin",
+		domain.ErrUserNotFound:            "user_not_found",
+		domain.ErrInvalidTOTP:             "invalid_totp",
+		domain.ErrTwoFactorAlreadyEnabled: "twofactor_already_enabled",
+		domain.ErrTwoFactorNotEnabled:     "twofactor_not_enabled",
+		domain.ErrRecoveryCodeInvalid:     "recovery_code_invalid",
 	} {
 		if errorValue.Error() != want {
 			t.Fatalf("got %q, want %q", errorValue.Error(), want)

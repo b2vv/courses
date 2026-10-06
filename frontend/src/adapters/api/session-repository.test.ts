@@ -8,6 +8,8 @@ const signedIn = {
   id: '40000000-0000-4000-8000-000000000001',
   email: 'student@courseforge.local',
   displayName: 'Студентка',
+  emailVerified: false,
+  twoFactorEnabled: false,
   role: 'student',
 };
 const credentials = { email: 'student@courseforge.local', password: 'secret' };
@@ -23,6 +25,77 @@ test('maps a successful login to the domain user', async () => {
   server.use(http.post(`${apiOrigin()}/api/v1/auth/login`, () => HttpResponse.json(signedIn)));
   const result = await createApiSessionRepository().logIn(credentials);
   expect(result).toEqual({ ok: true, value: signedIn });
+});
+
+test('sends rememberMe as part of the login command', async () => {
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/auth/login`, async ({ request }) => {
+      expect(await request.json()).toEqual({ ...credentials, rememberMe: true });
+      return HttpResponse.json(signedIn);
+    }),
+  );
+  expect(await createApiSessionRepository().logIn({ ...credentials, rememberMe: true })).toEqual({
+    ok: true,
+    value: signedIn,
+  });
+});
+
+test('registers a user and retains the unverified state from the API', async () => {
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/auth/register`, () =>
+      HttpResponse.json(signedIn, { status: 201 }),
+    ),
+  );
+  expect(
+    await createApiSessionRepository().register({
+      email: signedIn.email,
+      password: 'password1',
+      displayName: signedIn.displayName,
+    }),
+  ).toEqual({ ok: true, value: signedIn });
+});
+
+test.each([
+  ['/api/v1/auth/register', 409, 'email_taken', 'email_taken'],
+  ['/api/v1/auth/password/reset', 400, 'invalid_account_token', 'invalid_account_token'],
+  ['/api/v1/auth/password/reset', 410, 'token_used', 'token_used'],
+  ['/api/v1/auth/password/reset', 422, 'weak_password', 'weak_password'],
+  ['/api/v1/auth/password/forgot', 429, 'rate_limited', 'rate_limited'],
+])('maps self-service business error %s %i', async (path, status, code, expected) => {
+  server.use(
+    http.post(`${apiOrigin()}${path}`, () => HttpResponse.json(envelope(code), { status })),
+  );
+  const repository = createApiSessionRepository();
+  const result =
+    path === '/api/v1/auth/register'
+      ? await repository.register({
+          email: signedIn.email,
+          password: 'password1',
+          displayName: 'Name',
+        })
+      : path === '/api/v1/auth/password/forgot'
+        ? await repository.forgotPassword({ email: signedIn.email })
+        : await repository.resetPassword({ token: 'token', password: 'password1' });
+  expect(result).toEqual({ ok: false, error: { code: expected } });
+});
+
+test('keeps password-reset requests neutral and validates empty success bodies', async () => {
+  server.use(
+    http.post(
+      `${apiOrigin()}/api/v1/auth/password/forgot`,
+      () => new HttpResponse(null, { status: 200 }),
+    ),
+    http.post(`${apiOrigin()}/api/v1/auth/verify-email`, () =>
+      HttpResponse.json({ unexpected: true }, { status: 204 }),
+    ),
+  );
+  const repository = createApiSessionRepository();
+  expect(await repository.forgotPassword({ email: 'missing@courseforge.local' })).toEqual({
+    ok: true,
+    value: null,
+  });
+  // A 204 cannot have a JSON response body in Fetch; Orval exposes it as undefined.
+  expect(await repository.verifyEmail({ token: 'token' })).toEqual({ ok: true, value: null });
 });
 
 test.each([
@@ -51,6 +124,15 @@ test('refuses a login response whose body is not an authenticated user', async (
   const result = await createApiSessionRepository().logIn(credentials);
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.error.code).toBe('invalid_response');
+});
+
+test('refuses an authenticated user response without emailVerified', async () => {
+  const { emailVerified: _emailVerified, ...withoutVerification } = signedIn;
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/auth/me`, () => HttpResponse.json(withoutVerification)),
+  );
+  const result = await createApiSessionRepository().currentUser();
+  expect(result).toEqual({ ok: false, error: { code: 'invalid_response' } });
 });
 
 test('reports an anonymous viewer as success carrying null, not as an error', async () => {

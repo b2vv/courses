@@ -14,6 +14,7 @@ import (
 var (
 	ErrCommentForbidden = errors.New("comment_forbidden")
 	ErrCommentRemoved   = errors.New("comment_removed")
+	ErrEmailNotVerified = errors.New("email_not_verified")
 )
 
 type Service struct {
@@ -142,6 +143,9 @@ func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor 
 }
 
 func (service *Service) Publish(ctx context.Context, actor Actor, request PublishRequest) (Comment, error) {
+	if !actor.EmailVerified {
+		return Comment{}, ErrEmailNotVerified
+	}
 	facts, err := service.repository.LessonFacts(ctx, actor.UserID, request.LessonID)
 	if err != nil {
 		return Comment{}, err
@@ -242,6 +246,9 @@ func (service *Service) Remove(ctx context.Context, actor Actor, commentID strin
 }
 
 func (service *Service) ReportComment(ctx context.Context, actor Actor, commentID string) error {
+	if !actor.EmailVerified {
+		return ErrEmailNotVerified
+	}
 	record, err := service.repository.Get(ctx, actor.UserID, commentID)
 	if err != nil {
 		return err
@@ -365,6 +372,9 @@ func (service *Service) OwnReview(ctx context.Context, actor Actor, courseID str
 }
 
 func (service *Service) PutReview(ctx context.Context, actor Actor, courseID string, stars int, body string) (Review, bool, error) {
+	if !actor.EmailVerified {
+		return Review{}, false, ErrEmailNotVerified
+	}
 	facts, err := service.repository.ReviewFacts(ctx, courseID, actor.UserID)
 	if err != nil {
 		return Review{}, false, err
@@ -400,6 +410,9 @@ func (service *Service) DeleteReview(ctx context.Context, actor Actor, courseID 
 	return service.repository.DeleteReview(ctx, courseID, actor.UserID)
 }
 func (service *Service) ReportReview(ctx context.Context, actor Actor, reviewID string) error {
+	if !actor.EmailVerified {
+		return ErrEmailNotVerified
+	}
 	return service.repository.InsertReviewReport(ctx, reviewID, actor.UserID, service.now())
 }
 

@@ -26,7 +26,7 @@ func TestStartPurchaseSnapshotsPublishedPaidCoursePrice(t *testing.T) {
 	store.course = ports.CourseFacts{Published: true, Price: money(t, "50000")}
 	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
 
-	order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID}, courseID, "purchase-key")
+	order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID, "purchase-key")
 	if err != nil {
 		t.Fatalf("StartPurchase: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testi
 			store := newFakeStore(t)
 			test.configure(store)
 			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
-			order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID}, courseID, "purchase-key")
+			order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID, "purchase-key")
 			if !errors.Is(err, test.want) {
 				t.Fatalf("error=%v want=%v", err, test.want)
 			}
@@ -140,10 +140,10 @@ func TestCheckoutClaimsAnOrderOnce(t *testing.T) {
 	provider := &fakePaymentProvider{}
 	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, provider)
 
-	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
+	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); err != nil {
 		t.Fatalf("first checkout: %v", err)
 	}
-	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); !errors.Is(err, domain.ErrCheckoutAlreadyOpened) {
+	if _, err := service.Checkout(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, orderID, ports.Buyer{}, ports.CheckoutURLs{}); !errors.Is(err, domain.ErrCheckoutAlreadyOpened) {
 		t.Fatalf("second checkout error=%v want=%v", err, domain.ErrCheckoutAlreadyOpened)
 	}
 	if provider.checkoutCalls != 1 {

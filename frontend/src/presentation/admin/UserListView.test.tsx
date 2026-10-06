@@ -28,6 +28,8 @@ const actor: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000003',
   email: 'admin@courseforge.local',
   displayName: 'Administrator',
+  emailVerified: true,
+  twoFactorEnabled: false,
   role: 'admin',
 };
 const listedActor: AdminUser = {

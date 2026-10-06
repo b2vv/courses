@@ -318,6 +318,50 @@ nav a {
   min-height: 44px;
   align-items: center;
 }
+.account-settings {
+  max-width: 42rem;
+  display: grid;
+  gap: var(--space-5);
+  padding-block: 2rem;
+}
+.account-settings-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+}
+.account-settings-card form {
+  display: grid;
+  gap: var(--space-3);
+}
+.verification-banner,
+.lesson-verification-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin-block: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+}
+.verification-banner p {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+.lesson-verification-gate {
+  display: grid;
+  justify-items: start;
+  min-block-size: 18rem;
+  align-content: center;
+}
+.lesson-verification-gate h2,
+.lesson-verification-gate p {
+  margin: 0;
+}
 .skip-link {
   position: absolute;
   top: -8rem;

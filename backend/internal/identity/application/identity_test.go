@@ -19,6 +19,25 @@ type credentials struct {
 	err      error
 }
 
+type limiter struct {
+	allowed    bool
+	allowCalls int
+	resetCalls int
+	key        string
+}
+
+func (limiter *limiter) Allow(_ context.Context, key string) (bool, error) {
+	limiter.allowCalls++
+	limiter.key = key
+	return limiter.allowed, nil
+}
+
+func (limiter *limiter) Reset(_ context.Context, key string) error {
+	limiter.resetCalls++
+	limiter.key = key
+	return nil
+}
+
 func (credentials *credentials) VerifyCredentials(_ context.Context, email, password string) (domain.User, error) {
 	credentials.calls++
 	credentials.email = email
@@ -27,19 +46,22 @@ func (credentials *credentials) VerifyCredentials(_ context.Context, email, pass
 }
 
 type sessions struct {
-	rotateCalls  int
-	resolveCalls int
-	revokeCalls  int
-	userID       string
-	presented    string
-	createdAt    time.Time
-	expiresAt    time.Time
-	token        string
-	issued       ports.IssuedSession
-	resolvedUser domain.User
-	rotateErr    error
-	resolveErr   error
-	revokeErr    error
+	rotateCalls       int
+	resolveCalls      int
+	revokeCalls       int
+	userID            string
+	presented         string
+	createdAt         time.Time
+	expiresAt         time.Time
+	token             string
+	issued            ports.IssuedSession
+	resolvedUser      domain.User
+	rotateErr         error
+	resolveErr        error
+	revokeErr         error
+	deleteAllCalls    int
+	deleteExceptCalls int
+	currentDigest     []byte
 }
 
 func (sessions *sessions) Rotate(_ context.Context, userID, presentedToken string, createdAt, expiresAt time.Time) (ports.IssuedSession, error) {
@@ -63,6 +85,17 @@ func (sessions *sessions) Revoke(_ context.Context, token string) error {
 	return sessions.revokeErr
 }
 
+func (sessions *sessions) DeleteIdentitySessionsForUser(_ context.Context, _ string) error {
+	sessions.deleteAllCalls++
+	return nil
+}
+
+func (sessions *sessions) DeleteUserSessionsExceptCurrent(_ context.Context, _ string, digest []byte) error {
+	sessions.deleteExceptCalls++
+	sessions.currentDigest = append([]byte(nil), digest...)
+	return nil
+}
+
 func TestLoginNormalizesCredentialsAndIssuesTwelveHourSession(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
@@ -84,6 +117,36 @@ func TestLoginNormalizesCredentialsAndIssuesTwelveHourSession(t *testing.T) {
 	}
 	if result.User != user || result.Session != issued.Session || result.Token != issued.Token {
 		t.Fatalf("wrong login result: %+v", result)
+	}
+}
+
+func TestLoginRememberMeAndRateLimit(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	user := validUser(now)
+	for _, test := range []struct {
+		name       string
+		rememberMe bool
+		lifetime   time.Duration
+	}{
+		{name: "ordinary session", lifetime: 12 * time.Hour},
+		{name: "remembered session", rememberMe: true, lifetime: application.RememberMeLifetime},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := &sessions{issued: ports.IssuedSession{Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: user.ID, CreatedAt: now, ExpiresAt: now.Add(test.lifetime)}, Token: validToken('A')}}
+			attempts := &limiter{allowed: true}
+			identity := application.NewIdentity(&credentials{user: user}, store, func() time.Time { return now }, attempts)
+			if _, err := identity.Login(context.Background(), application.LoginInput{Email: user.Email, Password: "correct password", RememberMe: test.rememberMe, IP: "203.0.113.9"}); err != nil {
+				t.Fatal(err)
+			}
+			if !store.expiresAt.Equal(now.Add(test.lifetime)) || attempts.allowCalls != 1 || attempts.resetCalls != 1 {
+				t.Fatalf("lifetime or limiter calls wrong: sessions=%+v limiter=%+v", store, attempts)
+			}
+		})
+	}
+	denied := &limiter{}
+	identity := application.NewIdentity(&credentials{user: user}, &sessions{}, func() time.Time { return now }, denied)
+	if _, err := identity.Login(context.Background(), application.LoginInput{Email: user.Email, Password: "correct password", IP: "203.0.113.9"}); !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatal(err)
 	}
 }
 
@@ -175,6 +238,13 @@ func (store *truncatingSessions) Resolve(_ context.Context, _ string, _ time.Tim
 }
 
 func (store *truncatingSessions) Revoke(_ context.Context, _ string) error {
+	return nil
+}
+
+func (store *truncatingSessions) DeleteIdentitySessionsForUser(context.Context, string) error {
+	return nil
+}
+func (store *truncatingSessions) DeleteUserSessionsExceptCurrent(context.Context, string, []byte) error {
 	return nil
 }
 

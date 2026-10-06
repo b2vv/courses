@@ -12,6 +12,7 @@ const (
 	// course the caller may not see exists.
 	ErrForbidden        Error = "forbidden"
 	ErrPurchaseRequired Error = "course_purchase_required"
+	ErrEmailNotVerified Error = "email_not_verified"
 	ErrNotFound         Error = "not_found"
 
 	ErrDependencyUnavailable Error = "dependency_unavailable"

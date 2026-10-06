@@ -34,5 +34,8 @@ func (authorizer *Authorizer) Authorize(ctx context.Context, actor domain.Actor,
 		}
 		return domain.ErrForbidden
 	}
+	if !course.CanStreamBy(actor) {
+		return domain.ErrEmailNotVerified
+	}
 	return nil
 }

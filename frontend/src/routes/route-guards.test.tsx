@@ -110,6 +110,8 @@ function user(role: Role): AuthenticatedUser {
     id: `40000000-0000-4000-8000-00000000000${role === 'student' ? '1' : role === 'instructor' ? '2' : '3'}`,
     email: `${role}@courseforge.local`,
     displayName: role,
+    emailVerified: true,
+    twoFactorEnabled: false,
     role,
   };
 }
@@ -364,6 +366,16 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
       { id: '/learn', path: 'learn', fullPath: '/learn' },
       { id: '/learn/$', path: '$', fullPath: '/learn/$' },
       { id: '/login', path: 'login', fullPath: '/login' },
+      { id: '/register', path: 'register', fullPath: '/register' },
+      { id: '/verify-email', path: 'verify-email', fullPath: '/verify-email' },
+      { id: '/password/forgot', path: 'password/forgot', fullPath: '/password/forgot' },
+      { id: '/password/reset', path: 'password/reset', fullPath: '/password/reset' },
+      {
+        id: '/email/change/confirm',
+        path: 'email/change/confirm',
+        fullPath: '/email/change/confirm',
+      },
+      { id: '/settings/account', path: 'settings/account', fullPath: '/settings/account' },
       { id: '/orders/$orderId', path: 'orders/$orderId', fullPath: '/orders/$orderId' },
       { id: '/teach', path: 'teach', fullPath: '/teach' },
       {

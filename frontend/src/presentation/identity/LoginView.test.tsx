@@ -9,6 +9,8 @@ const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',
   email: 'student@courseforge.local',
   displayName: 'Студентка Курсу',
+  emailVerified: true,
+  twoFactorEnabled: false,
   role: 'student',
 };
 
@@ -21,6 +23,7 @@ function view(props: Partial<Parameters<typeof LoginView>[0]> = {}, locale: 'uk'
         user={null}
         isPending={false}
         errorCode={undefined}
+        notice={undefined}
         onSubmit={(input) => submitted.push(input)}
         onContinue={() => continued.push(1)}
         {...props}
@@ -36,7 +39,9 @@ test('submits what the visitor typed', async () => {
   await user.type(screen.getByLabelText('Електронна пошта'), 'Student@CourseForge.Local');
   await user.type(screen.getByLabelText('Пароль'), 'secret');
   await user.click(screen.getByRole('button', { name: 'Увійти' }));
-  expect(submitted).toEqual([{ email: 'Student@CourseForge.Local', password: 'secret' }]);
+  expect(submitted).toEqual([
+    { email: 'Student@CourseForge.Local', password: 'secret', rememberMe: false },
+  ]);
 });
 
 test('submits from the keyboard alone', async () => {
@@ -47,9 +52,21 @@ test('submits from the keyboard alone', async () => {
   await user.tab();
   await user.keyboard('secret');
   await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Запам’ятати мене' }));
+  await user.tab();
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Увійти' }));
   await user.keyboard('{Enter}');
-  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret' }]);
+  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret', rememberMe: false }]);
+});
+
+test('includes remember-me when the visitor chooses it', async () => {
+  const user = userEvent.setup();
+  const { submitted } = view();
+  await user.type(screen.getByLabelText('Електронна пошта'), 'a@b.co');
+  await user.type(screen.getByLabelText('Пароль'), 'secret');
+  await user.click(screen.getByRole('checkbox', { name: 'Запам’ятати мене' }));
+  await user.click(screen.getByRole('button', { name: 'Увійти' }));
+  expect(submitted).toEqual([{ email: 'a@b.co', password: 'secret', rememberMe: true }]);
 });
 
 test('announces every refusal in the same place with the same wording', () => {
@@ -98,4 +115,21 @@ test('never renders the password as readable text', async () => {
   const password = screen.getByLabelText('Пароль');
   await user.type(password, 'secret');
   expect(password.getAttribute('type')).toBe('password');
+});
+
+test('submits authenticator and recovery codes on the second login step', async () => {
+  const user = userEvent.setup();
+  const codes: string[] = [];
+  view({ pendingId: 'pending-login', onComplete: (code) => codes.push(code) });
+  await user.type(screen.getByLabelText('Шестизначний код'), '123456');
+  await user.click(screen.getByRole('button', { name: 'Підтвердити вхід' }));
+  await user.click(screen.getByRole('button', { name: 'Ввести резервний код' }));
+  await user.type(screen.getByLabelText('Резервний код'), 'recovery-code');
+  await user.click(screen.getByRole('button', { name: 'Підтвердити вхід' }));
+  expect(codes).toEqual(['123456', 'recovery-code']);
+});
+
+test('shows an invalid second-factor refusal', () => {
+  view({ pendingId: 'pending-login', errorCode: 'invalid_totp' });
+  expect(screen.getByRole('alert').textContent).toBe('Код автентифікатора неправильний.');
 });

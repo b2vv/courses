@@ -90,6 +90,9 @@ func published(segments []domain.Segment, documents []domain.DocumentLink, gener
 
 func request(t *testing.T, target string, actor httpserver.Actor) *http.Request {
 	t.Helper()
+	if actor.UserID != "" {
+		actor.EmailVerified = true
+	}
 	r := httptest.NewRequest(http.MethodGet, target, nil)
 	if actor.UserID != "" {
 		r = r.WithContext(httpserver.WithActor(r.Context(), actor))
