@@ -44,6 +44,18 @@ func (repository *Repository) CourseForPurchase(ctx context.Context, courseID st
 	return facts, nil
 }
 
+func (repository *Repository) CourseForEnrollment(ctx context.Context, courseID string) (ports.EnrollmentFacts, error) {
+	var facts ports.EnrollmentFacts
+	err := repository.pool.QueryRow(ctx, `SELECT status, (price_minor IS NULL) AS free, instructor_id::text FROM courses WHERE id=$1::text::uuid`, courseID).Scan(&facts.Status, &facts.Free, &facts.InstructorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.EnrollmentFacts{}, domain.ErrCourseNotEnrollable
+	}
+	if err != nil {
+		return ports.EnrollmentFacts{}, persistenceError(err)
+	}
+	return facts, nil
+}
+
 func (repository *Repository) FindByIdempotencyKey(ctx context.Context, userID, key string) (domain.Order, error) {
 	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE user_id=$1::text::uuid AND idempotency_key=$2`, userID, key))
 }
@@ -115,22 +127,46 @@ func (repository *Repository) Membership(ctx context.Context, userID, courseID s
 	return &grant, nil
 }
 
-func (repository *Repository) GrantWithAudit(ctx context.Context, command ports.GrantCommand) (domain.Grant, error) {
+func (repository *Repository) CreateMembership(ctx context.Context, grant domain.Grant, action, reason string, actorID *string) (domain.Grant, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	grant := command.Grant
-	_, err = tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at,granted_by) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,NULL,$5,$6,$7::text::uuid)`,
-		grant.ID(), grant.UserID(), grant.CourseID(), string(grant.Source()), string(grant.State()), grant.GrantedAt(), grant.GrantedBy())
+	_, err = tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at,granted_by) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5::text::uuid,$6,$7,$8::text::uuid)`,
+		grant.ID(), grant.UserID(), grant.CourseID(), string(grant.Source()), grant.OrderID(), string(grant.State()), grant.GrantedAt(), grant.GrantedBy())
 	if isUnique(err, "course_grants_one_per_user_course") {
 		return domain.Grant{}, domain.ErrCourseAlreadyOwned
 	}
 	if err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,'grant',$3,$4)`, grant.ID(), grant.GrantedBy(), command.Reason, grant.GrantedAt()); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5)`, grant.ID(), actorID, action, reason, grant.GrantedAt()); err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	return grant, nil
+}
+
+func (repository *Repository) UpdateMembership(ctx context.Context, grant domain.Grant, expected domain.GrantState, action, reason string, actorID *string) (domain.Grant, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Compare-and-set on the prior state: the (user,course) row was read in a separate
+	// transaction, so a concurrent transition may have moved it since. The state predicate
+	// turns a lost update into a visible conflict instead of a blind overwrite.
+	result, err := tx.Exec(ctx, `UPDATE course_grants SET source=$2,order_id=$3::text::uuid,state=$4,granted_by=$5::text::uuid WHERE id=$1::text::uuid AND state=$6`, grant.ID(), string(grant.Source()), grant.OrderID(), string(grant.State()), grant.GrantedBy(), string(expected))
+	if err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.Grant{}, domain.ErrMembershipConflict
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5)`, grant.ID(), actorID, action, reason, grant.GrantedAt()); err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
 	if err := tx.Commit(ctx); err != nil {

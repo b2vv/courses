@@ -93,6 +93,46 @@ func TestSelfEnrollCreatesAnActiveSelfMembership(t *testing.T) {
 	}
 }
 
+func TestGrantReinstateOnlyRestoresRevokedMembership(t *testing.T) {
+	grantedAt := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	adminID := "admin-1"
+	for _, test := range []struct {
+		name      string
+		state     GrantState
+		source    GrantSource
+		grantedBy *string
+		wantErr   error
+	}{
+		{name: "active is not reinstated", state: GrantActive, source: GrantSelf, wantErr: ErrGrantTransitionInvalid},
+		{name: "blocked is not reinstated", state: GrantBlocked, source: GrantSelf, wantErr: ErrGrantTransitionInvalid},
+		{name: "revoked restores self", state: GrantRevoked, source: GrantSelf},
+		{name: "revoked restores admin", state: GrantRevoked, source: GrantAdmin, grantedBy: &adminID},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			grant, err := NewGrant("grant-1", "user-1", "course-1", GrantSelf, nil, test.state, grantedAt, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			next, err := grant.Reinstate(test.source, test.grantedBy)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error=%v want=%v", err, test.wantErr)
+			}
+			if test.wantErr != nil {
+				return
+			}
+			if next.ID() != grant.ID() || next.UserID() != grant.UserID() || next.CourseID() != grant.CourseID() || !next.GrantedAt().Equal(grant.GrantedAt()) || next.OrderID() != nil {
+				t.Fatalf("unexpected immutable fields after reinstate: %#v", next)
+			}
+			if next.State() != GrantActive || next.Source() != test.source {
+				t.Fatalf("state=%q source=%q", next.State(), next.Source())
+			}
+			if got := next.GrantedBy(); (got == nil) != (test.grantedBy == nil) || got != nil && *got != *test.grantedBy {
+				t.Fatalf("grantedBy=%v want=%v", got, test.grantedBy)
+			}
+		})
+	}
+}
+
 func TestCanStartOrderForMembership(t *testing.T) {
 	orderID := "order-1"
 	grantedAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)

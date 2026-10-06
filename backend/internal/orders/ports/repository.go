@@ -13,8 +13,15 @@ type CourseFacts struct {
 	Title     string
 }
 
+type EnrollmentFacts struct {
+	Status       string
+	Free         bool
+	InstructorID string
+}
+
 type CourseReader interface {
 	CourseForPurchase(context.Context, string) (CourseFacts, error)
+	CourseForEnrollment(context.Context, string) (EnrollmentFacts, error)
 }
 
 type OrderRepository interface {
@@ -24,15 +31,11 @@ type OrderRepository interface {
 	MarkCheckoutOpened(context.Context, string, string) (domain.Order, error)
 }
 
-type GrantCommand struct {
-	Grant  domain.Grant
-	Reason string
-}
-
 // GrantRepository owns the transaction which writes a grant and its audit row.
 type GrantRepository interface {
 	Membership(context.Context, string, string) (*domain.Grant, error)
-	GrantWithAudit(context.Context, GrantCommand) (domain.Grant, error)
+	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
+	UpdateMembership(context.Context, domain.Grant, domain.GrantState, string, string, *string) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error
 }
 

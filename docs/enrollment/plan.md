@@ -52,6 +52,11 @@ Payment-insert (`orders/adapters/postgres/repository.go` ~135/182/252) та `Can
 `(none)` --enroll(self)/purchase--> `active` --block--> `blocked` --unblock--> `active`;
 `active|blocked` --revoke(admin)--> `revoked`; `revoked` --admin re-grant / (free) re-enroll--> `active`.
 Архів курсу стан НЕ міняє (володіння). Інваріанти + unit-таблиця переходів.
+- **Рішення (власник, 2026-10-06, під час L2b):** `Enroll` (самозапис на free) **вимагає `email_verified`**,
+  як і `StartPurchase` — обидва створюють членство, а правило accounts «неверифікований не мутує» їх охоплює.
+  Неверифікований → `email_not_verified` (перевірка перша, до course-фактів). Перевірка: unit
+  «unverified cannot enroll» у `orders/application/service_test.go` + Enroll-актори в тестах verified.
+  Закриває альтернативу «free enroll без верифікації» (членство було б inert — CanStream/G11 усе одно гейтять).
 - **Контент**: `CanConsume` у playback(playback.go+access.go)/transcript/course-learning — JOIN
   `state IN ('active','blocked')`.
 - **Комунікація**: `CanCommunicate` у discussion Publish/ReportComment/PutReview/ReportReview — `state='active'`;

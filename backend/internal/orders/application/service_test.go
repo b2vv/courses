@@ -205,13 +205,160 @@ func TestGrantCourseRequiresAdministratorAndWritesAudit(t *testing.T) {
 			if !errors.Is(err, test.want) {
 				t.Fatalf("error=%v want=%v", err, test.want)
 			}
-			if store.grantCalls != test.wantCalls {
-				t.Fatalf("grant calls=%d want=%d", store.grantCalls, test.wantCalls)
+			if store.createMembershipCalls != test.wantCalls {
+				t.Fatalf("grant calls=%d want=%d", store.createMembershipCalls, test.wantCalls)
 			}
-			if test.want == nil && (grant.Source() != domain.GrantAdmin || grant.GrantedBy() == nil || *grant.GrantedBy() != adminID || store.grantCommand.Reason != "support decision") {
-				t.Fatalf("unexpected grant or audit command: %#v %#v", grant, store.grantCommand)
+			if test.want == nil && (grant.Source() != domain.GrantAdmin || grant.GrantedBy() == nil || *grant.GrantedBy() != adminID || store.membershipReason != "support decision") {
+				t.Fatalf("unexpected grant or audit command: %#v", grant)
 			}
 		})
+	}
+}
+
+func TestGrantCourseReinstatesOnlyRevokedMembership(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		membership *domain.Grant
+		want       error
+		wantUpdate int
+	}{
+		{name: "revoked is reinstated", membership: membership(t, domain.GrantSelf, domain.GrantRevoked), wantUpdate: 1},
+		{name: "active remains owned", membership: membership(t, domain.GrantSelf, domain.GrantActive), want: domain.ErrCourseAlreadyOwned},
+		{name: "blocked remains owned", membership: membership(t, domain.GrantSelf, domain.GrantBlocked), want: domain.ErrCourseAlreadyOwned},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := newFakeStore(t)
+			store.membership = test.membership
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+			grant, err := service.GrantCourse(context.Background(), application.Actor{UserID: adminID, Administrator: true}, userID, courseID, "support decision")
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error=%v want=%v", err, test.want)
+			}
+			if test.want == nil && (grant.State() != domain.GrantActive || grant.Source() != domain.GrantAdmin || store.updateMembershipCalls != test.wantUpdate || store.membershipAction != "grant") {
+				t.Fatalf("grant=%#v update=%d action=%q", grant, store.updateMembershipCalls, store.membershipAction)
+			}
+		})
+	}
+}
+
+func TestEnrollmentWritesTransitionsAndPreservesNoOps(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		membership *domain.Grant
+		call       func(*application.Service) (domain.Grant, error)
+		wantState  domain.GrantState
+		wantAction string
+		wantCreate int
+		wantUpdate int
+		wantErr    error
+	}{
+		{name: "enroll creates self membership", call: func(s *application.Service) (domain.Grant, error) {
+			return s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+		}, wantState: domain.GrantActive, wantAction: "enroll", wantCreate: 1},
+		{name: "enroll active is no op", membership: membership(t, domain.GrantSelf, domain.GrantActive), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+		}, wantState: domain.GrantActive},
+		{name: "enroll blocked is no op", membership: membership(t, domain.GrantSelf, domain.GrantBlocked), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+		}, wantState: domain.GrantBlocked},
+		{name: "enroll reinstates revoked self membership", membership: membership(t, domain.GrantAdmin, domain.GrantRevoked), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+		}, wantState: domain.GrantActive, wantAction: "enroll", wantUpdate: 1},
+		{name: "owner blocks active", membership: membership(t, domain.GrantSelf, domain.GrantActive), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Block(context.Background(), application.Actor{UserID: adminID}, userID, courseID)
+		}, wantState: domain.GrantBlocked, wantAction: "block", wantUpdate: 1},
+		{name: "blocked block is no op", membership: membership(t, domain.GrantSelf, domain.GrantBlocked), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Block(context.Background(), application.Actor{UserID: adminID}, userID, courseID)
+		}, wantState: domain.GrantBlocked},
+		{name: "owner unblocks", membership: membership(t, domain.GrantSelf, domain.GrantBlocked), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Unblock(context.Background(), application.Actor{UserID: adminID}, userID, courseID)
+		}, wantState: domain.GrantActive, wantAction: "unblock", wantUpdate: 1},
+		{name: "admin revokes", membership: membership(t, domain.GrantSelf, domain.GrantActive), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Revoke(context.Background(), application.Actor{UserID: adminID, Administrator: true}, userID, courseID)
+		}, wantState: domain.GrantRevoked, wantAction: "revoke", wantUpdate: 1},
+		{name: "revoked revoke is no op", membership: membership(t, domain.GrantSelf, domain.GrantRevoked), call: func(s *application.Service) (domain.Grant, error) {
+			return s.Revoke(context.Background(), application.Actor{UserID: adminID, Administrator: true}, userID, courseID)
+		}, wantState: domain.GrantRevoked},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := newFakeStore(t)
+			store.membership = test.membership
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "70000000-0000-4000-8000-000000000001" }, nil)
+			grant, err := test.call(service)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error=%v want=%v", err, test.wantErr)
+			}
+			if test.wantErr == nil && grant.State() != test.wantState {
+				t.Fatalf("state=%q want=%q", grant.State(), test.wantState)
+			}
+			if store.membershipAction != test.wantAction || store.createMembershipCalls != test.wantCreate || store.updateMembershipCalls != test.wantUpdate {
+				t.Fatalf("action=%q create=%d update=%d", store.membershipAction, store.createMembershipCalls, store.updateMembershipCalls)
+			}
+		})
+	}
+}
+
+func TestEnrollmentAuthorizationAndCourseEligibility(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		enrollment ports.EnrollmentFacts
+		membership *domain.Grant
+		call       func(*application.Service) error
+		want       error
+	}{
+		{name: "unverified cannot enroll", enrollment: ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: adminID}, call: func(s *application.Service) error {
+			_, err := s.Enroll(context.Background(), application.Actor{UserID: userID}, courseID)
+			return err
+		}, want: domain.ErrEmailNotVerified},
+		{name: "draft cannot enroll", enrollment: ports.EnrollmentFacts{Status: "draft", Free: true, InstructorID: adminID}, call: func(s *application.Service) error {
+			_, err := s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+			return err
+		}, want: domain.ErrCourseNotEnrollable},
+		{name: "paid cannot enroll", enrollment: ports.EnrollmentFacts{Status: "published", InstructorID: adminID}, call: func(s *application.Service) error {
+			_, err := s.Enroll(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID)
+			return err
+		}, want: domain.ErrCourseNotEnrollable},
+		{name: "stranger cannot block", membership: membership(t, domain.GrantSelf, domain.GrantActive), call: func(s *application.Service) error {
+			_, err := s.Block(context.Background(), application.Actor{UserID: "other"}, userID, courseID)
+			return err
+		}, want: domain.ErrEnrollmentForbidden},
+		{name: "owner cannot revoke", membership: membership(t, domain.GrantSelf, domain.GrantActive), call: func(s *application.Service) error {
+			_, err := s.Revoke(context.Background(), application.Actor{UserID: adminID}, userID, courseID)
+			return err
+		}, want: domain.ErrEnrollmentForbidden},
+		{name: "block missing membership is invalid transition", call: func(s *application.Service) error {
+			_, err := s.Block(context.Background(), application.Actor{UserID: adminID}, userID, courseID)
+			return err
+		}, want: domain.ErrGrantTransitionInvalid},
+		{name: "revoke missing membership is invalid grant", call: func(s *application.Service) error {
+			_, err := s.Revoke(context.Background(), application.Actor{UserID: adminID, Administrator: true}, userID, courseID)
+			return err
+		}, want: domain.ErrGrantInvalid},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := newFakeStore(t)
+			store.enrollment = test.enrollment
+			store.membership = test.membership
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+			if err := test.call(service); !errors.Is(err, test.want) {
+				t.Fatalf("error=%v want=%v", err, test.want)
+			}
+		})
+	}
+}
+
+func TestMembershipStateAllowsSelfAdministratorAndInstructor(t *testing.T) {
+	store := newFakeStore(t)
+	store.membership = membership(t, domain.GrantSelf, domain.GrantBlocked)
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+	for _, actor := range []application.Actor{{UserID: userID}, {UserID: adminID}, {UserID: "other", Administrator: true}} {
+		state, found, err := service.MembershipState(context.Background(), actor, userID, courseID)
+		if err != nil || !found || state != domain.GrantBlocked {
+			t.Fatalf("actor=%#v state=%q found=%v error=%v", actor, state, found, err)
+		}
+	}
+	if _, _, err := service.MembershipState(context.Background(), application.Actor{UserID: "other"}, userID, courseID); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+		t.Fatalf("stranger error=%v", err)
 	}
 }
 
@@ -235,22 +382,25 @@ func newFakeStore(t *testing.T) *fakeStore {
 }
 
 type fakeStore struct {
-	course              ports.CourseFacts
-	idempotentOrder     *domain.Order
-	createReturns       *domain.Order
-	membership          *domain.Grant
-	createCalls         int
-	checkoutCalls       int
-	order               *domain.Order
-	getUserID           string
-	appliedEvent        domain.PaymentEvent
-	applyErr            error
-	grantCalls          int
-	grantCommand        ports.GrantCommand
-	grandfatherCourse   string
-	grandfatherExpected time.Time
-	grandfatherUpdated  time.Time
-	grandfatherPrice    domain.Money
+	course                ports.CourseFacts
+	enrollment            ports.EnrollmentFacts
+	idempotentOrder       *domain.Order
+	createReturns         *domain.Order
+	membership            *domain.Grant
+	createCalls           int
+	checkoutCalls         int
+	order                 *domain.Order
+	getUserID             string
+	appliedEvent          domain.PaymentEvent
+	applyErr              error
+	createMembershipCalls int
+	updateMembershipCalls int
+	membershipAction      string
+	membershipReason      string
+	grandfatherCourse     string
+	grandfatherExpected   time.Time
+	grandfatherUpdated    time.Time
+	grandfatherPrice      domain.Money
 }
 
 type fakePaymentProvider struct {
@@ -299,6 +449,13 @@ func (provider *fakePaymentProvider) OrderStatus(context.Context, string) (ports
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
 	return store.course, nil
+}
+
+func (store *fakeStore) CourseForEnrollment(context.Context, string) (ports.EnrollmentFacts, error) {
+	if store.enrollment.Status == "" {
+		return ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: adminID}, nil
+	}
+	return store.enrollment, nil
 }
 
 func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (domain.Order, error) {
@@ -356,10 +513,20 @@ func membership(t *testing.T, source domain.GrantSource, state domain.GrantState
 	return &grant
 }
 
-func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {
-	store.grantCalls++
-	store.grantCommand = command
-	return command.Grant, nil
+func (store *fakeStore) CreateMembership(_ context.Context, grant domain.Grant, action, reason string, _ *string) (domain.Grant, error) {
+	store.createMembershipCalls++
+	store.membershipAction = action
+	store.membershipReason = reason
+	store.membership = &grant
+	return grant, nil
+}
+
+func (store *fakeStore) UpdateMembership(_ context.Context, grant domain.Grant, _ domain.GrantState, action, reason string, _ *string) (domain.Grant, error) {
+	store.updateMembershipCalls++
+	store.membershipAction = action
+	store.membershipReason = reason
+	store.membership = &grant
+	return grant, nil
 }
 
 func (store *fakeStore) GrandfatherOnPriceSet(_ context.Context, courseID string, expected time.Time, price domain.Money, updated time.Time) error {
