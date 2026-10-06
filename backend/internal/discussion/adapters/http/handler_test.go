@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	discussionhttp "courses/internal/discussion/adapters/http"
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
@@ -242,18 +243,18 @@ func newFake() *fakeRepository {
 	name := "Ada"
 	root := ports.CommentRecord{
 		Comment:     domain.Comment{ID: discussionComment, LessonID: discussionLesson, AuthorID: discussionAuthor, Body: "hello", CreatedAt: now},
-		DisplayName: &name, Course: domain.Course{OwnerID: discussionOwner, Status: domain.Published},
+		DisplayName: &name, Course: domain.Course{OwnerID: discussionOwner, Status: domain.Published, Membership: access.MembershipActive},
 	}
 	moderation := ports.ModerationCommentRecord{CommentRecord: root, LessonTitle: "Lesson one"}
 	return &fakeRepository{
-		facts: ports.LessonFacts{Course: root.Course, DurationSecs: floatPointer(100)},
+		facts: ports.LessonFacts{Course: domain.Course{OwnerID: discussionOwner, Status: domain.Published, Membership: access.MembershipActive}, DurationSecs: floatPointer(100)},
 		page: ports.CommentPage{
 			Threads:  []ports.Thread{{Root: root}},
 			Comments: []ports.ModerationCommentRecord{moderation},
 		},
 		comments:     map[string]ports.CommentRecord{discussionComment: root},
 		queue:        ports.QueuePage{Items: []ports.QueueItem{{ModerationCommentRecord: moderation, OpenReports: 1}}},
-		publicCourse: "course", reviews: map[string]ports.ReviewRecord{}, reviewReports: map[string]bool{}, reviewFacts: ports.ReviewFactsRecord{Facts: domain.ReviewFacts{Status: domain.Published, HasProgress: true}, CompletedLessons: 1, TotalLessons: 2},
+		publicCourse: "course", reviews: map[string]ports.ReviewRecord{}, reviewReports: map[string]bool{}, reviewFacts: ports.ReviewFactsRecord{Facts: domain.ReviewFacts{Status: domain.Published, Membership: access.MembershipActive, HasProgress: true}, CompletedLessons: 1, TotalLessons: 2},
 	}
 }
 
@@ -318,8 +319,18 @@ func TestK10GetComments(t *testing.T) {
 	}{
 		{"200", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusOK, ""},
 		{"401 anonymous", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments", nil, http.StatusUnauthorized, "authentication_required"},
-		{"403 draft", func() *fakeRepository { fake := newFake(); fake.facts.Course.Status = domain.Draft; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_forbidden"},
-		{"Pay19 paid course", func() *fakeRepository { fake := newFake(); fake.facts.Course.Paid = true; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_purchase_required"},
+		{"403 draft", func() *fakeRepository {
+			fake := newFake()
+			fake.facts.Course.Status = domain.Draft
+			fake.facts.Course.Membership = access.MembershipNone
+			return fake
+		}, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_forbidden"},
+		{"Pay19 paid course", func() *fakeRepository {
+			fake := newFake()
+			fake.facts.Course.Paid = true
+			fake.facts.Course.Membership = access.MembershipNone
+			return fake
+		}, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusForbidden, "course_purchase_required"},
 		{"404 lesson", func() *fakeRepository { fake := newFake(); fake.factsErr = domain.ErrNotFound; return fake }, "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student"), http.StatusNotFound, "lesson_not_found"},
 		{"400 cursor", newFake, "/api/v1/learn/lessons/" + discussionLesson + "/comments?cursor=%%", actor(discussionViewer, "student"), http.StatusBadRequest, "comment_cursor_invalid"},
 	}
@@ -351,8 +362,8 @@ func TestK11PostComments(t *testing.T) {
 		{"400 position", `{"body":"bad","positionMs":100001}`, true, nil, http.StatusBadRequest, "comment_position_invalid"},
 		{"400 parent", `{"body":"bad","parentId":"70000000-0000-4000-8000-0000000000cc"}`, true, nil, http.StatusBadRequest, "comment_parent_invalid"},
 		{"409 full", `{"body":"reply","parentId":"` + discussionComment + `"}`, true, func(fake *fakeRepository) { fake.insertErr = domain.ErrThreadFull }, http.StatusConflict, "comment_thread_full"},
-		{"403 course", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Status = domain.Draft }, http.StatusForbidden, "course_forbidden"},
-		{"Pay19 paid course", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Paid = true }, http.StatusForbidden, "course_purchase_required"},
+		{"enrollment required", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Membership = access.MembershipNone }, http.StatusForbidden, "enrollment_required"},
+		{"enrollment blocked", `{"body":"new"}`, true, func(fake *fakeRepository) { fake.facts.Course.Membership = access.MembershipBlocked }, http.StatusForbidden, "enrollment_blocked"},
 		{"400 malformed JSON", `{"body":`, false, nil, http.StatusBadRequest, "invalid_request"},
 	}
 	for _, test := range cases {
@@ -590,10 +601,10 @@ func TestI03ModerationContracts(t *testing.T) {
 	t.Run("W17 report without course access is forbidden without a write", func(t *testing.T) {
 		fake := newFake()
 		record := fake.comments[discussionComment]
-		record.Course.Status = domain.Draft
+		record.Course.Membership = access.MembershipNone
 		fake.comments[discussionComment] = record
 		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
-		requireError(t, response, http.StatusForbidden, "course_forbidden")
+		requireError(t, response, http.StatusForbidden, "enrollment_required")
 		if len(fake.reports) != 0 {
 			t.Fatalf("reports=%+v want none", fake.reports)
 		}
@@ -601,10 +612,10 @@ func TestI03ModerationContracts(t *testing.T) {
 	t.Run("Pay19 report on a paid course requires purchase without a write", func(t *testing.T) {
 		fake := newFake()
 		record := fake.comments[discussionComment]
-		record.Course.Paid = true
+		record.Course.Membership = access.MembershipBlocked
 		fake.comments[discussionComment] = record
 		response := serve(t, fake, http.MethodPost, "/api/v1/learn/comments/"+discussionComment+"/reports", "", actor(discussionViewer, "student"), true)
-		requireError(t, response, http.StatusForbidden, "course_purchase_required")
+		requireError(t, response, http.StatusForbidden, "enrollment_blocked")
 		if len(fake.reports) != 0 {
 			t.Fatalf("reports=%+v want none", fake.reports)
 		}
@@ -765,7 +776,7 @@ func TestT05ReviewRoutesContract(t *testing.T) {
 		fake := newFake()
 		now := time.Now()
 		fake.reviews[discussionReview] = ports.ReviewRecord{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: now}
-		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Published, HasProgress: true}
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Published, Membership: access.MembershipActive, HasProgress: true}
 		get := serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/review", "", actor(discussionAuthor, "student"), true)
 		if get.Code != 200 {
 			t.Fatal(get.Code)
@@ -814,7 +825,7 @@ func TestT05ReviewRoutesGaps(t *testing.T) {
 		// G3: archive changes nothing for reviews — a grant holder with progress may still edit (200).
 		fake := newFake()
 		fake.reviews[discussionReview] = ports.ReviewRecord{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: valid, CreatedAt: time.Now()}
-		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true, HasProgress: true}
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true, Membership: access.MembershipActive, HasProgress: true}
 		fake.reviewFacts.Exists = true
 		response := serve(t, fake, http.MethodPut, "/api/v1/learn/courses/"+discussionOwner+"/review", `{"stars":2,"body":"`+valid+`"}`, actor(discussionAuthor, "student"), true)
 		if response.Code != http.StatusOK || fake.reviews[discussionReview].Stars != 2 {
@@ -835,7 +846,7 @@ func TestT05ReviewRoutesGaps(t *testing.T) {
 	})
 	t.Run("learning list permits an archived course grant holder", func(t *testing.T) {
 		fake := newFake()
-		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true}
+		fake.reviewFacts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true, Membership: access.MembershipActive}
 		fake.reviewCount, fake.reviewSum = 3, 14
 		fake.reviewPage = ports.ReviewPage{Items: []ports.ReviewRecord{{ID: discussionReview, CourseID: discussionOwner, AuthorID: discussionAuthor, Stars: 4, Body: strings.Repeat("a", 20), CreatedAt: time.Now()}}}
 		response := serve(t, fake, http.MethodGet, "/api/v1/learn/courses/"+discussionOwner+"/reviews", "", actor(discussionViewer, "student"), true)

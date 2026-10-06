@@ -7,6 +7,8 @@ var (
 	ErrDependencyUnavailable     = errors.New("dependency_unavailable")
 	ErrForbidden                 = errors.New("course_forbidden")
 	ErrPurchaseRequired          = errors.New("course_purchase_required")
+	ErrEnrollmentRequired        = errors.New("enrollment_required")
+	ErrEnrollmentBlocked         = errors.New("enrollment_blocked")
 	ErrInvalidRequest            = errors.New("invalid_request")
 	ErrReportOwnComment          = errors.New("report_own_comment")
 	ErrReviewOwnerForbidden      = errors.New("review_owner_forbidden")

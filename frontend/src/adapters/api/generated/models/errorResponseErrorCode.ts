@@ -32,6 +32,8 @@ export const ErrorResponseErrorCode = {
   twofactor_not_enabled: 'twofactor_not_enabled',
   course_forbidden: 'course_forbidden',
   course_purchase_required: 'course_purchase_required',
+  enrollment_required: 'enrollment_required',
+  enrollment_blocked: 'enrollment_blocked',
   course_already_owned: 'course_already_owned',
   checkout_already_opened: 'checkout_already_opened',
   grant_forbidden: 'grant_forbidden',

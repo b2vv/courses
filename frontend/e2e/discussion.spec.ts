@@ -8,6 +8,8 @@ import { contractField } from './contract';
 
 const runNamespace = `e2e-discussion-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const instructorID = '40000000-0000-4000-8000-000000000002';
+// The seeded student fixture; after the enrollment phase, commenting needs active membership.
+const studentID = '40000000-0000-4000-8000-000000000001';
 const shortVideo = path.join(
   import.meta.dirname,
   '..',
@@ -100,6 +102,13 @@ async function publishVideo(page: Page, course: CourseToken, lessonID: string, s
   });
   expect(response.status(), await response.text()).toBe(200);
   published.push(token((await response.json()) as object));
+  // Commenting requires active membership after the enrollment phase: admin-grant the student onto
+  // this course (enroll the fixture, not loosen the gate).
+  const enrolled = await page.request.post(`/api/v1/admin/courses/${course.id}/grants`, {
+    data: { userId: studentID, reason: 'e2e discussion access for the commenting student' },
+    headers: origin(new URL(page.url()).origin),
+  });
+  expect(enrolled.status(), await enrolled.text()).toBe(201);
   const draftIndex = drafts.findIndex((candidate) => candidate.id === course.id);
   if (draftIndex >= 0) drafts.splice(draftIndex, 1);
   await page.goto(`/learn/${slug}/${lessonID}`);

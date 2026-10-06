@@ -119,7 +119,7 @@ func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor 
 	if err != nil {
 		return Page{}, err
 	}
-	if !facts.Course.CanBeViewedBy(actor) {
+	if !facts.Course.CanConsumeBy(actor) {
 		if facts.Course.PurchaseRequiredBy(actor) {
 			return Page{}, domain.ErrPurchaseRequired
 		}
@@ -150,11 +150,8 @@ func (service *Service) Publish(ctx context.Context, actor Actor, request Publis
 	if err != nil {
 		return Comment{}, err
 	}
-	if !facts.Course.CanBeViewedBy(actor) {
-		if facts.Course.PurchaseRequiredBy(actor) {
-			return Comment{}, domain.ErrPurchaseRequired
-		}
-		return Comment{}, domain.ErrForbidden
+	if err := requireCommunication(facts.Course, actor); err != nil {
+		return Comment{}, err
 	}
 	var parent *domain.Comment
 	if request.ParentID != nil {
@@ -253,11 +250,8 @@ func (service *Service) ReportComment(ctx context.Context, actor Actor, commentI
 	if err != nil {
 		return err
 	}
-	if !record.Course.CanBeViewedBy(actor) {
-		if record.Course.PurchaseRequiredBy(actor) {
-			return domain.ErrPurchaseRequired
-		}
-		return domain.ErrForbidden
+	if err := requireCommunication(record.Course, actor); err != nil {
+		return err
 	}
 	if record.Comment.RemovedAt != nil {
 		return nil
@@ -319,8 +313,10 @@ func (service *Service) LearningReviews(ctx context.Context, actor Actor, course
 	if err != nil {
 		return PublicReviewPage{}, err
 	}
-	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled}
-	if !course.CanBeViewedBy(actor) {
+	// Reading the in-course review list is consumption (plan §4): a member — active or blocked —
+	// reads it like lesson comments and content; a non-member does not. (PublicReviews stays CanView.)
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if !course.CanConsumeBy(actor) {
 		return PublicReviewPage{}, domain.ErrForbidden
 	}
 	return service.listReviews(ctx, courseID, cursor)
@@ -379,6 +375,10 @@ func (service *Service) PutReview(ctx context.Context, actor Actor, courseID str
 	if err != nil {
 		return Review{}, false, err
 	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if err := requireCommunication(course, actor); err != nil {
+		return Review{}, false, err
+	}
 	if err := domain.CanReview(facts.Facts, actor); err != nil {
 		return Review{}, false, err
 	}
@@ -413,7 +413,29 @@ func (service *Service) ReportReview(ctx context.Context, actor Actor, reviewID 
 	if !actor.EmailVerified {
 		return ErrEmailNotVerified
 	}
+	review, err := service.repository.GetReview(ctx, reviewID)
+	if err != nil {
+		return err
+	}
+	facts, err := service.repository.ReviewFacts(ctx, review.CourseID, actor.UserID)
+	if err != nil {
+		return err
+	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if err := requireCommunication(course, actor); err != nil {
+		return err
+	}
 	return service.repository.InsertReviewReport(ctx, reviewID, actor.UserID, service.now())
+}
+
+func requireCommunication(course domain.Course, actor Actor) error {
+	if course.CanCommunicateBy(actor) {
+		return nil
+	}
+	if course.CommunicationBlocked() {
+		return domain.ErrEnrollmentBlocked
+	}
+	return domain.ErrEnrollmentRequired
 }
 
 func (service *Service) RemoveReview(ctx context.Context, actor Actor, reviewID, reason string) error {

@@ -29,6 +29,18 @@ func (course Course) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
 }
 
+func (course Course) CanConsumeBy(actor Actor) bool {
+	return access.CanConsume(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
+}
+
+func (course Course) CanCommunicateBy(actor Actor) bool {
+	return access.CanCommunicate(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
+}
+
+func (course Course) CommunicationBlocked() bool {
+	return course.Membership == access.MembershipBlocked
+}
+
 func (course Course) PurchaseRequiredBy(actor Actor) bool {
 	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
 }
