@@ -5,9 +5,15 @@ import entry from './dist/server/index.js';
 
 const contentSecurityPolicy = (nonce) =>
   `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`;
-// Change this one value to `Content-Security-Policy` after the full e2e run
-// confirms the report-only policy has no violations.
-const contentSecurityPolicyHeader = 'Content-Security-Policy-Report-Only';
+// Enforcing in production: the full e2e run (playback, ASR, media) reported zero
+// CSP violations under report-only, so the directive is complete. The e2e sets
+// CSP_REPORT_ONLY=true because @axe-core/playwright and addStyleTag inject their
+// own script/style without the nonce — enforcing would block the test tooling, not
+// any app resource. Real users never see those injections, so production enforces.
+const contentSecurityPolicyHeader =
+  process.env.CSP_REPORT_ONLY === 'true'
+    ? 'Content-Security-Policy-Report-Only'
+    : 'Content-Security-Policy';
 
 const assets = staticMiddleware({
   dir: new URL('./dist/client', import.meta.url).pathname,

@@ -15,6 +15,10 @@ services:
       mailpit: { condition: service_healthy }
   mailpit: {}
   frontend:
+    # Report-only CSP in e2e only: axe-core and addStyleTag inject unnonce'd script/style
+    # that enforcing would block (test tooling, not app resources). Production enforces.
+    environment:
+      CSP_REPORT_ONLY: 'true'
     build:
       args:
         PUBLIC_WAYFORPAY_PAY_HOST: localhost
