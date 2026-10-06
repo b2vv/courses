@@ -7,12 +7,26 @@ services:
       PUBLIC_BASE_URL: http://localhost:8080
       WAYFORPAY_PAY_URL: http://localhost:8090/pay
       WAYFORPAY_STATUS_URL: http://wayforpay-stub:8080/api
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      MAIL_FROM: no-reply@courseforge.local
     depends_on:
       wayforpay-stub: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
+  mailpit: {}
   frontend:
+    # Report-only CSP in e2e only: axe-core and addStyleTag inject unnonce'd script/style
+    # that enforcing would block (test tooling, not app resources). Production enforces.
+    environment:
+      CSP_REPORT_ONLY: 'true'
     build:
       args:
         PUBLIC_WAYFORPAY_PAY_HOST: localhost
+  nginx:
+    # Larger login burst for the auth-heavy accounts e2e; overrides the strict production
+    # login-req.conf at the same path (last mount wins). Production nginx.conf is untouched.
+    volumes:
+      - ./infrastructure/nginx/login-req.e2e.conf:/etc/nginx/login-req.conf:ro
   wayforpay-stub:
     restart: unless-stopped
     build:

@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"os"
@@ -103,6 +104,120 @@ func TestAdministrationRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("R18 cancellation rolls back block and session revoke", harness.testCancelledBlock)
 	t.Run("R22 login races serialize with block and delete", harness.testLoginRaces)
 	t.Run("R22 concurrent delete has one not-found loser", harness.testConcurrentDelete)
+	t.Run("A03b account writers, tokens, session preservation, and verified resolve", harness.testAccountPersistence)
+}
+
+func (h *administrationHarness) testAccountPersistence(t *testing.T) {
+	h.reset(t)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	newUser := func(id, email string) domain.User {
+		user, err := domain.NewUser(domain.User{ID: id, Email: email, DisplayName: "Account User", Role: domain.Student, CreatedAt: now, UpdatedAt: now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return user
+	}
+	user := newUser("42000000-0000-4000-8000-000000000001", "account@example.test")
+	created, err := h.repository.CreateUser(h.ctx, user, h.passwordHash)
+	if err != nil || created.ID != user.ID || created.EmailVerified {
+		t.Fatalf("create user=%+v err=%v", created, err)
+	}
+	if _, err := h.repository.CreateUser(h.ctx, newUser("42000000-0000-4000-8000-000000000002", user.Email), h.passwordHash); !errors.Is(err, domain.ErrEmailTaken) {
+		t.Fatalf("duplicate email: %v", err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, id := range []string{"42000000-0000-4000-8000-000000000003", "42000000-0000-4000-8000-000000000004"} {
+		candidate := newUser(id, "race@example.test")
+		go func() {
+			<-start
+			_, err := h.repository.CreateUser(h.ctx, candidate, h.passwordHash)
+			results <- err
+		}()
+	}
+	close(start)
+	successes, taken := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			successes++
+		} else if errors.Is(err, domain.ErrEmailTaken) {
+			taken++
+		} else {
+			t.Fatalf("racing create: %v", err)
+		}
+	}
+	if successes != 1 || taken != 1 {
+		t.Fatalf("racing create successes=%d email_taken=%d", successes, taken)
+	}
+
+	issued := h.issueSession(t, user.ID, now)
+	if err := h.repository.SetEmailVerified(h.ctx, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if resolved, err := h.repository.Resolve(h.ctx, issued.Token, now); err != nil || !resolved.EmailVerified {
+		t.Fatalf("verified resolve=%+v err=%v", resolved, err)
+	}
+
+	digest := sha256.Sum256([]byte("email-change-token"))
+	token, err := domain.NewAccountToken(domain.AccountToken{ID: "43000000-0000-4000-8000-000000000001", UserID: user.ID, Purpose: domain.EmailChangeToken, NewEmail: "new@example.test", CreatedAt: now, ExpiresAt: now.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.repository.Issue(h.ctx, token, digest[:]); err != nil {
+		t.Fatal(err)
+	}
+	if userID, newEmail, err := h.repository.Consume(h.ctx, token.Purpose, digest[:]); err != nil || userID != user.ID || newEmail != token.NewEmail {
+		t.Fatalf("consume user=%q email=%q err=%v", userID, newEmail, err)
+	}
+	if _, _, err := h.repository.Consume(h.ctx, token.Purpose, digest[:]); !errors.Is(err, domain.ErrTokenUsed) {
+		t.Fatalf("replayed consume: %v", err)
+	}
+
+	expiredDigest := sha256.Sum256([]byte("expired-token"))
+	expired, err := domain.NewAccountToken(domain.AccountToken{ID: "43000000-0000-4000-8000-000000000002", UserID: user.ID, Purpose: domain.PasswordResetToken, CreatedAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Hour)})
+	if err != nil {
+		t.Fatalf("issue expired token: %v", err)
+	}
+	if err := h.repository.Issue(h.ctx, expired, expiredDigest[:]); err != nil {
+		t.Fatalf("issue expired token: %v", err)
+	}
+	if _, _, err := h.repository.Consume(h.ctx, expired.Purpose, expiredDigest[:]); !errors.Is(err, domain.ErrTokenUsed) {
+		t.Fatalf("expired consume: %v", err)
+	}
+
+	invalidatedDigest := sha256.Sum256([]byte("invalidated-token"))
+	invalidated, err := domain.NewAccountToken(domain.AccountToken{ID: "43000000-0000-4000-8000-000000000003", UserID: user.ID, Purpose: domain.EmailVerificationToken, CreatedAt: now, ExpiresAt: now.Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("issue invalidated token: %v", err)
+	}
+	if err := h.repository.Issue(h.ctx, invalidated, invalidatedDigest[:]); err != nil {
+		t.Fatalf("issue invalidated token: %v", err)
+	}
+	if err := h.repository.InvalidateByPurpose(h.ctx, user.ID, invalidated.Purpose); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.repository.Consume(h.ctx, invalidated.Purpose, invalidatedDigest[:]); !errors.Is(err, domain.ErrTokenUsed) {
+		t.Fatalf("invalidated consume: %v", err)
+	}
+
+	current := h.issueSession(t, user.ID, now)
+	h.issueSession(t, user.ID, now)
+	raw, valid := decodeToken(current.Token)
+	if !valid {
+		t.Fatal("issued invalid session token")
+	}
+	currentDigest := sha256.Sum256(raw)
+	if err := h.repository.DeleteUserSessionsExceptCurrent(h.ctx, user.ID, currentDigest[:]); err != nil {
+		t.Fatal(err)
+	}
+	if count := h.sessionCount(t, user.ID); count != 1 {
+		t.Fatalf("remaining sessions=%d", count)
+	}
+	if _, err := h.repository.Resolve(h.ctx, current.Token, now); err != nil {
+		t.Fatalf("current session removed: %v", err)
+	}
 }
 
 func (h *administrationHarness) testBlockRestore(t *testing.T) {

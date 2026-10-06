@@ -105,7 +105,7 @@ func TestDiscussionPostgres(t *testing.T) {
 			if err != nil || facts.Facts.Entitled || !facts.Facts.HasProgress || !facts.Facts.Paid {
 				t.Fatalf("facts=%+v err=%v", facts, err)
 			}
-			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.preview}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
+			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.preview, EmailVerified: true}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
 				t.Fatalf("CanReview=%v", err)
 			}
 		})
@@ -114,7 +114,7 @@ func TestDiscussionPostgres(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.admin, Administrator: true}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
+			if err := domain.CanReview(facts.Facts, domain.Actor{UserID: fx.admin, Administrator: true, EmailVerified: true}); !errors.Is(err, domain.ErrReviewPurchaseRequired) {
 				t.Fatalf("CanReview=%v", err)
 			}
 		})
@@ -446,7 +446,7 @@ func TestDiscussionPostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			service := application.New(repository, func() time.Time { return at.Add(time.Second) })
-			if err := service.ReportComment(ctx, domain.Actor{UserID: discussionReporter}, comment.Comment.ID); err != nil {
+			if err := service.ReportComment(ctx, domain.Actor{UserID: discussionReporter, EmailVerified: true}, comment.Comment.ID); err != nil {
 				t.Fatal(err)
 			}
 			var after int
@@ -604,7 +604,7 @@ func TestDiscussionPostgres(t *testing.T) {
 			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'L','',0,$2) RETURNING id::text`, moduleID, truth.Preview).Scan(&lessonID); err != nil {
 				t.Fatal(err)
 			}
-			actor := domain.Actor{UserID: discussionStudent, Administrator: truth.Role == accesstest.Administrator}
+			actor := domain.Actor{UserID: discussionStudent, Administrator: truth.Role == accesstest.Administrator, EmailVerified: true}
 			if truth.Role == accesstest.Owner {
 				actor.UserID = discussionOwner
 			}

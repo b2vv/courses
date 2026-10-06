@@ -10,6 +10,8 @@ function signedIn(role: Role): AuthenticatedUser {
     id: `40000000-0000-4000-8000-00000000000${role === 'student' ? '1' : role === 'instructor' ? '2' : '3'}`,
     email: `${role}@courseforge.local`,
     displayName: role,
+    emailVerified: true,
+    twoFactorEnabled: false,
     role,
   };
 }
@@ -109,6 +111,8 @@ test('G29 reaches and activates sign-out from the keyboard without focusing the 
   );
 
   expect(screen.getByText('student').getAttribute('tabindex')).toBeNull();
+  await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Акаунт' }));
   await user.tab();
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Вийти' }));
   await user.keyboard('{Enter}');

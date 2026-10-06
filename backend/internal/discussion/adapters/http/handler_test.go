@@ -285,7 +285,9 @@ func serve(t *testing.T, repository ports.Repository, method, path, body string,
 }
 
 func passThrough(next http.Handler) http.Handler { return next }
-func actor(id, role string) *httpserver.Actor    { return &httpserver.Actor{UserID: id, Role: role} }
+func actor(id, role string) *httpserver.Actor {
+	return &httpserver.Actor{UserID: id, Role: role, EmailVerified: true}
+}
 
 func requireError(t *testing.T, response *httptest.ResponseRecorder, status int, code string) {
 	t.Helper()

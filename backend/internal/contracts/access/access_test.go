@@ -44,6 +44,21 @@ func TestCanView(t *testing.T) {
 	})
 }
 
+func TestCanStreamRequiresVerifiedEmailAfterViewAccess(t *testing.T) {
+	t.Parallel()
+
+	course := access.Course{OwnerID: "owner", Published: true}
+	if access.CanStream(access.Subject{UserID: "student"}, course) {
+		t.Fatal("CanStream() = true for an unverified viewer")
+	}
+	if !access.CanStream(access.Subject{UserID: "student", EmailVerified: true}, course) {
+		t.Fatal("CanStream() = false for a verified viewer with view access")
+	}
+	if access.CanStream(access.Subject{UserID: "student", EmailVerified: true}, access.Course{OwnerID: "owner"}) {
+		t.Fatal("CanStream() = true without view access")
+	}
+}
+
 func TestPurchaseRequiredImpliesCannotView(t *testing.T) {
 	t.Parallel()
 

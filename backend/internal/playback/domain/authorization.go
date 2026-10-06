@@ -5,6 +5,7 @@ import "courses/internal/contracts/access"
 type Actor struct {
 	UserID        string
 	Administrator bool
+	EmailVerified bool
 }
 
 type Ownership struct {
@@ -37,6 +38,10 @@ type LessonPlayback struct {
 
 func (course VideoCourse) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
+}
+
+func (course VideoCourse) CanStreamBy(actor Actor) bool {
+	return access.CanStream(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator, EmailVerified: actor.EmailVerified}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: course.Preview})
 }
 
 func (course VideoCourse) PurchaseRequiredBy(actor Actor) bool {

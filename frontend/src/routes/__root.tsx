@@ -6,7 +6,7 @@ import {
   Link,
   useRouterState,
 } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
@@ -20,6 +20,7 @@ import { AdminShell, type AdminNavItem } from '../presentation/admin/AdminShell'
 import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../presentation/identity/IdentityHeader';
+import { EmailVerificationBanner } from '../presentation/identity/EmailVerificationBanner';
 import { Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import '../app/styles/main.css';
@@ -128,6 +129,9 @@ function Layout() {
   }, [viewerId, transcriptHistory]);
   const { signOut, isSigningOut, signOutFailed, dismissSignOutFailure } =
     useSignOut(identityDependencies);
+  const resendVerification = useMutation({
+    mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
+  });
 
   // The admin side is its own root layout: AdminShell (sidebar + top bar + the
   // #main skip target) replaces the client header and footer. It lives here, not
@@ -188,6 +192,14 @@ function Layout() {
           </div>
         </div>
       </header>
+      {session.data?.emailVerified === false && (
+        <div className="shell">
+          <EmailVerificationBanner
+            isPending={resendVerification.isPending}
+            onResend={() => resendVerification.mutate()}
+          />
+        </div>
+      )}
       {signOutFailed && (
         <div className="shell sign-out-message">
           <Toast message={t('identity.signOutFailure')} onDismiss={dismissSignOutFailure} />

@@ -96,9 +96,9 @@ func TestPlayChecksLessonAndPolicyBeforeTakingOwnership(t *testing.T) {
 		{name: "video not ready", loadErr: domain.ErrVideoNotReady, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrVideoNotReady},
 		{name: "draft denied to student", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrForbidden},
 		{name: "paid course requires purchase", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrPurchaseRequired},
-		{name: "published allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID}, wantTake: true},
-		{name: "draft allowed to owner", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: userID, Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantTake: true},
-		{name: "archived allowed to admin", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}}, actor: domain.Actor{UserID: userID, Administrator: true}, wantTake: true},
+		{name: "published allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "draft allowed to owner", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: userID, Status: domain.Draft}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "archived allowed to admin", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}}, actor: domain.Actor{UserID: userID, Administrator: true, EmailVerified: true}, wantTake: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestHeartbeatRenewsBeforeSavingProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update); err != nil {
+	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, lessonID, update); err != nil {
 		t.Fatal(err)
 	}
 	if ownerships.renewUserID != userID || ownerships.renewPlayback != playbackID || ownerships.renewTTL != 3*time.Minute {
@@ -195,7 +195,7 @@ func TestHeartbeatRefusalsNeverWriteProgress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update)
+			err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, lessonID, update)
 			if !errors.Is(err, test.want) || progress.saved {
 				t.Fatalf("err=%v saved=%t, want %v and no save", err, progress.saved, test.want)
 			}
@@ -216,7 +216,7 @@ func TestProgressDependencyFailureIsPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update); !errors.Is(err, domain.ErrDependencyUnavailable) {
+	if err := service.Heartbeat(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, lessonID, update); !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("got %v, want dependency unavailable", err)
 	}
 }

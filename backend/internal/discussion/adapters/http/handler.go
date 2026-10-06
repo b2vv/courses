@@ -457,7 +457,7 @@ func actorFromRequest(w http.ResponseWriter, r *http.Request) (domain.Actor, boo
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return domain.Actor{}, false
 	}
-	return domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}, true
+	return domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}, true
 }
 
 func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
@@ -591,7 +591,7 @@ func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFoun
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, application.ErrEmailNotVerified), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
 		return http.StatusForbidden
 	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull), errors.Is(err, domain.ErrReviewAlreadyExists), errors.Is(err, domain.ErrReviewRemoved):
 		return http.StatusConflict

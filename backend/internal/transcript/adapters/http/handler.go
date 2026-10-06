@@ -67,7 +67,7 @@ func (handler *Handler) get(w http.ResponseWriter, r *http.Request) {
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin"}
+	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
 	transcript, err := handler.reading.Get(r.Context(), actor, r.PathValue("lessonId"), language)
 	if err != nil {
@@ -120,6 +120,8 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrPurchaseRequired):
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_purchase_required", "Purchase is required to access this course")
+	case errors.Is(err, domain.ErrEmailNotVerified):
+		httpserver.WriteError(w, r, http.StatusForbidden, "email_not_verified", "Email verification is required")
 	case errors.Is(err, domain.ErrForbidden):
 		// The same answer whether the transcript exists or not, so that the refusal does not tell
 		// the caller which of the two it was.

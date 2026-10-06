@@ -2,12 +2,13 @@ import { Link } from '../ui';
 import { ValueStrip } from './ValueStrip';
 import { useTranslation } from 'react-i18next';
 
-export function HomeView() {
+export function HomeView({ notice }: { readonly notice?: 'verify-email' | undefined }) {
   const { t } = useTranslation();
   return (
     <div className="storefront-home">
       <section className="home-hero">
         <div className="hero-copy">
+          {notice === 'verify-email' && <output>{t('home.verifyEmailNotice')}</output>}
           <p className="ui-pill ui-pill--accent">{t('home.label')}</p>
           <h1>
             {t('home.title')} <em>production</em>

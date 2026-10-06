@@ -44,6 +44,8 @@ type ErrorDetail struct {
 	RequestID string `json:"requestId"`
 }
 
+const contentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'"
+
 func WriteJSON(w http.ResponseWriter, status int, value interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -81,6 +83,7 @@ func NewHandler(options Options) http.Handler {
 		options.Register(mux)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 		start := time.Now()
 		bytes := make([]byte, 16)
 		if _, err := rand.Read(bytes); err != nil {

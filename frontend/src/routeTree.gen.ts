@@ -13,15 +13,21 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as TeachRouteImport } from './routes/teach'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
 import { Route as LearnSplatRouteImport } from './routes/learn.$'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
+import { Route as PasswordForgotRouteImport } from './routes/password.forgot'
+import { Route as PasswordResetRouteImport } from './routes/password.reset'
+import { Route as SettingsAccountRouteImport } from './routes/settings.account'
 import { Route as AdminCoursesCourseIdRouteImport } from './routes/admin.courses.$courseId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
+import { Route as EmailChangeConfirmRouteImport } from './routes/email.change.confirm'
 import { Route as TeachCoursesCourseIdRouteImport } from './routes/teach.courses.$courseId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -44,9 +50,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TeachRoute = TeachRouteImport.update({
   id: '/teach',
   path: '/teach',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -79,6 +95,21 @@ const OrdersOrderIdRoute = OrdersOrderIdRouteImport.update({
   path: '/orders/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PasswordForgotRoute = PasswordForgotRouteImport.update({
+  id: '/password/forgot',
+  path: '/password/forgot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordResetRoute = PasswordResetRouteImport.update({
+  id: '/password/reset',
+  path: '/password/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsAccountRoute = SettingsAccountRouteImport.update({
+  id: '/settings/account',
+  path: '/settings/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCoursesCourseIdRoute = AdminCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
   path: '/courses/$courseId',
@@ -88,6 +119,11 @@ const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
   getParentRoute: () => AdminRoute,
+} as any)
+const EmailChangeConfirmRoute = EmailChangeConfirmRouteImport.update({
+  id: '/email/change/confirm',
+  path: '/email/change/confirm',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const TeachCoursesCourseIdRoute = TeachCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
@@ -100,14 +136,20 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/learn': typeof LearnRouteWithChildren
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/teach': typeof TeachRouteWithChildren
+  '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/password/forgot': typeof PasswordForgotRoute
+  '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -115,14 +157,20 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/learn': typeof LearnRouteWithChildren
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/teach': typeof TeachRouteWithChildren
+  '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/password/forgot': typeof PasswordForgotRoute
+  '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin': typeof AdminIndexRoute
   '/courses': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users': typeof AdminUsersIndexRoute
 }
@@ -132,14 +180,20 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/learn': typeof LearnRouteWithChildren
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/teach': typeof TeachRouteWithChildren
+  '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
+  '/password/forgot': typeof PasswordForgotRoute
+  '/password/reset': typeof PasswordResetRoute
+  '/settings/account': typeof SettingsAccountRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
+  '/email/change/confirm': typeof EmailChangeConfirmRoute
   '/teach/courses/$courseId': typeof TeachCoursesCourseIdRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -150,14 +204,20 @@ export interface FileRouteTypes {
     | '/admin'
     | '/learn'
     | '/login'
+    | '/register'
     | '/teach'
+    | '/verify-email'
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
+    | '/password/forgot'
+    | '/password/reset'
+    | '/settings/account'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users/'
   fileRoutesByTo: FileRoutesByTo
@@ -165,14 +225,20 @@ export interface FileRouteTypes {
     | '/'
     | '/learn'
     | '/login'
+    | '/register'
     | '/teach'
+    | '/verify-email'
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
+    | '/password/forgot'
+    | '/password/reset'
+    | '/settings/account'
     | '/admin'
     | '/courses'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users'
   id:
@@ -181,14 +247,20 @@ export interface FileRouteTypes {
     | '/admin'
     | '/learn'
     | '/login'
+    | '/register'
     | '/teach'
+    | '/verify-email'
     | '/admin/$'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
+    | '/password/forgot'
+    | '/password/reset'
+    | '/settings/account'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
+    | '/email/change/confirm'
     | '/teach/courses/$courseId'
     | '/admin/users/'
   fileRoutesById: FileRoutesById
@@ -198,10 +270,16 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   LearnRoute: typeof LearnRouteWithChildren
   LoginRoute: typeof LoginRoute
+  RegisterRoute: typeof RegisterRoute
   TeachRoute: typeof TeachRouteWithChildren
+  VerifyEmailRoute: typeof VerifyEmailRoute
   CoursesSlugRoute: typeof CoursesSlugRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
+  PasswordForgotRoute: typeof PasswordForgotRoute
+  PasswordResetRoute: typeof PasswordResetRoute
+  SettingsAccountRoute: typeof SettingsAccountRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
+  EmailChangeConfirmRoute: typeof EmailChangeConfirmRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -234,11 +312,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/teach': {
       id: '/teach'
       path: '/teach'
       fullPath: '/teach'
       preLoaderRoute: typeof TeachRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -283,6 +375,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/password/forgot': {
+      id: '/password/forgot'
+      path: '/password/forgot'
+      fullPath: '/password/forgot'
+      preLoaderRoute: typeof PasswordForgotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password/reset': {
+      id: '/password/reset'
+      path: '/password/reset'
+      fullPath: '/password/reset'
+      preLoaderRoute: typeof PasswordResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/account': {
+      id: '/settings/account'
+      path: '/settings/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof SettingsAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/courses/$courseId': {
       id: '/admin/courses/$courseId'
       path: '/courses/$courseId'
@@ -296,6 +409,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users/'
       preLoaderRoute: typeof AdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/email/change/confirm': {
+      id: '/email/change/confirm'
+      path: '/email/change/confirm'
+      fullPath: '/email/change/confirm'
+      preLoaderRoute: typeof EmailChangeConfirmRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/teach/courses/$courseId': {
       id: '/teach/courses/$courseId'
@@ -348,10 +468,16 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   LearnRoute: LearnRouteWithChildren,
   LoginRoute: LoginRoute,
+  RegisterRoute: RegisterRoute,
   TeachRoute: TeachRouteWithChildren,
+  VerifyEmailRoute: VerifyEmailRoute,
   CoursesSlugRoute: CoursesSlugRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
+  PasswordForgotRoute: PasswordForgotRoute,
+  PasswordResetRoute: PasswordResetRoute,
+  SettingsAccountRoute: SettingsAccountRoute,
   CoursesIndexRoute: CoursesIndexRoute,
+  EmailChangeConfirmRoute: EmailChangeConfirmRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
