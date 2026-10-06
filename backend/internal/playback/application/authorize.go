@@ -28,14 +28,14 @@ func (authorizer *Authorizer) Authorize(ctx context.Context, actor domain.Actor,
 	if err != nil {
 		return err
 	}
-	if !course.CanBeViewedBy(actor) {
+	if !actor.EmailVerified {
+		return domain.ErrEmailNotVerified
+	}
+	if !course.CanConsumeBy(actor) {
 		if course.PurchaseRequiredBy(actor) {
 			return domain.ErrPurchaseRequired
 		}
 		return domain.ErrForbidden
-	}
-	if !course.CanStreamBy(actor) {
-		return domain.ErrEmailNotVerified
 	}
 	return nil
 }

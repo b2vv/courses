@@ -41,8 +41,8 @@ func (course VideoCourse) CanBeViewedBy(actor Actor) bool {
 	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
 }
 
-func (course VideoCourse) CanStreamBy(actor Actor) bool {
-	return access.CanStream(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator, EmailVerified: actor.EmailVerified}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
+func (course VideoCourse) CanConsumeBy(actor Actor) bool {
+	return access.CanConsume(access.Subject{UserID: actor.UserID, Administrator: actor.Administrator}, access.Course{OwnerID: course.OwnerID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: course.Preview})
 }
 
 func (course VideoCourse) PurchaseRequiredBy(actor Actor) bool {

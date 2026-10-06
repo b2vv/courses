@@ -218,6 +218,12 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 				t.Fatalf("course=%+v err=%v", got.Course, err)
 			}
 		}
+		// Leave the student as an active member: the content-read subtests below exercise a
+		// genuine member reading transcripts, which after L4a (content gate → CanConsume) is the
+		// correct fixture — the student is enrolled, not the gate loosened.
+		if _, err := pool.Exec(ctx, `UPDATE course_grants SET state='active' WHERE user_id=$1 AND course_id=$2`, strangerAccount, courseID); err != nil {
+			t.Fatal(err)
+		}
 	})
 	reading := application.NewReading(repository)
 	authoring := application.NewAuthoring(repository)
