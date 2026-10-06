@@ -37,7 +37,7 @@ type fakeStore struct {
 	courseErr   error
 	getErr      error
 	grantErr    error
-	active      []domain.Grant
+	membership  *domain.Grant
 	applyCalls  int
 	applyErr    error
 	grantCalls  int
@@ -82,8 +82,8 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 	}
 	return store.order, nil
 }
-func (store *fakeStore) ActiveGrants(context.Context, string, string) ([]domain.Grant, error) {
-	return store.active, nil
+func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
+	return store.membership, nil
 }
 func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {
 	store.grantCalls++
@@ -161,7 +161,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store.active = []domain.Grant{owned}
+	store.membership = &owned
 	conflict := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
 	conflict.Header.Set("Idempotency-Key", "purchase-owned")
 	conflict.Header.Set("X-Test-Role", "student")
@@ -171,7 +171,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		t.Fatalf("owned status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, conflict, response)
-	store.active = nil
+	store.membership = nil
 
 	status := httptest.NewRequest(http.MethodGet, "/api/v1/learn/orders/"+testOrder, nil)
 	status.Header.Set("X-Test-Role", "student")

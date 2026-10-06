@@ -57,20 +57,20 @@ func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testi
 		wantCreate int
 	}{
 		{name: "same key pending returns existing order", configure: func(store *fakeStore) { store.idempotentOrder = &existing }, wantOrder: orderID},
-		// Paid without an active grant is not a production state (paid and the grant
-		// are written in one transaction); it stands in for a grant revoked since.
-		{name: "same key paid without active grant returns paid order", configure: func(store *fakeStore) { store.idempotentOrder = &paidExisting }, wantOrder: orderID},
+		{name: "same key paid without membership returns paid order", configure: func(store *fakeStore) { store.idempotentOrder = &paidExisting }, wantOrder: orderID},
 		// The production replay of a paid key: the owner check answers first (Pay12
 		// accepts already_owned here rather than the order itself).
 		{name: "same key after a completed purchase is already owned", configure: func(store *fakeStore) {
 			store.idempotentOrder = &paidExisting
-			store.activeGrant = true
+			store.membership = membership(t, domain.GrantAdmin, domain.GrantActive)
 		}, want: domain.ErrCourseAlreadyOwned},
 		{name: "same key failed returns failed order", configure: func(store *fakeStore) { store.idempotentOrder = &failedExisting }, wantOrder: orderID},
 		// The same key raced for another course: the insert hands back the other
 		// course's order, which must never be answered as this course's purchase.
 		{name: "same key raced for another course is refused", configure: func(store *fakeStore) { store.createReturns = &otherCourseOrder }, want: domain.ErrOrderInvalid, wantCreate: 1},
-		{name: "active grant blocks purchase", configure: func(store *fakeStore) { store.activeGrant = true }, want: domain.ErrCourseAlreadyOwned},
+		{name: "active grant blocks purchase", configure: func(store *fakeStore) { store.membership = membership(t, domain.GrantAdmin, domain.GrantActive) }, want: domain.ErrCourseAlreadyOwned},
+		{name: "revoked membership blocks purchase", configure: func(store *fakeStore) { store.membership = membership(t, domain.GrantAdmin, domain.GrantRevoked) }, want: domain.ErrCourseAlreadyOwned},
+		{name: "active self membership permits purchase", configure: func(store *fakeStore) { store.membership = membership(t, domain.GrantSelf, domain.GrantActive) }, wantCreate: 1},
 		{name: "free course", configure: func(store *fakeStore) { store.course.Price = nil }, want: domain.ErrCourseNotPurchasable},
 		{name: "unpublished course", configure: func(store *fakeStore) { store.course.Published = false }, want: domain.ErrCourseNotPurchasable},
 	} {
@@ -238,7 +238,7 @@ type fakeStore struct {
 	course              ports.CourseFacts
 	idempotentOrder     *domain.Order
 	createReturns       *domain.Order
-	activeGrant         bool
+	membership          *domain.Grant
 	createCalls         int
 	checkoutCalls       int
 	order               *domain.Order
@@ -338,15 +338,22 @@ func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID st
 	return *store.order, nil
 }
 
-func (store *fakeStore) ActiveGrants(_ context.Context, userID, courseID string) ([]domain.Grant, error) {
-	if !store.activeGrant {
-		return nil, nil
+func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
+	return store.membership, nil
+}
+
+func membership(t *testing.T, source domain.GrantSource, state domain.GrantState) *domain.Grant {
+	t.Helper()
+	var order *string
+	if source == domain.GrantPurchase {
+		value := orderID
+		order = &value
 	}
-	grant, err := domain.NewGrant("grant-1", userID, courseID, domain.GrantAdmin, nil, domain.GrantActive, fixedNow, nil)
+	grant, err := domain.NewGrant("grant-1", userID, courseID, source, order, state, fixedNow, nil)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
-	return []domain.Grant{grant}, nil
+	return &grant
 }
 
 func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {

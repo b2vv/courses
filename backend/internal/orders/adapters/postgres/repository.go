@@ -97,30 +97,22 @@ RETURNING id::text,user_id::text,course_id::text,amount_minor,currency,status,id
 	return domain.Order{}, domain.ErrOrderNotFound
 }
 
-func (repository *Repository) ActiveGrants(ctx context.Context, userID, courseID string) ([]domain.Grant, error) {
-	rows, err := repository.pool.Query(ctx, `SELECT id::text,user_id::text,course_id::text,source,order_id::text,state,granted_at,granted_by::text FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND state='active'`, userID, courseID)
+func (repository *Repository) Membership(ctx context.Context, userID, courseID string) (*domain.Grant, error) {
+	var id, grantUserID, grantCourseID, source, state string
+	var orderID, grantedBy pgtype.Text
+	var grantedAt time.Time
+	err := repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,source,order_id::text,state,granted_at,granted_by::text FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid LIMIT 1`, userID, courseID).Scan(&id, &grantUserID, &grantCourseID, &source, &orderID, &state, &grantedAt, &grantedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, persistenceError(err)
 	}
-	defer rows.Close()
-	var grants []domain.Grant
-	for rows.Next() {
-		var id, grantUserID, grantCourseID, source, state string
-		var orderID, grantedBy pgtype.Text
-		var grantedAt time.Time
-		if err := rows.Scan(&id, &grantUserID, &grantCourseID, &source, &orderID, &state, &grantedAt, &grantedBy); err != nil {
-			return nil, persistenceError(err)
-		}
-		grant, err := domain.NewGrant(id, grantUserID, grantCourseID, domain.GrantSource(source), textPointer(orderID), domain.GrantState(state), grantedAt, textPointer(grantedBy))
-		if err != nil {
-			return nil, domain.ErrDependencyUnavailable
-		}
-		grants = append(grants, grant)
+	grant, err := domain.NewGrant(id, grantUserID, grantCourseID, domain.GrantSource(source), textPointer(orderID), domain.GrantState(state), grantedAt, textPointer(grantedBy))
+	if err != nil {
+		return nil, domain.ErrDependencyUnavailable
 	}
-	if err := rows.Err(); err != nil {
-		return nil, persistenceError(err)
-	}
-	return grants, nil
+	return &grant, nil
 }
 
 func (repository *Repository) GrantWithAudit(ctx context.Context, command ports.GrantCommand) (domain.Grant, error) {
@@ -247,15 +239,24 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 		return persistenceError(err)
 	}
 	grantID := newID()
-	var insertedGrantID string
+	var settledGrantID string
+	var inserted bool
 	err = tx.QueryRow(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,'purchase',$4::text::uuid,'active',$5)
-ON CONFLICT (user_id, course_id) DO NOTHING
-RETURNING id::text`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&insertedGrantID)
+ON CONFLICT (user_id, course_id) DO UPDATE
+SET source='purchase', order_id=EXCLUDED.order_id
+WHERE course_grants.source='self' AND course_grants.state='active'
+RETURNING id::text, (xmax = 0) AS inserted`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&settledGrantID, &inserted)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return persistenceError(err)
 	}
 	if err == nil {
-		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,'grant',$2::text::uuid,$3)`, insertedGrantID, eventDatabaseID, event.ReceivedAt); err != nil {
+		// xmax = 0 is the freshly inserted tuple; a non-zero xmax is the self→purchase upgrade
+		// of an existing row. This avoids assuming the generated id's text form matches id::text.
+		action := "grant"
+		if !inserted {
+			action = "upgrade"
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,$2,$3::text::uuid,$4)`, settledGrantID, action, eventDatabaseID, event.ReceivedAt); err != nil {
 			return persistenceError(err)
 		}
 	} else {

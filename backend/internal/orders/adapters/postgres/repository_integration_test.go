@@ -253,9 +253,9 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if _, err := pool.Exec(ctx, `UPDATE courses SET price_minor=70000,currency='UAH',updated_at=$2 WHERE id=$1`, pay17CourseID, now.Add(2*time.Minute)); err != nil {
 			t.Fatal(err)
 		}
-		grants, err := repository.ActiveGrants(ctx, pay17UserID, pay17CourseID)
-		if err != nil || len(grants) != 1 {
-			t.Fatalf("active grants=%d error=%v", len(grants), err)
+		var activeGrants int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND state='active'`, pay17UserID, pay17CourseID).Scan(&activeGrants); err != nil || activeGrants != 1 {
+			t.Fatalf("active grants=%d error=%v", activeGrants, err)
 		}
 		var amount int64
 		if err := pool.QueryRow(ctx, `SELECT amount_minor FROM orders WHERE id=$1`, pay17Order.ID()).Scan(&amount); err != nil {
@@ -530,6 +530,80 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 		if activeGrants != 1 || events != 1 || paymentAudits != 0 {
 			t.Fatalf("active grants=%d events=%d payment audits=%d", activeGrants, events, paymentAudits)
+		}
+	})
+
+	t.Run("En02 paid event upgrades an active self membership in place", func(t *testing.T) {
+		var userID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'self-upgrade@example.test','Self upgrade','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {
+			t.Fatal(err)
+		}
+		var beforeID string
+		if err := pool.QueryRow(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,'self','active',$3) RETURNING id::text`, userID, integrationCourseID, now).Scan(&beforeID); err != nil {
+			t.Fatal(err)
+		}
+		ids := subtestIDs("81")
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, ids, nil)
+		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "self-upgrade")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "self-upgrade-paid", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(4 * time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		var afterID, source, state, orderID, action string
+		var rows int
+		if err := pool.QueryRow(ctx, `SELECT id::text,source,state,order_id::text,(SELECT action FROM grant_audit WHERE grant_id=course_grants.id ORDER BY created_at DESC LIMIT 1),(SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, userID, integrationCourseID).Scan(&afterID, &source, &state, &orderID, &action, &rows); err != nil {
+			t.Fatal(err)
+		}
+		if afterID != beforeID || source != "purchase" || state != "active" || orderID != order.ID() || action != "upgrade" || rows != 1 {
+			t.Fatalf("id=%q source=%q state=%q order=%q action=%q rows=%d", afterID, source, state, orderID, action, rows)
+		}
+	})
+
+	t.Run("blocked revoked and purchase memberships require refund without mutation", func(t *testing.T) {
+		for _, test := range []struct {
+			name   string
+			source string
+			state  string
+			prefix string
+		}{
+			{name: "blocked", source: "admin", state: "blocked", prefix: "82"},
+			{name: "revoked", source: "admin", state: "revoked", prefix: "83"},
+			{name: "purchase active", source: "purchase", state: "active", prefix: "84"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				var userID string
+				if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),$1,'Refund case','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`, "refund-"+test.state+"-"+test.source+"@example.test").Scan(&userID); err != nil {
+					t.Fatal(err)
+				}
+				ids := subtestIDs(test.prefix)
+				svc := application.New(repository, repository, repository, func() time.Time { return now }, ids, nil)
+				order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "refund-"+test.state+"-"+test.source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var grantID string
+				if test.source == "purchase" {
+					err = pool.QueryRow(ctx, `INSERT INTO course_grants(user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,'purchase',$3::text::uuid,'active',$4) RETURNING id::text`, userID, integrationCourseID, order.ID(), now).Scan(&grantID)
+				} else {
+					err = pool.QueryRow(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5) RETURNING id::text`, userID, integrationCourseID, test.source, test.state, now).Scan(&grantID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "refund-" + test.state + "-" + test.source, OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(5 * time.Minute)}); err != nil {
+					t.Fatal(err)
+				}
+				var source, state, gotGrantID string
+				var refund bool
+				if err := pool.QueryRow(ctx, `SELECT source,state,id::text,(SELECT refund_required FROM orders WHERE id=$3::text::uuid) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, userID, integrationCourseID, order.ID()).Scan(&source, &state, &gotGrantID, &refund); err != nil {
+					t.Fatal(err)
+				}
+				if source != test.source || state != test.state || gotGrantID != grantID || !refund {
+					t.Fatalf("source=%q state=%q id=%q refund=%v", source, state, gotGrantID, refund)
+				}
+			})
 		}
 	})
 
