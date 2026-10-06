@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/discussion/domain"
 	"courses/internal/discussion/ports"
 )
@@ -30,6 +31,9 @@ type reviewFake struct {
 	dismisses                int
 	removed                  int
 	course                   domain.Course
+	lesson                   ports.LessonFacts
+	comment                  ports.CommentRecord
+	inserted                 int
 }
 
 func (f *reviewFake) PublishedReviewCourse(context.Context, string) (string, error) {
@@ -117,15 +121,19 @@ func (f *reviewFake) ListQueue(context.Context, string, string, int) (ports.Queu
 }
 func (f *reviewFake) WriteModerationLog(context.Context, ports.ModerationLogEntry) error { return nil }
 func (f *reviewFake) LessonFacts(context.Context, string, string) (ports.LessonFacts, error) {
-	return ports.LessonFacts{}, nil
+	return f.lesson, nil
 }
 func (f *reviewFake) List(context.Context, string, string, int) (ports.CommentPage, error) {
 	return ports.CommentPage{}, nil
 }
 func (f *reviewFake) Get(context.Context, string, string) (ports.CommentRecord, error) {
+	if f.comment.Comment.ID != "" {
+		return f.comment, nil
+	}
 	return ports.CommentRecord{}, domain.ErrNotFound
 }
 func (f *reviewFake) InsertRoot(context.Context, domain.Comment) (ports.CommentRecord, error) {
+	f.inserted++
 	return ports.CommentRecord{}, nil
 }
 func (f *reviewFake) InsertReply(context.Context, domain.Comment) (ports.CommentRecord, error) {
@@ -138,7 +146,7 @@ func (f *reviewFake) Remove(context.Context, string, string, time.Time) error { 
 
 func newReviewFake() *reviewFake {
 	r := ports.ReviewRecord{ID: reviewID, CourseID: reviewCourse, AuthorID: reviewAuthor, Stars: 4, Body: "this review body has enough characters", CreatedAt: time.Now()}
-	return &reviewFake{facts: ports.ReviewFactsRecord{Facts: domain.ReviewFacts{Status: domain.Published, HasProgress: true}, CompletedLessons: 1, TotalLessons: 4}, byID: map[string]ports.ReviewRecord{reviewID: r}, course: domain.Course{OwnerID: reviewOwner, Status: domain.Published}}
+	return &reviewFake{facts: ports.ReviewFactsRecord{Facts: domain.ReviewFacts{Status: domain.Published, Membership: access.MembershipActive, HasProgress: true}, CompletedLessons: 1, TotalLessons: 4}, byID: map[string]ports.ReviewRecord{reviewID: r}, course: domain.Course{OwnerID: reviewOwner, Status: domain.Published}, lesson: ports.LessonFacts{Course: domain.Course{OwnerID: reviewOwner, Status: domain.Published, Membership: access.MembershipActive}}}
 }
 func reviewService(f *reviewFake) *Service {
 	return New(f, func() time.Time { return time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC) })
@@ -150,7 +158,7 @@ func TestPutReviewEligibilityOrder(t *testing.T) {
 		facts domain.ReviewFacts
 		actor Actor
 		want  error
-	}{{"anonymous", domain.ReviewFacts{Status: domain.Published, HasProgress: true}, Actor{}, ErrEmailNotVerified}, {"owner", domain.ReviewFacts{OwnerID: reviewOwner, Status: domain.Published, HasProgress: true}, Actor{UserID: reviewOwner, EmailVerified: true}, domain.ErrReviewOwnerForbidden}, {"unavailable", domain.ReviewFacts{Status: domain.Archived, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotAvailable}, {"purchase", domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewPurchaseRequired}, {"not started", domain.ReviewFacts{Status: domain.Published}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotStarted}}
+	}{{"anonymous", domain.ReviewFacts{Status: domain.Published, HasProgress: true}, Actor{}, ErrEmailNotVerified}, {"owner", domain.ReviewFacts{OwnerID: reviewOwner, Status: domain.Published, Membership: access.MembershipActive, HasProgress: true}, Actor{UserID: reviewOwner, EmailVerified: true}, domain.ErrReviewOwnerForbidden}, {"unavailable", domain.ReviewFacts{Status: domain.Archived, Membership: access.MembershipActive, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotAvailable}, {"purchase", domain.ReviewFacts{Status: domain.Published, Paid: true, Membership: access.MembershipActive, HasProgress: true}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewPurchaseRequired}, {"not started", domain.ReviewFacts{Status: domain.Published, Membership: access.MembershipActive}, Actor{UserID: reviewAuthor, EmailVerified: true}, domain.ErrReviewNotStarted}}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newReviewFake()
@@ -161,6 +169,113 @@ func TestPutReviewEligibilityOrder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCommunicationGatePrecedence(t *testing.T) {
+	t.Run("publish keeps email first then distinguishes membership", func(t *testing.T) {
+		cases := []struct {
+			name       string
+			verified   bool
+			membership access.Membership
+			want       error
+		}{
+			{"unverified blocked", false, access.MembershipBlocked, ErrEmailNotVerified},
+			{"verified blocked", true, access.MembershipBlocked, domain.ErrEnrollmentBlocked},
+			{"verified none", true, access.MembershipNone, domain.ErrEnrollmentRequired},
+			{"verified revoked", true, access.MembershipRevoked, domain.ErrEnrollmentRequired},
+			{"verified active", true, access.MembershipActive, nil},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.lesson.Course.Membership = tc.membership
+				_, err := reviewService(f).Publish(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: tc.verified}, PublishRequest{LessonID: "lesson", Body: "comment"})
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+				if tc.want == nil && f.inserted != 1 {
+					t.Fatalf("inserted=%d", f.inserted)
+				}
+			})
+		}
+	})
+
+	t.Run("list consumes active and blocked membership", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			state access.Membership
+			want  error
+		}{{"none", access.MembershipNone, domain.ErrForbidden}, {"blocked", access.MembershipBlocked, nil}, {"active", access.MembershipActive, nil}} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.lesson.Course.Membership = tc.state
+				_, err := reviewService(f).List(context.Background(), Actor{UserID: reviewAuthor}, "lesson", "")
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("report comment uses the same membership codes", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			state access.Membership
+			want  error
+		}{{"blocked", access.MembershipBlocked, domain.ErrEnrollmentBlocked}, {"revoked", access.MembershipRevoked, domain.ErrEnrollmentRequired}, {"active", access.MembershipActive, nil}} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.comment = ports.CommentRecord{Comment: domain.Comment{ID: "comment", AuthorID: "other"}, Course: domain.Course{OwnerID: reviewOwner, Status: domain.Published, Membership: tc.state}}
+				err := reviewService(f).ReportComment(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, "comment")
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("review communication precedes review eligibility", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			actor    Actor
+			state    access.Membership
+			progress bool
+			want     error
+		}{
+			{"blocked", Actor{UserID: reviewAuthor, EmailVerified: true}, access.MembershipBlocked, true, domain.ErrEnrollmentBlocked},
+			{"none", Actor{UserID: reviewAuthor, EmailVerified: true}, access.MembershipNone, true, domain.ErrEnrollmentRequired},
+			{"active progress", Actor{UserID: reviewAuthor, EmailVerified: true}, access.MembershipActive, true, nil},
+			{"owner after active", Actor{UserID: reviewOwner, EmailVerified: true}, access.MembershipActive, true, domain.ErrReviewOwnerForbidden},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.facts.Facts.OwnerID = reviewOwner
+				f.facts.Facts.Membership = tc.state
+				f.facts.Facts.HasProgress = tc.progress
+				_, _, err := reviewService(f).PutReview(context.Background(), tc.actor, reviewCourse, 4, "this review body has enough characters")
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("report review loads the review course before applying the gate", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			state access.Membership
+			want  error
+		}{{"blocked", access.MembershipBlocked, domain.ErrEnrollmentBlocked}, {"none", access.MembershipNone, domain.ErrEnrollmentRequired}, {"active", access.MembershipActive, nil}} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.facts.Facts.Membership = tc.state
+				err := reviewService(f).ReportReview(context.Background(), Actor{UserID: "reporter", EmailVerified: true}, reviewID)
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+			})
+		}
+	})
 }
 func TestPutReviewCreatesThenUpdatesRecapturedProgress(t *testing.T) {
 	f := newReviewFake()
@@ -181,7 +296,7 @@ func TestPutReviewRefusesEditAfterAccessIsLost(t *testing.T) {
 	stored := f.byID[reviewID]
 	f.own = &stored
 	f.facts.Exists = true
-	f.facts.Facts = domain.ReviewFacts{Status: domain.Published, Paid: true, HasProgress: true}
+	f.facts.Facts = domain.ReviewFacts{Status: domain.Published, Paid: true, Membership: access.MembershipActive, HasProgress: true}
 
 	_, _, err := reviewService(f).PutReview(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, reviewCourse, 5, "another review body with enough characters")
 	if !errors.Is(err, domain.ErrReviewPurchaseRequired) {
@@ -195,7 +310,7 @@ func TestPutReviewRefusesEditAfterAccessIsLost(t *testing.T) {
 func TestLearningReviews(t *testing.T) {
 	t.Run("grant holder can list archived course reviews", func(t *testing.T) {
 		f := newReviewFake()
-		f.facts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true}
+		f.facts.Facts = domain.ReviewFacts{Status: domain.Archived, Paid: true, Entitled: true, Membership: access.MembershipActive}
 		f.summaryCount, f.summarySum = 3, 14
 		f.page = ports.ReviewPage{Items: []ports.ReviewRecord{f.byID[reviewID]}, NextCursor: "next-page"}
 
@@ -228,7 +343,7 @@ func TestReviewDeleteReportRemoveAndPublic(t *testing.T) {
 	s := reviewService(f)
 	stored := f.byID[reviewID]
 	f.own = &stored
-	f.facts.Facts = domain.ReviewFacts{Status: domain.Archived}
+	f.facts.Facts = domain.ReviewFacts{Status: domain.Archived, Membership: access.MembershipActive}
 	if err := s.DeleteReview(context.Background(), Actor{UserID: reviewAuthor}, reviewCourse); err != nil || !f.deleted {
 		t.Fatalf("delete=%v", err)
 	}

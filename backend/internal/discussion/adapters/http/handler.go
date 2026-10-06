@@ -591,7 +591,7 @@ func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFoun
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, application.ErrEmailNotVerified), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrEnrollmentRequired), errors.Is(err, domain.ErrEnrollmentBlocked), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, application.ErrEmailNotVerified), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
 		return http.StatusForbidden
 	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull), errors.Is(err, domain.ErrReviewAlreadyExists), errors.Is(err, domain.ErrReviewRemoved):
 		return http.StatusConflict
@@ -612,6 +612,10 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 		message = "Purchase is required to access this course"
 	case "course_forbidden":
 		message = "Course access is forbidden"
+	case "enrollment_required":
+		message = "Enrollment is required to communicate in this course"
+	case "enrollment_blocked":
+		message = "Communication is blocked for this enrollment"
 	case "comment_forbidden":
 		message = "Comment access is forbidden"
 	case "comment_removed":
