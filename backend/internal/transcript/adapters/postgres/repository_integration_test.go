@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/access/accesstest"
 	containers "courses/internal/testsupport/containers"
 	transcriptpostgres "courses/internal/transcript/adapters/postgres"
@@ -199,6 +200,23 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 					t.Fatalf("facts=%+v actor=%+v CanBeViewedBy()=%v, want %v", result.Course, actorID, got, test.Want)
 				}
 			})
+		}
+	})
+	t.Run("L3b reads every membership state without treating presence as entitlement", func(t *testing.T) {
+		const courseID = "10000000-0000-4000-8000-0000000000c1"
+		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, strangerAccount, courseID, ownerAccount); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+			if want != access.MembershipActive {
+				if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, strangerAccount, courseID, string(want)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := repository.GetLessonTranscript(ctx, strangerAccount, publishedLesson, "")
+			if err != nil || got.Course.Membership != want || got.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("course=%+v err=%v", got.Course, err)
+			}
 		}
 	})
 	reading := application.NewReading(repository)

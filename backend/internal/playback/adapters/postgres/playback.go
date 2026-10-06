@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"courses/internal/contracts/access"
 	"courses/internal/playback/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -11,7 +12,7 @@ import (
 
 const loadLessonPlayback = `SELECT courses.instructor_id::text, courses.status,
 courses.price_minor IS NOT NULL,
-grants.id IS NOT NULL,
+grants.state,
 lessons.is_preview,
 (
     SELECT assets.id::text
@@ -26,7 +27,7 @@ FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id=lessons.module_id
 JOIN courses ON courses.id=modules.course_id
 LEFT JOIN course_grants AS grants
-  ON grants.user_id=$1::text::uuid AND grants.course_id=courses.id AND grants.state='active'
+  ON grants.user_id=$1::text::uuid AND grants.course_id=courses.id
 LEFT JOIN lesson_progress AS progress
   ON progress.user_id=$1::text::uuid AND progress.lesson_id=lessons.id
 WHERE lessons.id=$2::text::uuid`
@@ -39,16 +40,17 @@ func NewLessonPlaybackReader(database QueryRower) *LessonPlaybackReader {
 
 func (reader *LessonPlaybackReader) LoadLessonPlayback(ctx context.Context, userID, lessonID string) (domain.LessonPlayback, error) {
 	var (
-		ownerID, status         string
-		paid, entitled, preview bool
-		videoID                 pgtype.Text
-		clientSequence          int64
+		ownerID, status string
+		paid, preview   bool
+		membership      pgtype.Text
+		videoID         pgtype.Text
+		clientSequence  int64
 	)
 	err := reader.database.QueryRow(ctx, loadLessonPlayback, userID, lessonID).Scan(
 		&ownerID,
 		&status,
 		&paid,
-		&entitled,
+		&membership,
 		&preview,
 		&videoID,
 		&clientSequence,
@@ -70,6 +72,13 @@ func (reader *LessonPlaybackReader) LoadLessonPlayback(ctx context.Context, user
 	return domain.LessonPlayback{
 		VideoID:        videoID.String,
 		ClientSequence: clientSequence,
-		Course:         domain.VideoCourse{OwnerID: ownerID, Status: courseStatus, Paid: paid, Entitled: entitled, Preview: preview},
+		Course:         domain.VideoCourse{OwnerID: ownerID, Status: courseStatus, Paid: paid, Entitled: membership.Valid && membership.String == "active", Membership: membershipState(membership), Preview: preview},
 	}, nil
+}
+
+func membershipState(state pgtype.Text) access.Membership {
+	if !state.Valid {
+		return access.MembershipNone
+	}
+	return access.Membership(state.String)
 }

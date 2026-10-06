@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/access/accesstest"
 	"courses/internal/playback/domain"
 	containers "courses/internal/testsupport/containers"
@@ -165,7 +166,50 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 			})
 		}
 	})
-	t.Run("Pay23 active grant lookup uses the partial index", func(t *testing.T) {
+	t.Run("L3b sessions and media bytes read every membership state", func(t *testing.T) {
+		var membershipViewerID, membershipCourseID, membershipModuleID, membershipLessonID, membershipVideoID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+			VALUES(gen_random_uuid(),'membership-viewer@playback.test','Membership viewer','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+			RETURNING id::text`).Scan(&membershipViewerID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
+			VALUES(gen_random_uuid(),$1,'membership-playback','Membership playback','Summary','Description','published',now()) RETURNING id::text`, ownerID).Scan(&membershipCourseID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, membershipCourseID).Scan(&membershipModuleID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
+			VALUES(gen_random_uuid(),$1,1,'ready',1,1,'membership.mp4',ARRAY['360p'],now()+interval '1 day',now(),now()) RETURNING id::text`, membershipLessonID).Scan(&membershipVideoID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, membershipViewerID, membershipCourseID, ownerID); err != nil {
+			t.Fatal(err)
+		}
+		// Own reader+counter so these LoadVideoCourse calls do not inflate the shared `metric`
+		// that the top-level body asserts.
+		membershipReader := NewVideoAccessReader(pool, &integrationCounter{})
+		for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+			if want != access.MembershipActive {
+				if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, membershipViewerID, membershipCourseID, string(want)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bytes, err := membershipReader.LoadVideoCourse(ctx, membershipViewerID, membershipVideoID)
+			if err != nil || bytes.Membership != want || bytes.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("bytes=%+v err=%v", bytes, err)
+			}
+			session, err := playbackReader.LoadLessonPlayback(ctx, membershipViewerID, membershipLessonID)
+			if err != nil || session.Course.Membership != want || session.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("session=%+v err=%v", session, err)
+			}
+		}
+	})
+	t.Run("Pay23 membership lookup uses the unique per-user-course index", func(t *testing.T) {
 		var measuredCourseID, measuredModuleID, measuredLessonID, measuredVideoID string
 		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at,price_minor,currency)
 			VALUES(gen_random_uuid(),$1,'pay23-access','Pay23','Summary','Description','published',now(),50000,'UAH') RETURNING id::text`, ownerID).Scan(&measuredCourseID); err != nil {
@@ -184,7 +228,7 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, viewerID, measuredCourseID, ownerID); err != nil {
 			t.Fatal(err)
 		}
-		// A tiny fixture legitimately favours a sequential scan. Populate enough unrelated active
+		// A tiny fixture legitimately favours a sequential scan. Populate enough unrelated
 		// grants for the planner to make the same selective index-probe choice expected in production.
 		if _, err := pool.Exec(ctx, `WITH filler_users AS (
 			INSERT INTO users(id,email,display_name,role,password_hash)

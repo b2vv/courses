@@ -52,6 +52,7 @@ type LearningCourse struct {
 	ContinueLessonID string
 	Paid             bool
 	Entitled         bool
+	Membership       access.Membership
 }
 
 func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
@@ -83,7 +84,7 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 
 	result := LearningCourse{
 		Course: course, InstructorID: input.InstructorID, Modules: modules,
-		Paid: input.Paid, Entitled: input.Entitled,
+		Paid: input.Paid, Entitled: input.Entitled, Membership: input.Membership,
 	}
 	result.ContinueLessonID = continueLessonID(modules)
 	return result, nil
@@ -93,13 +94,13 @@ func NewLearningCourse(input LearningCourse) (LearningCourse, error) {
 // preview (owner decision 2026-10-01, docs/payment/assumptions.md): titles are public on
 // the storefront already, and content stays gated per lesson. Hence preview is true here.
 func (course LearningCourse) CanBeViewedBy(actor Actor) bool {
-	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: true})
+	return access.CanView(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: true})
 }
 
 // PurchaseRequiredBy reports whether lesson needs a purchase for actor, with that
 // lesson's own preview fact.
 func (course LearningCourse) PurchaseRequiredBy(actor Actor, lesson LearningLesson) bool {
-	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Preview: lesson.IsPreview})
+	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: lesson.IsPreview})
 }
 
 // CanPurchaseBy controls whether the learning outline presents a purchase entry.

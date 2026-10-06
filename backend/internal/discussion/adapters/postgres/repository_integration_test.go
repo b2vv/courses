@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/access/accesstest"
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
@@ -83,6 +84,46 @@ func TestDiscussionPostgres(t *testing.T) {
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
 
+	t.Run("L3b lesson and comment facts read every membership state", func(t *testing.T) {
+		var membershipStudentID, membershipCourseID, membershipModuleID, membershipLessonID, membershipCommentID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+			VALUES(gen_random_uuid(),'membership-student@discussion.test','Membership student','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')
+			RETURNING id::text`).Scan(&membershipStudentID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
+			VALUES(gen_random_uuid(),'membership-discussion','Membership discussion','Summary','Description','published',$1,now()) RETURNING id::text`, discussionOwner).Scan(&membershipCourseID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, membershipCourseID).Scan(&membershipModuleID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'membership facts') RETURNING id::text`, membershipLessonID, discussionOwner).Scan(&membershipCommentID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, membershipStudentID, membershipCourseID, discussionOwner); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+			if want != access.MembershipActive {
+				if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, membershipStudentID, membershipCourseID, string(want)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			lesson, err := repository.LessonFacts(ctx, membershipStudentID, membershipLessonID)
+			if err != nil || lesson.Course.Membership != want || lesson.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("lesson=%+v err=%v", lesson, err)
+			}
+			comment, err := repository.Get(ctx, membershipStudentID, membershipCommentID)
+			if err != nil || comment.Course.Membership != want || comment.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("comment=%+v err=%v", comment, err)
+			}
+		}
+	})
+
 	t.Run("ratings repository", func(t *testing.T) {
 		ctx := context.Background()
 		fx := seedRatings(t, pool)
@@ -98,6 +139,22 @@ func TestDiscussionPostgres(t *testing.T) {
 			facts, err := repository.ReviewFacts(ctx, fx.course, fx.buyer)
 			if err != nil || !facts.Facts.Entitled || !facts.Facts.HasProgress || !facts.Facts.Paid {
 				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+		t.Run("L3b review facts read every membership state", func(t *testing.T) {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, fx.preview, fx.course, discussionOwner); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+				if want != access.MembershipActive {
+					if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, fx.preview, fx.course, string(want)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				facts, err := repository.ReviewFacts(ctx, fx.course, fx.preview)
+				if err != nil || facts.Facts.Membership != want || facts.Facts.Entitled != (want == access.MembershipActive) {
+					t.Fatalf("facts=%+v err=%v", facts, err)
+				}
 			}
 		})
 		t.Run("Rt16 preview only refused", func(t *testing.T) {
