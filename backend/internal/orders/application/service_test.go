@@ -362,6 +362,42 @@ func TestMembershipStateAllowsSelfAdministratorAndInstructor(t *testing.T) {
 	}
 }
 
+func TestRosterAllowsInstructorAndAdministratorAndClampsLimit(t *testing.T) {
+	page := ports.RosterPage{Entries: []ports.RosterEntry{{UserID: userID, DisplayName: "Student", State: domain.GrantActive, ProgressPercent: 50}}, NextCursor: "next"}
+	for _, test := range []struct {
+		name      string
+		actor     application.Actor
+		limit     int
+		wantLimit int
+		wantErr   error
+	}{
+		{name: "owner gets default limit", actor: application.Actor{UserID: adminID}, wantLimit: 20},
+		{name: "administrator gets minimum limit", actor: application.Actor{UserID: "other", Administrator: true}, limit: -1, wantLimit: 20},
+		{name: "limit one", actor: application.Actor{UserID: adminID}, limit: 1, wantLimit: 1},
+		{name: "limit is capped", actor: application.Actor{UserID: adminID}, limit: 101, wantLimit: 100},
+		{name: "stranger is forbidden", actor: application.Actor{UserID: "other"}, limit: 10, wantErr: domain.ErrEnrollmentForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := newFakeStore(t)
+			store.rosterPage = page
+			service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+			got, err := service.Roster(context.Background(), test.actor, courseID, "cursor", test.limit)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("error=%v want=%v", err, test.wantErr)
+			}
+			if test.wantErr != nil {
+				return
+			}
+			if store.rosterCourseID != courseID || store.rosterCursor != "cursor" || store.rosterLimit != test.wantLimit {
+				t.Fatalf("repository arguments course=%q cursor=%q limit=%d", store.rosterCourseID, store.rosterCursor, store.rosterLimit)
+			}
+			if got.NextCursor != page.NextCursor || len(got.Entries) != 1 || got.Entries[0].DisplayName != "Student" {
+				t.Fatalf("page=%#v", got)
+			}
+		})
+	}
+}
+
 func TestGrandfatherOnPriceSetUsesOneRepositoryOperation(t *testing.T) {
 	store := newFakeStore(t)
 	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
@@ -401,6 +437,10 @@ type fakeStore struct {
 	grandfatherExpected   time.Time
 	grandfatherUpdated    time.Time
 	grandfatherPrice      domain.Money
+	rosterPage            ports.RosterPage
+	rosterCourseID        string
+	rosterCursor          string
+	rosterLimit           int
 }
 
 type fakePaymentProvider struct {
@@ -497,6 +537,13 @@ func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID st
 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+
+func (store *fakeStore) Roster(_ context.Context, courseID, cursor string, limit int) (ports.RosterPage, error) {
+	store.rosterCourseID = courseID
+	store.rosterCursor = cursor
+	store.rosterLimit = limit
+	return store.rosterPage, nil
 }
 
 func membership(t *testing.T, source domain.GrantSource, state domain.GrantState) *domain.Grant {

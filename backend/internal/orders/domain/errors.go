@@ -24,4 +24,5 @@ const (
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrCourseModified         Error = "course_modified"
 	ErrEmailNotVerified       Error = "email_not_verified"
+	ErrInvalidCursor          Error = "roster_cursor_invalid"
 )
