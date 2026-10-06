@@ -132,7 +132,7 @@ func (repository *Repository) GrantWithAudit(ctx context.Context, command ports.
 	grant := command.Grant
 	_, err = tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at,granted_by) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,NULL,$5,$6,$7::text::uuid)`,
 		grant.ID(), grant.UserID(), grant.CourseID(), string(grant.Source()), string(grant.State()), grant.GrantedAt(), grant.GrantedBy())
-	if isUnique(err, "course_grants_one_active_per_user_course") {
+	if isUnique(err, "course_grants_one_per_user_course") {
 		return domain.Grant{}, domain.ErrCourseAlreadyOwned
 	}
 	if err != nil {
@@ -179,7 +179,7 @@ func (repository *Repository) GrandfatherOnPriceSet(ctx context.Context, courseI
   JOIN course_lessons AS lessons ON lessons.id=progress.lesson_id
   JOIN course_modules AS modules ON modules.id=lessons.module_id
   WHERE modules.course_id=$1::text::uuid
-  ON CONFLICT (user_id,course_id) WHERE state='active' DO NOTHING
+  ON CONFLICT (user_id,course_id) DO NOTHING
   RETURNING id, granted_at
 )
 INSERT INTO grant_audit(grant_id,action,reason,created_at)
@@ -249,7 +249,7 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 	grantID := newID()
 	var insertedGrantID string
 	err = tx.QueryRow(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,'purchase',$4::text::uuid,'active',$5)
-ON CONFLICT (user_id, course_id) WHERE state='active' DO NOTHING
+ON CONFLICT (user_id, course_id) DO NOTHING
 RETURNING id::text`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&insertedGrantID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return persistenceError(err)

@@ -9,6 +9,7 @@ const (
 	ErrOrderInvalid           Error = "order_invalid"
 	ErrOrderTransitionInvalid Error = "order_status_transition_invalid"
 	ErrGrantInvalid           Error = "grant_invalid"
+	ErrGrantTransitionInvalid Error = "grant_transition_invalid"
 	ErrCourseAlreadyOwned     Error = "course_already_owned"
 	ErrPaymentEventRejected   Error = "payment_event_rejected"
 	ErrPaymentEventUnmatched  Error = "payment_event_unmatched"
