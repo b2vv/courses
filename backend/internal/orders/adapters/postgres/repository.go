@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"courses/internal/orders/domain"
@@ -125,6 +127,107 @@ func (repository *Repository) Membership(ctx context.Context, userID, courseID s
 		return nil, domain.ErrDependencyUnavailable
 	}
 	return &grant, nil
+}
+
+func (repository *Repository) Roster(ctx context.Context, courseID, cursor string, limit int) (ports.RosterPage, error) {
+	stamp, userID, err := decodeRosterCursor(cursor)
+	if err != nil {
+		return ports.RosterPage{}, err
+	}
+	rows, err := repository.pool.Query(ctx, `SELECT g.user_id::text, u.display_name, g.state, g.granted_at,
+  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+FROM course_grants AS g
+LEFT JOIN users AS u ON u.id = g.user_id AND u.deleted_at IS NULL
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS completed
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
+) AS completed
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS total
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  WHERE m.course_id = g.course_id
+) AS totals
+WHERE g.course_id = $1::text::uuid AND g.state IN ('active', 'blocked')
+  AND ($2::timestamptz IS NULL OR g.granted_at < $2 OR (g.granted_at = $2 AND g.user_id > $3::text::uuid))
+ORDER BY g.granted_at DESC, g.user_id ASC
+LIMIT $4`, courseID, stamp, userID, limit+1)
+	if err != nil {
+		return ports.RosterPage{}, persistenceError(err)
+	}
+	defer rows.Close()
+	entries := make([]ports.RosterEntry, 0, limit+1)
+	for rows.Next() {
+		entry, scanErr := scanRosterEntry(rows)
+		if scanErr != nil {
+			return ports.RosterPage{}, scanErr
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return ports.RosterPage{}, persistenceError(err)
+	}
+	page := ports.RosterPage{Entries: entries}
+	if len(entries) > limit {
+		last := entries[limit-1]
+		page.NextCursor = encodeRosterCursor(last.EnrolledAt, last.UserID)
+		page.Entries = entries[:limit]
+	}
+	return page, nil
+}
+
+type rosterRow interface {
+	Scan(...any) error
+}
+
+func scanRosterEntry(row rosterRow) (ports.RosterEntry, error) {
+	var entry ports.RosterEntry
+	var state string
+	// LEFT JOIN with deleted_at IS NULL: a since-deleted but still-enrolled member keeps the
+	// roster row but surfaces a NULL name, which maps to "" so the UI can anonymize it the way
+	// the review list does, rather than leaking the deleted account's display name.
+	var displayName pgtype.Text
+	if err := row.Scan(&entry.UserID, &displayName, &state, &entry.EnrolledAt, &entry.ProgressPercent); err != nil {
+		return ports.RosterEntry{}, persistenceError(err)
+	}
+	entry.DisplayName = displayName.String
+	switch domain.GrantState(state) {
+	case domain.GrantActive, domain.GrantBlocked:
+		entry.State = domain.GrantState(state)
+		return entry, nil
+	default:
+		return ports.RosterEntry{}, domain.ErrDependencyUnavailable
+	}
+}
+
+func encodeRosterCursor(stamp time.Time, userID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(stamp.UTC().Format(time.RFC3339Nano) + "|" + userID))
+}
+
+func decodeRosterCursor(value string) (*time.Time, *string, error) {
+	if value == "" {
+		return nil, nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	parts := strings.Split(string(decoded), "|")
+	if len(parts) != 2 || parts[1] == "" {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	stamp, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	var id pgtype.UUID
+	if err := id.Scan(parts[1]); err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	return &stamp, &parts[1], nil
 }
 
 func (repository *Repository) CreateMembership(ctx context.Context, grant domain.Grant, action, reason string, actorID *string) (domain.Grant, error) {

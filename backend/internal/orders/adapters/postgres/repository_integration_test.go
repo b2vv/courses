@@ -727,6 +727,97 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
+	t.Run("En08 roster returns current members and their progress with keyset pagination", func(t *testing.T) {
+		const (
+			rosterCourse  = "50000000-0000-4000-8000-000000000101"
+			zeroLessons   = "50000000-0000-4000-8000-000000000102"
+			emptyCourse   = "50000000-0000-4000-8000-000000000103"
+			moduleID      = "51000000-0000-4000-8000-000000000101"
+			lessonOneID   = "52000000-0000-4000-8000-000000000101"
+			lessonTwoID   = "52000000-0000-4000-8000-000000000102"
+			lessonThreeID = "52000000-0000-4000-8000-000000000103"
+			fullUser      = "40000000-0000-4000-8000-000000000101"
+			blockedUser   = "40000000-0000-4000-8000-000000000102"
+			noProgress    = "40000000-0000-4000-8000-000000000103"
+			revokedUser   = "40000000-0000-4000-8000-000000000104"
+		)
+		if _, err := pool.Exec(ctx, `WITH inserted_users AS (
+INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'roster-full@example.test','Full progress','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+($2,'roster-blocked@example.test','Blocked progress','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+($3,'roster-none@example.test','No progress','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+($4,'roster-revoked@example.test','Revoked','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')
+), inserted_courses AS (
+INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($5,'roster','Roster','Summary','Description','published',$6,$7,$7,$7),
+($8,'roster-zero-lessons','Roster zero lessons','Summary','Description','published',$6,$7,$7,$7),
+($12,'roster-empty','Roster empty','Summary','Description','published',$6,$7,$7,$7)
+), inserted_modules AS (
+INSERT INTO course_modules(id,course_id,title,position) VALUES($9,$5,'Roster module',0)
+), inserted_lessons AS (
+INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($10,$9,'One','',0),($11,$9,'Two','',1),($13,$9,'Three','',2)
+), inserted_grants AS (
+INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
+($1,$5,'self','active',$7 + interval '3 minutes'),
+($2,$5,'self','blocked',$7 + interval '2 minutes'),
+($3,$5,'self','active',$7 + interval '1 minute'),
+($4,$5,'self','revoked',$7 + interval '4 minutes'),
+($1,$8,'self','active',$7)
+)
+INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at,completed_at) VALUES
+($1,$10,1,1,$7,$7),($1,$11,1,1,$7,$7),($1,$13,1,1,$7,$7),($2,$10,1,1,$7,$7),($2,$11,1,1,$7,$7)`, fullUser, blockedUser, noProgress, revokedUser, rosterCourse, integrationAdminID, now, zeroLessons, moduleID, lessonOneID, lessonTwoID, emptyCourse, lessonThreeID); err != nil {
+			t.Fatal(err)
+		}
+		owner := application.Actor{UserID: integrationAdminID}
+		first, err := service.Roster(ctx, owner, rosterCourse, "", 1)
+		if err != nil || len(first.Entries) != 1 || first.Entries[0].UserID != fullUser || first.Entries[0].DisplayName != "Full progress" || first.Entries[0].State != domain.GrantActive || first.Entries[0].ProgressPercent != 100 || !first.Entries[0].EnrolledAt.Equal(now.Add(3*time.Minute)) || first.NextCursor == "" {
+			t.Fatalf("first roster page=%#v error=%v", first, err)
+		}
+		second, err := service.Roster(ctx, owner, rosterCourse, first.NextCursor, 1)
+		if err != nil || len(second.Entries) != 1 || second.Entries[0].UserID != blockedUser || second.Entries[0].State != domain.GrantBlocked || second.Entries[0].ProgressPercent != 67 || second.NextCursor == "" {
+			t.Fatalf("second roster page=%#v error=%v", second, err)
+		}
+		last, err := service.Roster(ctx, application.Actor{UserID: "admin", Administrator: true}, rosterCourse, second.NextCursor, 10)
+		if err != nil || len(last.Entries) != 1 || last.Entries[0].UserID != noProgress || last.Entries[0].ProgressPercent != 0 || last.NextCursor != "" {
+			t.Fatalf("last roster page=%#v error=%v", last, err)
+		}
+		if _, err := service.Roster(ctx, owner, rosterCourse, "not-a-cursor", 1); !errors.Is(err, domain.ErrInvalidCursor) {
+			t.Fatalf("invalid cursor error=%v", err)
+		}
+		if _, err := service.Roster(ctx, application.Actor{UserID: noProgress}, rosterCourse, "", 1); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+			t.Fatalf("stranger roster error=%v", err)
+		}
+		zero, err := service.Roster(ctx, owner, zeroLessons, "", 1)
+		if err != nil || len(zero.Entries) != 1 || zero.Entries[0].ProgressPercent != 0 {
+			t.Fatalf("zero-lesson roster page=%#v error=%v", zero, err)
+		}
+		empty, err := service.Roster(ctx, owner, emptyCourse, "", 1)
+		if err != nil || len(empty.Entries) != 0 || empty.NextCursor != "" {
+			t.Fatalf("empty roster page=%#v error=%v", empty, err)
+		}
+		// A since-deleted but still-enrolled member stays on the roster with an anonymized (empty)
+		// name, mirroring how the review list drops a deleted author's display_name.
+		if _, err := pool.Exec(ctx, `UPDATE users SET disabled_at=updated_at, deleted_at=updated_at WHERE id=$1::text::uuid`, noProgress); err != nil {
+			t.Fatal(err)
+		}
+		anonymized, err := service.Roster(ctx, owner, rosterCourse, "", 10)
+		if err != nil {
+			t.Fatalf("roster after soft-delete error=%v", err)
+		}
+		var sawDeleted bool
+		for _, e := range anonymized.Entries {
+			if e.UserID == noProgress {
+				sawDeleted = true
+				if e.DisplayName != "" {
+					t.Fatalf("deleted member leaked display_name=%q", e.DisplayName)
+				}
+			}
+		}
+		if !sawDeleted {
+			t.Fatal("deleted-but-enrolled member dropped from roster; expected anonymized row")
+		}
+	})
+
 	var freeUpdated time.Time
 	if err := pool.QueryRow(ctx, `SELECT updated_at FROM courses WHERE id=$1`, integrationFreeID).Scan(&freeUpdated); err != nil {
 		t.Fatal(err)

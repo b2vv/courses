@@ -88,6 +88,9 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
 }
+func (*fakeStore) Roster(context.Context, string, string, int) (ports.RosterPage, error) {
+	return ports.RosterPage{}, nil
+}
 func (store *fakeStore) CreateMembership(_ context.Context, grant domain.Grant, _ string, _ string, _ *string) (domain.Grant, error) {
 	store.grantCalls++
 	if store.grantErr != nil {

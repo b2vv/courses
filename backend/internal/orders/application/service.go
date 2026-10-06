@@ -237,6 +237,22 @@ func (service *Service) MembershipState(ctx context.Context, actor Actor, userID
 	return membership.State(), true, nil
 }
 
+func (service *Service) Roster(ctx context.Context, actor Actor, courseID, cursor string, limit int) (ports.RosterPage, error) {
+	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+	if err != nil {
+		return ports.RosterPage{}, err
+	}
+	if !actor.Administrator && actor.UserID != facts.InstructorID {
+		return ports.RosterPage{}, domain.ErrEnrollmentForbidden
+	}
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	return service.grants.Roster(ctx, courseID, cursor, limit)
+}
+
 func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
 	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
 	if err != nil {
