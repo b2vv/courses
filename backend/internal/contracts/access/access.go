@@ -34,11 +34,6 @@ func CanView(subject Subject, course Course) bool {
 	return accessExempt(subject, course) || course.Published && (!course.Paid || course.Preview)
 }
 
-// CanStream reports whether subject may consume lesson content.
-func CanStream(subject Subject, course Course) bool {
-	return CanView(subject, course) && subject.EmailVerified
-}
-
 // CanConsume reports whether subject may consume lesson content. A preview lesson is open only
 // while the course is published (mirroring CanView); membership (active or blocked) grants content
 // regardless of published state, which is the archived-member case and matches the old

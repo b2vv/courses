@@ -111,6 +111,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			{"40000000-0000-4000-8000-0000000000d1", "block-me@courseforge.local", "Тест блокування", "courseforge-student-demo", domain.Student},
 			{"40000000-0000-4000-8000-0000000000d2", "delete-me@courseforge.local", "Тест видалення", "courseforge-student-demo", domain.Student},
 			{"40000000-0000-4000-8000-0000000000d3", "reset-me@courseforge.local", "Тест скидання пароля", "courseforge-student-demo", domain.Student},
+			{"40000000-0000-4000-8000-0000000000d4", "outsider@courseforge.local", "Сторонній Глядач", "courseforge-student-demo", domain.Student},
 		}
 		defer func() {
 			if _, err := pool.Exec(context.Background(), `DELETE FROM users`); err != nil {

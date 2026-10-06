@@ -194,10 +194,20 @@ test.afterAll(async ({ browser, baseURL }) => {
       const status = contractField<AdminCourseTree>(tree, 'status');
       const updatedAt = contractField<AdminCourseTree>(tree, 'updatedAt');
       if (status === 'archived' || typeof updatedAt !== 'string') continue;
-      const response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+      // Archiving is cleanup, not an assertion under test: tolerate a transient nginx api-zone 429
+      // (the zone refills within a second). A hard failure here would leave the course published
+      // and break recovery.spec's seeded-course count — a cleanup flake masquerading as a defect.
+      let response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
         data: { expectedUpdatedAt: updatedAt, status: 'archived' },
         headers: origin(baseURL),
       });
+      for (let attempt = 0; attempt < 5 && response.status() === 429; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+          data: { expectedUpdatedAt: updatedAt, status: 'archived' },
+          headers: origin(baseURL),
+        });
+      }
       expect(response.status(), await response.text()).toBe(200);
     }
   } finally {
