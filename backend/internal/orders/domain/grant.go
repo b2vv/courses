@@ -96,13 +96,11 @@ func (grant Grant) GrantedAt() time.Time { return grant.grantedAt }
 
 func (grant Grant) GrantedBy() *string { return copyString(grant.grantedBy) }
 
-func CanStartOrder(userID, courseID string, grants []Grant) error {
-	for _, grant := range grants {
-		if grant.userID == userID && grant.courseID == courseID && grant.state == GrantActive {
-			return ErrCourseAlreadyOwned
-		}
+func CanStartOrder(membership *Grant) error {
+	if membership == nil || membership.state == GrantActive && membership.source == GrantSelf {
+		return nil
 	}
-	return nil
+	return ErrCourseAlreadyOwned
 }
 
 func copyString(value *string) *string {

@@ -93,46 +93,40 @@ func TestSelfEnrollCreatesAnActiveSelfMembership(t *testing.T) {
 	}
 }
 
-func TestActiveGrantOfEverySourceBlocksAnotherOrder(t *testing.T) {
+func TestCanStartOrderForMembership(t *testing.T) {
 	orderID := "order-1"
 	grantedAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
 	for _, test := range []struct {
-		name    string
-		source  GrantSource
-		orderID *string
+		name      string
+		source    GrantSource
+		state     GrantState
+		orderID   *string
+		wantError error
 	}{
-		{name: "purchase", source: GrantPurchase, orderID: &orderID},
-		{name: "admin", source: GrantAdmin},
-		{name: "grandfather", source: GrantGrandfather},
-		{name: "self", source: GrantSelf},
+		{name: "active self upgrades", source: GrantSelf, state: GrantActive},
+		{name: "active purchase owns", source: GrantPurchase, state: GrantActive, orderID: &orderID, wantError: ErrCourseAlreadyOwned},
+		{name: "active admin owns", source: GrantAdmin, state: GrantActive, wantError: ErrCourseAlreadyOwned},
+		{name: "active grandfather owns", source: GrantGrandfather, state: GrantActive, wantError: ErrCourseAlreadyOwned},
+		{name: "blocked self owns", source: GrantSelf, state: GrantBlocked, wantError: ErrCourseAlreadyOwned},
+		{name: "blocked purchase owns", source: GrantPurchase, state: GrantBlocked, orderID: &orderID, wantError: ErrCourseAlreadyOwned},
+		{name: "blocked admin owns", source: GrantAdmin, state: GrantBlocked, wantError: ErrCourseAlreadyOwned},
+		{name: "blocked grandfather owns", source: GrantGrandfather, state: GrantBlocked, wantError: ErrCourseAlreadyOwned},
+		{name: "revoked self owns", source: GrantSelf, state: GrantRevoked, wantError: ErrCourseAlreadyOwned},
+		{name: "revoked purchase owns", source: GrantPurchase, state: GrantRevoked, orderID: &orderID, wantError: ErrCourseAlreadyOwned},
+		{name: "revoked admin owns", source: GrantAdmin, state: GrantRevoked, wantError: ErrCourseAlreadyOwned},
+		{name: "revoked grandfather owns", source: GrantGrandfather, state: GrantRevoked, wantError: ErrCourseAlreadyOwned},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			grant, err := NewGrant("grant-1", "user-1", "course-1", test.source, test.orderID, GrantActive, grantedAt, nil)
+			grant, err := NewGrant("grant-1", "user-1", "course-1", test.source, test.orderID, test.state, grantedAt, nil)
 			if err != nil {
 				t.Fatalf("NewGrant: %v", err)
 			}
-			if err := CanStartOrder("user-1", "course-1", []Grant{grant}); !errors.Is(err, ErrCourseAlreadyOwned) {
-				t.Fatalf("error=%v want=%v", err, ErrCourseAlreadyOwned)
+			if err := CanStartOrder(&grant); !errors.Is(err, test.wantError) {
+				t.Fatalf("error=%v want=%v", err, test.wantError)
 			}
 		})
 	}
-}
-
-func TestRevokedOrOtherCourseGrantDoesNotBlockOrder(t *testing.T) {
-	grantedAt := time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC)
-	revoked, err := NewGrant("grant-1", "user-1", "course-1", GrantAdmin, nil, GrantRevoked, grantedAt, nil)
-	if err != nil {
-		t.Fatalf("NewGrant revoked: %v", err)
-	}
-	otherCourse, err := NewGrant("grant-2", "user-1", "course-2", GrantAdmin, nil, GrantActive, grantedAt, nil)
-	if err != nil {
-		t.Fatalf("NewGrant other course: %v", err)
-	}
-	otherUser, err := NewGrant("grant-3", "user-2", "course-1", GrantAdmin, nil, GrantActive, grantedAt, nil)
-	if err != nil {
-		t.Fatalf("NewGrant other user: %v", err)
-	}
-	if err := CanStartOrder("user-1", "course-1", []Grant{revoked, otherCourse, otherUser}); err != nil {
-		t.Fatalf("CanStartOrder: %v", err)
+	if err := CanStartOrder(nil); err != nil {
+		t.Fatalf("nil membership error=%v", err)
 	}
 }

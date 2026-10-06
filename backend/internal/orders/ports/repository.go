@@ -31,7 +31,7 @@ type GrantCommand struct {
 
 // GrantRepository owns the transaction which writes a grant and its audit row.
 type GrantRepository interface {
-	ActiveGrants(context.Context, string, string) ([]domain.Grant, error)
+	Membership(context.Context, string, string) (*domain.Grant, error)
 	GrantWithAudit(context.Context, GrantCommand) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error
 }

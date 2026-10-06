@@ -52,11 +52,11 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 	if !facts.Published || facts.Price == nil {
 		return domain.Order{}, domain.ErrCourseNotPurchasable
 	}
-	grants, err := service.grants.ActiveGrants(ctx, actor.UserID, courseID)
+	membership, err := service.grants.Membership(ctx, actor.UserID, courseID)
 	if err != nil {
 		return domain.Order{}, err
 	}
-	if err := domain.CanStartOrder(actor.UserID, courseID, grants); err != nil {
+	if err := domain.CanStartOrder(membership); err != nil {
 		return domain.Order{}, err
 	}
 	if existing, err := service.orders.FindByIdempotencyKey(ctx, actor.UserID, idempotencyKey); err == nil {
