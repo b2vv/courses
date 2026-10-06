@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -604,6 +605,125 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 					t.Fatalf("source=%q state=%q id=%q refund=%v", source, state, gotGrantID, refund)
 				}
 			})
+		}
+	})
+
+	t.Run("L2b enrollment membership writes", func(t *testing.T) {
+		const enrolledUser = "40000000-0000-4000-8000-000000000090"
+		const otherUser = "40000000-0000-4000-8000-000000000091"
+		const draftCourse = "50000000-0000-4000-8000-000000000090"
+		const archivedCourse = "50000000-0000-4000-8000-000000000091"
+		const otherFreeCourse = "50000000-0000-4000-8000-000000000092"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'enrollment@example.test','Enrollment','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+($2,'enrollment-other@example.test','Enrollment other','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, enrolledUser, otherUser); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($1,'enrollment-draft','Draft','Summary','Description','draft',$2,NULL,$3,$3),
+($4,'enrollment-archived','Archived','Summary','Description','archived',$2,$3,$3,$3),
+($5,'enrollment-other-free','Other free','Summary','Description','published',$6,$3,$3,$3)`, draftCourse, integrationAdminID, now, archivedCourse, otherFreeCourse, otherUser); err != nil {
+			t.Fatal(err)
+		}
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("90"), nil)
+		student := application.Actor{UserID: enrolledUser, EmailVerified: true}
+		admin := application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}
+		owner := application.Actor{UserID: integrationAdminID, EmailVerified: true}
+		if enrolled, err := svc.Enroll(ctx, application.Actor{UserID: otherUser, EmailVerified: true}, integrationFreeID); err != nil || enrolled.Source() != domain.GrantSelf {
+			t.Fatalf("En14 instructor enrolls in another free course: grant=%#v error=%v", enrolled, err)
+		}
+		if enrolled, err := svc.Enroll(ctx, admin, otherFreeCourse); err != nil || enrolled.Source() != domain.GrantSelf {
+			t.Fatalf("En14 admin enrolls in another free course: grant=%#v error=%v", enrolled, err)
+		}
+
+		grant, err := svc.Enroll(ctx, student, integrationFreeID)
+		if err != nil || grant.State() != domain.GrantActive || grant.Source() != domain.GrantSelf {
+			t.Fatalf("En01 enroll grant=%#v error=%v", grant, err)
+		}
+		if _, err := svc.Enroll(ctx, student, integrationFreeID); err != nil {
+			t.Fatalf("En15 repeat enroll: %v", err)
+		}
+		var rows int
+		var action string
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid),(SELECT action FROM grant_audit WHERE grant_id=$3::text::uuid ORDER BY created_at DESC LIMIT 1)`, enrolledUser, integrationFreeID, grant.ID()).Scan(&rows, &action); err != nil || rows != 1 || action != "enroll" {
+			t.Fatalf("En01/En15 rows=%d action=%q error=%v", rows, action, err)
+		}
+		if _, err := svc.Block(ctx, owner, enrolledUser, integrationFreeID); err != nil {
+			t.Fatalf("owner block: %v", err)
+		}
+		if _, err := svc.Block(ctx, application.Actor{UserID: otherUser}, enrolledUser, integrationFreeID); err != domain.ErrEnrollmentForbidden {
+			t.Fatalf("stranger block error=%v", err)
+		}
+		if unblocked, err := svc.Unblock(ctx, admin, enrolledUser, integrationFreeID); err != nil || unblocked.State() != domain.GrantActive {
+			t.Fatalf("admin unblock grant=%#v error=%v", unblocked, err)
+		}
+		if revoked, err := svc.Revoke(ctx, admin, enrolledUser, integrationFreeID); err != nil || revoked.State() != domain.GrantRevoked {
+			t.Fatalf("admin revoke grant=%#v error=%v", revoked, err)
+		}
+		if _, err := svc.Revoke(ctx, admin, enrolledUser, integrationFreeID); err != nil {
+			t.Fatalf("re-revoke should be no-op: %v", err)
+		}
+		if restored, err := svc.Enroll(ctx, student, integrationFreeID); err != nil || restored.State() != domain.GrantActive || restored.Source() != domain.GrantSelf {
+			t.Fatalf("free re-enroll grant=%#v error=%v", restored, err)
+		}
+		if _, err := svc.Enroll(ctx, student, integrationCourseID); err != domain.ErrCourseNotEnrollable {
+			t.Fatalf("paid enroll error=%v", err)
+		}
+		for _, blockedCourse := range []string{draftCourse, archivedCourse} {
+			if _, err := svc.Enroll(ctx, student, blockedCourse); err != domain.ErrCourseNotEnrollable {
+				t.Fatalf("course %s enroll error=%v", blockedCourse, err)
+			}
+		}
+		if _, err := svc.GrantCourse(ctx, admin, enrolledUser, integrationFreeID, "manual restore"); err != domain.ErrCourseAlreadyOwned {
+			t.Fatalf("active admin grant error=%v", err)
+		}
+		if _, err := svc.Revoke(ctx, admin, enrolledUser, integrationFreeID); err != nil {
+			t.Fatal(err)
+		}
+		if restored, err := svc.GrantCourse(ctx, admin, enrolledUser, integrationFreeID, "manual restore"); err != nil || restored.State() != domain.GrantActive || restored.Source() != domain.GrantAdmin {
+			t.Fatalf("admin re-grant grant=%#v error=%v", restored, err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, enrolledUser, integrationFreeID).Scan(&rows); err != nil || rows != 1 {
+			t.Fatalf("single membership rows=%d error=%v", rows, err)
+		}
+	})
+
+	t.Run("L2b compare-and-set rejects a stale concurrent transition", func(t *testing.T) {
+		const casUser = "40000000-0000-4000-8000-000000000095"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'cas@example.test','CAS','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, casUser); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,state,granted_at) VALUES(gen_random_uuid(),$1::text::uuid,$2::text::uuid,'self','active',$3)`, casUser, integrationFreeID, now); err != nil {
+			t.Fatal(err)
+		}
+		// Both transitions read the same active snapshot (the lost-update window): one commits,
+		// the other must be rejected by the state predicate rather than blindly overwrite.
+		snapshot, err := repository.Membership(ctx, casUser, integrationFreeID)
+		if err != nil || snapshot == nil || snapshot.State() != domain.GrantActive {
+			t.Fatalf("snapshot=%#v error=%v", snapshot, err)
+		}
+		admin := integrationAdminID
+		blocked, err := snapshot.Block()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.UpdateMembership(ctx, blocked, domain.GrantActive, "block", "", &admin); err != nil {
+			t.Fatalf("winning block: %v", err)
+		}
+		revoked, err := snapshot.Revoke()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repository.UpdateMembership(ctx, revoked, domain.GrantActive, "revoke", "", &admin); !errors.Is(err, domain.ErrMembershipConflict) {
+			t.Fatalf("stale revoke error=%v want=%v", err, domain.ErrMembershipConflict)
+		}
+		var state string
+		var audits int
+		if err := pool.QueryRow(ctx, `SELECT state,(SELECT count(*) FROM grant_audit WHERE grant_id=course_grants.id) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, casUser, integrationFreeID).Scan(&state, &audits); err != nil {
+			t.Fatal(err)
+		}
+		if state != "blocked" || audits != 1 {
+			t.Fatalf("after stale write state=%q audits=%d (want blocked/1: no lost update, no spurious revoke audit)", state, audits)
 		}
 	})
 

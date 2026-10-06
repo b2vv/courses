@@ -76,6 +76,13 @@ func (grant Grant) Revoke() (Grant, error) {
 	return grant, nil
 }
 
+func (grant Grant) Reinstate(source GrantSource, grantedBy *string) (Grant, error) {
+	if grant.state != GrantRevoked {
+		return Grant{}, ErrGrantTransitionInvalid
+	}
+	return NewGrant(grant.id, grant.userID, grant.courseID, source, nil, GrantActive, grant.grantedAt, grantedBy)
+}
+
 func SelfEnroll(id, userID, courseID string, grantedAt time.Time) (Grant, error) {
 	return NewGrant(id, userID, courseID, GrantSelf, nil, GrantActive, grantedAt, nil)
 }

@@ -51,6 +51,9 @@ func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.Course
 	money, _ := domain.NewMoney("50000", "UAH")
 	return ports.CourseFacts{Published: true, Price: &money}, nil
 }
+func (store *fakeStore) CourseForEnrollment(context.Context, string) (ports.EnrollmentFacts, error) {
+	return ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: testAdmin}, nil
+}
 func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (domain.Order, error) {
 	if store.order.ID() == "" {
 		return domain.Order{}, domain.ErrOrderNotFound
@@ -85,13 +88,21 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
 }
-func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {
+func (store *fakeStore) CreateMembership(_ context.Context, grant domain.Grant, _ string, _ string, _ *string) (domain.Grant, error) {
 	store.grantCalls++
 	if store.grantErr != nil {
 		return domain.Grant{}, store.grantErr
 	}
-	store.grant = command.Grant
-	return command.Grant, nil
+	store.grant = grant
+	return grant, nil
+}
+func (store *fakeStore) UpdateMembership(_ context.Context, grant domain.Grant, _ domain.GrantState, _ string, _ string, _ *string) (domain.Grant, error) {
+	store.grantCalls++
+	if store.grantErr != nil {
+		return domain.Grant{}, store.grantErr
+	}
+	store.grant = grant
+	return grant, nil
 }
 func (*fakeStore) GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error {
 	return nil
