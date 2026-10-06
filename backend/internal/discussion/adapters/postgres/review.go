@@ -16,13 +16,15 @@ import (
 
 const reviewFactsQuery = `SELECT courses.instructor_id::text, courses.status,
   courses.price_minor IS NOT NULL,
-  EXISTS (SELECT 1 FROM course_grants g WHERE g.course_id=courses.id AND g.user_id=$2::text::uuid AND g.state='active'),
+  g.state,
   EXISTS (SELECT 1 FROM course_modules m JOIN course_lessons l ON l.module_id=m.id JOIN lesson_progress p ON p.lesson_id=l.id WHERE m.course_id=courses.id AND p.user_id=$2::text::uuid),
   (SELECT count(*) FROM course_modules m JOIN course_lessons l ON l.module_id=m.id JOIN lesson_progress p ON p.lesson_id=l.id WHERE m.course_id=courses.id AND p.user_id=$2::text::uuid AND p.completed_at IS NOT NULL),
   (SELECT count(*) FROM course_modules m JOIN course_lessons l ON l.module_id=m.id WHERE m.course_id=courses.id),
   EXISTS (SELECT 1 FROM discussion_reviews r WHERE r.course_id=courses.id AND r.author_id=$2::text::uuid),
   COALESCE((SELECT r.removed_at IS NOT NULL FROM discussion_reviews r WHERE r.course_id=courses.id AND r.author_id=$2::text::uuid), false)
-FROM courses WHERE courses.id=$1::text::uuid`
+FROM courses
+LEFT JOIN course_grants g ON g.course_id=courses.id AND g.user_id=$2::text::uuid
+WHERE courses.id=$1::text::uuid`
 
 const reviewSelect = `SELECT r.id::text, r.course_id::text, r.author_id::text, r.stars, r.body,
  r.completed_lessons, r.total_lessons, r.created_at, r.edited_at, r.removed_at, r.removed_by::text, u.display_name
@@ -47,7 +49,8 @@ func (repository *Repository) GetReview(ctx context.Context, reviewID string) (p
 func (repository *Repository) ReviewFacts(ctx context.Context, courseID, userID string) (ports.ReviewFactsRecord, error) {
 	var result ports.ReviewFactsRecord
 	var status string
-	err := repository.pool.QueryRow(ctx, reviewFactsQuery, courseID, userID).Scan(&result.Facts.OwnerID, &status, &result.Facts.Paid, &result.Facts.Entitled, &result.Facts.HasProgress, &result.CompletedLessons, &result.TotalLessons, &result.Exists, &result.Removed)
+	var membership pgtype.Text
+	err := repository.pool.QueryRow(ctx, reviewFactsQuery, courseID, userID).Scan(&result.Facts.OwnerID, &status, &result.Facts.Paid, &membership, &result.Facts.HasProgress, &result.CompletedLessons, &result.TotalLessons, &result.Exists, &result.Removed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.ReviewFactsRecord{}, domain.ErrNotFound
 	}
@@ -55,6 +58,8 @@ func (repository *Repository) ReviewFacts(ctx context.Context, courseID, userID 
 		return ports.ReviewFactsRecord{}, persistenceError(err)
 	}
 	result.Facts.Status = domain.Status(status)
+	result.Facts.Entitled = membership.Valid && membership.String == "active"
+	result.Facts.Membership = membershipState(membership)
 	return result, nil
 }
 
