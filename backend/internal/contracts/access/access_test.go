@@ -1,6 +1,7 @@
 package access_test
 
 import (
+	"strconv"
 	"testing"
 
 	"courses/internal/contracts/access"
@@ -56,6 +57,55 @@ func TestCanStreamRequiresVerifiedEmailAfterViewAccess(t *testing.T) {
 	}
 	if access.CanStream(access.Subject{UserID: "student", EmailVerified: true}, access.Course{OwnerID: "owner"}) {
 		t.Fatal("CanStream() = true without view access")
+	}
+}
+
+func TestMembershipPredicates(t *testing.T) {
+	t.Parallel()
+
+	const owner = "owner"
+	roles := []struct {
+		name    string
+		subject access.Subject
+	}{
+		{name: "stranger", subject: access.Subject{UserID: "stranger"}},
+		{name: "owner", subject: access.Subject{UserID: owner}},
+		{name: "administrator", subject: access.Subject{UserID: "administrator", Administrator: true}},
+	}
+	memberships := []access.Membership{
+		access.MembershipNone,
+		access.MembershipActive,
+		access.MembershipBlocked,
+		access.MembershipRevoked,
+	}
+
+	for _, membership := range memberships {
+		for _, role := range roles {
+			for _, preview := range []bool{false, true} {
+				for _, published := range []bool{false, true} {
+					name := string(membership)
+					if name == "" {
+						name = "none"
+					}
+					t.Run(name+"/"+role.name+"/preview="+strconv.FormatBool(preview)+"/published="+strconv.FormatBool(published), func(t *testing.T) {
+						t.Parallel()
+
+						course := access.Course{OwnerID: owner, Published: published, Membership: membership, Preview: preview}
+						// A preview lesson opens content only while the course is published; membership
+						// (active or blocked) opens it regardless of published state (archived member).
+						wantConsume := role.subject.Administrator || role.subject.UserID == owner || (published && preview) || membership == access.MembershipActive || membership == access.MembershipBlocked
+						wantCommunicate := role.subject.Administrator || role.subject.UserID == owner || membership == access.MembershipActive
+
+						if got := access.CanConsume(role.subject, course); got != wantConsume {
+							t.Fatalf("CanConsume() = %v, want %v", got, wantConsume)
+						}
+						if got := access.CanCommunicate(role.subject, course); got != wantCommunicate {
+							t.Fatalf("CanCommunicate() = %v, want %v", got, wantCommunicate)
+						}
+					})
+				}
+			}
+		}
 	}
 }
 
