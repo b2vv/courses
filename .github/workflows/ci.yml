@@ -49,6 +49,17 @@ jobs:
         run: make up
       - name: Seed and smoke
         run: make seed-identities seed smoke
+      - name: Install browser
+        # K10: its own step with its own limit. Run 37670569075 (2026-10-07) spent 29 min inside
+        # `playwright install --with-deps`: apt-get update stalled on the runner's mirror (Azure mirror
+        # ignored, archive.ubuntu.com silent after noble-security InRelease) and the job hit its 45-min
+        # limit before a single test ran — and the cancelled step skipped the artifact upload. Here a
+        # stall fails in 10 min with its own name, one retry covers a transient mirror, and the browser
+        # step's timing stays a measurement of the suite alone.
+        timeout-minutes: 10
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium || (sleep 15 && npx playwright install --with-deps chromium)
       - name: Browser tests
         # K4: the api+nginx log of the WHOLE browser run is streamed from this same shell, so it is
         # on disk before recovery.spec recreates containers (a dump after the run keeps only the
@@ -61,7 +72,7 @@ jobs:
           docker compose logs -f --no-color --timestamps api nginx > frontend/test-logs/api-nginx.log 2>&1 &
           follower=$!
           # E2E_SKIP_ASR: asr.spec needs the asr-worker the CI override does not start (K10).
-          (cd frontend && npx playwright install --with-deps chromium && E2E_SKIP_ASR=1 npm run e2e); status=$?
+          (cd frontend && E2E_SKIP_ASR=1 npm run e2e); status=$?
           kill $follower 2>/dev/null; wait $follower 2>/dev/null
           exit $status
       - uses: actions/upload-artifact@v4
