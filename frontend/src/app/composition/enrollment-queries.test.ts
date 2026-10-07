@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import {
   createEnrollmentQueries,
   enrollmentMembershipQueryKey,
+  enrollmentParticipantReportsQueryKey,
   enrollmentRosterQueryKey,
   EnrollmentQueryError,
 } from './enrollment-queries';
@@ -18,6 +19,9 @@ test('membership conflict invalidates the exact membership state for a fresh CTA
     unblock: async () => ({ ok: true, value: undefined }),
     reportLecturer: async () => ({ ok: true, value: undefined }),
     reportStudent: async () => ({ ok: true, value: undefined }),
+    participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+    resolveReport: async () => ({ ok: true, value: undefined }),
+    revoke: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
   const key = enrollmentMembershipQueryKey(courseId);
@@ -42,6 +46,9 @@ test('roster mutations invalidate only their course roster', async () => {
     unblock: async () => ({ ok: true, value: undefined }),
     reportLecturer: async () => ({ ok: true, value: undefined }),
     reportStudent: async () => ({ ok: true, value: undefined }),
+    participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+    resolveReport: async () => ({ ok: true, value: undefined }),
+    revoke: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
   const otherCourseId = '20000000-0000-4000-8000-000000000002';
@@ -68,6 +75,9 @@ test('block/unblock refresh the roster on a membership_conflict 409 but not on o
     unblock: async () => ({ ok: true, value: undefined }),
     reportLecturer: async () => ({ ok: true, value: undefined }),
     reportStudent: async () => ({ ok: true, value: undefined }),
+    participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+    resolveReport: async () => ({ ok: true, value: undefined }),
+    revoke: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
   const userId = '30000000-0000-4000-8000-000000000003';
@@ -95,6 +105,9 @@ test('report mutations do not invalidate visible enrollment state', async () => 
     unblock: async () => ({ ok: true, value: undefined }),
     reportLecturer: async () => ({ ok: true, value: undefined }),
     reportStudent: async () => ({ ok: true, value: undefined }),
+    participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+    resolveReport: async () => ({ ok: true, value: undefined }),
+    revoke: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
   const key = enrollmentMembershipQueryKey(courseId);
@@ -104,4 +117,40 @@ test('report mutations do not invalidate visible enrollment state', async () => 
     meta: undefined,
   });
   expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+});
+
+test('resolve refreshes the report queue, while revoke also refreshes only its course roster', async () => {
+  const client = new QueryClient();
+  const queries = createEnrollmentQueries({
+    membership: async () => ({ ok: true, value: { state: null } }),
+    enroll: async () => ({ ok: true, value: { state: 'active' } }),
+    myMemberships: async () => ({ ok: true, value: [] }),
+    roster: async () => ({ ok: true, value: { entries: [], nextCursor: null } }),
+    block: async () => ({ ok: true, value: undefined }),
+    unblock: async () => ({ ok: true, value: undefined }),
+    reportLecturer: async () => ({ ok: true, value: undefined }),
+    reportStudent: async () => ({ ok: true, value: undefined }),
+    participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+    resolveReport: async () => ({ ok: true, value: undefined }),
+    revoke: async () => ({ ok: true, value: undefined }),
+  });
+  const courseId = '10000000-0000-4000-8000-000000000001';
+  const otherCourseId = '20000000-0000-4000-8000-000000000002';
+  const reportKey = enrollmentParticipantReportsQueryKey;
+  const rosterKey = enrollmentRosterQueryKey(courseId);
+  const otherRosterKey = enrollmentRosterQueryKey(otherCourseId);
+  const context = { client, meta: undefined };
+  client.setQueryData(reportKey, { pages: [], pageParams: [] });
+  client.setQueryData(rosterKey, { pages: [], pageParams: [] });
+  client.setQueryData(otherRosterKey, { pages: [], pageParams: [] });
+
+  await queries.resolveReport(client).onSuccess?.(undefined, '30000000-0000-4000-8000-000000000003', undefined, context);
+  expect(client.getQueryState(reportKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(false);
+
+  client.setQueryData(reportKey, { pages: [], pageParams: [] });
+  await queries.revoke(client).onSuccess?.(undefined, { courseId, userId: '30000000-0000-4000-8000-000000000003' }, undefined, context);
+  expect(client.getQueryState(reportKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(otherRosterKey)?.isInvalidated).toBe(false);
 });
