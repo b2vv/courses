@@ -1,15 +1,25 @@
 #!/bin/sh
 set -eu
+# K10: CI raises the stack through docker-compose.ci.yml, which parks asr-worker behind a profile
+# (2.94 GB image, cpus 6.0 — not for a 2 vCPU runner). The C20 ASR checks run only when the service
+# is part of the active compose project; skipping is printed, never silent, and ASR stays proven by
+# the local ordered gate (AGENDA K10).
+asr_in_project() { docker compose config --services 2>/dev/null | grep -qx asr-worker; }
 docker compose exec -T api curl -fsS http://127.0.0.1:8080/readyz > /dev/null
 docker compose exec -T media-worker curl -fsS http://127.0.0.1:8081/readyz > /dev/null
 docker compose exec -T upload curl -fsS http://127.0.0.1:8082/readyz > /dev/null
-docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/readyz > /dev/null
+if asr_in_project; then
+  docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/readyz > /dev/null
+else
+  echo "smoke: asr-worker is not in this compose project (CI override) - skipping its readyz and the C20 ASR checks"
+fi
 ffmpeg_version="$(docker compose exec -T media-worker ffmpeg -version | sed -n '1p')"
 printf '%s\n' "$ffmpeg_version"
 case "$ffmpeg_version" in
   'ffmpeg version 5.1.'*) ;;
   *) echo "Unexpected worker ffmpeg version" >&2; exit 1 ;;
 esac
+if asr_in_project; then
 # C20: asr-worker image carries ffmpeg, Python with faster-whisper, model weights; runs as 10001
 asr_ffmpeg="$(docker compose exec -T asr-worker ffmpeg -version | sed -n '1p')"
 case "$asr_ffmpeg" in
@@ -85,21 +95,40 @@ fi
 SH
 asr_status="$(docker compose exec -T asr-worker curl -fsS http://127.0.0.1:8083/status)"
 printf 'asr-worker status: %s\n' "$asr_status"
-docker compose exec -T frontend node --input-type=module <<'JS'
+fi
+# K10: the WayForPay expectation below depends on which stack raised the api. The base compose never
+# forwards WAYFORPAY_* (route absent, 404); docker-compose.e2e.yml does (route registered; an unsigned
+# `{}` callback is refused as 401 invalid_callback, measured 2026-10-07 on the overlay). Read the fact
+# from the running api instead of assuming the base stack, so CI (which raises the e2e overlay) and the
+# local `make check` (base) both assert the behaviour of the api actually in front of them.
+wfp_configured="$(docker compose exec -T api sh -c 'test -n "${WAYFORPAY_MERCHANT_ACCOUNT:-}" && echo 1 || echo 0')"
+# Same for the login burst: nginx.conf includes /etc/nginx/login-req.conf, strict by default (burst 5)
+# and replaced by a larger-burst mount in docker-compose.e2e.yml (burst 50). The smoke proves the limit
+# of whichever file is mounted by sending more attempts than its burst, instead of a count that only
+# exceeds the strict one.
+login_burst="$(docker compose exec -T nginx sed -n 's/.*burst=\([0-9][0-9]*\).*/\1/p' /etc/nginx/login-req.conf)"
+case "$login_burst" in ''|*[!0-9]*) echo "smoke: cannot read burst= from nginx login-req.conf" >&2; exit 1;; esac
+asr_present=0; asr_in_project && asr_present=1
+docker compose exec -T -e "WFP_CONFIGURED=$wfp_configured" -e "LOGIN_BURST=$login_burst" -e "ASR_PRESENT=$asr_present" frontend node --input-type=module <<'JS'
 import {writeFile} from 'node:fs/promises';
 const origin = 'http://nginx:8080';
 for (const [path, expected] of [['/healthz',200],['/',200],['/metrics',404],['/readyz',404]]) {
   const response = await fetch(origin+path);
   if(response.status!==expected) throw Error(`${path}: expected ${expected}, got ${response.status}`);
 }
-// WayForPay is not configured in the base stack, so the callback route must be absent (404),
-// not merely erroring. This catches the typed-nil-interface trap: a nil *Provider placed in an
-// interface would register the route (and panic on use) instead of staying unregistered.
-// Depends on the api running from the base compose, which never forwards WAYFORPAY_* (values in
-// .env alone do not configure it). Running smoke while the api is up from docker-compose.e2e.yml or
-// docker-compose.tunnel.yml (`make tunnel-up`) makes this a false red, never a false green.
+// WayForPay unconfigured (base stack): the callback route must be absent (404), not merely
+// erroring. This catches the typed-nil-interface trap: a nil *Provider placed in an interface would
+// register the route (and panic on use) instead of staying unregistered. Configured (e2e overlay,
+// `make tunnel-up`): the route exists and an unsigned callback is refused (401), never applied.
+// WFP_CONFIGURED is read from the running api by the shell above, so neither stack is a false red.
+const wfpConfigured=process.env.WFP_CONFIGURED==='1';
 const wfpCallback=await fetch(origin+'/api/v1/payments/wayforpay/callback',{method:'POST',headers:{'Content-Type':'application/json','Origin':origin},body:'{}'});
-if(wfpCallback.status!==404) throw Error(`wayforpay callback unconfigured: expected 404, got ${wfpCallback.status}`);
+const wfpExpected=wfpConfigured?401:404;
+if(wfpCallback.status!==wfpExpected) throw Error(`wayforpay callback ${wfpConfigured?'configured':'unconfigured'}: expected ${wfpExpected}, got ${wfpCallback.status}`);
+if(wfpConfigured){
+  const body=await wfpCallback.json().catch(()=>({}));
+  if(body?.error?.code!=='invalid_callback') throw Error(`wayforpay unsigned callback: expected invalid_callback, got ${JSON.stringify(body)}`);
+}
 const unknownVideoId='10000000-0000-4000-8000-000000000001';
 const unknownUpload=origin+'/uploads/'+unknownVideoId;
 const head=await fetch(unknownUpload,{method:'HEAD',headers:{'Tus-Resumable':'1.0.0'}});
@@ -155,17 +184,26 @@ for(const series of [
   if(!metrics.includes(series)) throw Error(`Worker metric series is not registered: ${series}`);
 }
 // C15: asr queue visible in courses_queue_depth as a label value, media still present
-const asrMetrics=await fetch('http://asr-worker:8083/metrics').then(r=>r.text());
-if(!asrMetrics.includes('courses_queue_depth{queue="asr"')) throw Error('C15: courses_queue_depth missing queue="asr" label');
+if(process.env.ASR_PRESENT==='1'){
+  const asrMetrics=await fetch('http://asr-worker:8083/metrics').then(r=>r.text());
+  if(!asrMetrics.includes('courses_queue_depth{queue="asr"')) throw Error('C15: courses_queue_depth missing queue="asr" label');
+} else {
+  console.log('smoke: asr-worker absent from this compose project - C15 asr metrics check skipped');
+}
 if(!metrics.includes('courses_queue_depth{queue="media"')) throw Error('C15: courses_queue_depth lost queue="media" after asr-worker added');
 const burst=await Promise.all(Array.from({length:60},()=>fetch(origin+'/api/v1/not-found').then(r=>r.status)));
 if(!burst.includes(429)) throw Error('API rate limit not enforced');
 // Login is metered far below the API rate because each attempt costs an
-// Argon2id verification, paid even when the account does not exist.
-const login=Array.from({length:30},()=>fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({email:'absent@courseforge.local',password:'x'})}).then(r=>r.status));
+// Argon2id verification, paid even when the account does not exist. The attempt count exceeds the
+// burst of the login-req.conf nginx actually mounted (LOGIN_BURST, read by the shell above).
+const loginAttempts=Math.max(30,Number(process.env.LOGIN_BURST)+10);
+const login=Array.from({length:loginAttempts},()=>fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({email:'absent@courseforge.local',password:'x'})}).then(r=>r.status));
 const logins=await Promise.all(login);
-if(!logins.includes(429)) throw Error('Login rate limit not enforced');
-if(logins.filter(s=>s===429).length<logins.length-10) throw Error('Login budget is not tighter than the API budget');
+if(!logins.includes(429)) throw Error(`Login rate limit not enforced (${loginAttempts} attempts, burst ${process.env.LOGIN_BURST})`);
+// nodelay admits the burst at once and refills at 10r/m, so an honest limit lets through at most
+// burst + a few refills; +5 is the slack the original 30-attempt/burst-5 check (≤10 accepted) had.
+const loginAccepted=logins.filter(s=>s!==429).length;
+if(loginAccepted>Number(process.env.LOGIN_BURST)+5) throw Error(`Login budget is not tighter than the API budget: ${loginAccepted} of ${loginAttempts} accepted, burst ${process.env.LOGIN_BURST}`);
 // SSR reaches the API on the internal network, so the page routes need their
 // own budget or the catalog is an unmetered path into PostgreSQL.
 const pages=await Promise.all(Array.from({length:400},()=>fetch(origin+'/').then(r=>r.status)));

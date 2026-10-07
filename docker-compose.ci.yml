@@ -1,0 +1,21 @@
+# CI override — AGENDA K10, owner decision 2026-10-07. Layered on top of docker-compose.yml and
+# docker-compose.e2e.yml by the job-level COMPOSE_FILE in .github/workflows/ci.yml, so CI raises the
+# same overlay stack as the authoritative local `make e2e-local`, minus what a 2 vCPU / 7 GB GitHub
+# runner cannot carry. Nothing here relaxes a production default: the base file keeps asr-worker at
+# cpus 6.0 / 5g; this file only changes what CI starts and how much CI gives it.
+#
+# asr-worker is moved behind a profile no CI step activates: its image is 2.94 GB (whisper
+# large-v3-turbo is downloaded from Hugging Face at build time, so every cold runner would rebuild
+# it), it asks for 6 CPUs the runner does not have (that single limit is why every `make up` on CI
+# failed from 2026-09-11), and faster-whisper on 2 vCPU would not fit the 30-minute job. ASR stays
+# proven by the local ordered gate only (asr.spec is skipped in CI via E2E_SKIP_ASR; smoke skips its
+# C20 checks when the service is absent). A larger runner or a registry-cached image reopens this.
+#
+# media-worker keeps running — media.spec / playback.spec depend on real transcodes — but under a cap
+# that leaves room for postgres, redis, api, frontend and nginx on 7 GB.
+services:
+  asr-worker:
+    profiles: [local-only]
+  media-worker:
+    cpus: 1.5
+    mem_limit: 1536m
