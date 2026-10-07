@@ -5,6 +5,15 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # K10: one compose project for the whole job. Absolute paths on purpose — a relative COMPOSE_FILE
+    # resolves against each caller's cwd and disables parent-directory discovery (it broke every spec
+    # that shells compose from frontend/). With this, `make up`, the seed/smoke scripts and every bare
+    # `docker compose` inside the suite raise and address the SAME stack: base + e2e overlay + the CI
+    # override (no asr-worker, media-worker capped) — the overlay the authoritative local gate uses,
+    # instead of the base stack CI raised before (which could never pass purchase-wayforpay: :8090 is
+    # overlay-only). The Makefile `e2e` recipe is not used here, so its own export does not interfere.
+    env:
+      COMPOSE_FILE: ${{ github.workspace }}/docker-compose.yml:${{ github.workspace }}/docker-compose.e2e.yml:${{ github.workspace }}/docker-compose.ci.yml
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,13 +43,14 @@ jobs:
         # on disk before recovery.spec recreates containers (a dump after the run keeps only the
         # recreated container's few lines). The follower is stopped and the run's own status is
         # re-raised; `set +e` because the runner's shell is bash -e, which would skip those lines.
-        # Mirrors the `e2e` recipe in the Makefile for the CI stack (`make up`, base compose).
+        # Mirrors the `e2e` recipe in the Makefile against the job-level COMPOSE_FILE stack (K10).
         run: |
           set +e
           mkdir -p frontend/test-logs
           docker compose logs -f --no-color --timestamps api nginx > frontend/test-logs/api-nginx.log 2>&1 &
           follower=$!
-          (cd frontend && npx playwright install --with-deps chromium && npm run e2e); status=$?
+          # E2E_SKIP_ASR: asr.spec needs the asr-worker the CI override does not start (K10).
+          (cd frontend && npx playwright install --with-deps chromium && E2E_SKIP_ASR=1 npm run e2e); status=$?
           kill $follower 2>/dev/null; wait $follower 2>/dev/null
           exit $status
       - uses: actions/upload-artifact@v4
