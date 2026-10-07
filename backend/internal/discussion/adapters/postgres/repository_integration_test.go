@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/access/accesstest"
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
@@ -83,6 +84,180 @@ func TestDiscussionPostgres(t *testing.T) {
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
 
+	t.Run("L5 participant reports use isolated course membership and admin queue", func(t *testing.T) {
+		// This fixture intentionally has no lesson and does not reuse the globally counted d1/b1 fixtures.
+		// Person reports only need a course and membership, so each identity/course is generated here.
+		createUser := func(t *testing.T, name string) string {
+			t.Helper()
+			var id string
+			if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+				VALUES(gen_random_uuid(),concat('l5-',gen_random_uuid()::text,'@discussion.test'),$1,'student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`, name).Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			return id
+		}
+		owner, active, blocked, none, admin := createUser(t, "L5 owner"), createUser(t, "L5 active"), createUser(t, "L5 blocked"), createUser(t, "L5 none"), createUser(t, "L5 admin")
+		var course string
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
+			VALUES(gen_random_uuid(),concat('l5-',gen_random_uuid()::text),'L5 isolated reports','Summary','Description','published',$1::uuid,now()) RETURNING id::text`, owner).Scan(&course); err != nil {
+			t.Fatal(err)
+		}
+		for _, membership := range []struct{ user, state string }{{active, "active"}, {blocked, "blocked"}} {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1::uuid,$2::uuid,'admin',$3,$4::uuid)`, membership.user, course, membership.state, owner); err != nil {
+				t.Fatal(err)
+			}
+		}
+		service := application.New(repository, time.Now)
+		member := application.Actor{UserID: active, EmailVerified: true}
+		if report, err := service.ReportLecturer(ctx, member, course, "lecturer report"); err != nil || report.Kind != domain.ReportOnLecturer || report.TargetID != owner {
+			t.Fatalf("lecturer report=%+v err=%v", report, err)
+		}
+		if _, err := service.ReportLecturer(ctx, member, course, "duplicate"); !errors.Is(err, domain.ErrReportDuplicate) {
+			t.Fatalf("duplicate=%v", err)
+		}
+		if _, err := service.ReportLecturer(ctx, application.Actor{UserID: blocked, EmailVerified: true}, course, "blocked is participant"); err != nil {
+			t.Fatalf("blocked=%v", err)
+		}
+		if _, err := service.ReportLecturer(ctx, application.Actor{UserID: none, EmailVerified: true}, course, "none"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("none=%v", err)
+		}
+		if report, err := service.ReportStudent(ctx, application.Actor{UserID: owner, EmailVerified: true}, course, active, "student report"); err != nil || report.Kind != domain.ReportOnStudent {
+			t.Fatalf("student report=%+v err=%v", report, err)
+		}
+		if _, err := service.ReportStudent(ctx, application.Actor{UserID: owner, EmailVerified: true}, course, none, "not participant"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-member target=%v", err)
+		}
+		if _, err := service.ReportQueue(ctx, application.Actor{UserID: admin}, ""); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-admin queue=%v", err)
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin}, "00000000-0000-4000-8000-000000000001"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-admin resolve=%v", err)
+		}
+		queue, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		if err != nil || len(queue.Items) != 3 {
+			t.Fatalf("queue=%+v err=%v", queue, err)
+		}
+		var lecturerID string
+		for _, item := range queue.Items {
+			if item.Report.Kind == domain.ReportOnLecturer && item.Report.ReporterID == active {
+				lecturerID = item.Report.ID
+			}
+			if item.ReporterName == nil || item.TargetName == nil {
+				t.Fatalf("names absent: %+v", item)
+			}
+		}
+		if lecturerID == "" {
+			t.Fatal("active lecturer report absent")
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin, Administrator: true}, lecturerID); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin, Administrator: true}, lecturerID); err != nil {
+			t.Fatalf("idempotent resolve=%v", err)
+		}
+		queue, err = service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		if err != nil || len(queue.Items) != 2 {
+			t.Fatalf("resolved queue=%+v err=%v", queue, err)
+		}
+	})
+
+	t.Run("L4b communication gate uses seeded membership states through the application service", func(t *testing.T) {
+		service := application.New(repository, time.Now)
+		// Isolated course/lesson so this subtest's comments do not land on the shared discussion
+		// lesson that K09 counts roots on (the globally-counted-state rule).
+		var l4bCourse, l4bModule, l4bLesson string
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES(gen_random_uuid(), concat('l4b-', gen_random_uuid()::text), 'L4b gate', 'Summary', 'Description', 'published', $1::uuid, now()) RETURNING id::text`, discussionOwner).Scan(&l4bCourse); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(), $1::uuid, 'Module', 0) RETURNING id::text`, l4bCourse).Scan(&l4bModule); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(), $1::uuid, 'Lesson', '', 0) RETURNING id::text`, l4bModule).Scan(&l4bLesson); err != nil {
+			t.Fatal(err)
+		}
+		createMember := func(t *testing.T, state string) string {
+			t.Helper()
+			var userID string
+			if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+				VALUES(gen_random_uuid(), concat('l4b-', gen_random_uuid()::text, '@discussion.test'), 'L4b member', 'student', '$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')
+				RETURNING id::text`).Scan(&userID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by)
+				VALUES($1::uuid,$2::uuid,'admin',$3,$4::uuid)`, userID, l4bCourse, state, discussionOwner); err != nil {
+				t.Fatal(err)
+			}
+			return userID
+		}
+		active := createMember(t, "active")
+		blocked := createMember(t, "blocked")
+		revoked := createMember(t, "revoked")
+
+		if _, err := service.Publish(ctx, application.Actor{UserID: active, EmailVerified: true}, application.PublishRequest{LessonID: l4bLesson, Body: "active member comment"}); err != nil {
+			t.Fatalf("active publish: %v", err)
+		}
+		if _, err := service.Publish(ctx, application.Actor{UserID: blocked, EmailVerified: true}, application.PublishRequest{LessonID: l4bLesson, Body: "blocked member comment"}); !errors.Is(err, domain.ErrEnrollmentBlocked) {
+			t.Fatalf("blocked publish: %v", err)
+		}
+		if _, err := service.Publish(ctx, application.Actor{UserID: revoked, EmailVerified: true}, application.PublishRequest{LessonID: l4bLesson, Body: "revoked member comment"}); !errors.Is(err, domain.ErrEnrollmentRequired) {
+			t.Fatalf("revoked publish: %v", err)
+		}
+		if _, err := service.List(ctx, application.Actor{UserID: blocked}, l4bLesson, ""); err != nil {
+			t.Fatalf("blocked list: %v", err)
+		}
+		if _, err := service.List(ctx, application.Actor{UserID: revoked}, l4bLesson, ""); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("revoked list: %v", err)
+		}
+		// Reading the in-course review list is consumption too: a blocked member reads it, a
+		// non-member (revoked) is refused — consistent with comment List.
+		if _, err := service.LearningReviews(ctx, application.Actor{UserID: blocked}, l4bCourse, ""); err != nil {
+			t.Fatalf("blocked review list: %v", err)
+		}
+		if _, err := service.LearningReviews(ctx, application.Actor{UserID: revoked}, l4bCourse, ""); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("revoked review list: %v", err)
+		}
+	})
+
+	t.Run("L3b lesson and comment facts read every membership state", func(t *testing.T) {
+		var membershipStudentID, membershipCourseID, membershipModuleID, membershipLessonID, membershipCommentID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+			VALUES(gen_random_uuid(),'membership-student@discussion.test','Membership student','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')
+			RETURNING id::text`).Scan(&membershipStudentID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
+			VALUES(gen_random_uuid(),'membership-discussion','Membership discussion','Summary','Description','published',$1,now()) RETURNING id::text`, discussionOwner).Scan(&membershipCourseID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, membershipCourseID).Scan(&membershipModuleID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'membership facts') RETURNING id::text`, membershipLessonID, discussionOwner).Scan(&membershipCommentID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, membershipStudentID, membershipCourseID, discussionOwner); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+			if want != access.MembershipActive {
+				if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, membershipStudentID, membershipCourseID, string(want)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			lesson, err := repository.LessonFacts(ctx, membershipStudentID, membershipLessonID)
+			if err != nil || lesson.Course.Membership != want || lesson.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("lesson=%+v err=%v", lesson, err)
+			}
+			comment, err := repository.Get(ctx, membershipStudentID, membershipCommentID)
+			if err != nil || comment.Course.Membership != want || comment.Course.Entitled != (want == access.MembershipActive) {
+				t.Fatalf("comment=%+v err=%v", comment, err)
+			}
+		}
+	})
+
 	t.Run("ratings repository", func(t *testing.T) {
 		ctx := context.Background()
 		fx := seedRatings(t, pool)
@@ -98,6 +273,22 @@ func TestDiscussionPostgres(t *testing.T) {
 			facts, err := repository.ReviewFacts(ctx, fx.course, fx.buyer)
 			if err != nil || !facts.Facts.Entitled || !facts.Facts.HasProgress || !facts.Facts.Paid {
 				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+		t.Run("L3b review facts read every membership state", func(t *testing.T) {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, fx.preview, fx.course, discussionOwner); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []access.Membership{access.MembershipActive, access.MembershipBlocked, access.MembershipRevoked} {
+				if want != access.MembershipActive {
+					if _, err := pool.Exec(ctx, `UPDATE course_grants SET state=$3 WHERE user_id=$1 AND course_id=$2`, fx.preview, fx.course, string(want)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				facts, err := repository.ReviewFacts(ctx, fx.course, fx.preview)
+				if err != nil || facts.Facts.Membership != want || facts.Facts.Entitled != (want == access.MembershipActive) {
+					t.Fatalf("facts=%+v err=%v", facts, err)
+				}
 			}
 		})
 		t.Run("Rt16 preview only refused", func(t *testing.T) {
@@ -443,6 +634,11 @@ func TestDiscussionPostgres(t *testing.T) {
 			}
 			var before int
 			if err := pool.QueryRow(ctx, `SELECT count(*) FROM discussion_comment_reports WHERE comment_id=$1::uuid`, comment.Comment.ID).Scan(&before); err != nil {
+				t.Fatal(err)
+			}
+			// Reporting is communication now, so the reporter must be an active member of the
+			// course to reach the no-op path (enroll the fixture, not loosen the gate).
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1::uuid,$2::uuid,'admin','active',$3::uuid) ON CONFLICT (user_id,course_id) DO UPDATE SET state='active'`, discussionReporter, moderationCourse, discussionOwner); err != nil {
 				t.Fatal(err)
 			}
 			service := application.New(repository, func() time.Time { return at.Add(time.Second) })

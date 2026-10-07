@@ -30,6 +30,9 @@ const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fi
 const namespace = `e2e-playback-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const crossCourseNamespace = `${namespace}-cross-course`;
 const adminID = '40000000-0000-4000-8000-000000000003';
+// The seeded student fixture (student@courseforge.local); after the enrollment phase, playing a
+// lesson needs membership, so the milestone fixtures admin-grant this student on their courses.
+const studentID = '40000000-0000-4000-8000-000000000001';
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const moduleID = randomUUID();
 const lessonID = randomUUID();
@@ -501,6 +504,10 @@ async function segmentCovering(
 // psql interpolates `:'name'` only while parsing its own input, never inside `-c`, so the
 // statement is fed on stdin.
 const deleteCourseStatement = `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+-- Memberships reference the course without ON DELETE CASCADE (grants preserve ownership records),
+-- and grant_audit references the grant, so cleanup unwinds the chain audit → grants → course.
+DELETE FROM grant_audit WHERE grant_id IN (SELECT id FROM course_grants WHERE course_id = :'course_id');
+DELETE FROM course_grants WHERE course_id = :'course_id';
 DELETE FROM courses WHERE id = :'course_id';
 SQL`;
 
@@ -561,6 +568,13 @@ test.describe('T7 playback milestone', () => {
       expect(published.status()).toBe(200);
       course = courseToken(await published.json());
 
+      // Enroll the playing student: lesson content needs membership after the enrollment phase.
+      const enrolled = await context.request.post(`/api/v1/admin/courses/${course.id}/grants`, {
+        data: { userId: studentID, reason: 'e2e playback access for the student' },
+        headers: { Origin: new URL(baseURL).origin },
+      });
+      expect(enrolled.status(), await enrolled.text()).toBe(201);
+
       const crossCourseDraft = {
         slug: crossCourseNamespace,
         title: `T10 cross-course ${namespace}`,
@@ -618,6 +632,15 @@ test.describe('T7 playback milestone', () => {
       );
       expect(crossCoursePublished.status()).toBe(200);
       crossCourse = courseToken(await crossCoursePublished.json());
+
+      const crossEnrolled = await context.request.post(
+        `/api/v1/admin/courses/${crossCourse.id}/grants`,
+        {
+          data: { userId: studentID, reason: 'e2e cross-course playback access for the student' },
+          headers: { Origin: new URL(baseURL).origin },
+        },
+      );
+      expect(crossEnrolled.status(), await crossEnrolled.text()).toBe(201);
     } finally {
       await context.close();
     }
@@ -1871,12 +1894,16 @@ test.describe('T7 playback milestone', () => {
       await expect(page.getByText('Відео зараз недоступне.')).toBeVisible({ timeout: 60_000 });
     });
 
-    test('R04 archive stops a started student view', async ({ page, browser, baseURL }) => {
+    test('R04 archive preserves an enrolled member started view (En09 ownership)', async ({
+      page,
+      browser,
+      baseURL,
+    }) => {
       if (baseURL === undefined || course === undefined)
         throw new Error('Playback course fixture is unavailable');
-      // Remember a segment the edge served while the course was public. Asking for that exact
-      // path again after the archive is what proves the bytes are cut - stronger than waiting
-      // for the player to happen to request one, and independent of what it does next.
+      // Remember a segment the edge served while the course was public, then ask for that exact
+      // path again after the archive. En09 (ownership, not rental): archiving must NOT revoke an
+      // enrolled member's access, so the same bytes are still served.
       let servedSegment: string | undefined;
       page.on('response', (response) => {
         const path = new URL(response.url()).pathname;
@@ -1897,18 +1924,16 @@ test.describe('T7 playback milestone', () => {
         await context.close();
       }
       await setPosition(page, 120);
-      // The same path the edge served a moment ago now refuses. Waiting for the player to catch
-      // a 403 itself no longer works and should not: a seek queues a heartbeat, that heartbeat
-      // is refused first, and the player tears itself down before any segment goes out. Stopping
-      // sooner is better behaviour - but it left this row watching for something that had
-      // stopped happening, which is how a real guarantee quietly loses its proof.
-      const refused = await page.request.get(servedSegment);
-      expect(refused.status()).toBe(403);
+      // The same path the edge served a moment ago is still served: an enrolled member keeps
+      // access through an archive (En09). The player shows no "course unavailable" stop. Cutting a
+      // started view is an admin REVOKE, not an archive — covered once the revoke endpoint lands (L6).
+      const stillServed = await page.request.get(servedSegment);
+      expect(stillServed.status()).toBe(200);
       await expect(
         page.getByRole('heading', {
           name: 'Перегляд зупинено. Курс більше недоступний.',
         }),
-      ).toBeVisible();
+      ).toBeHidden();
     });
   });
 
@@ -1948,11 +1973,16 @@ test.describe('T7 playback milestone', () => {
       await openAndPlay(page);
       expect((await segment).status()).toBe(200);
 
-      const otherContext = await browser.newContext({
-        baseURL,
-        storageState: authStatePath('student'),
-      });
+      // The refused viewer is the non-member fixture (outsider@courseforge.local): the seeded
+      // student is now an enrolled member and would keep access (En09), so the "another non-admin
+      // is refused" guarantee needs a genuine non-member. A fresh context logs in inline.
+      const otherContext = await browser.newContext({ baseURL });
       try {
+        const loggedIn = await otherContext.request.post('/api/v1/auth/login', {
+          data: { email: 'outsider@courseforge.local', password: 'courseforge-student-demo' },
+          headers: { Origin: origin },
+        });
+        expect(loggedIn.status(), await loggedIn.text()).toBe(200);
         const refused = await otherContext.request.post('/api/v1/playback/sessions', {
           data: { lessonId: lessonID },
           headers: { Origin: origin },

@@ -71,14 +71,14 @@ func (sessions *Sessions) loadViewablePlayback(ctx context.Context, actor domain
 	if err != nil {
 		return domain.LessonPlayback{}, err
 	}
-	if !playback.Course.CanBeViewedBy(actor) {
+	if !actor.EmailVerified {
+		return domain.LessonPlayback{}, domain.ErrEmailNotVerified
+	}
+	if !playback.Course.CanConsumeBy(actor) {
 		if playback.Course.PurchaseRequiredBy(actor) {
 			return domain.LessonPlayback{}, domain.ErrPurchaseRequired
 		}
 		return domain.LessonPlayback{}, domain.ErrForbidden
-	}
-	if !playback.Course.CanStreamBy(actor) {
-		return domain.LessonPlayback{}, domain.ErrEmailNotVerified
 	}
 	return playback, nil
 }

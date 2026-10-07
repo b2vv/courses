@@ -228,3 +228,26 @@ test('W03 shows an error when reporting fails', async () => {
   expect(await screen.findByRole('alert')).toBeTruthy();
   expect(screen.getByRole('alert').textContent).toContain('Could not report this comment');
 });
+
+for (const [code, message] of [
+  ['enrollment_required', 'Enroll in this course to comment or report comments.'],
+  [
+    'enrollment_blocked',
+    'You are blocked in this course — commenting and reporting comments are unavailable.',
+  ],
+] as const) {
+  test(`shows the ${code} comment message`, () => {
+    renderPanel({ error: code });
+    expect(screen.getByRole('alert').textContent).toContain(message);
+  });
+  test(`shows the ${code} report message without claiming success`, async () => {
+    renderPanel({
+      onReport: async () => {
+        throw new Error(code);
+      },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Report' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+    expect(screen.queryByRole('button', { name: 'Reported' })).toBeNull();
+  });
+}

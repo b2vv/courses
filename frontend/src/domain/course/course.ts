@@ -10,6 +10,8 @@ export type CatalogErrorCode =
   | 'request_timeout'
   | 'request_cancelled'
   | 'report_own_review'
+  | 'enrollment_required'
+  | 'enrollment_blocked'
   | 'authentication_required'
   | 'review_invalid'
   | 'review_removed'

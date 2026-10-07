@@ -29,6 +29,8 @@ const shortVideo = path.join(
 // walks away breaks a test it never touches. Archiving removes a course from the catalog; a
 // published course cannot be deleted at all (only drafts can), so archiving is the whole cleanup.
 const published: { id: string; updatedAt: string }[] = [];
+// The seeded student fixture (student@courseforge.local); after enrollment, content reads need membership.
+const studentID = '40000000-0000-4000-8000-000000000001';
 
 const moduleID = randomUUID();
 const videoLessonID = randomUUID();
@@ -103,6 +105,15 @@ async function seed(request: APIRequestContext, baseURL: string) {
   });
   expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
   published.push(token((await publishedResponse.json()) as object));
+
+  // After the enrollment phase, lesson content requires membership: enroll the reading student as
+  // an (admin-granted) active member of this freshly created course. The fixture user is enrolled,
+  // not the content gate loosened.
+  const enrolled = await request.post(`/api/v1/admin/courses/${course.id}/grants`, {
+    data: { userId: studentID, reason: 'e2e content access for the reading student' },
+    headers,
+  });
+  expect(enrolled.status(), await enrolled.text()).toBe(201);
 
   const transcript = await request.put(`/api/v1/admin/lessons/${lessonID}/transcript`, {
     data: {
@@ -303,6 +314,13 @@ test.describe('with a real two-second video', () => {
     });
     expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
     published.push(token((await publishedResponse.json()) as object));
+
+    // Enroll the reading student: lesson content needs membership after the enrollment phase.
+    const videoEnrolled = await page.request.post(`/api/v1/admin/courses/${course.id}/grants`, {
+      data: { userId: studentID, reason: 'e2e content access for the reading student' },
+      headers,
+    });
+    expect(videoEnrolled.status(), await videoEnrolled.text()).toBe(201);
 
     const written = await page.request.put(`/api/v1/admin/lessons/${videoLessonID}/transcript`, {
       data: {

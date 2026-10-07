@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/discussion/domain"
 )
 
@@ -111,6 +112,25 @@ type ModerationQueuePage struct {
 	NextCursor string
 }
 
+type ParticipantReportQueueItem struct {
+	Report       domain.ParticipantReport
+	ReporterName *string
+	TargetName   *string
+	CourseTitle  string
+}
+
+type ParticipantReportQueuePage struct {
+	Items      []ParticipantReportQueueItem
+	NextCursor string
+}
+
+type ParticipantReportRepository interface {
+	ReportSubject(context.Context, string, string) (ownerID string, membership access.Membership, courseFound bool, err error)
+	InsertParticipantReport(context.Context, domain.ParticipantReport) (string, error)
+	ParticipantReportQueue(context.Context, string, int) (ParticipantReportQueuePage, error)
+	ResolveParticipantReport(context.Context, string) error
+}
+
 type ReviewRepository interface {
 	PublishedReviewCourse(context.Context, string) (string, error)
 	ReviewFacts(context.Context, string, string) (ReviewFactsRecord, error)
@@ -139,6 +159,7 @@ type ModerationRepository interface {
 type Repository interface {
 	ModerationRepository
 	ReviewRepository
+	ParticipantReportRepository
 	LessonFacts(context.Context, string, string) (LessonFacts, error)
 	List(context.Context, string, string, int) (CommentPage, error)
 	Get(context.Context, string, string) (CommentRecord, error)

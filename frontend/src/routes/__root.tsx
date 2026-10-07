@@ -11,6 +11,7 @@ import type { createCatalogDependencies } from '../app/composition/catalog';
 import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
 import type { TeachDependencies } from '../app/composition/teach';
+import type { createEnrollmentDependencies } from '../app/composition/enrollment';
 import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../application/transcript/recovery';
@@ -30,6 +31,7 @@ type RootRouteContext = RootIdentityContext & {
   catalog: ReturnType<typeof createCatalogDependencies>;
   learn: LearnDependencies;
   teach: TeachDependencies;
+  enrollment: ReturnType<typeof createEnrollmentDependencies>;
   transcriptHistory: TranscriptHistoryStore;
 };
 
@@ -144,6 +146,7 @@ function Layout() {
       ? [{ to: '/teach', label: t('common.navModeration'), exact: true }]
       : [
           { to: '/admin', label: t('common.navCourses'), exact: true },
+          { to: '/admin/participant-reports', label: t('common.navParticipantReports') },
           ...(canAdministerAccounts(viewer)
             ? [{ to: '/admin/users', label: t('adminUsers.title') }]
             : []),

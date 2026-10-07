@@ -52,11 +52,11 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 	if !facts.Published || facts.Price == nil {
 		return domain.Order{}, domain.ErrCourseNotPurchasable
 	}
-	grants, err := service.grants.ActiveGrants(ctx, actor.UserID, courseID)
+	membership, err := service.grants.Membership(ctx, actor.UserID, courseID)
 	if err != nil {
 		return domain.Order{}, err
 	}
-	if err := domain.CanStartOrder(actor.UserID, courseID, grants); err != nil {
+	if err := domain.CanStartOrder(membership); err != nil {
 		return domain.Order{}, err
 	}
 	if existing, err := service.orders.FindByIdempotencyKey(ctx, actor.UserID, idempotencyKey); err == nil {
@@ -146,11 +146,145 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
 		return domain.Grant{}, domain.ErrGrantInvalid
 	}
-	grant, err := domain.NewGrant(service.newID(), userID, courseID, domain.GrantAdmin, nil, domain.GrantActive, service.now(), &actor.UserID)
+	membership, err := service.grants.Membership(ctx, userID, courseID)
 	if err != nil {
 		return domain.Grant{}, err
 	}
-	return service.grants.GrantWithAudit(ctx, ports.GrantCommand{Grant: grant, Reason: reason})
+	if membership == nil {
+		grant, newErr := domain.NewGrant(service.newID(), userID, courseID, domain.GrantAdmin, nil, domain.GrantActive, service.now(), &actor.UserID)
+		if newErr != nil {
+			return domain.Grant{}, newErr
+		}
+		return service.grants.CreateMembership(ctx, grant, "grant", reason, &actor.UserID)
+	}
+	if membership.State() != domain.GrantRevoked {
+		return domain.Grant{}, domain.ErrCourseAlreadyOwned
+	}
+	grant, err := membership.Reinstate(domain.GrantAdmin, &actor.UserID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.grants.UpdateMembership(ctx, grant, domain.GrantRevoked, "grant", reason, &actor.UserID)
+}
+
+func (service *Service) Enroll(ctx context.Context, actor Actor, courseID string) (domain.Grant, error) {
+	if !actor.EmailVerified {
+		return domain.Grant{}, domain.ErrEmailNotVerified
+	}
+	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if facts.Status != "published" || !facts.Free {
+		return domain.Grant{}, domain.ErrCourseNotEnrollable
+	}
+	membership, err := service.grants.Membership(ctx, actor.UserID, courseID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if membership == nil {
+		grant, newErr := domain.SelfEnroll(service.newID(), actor.UserID, courseID, service.now())
+		if newErr != nil {
+			return domain.Grant{}, newErr
+		}
+		created, createErr := service.grants.CreateMembership(ctx, grant, "enroll", "", &actor.UserID)
+		if errors.Is(createErr, domain.ErrCourseAlreadyOwned) {
+			// A concurrent enroll won the insert; enrolling an existing member is a no-op,
+			// so re-read the row the other transaction created and return it.
+			if existing, readErr := service.grants.Membership(ctx, actor.UserID, courseID); readErr == nil && existing != nil {
+				return *existing, nil
+			}
+		}
+		return created, createErr
+	}
+	if membership.State() != domain.GrantRevoked {
+		return *membership, nil
+	}
+	grant, err := membership.Reinstate(domain.GrantSelf, nil)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.grants.UpdateMembership(ctx, grant, domain.GrantRevoked, "enroll", "", &actor.UserID)
+}
+
+func (service *Service) Block(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
+	return service.transitionMembership(ctx, actor, userID, courseID, "block", false, domain.Grant.Block)
+}
+
+func (service *Service) Unblock(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
+	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", false, domain.Grant.Unblock)
+}
+
+func (service *Service) Revoke(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
+	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", true, domain.Grant.Revoke)
+}
+
+func (service *Service) MembershipState(ctx context.Context, actor Actor, userID, courseID string) (domain.GrantState, bool, error) {
+	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+	if err != nil {
+		return "", false, err
+	}
+	if !actor.Administrator && actor.UserID != userID && actor.UserID != facts.InstructorID {
+		return "", false, domain.ErrEnrollmentForbidden
+	}
+	membership, err := service.grants.Membership(ctx, userID, courseID)
+	if err != nil {
+		return "", false, err
+	}
+	if membership == nil {
+		return "", false, nil
+	}
+	return membership.State(), true, nil
+}
+
+func (service *Service) MyMemberships(ctx context.Context, actor Actor) ([]ports.MembershipCard, error) {
+	return service.grants.MyMemberships(ctx, actor.UserID)
+}
+
+func (service *Service) Roster(ctx context.Context, actor Actor, courseID, cursor string, limit int) (ports.RosterPage, error) {
+	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+	if err != nil {
+		return ports.RosterPage{}, err
+	}
+	if !actor.Administrator && actor.UserID != facts.InstructorID {
+		return ports.RosterPage{}, domain.ErrEnrollmentForbidden
+	}
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	return service.grants.Roster(ctx, courseID, cursor, limit)
+}
+
+func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
+	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if !actor.Administrator && (administratorOnly || actor.UserID != facts.InstructorID) {
+		return domain.Grant{}, domain.ErrEnrollmentForbidden
+	}
+	membership, err := service.grants.Membership(ctx, userID, courseID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if membership == nil {
+		if action == "revoke" {
+			return domain.Grant{}, domain.ErrGrantInvalid
+		}
+		return domain.Grant{}, domain.ErrGrantTransitionInvalid
+	}
+	if (action == "block" && membership.State() == domain.GrantBlocked) ||
+		(action == "unblock" && membership.State() == domain.GrantActive) ||
+		(action == "revoke" && membership.State() == domain.GrantRevoked) {
+		return *membership, nil
+	}
+	grant, err := transition(*membership)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.grants.UpdateMembership(ctx, grant, membership.State(), action, "", &actor.UserID)
 }
 
 func (service *Service) GrandfatherOnPriceSet(ctx context.Context, courseID string, expectedUpdatedAt time.Time, priceMinor int64, currency string, updatedAt time.Time) error {

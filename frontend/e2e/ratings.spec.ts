@@ -131,6 +131,11 @@ async function seedProgress(course: CourseFixture, userID = studentID, completed
   await sql(
     `INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES (${literal(userID)}::uuid,${literal(course.lessonId)}::uuid,1,${completed ? 'now()' : 'NULL'},1,now()) ON CONFLICT (user_id,lesson_id) DO UPDATE SET position_seconds=EXCLUDED.position_seconds,completed_at=EXCLUDED.completed_at,client_seq=EXCLUDED.client_seq,updated_at=EXCLUDED.updated_at`,
   );
+  // Progress implies enrollment after the enrollment phase: a learner with progress is an active
+  // member, which writing/reporting a review (communication) now requires.
+  await sql(
+    `INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES (${literal(userID)}::uuid,${literal(course.id)}::uuid,'self','active',now()) ON CONFLICT (user_id,course_id) DO NOTHING`,
+  );
 }
 
 async function seedReview(course: CourseFixture, index: number, stars: number, body: string) {
@@ -194,10 +199,20 @@ test.afterAll(async ({ browser, baseURL }) => {
       const status = contractField<AdminCourseTree>(tree, 'status');
       const updatedAt = contractField<AdminCourseTree>(tree, 'updatedAt');
       if (status === 'archived' || typeof updatedAt !== 'string') continue;
-      const response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+      // Archiving is cleanup, not an assertion under test: tolerate a transient nginx api-zone 429
+      // (the zone refills within a second). A hard failure here would leave the course published
+      // and break recovery.spec's seeded-course count — a cleanup flake masquerading as a defect.
+      let response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
         data: { expectedUpdatedAt: updatedAt, status: 'archived' },
         headers: origin(baseURL),
       });
+      for (let attempt = 0; attempt < 5 && response.status() === 429; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
+          data: { expectedUpdatedAt: updatedAt, status: 'archived' },
+          headers: origin(baseURL),
+        });
+      }
       expect(response.status(), await response.text()).toBe(200);
     }
   } finally {
@@ -329,6 +344,11 @@ test('Rt09 Rt21 Rt22 and report: report reaches the owner queue, owner has no re
   }
   for (const [index, stars] of [4, 5, 5].entries())
     await seedReview(course, index + 10, stars, `Moderation ${index} ${runNamespace}`);
+  // The student reports a review below; reporting is communication, so enroll the student as an
+  // active member of this course (enroll the fixture, not loosen the gate).
+  await sql(
+    `INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES (${literal(studentID)}::uuid,${literal(course.id)}::uuid,'self','active',now()) ON CONFLICT (user_id,course_id) DO NOTHING`,
+  );
   await page.goto(`/courses/${course.slug}`);
   const target = page.getByText(`Moderation 0 ${runNamespace}`).locator('..');
   await target.getByRole('button', { name: 'Поскаржитись' }).click();

@@ -114,12 +114,104 @@ type OwnReview struct {
 	Eligibility string
 }
 
+type ParticipantReportQueueItem struct {
+	ReporterName *string
+	TargetName   *string
+	CourseTitle  string
+	Report       domain.ParticipantReport
+}
+
+type ParticipantReportQueuePage struct {
+	Items      []ParticipantReportQueueItem
+	NextCursor string
+}
+
+func (service *Service) ReportLecturer(ctx context.Context, actor Actor, courseID, reason string) (domain.ParticipantReport, error) {
+	if !actor.EmailVerified {
+		return domain.ParticipantReport{}, ErrEmailNotVerified
+	}
+	ownerID, membership, courseFound, err := service.repository.ReportSubject(ctx, courseID, actor.UserID)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if !courseFound {
+		return domain.ParticipantReport{}, domain.ErrNotFound
+	}
+	if actor.UserID == ownerID {
+		return domain.ParticipantReport{}, domain.ErrReportSelf
+	}
+	if !domain.IsParticipant(membership) {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	report, err := domain.NewParticipantReport("", courseID, actor.UserID, ownerID, domain.ReportOnLecturer, reason, service.now())
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	id, err := service.repository.InsertParticipantReport(ctx, report)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	report.ID = id
+	return report, nil
+}
+
+func (service *Service) ReportStudent(ctx context.Context, actor Actor, courseID, targetID, reason string) (domain.ParticipantReport, error) {
+	if !actor.EmailVerified {
+		return domain.ParticipantReport{}, ErrEmailNotVerified
+	}
+	ownerID, membership, courseFound, err := service.repository.ReportSubject(ctx, courseID, targetID)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if !courseFound {
+		return domain.ParticipantReport{}, domain.ErrNotFound
+	}
+	if !actor.Administrator && actor.UserID != ownerID {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	if !domain.IsParticipant(membership) {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	report, err := domain.NewParticipantReport("", courseID, actor.UserID, targetID, domain.ReportOnStudent, reason, service.now())
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	id, err := service.repository.InsertParticipantReport(ctx, report)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	report.ID = id
+	return report, nil
+}
+
+func (service *Service) ReportQueue(ctx context.Context, actor Actor, cursor string) (ParticipantReportQueuePage, error) {
+	if !actor.Administrator {
+		return ParticipantReportQueuePage{}, domain.ErrReportForbidden
+	}
+	page, err := service.repository.ParticipantReportQueue(ctx, cursor, 20)
+	if err != nil {
+		return ParticipantReportQueuePage{}, err
+	}
+	result := ParticipantReportQueuePage{NextCursor: page.NextCursor, Items: make([]ParticipantReportQueueItem, len(page.Items))}
+	for i, item := range page.Items {
+		result.Items[i] = ParticipantReportQueueItem{Report: item.Report, ReporterName: item.ReporterName, TargetName: item.TargetName, CourseTitle: item.CourseTitle}
+	}
+	return result, nil
+}
+
+func (service *Service) ResolveReport(ctx context.Context, actor Actor, reportID string) error {
+	if !actor.Administrator {
+		return domain.ErrReportForbidden
+	}
+	return service.repository.ResolveParticipantReport(ctx, reportID)
+}
+
 func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor string) (Page, error) {
 	facts, err := service.repository.LessonFacts(ctx, actor.UserID, lessonID)
 	if err != nil {
 		return Page{}, err
 	}
-	if !facts.Course.CanBeViewedBy(actor) {
+	if !facts.Course.CanConsumeBy(actor) {
 		if facts.Course.PurchaseRequiredBy(actor) {
 			return Page{}, domain.ErrPurchaseRequired
 		}
@@ -150,11 +242,8 @@ func (service *Service) Publish(ctx context.Context, actor Actor, request Publis
 	if err != nil {
 		return Comment{}, err
 	}
-	if !facts.Course.CanBeViewedBy(actor) {
-		if facts.Course.PurchaseRequiredBy(actor) {
-			return Comment{}, domain.ErrPurchaseRequired
-		}
-		return Comment{}, domain.ErrForbidden
+	if err := requireCommunication(facts.Course, actor); err != nil {
+		return Comment{}, err
 	}
 	var parent *domain.Comment
 	if request.ParentID != nil {
@@ -253,11 +342,8 @@ func (service *Service) ReportComment(ctx context.Context, actor Actor, commentI
 	if err != nil {
 		return err
 	}
-	if !record.Course.CanBeViewedBy(actor) {
-		if record.Course.PurchaseRequiredBy(actor) {
-			return domain.ErrPurchaseRequired
-		}
-		return domain.ErrForbidden
+	if err := requireCommunication(record.Course, actor); err != nil {
+		return err
 	}
 	if record.Comment.RemovedAt != nil {
 		return nil
@@ -319,8 +405,10 @@ func (service *Service) LearningReviews(ctx context.Context, actor Actor, course
 	if err != nil {
 		return PublicReviewPage{}, err
 	}
-	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled}
-	if !course.CanBeViewedBy(actor) {
+	// Reading the in-course review list is consumption (plan §4): a member — active or blocked —
+	// reads it like lesson comments and content; a non-member does not. (PublicReviews stays CanView.)
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if !course.CanConsumeBy(actor) {
 		return PublicReviewPage{}, domain.ErrForbidden
 	}
 	return service.listReviews(ctx, courseID, cursor)
@@ -379,6 +467,10 @@ func (service *Service) PutReview(ctx context.Context, actor Actor, courseID str
 	if err != nil {
 		return Review{}, false, err
 	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if err := requireCommunication(course, actor); err != nil {
+		return Review{}, false, err
+	}
 	if err := domain.CanReview(facts.Facts, actor); err != nil {
 		return Review{}, false, err
 	}
@@ -413,7 +505,29 @@ func (service *Service) ReportReview(ctx context.Context, actor Actor, reviewID 
 	if !actor.EmailVerified {
 		return ErrEmailNotVerified
 	}
+	review, err := service.repository.GetReview(ctx, reviewID)
+	if err != nil {
+		return err
+	}
+	facts, err := service.repository.ReviewFacts(ctx, review.CourseID, actor.UserID)
+	if err != nil {
+		return err
+	}
+	course := domain.Course{OwnerID: facts.Facts.OwnerID, Status: facts.Facts.Status, Paid: facts.Facts.Paid, Entitled: facts.Facts.Entitled, Membership: facts.Facts.Membership}
+	if err := requireCommunication(course, actor); err != nil {
+		return err
+	}
 	return service.repository.InsertReviewReport(ctx, reviewID, actor.UserID, service.now())
+}
+
+func requireCommunication(course domain.Course, actor Actor) error {
+	if course.CanCommunicateBy(actor) {
+		return nil
+	}
+	if course.CommunicationBlocked() {
+		return domain.ErrEnrollmentBlocked
+	}
+	return domain.ErrEnrollmentRequired
 }
 
 func (service *Service) RemoveReview(ctx context.Context, actor Actor, reviewID, reason string) error {

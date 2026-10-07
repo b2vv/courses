@@ -12,6 +12,8 @@ import { contractField } from './contract';
 
 const runNamespace = `e2e-instructor-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const instructorID = '40000000-0000-4000-8000-000000000002';
+// The seeded student fixture; after the enrollment phase, reporting/commenting needs active membership.
+const studentID = '40000000-0000-4000-8000-000000000001';
 
 type CourseToken = { id: string; updatedAt: string };
 type LessonFixture = { id: string; title: string };
@@ -106,6 +108,13 @@ async function publishCourse(
   expect(response.status(), await response.text()).toBe(200);
   const result = token((await response.json()) as object);
   published.push(result);
+  // The student reports/comments on these courses in the moderation journeys; reporting is
+  // communication now, so enroll the student as an active member (enroll the fixture, not loosen).
+  const enrolled = await request.post(`/api/v1/admin/courses/${result.id}/grants`, {
+    data: { userId: studentID, reason: `instructor ${runNamespace}` },
+    headers: origin(baseURL),
+  });
+  expect(enrolled.status(), await enrolled.text()).toBe(201);
   const draftIndex = drafts.findIndex((candidate) => candidate.id === course.id);
   if (draftIndex >= 0) drafts.splice(draftIndex, 1);
   return result;

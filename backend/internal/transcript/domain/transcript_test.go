@@ -3,12 +3,39 @@ package domain
 import (
 	"strings"
 	"testing"
+
+	"courses/internal/contracts/access"
 )
 
 func id(last string) string { return "11111111-1111-4111-8111-1111111111" + last }
 
 func segment(startMs, endMs int64, last string) Segment {
 	return Segment{ID: id(last), StartMs: startMs, EndMs: endMs, Text: "текст"}
+}
+
+func TestCanConsumeByMirrorsMembershipContentRule(t *testing.T) {
+	t.Parallel()
+	viewer, owner := id("bb"), id("aa")
+	for _, test := range []struct {
+		name   string
+		actor  Actor
+		course Course
+		want   bool
+	}{
+		{name: "active member consumes", actor: Actor{UserID: viewer}, course: Course{Status: Draft, Membership: access.MembershipActive}, want: true},
+		{name: "blocked member consumes", actor: Actor{UserID: viewer}, course: Course{Status: Draft, Membership: access.MembershipBlocked}, want: true},
+		{name: "revoked member cannot consume", actor: Actor{UserID: viewer}, course: Course{Status: Published, Membership: access.MembershipRevoked}},
+		{name: "published preview consumes", actor: Actor{UserID: viewer}, course: Course{Status: Published, Preview: true}, want: true},
+		{name: "draft preview cannot consume", actor: Actor{UserID: viewer}, course: Course{Status: Draft, Preview: true}},
+		{name: "owner consumes", actor: Actor{UserID: owner}, course: Course{OwnerID: owner, Status: Draft}, want: true},
+		{name: "administrator consumes", actor: Actor{UserID: viewer, Administrator: true}, course: Course{Status: Draft}, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.course.CanConsumeBy(test.actor); got != test.want {
+				t.Fatalf("CanConsumeBy() = %v, want %v", got, test.want)
+			}
+		})
+	}
 }
 
 func TestLanguageNormalisationCannotDependOnTheWritePath(t *testing.T) {

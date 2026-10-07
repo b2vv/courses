@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"courses/internal/contracts/access"
 	playbackpostgres "courses/internal/playback/adapters/postgres"
 	"courses/internal/playback/domain"
 	"github.com/jackc/pgx/v5"
@@ -33,7 +34,7 @@ type playbackRow struct {
 	ownerID        string
 	status         string
 	paid           bool
-	entitled       bool
+	membership     pgtype.Text
 	preview        bool
 	videoID        string
 	clientSequence int64
@@ -48,7 +49,7 @@ func (result playbackRow) Scan(dest ...any) error {
 	*dest[0].(*string) = result.ownerID
 	*dest[1].(*string) = result.status
 	*dest[2].(*bool) = result.paid
-	*dest[3].(*bool) = result.entitled
+	*dest[3].(*pgtype.Text) = result.membership
 	*dest[4].(*bool) = result.preview
 	*dest[5].(*pgtype.Text) = pgtype.Text{String: result.videoID, Valid: result.videoPresent}
 	*dest[6].(*int64) = result.clientSequence
@@ -59,7 +60,7 @@ func TestLessonPlaybackReaderLoadsServerSelectedVideoAndProgress(t *testing.T) {
 	t.Parallel()
 	database := &playbackQueryer{row: playbackRow{
 		ownerID: "40000000-0000-4000-8000-000000000002", status: "published",
-		paid: true, entitled: true, preview: true,
+		paid: true, membership: pgtype.Text{String: "active", Valid: true}, preview: true,
 		videoID: playbackVideoID, videoPresent: true, clientSequence: 12,
 	}}
 	reader := playbackpostgres.NewLessonPlaybackReader(database)
@@ -70,7 +71,7 @@ func TestLessonPlaybackReaderLoadsServerSelectedVideoAndProgress(t *testing.T) {
 	}
 	want := domain.LessonPlayback{
 		VideoID: playbackVideoID, ClientSequence: 12,
-		Course: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published, Paid: true, Entitled: true, Preview: true},
+		Course: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published, Paid: true, Entitled: true, Membership: access.MembershipActive, Preview: true},
 	}
 	if got != want {
 		t.Fatalf("playback=%+v, want %+v", got, want)

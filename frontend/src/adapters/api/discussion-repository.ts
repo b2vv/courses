@@ -124,7 +124,7 @@ const publishErrors = {
     'comment_parent_invalid',
   ],
   401: ['authentication_required'],
-  403: ['origin_forbidden', 'course_forbidden'],
+  403: ['origin_forbidden', 'course_forbidden', 'enrollment_required', 'enrollment_blocked'],
   404: ['lesson_not_found'],
   409: ['comment_thread_full'],
 } as const satisfies Readonly<Record<number, readonly DiscussionErrorCode[]>>;
@@ -145,7 +145,7 @@ const removeErrors = {
 
 const reportErrors = {
   401: ['authentication_required'],
-  403: ['comment_forbidden'],
+  403: ['comment_forbidden', 'enrollment_required', 'enrollment_blocked'],
   404: ['comment_not_found'],
 } as const satisfies Readonly<Record<number, readonly DiscussionErrorCode[]>>;
 

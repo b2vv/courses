@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"courses/internal/orders/domain"
@@ -40,6 +42,18 @@ func (repository *Repository) CourseForPurchase(ctx context.Context, courseID st
 		facts.Price = &money
 	} else if minor.Valid || currency.Valid {
 		return ports.CourseFacts{}, domain.ErrDependencyUnavailable
+	}
+	return facts, nil
+}
+
+func (repository *Repository) CourseForEnrollment(ctx context.Context, courseID string) (ports.EnrollmentFacts, error) {
+	var facts ports.EnrollmentFacts
+	err := repository.pool.QueryRow(ctx, `SELECT status, (price_minor IS NULL) AS free, instructor_id::text FROM courses WHERE id=$1::text::uuid`, courseID).Scan(&facts.Status, &facts.Free, &facts.InstructorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ports.EnrollmentFacts{}, domain.ErrCourseNotEnrollable
+	}
+	if err != nil {
+		return ports.EnrollmentFacts{}, persistenceError(err)
 	}
 	return facts, nil
 }
@@ -97,48 +111,219 @@ RETURNING id::text,user_id::text,course_id::text,amount_minor,currency,status,id
 	return domain.Order{}, domain.ErrOrderNotFound
 }
 
-func (repository *Repository) ActiveGrants(ctx context.Context, userID, courseID string) ([]domain.Grant, error) {
-	rows, err := repository.pool.Query(ctx, `SELECT id::text,user_id::text,course_id::text,source,order_id::text,state,granted_at,granted_by::text FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND state='active'`, userID, courseID)
+func (repository *Repository) Membership(ctx context.Context, userID, courseID string) (*domain.Grant, error) {
+	var id, grantUserID, grantCourseID, source, state string
+	var orderID, grantedBy pgtype.Text
+	var grantedAt time.Time
+	err := repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,source,order_id::text,state,granted_at,granted_by::text FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid LIMIT 1`, userID, courseID).Scan(&id, &grantUserID, &grantCourseID, &source, &orderID, &state, &grantedAt, &grantedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	grant, err := domain.NewGrant(id, grantUserID, grantCourseID, domain.GrantSource(source), textPointer(orderID), domain.GrantState(state), grantedAt, textPointer(grantedBy))
+	if err != nil {
+		return nil, domain.ErrDependencyUnavailable
+	}
+	return &grant, nil
+}
+
+func (repository *Repository) MyMemberships(ctx context.Context, userID string) ([]ports.MembershipCard, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT g.course_id::text, c.slug, c.title, g.state, g.granted_at,
+  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+FROM course_grants AS g
+JOIN courses AS c ON c.id = g.course_id
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS completed
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
+) AS completed
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS total
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  WHERE m.course_id = g.course_id
+) AS totals
+WHERE g.user_id = $1::text::uuid AND g.state IN ('active', 'blocked')
+ORDER BY g.granted_at DESC
+LIMIT 200`, userID)
 	if err != nil {
 		return nil, persistenceError(err)
 	}
 	defer rows.Close()
-	var grants []domain.Grant
+	cards := make([]ports.MembershipCard, 0)
 	for rows.Next() {
-		var id, grantUserID, grantCourseID, source, state string
-		var orderID, grantedBy pgtype.Text
-		var grantedAt time.Time
-		if err := rows.Scan(&id, &grantUserID, &grantCourseID, &source, &orderID, &state, &grantedAt, &grantedBy); err != nil {
-			return nil, persistenceError(err)
+		card, scanErr := scanMembershipCard(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		grant, err := domain.NewGrant(id, grantUserID, grantCourseID, domain.GrantSource(source), textPointer(orderID), domain.GrantState(state), grantedAt, textPointer(grantedBy))
-		if err != nil {
-			return nil, domain.ErrDependencyUnavailable
-		}
-		grants = append(grants, grant)
+		cards = append(cards, card)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, persistenceError(err)
 	}
-	return grants, nil
+	return cards, nil
 }
 
-func (repository *Repository) GrantWithAudit(ctx context.Context, command ports.GrantCommand) (domain.Grant, error) {
+func (repository *Repository) Roster(ctx context.Context, courseID, cursor string, limit int) (ports.RosterPage, error) {
+	stamp, userID, err := decodeRosterCursor(cursor)
+	if err != nil {
+		return ports.RosterPage{}, err
+	}
+	rows, err := repository.pool.Query(ctx, `SELECT g.user_id::text, u.display_name, g.state, g.granted_at,
+  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+FROM course_grants AS g
+LEFT JOIN users AS u ON u.id = g.user_id AND u.deleted_at IS NULL
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS completed
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
+) AS completed
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS total
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  WHERE m.course_id = g.course_id
+) AS totals
+WHERE g.course_id = $1::text::uuid AND g.state IN ('active', 'blocked')
+  AND ($2::timestamptz IS NULL OR g.granted_at < $2 OR (g.granted_at = $2 AND g.user_id > $3::text::uuid))
+ORDER BY g.granted_at DESC, g.user_id ASC
+LIMIT $4`, courseID, stamp, userID, limit+1)
+	if err != nil {
+		return ports.RosterPage{}, persistenceError(err)
+	}
+	defer rows.Close()
+	entries := make([]ports.RosterEntry, 0, limit+1)
+	for rows.Next() {
+		entry, scanErr := scanRosterEntry(rows)
+		if scanErr != nil {
+			return ports.RosterPage{}, scanErr
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return ports.RosterPage{}, persistenceError(err)
+	}
+	page := ports.RosterPage{Entries: entries}
+	if len(entries) > limit {
+		last := entries[limit-1]
+		page.NextCursor = encodeRosterCursor(last.EnrolledAt, last.UserID)
+		page.Entries = entries[:limit]
+	}
+	return page, nil
+}
+
+type rosterRow interface {
+	Scan(...any) error
+}
+
+func scanRosterEntry(row rosterRow) (ports.RosterEntry, error) {
+	var entry ports.RosterEntry
+	var state string
+	// LEFT JOIN with deleted_at IS NULL: a since-deleted but still-enrolled member keeps the
+	// roster row but surfaces a NULL name, which maps to "" so the UI can anonymize it the way
+	// the review list does, rather than leaking the deleted account's display name.
+	var displayName pgtype.Text
+	if err := row.Scan(&entry.UserID, &displayName, &state, &entry.EnrolledAt, &entry.ProgressPercent); err != nil {
+		return ports.RosterEntry{}, persistenceError(err)
+	}
+	entry.DisplayName = displayName.String
+	switch domain.GrantState(state) {
+	case domain.GrantActive, domain.GrantBlocked:
+		entry.State = domain.GrantState(state)
+		return entry, nil
+	default:
+		return ports.RosterEntry{}, domain.ErrDependencyUnavailable
+	}
+}
+
+func scanMembershipCard(row rosterRow) (ports.MembershipCard, error) {
+	var card ports.MembershipCard
+	var state string
+	if err := row.Scan(&card.CourseID, &card.Slug, &card.Title, &state, &card.EnrolledAt, &card.ProgressPercent); err != nil {
+		return ports.MembershipCard{}, persistenceError(err)
+	}
+	switch domain.GrantState(state) {
+	case domain.GrantActive, domain.GrantBlocked:
+		card.State = domain.GrantState(state)
+		return card, nil
+	default:
+		return ports.MembershipCard{}, domain.ErrDependencyUnavailable
+	}
+}
+
+func encodeRosterCursor(stamp time.Time, userID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(stamp.UTC().Format(time.RFC3339Nano) + "|" + userID))
+}
+
+func decodeRosterCursor(value string) (*time.Time, *string, error) {
+	if value == "" {
+		return nil, nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	parts := strings.Split(string(decoded), "|")
+	if len(parts) != 2 || parts[1] == "" {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	stamp, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	var id pgtype.UUID
+	if err := id.Scan(parts[1]); err != nil {
+		return nil, nil, domain.ErrInvalidCursor
+	}
+	return &stamp, &parts[1], nil
+}
+
+func (repository *Repository) CreateMembership(ctx context.Context, grant domain.Grant, action, reason string, actorID *string) (domain.Grant, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	grant := command.Grant
-	_, err = tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at,granted_by) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,NULL,$5,$6,$7::text::uuid)`,
-		grant.ID(), grant.UserID(), grant.CourseID(), string(grant.Source()), string(grant.State()), grant.GrantedAt(), grant.GrantedBy())
-	if isUnique(err, "course_grants_one_active_per_user_course") {
+	_, err = tx.Exec(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at,granted_by) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5::text::uuid,$6,$7,$8::text::uuid)`,
+		grant.ID(), grant.UserID(), grant.CourseID(), string(grant.Source()), grant.OrderID(), string(grant.State()), grant.GrantedAt(), grant.GrantedBy())
+	if isUnique(err, "course_grants_one_per_user_course") {
 		return domain.Grant{}, domain.ErrCourseAlreadyOwned
 	}
 	if err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,'grant',$3,$4)`, grant.ID(), grant.GrantedBy(), command.Reason, grant.GrantedAt()); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5)`, grant.ID(), actorID, action, reason, grant.GrantedAt()); err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	return grant, nil
+}
+
+func (repository *Repository) UpdateMembership(ctx context.Context, grant domain.Grant, expected domain.GrantState, action, reason string, actorID *string) (domain.Grant, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Compare-and-set on the prior state: the (user,course) row was read in a separate
+	// transaction, so a concurrent transition may have moved it since. The state predicate
+	// turns a lost update into a visible conflict instead of a blind overwrite.
+	result, err := tx.Exec(ctx, `UPDATE course_grants SET source=$2,order_id=$3::text::uuid,state=$4,granted_by=$5::text::uuid WHERE id=$1::text::uuid AND state=$6`, grant.ID(), string(grant.Source()), grant.OrderID(), string(grant.State()), grant.GrantedBy(), string(expected))
+	if err != nil {
+		return domain.Grant{}, persistenceError(err)
+	}
+	if result.RowsAffected() != 1 {
+		return domain.Grant{}, domain.ErrMembershipConflict
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,actor_id,action,reason,created_at) VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5)`, grant.ID(), actorID, action, reason, grant.GrantedAt()); err != nil {
 		return domain.Grant{}, persistenceError(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -179,7 +364,7 @@ func (repository *Repository) GrandfatherOnPriceSet(ctx context.Context, courseI
   JOIN course_lessons AS lessons ON lessons.id=progress.lesson_id
   JOIN course_modules AS modules ON modules.id=lessons.module_id
   WHERE modules.course_id=$1::text::uuid
-  ON CONFLICT (user_id,course_id) WHERE state='active' DO NOTHING
+  ON CONFLICT (user_id,course_id) DO NOTHING
   RETURNING id, granted_at
 )
 INSERT INTO grant_audit(grant_id,action,reason,created_at)
@@ -247,15 +432,24 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 		return persistenceError(err)
 	}
 	grantID := newID()
-	var insertedGrantID string
+	var settledGrantID string
+	var inserted bool
 	err = tx.QueryRow(ctx, `INSERT INTO course_grants(id,user_id,course_id,source,order_id,state,granted_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,'purchase',$4::text::uuid,'active',$5)
-ON CONFLICT (user_id, course_id) WHERE state='active' DO NOTHING
-RETURNING id::text`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&insertedGrantID)
+ON CONFLICT (user_id, course_id) DO UPDATE
+SET source='purchase', order_id=EXCLUDED.order_id
+WHERE course_grants.source='self' AND course_grants.state='active'
+RETURNING id::text, (xmax = 0) AS inserted`, grantID, decision.GrantUserID, decision.GrantCourseID, decision.GrantOrderID, event.ReceivedAt).Scan(&settledGrantID, &inserted)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return persistenceError(err)
 	}
 	if err == nil {
-		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,'grant',$2::text::uuid,$3)`, insertedGrantID, eventDatabaseID, event.ReceivedAt); err != nil {
+		// xmax = 0 is the freshly inserted tuple; a non-zero xmax is the self→purchase upgrade
+		// of an existing row. This avoids assuming the generated id's text form matches id::text.
+		action := "grant"
+		if !inserted {
+			action = "upgrade"
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,created_at) VALUES($1::text::uuid,$2,$3::text::uuid,$4)`, settledGrantID, action, eventDatabaseID, event.ReceivedAt); err != nil {
 			return persistenceError(err)
 		}
 	} else {

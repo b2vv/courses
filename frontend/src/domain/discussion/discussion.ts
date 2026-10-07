@@ -4,6 +4,8 @@ export type DiscussionErrorCode =
   | 'invalid_response'
   | 'dependency_unavailable'
   | 'invalid_request'
+  | 'enrollment_required'
+  | 'enrollment_blocked'
   | 'authentication_required'
   | 'origin_forbidden'
   | 'course_forbidden'

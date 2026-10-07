@@ -1,10 +1,12 @@
 import type { CourseDetail } from '../../domain/course/course';
 import type { PublicReviewPage } from '../../domain/course/course';
+import type { EnrollmentErrorCode, Membership } from '../../domain/enrollment/enrollment';
 import { Button, Link } from '../ui';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { RatingSummary } from './RatingSummary';
 import { formatDate } from '../format-timestamp';
+import { ReportDialog } from '../enrollment/ReportDialog';
 
 export function CourseView({
   course,
@@ -17,6 +19,11 @@ export function CourseView({
   onRetry = () => {},
   onRetryMore = () => {},
   signedIn = false,
+  membership,
+  enrolling = false,
+  enrollError,
+  onEnroll = () => {},
+  onReportLecturer = async () => {},
   ownReviewId,
   onReport = async () => {},
 }: {
@@ -30,6 +37,11 @@ export function CourseView({
   onRetry?: (() => void) | undefined;
   onRetryMore?: (() => void) | undefined;
   signedIn?: boolean | undefined;
+  membership?: Membership | undefined;
+  enrolling?: boolean | undefined;
+  enrollError?: EnrollmentErrorCode | undefined;
+  onEnroll?: (() => void) | undefined;
+  onReportLecturer?: ((reason: string) => Promise<void>) | undefined;
   ownReviewId?: string | undefined;
   onReport?: ((id: string) => Promise<void>) | undefined;
 }) {
@@ -84,14 +96,100 @@ export function CourseView({
             onReport={onReport}
           />
         </div>
-        <aside className="availability">
-          <h2>{t('course.learningTitle')}</h2>
-          <p>{t('course.learningHint')}</p>
-          <Link href={`/learn/${course.slug}`}>{t('course.startLearning')}</Link>
-        </aside>
+        <EnrollmentCallToAction
+          course={course}
+          membership={membership}
+          enrolling={enrolling}
+          enrollError={enrollError}
+          onEnroll={onEnroll}
+          onReportLecturer={onReportLecturer}
+        />
       </div>
     </article>
   );
+}
+
+function EnrollmentCallToAction({
+  course,
+  membership,
+  enrolling,
+  enrollError,
+  onEnroll,
+  onReportLecturer,
+}: {
+  course: CourseDetail;
+  membership: Membership | undefined;
+  enrolling: boolean;
+  enrollError: EnrollmentErrorCode | undefined;
+  onEnroll: () => void;
+  onReportLecturer: (reason: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [reportSent, setReportSent] = useState(false);
+  // The backend's `member` flag means "a membership row exists", which is true for revoked too;
+  // access follows the STATE. active|blocked are current members; revoked|none are not and may
+  // re-enroll (free) — so branch on state, not the member boolean.
+  const activeMember = membership?.state === 'active' || membership?.state === 'blocked';
+  const blocked = membership?.state === 'blocked';
+  const canEnroll = !activeMember && course.price === null;
+  return (
+    <aside className="availability">
+      <h2>{activeMember ? t('enrollment.member') : t('course.learningTitle')}</h2>
+      {activeMember ? (
+        <>
+          {blocked && <output>{t('enrollment.blockedNote')}</output>}
+          <Link href={`/learn/${course.slug}`}>{t('enrollment.startLearning')}</Link>
+          <ReportDialog
+            triggerLabel={t('enrollment.report.lecturer')}
+            onReport={onReportLecturer}
+            onSent={() => setReportSent(true)}
+          />
+          {reportSent ? <output>{t('enrollment.report.sent')}</output> : null}
+        </>
+      ) : canEnroll ? (
+        <>
+          <p>{t('course.learningHint')}</p>
+          {/* Keep focus on this control while the request is in flight. */}
+          <Button type="button" onPress={onEnroll} isPending={enrolling}>
+            {t('enrollment.enroll')}
+          </Button>
+          {enrollError !== undefined && (
+            <p role="alert">{t(`enrollment.errors.${enrollErrorKey(enrollError)}`)}</p>
+          )}
+        </>
+      ) : (
+        <>
+          <p>{t('course.learningHint')}</p>
+          <Link href={`/learn/${course.slug}`}>{t('course.startLearning')}</Link>
+        </>
+      )}
+    </aside>
+  );
+}
+
+export function enrollErrorKey(
+  code: EnrollmentErrorCode,
+):
+  | 'membership_conflict'
+  | 'enrollment_required'
+  | 'enrollment_blocked'
+  | 'course_not_enrollable'
+  | 'enrollment_forbidden'
+  | 'course_already_owned'
+  | 'email_not_verified'
+  | 'generic' {
+  switch (code) {
+    case 'membership_conflict':
+    case 'enrollment_required':
+    case 'enrollment_blocked':
+    case 'course_not_enrollable':
+    case 'enrollment_forbidden':
+    case 'course_already_owned':
+    case 'email_not_verified':
+      return code;
+    default:
+      return 'generic';
+  }
 }
 
 export function Reviews({
@@ -247,7 +345,11 @@ function ReviewCard({
                       setReportError(
                         error instanceof Error && error.message === 'report_own_review'
                           ? t('ratings.ownReportError')
-                          : t('ratings.reportError'),
+                          : error instanceof Error &&
+                              (error.message === 'enrollment_required' ||
+                                error.message === 'enrollment_blocked')
+                            ? t(`ratings.errors.${error.message}`)
+                            : t('ratings.reportError'),
                       ),
                     )
                     .finally(() => setIsReporting(false))

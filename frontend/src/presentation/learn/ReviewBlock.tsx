@@ -112,7 +112,11 @@ export function ReviewBlock({
       setError(
         failure instanceof Error && failure.message === 'review_removed'
           ? t('ratings.removed')
-          : t('ratings.writeFailure'),
+          : failure instanceof Error &&
+              (failure.message === 'enrollment_required' ||
+                failure.message === 'enrollment_blocked')
+            ? t(`ratings.errors.${failure.message}`)
+            : t('ratings.writeFailure'),
       );
     }
   };

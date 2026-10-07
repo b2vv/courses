@@ -32,16 +32,21 @@ const (
 )
 
 type fakeStore struct {
-	order       domain.Order
-	grant       domain.Grant
-	courseErr   error
-	getErr      error
-	grantErr    error
-	active      []domain.Grant
-	applyCalls  int
-	applyErr    error
-	grantCalls  int
-	checkoutErr error
+	order          domain.Order
+	grant          domain.Grant
+	courseErr      error
+	getErr         error
+	grantErr       error
+	membership     *domain.Grant
+	applyCalls     int
+	applyErr       error
+	grantCalls     int
+	checkoutErr    error
+	enrollment     ports.EnrollmentFacts
+	roster         ports.RosterPage
+	rosterErr      error
+	memberships    []ports.MembershipCard
+	membershipsErr error
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -50,6 +55,12 @@ func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.Course
 	}
 	money, _ := domain.NewMoney("50000", "UAH")
 	return ports.CourseFacts{Published: true, Price: &money}, nil
+}
+func (store *fakeStore) CourseForEnrollment(context.Context, string) (ports.EnrollmentFacts, error) {
+	if store.enrollment.Status != "" {
+		return store.enrollment, nil
+	}
+	return ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: testAdmin}, nil
 }
 func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (domain.Order, error) {
 	if store.order.ID() == "" {
@@ -82,16 +93,30 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 	}
 	return store.order, nil
 }
-func (store *fakeStore) ActiveGrants(context.Context, string, string) ([]domain.Grant, error) {
-	return store.active, nil
+func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
+	return store.membership, nil
 }
-func (store *fakeStore) GrantWithAudit(_ context.Context, command ports.GrantCommand) (domain.Grant, error) {
+func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
+	return store.memberships, store.membershipsErr
+}
+func (store *fakeStore) Roster(context.Context, string, string, int) (ports.RosterPage, error) {
+	return store.roster, store.rosterErr
+}
+func (store *fakeStore) CreateMembership(_ context.Context, grant domain.Grant, _ string, _ string, _ *string) (domain.Grant, error) {
 	store.grantCalls++
 	if store.grantErr != nil {
 		return domain.Grant{}, store.grantErr
 	}
-	store.grant = command.Grant
-	return command.Grant, nil
+	store.grant = grant
+	return grant, nil
+}
+func (store *fakeStore) UpdateMembership(_ context.Context, grant domain.Grant, _ domain.GrantState, _ string, _ string, _ *string) (domain.Grant, error) {
+	store.grantCalls++
+	if store.grantErr != nil {
+		return domain.Grant{}, store.grantErr
+	}
+	store.grant = grant
+	return grant, nil
 }
 func (*fakeStore) GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error {
 	return nil
@@ -115,7 +140,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 			w.Header().Set("Cache-Control", "no-store")
 			role := r.Header.Get("X-Test-Role")
 			userID := testUser
-			if role == "admin" {
+			if role == "admin" || role == "instructor" {
 				userID = testAdmin
 			}
 			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: userID, Role: role, EmailVerified: true})))
@@ -161,7 +186,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store.active = []domain.Grant{owned}
+	store.membership = &owned
 	conflict := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
 	conflict.Header.Set("Idempotency-Key", "purchase-owned")
 	conflict.Header.Set("X-Test-Role", "student")
@@ -171,7 +196,7 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		t.Fatalf("owned status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, conflict, response)
-	store.active = nil
+	store.membership = nil
 
 	status := httptest.NewRequest(http.MethodGet, "/api/v1/learn/orders/"+testOrder, nil)
 	status.Header.Set("X-Test-Role", "student")
@@ -297,6 +322,144 @@ func TestCheckoutAlreadyOpenedMatchesOpenAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, request, response)
+}
+
+func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	store := &fakeStore{roster: ports.RosterPage{Entries: []ports.RosterEntry{{UserID: testUser, DisplayName: "Student", State: domain.GrantActive, EnrolledAt: now, ProgressPercent: 35}}}}
+	service := application.New(store, store, store, func() time.Time { return now }, func() string { return testGrant }, nil)
+	handler := ordershttp.NewHandler(service, nil, "")
+	authenticate := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role := r.Header.Get("X-Test-Role")
+			userID := testUser
+			if role == "admin" || role == "instructor" {
+				userID = testAdmin
+			}
+			next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: userID, Role: role, EmailVerified: r.Header.Get("X-Unverified") == ""})))
+		})
+	}
+	server := httpserver.NewHandler(httpserver.Options{Service: "test", Register: func(mux *http.ServeMux) {
+		handler.Register(mux, authenticate, func(next http.Handler) http.Handler { return next })
+		handler.RegisterTeach(mux, authenticate, func(next http.Handler) http.Handler { return next })
+		handler.RegisterAdmin(mux, authenticate, func(next http.Handler) http.Handler { return next }, func(next http.Handler) http.Handler { return next })
+	}})
+	request := func(method, path, role string) (*http.Request, *httptest.ResponseRecorder) {
+		r := httptest.NewRequest(method, path, nil)
+		r.Header.Set("X-Test-Role", role)
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, r)
+		return r, response
+	}
+
+	path := "/api/v1/learn/courses/" + testCourse
+	r, response := request(http.MethodPost, path+"/enroll", "student")
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"source":"self"`) {
+		t.Fatalf("enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.membership = &store.grant
+	r, response = request(http.MethodGet, path+"/membership", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"member":true`) {
+		t.Fatalf("membership status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.membership = nil
+	r, response = request(http.MethodGet, path+"/membership", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":null`) {
+		t.Fatalf("none membership status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.enrollment = ports.EnrollmentFacts{Status: "published", Free: false, InstructorID: testAdmin}
+	r, response = request(http.MethodPost, path+"/enroll", "student")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "course_not_enrollable") {
+		t.Fatalf("paid enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.enrollment = ports.EnrollmentFacts{}
+
+	r, response = request(http.MethodPost, path+"/enroll", "student")
+	r.Header.Set("X-Unverified", "true")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, r)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "email_not_verified") {
+		t.Fatalf("unverified enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.membership = nil
+	store.grantErr = domain.ErrMembershipConflict
+	r, response = request(http.MethodPost, path+"/enroll", "student")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "membership_conflict") {
+		t.Fatalf("conflict enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.grantErr = nil
+
+	store.membership = nil
+	participant := "/participants/" + testUser
+	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/block", "student")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "enrollment_forbidden") {
+		t.Fatalf("stranger block status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	active, err := domain.SelfEnroll(testGrant, testUser, testCourse, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.membership = &active
+	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/block", "instructor")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"blocked"`) {
+		t.Fatalf("block status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.membership = &store.grant
+	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/unblock", "instructor")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"active"`) {
+		t.Fatalf("unblock status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.membership = &store.grant
+	store.memberships = []ports.MembershipCard{{CourseID: testCourse, Slug: "course", Title: "Course", State: domain.GrantActive, EnrolledAt: now, ProgressPercent: 35}}
+	r, response = request(http.MethodGet, "/api/v1/learn/memberships", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"items":[{"courseId":"`+testCourse+`"`) || !strings.Contains(response.Body.String(), `"progressPercent":35`) {
+		t.Fatalf("memberships status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.memberships = nil
+	r, response = request(http.MethodGet, "/api/v1/learn/memberships", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"items":[]`) {
+		t.Fatalf("empty memberships status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	r, response = request(http.MethodPost, "/api/v1/admin/courses/"+testCourse+participant+"/revoke", "student")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "enrollment_forbidden") {
+		t.Fatalf("revoke status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	r, response = request(http.MethodPost, "/api/v1/admin/courses/"+testCourse+participant+"/revoke", "admin")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"revoked"`) {
+		t.Fatalf("revoke status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	r, response = request(http.MethodGet, "/api/v1/teach/courses/"+testCourse+"/roster?limit=20", "instructor")
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "email") {
+		t.Fatalf("roster status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.rosterErr = domain.ErrInvalidCursor
+	r, response = request(http.MethodGet, "/api/v1/teach/courses/"+testCourse+"/roster?cursor=invalid", "instructor")
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("cursor status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
 }
 
 func assertContract(t *testing.T, request *http.Request, response *httptest.ResponseRecorder) {
