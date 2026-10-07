@@ -333,6 +333,14 @@ remain readable UI states rather than blank pages.
   local run afterwards is a regression check (all rows still pass), not proof that the flake is
   gone — the original needed concurrent load a quiet host does not reproduce; the proof of that is
   the mechanism (a capture at the event is load-independent by construction) and the 2 vCPU CI run.
+  That run (37655371086, 2026-10-07) then showed a second shape in **P05**: the first page keeps
+  playing and recording a tick every 2 s on the e2e profile while the second context is opened,
+  so the "saved position" was a moving target — the second page started at **41.03 s** at
+  `playing`, correctly restoring what the first page had saved meanwhile. P05 and B18 now pause
+  the first page and anchor the expectation on the position the pause heartbeat recorded
+  (`pauseAndRecord`, ±1 s), i.e. on the value a restore has to reproduce, not on the number the
+  seek asked for. P04 reloads immediately after the seek (a `nav` heartbeat freezes the value) and
+  P07 restarts from zero; neither has a page left playing.
 - **AV1 telemetry begins only at the mint endpoint.** It includes denied mints, but a client
   consumes its page-scope probe before sending; if that request never reaches the server, the
   observation is lost. This narrow loss window avoids double counting when a response is lost.
