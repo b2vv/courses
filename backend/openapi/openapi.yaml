@@ -97,6 +97,124 @@ paths:
         '409': { $ref: '#/components/responses/PurchaseConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/enroll:
+    post:
+      operationId: enrollInCourse
+      summary: Enroll the authenticated account in a free published course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Active membership.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/learn/courses/{courseId}/membership:
+    get:
+      operationId: getMyCourseMembership
+      summary: Read the authenticated account membership state
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Membership state, or no membership.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/MembershipState' } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/courses/{courseId}/roster:
+    get:
+      operationId: getCourseRoster
+      summary: List course members for the instructor or administrator
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: A cursor page of members; email addresses are not exposed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/RosterPage' } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/courses/{courseId}/participants/{userId}/block:
+    post:
+      operationId: blockCourseParticipant
+      summary: Block a participant from course communication
+      parameters:
+        - { name: courseId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/courses/{courseId}/participants/{userId}/unblock:
+    post:
+      operationId: unblockCourseParticipant
+      summary: Restore a participant's course communication
+      parameters:
+        - { name: courseId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/courses/{courseId}/participants/{userId}/revoke:
+    post:
+      operationId: revokeCourseParticipant
+      summary: Revoke a participant membership as an administrator
+      parameters:
+        - { name: courseId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/learn/orders/{orderId}:
     get:
       operationId: getPurchaseStatus
@@ -2188,6 +2306,44 @@ components:
       properties:
         userId: { type: string, format: uuid }
         reason: { type: string, minLength: 1, maxLength: 500 }
+    MembershipGrant:
+      type: object
+      additionalProperties: false
+      required: [id, userId, courseId, source, state, grantedAt, grantedBy]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        source: { type: string, enum: [purchase, admin, grandfather, self] }
+        state: { type: string, enum: [active, blocked, revoked] }
+        grantedAt: { type: string, format: date-time }
+        grantedBy: { type: string, format: uuid, nullable: true }
+    MembershipState:
+      type: object
+      additionalProperties: false
+      required: [state, member]
+      properties:
+        state: { type: string, enum: [active, blocked, revoked], nullable: true }
+        member: { type: boolean }
+    RosterEntry:
+      type: object
+      additionalProperties: false
+      required: [userId, displayName, state, enrolledAt, progressPercent]
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        state: { type: string, enum: [active, blocked, revoked] }
+        enrolledAt: { type: string, format: date-time }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+    RosterPage:
+      type: object
+      additionalProperties: false
+      required: [entries, nextCursor]
+      properties:
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/RosterEntry' }
+        nextCursor: { type: string, nullable: true }
     CourseGrant:
       type: object
       additionalProperties: false
@@ -2410,10 +2566,18 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, email_not_verified, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, membership_conflict, course_not_enrollable, enrollment_forbidden, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:
+    MembershipConflict:
+      description: Enrollment is unavailable or changed concurrently.
+      headers:
+        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+        Cache-Control: { $ref: '#/components/headers/NoStore' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     TwoFactorConflict:
       description: Two-factor authentication is already enabled or is not enabled.
       content:

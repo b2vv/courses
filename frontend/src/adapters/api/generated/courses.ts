@@ -43,6 +43,7 @@ import type {
   EmailRequest,
   EmailTakenResponse,
   ForbiddenResponse,
+  GetCourseRosterParams,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
   Instructor,
@@ -69,6 +70,9 @@ import type {
   MediaTicketRequest,
   MediaUploadTicket,
   MediaVideo,
+  MembershipConflictResponse,
+  MembershipGrant,
+  MembershipState,
   ModerationQueuePage,
   NewEmailRequest,
   NotFoundResponse,
@@ -97,6 +101,7 @@ import type {
   RegisterRequest,
   ResetPasswordRequest,
   Review,
+  RosterPage,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
@@ -326,6 +331,461 @@ export const startCoursePurchase = async (courseId: string, options?: RequestIni
 
   const data: startCoursePurchaseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as startCoursePurchaseResponse
+}
+
+
+
+export type enrollInCourseResponse201 = {
+  data: MembershipGrant
+  status: 201
+}
+
+export type enrollInCourseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type enrollInCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type enrollInCourseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type enrollInCourseResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type enrollInCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type enrollInCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type enrollInCourseResponseSuccess = (enrollInCourseResponse201) & {
+  headers: Headers;
+};
+export type enrollInCourseResponseError = (enrollInCourseResponse400 | enrollInCourseResponse401 | enrollInCourseResponse403 | enrollInCourseResponse409 | enrollInCourseResponse500 | enrollInCourseResponse503) & {
+  headers: Headers;
+};
+
+export type enrollInCourseResponse = (enrollInCourseResponseSuccess | enrollInCourseResponseError)
+
+export const getEnrollInCourseUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/enroll`
+}
+
+/**
+ * @summary Enroll the authenticated account in a free published course
+ */
+export const enrollInCourse = async (courseId: string, options?: RequestInit): Promise<enrollInCourseResponse> => {
+
+  const res = await fetch(getEnrollInCourseUrl(courseId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollInCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as enrollInCourseResponse
+}
+
+
+
+export type getMyCourseMembershipResponse200 = {
+  data: MembershipState
+  status: 200
+}
+
+export type getMyCourseMembershipResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipResponseSuccess = (getMyCourseMembershipResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipResponseError = (getMyCourseMembershipResponse400 | getMyCourseMembershipResponse401 | getMyCourseMembershipResponse403 | getMyCourseMembershipResponse500 | getMyCourseMembershipResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipResponse = (getMyCourseMembershipResponseSuccess | getMyCourseMembershipResponseError)
+
+export const getGetMyCourseMembershipUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/membership`
+}
+
+/**
+ * @summary Read the authenticated account membership state
+ */
+export const getMyCourseMembership = async (courseId: string, options?: RequestInit): Promise<getMyCourseMembershipResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipUrl(courseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyCourseMembershipResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipResponse
+}
+
+
+
+export type getCourseRosterResponse200 = {
+  data: RosterPage
+  status: 200
+}
+
+export type getCourseRosterResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getCourseRosterResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getCourseRosterResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getCourseRosterResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getCourseRosterResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getCourseRosterResponseSuccess = (getCourseRosterResponse200) & {
+  headers: Headers;
+};
+export type getCourseRosterResponseError = (getCourseRosterResponse400 | getCourseRosterResponse401 | getCourseRosterResponse403 | getCourseRosterResponse500 | getCourseRosterResponse503) & {
+  headers: Headers;
+};
+
+export type getCourseRosterResponse = (getCourseRosterResponseSuccess | getCourseRosterResponseError)
+
+export const getGetCourseRosterUrl = (courseId: string,
+    params?: GetCourseRosterParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster`
+}
+
+/**
+ * @summary List course members for the instructor or administrator
+ */
+export const getCourseRoster = async (courseId: string,
+    params?: GetCourseRosterParams, options?: RequestInit): Promise<getCourseRosterResponse> => {
+
+  const res = await fetch(getGetCourseRosterUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCourseRosterResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCourseRosterResponse
+}
+
+
+
+export type blockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockCourseParticipantResponseSuccess = (blockCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type blockCourseParticipantResponseError = (blockCourseParticipantResponse400 | blockCourseParticipantResponse401 | blockCourseParticipantResponse403 | blockCourseParticipantResponse409 | blockCourseParticipantResponse500 | blockCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type blockCourseParticipantResponse = (blockCourseParticipantResponseSuccess | blockCourseParticipantResponseError)
+
+export const getBlockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/block`
+}
+
+/**
+ * @summary Block a participant from course communication
+ */
+export const blockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<blockCourseParticipantResponse> => {
+
+  const res = await fetch(getBlockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockCourseParticipantResponse
+}
+
+
+
+export type unblockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockCourseParticipantResponseSuccess = (unblockCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type unblockCourseParticipantResponseError = (unblockCourseParticipantResponse400 | unblockCourseParticipantResponse401 | unblockCourseParticipantResponse403 | unblockCourseParticipantResponse409 | unblockCourseParticipantResponse500 | unblockCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type unblockCourseParticipantResponse = (unblockCourseParticipantResponseSuccess | unblockCourseParticipantResponseError)
+
+export const getUnblockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/unblock`
+}
+
+/**
+ * @summary Restore a participant's course communication
+ */
+export const unblockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<unblockCourseParticipantResponse> => {
+
+  const res = await fetch(getUnblockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
+}
+
+
+
+export type revokeCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type revokeCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type revokeCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type revokeCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type revokeCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type revokeCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type revokeCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type revokeCourseParticipantResponseSuccess = (revokeCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type revokeCourseParticipantResponseError = (revokeCourseParticipantResponse400 | revokeCourseParticipantResponse401 | revokeCourseParticipantResponse403 | revokeCourseParticipantResponse409 | revokeCourseParticipantResponse500 | revokeCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type revokeCourseParticipantResponse = (revokeCourseParticipantResponseSuccess | revokeCourseParticipantResponseError)
+
+export const getRevokeCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/participants/${userId}/revoke`
+}
+
+/**
+ * @summary Revoke a participant membership as an administrator
+ */
+export const revokeCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<revokeCourseParticipantResponse> => {
+
+  const res = await fetch(getRevokeCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as revokeCourseParticipantResponse
 }
 
 
