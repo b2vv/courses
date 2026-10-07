@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { RatingSummary } from './RatingSummary';
 import { formatDate } from '../format-timestamp';
+import { ReportDialog } from '../enrollment/ReportDialog';
 
 export function CourseView({
   course,
@@ -22,6 +23,7 @@ export function CourseView({
   enrolling = false,
   enrollError,
   onEnroll = () => {},
+  onReportLecturer = async () => {},
   ownReviewId,
   onReport = async () => {},
 }: {
@@ -39,6 +41,7 @@ export function CourseView({
   enrolling?: boolean | undefined;
   enrollError?: EnrollmentErrorCode | undefined;
   onEnroll?: (() => void) | undefined;
+  onReportLecturer?: ((reason: string) => Promise<void>) | undefined;
   ownReviewId?: string | undefined;
   onReport?: ((id: string) => Promise<void>) | undefined;
 }) {
@@ -99,6 +102,7 @@ export function CourseView({
           enrolling={enrolling}
           enrollError={enrollError}
           onEnroll={onEnroll}
+          onReportLecturer={onReportLecturer}
         />
       </div>
     </article>
@@ -111,14 +115,17 @@ function EnrollmentCallToAction({
   enrolling,
   enrollError,
   onEnroll,
+  onReportLecturer,
 }: {
   course: CourseDetail;
   membership: Membership | undefined;
   enrolling: boolean;
   enrollError: EnrollmentErrorCode | undefined;
   onEnroll: () => void;
+  onReportLecturer: (reason: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const [reportSent, setReportSent] = useState(false);
   // The backend's `member` flag means "a membership row exists", which is true for revoked too;
   // access follows the STATE. active|blocked are current members; revoked|none are not and may
   // re-enroll (free) — so branch on state, not the member boolean.
@@ -132,6 +139,12 @@ function EnrollmentCallToAction({
         <>
           {blocked && <output>{t('enrollment.blockedNote')}</output>}
           <Link href={`/learn/${course.slug}`}>{t('enrollment.startLearning')}</Link>
+          <ReportDialog
+            triggerLabel={t('enrollment.report.lecturer')}
+            onReport={onReportLecturer}
+            onSent={() => setReportSent(true)}
+          />
+          {reportSent ? <output>{t('enrollment.report.sent')}</output> : null}
         </>
       ) : canEnroll ? (
         <>

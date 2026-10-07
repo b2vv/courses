@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { RosterEntry } from '../../domain/enrollment/enrollment';
 import { Button, EmptyState, ProgressBar } from '../ui';
+import { ReportDialog } from '../enrollment/ReportDialog';
+import { useEffect, useRef, useState } from 'react';
 
 type CourseRosterProps = {
   readonly entries: readonly RosterEntry[];
@@ -14,6 +16,7 @@ type CourseRosterProps = {
   readonly onLoadMore: () => void;
   readonly onBlock: (userId: string) => void;
   readonly onUnblock: (userId: string) => void;
+  readonly onReportStudent: (userId: string, reason: string) => Promise<void>;
 };
 
 function enrollmentErrorKey(error: unknown): string {
@@ -42,9 +45,28 @@ export function CourseRoster({
   onLoadMore,
   onBlock,
   onUnblock,
+  onReportStudent,
 }: CourseRosterProps) {
   const { t, i18n } = useTranslation();
+  const [reportSent, setReportSent] = useState(false);
   const errorCode = enrollmentErrorKey(error);
+  // Per-row pending: only the acted row's button goes busy, and it stays focusable (isPending,
+  // not isDisabled — a native disabled on the focused button drops focus to <body>). A single
+  // list-wide flag would disable every row and lose the user's place (B-L7b.1). No reset needed:
+  // `isPending && actedUserId === entry.userId` falls to false on its own when the request settles.
+  const [actedUserId, setActedUserId] = useState<string>();
+  // Load-more focus: after the final page arrives, move focus to the first newly-loaded row
+  // (mirrors the reviews list / Rt14) so keyboard users are not dropped to the top.
+  const priorCount = useRef(entries.length);
+  const addedRow = useRef<HTMLLIElement>(null);
+  const [firstAddedIndex, setFirstAddedIndex] = useState<number>();
+  useEffect(() => {
+    if (entries.length - priorCount.current > 0) setFirstAddedIndex(priorCount.current);
+    priorCount.current = entries.length;
+  }, [entries.length]);
+  useEffect(() => {
+    if (!hasNextPage && firstAddedIndex !== undefined) addedRow.current?.focus();
+  }, [firstAddedIndex, hasNextPage]);
   return (
     <section aria-labelledby="teach-roster-heading" className="teach-section">
       <h2 id="teach-roster-heading">{t('enrollment.roster.title')}</h2>
@@ -61,8 +83,11 @@ export function CourseRoster({
       {actionError ? <p role="alert">{t(`enrollment.errors.${enrollmentErrorKey(actionError)}`)}</p> : null}
       {entries.length > 0 ? (
         <ul aria-label={t('enrollment.roster.title')}>
-          {entries.map((entry) => (
-            <li key={entry.userId}>
+          {entries.map((entry, index) => (
+            <li
+              key={entry.userId}
+              {...(index === firstAddedIndex ? { ref: addedRow, tabIndex: -1 } : {})}
+            >
               <article>
                 <h3>{entry.displayName || t('ratings.formerAuthor')}</h3>
                 <p>{t(`enrollment.roster.state.${entry.state}`)}</p>
@@ -80,22 +105,32 @@ export function CourseRoster({
                 />
                 <Button
                   variant={entry.state === 'active' ? 'danger' : 'secondary'}
-                  isDisabled={isPending}
-                  onPress={() =>
-                    entry.state === 'active' ? onBlock(entry.userId) : onUnblock(entry.userId)
-                  }
+                  isPending={isPending && actedUserId === entry.userId}
+                  onPress={() => {
+                    setActedUserId(entry.userId);
+                    if (entry.state === 'active') onBlock(entry.userId);
+                    else onUnblock(entry.userId);
+                  }}
                 >
                   {t(`enrollment.roster.${entry.state === 'active' ? 'block' : 'unblock'}`)}
                 </Button>
+                <ReportDialog
+                  triggerLabel={t('enrollment.report.student')}
+                  onReport={(reason) => onReportStudent(entry.userId, reason)}
+                  onSent={() => setReportSent(true)}
+                />
               </article>
             </li>
           ))}
         </ul>
       ) : null}
+      {reportSent ? <output>{t('enrollment.report.sent')}</output> : null}
       {hasNextPage ? (
         <Button
           variant="secondary"
-          isDisabled={isFetchingNextPage}
+          // isPending, not isDisabled: a native disabled on the focused button drops focus to <body>
+          // while the next page loads (B-L7b.1).
+          isPending={isFetchingNextPage}
           onPress={onLoadMore}
         >
           {t('enrollment.roster.more')}

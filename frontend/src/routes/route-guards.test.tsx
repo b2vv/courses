@@ -277,6 +277,8 @@ function createTestRouter(
         roster: async () => ({ ok: true, value: { entries: [], nextCursor: null } }),
         block: async () => ({ ok: true, value: undefined }),
         unblock: async () => ({ ok: true, value: undefined }),
+        reportLecturer: async () => ({ ok: true, value: undefined }),
+        reportStudent: async () => ({ ok: true, value: undefined }),
       }),
     },
     defaultPendingMs: 0,

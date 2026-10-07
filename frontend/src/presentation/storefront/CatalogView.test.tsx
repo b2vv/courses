@@ -146,6 +146,26 @@ describe('catalog presentation', () => {
     expect(screen.getByRole('alert').textContent).toContain('Стан участі змінився');
   });
 
+  it('lets current members report the instructor and keeps the action from revoked viewers', async () => {
+    const report = async (reason: string) => {
+      expect(reason).toBe('Неприйнятна поведінка');
+    };
+    const { rerender } = render(
+      <CourseView
+        course={architectureCourse}
+        membership={{ state: 'active' }}
+        onReportLecturer={report}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Поскаржитися на викладача' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Причина скарги' }), 'Неприйнятна поведінка');
+    await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
+    expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');
+
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'revoked' }} />);
+    expect(screen.queryByRole('button', { name: 'Поскаржитися на викладача' })).toBeNull();
+  });
+
   it('omits an empty program section and localizes a present program heading', () => {
     const { rerender } = render(<CourseView course={{ ...architectureCourse, program: [] }} />);
     expect(screen.queryByRole('heading', { name: 'Програма курсу' })).toBeNull();

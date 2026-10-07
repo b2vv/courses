@@ -4,6 +4,8 @@ import {
   getCourseRoster,
   getMyCourseMembership,
   getMyCourseMemberships,
+  reportCourseLecturer,
+  reportCourseParticipant,
   unblockCourseParticipant,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
@@ -127,6 +129,13 @@ const membershipMutationErrors = {
   403: ['enrollment_forbidden'],
   409: ['membership_conflict'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const reportErrors = {
+  400: ['report_invalid', 'report_own_person'],
+  401: ['authentication_required'],
+  403: ['report_forbidden', 'email_not_verified'],
+  404: ['course_not_found'],
+  409: ['report_already_open'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
 
 export function createApiEnrollmentRepository(
   options: TransportOptions = {},
@@ -196,6 +205,28 @@ export function createApiEnrollmentRepository(
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, membershipMutationErrors));
       return membershipGrant(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+    },
+    async reportLecturer(courseId, reason, signal) {
+      const outcome = await send(
+        'enrollment.report-lecturer',
+        (init) => reportCourseLecturer(courseId, { reason }, init),
+        201,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 201) return failure(namedError(outcome, reportErrors));
+      return record(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+    },
+    async reportStudent(courseId, userId, reason, signal) {
+      const outcome = await send(
+        'enrollment.report-student',
+        (init) => reportCourseParticipant(courseId, userId, { reason }, init),
+        201,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 201) return failure(namedError(outcome, reportErrors));
+      return record(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
     },
   };
 }

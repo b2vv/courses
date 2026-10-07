@@ -25,6 +25,7 @@ function renderRoster(overrides: Partial<ComponentProps<typeof CourseRoster>> = 
     onLoadMore: rs.fn(),
     onBlock: rs.fn(),
     onUnblock: rs.fn(),
+    onReportStudent: rs.fn(async () => {}),
     ...overrides,
   };
   render(<CourseRoster {...props} />);
@@ -62,5 +63,14 @@ describe('CourseRoster', () => {
     const more = renderRoster({ hasNextPage: true });
     await userEvent.click(screen.getByRole('button', { name: 'Показати ще' }));
     expect(more.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a report for the selected participant and announces success', async () => {
+    const roster = renderRoster();
+    await userEvent.click(screen.getByRole('button', { name: 'Поскаржитися' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Причина скарги' }), 'Образливе повідомлення');
+    await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
+    expect(roster.onReportStudent).toHaveBeenCalledWith(active.userId, 'Образливе повідомлення');
+    expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');
   });
 });

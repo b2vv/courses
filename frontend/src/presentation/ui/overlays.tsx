@@ -7,7 +7,7 @@ type DialogProps = {
   triggerLabel: string;
   title: string;
   closeLabel: string;
-  children: ReactNode;
+  children: ReactNode | ((close: () => void) => ReactNode);
 };
 
 export function Dialog({ triggerLabel, title, closeLabel, children }: DialogProps) {
@@ -20,7 +20,7 @@ export function Dialog({ triggerLabel, title, closeLabel, children }: DialogProp
             {({ close }) => (
               <>
                 <Aria.Heading slot="title">{title}</Aria.Heading>
-                {children}
+                {typeof children === 'function' ? children(close) : children}
                 <div className="ui-dialog-actions">
                   <Button variant="secondary" onPress={close}>
                     {closeLabel}
