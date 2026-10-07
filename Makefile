@@ -51,15 +51,35 @@ build:
 # post-recreate requests in the file). It lives outside test-results/, which Playwright wipes on
 # start. The exit status is the e2e run's own, read right after the subshell and re-raised after
 # the follower is stopped, so a red run stays red.
+# The suite's own `docker compose` calls (recovery.spec stop/up, media.setup exec, asr.spec) run bare,
+# with no `-f`. Before this export they resolved to the BASE compose file and, finding a config that
+# differs from the overlay-created container, RECREATED api/nginx/frontend on the base config mid-suite:
+# frontend CSP flipped from report-only to enforcing, api lost the WayForPay stub env, nginx its login
+# burst override — and the container log history went with them. COMPOSE_FILE makes those bare calls
+# resolve to the same two files; the recipe's own explicit `-f` calls are unaffected (flags win).
+# Measured 2026-10-07: `config --hash=api` is identical for the env form and the `-f` form, and a
+# stop → up against a matching container keeps its id (base vs overlay differ → recreate). CI sets
+# nothing, so its bare calls keep matching the base stack it raises with `make up`.
+# The paths are ABSOLUTE on purpose: COMPOSE_FILE is resolved against the caller's cwd and disables
+# compose's parent-directory discovery, so a relative value broke every spec that shells compose
+# from frontend/ (accounts, ratings: `stat frontend/docker-compose.yml`) — they had been finding
+# ../docker-compose.yml by that discovery. With absolute paths the project directory is the first
+# file's directory for every caller, so the project is "courses" from any cwd: a frontend-cwd
+# `exec postgres` and the root stack are one project, the same container (measured: same id).
 e2e:
 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 180 api frontend wayforpay-stub nginx
+	export COMPOSE_FILE="$$(pwd)/docker-compose.yml:$$(pwd)/docker-compose.e2e.yml"; \
 	mkdir -p frontend/test-logs; \
-	docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs -f --no-color --timestamps api nginx > frontend/test-logs/api-nginx.log 2>&1 & \
+	stream="frontend/test-logs/api-nginx-$$(date -u +%Y%m%dT%H%M%SZ).log"; \
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs -f --no-color --timestamps api nginx > "$$stream" 2>&1 & \
 	follower=$$!; trap 'kill $$follower 2>/dev/null' EXIT; \
 	(cd frontend && npm run e2e); status=$$?; \
 	kill $$follower 2>/dev/null; wait $$follower 2>/dev/null; trap - EXIT; \
-	echo "api/nginx log (whole run): frontend/test-logs/api-nginx.log"; \
+	echo "api/nginx log (whole run): $$stream"; \
 	exit $$status
+# The stream file is run-stamped so a run never clobbers the artifact a reviewer was pointed at
+# (it happened once: a second run truncated the file PR #9's counts were taken from). CI keeps the
+# plain name api-nginx.log — its artifact is already per-run via upload-artifact.
 # Run this, not bare `e2e`, for a standalone browser run. `e2e` raises the stack with the
 # e2e overlay (api, frontend, nginx and the WayForPay stub, `--wait` so chromium never meets a
 # still-starting 503) but does NOT reseed, so on its own it fails against a `delete-me` user a
