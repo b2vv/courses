@@ -525,6 +525,23 @@ async function startPosition(page: Page): Promise<number> {
   return position;
 }
 
+// Pauses and returns the position the pause heartbeat recorded - the value a later restore has to
+// reproduce. Waiting for the heartbeat response, not for the click, is what makes it the saved one:
+// heartbeatPayload reads the request body only behind a 204, so this is what the server stored, not
+// a client-side estimate. A paused player schedules no further ticks (LessonPlayer's tick effect is
+// gated on `playing`), so the target stops moving. Callers assert the restored start within ±1 s of
+// it: that allowance is seek granularity — the player seeks HLS/MSE media to the stored value and
+// `playing` reports currentTime after the seek lands on a frame — not a timing assumption.
+async function pauseAndRecord(page: Page, targetLessonID = lessonID): Promise<number> {
+  const paused = page.waitForResponse(
+    (response) => heartbeatPayload(response, targetLessonID)?.reason === 'pause',
+  );
+  await page.getByRole('button', { name: 'Пауза' }).click();
+  const payload = heartbeatPayload(await paused, targetLessonID);
+  if (payload === null) throw new Error('the pause heartbeat was not recorded');
+  return payload.positionSeconds;
+}
+
 async function videoEnded(page: Page): Promise<boolean> {
   return page.locator('video').evaluate((node) => {
     if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
@@ -976,6 +993,12 @@ test.describe('T7 playback milestone', () => {
       });
       await setPosition(page, 40);
       await saved;
+      // The first page keeps playing and keeps recording (a tick every 2 s on the e2e profile), so
+      // "the saved position" is a moving target while the second context is being opened: on the
+      // 2 vCPU runner (2026-10-07) the second page started at 41.03 s, correctly restoring a position
+      // the first page had meanwhile saved. Freeze it: pause, and anchor the expectation on the
+      // position the pause heartbeat actually recorded instead of on the number the seek asked for.
+      const pausedAt = await pauseAndRecord(page);
 
       const secondContext = await browser.newContext({
         baseURL,
@@ -986,8 +1009,8 @@ test.describe('T7 playback milestone', () => {
         await armStartPositionProbe(secondPage);
         await openAndPlay(secondPage);
         const restored = await startPosition(secondPage);
-        expect(restored).toBeGreaterThanOrEqual(39);
-        expect(restored).toBeLessThanOrEqual(41);
+        expect(restored).toBeGreaterThanOrEqual(pausedAt - 1);
+        expect(restored).toBeLessThanOrEqual(pausedAt + 1);
       } finally {
         await secondContext.close();
       }
@@ -1041,7 +1064,8 @@ test.describe('T7 playback milestone', () => {
       });
       await setPosition(page, 40);
       await saved;
-      await page.getByRole('button', { name: 'Пауза' }).click();
+      // Same anchor as P05: the row restores what the pause recorded, not the number the seek asked for.
+      const pausedAt = await pauseAndRecord(page);
 
       // The break has to be observable, or an offline toggle that changed nothing would pass.
       // It shows up as the player's unavailable state: losing the network exhausts the media
@@ -1060,8 +1084,8 @@ test.describe('T7 playback milestone', () => {
         await armStartPositionProbe(recoveredPage);
         await openAndPlay(recoveredPage);
         const restored = await startPosition(recoveredPage);
-        expect(restored).toBeGreaterThanOrEqual(39);
-        expect(restored).toBeLessThanOrEqual(41);
+        expect(restored).toBeGreaterThanOrEqual(pausedAt - 1);
+        expect(restored).toBeLessThanOrEqual(pausedAt + 1);
       } finally {
         await recoveredPage.close();
       }
