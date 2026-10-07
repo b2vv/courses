@@ -225,7 +225,8 @@ function describeResponseError(
 // refused, naming the body's error code — `playback_forbidden`/`course_purchase_required`
 // (the access rule) versus `origin_forbidden` (same-origin) — and its requestId, which joins
 // the refusal to the api's own "http request" line in the log the gate now streams for the whole
-// run (frontend/test-logs/api-nginx.log). The api mints that id itself (httpserver/server.go) and
+// run (frontend/test-logs/api-nginx-<run stamp>.log locally, api-nginx.log in CI). The api mints
+// that id itself (httpserver/server.go) and
 // does not adopt nginx's X-Request-ID, so nginx's `safe` access lines carry a different id.
 function heartbeatDenialFailure(page: Page): Promise<never> {
   return page

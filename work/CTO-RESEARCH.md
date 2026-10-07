@@ -236,6 +236,16 @@ ADR, обов'язкові перед відповідними шарами: `00
    не послаблення дефолту; CI підіймає той самий стек, що `make e2e-local`); застереження Courses 2 —
    повний overlay-e2e на 2 vCPU може бути повільним/флакі (тюнінг під потужний хост) → можливо larger
    runner або вужчий CI-сабсет.
+6. **e2e config-drift усередині suite — закрито 2026-10-07 (AGENDA K11), profile-drift лишається.** Bare
+   `docker compose` у специ резолвились у base-конфіг і перестворювали api/nginx/frontend посеред
+   overlay-suite (CSP report-only→enforcing, api без WayForPay-стаба). Фікс: рецепт `e2e` експортує
+   **абсолютний** `COMPOSE_FILE` (відносний вимикає parent-discovery й ламає frontend-cwd виклики —
+   виміряно `config --hash`), `--no-deps` у `recreateApi()` (виміряно: un-scoped recreate на compose
+   v5.5.1 не каскадив — hardening). Доказ `make e2e-local` 107/107: frontend/nginx `.Created` = старт
+   suite крізь recovery, CSP тримається. **Лишається:** api один раз перестворюється в recovery через
+   порядок проєктів (playback.setup 2/6 → recovery → teardown #106 30/180): bare `up` повертає дефолти
+   (`d3ffda`→`01d97f`), виміряно ізольовано; бенігно, варіанти в K11. Детектори drift — ID/`.Created`/hash;
+   «server starting» і `ps` «Up X» — НЕ детектори (старти процесу / час від старту).
 3. **Провайдерна поверхня — callback без автентифікації (прийнято, не дефект).** `POST
    /api/v1/payments/wayforpay/callback` авторизує лише підпис; `zone=api` nginx-ліміт і тіло-ліміт —
    єдиний захист від зловживання до підпису (`docs/payment/plan.md` §Side-effects).
