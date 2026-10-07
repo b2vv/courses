@@ -143,6 +143,16 @@ func (f *reviewFake) UpdateBody(context.Context, string, string, string, time.Ti
 	return ports.CommentRecord{}, nil
 }
 func (f *reviewFake) Remove(context.Context, string, string, time.Time) error { return nil }
+func (f *reviewFake) ReportSubject(context.Context, string, string) (string, access.Membership, bool, error) {
+	return "", access.MembershipNone, false, nil
+}
+func (f *reviewFake) InsertParticipantReport(context.Context, domain.ParticipantReport) error {
+	return nil
+}
+func (f *reviewFake) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
+	return ports.ParticipantReportQueuePage{}, nil
+}
+func (f *reviewFake) ResolveParticipantReport(context.Context, string) error { return nil }
 
 func newReviewFake() *reviewFake {
 	r := ports.ReviewRecord{ID: reviewID, CourseID: reviewCourse, AuthorID: reviewAuthor, Stars: 4, Body: "this review body has enough characters", CreatedAt: time.Now()}
