@@ -64,6 +64,14 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
         onSuccess: async (_, { courseId }) => {
           await client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
         },
+        // A concurrent change (e.g. admin revokes while the owner blocks) lands as a 409
+        // membership_conflict; re-read the roster so the stale row doesn't mislead (B-L7b.2).
+        onError: (error, { courseId }) => {
+          if (error instanceof EnrollmentQueryError && error.code === 'membership_conflict') {
+            return client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
+          }
+          return undefined;
+        },
       }),
     unblock: (client: QueryClient) =>
       mutationOptions({
@@ -72,6 +80,22 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
         onSuccess: async (_, { courseId }) => {
           await client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
         },
+        onError: (error, { courseId }) => {
+          if (error instanceof EnrollmentQueryError && error.code === 'membership_conflict') {
+            return client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
+          }
+          return undefined;
+        },
+      }),
+    reportLecturer: () =>
+      mutationOptions({
+        mutationFn: ({ courseId, reason }: { courseId: string; reason: string }) =>
+          enrollment.reportLecturer(courseId, reason).then(unwrap),
+      }),
+    reportStudent: () =>
+      mutationOptions({
+        mutationFn: ({ courseId, userId, reason }: { courseId: string; userId: string; reason: string }) =>
+          enrollment.reportStudent(courseId, userId, reason).then(unwrap),
       }),
   };
 }

@@ -42,7 +42,12 @@ export type EnrollmentErrorCode =
   | 'course_not_enrollable'
   | 'enrollment_forbidden'
   | 'course_already_owned'
-  | 'email_not_verified';
+  | 'email_not_verified'
+  | 'report_own_person'
+  | 'report_invalid'
+  | 'report_forbidden'
+  | 'report_already_open'
+  | 'course_not_found';
 
 export type EnrollmentResult<T> =
   | { readonly ok: true; readonly value: T }

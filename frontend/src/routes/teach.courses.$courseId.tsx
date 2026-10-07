@@ -79,6 +79,7 @@ function TeachCourseRoute() {
   const removeReview = useMutation(teach.removeReview(queryClient));
   const block = useMutation(enrollment.block(queryClient));
   const unblock = useMutation(enrollment.unblock(queryClient));
+  const reportStudent = useMutation(enrollment.reportStudent());
   const [actionError, setActionError] = useState<string>();
   const [rosterActionError, setRosterActionError] = useState<string>();
   const commentItems = useMemo(
@@ -241,6 +242,9 @@ function TeachCourseRoute() {
         onBlock={(userId) => void runRosterAction(() => block.mutateAsync({ courseId: id, userId }))}
         onUnblock={(userId) =>
           void runRosterAction(() => unblock.mutateAsync({ courseId: id, userId }))
+        }
+        onReportStudent={(userId, reason) =>
+          reportStudent.mutateAsync({ courseId: id, userId, reason })
         }
       />
     </div>

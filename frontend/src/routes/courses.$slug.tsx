@@ -52,6 +52,7 @@ function CourseRoute() {
     enabled: session.data !== null && session.data !== undefined,
   });
   const enroll = useMutation(enrollment.enroll(queryClient));
+  const reportLecturer = useMutation(enrollment.reportLecturer());
   const report = useMutation(catalog.report());
   const page =
     reviews.data === undefined
@@ -77,6 +78,7 @@ function CourseRoute() {
       enrolling={enroll.isPending}
       enrollError={enroll.error instanceof EnrollmentQueryError ? enroll.error.code : undefined}
       onEnroll={() => enroll.mutate(data.id)}
+      onReportLecturer={(reason) => reportLecturer.mutateAsync({ courseId: data.id, reason })}
       ownReviewId={ownReview.data?.review?.id}
       onReport={(reviewId) => report.mutateAsync({ reviewId })}
     />
