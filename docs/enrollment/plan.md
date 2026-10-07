@@ -139,3 +139,18 @@ orders** (ADR-013, підтверджено критикою); модуль не
 (T8) e2e `enrollment.spec.ts` + axe (вкл. backfill, media-bytes-blocked, single-row, G10).
 (T9) упорядкований `make check` + звіт + PR.
 Кожен таск посилається на рядки En.
+
+## Amendment — L6c «Моє навчання» list endpoint (Courses 1, 2026-10-07)
+
+**Контекст/перевірка:** Explore-мапінг фронту показав, що «Моє навчання» (En01) не має джерела
+даних — є лише per-course `getMyCourseMembership` і `getLearningCourse(slug)`, а `/learn` index
+редіректить на `/courses`. Клієнтський N+1 по курсах — не варіант. Власник обрав додати ендпоінт.
+
+**Рішення (закриває альтернативу «без списку»):** новий backend read-зріз **L6c** перед L7a:
+`GET /api/v1/learn/memberships` (learn-side, `authenticate`) → членства поточного користувача у
+стані `active|blocked`, кожне з карткою курсу (`courseId`, `slug`, `title`, `state`,
+`progressPercent`, `enrolledAt`), впорядковані за `enrolledAt` DESC. Прогрес — той самий розрахунок,
+що в ростері (completed/total lesson_progress). У orders-модулі (там membership/roster). OpenAPI+Orval.
+**Межа/магнітуда:** без пагінації — кількість власних членств користувача обмежена курсами, на які
+він записався (десятки), значно менше за будь-який page size; keyset додамо, лише якщо зʼявиться
+потреба. L7a споживає цей ендпоінт для списку «Моє навчання».
