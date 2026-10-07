@@ -1,10 +1,21 @@
 name: foundation
-on: [push, pull_request]
+# K10: one run per change. `[push, pull_request]` ran every PR commit twice on two runners (measured
+# 2026-10-07: runs 37643434238/37643443193 for one SHA), doubling minutes for identical evidence.
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions: { contents: read }
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # K10: measured on the 2 vCPU runner 2026-10-07 (run 37655371086): the steps before the browser
+    # take ~16.5 min (unit tests 6.5, build 3, integration 2, drift 2 — Go builds without a cache)
+    # and the browser suite runs ~2.4× its strong-host time, ≈22 min for all projects, so a green
+    # run needs ≈38–40 min. 45 is a bridge, not a ceiling: it leaves 5–7 min against a measured
+    # 2.4× variance, so the real fix is K12 (a Go build cache, −~10 min pre-browser), after which
+    # this goes back to 30. Running blind for hours is what the limit still prevents.
+    timeout-minutes: 45
     # K10: one compose project for the whole job. Absolute paths on purpose — a relative COMPOSE_FILE
     # resolves against each caller's cwd and disables parent-directory discovery (it broke every spec
     # that shells compose from frontend/). With this, `make up`, the seed/smoke scripts and every bare
