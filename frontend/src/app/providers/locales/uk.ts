@@ -102,6 +102,18 @@ export const uk = {
         empty: 'Ви ще не записалися на жоден курс.',
         browse: 'Переглянути курси',
       },
+      roster: {
+        title: 'Учасники',
+        block: 'Заблокувати',
+        unblock: 'Розблокувати',
+        empty: 'Поки немає учасників',
+        more: 'Показати ще',
+        enrolledAt: 'Записався:',
+        state: {
+          active: 'Активний',
+          blocked: 'Заблокований',
+        },
+      },
       errors: {
         membership_conflict: 'Стан участі змінився. Перевірте його та спробуйте ще раз.',
         enrollment_required: 'Спершу запишіться на курс.',
@@ -110,6 +122,9 @@ export const uk = {
         enrollment_forbidden: 'Ви не можете записатися на цей курс.',
         course_already_owned: 'Ви вже маєте доступ до цього курсу.',
         email_not_verified: 'Підтвердіть email, щоб записатися на курс.',
+        invalid_request: 'Не вдалося виконати дію. Спробуйте ще раз.',
+        authentication_required: 'Увійдіть, щоб продовжити.',
+        dependency_unavailable: 'Сервіс тимчасово недоступний. Спробуйте ще раз.',
         generic: 'Не вдалося записатися на курс. Спробуйте ще раз.',
       },
     },

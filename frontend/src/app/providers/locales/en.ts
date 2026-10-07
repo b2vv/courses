@@ -99,6 +99,18 @@ export const en = {
         empty: 'You have not enrolled in any courses yet.',
         browse: 'Browse courses',
       },
+      roster: {
+        title: 'Participants',
+        block: 'Block',
+        unblock: 'Unblock',
+        empty: 'There are no participants yet',
+        more: 'Show more',
+        enrolledAt: 'Enrolled:',
+        state: {
+          active: 'Active',
+          blocked: 'Blocked',
+        },
+      },
       errors: {
         membership_conflict: 'Your membership changed. Check its status and try again.',
         enrollment_required: 'Enroll in the course first.',
@@ -107,6 +119,9 @@ export const en = {
         enrollment_forbidden: 'You cannot enroll in this course.',
         course_already_owned: 'You already have access to this course.',
         email_not_verified: 'Confirm your email to enroll in this course.',
+        invalid_request: 'Could not complete the action. Please try again.',
+        authentication_required: 'Sign in to continue.',
+        dependency_unavailable: 'The service is temporarily unavailable. Please try again.',
         generic: 'Could not enroll in this course. Please try again.',
       },
     },
