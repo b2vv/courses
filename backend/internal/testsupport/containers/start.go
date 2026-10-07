@@ -67,6 +67,9 @@ func Start[T testcontainers.Container](ctx context.Context, start func(context.C
 		if !isReaperRace(err) {
 			return container, err
 		}
+		// K5: a retried race used to vanish — the attempt that failed left no trace once the retry
+		// passed, so a flake's message was lost. Log it before retrying; the gate keeps its output.
+		log.Printf("testcontainers reaper race (will retry): %v", err)
 
 		// The target was created before reaper acquisition. Remove only that target.
 		if terminateErr := testcontainers.TerminateContainer(container); terminateErr != nil {

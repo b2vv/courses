@@ -240,10 +240,27 @@ done
 # TEMPORARY(testcontainers-go#3868): remove both when a release contains #3868 (backlog B-27).
 # After a hard kill, list leftovers with `docker ps -a --filter label=org.testcontainers=true` and remove
 # only this repository's.
-docker run --rm "$@" \
-  -v "$task_root/backend:/work" -w /work \
-  -v "$task_socket:/var/run/docker.sock" \
-  -e DOCKER_HOST=unix:///var/run/docker.sock \
-  -e TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
-  -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build \
-  golang:1.27.1-bookworm go test -count=1 -tags=integration ./...
+# K5: keep the full `go test` output. A one-off failure (`TestAdministrationRepositoryAgainstPostgreSQL`
+# during O05) was rerun green and its message was gone, because nothing persisted this stream. The
+# log lives under backend/test-results/ (gitignored). The exit status is written out of band: under
+# plain sh, `$?` after a pipe is tee's, not go test's, so a red gate would otherwise exit 0.
+log_dir="$task_root/backend/test-results"
+mkdir -p "$log_dir"
+log="$log_dir/integration.log"
+status_file=$(mktemp)
+set +e
+{
+  docker run --rm "$@" \
+    -v "$task_root/backend:/work" -w /work \
+    -v "$task_socket:/var/run/docker.sock" \
+    -e DOCKER_HOST=unix:///var/run/docker.sock \
+    -e TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+    -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build \
+    golang:1.27.1-bookworm go test -count=1 -tags=integration ./...
+  echo $? > "$status_file"
+} 2>&1 | tee "$log"
+set -e
+status=$(cat "$status_file")
+rm -f "$status_file"
+echo "integration log: $log"
+exit "$status"
