@@ -22,6 +22,7 @@ export const enrollmentMyMembershipsQueryKey = ['enrollment', 'myMemberships'] a
 export function enrollmentRosterQueryKey(courseId: string) {
   return ['enrollment', 'roster', courseId] as const;
 }
+export const enrollmentParticipantReportsQueryKey = ['enrollment', 'participantReports'] as const;
 
 export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
   return {
@@ -40,6 +41,13 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
         queryKey: enrollmentRosterQueryKey(courseId),
         initialPageParam: undefined as string | undefined,
         queryFn: ({ signal, pageParam }) => enrollment.roster(courseId, pageParam, signal).then(unwrap),
+        getNextPageParam: (page) => page.nextCursor ?? undefined,
+      }),
+    participantReports: () =>
+      infiniteQueryOptions({
+        queryKey: enrollmentParticipantReportsQueryKey,
+        initialPageParam: undefined as string | undefined,
+        queryFn: ({ signal, pageParam }) => enrollment.participantReports(pageParam, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
     enroll: (client: QueryClient) =>
@@ -96,6 +104,27 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
       mutationOptions({
         mutationFn: ({ courseId, userId, reason }: { courseId: string; userId: string; reason: string }) =>
           enrollment.reportStudent(courseId, userId, reason).then(unwrap),
+      }),
+    resolveReport: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: (reportId: string) => enrollment.resolveReport(reportId).then(unwrap),
+        onSuccess: () => client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey }),
+      }),
+    revoke: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: ({ courseId, userId }: { courseId: string; userId: string }) =>
+          enrollment.revoke(courseId, userId).then(unwrap),
+        onSuccess: async (_, { courseId }) => {
+          await client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey });
+          await client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
+        },
+        onError: (error, { courseId }) => {
+          if (error instanceof EnrollmentQueryError && error.code === 'membership_conflict') {
+            void client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey });
+            return client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
+          }
+          return undefined;
+        },
       }),
   };
 }

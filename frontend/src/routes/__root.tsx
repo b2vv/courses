@@ -146,6 +146,7 @@ function Layout() {
       ? [{ to: '/teach', label: t('common.navModeration'), exact: true }]
       : [
           { to: '/admin', label: t('common.navCourses'), exact: true },
+          { to: '/admin/participant-reports', label: t('common.navParticipantReports') },
           ...(canAdministerAccounts(viewer)
             ? [{ to: '/admin/users', label: t('adminUsers.title') }]
             : []),

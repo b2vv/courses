@@ -4,8 +4,11 @@ import {
   getCourseRoster,
   getMyCourseMembership,
   getMyCourseMemberships,
+  listParticipantReports,
   reportCourseLecturer,
   reportCourseParticipant,
+  resolveParticipantReport,
+  revokeCourseParticipant,
   unblockCourseParticipant,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
@@ -17,6 +20,8 @@ import type {
   Membership,
   MembershipCard,
   MembershipState,
+  ParticipantReportQueueItem,
+  ParticipantReportQueuePage,
   RosterEntry,
   RosterPage,
 } from '../../domain/enrollment/enrollment';
@@ -79,6 +84,33 @@ function rosterPage(value: unknown): value is RosterPage {
     (value.nextCursor === null || typeof value.nextCursor === 'string')
   );
 }
+function participantReportItem(value: unknown): value is ParticipantReportQueueItem {
+  return (
+    record(value) &&
+    uuid(value.id) &&
+    uuid(value.courseId) &&
+    uuid(value.reporterId) &&
+    uuid(value.targetId) &&
+    (value.kind === 'on_lecturer' || value.kind === 'on_student') &&
+    typeof value.reason === 'string' &&
+    value.reason.length >= 1 &&
+    value.reason.length <= 500 &&
+    (value.state === 'open' || value.state === 'resolved') &&
+    date(value.createdAt) &&
+    (value.reporterName === null || typeof value.reporterName === 'string') &&
+    (value.targetName === null || typeof value.targetName === 'string') &&
+    typeof value.courseTitle === 'string'
+  );
+}
+function participantReportPage(value: unknown): value is ParticipantReportQueuePage {
+  return (
+    record(value) &&
+    Array.isArray(value.items) &&
+    value.items.length <= 20 &&
+    value.items.every(participantReportItem) &&
+    (value.nextCursor === null || (typeof value.nextCursor === 'string' && value.nextCursor.length > 0))
+  );
+}
 function membershipGrant(value: unknown): boolean {
   return (
     record(value) &&
@@ -135,6 +167,25 @@ const reportErrors = {
   403: ['report_forbidden', 'email_not_verified'],
   404: ['course_not_found'],
   409: ['report_already_open'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const participantReportListErrors = {
+  400: ['comment_cursor_invalid'],
+  401: ['authentication_required'],
+  403: ['report_forbidden'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const participantReportResolveErrors = {
+  401: ['authentication_required'],
+  403: ['report_forbidden'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const revokeErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['enrollment_forbidden'],
+  409: ['membership_conflict'],
+  500: ['internal_error'],
+  503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
 
 export function createApiEnrollmentRepository(
@@ -227,6 +278,42 @@ export function createApiEnrollmentRepository(
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 201) return failure(namedError(outcome, reportErrors));
       return record(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+    },
+    async participantReports(cursor, signal) {
+      const outcome = await send(
+        'enrollment.participant-reports',
+        (init) => listParticipantReports(cursor === undefined ? undefined : { cursor }, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 200) return failure(namedError(outcome, participantReportListErrors));
+      return participantReportPage(outcome.data)
+        ? { ok: true, value: outcome.data }
+        : failure('invalid_response');
+    },
+    async resolveReport(reportId, signal) {
+      const outcome = await send(
+        'enrollment.resolve-participant-report',
+        (init) => resolveParticipantReport(reportId, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, participantReportResolveErrors));
+    },
+    async revoke(courseId, userId, signal) {
+      const outcome = await send(
+        'enrollment.revoke',
+        (init) => revokeCourseParticipant(courseId, userId, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 200) return failure(namedError(outcome, revokeErrors));
+      return membershipGrant(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
     },
   };
 }

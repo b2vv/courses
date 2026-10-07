@@ -29,11 +29,34 @@ export type RosterPage = {
   readonly nextCursor: string | null;
 };
 
+export type ParticipantReportKind = 'on_lecturer' | 'on_student';
+export type ParticipantReportState = 'open' | 'resolved';
+
+export type ParticipantReportQueueItem = {
+  readonly id: string;
+  readonly courseId: string;
+  readonly reporterId: string;
+  readonly targetId: string;
+  readonly kind: ParticipantReportKind;
+  readonly reason: string;
+  readonly state: ParticipantReportState;
+  readonly createdAt: string;
+  readonly reporterName: string | null;
+  readonly targetName: string | null;
+  readonly courseTitle: string;
+};
+
+export type ParticipantReportQueuePage = {
+  readonly items: readonly ParticipantReportQueueItem[];
+  readonly nextCursor: string | null;
+};
+
 export type EnrollmentErrorCode =
   | 'request_cancelled'
   | 'request_timeout'
   | 'invalid_response'
   | 'dependency_unavailable'
+  | 'internal_error'
   | 'invalid_request'
   | 'authentication_required'
   | 'enrollment_required'
@@ -47,6 +70,7 @@ export type EnrollmentErrorCode =
   | 'report_invalid'
   | 'report_forbidden'
   | 'report_already_open'
+  | 'comment_cursor_invalid'
   | 'course_not_found';
 
 export type EnrollmentResult<T> =

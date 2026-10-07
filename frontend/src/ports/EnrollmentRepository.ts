@@ -2,6 +2,7 @@ import type {
   EnrollmentResult,
   Membership,
   MembershipCard,
+  ParticipantReportQueuePage,
   RosterPage,
 } from '../domain/enrollment/enrollment';
 
@@ -19,4 +20,7 @@ export interface EnrollmentRepository {
     reason: string,
     signal?: AbortSignal,
   ): Promise<EnrollmentResult<void>>;
+  participantReports(cursor?: string, signal?: AbortSignal): Promise<EnrollmentResult<ParticipantReportQueuePage>>;
+  resolveReport(reportId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
+  revoke(courseId: string, userId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
 }
