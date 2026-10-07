@@ -27,11 +27,11 @@ async function submitLogin(page: Page, role: keyof typeof fixtures) {
 test.describe('catalog learning entry', () => {
   test.use({ storageState: authStatePath('student') });
 
-  test('R36 sends /learn to the public catalog', async ({ page }) => {
+  test('R36 keeps /learn on the signed-in learning overview', async ({ page }) => {
     await page.goto('/learn');
 
-    await expect(page).toHaveURL((url) => url.pathname === '/courses');
-    await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname === '/learn');
+    await expect(page.getByRole('heading', { name: 'Моє навчання' })).toBeVisible();
   });
 });
 
@@ -61,10 +61,12 @@ test('student returnTo reaches the not-found admin answer and the learning shell
   await expect(page.getByText('Студентка Курсу')).toBeVisible();
 
   await page.goto('/learn');
-  await expect(page).toHaveURL((url) => url.pathname === '/courses');
-  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/learn');
+  await expect(page.getByRole('heading', { name: 'Моє навчання' })).toBeVisible();
 
   await page.goto('/learn/go/intro');
+  // The splat lesson route renders the learning shell («Ваше навчання»), not the /learn index
+  // list («Моє навчання») — only the /learn index became the my-learning list.
   await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toBeVisible();
   await page.goto('/admin/courses');
   await expect(page.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeVisible();
@@ -138,8 +140,8 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
 
   await page.goto('/learn');
-  await expect(page).toHaveURL((url) => url.pathname === '/courses');
-  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/learn');
+  await expect(page.getByRole('heading', { name: 'Моє навчання' })).toBeVisible();
 });
 
 test('public SPA transitions do not revalidate; learning does, and Back stays signed out', async ({
@@ -183,16 +185,19 @@ test('public SPA transitions do not revalidate; learning does, and Back stays si
     if (typeof navigate !== 'function') throw new Error('TanStack Router cannot navigate');
     await Reflect.apply(navigate, router, [{ to: '/learn' }]);
   });
-  await expect(page).toHaveURL((url) => url.pathname === '/courses');
-  await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  await expect(page).toHaveURL((url) => url.pathname === '/learn');
+  await expect(page.getByRole('heading', { name: 'Моє навчання' })).toBeVisible();
   expect(currentUserRequests).toBe(1);
 
   await page.getByRole('button', { name: 'Вийти' }).click();
   await expect(page).toHaveURL((url) => url.pathname === '/courses');
   await page.goBack();
-  await expect(page).toHaveURL((url) => url.pathname === '/courses');
+  // Back now lands on the real /learn page (the redirect was removed), and signed-out it bounces
+  // through requireIdentity to /login — the point of the test holds: Back stays signed out, no
+  // signed-in learning view is restored.
+  await expect(page).toHaveURL((url) => url.pathname === '/login');
   await expect(page.getByText(fixtures.student.name)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Ваше навчання' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Моє навчання' })).toHaveCount(0);
 });
 
 test.describe('with stored non-admin sessions', () => {
