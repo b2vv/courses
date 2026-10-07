@@ -133,24 +133,29 @@ export function ParticipantReportQueue({
                     <Button isPending={isPending} onPress={() => void resolve(item)}>
                       {t('enrollment.reports.resolve')}
                     </Button>
-                    <Dialog
-                      triggerLabel={t('enrollment.reports.revoke')}
-                      title={t('enrollment.reports.revoke')}
-                      closeLabel={t('common.close')}
-                    >
-                      {(close) => (
-                        <>
-                          <p>{t('enrollment.reports.revokeConfirm')}</p>
-                          <Button
-                            variant="danger"
-                            isPending={isPending}
-                            onPress={() => void revoke(item, close)}
-                          >
-                            {t('enrollment.reports.revoke')}
-                          </Button>
-                        </>
-                      )}
-                    </Dialog>
+                    {/* Revoke only applies to a reported student; on a lecturer report the target is
+                        the course owner, who has no membership — revoke would just fail grant_invalid,
+                        a dead action. So the control is gated to on_student reports. */}
+                    {item.kind === 'on_student' ? (
+                      <Dialog
+                        triggerLabel={t('enrollment.reports.revoke')}
+                        title={t('enrollment.reports.revoke')}
+                        closeLabel={t('common.close')}
+                      >
+                        {(close) => (
+                          <>
+                            <p>{t('enrollment.reports.revokeConfirm')}</p>
+                            <Button
+                              variant="danger"
+                              isPending={isPending}
+                              onPress={() => void revoke(item, close)}
+                            >
+                              {t('enrollment.reports.revoke')}
+                            </Button>
+                          </>
+                        )}
+                      </Dialog>
+                    ) : null}
                   </div>
                 </article>
               </li>
