@@ -217,10 +217,25 @@ ADR, обов'язкові перед відповідними шарами: `00
    (`playback_forbidden`/`course_purchase_required`) або `sameOrigin`-перевірка — непідтверджено;
    неавтентифікований шлях виключено (`normalizeAuthenticationDenial` огортає лише
    `GET /internal/playback/authorize`, не heartbeat). Наступного разу — зберігати тіло відповіді й
-   лог API (`work/review-o05-grant-ui.md`).
+   лог API (`work/review-o05-grant-ui.md`). **Інструментовано 2026-10-07 (K4):** R23 валиться з кодом
+   і requestId відмовленого heartbeat'а; `make e2e` стрімить api+nginx лог усього прогону у
+   `frontend/test-logs/api-nginx.log` (переживає recreate — доведено 7× «server starting» у 107/107).
 2. **`TestAdministrationRepositoryAgainstPostgreSQL` — одноразовий фейл, пакет identity не чіпано.**
    Два пересіви зелені, текст помилки втрачено; підозра на спільний стан БД/порядок паралельних
-   тестів, не на зміни O05 (`work/review-o05-purchase-ui.md`).
+   тестів, не на зміни O05 (`work/review-o05-purchase-ui.md`). Тест має власний контейнер і послідовні
+   `t.Run` — міжпакетний стан виключено. **Інструментовано 2026-10-07 (K5):** `make integration`
+   персистить вивід у `backend/test-results/integration.log` зі статусом `go test`'а; retry в
+   `containers.Start` логує помилку. Механізм досі невстановлений.
+5. **CI не був гейтом з 2026-09-11 (знайдено 2026-10-07 під час K4).** 100/100 ранів `ci.yml` у
+   retention-вікні — failure; усі свіжі падають на `make up`: `asr-worker` `cpus: 6.0`/`mem_limit: 5g`
+   (compose:130–131, ASR-фаза) > 2 vCPU GitHub-runner'а — детермінований range-error на create. Під
+   ним латентно: CI підіймає BASE-стек (`make up`), а `purchase-wayforpay.spec` потребує overlay-порту
+   8090 без skip-guard. **Цілісність фаз не зачеплена:** усі звіти/AGENTS заявляють «behind an ordered
+   `make check`» — локальний гейт, єдина заявлена авторитетність; «CI green» ніде не claim'ився.
+   Рішення власника 2026-10-07: полагодити як окремий хвіст після K4/K5 (CI-override для cpus/mem,
+   не послаблення дефолту; CI підіймає той самий стек, що `make e2e-local`); застереження Courses 2 —
+   повний overlay-e2e на 2 vCPU може бути повільним/флакі (тюнінг під потужний хост) → можливо larger
+   runner або вужчий CI-сабсет.
 3. **Провайдерна поверхня — callback без автентифікації (прийнято, не дефект).** `POST
    /api/v1/payments/wayforpay/callback` авторизує лише підпис; `zone=api` nginx-ліміт і тіло-ліміт —
    єдиний захист від зловживання до підпису (`docs/payment/plan.md` §Side-effects).

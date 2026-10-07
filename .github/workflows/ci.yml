@@ -30,10 +30,31 @@ jobs:
       - name: Seed and smoke
         run: make seed-identities seed smoke
       - name: Browser tests
-        run: cd frontend && npx playwright install --with-deps chromium && npm run e2e
+        # K4: the api+nginx log of the WHOLE browser run is streamed from this same shell, so it is
+        # on disk before recovery.spec recreates containers (a dump after the run keeps only the
+        # recreated container's few lines). The follower is stopped and the run's own status is
+        # re-raised; `set +e` because the runner's shell is bash -e, which would skip those lines.
+        # Mirrors the `e2e` recipe in the Makefile for the CI stack (`make up`, base compose).
+        run: |
+          set +e
+          mkdir -p frontend/test-logs
+          docker compose logs -f --no-color --timestamps api nginx > frontend/test-logs/api-nginx.log 2>&1 &
+          follower=$!
+          (cd frontend && npx playwright install --with-deps chromium && npm run e2e); status=$?
+          kill $follower 2>/dev/null; wait $follower 2>/dev/null
+          exit $status
       - uses: actions/upload-artifact@v4
         if: failure()
-        with: { name: playwright-traces, path: frontend/test-results, retention-days: 7 }
+        with:
+          name: playwright-traces
+          retention-days: 7
+          # K4/K5: the streamed api+nginx log and the persisted `make integration` output travel
+          # with the traces, so a flake's message survives the runner (the O05 R23 403 and the
+          # identity one-off were both lost for want of exactly this).
+          path: |
+            frontend/test-results
+            frontend/test-logs
+            backend/test-results
       - name: Shutdown
         if: always()
         run: docker compose down

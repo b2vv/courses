@@ -14,6 +14,8 @@ import {
 import { promisify } from 'node:util';
 import type {
   AdminCourseTree,
+  ErrorResponse,
+  ErrorResponseError,
   LearningCourse as LearningCourseContract,
   LearningLesson,
   LearningModule,
@@ -203,6 +205,49 @@ function heartbeatPayload(response: Response, expectedLessonID: string): Heartbe
     clientSeq,
     reason,
   };
+}
+
+function describeResponseError(
+  payload: unknown,
+): { readonly code: string; readonly requestId?: string } | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const error = contractField<ErrorResponse>(payload, 'error');
+  if (typeof error !== 'object' || error === null) return null;
+  const code = contractField<ErrorResponseError>(error, 'code');
+  const requestId = contractField<ErrorResponseError>(error, 'requestId');
+  if (typeof code !== 'string') return null;
+  return typeof requestId === 'string' ? { code, requestId } : { code };
+}
+
+// K4 (R23 heartbeat 403, O05 — mechanism never established): a refused heartbeat used to be
+// invisible. `heartbeatPayload` ignores every non-204 answer, so the `ended` wait merely timed
+// out and the code behind the 403 was lost with it. This rejects the moment a heartbeat is
+// refused, naming the body's error code — `playback_forbidden`/`course_purchase_required`
+// (the access rule) versus `origin_forbidden` (same-origin) — and its requestId, which joins
+// the refusal to the api's own "http request" line in the log the gate now streams for the whole
+// run (frontend/test-logs/api-nginx.log). The api mints that id itself (httpserver/server.go) and
+// does not adopt nginx's X-Request-ID, so nginx's `safe` access lines carry a different id.
+function heartbeatDenialFailure(page: Page): Promise<never> {
+  return page
+    .waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/v1/playback/heartbeat' &&
+        response.status() >= 400,
+      { timeout: 0 },
+    )
+    .then(
+      async (response) => {
+        const payload: unknown = await response.json().catch(() => null);
+        const error = describeResponseError(payload);
+        throw new Error(
+          `heartbeat refused: HTTP ${response.status()} ${error?.code ?? '<no error code in body>'}` +
+            (error?.requestId === undefined ? '' : ` requestId=${error.requestId}`),
+        );
+      },
+      // The page closing after a passing test rejects the still-pending wait; that is not a
+      // refusal, and nothing awaits this branch any more, so it simply never settles.
+      () => new Promise<never>(() => {}),
+    );
 }
 
 function heartbeatPosition(response: Response, expectedLessonID: string): number | null {
@@ -1689,10 +1734,15 @@ test.describe('T7 playback milestone', () => {
       });
       const apiBefore = await containerNetworkSnapshot('api');
       const authorizeBefore = await authorizeCounts();
-      const endedHeartbeat = page.waitForResponse((response) => {
-        const heartbeat = heartbeatPayload(response, fourthLessonID);
-        return heartbeat?.reason === 'ended';
-      });
+      // K4: the `ended` wait races a refused heartbeat, so a repeat of the O05 403 fails here
+      // with its error code and requestId instead of a silent timeout (see heartbeatDenialFailure).
+      const endedHeartbeat = Promise.race([
+        page.waitForResponse((response) => {
+          const heartbeat = heartbeatPayload(response, fourthLessonID);
+          return heartbeat?.reason === 'ended';
+        }),
+        heartbeatDenialFailure(page),
+      ]);
       const session = await openAndPlay(page, fourthLessonID);
       const startPosition = await videoTime(page);
       expect(
