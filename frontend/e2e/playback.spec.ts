@@ -492,6 +492,39 @@ async function videoTime(page: Page): Promise<number> {
   });
 }
 
+// A position read AFTER openAndPlay measures the test process, not the player: the helper has
+// already waited for the Pause label (the `playing` event) and polled videoTime, and the video keeps
+// advancing meanwhile. Against a [39, 41] restore window that read measured 41.37 s on a loaded host
+// (2026-10-07, local e2e beside a format/typecheck run) and would fail routinely on a 2 vCPU runner.
+// The rows "resumes at the saved position" and "reopens from zero" name currentTime AT `playing`, so
+// that is what is captured: an init script (the helpers navigate again), on document in the capture
+// phase (`playing` does not bubble), first occurrence only. Init scripts are page-scoped, so arm the
+// probe on the page that will navigate — a new context's or a new page's — before its openAndPlay.
+async function armStartPositionProbe(page: Page) {
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'playing',
+      (event) => {
+        const probe = window as Window & { __startPosition?: number };
+        if (event.target instanceof HTMLVideoElement && probe.__startPosition === undefined) {
+          probe.__startPosition = event.target.currentTime;
+        }
+      },
+      true,
+    );
+  });
+}
+
+async function startPosition(page: Page): Promise<number> {
+  const position = await page.evaluate(
+    () => (window as Window & { __startPosition?: number }).__startPosition,
+  );
+  if (typeof position !== 'number') {
+    throw new Error('playing never fired on this page, or the probe was armed after navigation');
+  }
+  return position;
+}
+
 async function videoEnded(page: Page): Promise<boolean> {
   return page.locator('video').evaluate((node) => {
     if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
@@ -922,9 +955,10 @@ test.describe('T7 playback milestone', () => {
       await setPosition(page, 40);
       await saved;
 
+      await armStartPositionProbe(page);
       await page.reload();
       await openAndPlay(page);
-      const restored = await videoTime(page);
+      const restored = await startPosition(page);
       expect(restored).toBeGreaterThanOrEqual(39);
       expect(restored).toBeLessThanOrEqual(41);
     });
@@ -949,8 +983,9 @@ test.describe('T7 playback milestone', () => {
       });
       try {
         const secondPage = await secondContext.newPage();
+        await armStartPositionProbe(secondPage);
         await openAndPlay(secondPage);
-        const restored = await videoTime(secondPage);
+        const restored = await startPosition(secondPage);
         expect(restored).toBeGreaterThanOrEqual(39);
         expect(restored).toBeLessThanOrEqual(41);
       } finally {
@@ -991,10 +1026,11 @@ test.describe('T7 playback milestone', () => {
       await setPosition(page, 285);
       await completed;
 
+      await armStartPositionProbe(page);
       await page.reload();
       await expect(page.getByRole('slider', { name: 'Позиція відтворення' })).toHaveValue('0');
       await openAndPlay(page);
-      expect(await videoTime(page)).toBeLessThanOrEqual(1);
+      expect(await startPosition(page)).toBeLessThanOrEqual(1);
     });
 
     test('B18 keeps the last recorded position across a network break', async ({ page }) => {
@@ -1021,8 +1057,9 @@ test.describe('T7 playback milestone', () => {
 
       const recoveredPage = await page.context().newPage();
       try {
+        await armStartPositionProbe(recoveredPage);
         await openAndPlay(recoveredPage);
-        const restored = await videoTime(recoveredPage);
+        const restored = await startPosition(recoveredPage);
         expect(restored).toBeGreaterThanOrEqual(39);
         expect(restored).toBeLessThanOrEqual(41);
       } finally {
