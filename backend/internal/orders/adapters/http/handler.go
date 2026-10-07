@@ -2,12 +2,14 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,6 +38,8 @@ func NewHandler(service *application.Service, callback ports.CallbackVerifier, p
 
 func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
 	mux.Handle("POST /api/v1/learn/courses/{courseId}/purchase", sameOrigin(authenticate(http.HandlerFunc(handler.startPurchase))))
+	mux.Handle("POST /api/v1/learn/courses/{courseId}/enroll", sameOrigin(authenticate(http.HandlerFunc(handler.enroll))))
+	mux.Handle("GET /api/v1/learn/courses/{courseId}/membership", authenticate(http.HandlerFunc(handler.membershipState)))
 	mux.Handle("POST /api/v1/learn/orders/{orderId}/checkout", sameOrigin(authenticate(http.HandlerFunc(handler.checkout))))
 	mux.Handle("GET /api/v1/learn/orders/{orderId}", authenticate(http.HandlerFunc(handler.purchaseStatus)))
 	if handler.callback != nil {
@@ -45,6 +49,13 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin fu
 
 func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrigin, administrator func(http.Handler) http.Handler) {
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/grants", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.grantCourse)))))
+	mux.Handle("POST /api/v1/admin/courses/{courseId}/participants/{userId}/revoke", sameOrigin(authenticate(http.HandlerFunc(handler.revoke))))
+}
+
+func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/teach/courses/{courseId}/roster", authenticate(http.HandlerFunc(handler.roster)))
+	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/block", sameOrigin(authenticate(http.HandlerFunc(handler.block))))
+	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/unblock", sameOrigin(authenticate(http.HandlerFunc(handler.unblock))))
 }
 
 type moneyDTO struct {
@@ -80,6 +91,24 @@ type grantDTO struct {
 	GrantedBy *string `json:"grantedBy"`
 }
 
+type membershipDTO struct {
+	State  *string `json:"state"`
+	Member bool    `json:"member"`
+}
+
+type rosterEntryDTO struct {
+	UserID          string `json:"userId"`
+	DisplayName     string `json:"displayName"`
+	State           string `json:"state"`
+	EnrolledAt      string `json:"enrolledAt"`
+	ProgressPercent int    `json:"progressPercent"`
+}
+
+type rosterPageDTO struct {
+	Entries    []rosterEntryDTO `json:"entries"`
+	NextCursor *string          `json:"nextCursor"`
+}
+
 func (handler *Handler) startPurchase(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
 	actor, ok := actorFromRequest(w, r)
@@ -110,6 +139,131 @@ func (handler *Handler) startPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusCreated, mapOrder(order))
+}
+
+func (handler *Handler) enroll(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("courseId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	grant, err := handler.service.Enroll(r.Context(), actor, r.PathValue("courseId"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, mapGrant(grant))
+}
+
+func (handler *Handler) membershipState(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("courseId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	state, member, err := handler.service.MembershipState(r.Context(), actor, actor.UserID, r.PathValue("courseId"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response := membershipDTO{Member: member}
+	if member {
+		value := string(state)
+		response.State = &value
+	}
+	httpserver.WriteJSON(w, http.StatusOK, response)
+}
+
+func (handler *Handler) roster(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !validID(r.PathValue("courseId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	query := r.URL.Query()
+	if len(query["cursor"]) > 1 || len(query["limit"]) > 1 || len(query) > lenPresent(query, "cursor", "limit") {
+		writeError(w, r, domain.ErrInvalidCursor)
+		return
+	}
+	limit := 0
+	if values := query["limit"]; len(values) == 1 {
+		var err error
+		limit, err = strconv.Atoi(values[0])
+		if err != nil || limit < 1 || limit > 100 {
+			writeError(w, r, domain.ErrInvalidCursor)
+			return
+		}
+	}
+	cursor := ""
+	if values := query["cursor"]; len(values) == 1 {
+		cursor = values[0]
+	}
+	page, err := handler.service.Roster(r.Context(), actor, r.PathValue("courseId"), cursor, limit)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	entries := make([]rosterEntryDTO, 0, len(page.Entries))
+	for _, entry := range page.Entries {
+		entries = append(entries, rosterEntryDTO{UserID: entry.UserID, DisplayName: entry.DisplayName, State: string(entry.State), EnrolledAt: entry.EnrolledAt.UTC().Format(dateTimeLayout), ProgressPercent: entry.ProgressPercent})
+	}
+	response := rosterPageDTO{Entries: entries}
+	if page.NextCursor != "" {
+		response.NextCursor = &page.NextCursor
+	}
+	httpserver.WriteJSON(w, http.StatusOK, response)
+}
+
+func lenPresent(query url.Values, keys ...string) int {
+	n := 0
+	for _, key := range keys {
+		if _, ok := query[key]; ok {
+			n++
+		}
+	}
+	return n
+}
+
+func (handler *Handler) block(w http.ResponseWriter, r *http.Request) {
+	handler.transition(w, r, handler.service.Block)
+}
+
+func (handler *Handler) unblock(w http.ResponseWriter, r *http.Request) {
+	handler.transition(w, r, handler.service.Unblock)
+}
+
+func (handler *Handler) revoke(w http.ResponseWriter, r *http.Request) {
+	handler.transition(w, r, handler.service.Revoke)
+}
+
+func (handler *Handler) transition(w http.ResponseWriter, r *http.Request, operation func(context.Context, application.Actor, string, string) (domain.Grant, error)) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("courseId")) || !validID(r.PathValue("userId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	grant, err := operation(r.Context(), actor, r.PathValue("userId"), r.PathValue("courseId"))
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapGrant(grant))
 }
 
 func (handler *Handler) purchaseStatus(w http.ResponseWriter, r *http.Request) {
@@ -244,10 +398,11 @@ func (handler *Handler) grantCourse(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusCreated, grantDTO{
-		ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: string(grant.Source()),
-		State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format(dateTimeLayout), GrantedBy: grant.GrantedBy(),
-	})
+	httpserver.WriteJSON(w, http.StatusCreated, mapGrant(grant))
+}
+
+func mapGrant(grant domain.Grant) grantDTO {
+	return grantDTO{ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: string(grant.Source()), State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format(dateTimeLayout), GrantedBy: grant.GrantedBy()}
 }
 
 func actorFromRequest(w http.ResponseWriter, r *http.Request) (application.Actor, bool) {
@@ -396,6 +551,14 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrCourseAlreadyOwned):
 		httpserver.WriteError(w, r, http.StatusConflict, "course_already_owned", "Course is already owned")
+	case errors.Is(err, domain.ErrMembershipConflict):
+		httpserver.WriteError(w, r, http.StatusConflict, "membership_conflict", "Membership changed concurrently")
+	case errors.Is(err, domain.ErrCourseNotEnrollable):
+		httpserver.WriteError(w, r, http.StatusConflict, "course_not_enrollable", "Course is not available for enrollment")
+	case errors.Is(err, domain.ErrEnrollmentForbidden):
+		httpserver.WriteError(w, r, http.StatusForbidden, "enrollment_forbidden", "Enrollment permission is required")
+	case errors.Is(err, domain.ErrInvalidCursor):
+		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrOrderNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "order_not_found", "Order was not found")
 	case errors.Is(err, domain.ErrCheckoutAlreadyOpened):

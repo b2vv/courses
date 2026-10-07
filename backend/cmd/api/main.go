@@ -156,6 +156,7 @@ func main() {
 				courseHandler.Register(mux)
 				ordersHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				ordersHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin, identityHandler.RequireAdministrator)
+				ordersHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
