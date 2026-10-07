@@ -88,6 +88,11 @@ func published(segments []domain.Segment, documents []domain.DocumentLink, gener
 	}
 }
 
+func activeMember(result ports.LessonTranscript) ports.LessonTranscript {
+	result.Course.Membership = "active"
+	return result
+}
+
 func request(t *testing.T, target string, actor httpserver.Actor) *http.Request {
 	t.Helper()
 	if actor.UserID != "" {
@@ -123,7 +128,7 @@ func TestTranscriptReadMatchesOpenAPI(t *testing.T) {
 		Text: "перша", Speaker: "А", DocumentIDs: []string{documentID},
 	}
 	link := domain.DocumentLink{ID: documentID, Label: "Doc", URL: "https://example.test/a"}
-	repository := &stubRepository{result: published([]domain.Segment{segment}, []domain.DocumentLink{link}, 1, 1)}
+	repository := &stubRepository{result: activeMember(published([]domain.Segment{segment}, []domain.DocumentLink{link}, 1, 1))}
 
 	r := request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript", httpserver.Actor{UserID: viewerID, Role: "student"})
 	response := serve(t, repository, r)
@@ -170,7 +175,7 @@ func TestTranscriptReadMatchesOpenAPI(t *testing.T) {
 
 func TestAbsentTranscriptIsAStateNotAMissingResource(t *testing.T) {
 	repository := &stubRepository{result: ports.LessonTranscript{
-		Found: false, Course: domain.Course{OwnerID: ownerID, Status: domain.Published},
+		Found: false, Course: domain.Course{OwnerID: ownerID, Status: domain.Published, Membership: "active"},
 	}}
 	r := request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript", httpserver.Actor{UserID: viewerID, Role: "student"})
 	response := serve(t, repository, r)
@@ -189,7 +194,7 @@ func TestTheReadTakesNoPagingParameters(t *testing.T) {
 		"/api/v1/learn/lessons/" + lessonID + "/transcript?offset=10",
 		"/api/v1/learn/lessons/" + lessonID + "/transcript?page=2",
 	} {
-		repository := &stubRepository{result: published(nil, nil, 0, 0)}
+		repository := &stubRepository{result: activeMember(published(nil, nil, 0, 0))}
 		response := serve(t, repository, request(t, target, httpserver.Actor{UserID: viewerID, Role: "student"}))
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("%s: status = %d; want 400", target, response.Code)
@@ -198,7 +203,7 @@ func TestTheReadTakesNoPagingParameters(t *testing.T) {
 }
 
 func TestLanguageReachesTheReadAndIsNormalised(t *testing.T) {
-	repository := &stubRepository{result: published(nil, nil, 0, 0)}
+	repository := &stubRepository{result: activeMember(published(nil, nil, 0, 0))}
 	serve(t, repository, request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript?language=UK", httpserver.Actor{UserID: viewerID, Role: "student"}))
 	if repository.gotLanguage != "uk" {
 		t.Fatalf("language reached the read as %q; want uk", repository.gotLanguage)
@@ -236,7 +241,7 @@ func TestPay19PaidTranscriptRequiresPurchase(t *testing.T) {
 	assertContract(t, r, response, true)
 }
 
-func TestR09TranscriptForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+func TestR09TranscriptForeignDraftDeniedAndActiveMemberAllowed(t *testing.T) {
 	for _, test := range []accesstest.Case{
 		transcriptAccessCase(t, accesstest.Stranger, "draft"),
 		transcriptAccessCase(t, accesstest.Stranger, "published"),
@@ -244,6 +249,9 @@ func TestR09TranscriptForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			result := published(nil, nil, 0, 0)
 			result.Course.Status = domain.Status(test.Status)
+			if test.Want {
+				result.Course.Membership = "active"
+			}
 			r := request(t, "/api/v1/learn/lessons/"+lessonID+"/transcript", transcriptAccessActor(test))
 			response := serve(t, &stubRepository{result: result}, r)
 

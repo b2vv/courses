@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/discussion/domain"
 	"courses/internal/discussion/ports"
 	"github.com/jackc/pgx/v5"
@@ -18,13 +19,13 @@ import (
 // course uses its deliberately different sorting selector to report UI state. discussion must
 // not copy that sorting form: a processing upload is not the playable asset.
 const lessonFactsQuery = `SELECT courses.instructor_id::text, courses.status,
-  courses.price_minor IS NOT NULL, grants.id IS NOT NULL, lessons.is_preview,
+  courses.price_minor IS NOT NULL, grants.state, lessons.is_preview,
   COALESCE(current_asset.id::text, ''), COALESCE(current_asset.generation, 0), current_asset.duration_seconds
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
 LEFT JOIN course_grants AS grants
-  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
 LEFT JOIN LATERAL (
   SELECT assets.id, assets.generation, assets.duration_seconds
   FROM video_assets AS assets
@@ -65,13 +66,13 @@ ORDER BY c.parent_id, c.created_at, c.id`
 const commentQuery = `SELECT c.id::text, c.lesson_id::text, c.author_id::text, c.parent_id::text,
   c.body, c.position_ms, c.created_at, c.edited_at, c.removed_at, c.removed_by::text, u.display_name,
   courses.id::text, courses.instructor_id::text, courses.status,
-  courses.price_minor IS NOT NULL, grants.id IS NOT NULL, lessons.is_preview
+  courses.price_minor IS NOT NULL, grants.state, lessons.is_preview
 FROM discussion_comments AS c
 JOIN course_lessons AS lessons ON lessons.id = c.lesson_id
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
 LEFT JOIN course_grants AS grants
-  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
 LEFT JOIN users AS u ON u.id = c.author_id AND u.deleted_at IS NULL
 WHERE c.id = $2::text::uuid`
 
@@ -82,10 +83,11 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 func (repository *Repository) LessonFacts(ctx context.Context, userID, lessonID string) (ports.LessonFacts, error) {
 	var result ports.LessonFacts
 	var status string
-	var paid, entitled, preview bool
+	var paid, preview bool
+	var membership pgtype.Text
 	var duration pgtype.Numeric
 	err := repository.pool.QueryRow(ctx, lessonFactsQuery, userID, lessonID).Scan(
-		&result.Course.OwnerID, &status, &paid, &entitled, &preview,
+		&result.Course.OwnerID, &status, &paid, &membership, &preview,
 		&result.AssetID, &result.Generation, &duration,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -96,7 +98,8 @@ func (repository *Repository) LessonFacts(ctx context.Context, userID, lessonID 
 	}
 	result.Course.Status = domain.Status(status)
 	result.Course.Paid = paid
-	result.Course.Entitled = entitled
+	result.Course.Entitled = membership.Valid && membership.String == "active"
+	result.Course.Membership = membershipState(membership)
 	result.Course.Preview = preview
 	if value, err := duration.Float64Value(); err == nil && value.Valid {
 		result.DurationSecs = &value.Float64
@@ -274,14 +277,15 @@ func scanModerationRecord(row interface{ Scan(...any) error }, openReports *int)
 func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) (ports.CommentRecord, error) {
 	var c ports.CommentRecord
 	var status string
-	var paid, entitled, preview bool
+	var paid, preview bool
+	var membership pgtype.Text
 	var parentID, body pgtype.Text
 	var position pgtype.Int8
 	var edited, removed pgtype.Timestamptz
 	var removedBy, display pgtype.Text
 	values := []any{&c.Comment.ID, &c.Comment.LessonID, &c.Comment.AuthorID, &parentID, &body, &position, &c.Comment.CreatedAt, &edited, &removed, &removedBy, &display, &c.CourseID, &c.Course.OwnerID, &status}
 	if tail.accessFacts {
-		values = append(values, &paid, &entitled, &preview)
+		values = append(values, &paid, &membership, &preview)
 	}
 	if tail.lessonTitle != nil {
 		values = append(values, tail.lessonTitle)
@@ -317,9 +321,17 @@ func scanRecordFields(row interface{ Scan(...any) error }, tail recordScanTail) 
 	}
 	c.Course.Status = domain.Status(status)
 	c.Course.Paid = paid
-	c.Course.Entitled = entitled
+	c.Course.Entitled = membership.Valid && membership.String == "active"
+	c.Course.Membership = membershipState(membership)
 	c.Course.Preview = preview
 	return c, nil
+}
+
+func membershipState(state pgtype.Text) access.Membership {
+	if !state.Valid {
+		return access.MembershipNone
+	}
+	return access.Membership(state.String)
 }
 
 func textPointer(value pgtype.Text) *string {

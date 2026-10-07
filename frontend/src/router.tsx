@@ -8,6 +8,7 @@ import { createAdminDependencies } from './app/composition/admin';
 import { createIdentityDependencies } from './app/composition/identity';
 import { createLearnDependencies } from './app/composition/learn';
 import { createTeachDependencies } from './app/composition/teach';
+import { createEnrollmentDependencies } from './app/composition/enrollment';
 import { detectLocale } from './app/composition/locale';
 import { createTranscriptHistory } from './app/composition/transcript-history';
 import { parseUrlSearch, stringifyUrlSearch } from './app/router/url-search';
@@ -43,6 +44,7 @@ export function getRouter() {
       identityDependencies: createIdentityDependencies(),
       learn: createLearnDependencies(queryClient),
       teach: createTeachDependencies(),
+      enrollment: createEnrollmentDependencies(),
       // Top level rather than inside `admin`: the editor writes it, and the identity sweep in
       // `__root` clears it, so neither owns it.
       transcriptHistory: createTranscriptHistory(),

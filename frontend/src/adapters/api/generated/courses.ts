@@ -43,6 +43,7 @@ import type {
   EmailRequest,
   EmailTakenResponse,
   ForbiddenResponse,
+  GetCourseRosterParams,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
   Instructor,
@@ -60,6 +61,7 @@ import type {
   ListCourseReviewsParams,
   ListLearningCourseReviewsParams,
   ListLessonCommentsParams,
+  ListParticipantReportsParams,
   ListPublishedCoursesParams,
   ListTeachCourseCommentsParams,
   ListTeachModerationQueueParams,
@@ -69,13 +71,20 @@ import type {
   MediaTicketRequest,
   MediaUploadTicket,
   MediaVideo,
+  MembershipConflictResponse,
+  MembershipGrant,
+  MembershipState,
   ModerationQueuePage,
+  MyMembershipsPage,
   NewEmailRequest,
   NotFoundResponse,
   OptionalEmailRequest,
   OrderNotFoundResponse,
   OriginForbiddenResponse,
   OwnReview,
+  ParticipantReport,
+  ParticipantReportQueuePage,
+  ParticipantReportRequest,
   PlaybackExpiredResponse,
   PlaybackForbiddenResponse,
   PlaybackHeartbeatRequest,
@@ -97,6 +106,7 @@ import type {
   RegisterRequest,
   ResetPasswordRequest,
   Review,
+  RosterPage,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
@@ -326,6 +336,817 @@ export const startCoursePurchase = async (courseId: string, options?: RequestIni
 
   const data: startCoursePurchaseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as startCoursePurchaseResponse
+}
+
+
+
+export type enrollInCourseResponse201 = {
+  data: MembershipGrant
+  status: 201
+}
+
+export type enrollInCourseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type enrollInCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type enrollInCourseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type enrollInCourseResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type enrollInCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type enrollInCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type enrollInCourseResponseSuccess = (enrollInCourseResponse201) & {
+  headers: Headers;
+};
+export type enrollInCourseResponseError = (enrollInCourseResponse400 | enrollInCourseResponse401 | enrollInCourseResponse403 | enrollInCourseResponse409 | enrollInCourseResponse500 | enrollInCourseResponse503) & {
+  headers: Headers;
+};
+
+export type enrollInCourseResponse = (enrollInCourseResponseSuccess | enrollInCourseResponseError)
+
+export const getEnrollInCourseUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/enroll`
+}
+
+/**
+ * @summary Enroll the authenticated account in a free published course
+ */
+export const enrollInCourse = async (courseId: string, options?: RequestInit): Promise<enrollInCourseResponse> => {
+
+  const res = await fetch(getEnrollInCourseUrl(courseId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollInCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as enrollInCourseResponse
+}
+
+
+
+export type getMyCourseMembershipResponse200 = {
+  data: MembershipState
+  status: 200
+}
+
+export type getMyCourseMembershipResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipResponseSuccess = (getMyCourseMembershipResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipResponseError = (getMyCourseMembershipResponse400 | getMyCourseMembershipResponse401 | getMyCourseMembershipResponse403 | getMyCourseMembershipResponse500 | getMyCourseMembershipResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipResponse = (getMyCourseMembershipResponseSuccess | getMyCourseMembershipResponseError)
+
+export const getGetMyCourseMembershipUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/membership`
+}
+
+/**
+ * @summary Read the authenticated account membership state
+ */
+export const getMyCourseMembership = async (courseId: string, options?: RequestInit): Promise<getMyCourseMembershipResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipUrl(courseId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyCourseMembershipResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipResponse
+}
+
+
+
+export type getMyCourseMembershipsResponse200 = {
+  data: MyMembershipsPage
+  status: 200
+}
+
+export type getMyCourseMembershipsResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipsResponseSuccess = (getMyCourseMembershipsResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipsResponseError = (getMyCourseMembershipsResponse400 | getMyCourseMembershipsResponse401 | getMyCourseMembershipsResponse403 | getMyCourseMembershipsResponse500 | getMyCourseMembershipsResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipsResponse = (getMyCourseMembershipsResponseSuccess | getMyCourseMembershipsResponseError)
+
+export const getGetMyCourseMembershipsUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/memberships`
+}
+
+/**
+ * @summary List the authenticated account course memberships
+ */
+export const getMyCourseMemberships = async ( options?: RequestInit): Promise<getMyCourseMembershipsResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyCourseMembershipsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipsResponse
+}
+
+
+
+export type getCourseRosterResponse200 = {
+  data: RosterPage
+  status: 200
+}
+
+export type getCourseRosterResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getCourseRosterResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getCourseRosterResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getCourseRosterResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getCourseRosterResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getCourseRosterResponseSuccess = (getCourseRosterResponse200) & {
+  headers: Headers;
+};
+export type getCourseRosterResponseError = (getCourseRosterResponse400 | getCourseRosterResponse401 | getCourseRosterResponse403 | getCourseRosterResponse500 | getCourseRosterResponse503) & {
+  headers: Headers;
+};
+
+export type getCourseRosterResponse = (getCourseRosterResponseSuccess | getCourseRosterResponseError)
+
+export const getGetCourseRosterUrl = (courseId: string,
+    params?: GetCourseRosterParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster`
+}
+
+/**
+ * @summary List course members for the instructor or administrator
+ */
+export const getCourseRoster = async (courseId: string,
+    params?: GetCourseRosterParams, options?: RequestInit): Promise<getCourseRosterResponse> => {
+
+  const res = await fetch(getGetCourseRosterUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCourseRosterResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCourseRosterResponse
+}
+
+
+
+export type blockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockCourseParticipantResponseSuccess = (blockCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type blockCourseParticipantResponseError = (blockCourseParticipantResponse400 | blockCourseParticipantResponse401 | blockCourseParticipantResponse403 | blockCourseParticipantResponse409 | blockCourseParticipantResponse500 | blockCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type blockCourseParticipantResponse = (blockCourseParticipantResponseSuccess | blockCourseParticipantResponseError)
+
+export const getBlockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/block`
+}
+
+/**
+ * @summary Block a participant from course communication
+ */
+export const blockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<blockCourseParticipantResponse> => {
+
+  const res = await fetch(getBlockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockCourseParticipantResponse
+}
+
+
+
+export type unblockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockCourseParticipantResponseSuccess = (unblockCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type unblockCourseParticipantResponseError = (unblockCourseParticipantResponse400 | unblockCourseParticipantResponse401 | unblockCourseParticipantResponse403 | unblockCourseParticipantResponse409 | unblockCourseParticipantResponse500 | unblockCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type unblockCourseParticipantResponse = (unblockCourseParticipantResponseSuccess | unblockCourseParticipantResponseError)
+
+export const getUnblockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/unblock`
+}
+
+/**
+ * @summary Restore a participant's course communication
+ */
+export const unblockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<unblockCourseParticipantResponse> => {
+
+  const res = await fetch(getUnblockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
+}
+
+
+
+export type reportCourseLecturerResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseLecturerResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseLecturerResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseLecturerResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseLecturerResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseLecturerResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseLecturerResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseLecturerResponseSuccess = (reportCourseLecturerResponse201) & {
+  headers: Headers;
+};
+export type reportCourseLecturerResponseError = (reportCourseLecturerResponse400 | reportCourseLecturerResponse401 | reportCourseLecturerResponse403 | reportCourseLecturerResponse404 | reportCourseLecturerResponse409 | reportCourseLecturerResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseLecturerResponse = (reportCourseLecturerResponseSuccess | reportCourseLecturerResponseError)
+
+export const getReportCourseLecturerUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/report-lecturer`
+}
+
+export const reportCourseLecturer = async (courseId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseLecturerResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getReportCourseLecturerUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseLecturerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseLecturerResponse
+}
+
+
+
+export type reportCourseParticipantResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseParticipantResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseParticipantResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseParticipantResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseParticipantResponseSuccess = (reportCourseParticipantResponse201) & {
+  headers: Headers;
+};
+export type reportCourseParticipantResponseError = (reportCourseParticipantResponse400 | reportCourseParticipantResponse401 | reportCourseParticipantResponse403 | reportCourseParticipantResponse404 | reportCourseParticipantResponse409 | reportCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseParticipantResponse = (reportCourseParticipantResponseSuccess | reportCourseParticipantResponseError)
+
+export const getReportCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/report`
+}
+
+export const reportCourseParticipant = async (courseId: string,
+    userId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseParticipantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getReportCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseParticipantResponse
+}
+
+
+
+export type listParticipantReportsResponse200 = {
+  data: ParticipantReportQueuePage
+  status: 200
+}
+
+export type listParticipantReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listParticipantReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listParticipantReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listParticipantReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listParticipantReportsResponseSuccess = (listParticipantReportsResponse200) & {
+  headers: Headers;
+};
+export type listParticipantReportsResponseError = (listParticipantReportsResponse400 | listParticipantReportsResponse401 | listParticipantReportsResponse403 | listParticipantReportsResponse503) & {
+  headers: Headers;
+};
+
+export type listParticipantReportsResponse = (listParticipantReportsResponseSuccess | listParticipantReportsResponseError)
+
+export const getListParticipantReportsUrl = (params?: ListParticipantReportsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/participant-reports?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/participant-reports`
+}
+
+export const listParticipantReports = async (params?: ListParticipantReportsParams, options?: RequestInit): Promise<listParticipantReportsResponse> => {
+
+  const res = await fetch(getListParticipantReportsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listParticipantReportsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listParticipantReportsResponse
+}
+
+
+
+export type resolveParticipantReportResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resolveParticipantReportResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resolveParticipantReportResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type resolveParticipantReportResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type resolveParticipantReportResponseSuccess = (resolveParticipantReportResponse204) & {
+  headers: Headers;
+};
+export type resolveParticipantReportResponseError = (resolveParticipantReportResponse401 | resolveParticipantReportResponse403 | resolveParticipantReportResponse503) & {
+  headers: Headers;
+};
+
+export type resolveParticipantReportResponse = (resolveParticipantReportResponseSuccess | resolveParticipantReportResponseError)
+
+export const getResolveParticipantReportUrl = (reportId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/participant-reports/${reportId}/resolve`
+}
+
+export const resolveParticipantReport = async (reportId: string, options?: RequestInit): Promise<resolveParticipantReportResponse> => {
+
+  const res = await fetch(getResolveParticipantReportUrl(reportId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveParticipantReportResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resolveParticipantReportResponse
+}
+
+
+
+export type revokeCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type revokeCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type revokeCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type revokeCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type revokeCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type revokeCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type revokeCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type revokeCourseParticipantResponseSuccess = (revokeCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type revokeCourseParticipantResponseError = (revokeCourseParticipantResponse400 | revokeCourseParticipantResponse401 | revokeCourseParticipantResponse403 | revokeCourseParticipantResponse409 | revokeCourseParticipantResponse500 | revokeCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type revokeCourseParticipantResponse = (revokeCourseParticipantResponseSuccess | revokeCourseParticipantResponseError)
+
+export const getRevokeCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/participants/${userId}/revoke`
+}
+
+/**
+ * @summary Revoke a participant membership as an administrator
+ */
+export const revokeCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<revokeCourseParticipantResponse> => {
+
+  const res = await fetch(getRevokeCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as revokeCourseParticipantResponse
 }
 
 

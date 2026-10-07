@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/rating"
 )
 
@@ -17,6 +18,7 @@ type ReviewFacts struct {
 	Status      Status
 	Paid        bool
 	Entitled    bool
+	Membership  access.Membership
 	HasProgress bool
 }
 

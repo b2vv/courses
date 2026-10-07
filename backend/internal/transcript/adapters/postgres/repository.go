@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/transcript/domain"
 	"courses/internal/transcript/ports"
 	"github.com/jackc/pgx/v5"
@@ -30,13 +31,13 @@ const readyGenerationForLesson = `SELECT COALESCE((
 // missing transcript and a forbidden course cannot be told apart by the caller.
 const getLessonAccessCourse = `SELECT courses.instructor_id::text, courses.status,
   courses.price_minor IS NOT NULL,
-  grants.id IS NOT NULL,
+  grants.state,
   lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 JOIN courses ON courses.id = modules.course_id
 LEFT JOIN course_grants AS grants
-  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
 WHERE lessons.id = $2::text::uuid`
 
 // An empty language selects the only transcript, or the first by normalised code when several
@@ -70,8 +71,9 @@ func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: po
 
 func (repository *Repository) GetLessonTranscript(ctx context.Context, userID, lessonID string, language domain.Language) (ports.LessonTranscript, error) {
 	var ownerID, status string
-	var paid, entitled, preview bool
-	err := repository.pool.QueryRow(ctx, getLessonAccessCourse, userID, lessonID).Scan(&ownerID, &status, &paid, &entitled, &preview)
+	var paid, preview bool
+	var membership pgtype.Text
+	err := repository.pool.QueryRow(ctx, getLessonAccessCourse, userID, lessonID).Scan(&ownerID, &status, &paid, &membership, &preview)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ports.LessonTranscript{}, domain.ErrNotFound
 	}
@@ -79,7 +81,7 @@ func (repository *Repository) GetLessonTranscript(ctx context.Context, userID, l
 		return ports.LessonTranscript{}, persistenceError(err)
 	}
 	result := ports.LessonTranscript{Course: domain.Course{
-		OwnerID: ownerID, Status: domain.Status(status), Paid: paid, Entitled: entitled, Preview: preview,
+		OwnerID: ownerID, Status: domain.Status(status), Paid: paid, Entitled: membership.Valid && membership.String == "active", Membership: membershipState(membership), Preview: preview,
 	}}
 
 	var storedLanguage string
@@ -113,6 +115,13 @@ func (repository *Repository) GetLessonTranscript(ctx context.Context, userID, l
 	result.Transcript = transcript
 	result.UpdatedAt = updatedAt.UTC().Format(time.RFC3339Nano)
 	return result, nil
+}
+
+func membershipState(state pgtype.Text) access.Membership {
+	if !state.Valid {
+		return access.MembershipNone
+	}
+	return access.Membership(state.String)
 }
 
 func (repository *Repository) readSegments(ctx context.Context, lessonID, language string) ([]domain.Segment, []domain.DocumentLink, error) {

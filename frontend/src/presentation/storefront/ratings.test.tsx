@@ -179,3 +179,27 @@ describe('course page reviews', () => {
     expect(await screen.findByText('Не можна поскаржитись на власний відгук')).toBeTruthy();
   });
 });
+
+for (const [code, message] of [
+  ['enrollment_required', 'Щоб залишити відгук або поскаржитися на відгук, запишіться на курс.'],
+  [
+    'enrollment_blocked',
+    'Вас заблоковано в цьому курсі — відгуки та скарги на відгуки недоступні.',
+  ],
+] as const) {
+  it(`shows the ${code} review report message`, async () => {
+    render(
+      <CourseView
+        course={course}
+        reviews={page(1)}
+        signedIn
+        onReport={async () => {
+          throw new Error(code);
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Поскаржитись' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+    expect(screen.queryByRole('button', { name: 'Скаргу надіслано' })).toBeNull();
+  });
+}

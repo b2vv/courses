@@ -339,6 +339,87 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+	t.Run("enrollment migration backfills free-course activity into self-active membership", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 14); err != nil {
+			t.Fatal(err)
+		}
+		// Remove our published courses before later subtests count the shared catalog.
+		t.Cleanup(func() {
+			for _, statement := range []string{
+				`DELETE FROM course_grants WHERE course_id BETWEEN '52000000-0000-4000-8000-000000000001' AND '52000000-0000-4000-8000-000000000004'`,
+				`DELETE FROM courses WHERE id BETWEEN '52000000-0000-4000-8000-000000000001' AND '52000000-0000-4000-8000-000000000004'`,
+				`DELETE FROM users WHERE id BETWEEN '42000000-0000-4000-8000-000000000001' AND '42000000-0000-4000-8000-000000000007'`,
+			} {
+				if _, err := pool.Exec(context.Background(), statement); err != nil {
+					t.Errorf("cleanup enrollment migration fixture: %v", err)
+				}
+			}
+		})
+		if _, err := pool.Exec(ctx, `INSERT INTO users (id,email,display_name,role,password_hash)
+		SELECT ('42000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+		'enrollment-backfill-'||n||'@courseforge.local','Backfill user '||n,
+		CASE WHEN n=7 THEN 'instructor' ELSE 'student' END,
+		'$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+		FROM generate_series(1,7) AS n;
+		INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,price_minor,currency,published_at) VALUES
+		('52000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000007','backfill-free','Free backfill','Fixture summary','Fixture description','published',NULL,NULL,now()),
+		('52000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000007','backfill-paid','Paid backfill','Fixture summary','Fixture description','published',100,'UAH',now()),
+		('52000000-0000-4000-8000-000000000003','42000000-0000-4000-8000-000000000007','backfill-draft','Draft backfill','Fixture summary','Fixture description','draft',NULL,NULL,NULL),
+		('52000000-0000-4000-8000-000000000004','42000000-0000-4000-8000-000000000007','backfill-archived','Archived backfill','Fixture summary','Fixture description','archived',NULL,NULL,NULL);
+		INSERT INTO course_modules (id,course_id,title,position)
+		SELECT ('62000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+		('52000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'Backfill module',0
+		FROM generate_series(1,4) AS n;
+		INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
+		('72000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000001','Free lesson','Backfill fixture',0),
+		('72000000-0000-4000-8000-000000000002','62000000-0000-4000-8000-000000000002','Paid lesson','Backfill fixture',0),
+		('72000000-0000-4000-8000-000000000003','62000000-0000-4000-8000-000000000003','Draft lesson','Backfill fixture',0),
+		('72000000-0000-4000-8000-000000000004','62000000-0000-4000-8000-000000000004','Archived lesson','Backfill fixture',0),
+		('72000000-0000-4000-8000-000000000005','62000000-0000-4000-8000-000000000001','Second free lesson','Backfill fixture',1);
+		INSERT INTO lesson_progress (user_id,lesson_id,position_seconds,client_seq,updated_at) VALUES
+		('42000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001',10,1,now()),
+		('42000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000005',20,1,now()),
+		('42000000-0000-4000-8000-000000000004','72000000-0000-4000-8000-000000000002',10,1,now()),
+		('42000000-0000-4000-8000-000000000005','72000000-0000-4000-8000-000000000003',10,1,now()),
+		('42000000-0000-4000-8000-000000000006','72000000-0000-4000-8000-000000000004',10,1,now());
+		INSERT INTO discussion_comments (id,lesson_id,author_id,body) VALUES
+		('92000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000002','Comment-only backfill activity'),
+		('92000000-0000-4000-8000-000000000002','72000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000001','User 1 also commented — proves cross-source UNION dedup, not just within progress');
+		INSERT INTO discussion_reviews (id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES
+		('82000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001','42000000-0000-4000-8000-000000000003',4,'Review-only backfill activity is preserved.',0,2,now())`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.UpTo(ctx, 15); err != nil {
+			t.Fatal(err)
+		}
+		for _, test := range []struct {
+			name                 string
+			user, course, grants int
+		}{
+			{name: "A progress on two lessons + a comment deduplicates across UNION sources", user: 1, course: 1, grants: 1},
+			{name: "B comment only", user: 2, course: 1, grants: 1},
+			{name: "C review only", user: 3, course: 1, grants: 1},
+			{name: "D paid excluded", user: 4, course: 2, grants: 0},
+			{name: "E draft excluded", user: 5, course: 3, grants: 0},
+			{name: "F free archived included", user: 6, course: 4, grants: 1},
+		} {
+			var count, selfActive int
+			if err := db.QueryRowContext(ctx, `SELECT count(*),
+			count(*) FILTER (WHERE source='self' AND state='active')
+			FROM course_grants WHERE user_id=$1 AND course_id=$2`,
+				fmt.Sprintf("42000000-0000-4000-8000-%012d", test.user),
+				fmt.Sprintf("52000000-0000-4000-8000-%012d", test.course),
+			).Scan(&count, &selfActive); err != nil {
+				t.Fatalf("%s: %v", test.name, err)
+			}
+			if count != test.grants || selfActive != test.grants {
+				t.Errorf("%s: grants=%d self-active=%d, want both %d", test.name, count, selfActive, test.grants)
+			}
+		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("playback migration lock timeout rolls back and retry succeeds", func(t *testing.T) {
 		if _, err := provider.DownTo(ctx, 5); err != nil {
 			t.Fatal(err)

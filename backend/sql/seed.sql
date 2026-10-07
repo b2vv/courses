@@ -17,4 +17,23 @@ ON CONFLICT (id) DO UPDATE SET
     created_at = EXCLUDED.created_at,
     updated_at = EXCLUDED.updated_at,
     published_at = EXCLUDED.published_at;
+
+-- The student fixture is an active self-member of every published free demo course, so the
+-- enrollment access rule does not make the existing authenticated learning journey disappear.
+-- Guarded by to_regclass so seed.sql stays loadable against a pre-00011 schema: the course
+-- migration-preservation tests (course/adapters/postgres) run this whole seed after DownTo an
+-- earlier version, where course_grants does not yet exist. Dynamic EXECUTE is never planned
+-- when the branch is skipped, so the missing relation cannot raise 42P01.
+DO $$
+BEGIN
+  IF to_regclass('public.course_grants') IS NOT NULL THEN
+    EXECUTE $grant$
+      INSERT INTO course_grants (id, user_id, course_id, source, order_id, state, granted_by) VALUES
+      ('30000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'self', NULL, 'active', NULL),
+      ('30000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 'self', NULL, 'active', NULL),
+      ('30000000-0000-4000-8000-000000000003', '40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'self', NULL, 'active', NULL)
+      ON CONFLICT (user_id, course_id) DO NOTHING
+    $grant$;
+  END IF;
+END $$;
 COMMIT;

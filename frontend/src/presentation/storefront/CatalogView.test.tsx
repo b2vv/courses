@@ -95,9 +95,7 @@ describe('catalog presentation', () => {
       screen.getByText('Працюємо з портами та адаптерами. Завершуємо наскрізним тестом API.'),
     ).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Готові почати?' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
-      '/learn/go-architecture',
-    );
+    expect(screen.getByRole('button', { name: 'Записатися' })).toBeTruthy();
     expect(screen.getByRole('link', { name: '← Усі курси' }).getAttribute('href')).toBe('/courses');
 
     const programHeading = screen.getByRole('heading', { name: 'Програма курсу' });
@@ -106,6 +104,65 @@ describe('catalog presentation', () => {
     expect(program.textContent).toContain('Межі модулівПортиАдаптериПеревіркаКонтрактний тест');
     expect(within(program).getAllByRole('list')).toHaveLength(3);
     expect(within(program).queryByRole('link')).toBeNull();
+  });
+
+  it('renders enrollment CTA states and switches after a successful enrollment', async () => {
+    const user = userEvent.setup();
+    let enrolled = false;
+    const { rerender } = render(
+      <CourseView
+        course={architectureCourse}
+        onEnroll={() => {
+          enrolled = true;
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Записатися' }));
+    expect(enrolled).toBe(true);
+
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'active' }} />);
+    expect(screen.getByRole('heading', { name: 'Ви учасник' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
+      '/learn/go-architecture',
+    );
+
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'blocked' }} />);
+    expect(screen.getByRole('status').textContent).toContain(
+      'Доступ до контенту відкрито, участь в обговореннях обмежено',
+    );
+
+    rerender(
+      <CourseView
+        course={architectureCourse}
+        membership={{ state: 'revoked' }}
+        enrollError="membership_conflict"
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Записатися' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Стан участі змінився');
+  });
+
+  it('lets current members report the instructor and keeps the action from revoked viewers', async () => {
+    const report = async (reason: string) => {
+      expect(reason).toBe('Неприйнятна поведінка');
+    };
+    const { rerender } = render(
+      <CourseView
+        course={architectureCourse}
+        membership={{ state: 'active' }}
+        onReportLecturer={report}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Поскаржитися на викладача' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Причина скарги' }),
+      'Неприйнятна поведінка',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
+    expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');
+
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'revoked' }} />);
+    expect(screen.queryByRole('button', { name: 'Поскаржитися на викладача' })).toBeNull();
   });
 
   it('omits an empty program section and localizes a present program heading', () => {

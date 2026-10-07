@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"courses/internal/contracts/access"
 	"courses/internal/contracts/rating"
 	"courses/internal/course/domain"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -22,7 +23,7 @@ const getLearningCourse = `SELECT
   courses.instructor_id::text,
   courses.price_minor,
   courses.currency,
-  grants.id IS NOT NULL,
+  grants.state,
   COALESCE(reviews.review_count, 0)::bigint,
   COALESCE(reviews.review_stars_sum, 0)::bigint,
   COALESCE(lessons.is_preview, false),
@@ -43,7 +44,7 @@ const getLearningCourse = `SELECT
   COALESCE(progress.client_seq, 0)
 FROM courses
 LEFT JOIN course_grants AS grants
-  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id AND grants.state = 'active'
+  ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
 LEFT JOIN LATERAL (
   SELECT count(*) AS review_count, COALESCE(sum(stars), 0)::bigint AS review_stars_sum
   FROM discussion_reviews
@@ -70,7 +71,8 @@ type learningCourseRow struct {
 	createdAt, updatedAt, publishedAt                           pgtype.Timestamptz
 	priceMinor                                                  pgtype.Int8
 	currency                                                    pgtype.Text
-	entitled, preview                                           bool
+	membership                                                  pgtype.Text
+	preview                                                     bool
 	reviewCount, reviewStarsSum                                 int64
 }
 
@@ -96,7 +98,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 		if err := rows.Scan(
 			&courseRow.id, &courseRow.slug, &courseRow.title, &courseRow.summary, &courseRow.description, &courseRow.status,
 			&courseRow.createdAt, &courseRow.updatedAt, &courseRow.publishedAt, &courseRow.instructorID,
-			&courseRow.priceMinor, &courseRow.currency, &courseRow.entitled, &courseRow.reviewCount, &courseRow.reviewStarsSum, &courseRow.preview,
+			&courseRow.priceMinor, &courseRow.currency, &courseRow.membership, &courseRow.reviewCount, &courseRow.reviewStarsSum, &courseRow.preview,
 			&storedModuleID, &moduleTitle, &lessonID, &lessonTitle, &videoState,
 			&duration, &position, &completed, &clientSequence,
 		); err != nil {
@@ -109,7 +111,7 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			}
 			result = domain.LearningCourse{
 				Course: course, InstructorID: courseRow.instructorID, Modules: []domain.LearningModule{},
-				Paid: course.Paid, Entitled: courseRow.entitled,
+				Paid: course.Paid, Entitled: courseRow.membership.Valid && courseRow.membership.String == "active", Membership: membership(courseRow.membership),
 			}
 			found = true
 		}
@@ -144,6 +146,13 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 		return domain.LearningCourse{}, domain.ErrCourseNotFound
 	}
 	return domain.NewLearningCourse(result)
+}
+
+func membership(state pgtype.Text) access.Membership {
+	if !state.Valid {
+		return access.MembershipNone
+	}
+	return access.Membership(state.String)
 }
 
 func mapLearningCourseRow(row learningCourseRow) (domain.Course, error) {

@@ -24,6 +24,7 @@ import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
 import { createPurchaseQueries } from '../app/composition/purchase-queries';
+import { createEnrollmentQueries } from '../app/composition/enrollment-queries';
 import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
@@ -269,6 +270,19 @@ function createTestRouter(
           })),
       },
       teach: createTeachQueries(teachStub),
+      enrollment: createEnrollmentQueries({
+        membership: async () => ({ ok: true, value: { member: false, state: null } }),
+        enroll: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+        myMemberships: async () => ({ ok: true, value: [] }),
+        roster: async () => ({ ok: true, value: { entries: [], nextCursor: null } }),
+        block: async () => ({ ok: true, value: undefined }),
+        unblock: async () => ({ ok: true, value: undefined }),
+        reportLecturer: async () => ({ ok: true, value: undefined }),
+        reportStudent: async () => ({ ok: true, value: undefined }),
+        participantReports: async () => ({ ok: true, value: { items: [], nextCursor: null } }),
+        resolveReport: async () => ({ ok: true, value: undefined }),
+        revoke: async () => ({ ok: true, value: undefined }),
+      }),
     },
     defaultPendingMs: 0,
     defaultPendingMinMs: 0,
@@ -326,7 +340,7 @@ test.each([
 });
 
 test.each(['student', 'instructor', 'admin'] satisfies Role[])(
-  'R36 sends the %s role from /learn to the public catalog',
+  'R36 shows the %s role their «Моє навчання» list at /learn (enrollment replaced the catalog redirect)',
   async (role) => {
     const signedIn = user(role);
     answerWith(signedIn);
@@ -335,8 +349,9 @@ test.each(['student', 'instructor', 'admin'] satisfies Role[])(
     await router.load();
     renderRouter(router);
 
-    expect(router.state.location.href).toBe('/courses');
-    expect(screen.getByRole('heading', { name: 'Каталог курсів' })).toBeTruthy();
+    expect(router.state.location.href).toBe('/learn');
+    // The harness wires myMemberships → empty, so the list renders its empty state.
+    expect(screen.getByText('Ви ще не записалися на жоден курс.')).toBeTruthy();
     expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
     expect(screen.queryByText('Ваші викладацькі курси')).toBeNull();
   },
@@ -359,6 +374,11 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
         id: '/admin/courses/$courseId',
         path: 'courses/$courseId',
         fullPath: '/admin/courses/$courseId',
+      },
+      {
+        id: '/admin/participant-reports',
+        path: 'participant-reports',
+        fullPath: '/admin/participant-reports',
       },
       { id: '/admin/users/', path: 'users/', fullPath: '/admin/users/' },
       { id: '/courses/', path: 'courses/', fullPath: '/courses/' },

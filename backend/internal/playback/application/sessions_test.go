@@ -58,7 +58,7 @@ func (reader *playbackReader) LoadLessonPlayback(_ context.Context, userID, less
 func viewablePlaybackReader() *playbackReader {
 	return &playbackReader{playback: domain.LessonPlayback{
 		VideoID: videoID,
-		Course:  domain.VideoCourse{OwnerID: "owner", Status: domain.Published},
+		Course:  domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Membership: "active"},
 	}}
 }
 
@@ -94,9 +94,14 @@ func TestPlayChecksLessonAndPolicyBeforeTakingOwnership(t *testing.T) {
 	}{
 		{name: "missing lesson", loadErr: domain.ErrLessonNotFound, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrLessonNotFound},
 		{name: "video not ready", loadErr: domain.ErrVideoNotReady, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrVideoNotReady},
-		{name: "draft denied to student", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrForbidden},
-		{name: "paid course requires purchase", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrPurchaseRequired},
-		{name: "published allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "active member allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft, Membership: "active"}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "blocked member allowed", playback: domain.LessonPlayback{VideoID: videoID, ClientSequence: 12, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft, Membership: "blocked"}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "revoked member denied from free content", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Membership: "revoked"}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantErr: domain.ErrForbidden},
+		{name: "free non member denied", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantErr: domain.ErrForbidden},
+		{name: "paid non member requires purchase", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Paid: true}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantErr: domain.ErrPurchaseRequired},
+		{name: "preview non member allowed", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Preview: true}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
+		{name: "preview unverified email denied", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Published, Preview: true}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrEmailNotVerified},
+		{name: "member unverified email denied", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Draft, Membership: "active"}}, actor: domain.Actor{UserID: userID}, wantErr: domain.ErrEmailNotVerified},
 		{name: "draft allowed to owner", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: userID, Status: domain.Draft}}, actor: domain.Actor{UserID: userID, EmailVerified: true}, wantTake: true},
 		{name: "archived allowed to admin", playback: domain.LessonPlayback{VideoID: videoID, Course: domain.VideoCourse{OwnerID: "owner", Status: domain.Archived}}, actor: domain.Actor{UserID: userID, Administrator: true, EmailVerified: true}, wantTake: true},
 	}
@@ -164,7 +169,9 @@ func TestR17HeartbeatChecksCourseVisibilityBeforeRenewalAndProgress(t *testing.T
 		t.Fatal(err)
 	}
 
-	err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID}, playbackID, lessonID, update)
+	// Verified so the visibility gate (not the email gate) is the one that refuses: this row is
+	// about an archived/invisible course stopping renewal and progress, email-first notwithstanding.
+	err = service.Heartbeat(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, lessonID, update)
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("error=%v", err)
 	}

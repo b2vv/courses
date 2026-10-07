@@ -210,16 +210,20 @@ func TestAuthorizeReturnsNoContentForAnAllowedMediaRequest(t *testing.T) {
 	}
 }
 
-func TestR09PlaybackSessionForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+func TestR09PlaybackSessionForeignDraftDeniedAndActiveMemberAllowed(t *testing.T) {
 	for _, test := range []accesstest.Case{
 		playbackAccessCase(t, accesstest.Stranger, "draft"),
 		playbackAccessCase(t, accesstest.Stranger, "published"),
 	} {
 		t.Run(test.Name, func(t *testing.T) {
+			course := domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)}
+			if test.Want {
+				course.Membership = "active"
+			}
 			service := playbackapp.NewSessions(
 				&r09PlaybackReader{playback: domain.LessonPlayback{
 					VideoID: videoID,
-					Course:  domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)},
+					Course:  course,
 				}},
 				&r09OwnershipWriter{}, &r09ProgressWriter{}, time.Minute, time.Now,
 			)
@@ -243,15 +247,17 @@ func TestR09PlaybackSessionForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
 	}
 }
 
-func TestR09PlaybackAuthorizeForeignDraftDeniedAndPublishedAllowed(t *testing.T) {
+func TestR09PlaybackAuthorizeForeignDraftDeniedAndActiveMemberAllowed(t *testing.T) {
 	for _, test := range []accesstest.Case{
 		playbackAccessCase(t, accesstest.Stranger, "draft"),
 		playbackAccessCase(t, accesstest.Stranger, "published"),
 	} {
 		t.Run(test.Name, func(t *testing.T) {
-			service := playbackapp.NewAuthorizer(&r09OwnershipReader{}, &r09VideoAccessReader{
-				course: domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)},
-			})
+			course := domain.VideoCourse{OwnerID: r09OwnerID, Status: domain.CourseStatus(test.Status)}
+			if test.Want {
+				course.Membership = "active"
+			}
+			service := playbackapp.NewAuthorizer(&r09OwnershipReader{}, &r09VideoAccessReader{course: course})
 			adapter := playbackhttp.NewHandler(service, nil, testConfig(t), ignoreAV1Probe)
 			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 				adapter.Register(mux, authenticated(playbackAccessActor(test)), passThrough)

@@ -87,8 +87,22 @@ test('restart retains seeded courses and Nginx never stores query or Referer', a
   await compose('up', '-d', '--wait');
   const response = await request.get('/api/v1/courses');
   expect(response.status()).toBe(200);
-  const page: unknown = await response.json();
-  expect(page).toMatchObject({ pagination: { total: 3 } });
+  // "Retains seeded courses" is about the seed surviving the restart — assert the seeded slugs are
+  // present, not an absolute total. Published-course count is a globally-counted, shared thing
+  // (AGENTS: read it by scoping the selection, never by asserting a count at a position), so a leak
+  // from any other spec's interrupted run must not fail this one.
+  const catalog = (await response.json()) as {
+    items?: ReadonlyArray<{ slug?: string }>;
+    pagination?: { total?: number };
+  };
+  const slugs = new Set((catalog.items ?? []).map((course) => course.slug));
+  for (const seeded of [
+    'go-backend-foundations',
+    'react-accessible-interfaces',
+    'system-design-practice',
+  ])
+    expect(slugs.has(seeded), `seeded course ${seeded} must survive the restart`).toBe(true);
+  expect(catalog.pagination?.total ?? 0).toBeGreaterThanOrEqual(3);
 
   const marker = 'courses-log-probe-' + Date.now();
   const since = new Date().toISOString();
