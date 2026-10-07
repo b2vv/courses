@@ -56,10 +56,17 @@ test('roster mutations invalidate only their course roster', async () => {
   const otherRosterKey = enrollmentRosterQueryKey(otherCourseId);
   client.setQueryData(rosterKey, { pages: [], pageParams: [] });
   client.setQueryData(otherRosterKey, { pages: [], pageParams: [] });
-  await queries.block(client).onSuccess?.(undefined, { courseId, userId: '30000000-0000-4000-8000-000000000003' }, undefined, {
-    client,
-    meta: undefined,
-  });
+  await queries
+    .block(client)
+    .onSuccess?.(
+      undefined,
+      { courseId, userId: '30000000-0000-4000-8000-000000000003' },
+      undefined,
+      {
+        client,
+        meta: undefined,
+      },
+    );
   expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(true);
   expect(client.getQueryState(otherRosterKey)?.isInvalidated).toBe(false);
 });
@@ -85,12 +92,26 @@ test('block/unblock refresh the roster on a membership_conflict 409 but not on o
   const context = { client, meta: undefined };
 
   client.setQueryData(rosterKey, { pages: [], pageParams: [] });
-  await queries.block(client).onError?.(new EnrollmentQueryError('membership_conflict'), { courseId, userId }, undefined, context);
+  await queries
+    .block(client)
+    .onError?.(
+      new EnrollmentQueryError('membership_conflict'),
+      { courseId, userId },
+      undefined,
+      context,
+    );
   expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(true);
 
   // A non-conflict error leaves the roster untouched (no spurious refetch).
   client.setQueryData(rosterKey, { pages: [], pageParams: [] });
-  await queries.unblock(client).onError?.(new EnrollmentQueryError('enrollment_forbidden'), { courseId, userId }, undefined, context);
+  await queries
+    .unblock(client)
+    .onError?.(
+      new EnrollmentQueryError('enrollment_forbidden'),
+      { courseId, userId },
+      undefined,
+      context,
+    );
   expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(false);
 });
 
@@ -144,12 +165,21 @@ test('resolve refreshes the report queue, while revoke also refreshes only its c
   client.setQueryData(rosterKey, { pages: [], pageParams: [] });
   client.setQueryData(otherRosterKey, { pages: [], pageParams: [] });
 
-  await queries.resolveReport(client).onSuccess?.(undefined, '30000000-0000-4000-8000-000000000003', undefined, context);
+  await queries
+    .resolveReport(client)
+    .onSuccess?.(undefined, '30000000-0000-4000-8000-000000000003', undefined, context);
   expect(client.getQueryState(reportKey)?.isInvalidated).toBe(true);
   expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(false);
 
   client.setQueryData(reportKey, { pages: [], pageParams: [] });
-  await queries.revoke(client).onSuccess?.(undefined, { courseId, userId: '30000000-0000-4000-8000-000000000003' }, undefined, context);
+  await queries
+    .revoke(client)
+    .onSuccess?.(
+      undefined,
+      { courseId, userId: '30000000-0000-4000-8000-000000000003' },
+      undefined,
+      context,
+    );
   expect(client.getQueryState(reportKey)?.isInvalidated).toBe(true);
   expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(true);
   expect(client.getQueryState(otherRosterKey)?.isInvalidated).toBe(false);

@@ -239,7 +239,9 @@ function TeachCourseRoute() {
         actionError={rosterActionError}
         onRetry={() => void roster.refetch()}
         onLoadMore={() => void roster.fetchNextPage()}
-        onBlock={(userId) => void runRosterAction(() => block.mutateAsync({ courseId: id, userId }))}
+        onBlock={(userId) =>
+          void runRosterAction(() => block.mutateAsync({ courseId: id, userId }))
+        }
         onUnblock={(userId) =>
           void runRosterAction(() => unblock.mutateAsync({ courseId: id, userId }))
         }

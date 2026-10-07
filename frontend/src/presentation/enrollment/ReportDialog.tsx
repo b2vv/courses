@@ -5,7 +5,9 @@ import { Button, Dialog, TextArea } from '../ui';
 
 const maximumReasonLength = 500;
 
-function reportErrorKey(code: EnrollmentErrorCode):
+function reportErrorKey(
+  code: EnrollmentErrorCode,
+):
   | 'report_already_open'
   | 'report_own_person'
   | 'report_invalid'
@@ -58,7 +60,11 @@ export function ReportDialog({
   const valid = reason.trim().length >= 1 && reason.trim().length <= maximumReasonLength;
 
   return (
-    <Dialog triggerLabel={triggerLabel} title={triggerLabel} closeLabel={t('enrollment.report.cancel')}>
+    <Dialog
+      triggerLabel={triggerLabel}
+      title={triggerLabel}
+      closeLabel={t('enrollment.report.cancel')}
+    >
       {(close) => (
         <form
           noValidate
@@ -85,7 +91,9 @@ export function ReportDialog({
             isRequired
             isDisabled={pending}
             isInvalid={touched && !valid}
-            {...(touched && !valid ? { errorMessage: t('enrollment.report.errors.report_invalid') } : {})}
+            {...(touched && !valid
+              ? { errorMessage: t('enrollment.report.errors.report_invalid') }
+              : {})}
           />
           <Button type="submit" isPending={pending}>
             {t('enrollment.report.submit')}

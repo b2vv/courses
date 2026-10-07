@@ -20,7 +20,8 @@ type CourseRosterProps = {
 };
 
 function enrollmentErrorKey(error: unknown): string {
-  const code = error instanceof Error ? error.message : typeof error === 'string' ? error : undefined;
+  const code =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : undefined;
   switch (code) {
     case 'membership_conflict':
     case 'enrollment_forbidden':
@@ -80,7 +81,9 @@ export function CourseRoster({
       {!isLoading && error === null && entries.length === 0 ? (
         <EmptyState title={t('enrollment.roster.empty')} />
       ) : null}
-      {actionError ? <p role="alert">{t(`enrollment.errors.${enrollmentErrorKey(actionError)}`)}</p> : null}
+      {actionError ? (
+        <p role="alert">{t(`enrollment.errors.${enrollmentErrorKey(actionError)}`)}</p>
+      ) : null}
       {entries.length > 0 ? (
         <ul aria-label={t('enrollment.roster.title')}>
           {entries.map((entry, index) => (
