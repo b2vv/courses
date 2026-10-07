@@ -60,7 +60,7 @@ function CommentCard({
   const [replyBody, setReplyBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [reported, setReported] = useState(false);
-  const [reportError, setReportError] = useState(false);
+  const [reportError, setReportError] = useState<string>();
   const author = comment.author.displayName ?? t('learn.discussion.formerParticipant');
   const position = comment.positionMs;
   const run = async (action: () => Promise<void>) => {
@@ -140,17 +140,25 @@ function CommentCard({
               variant="secondary"
               isDisabled={busy || reported}
               onPress={() => {
-                setReportError(false);
+                setReportError(undefined);
                 void run(() => onReport(comment.id))
                   .then(() => setReported(true))
-                  .catch(() => setReportError(true));
+                  .catch((error: unknown) =>
+                    setReportError(
+                      error instanceof Error &&
+                        (error.message === 'enrollment_required' ||
+                          error.message === 'enrollment_blocked')
+                        ? t(`learn.discussion.errors.${error.message}`)
+                        : t('learn.discussion.reportError'),
+                    ),
+                  );
               }}
             >
               {reported ? t('learn.discussion.reported') : t('learn.discussion.report')}
             </Button>
           ) : null}
         </div>
-        {reportError ? <p role="alert">{t('learn.discussion.reportError')}</p> : null}
+        {reportError ? <p role="alert">{reportError}</p> : null}
         {canReply && replying ? (
           <form
             className="discussion-reply-form"

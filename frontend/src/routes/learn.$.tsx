@@ -304,9 +304,7 @@ function OpenLesson({
         onRemove={(commentId) =>
           runDiscussionMutation(() => removeDiscussion.mutateAsync({ lessonId, commentId }))
         }
-        onReport={(commentId) =>
-          runDiscussionMutation(() => reportDiscussion.mutateAsync({ lessonId, commentId }))
-        }
+        onReport={(commentId) => reportDiscussion.mutateAsync({ lessonId, commentId })}
       />
       <ReviewBlock
         own={ownReview.data}

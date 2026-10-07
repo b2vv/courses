@@ -146,7 +146,8 @@ export const en = {
         reason: 'Reason',
         resolve: 'Resolve',
         revoke: 'Revoke access',
-        revokeConfirm: 'This will remove the participant’s access. Only an administrator can restore it.',
+        revokeConfirm:
+          'This will remove the participant’s access. Only an administrator can restore it.',
         empty: 'No reports',
         more: 'Show more',
       },
@@ -178,6 +179,11 @@ export const en = {
       body: 'Review text',
       starsLabel: 'Rating',
       minimum: 'At least 20 characters',
+      errors: {
+        enrollment_required: 'Enroll in this course to leave or report a review.',
+        enrollment_blocked:
+          'You are blocked in this course — writing and reporting reviews are unavailable.',
+      },
       writeFailure: 'Could not save, try again',
       deleteFailure: 'Could not delete the review, try again',
       ownFailure: 'Could not load your review',
@@ -295,6 +301,9 @@ export const en = {
           comment_position_invalid: 'This timestamp is outside the video.',
           comment_parent_invalid: 'That reply target is no longer available.',
           comment_cursor_invalid: 'This discussion page is no longer available.',
+          enrollment_required: 'Enroll in this course to comment or report comments.',
+          enrollment_blocked:
+            'You are blocked in this course — commenting and reporting comments are unavailable.',
           comment_thread_full: 'This thread has reached its reply limit.',
           comment_forbidden: 'You may not change this comment.',
           comment_removed: 'This comment has already been removed.',

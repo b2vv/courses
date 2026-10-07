@@ -167,7 +167,9 @@ function EnrollmentCallToAction({
   );
 }
 
-export function enrollErrorKey(code: EnrollmentErrorCode):
+export function enrollErrorKey(
+  code: EnrollmentErrorCode,
+):
   | 'membership_conflict'
   | 'enrollment_required'
   | 'enrollment_blocked'
@@ -343,7 +345,11 @@ function ReviewCard({
                       setReportError(
                         error instanceof Error && error.message === 'report_own_review'
                           ? t('ratings.ownReportError')
-                          : t('ratings.reportError'),
+                          : error instanceof Error &&
+                              (error.message === 'enrollment_required' ||
+                                error.message === 'enrollment_blocked')
+                            ? t(`ratings.errors.${error.message}`)
+                            : t('ratings.reportError'),
                       ),
                     )
                     .finally(() => setIsReporting(false))
