@@ -134,12 +134,33 @@ async function publishThroughUI(page: Page, body: string, withMoment = false) {
   }
   await composer.fill(body);
   await panel.getByRole('button', { name: /Publish|Опублікувати/ }).click();
-  await expect(panel.getByText(body)).toBeVisible();
+  // Same trap as postedReply(): the composer textarea sits inside the panel and mirrors the typed
+  // body, so a panel-wide getByText could pass before the server answered. The threads list is
+  // the output.
+  await expect(
+    panel.getByRole('list', { name: /Discussion|Обговорення/ }).getByText(body, { exact: true }),
+  ).toBeVisible();
 }
 
 async function commentCard(page: Page, body: string) {
   const panel = page.getByRole('region', { name: /Discussion|Обговорення/ });
   return panel.locator('article').filter({ hasText: body }).first();
+}
+
+// A posted reply lives in the thread's nested list BESIDE the root article, never inside it
+// (DiscussionPanel renders <li><article>root + reply form</article><ol>replies</ol></li>). The earlier
+// `rootCard.getByText(reply)` passed on every local gate since 2026-09-29 by matching the reply
+// TEXTAREA — React mirrors a controlled value into the textarea's text content — while the form was
+// still open, and failed on the first 2 vCPU CI run (2026-10-07) where the form had closed before
+// the first poll. Scoping to the thread's list is what asserts the reply the server returned.
+function postedReply(page: Page, root: string, reply: string) {
+  const panel = page.getByRole('region', { name: /Discussion|Обговорення/ });
+  return panel
+    .getByRole('listitem')
+    .filter({ hasText: root })
+    .first()
+    .getByRole('list')
+    .getByText(reply, { exact: true });
 }
 
 test.afterAll(async ({ browser, baseURL }) => {
@@ -212,7 +233,7 @@ test.describe('discussion branches', () => {
         .getByRole('textbox', { name: /Reply|Відповідь/ })
         .fill(`K19 reply ${runNamespace}`);
       await rootCard.getByRole('button', { name: /Send reply|Надіслати відповідь/ }).click();
-      await expect(rootCard.getByText(`K19 reply ${runNamespace}`)).toBeVisible();
+      await expect(postedReply(instructorPage, root, `K19 reply ${runNamespace}`)).toBeVisible();
     } finally {
       await student.close();
       await instructor.close();
@@ -263,7 +284,9 @@ test.describe('discussion branches', () => {
         .getByRole('textbox', { name: /Reply|Відповідь/ })
         .fill(`K20 owner reply ${runNamespace}`);
       await rootCard.getByRole('button', { name: /Send reply|Надіслати відповідь/ }).click();
-      await expect(rootCard.getByText(`K20 owner reply ${runNamespace}`)).toBeVisible();
+      await expect(
+        postedReply(instructorPage, root, `K20 owner reply ${runNamespace}`),
+      ).toBeVisible();
       await rootCard.getByRole('button', { name: /Remove|Прибрати/ }).click();
       await expect(instructorPage.getByText(/Comment removed|Коментар видалено/)).toBeVisible();
       await expect(rootCard.getByText(root)).toHaveCount(0);
