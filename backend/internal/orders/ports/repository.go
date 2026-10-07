@@ -34,10 +34,20 @@ type OrderRepository interface {
 // GrantRepository reads and writes membership records and their audit rows.
 type GrantRepository interface {
 	Membership(context.Context, string, string) (*domain.Grant, error)
+	MyMemberships(context.Context, string) ([]MembershipCard, error)
 	Roster(context.Context, string, string, int) (RosterPage, error)
 	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
 	UpdateMembership(context.Context, domain.Grant, domain.GrantState, string, string, *string) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error
+}
+
+type MembershipCard struct {
+	CourseID        string
+	Slug            string
+	Title           string
+	State           domain.GrantState
+	ProgressPercent int
+	EnrolledAt      time.Time
 }
 
 type RosterEntry struct {

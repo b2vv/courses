@@ -40,6 +40,7 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin fu
 	mux.Handle("POST /api/v1/learn/courses/{courseId}/purchase", sameOrigin(authenticate(http.HandlerFunc(handler.startPurchase))))
 	mux.Handle("POST /api/v1/learn/courses/{courseId}/enroll", sameOrigin(authenticate(http.HandlerFunc(handler.enroll))))
 	mux.Handle("GET /api/v1/learn/courses/{courseId}/membership", authenticate(http.HandlerFunc(handler.membershipState)))
+	mux.Handle("GET /api/v1/learn/memberships", authenticate(http.HandlerFunc(handler.myMemberships)))
 	mux.Handle("POST /api/v1/learn/orders/{orderId}/checkout", sameOrigin(authenticate(http.HandlerFunc(handler.checkout))))
 	mux.Handle("GET /api/v1/learn/orders/{orderId}", authenticate(http.HandlerFunc(handler.purchaseStatus)))
 	if handler.callback != nil {
@@ -94,6 +95,19 @@ type grantDTO struct {
 type membershipDTO struct {
 	State  *string `json:"state"`
 	Member bool    `json:"member"`
+}
+
+type membershipCardDTO struct {
+	CourseID        string `json:"courseId"`
+	Slug            string `json:"slug"`
+	Title           string `json:"title"`
+	State           string `json:"state"`
+	ProgressPercent int    `json:"progressPercent"`
+	EnrolledAt      string `json:"enrolledAt"`
+}
+
+type myMembershipsPageDTO struct {
+	Items []membershipCardDTO `json:"items"`
 }
 
 type rosterEntryDTO struct {
@@ -180,6 +194,28 @@ func (handler *Handler) membershipState(w http.ResponseWriter, r *http.Request) 
 		response.State = &value
 	}
 	httpserver.WriteJSON(w, http.StatusOK, response)
+}
+
+func (handler *Handler) myMemberships(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	cards, err := handler.service.MyMemberships(r.Context(), actor)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items := make([]membershipCardDTO, 0, len(cards))
+	for _, card := range cards {
+		items = append(items, membershipCardDTO{CourseID: card.CourseID, Slug: card.Slug, Title: card.Title, State: string(card.State), ProgressPercent: card.ProgressPercent, EnrolledAt: card.EnrolledAt.UTC().Format(dateTimeLayout)})
+	}
+	httpserver.WriteJSON(w, http.StatusOK, myMembershipsPageDTO{Items: items})
 }
 
 func (handler *Handler) roster(w http.ResponseWriter, r *http.Request) {

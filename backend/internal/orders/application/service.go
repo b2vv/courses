@@ -237,6 +237,10 @@ func (service *Service) MembershipState(ctx context.Context, actor Actor, userID
 	return membership.State(), true, nil
 }
 
+func (service *Service) MyMemberships(ctx context.Context, actor Actor) ([]ports.MembershipCard, error) {
+	return service.grants.MyMemberships(ctx, actor.UserID)
+}
+
 func (service *Service) Roster(ctx context.Context, actor Actor, courseID, cursor string, limit int) (ports.RosterPage, error) {
 	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
 	if err != nil {

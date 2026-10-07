@@ -129,6 +129,45 @@ func (repository *Repository) Membership(ctx context.Context, userID, courseID s
 	return &grant, nil
 }
 
+func (repository *Repository) MyMemberships(ctx context.Context, userID string) ([]ports.MembershipCard, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT g.course_id::text, c.slug, c.title, g.state, g.granted_at,
+  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+FROM course_grants AS g
+JOIN courses AS c ON c.id = g.course_id
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS completed
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
+) AS completed
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS total
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  WHERE m.course_id = g.course_id
+) AS totals
+WHERE g.user_id = $1::text::uuid AND g.state IN ('active', 'blocked')
+ORDER BY g.granted_at DESC
+LIMIT 200`, userID)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	cards := make([]ports.MembershipCard, 0)
+	for rows.Next() {
+		card, scanErr := scanMembershipCard(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		cards = append(cards, card)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return cards, nil
+}
+
 func (repository *Repository) Roster(ctx context.Context, courseID, cursor string, limit int) (ports.RosterPage, error) {
 	stamp, userID, err := decodeRosterCursor(cursor)
 	if err != nil {
@@ -200,6 +239,21 @@ func scanRosterEntry(row rosterRow) (ports.RosterEntry, error) {
 		return entry, nil
 	default:
 		return ports.RosterEntry{}, domain.ErrDependencyUnavailable
+	}
+}
+
+func scanMembershipCard(row rosterRow) (ports.MembershipCard, error) {
+	var card ports.MembershipCard
+	var state string
+	if err := row.Scan(&card.CourseID, &card.Slug, &card.Title, &state, &card.EnrolledAt, &card.ProgressPercent); err != nil {
+		return ports.MembershipCard{}, persistenceError(err)
+	}
+	switch domain.GrantState(state) {
+	case domain.GrantActive, domain.GrantBlocked:
+		card.State = domain.GrantState(state)
+		return card, nil
+	default:
+		return ports.MembershipCard{}, domain.ErrDependencyUnavailable
 	}
 }
 
