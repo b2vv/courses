@@ -121,7 +121,7 @@ describe('catalog presentation', () => {
     expect(enrolled).toBe(true);
 
     rerender(
-      <CourseView course={architectureCourse} membership={{ member: true, state: 'active' }} />,
+      <CourseView course={architectureCourse} membership={{ state: 'active' }} />,
     );
     expect(screen.getByRole('heading', { name: 'Ви учасник' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
@@ -129,7 +129,7 @@ describe('catalog presentation', () => {
     );
 
     rerender(
-      <CourseView course={architectureCourse} membership={{ member: true, state: 'blocked' }} />,
+      <CourseView course={architectureCourse} membership={{ state: 'blocked' }} />,
     );
     expect(screen.getByRole('status').textContent).toContain(
       'Доступ до контенту відкрито, участь в обговореннях обмежено',
@@ -138,7 +138,7 @@ describe('catalog presentation', () => {
     rerender(
       <CourseView
         course={architectureCourse}
-        membership={{ member: true, state: 'revoked' }}
+        membership={{ state: 'revoked' }}
         enrollError="membership_conflict"
       />,
     );

@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { TeachQueryError } from '../app/composition/teach-queries';
+import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { validEntityId } from '../domain/course/course';
 import type { ModerationQueueItem, TeachComment } from '../domain/teach/teach';
 import { formatTimestamp } from '../presentation/format-timestamp';
 import { ReviewModerationRow } from '../presentation/teach/ReviewModerationRow';
+import { CourseRoster } from '../presentation/teach/CourseRoster';
 import { Button } from '../presentation/ui';
 
 const moderationReason = 'moderation_reviewed';
@@ -34,6 +36,7 @@ export const Route = createFileRoute('/teach/courses/$courseId')({
     await Promise.all([
       context.queryClient.prefetchInfiniteQuery(context.teach.courseComments(id)),
       context.queryClient.prefetchInfiniteQuery(context.teach.moderationQueue(id)),
+      context.queryClient.prefetchInfiniteQuery(context.enrollment.roster(id)),
     ]);
     return { courseId: id };
   },
@@ -63,16 +66,21 @@ function commentLabel(comment: TeachComment): string {
 
 function TeachCourseRoute() {
   const { teach } = Route.useRouteContext();
+  const { enrollment } = Route.useRouteContext();
   const { identity } = Route.useRouteContext();
   const { courseId: id } = Route.useLoaderData();
   const queryClient = useQueryClient();
   const comments = useInfiniteQuery(teach.courseComments(id));
   const queue = useInfiniteQuery(teach.moderationQueue(id));
+  const roster = useInfiniteQuery(enrollment.roster(id));
   const dismiss = useMutation(teach.dismiss(queryClient));
   const remove = useMutation(teach.remove(queryClient));
   const dismissReview = useMutation(teach.dismissReview(queryClient));
   const removeReview = useMutation(teach.removeReview(queryClient));
+  const block = useMutation(enrollment.block(queryClient));
+  const unblock = useMutation(enrollment.unblock(queryClient));
   const [actionError, setActionError] = useState<string>();
+  const [rosterActionError, setRosterActionError] = useState<string>();
   const commentItems = useMemo(
     () => comments.data?.pages.flatMap((page) => page.comments) ?? [],
     [comments.data],
@@ -81,12 +89,26 @@ function TeachCourseRoute() {
     () => queue.data?.pages.flatMap((page) => page.items) ?? [],
     [queue.data],
   );
+  const rosterEntries = useMemo(
+    () => roster.data?.pages.flatMap((page) => page.entries) ?? [],
+    [roster.data],
+  );
   const run = async (action: () => Promise<unknown>) => {
     setActionError(undefined);
     try {
       await action();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'dependency_unavailable');
+    }
+  };
+  const runRosterAction = async (action: () => Promise<unknown>) => {
+    setRosterActionError(undefined);
+    try {
+      await action();
+    } catch (error) {
+      setRosterActionError(
+        error instanceof EnrollmentQueryError ? error.code : 'dependency_unavailable',
+      );
     }
   };
   return (
@@ -206,6 +228,21 @@ function TeachCourseRoute() {
           </Button>
         ) : null}
       </section>
+      <CourseRoster
+        entries={rosterEntries}
+        isLoading={roster.isLoading}
+        error={roster.error}
+        hasNextPage={roster.hasNextPage}
+        isFetchingNextPage={roster.isFetchingNextPage}
+        isPending={block.isPending || unblock.isPending}
+        actionError={rosterActionError}
+        onRetry={() => void roster.refetch()}
+        onLoadMore={() => void roster.fetchNextPage()}
+        onBlock={(userId) => void runRosterAction(() => block.mutateAsync({ courseId: id, userId }))}
+        onUnblock={(userId) =>
+          void runRosterAction(() => unblock.mutateAsync({ courseId: id, userId }))
+        }
+      />
     </div>
   );
 }

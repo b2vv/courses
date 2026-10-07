@@ -1,7 +1,9 @@
 export type MembershipState = 'active' | 'blocked' | 'revoked';
 
+// State is authoritative. There is deliberately no `member` boolean: the backend sets member=true
+// whenever a row exists (including revoked), so branching on it is a footgun (it caused the L7a
+// revoked-as-member bug). Membership is `active`|`blocked`|`revoked`|null; access follows state.
 export type Membership = {
-  readonly member: boolean;
   readonly state: MembershipState | null;
 };
 
@@ -12,6 +14,19 @@ export type MembershipCard = {
   readonly state: Extract<MembershipState, 'active' | 'blocked'>;
   readonly progressPercent: number;
   readonly enrolledAt: string;
+};
+
+export type RosterEntry = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly state: Extract<MembershipState, 'active' | 'blocked'>;
+  readonly enrolledAt: string;
+  readonly progressPercent: number;
+};
+
+export type RosterPage = {
+  readonly entries: readonly RosterEntry[];
+  readonly nextCursor: string | null;
 };
 
 export type EnrollmentErrorCode =
