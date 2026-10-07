@@ -362,6 +362,20 @@ func TestMembershipStateAllowsSelfAdministratorAndInstructor(t *testing.T) {
 	}
 }
 
+func TestMyMembershipsDelegatesForActor(t *testing.T) {
+	store := newFakeStore(t)
+	store.memberships = []ports.MembershipCard{{CourseID: courseID, Slug: "course", Title: "Course", State: domain.GrantActive}}
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+
+	cards, err := service.MyMemberships(context.Background(), application.Actor{UserID: userID})
+	if err != nil {
+		t.Fatalf("MyMemberships: %v", err)
+	}
+	if store.membershipsUserID != userID || len(cards) != 1 || cards[0].CourseID != courseID {
+		t.Fatalf("user=%q cards=%#v", store.membershipsUserID, cards)
+	}
+}
+
 func TestRosterAllowsInstructorAndAdministratorAndClampsLimit(t *testing.T) {
 	page := ports.RosterPage{Entries: []ports.RosterEntry{{UserID: userID, DisplayName: "Student", State: domain.GrantActive, ProgressPercent: 50}}, NextCursor: "next"}
 	for _, test := range []struct {
@@ -441,6 +455,8 @@ type fakeStore struct {
 	rosterCourseID        string
 	rosterCursor          string
 	rosterLimit           int
+	memberships           []ports.MembershipCard
+	membershipsUserID     string
 }
 
 type fakePaymentProvider struct {
@@ -537,6 +553,11 @@ func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID st
 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+
+func (store *fakeStore) MyMemberships(_ context.Context, userID string) ([]ports.MembershipCard, error) {
+	store.membershipsUserID = userID
+	return store.memberships, nil
 }
 
 func (store *fakeStore) Roster(_ context.Context, courseID, cursor string, limit int) (ports.RosterPage, error) {

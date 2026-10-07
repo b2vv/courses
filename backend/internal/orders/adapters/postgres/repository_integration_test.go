@@ -818,6 +818,56 @@ INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,update
 		}
 	})
 
+	t.Run("En01 my memberships returns own active and blocked course cards", func(t *testing.T) {
+		const (
+			memberUser    = "40000000-0000-4000-8000-000000000151"
+			otherUser     = "40000000-0000-4000-8000-000000000152"
+			activeCourse  = "50000000-0000-4000-8000-000000000151"
+			blockedCourse = "50000000-0000-4000-8000-000000000152"
+			revokedCourse = "50000000-0000-4000-8000-000000000153"
+			moduleID      = "51000000-0000-4000-8000-000000000151"
+			lessonOneID   = "52000000-0000-4000-8000-000000000151"
+			lessonTwoID   = "52000000-0000-4000-8000-000000000152"
+		)
+		if _, err := pool.Exec(ctx, `WITH inserted_users AS (
+INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'my-memberships@example.test','Member','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is'),
+($2,'other-memberships@example.test','Other','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')
+), inserted_courses AS (
+INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($3,'my-active','My active','Summary','Description','archived',$8,$9,$9,$9),
+($4,'my-blocked','My blocked','Summary','Description','draft',$8,NULL,$9,$9),
+($5,'my-revoked','My revoked','Summary','Description','published',$8,$9,$9,$9)
+), inserted_modules AS (
+INSERT INTO course_modules(id,course_id,title,position) VALUES($6,$3,'Module',0)
+), inserted_lessons AS (
+INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($7,$6,'One','',0),($10,$6,'Two','',1)
+), inserted_grants AS (
+INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
+($1,$3,'self','active',$9 + interval '2 minutes'),
+($1,$4,'self','blocked',$9 + interval '3 minutes'),
+($1,$5,'self','revoked',$9 + interval '4 minutes'),
+($2,$3,'self','active',$9 + interval '5 minutes')
+)
+INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at,completed_at)
+VALUES($1,$7,1,1,$9,$9)`, memberUser, otherUser, activeCourse, blockedCourse, revokedCourse, moduleID, lessonOneID, integrationAdminID, now, lessonTwoID); err != nil {
+			t.Fatal(err)
+		}
+		cards, err := service.MyMemberships(ctx, application.Actor{UserID: memberUser})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cards) != 2 {
+			t.Fatalf("cards=%#v", cards)
+		}
+		if cards[0].CourseID != blockedCourse || cards[0].Slug != "my-blocked" || cards[0].Title != "My blocked" || cards[0].State != domain.GrantBlocked || cards[0].ProgressPercent != 0 || !cards[0].EnrolledAt.Equal(now.Add(3*time.Minute)) {
+			t.Fatalf("first card=%#v", cards[0])
+		}
+		if cards[1].CourseID != activeCourse || cards[1].Slug != "my-active" || cards[1].Title != "My active" || cards[1].State != domain.GrantActive || cards[1].ProgressPercent != 50 || !cards[1].EnrolledAt.Equal(now.Add(2*time.Minute)) {
+			t.Fatalf("second card=%#v", cards[1])
+		}
+	})
+
 	var freeUpdated time.Time
 	if err := pool.QueryRow(ctx, `SELECT updated_at FROM courses WHERE id=$1`, integrationFreeID).Scan(&freeUpdated); err != nil {
 		t.Fatal(err)

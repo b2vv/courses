@@ -32,19 +32,21 @@ const (
 )
 
 type fakeStore struct {
-	order       domain.Order
-	grant       domain.Grant
-	courseErr   error
-	getErr      error
-	grantErr    error
-	membership  *domain.Grant
-	applyCalls  int
-	applyErr    error
-	grantCalls  int
-	checkoutErr error
-	enrollment  ports.EnrollmentFacts
-	roster      ports.RosterPage
-	rosterErr   error
+	order          domain.Order
+	grant          domain.Grant
+	courseErr      error
+	getErr         error
+	grantErr       error
+	membership     *domain.Grant
+	applyCalls     int
+	applyErr       error
+	grantCalls     int
+	checkoutErr    error
+	enrollment     ports.EnrollmentFacts
+	roster         ports.RosterPage
+	rosterErr      error
+	memberships    []ports.MembershipCard
+	membershipsErr error
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -93,6 +95,9 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 }
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
+	return store.memberships, store.membershipsErr
 }
 func (store *fakeStore) Roster(context.Context, string, string, int) (ports.RosterPage, error) {
 	return store.roster, store.rosterErr
@@ -419,6 +424,19 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	}
 	assertContract(t, r, response)
 	store.membership = &store.grant
+	store.memberships = []ports.MembershipCard{{CourseID: testCourse, Slug: "course", Title: "Course", State: domain.GrantActive, EnrolledAt: now, ProgressPercent: 35}}
+	r, response = request(http.MethodGet, "/api/v1/learn/memberships", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"items":[{"courseId":"`+testCourse+`"`) || !strings.Contains(response.Body.String(), `"progressPercent":35`) {
+		t.Fatalf("memberships status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.memberships = nil
+	r, response = request(http.MethodGet, "/api/v1/learn/memberships", "student")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"items":[]`) {
+		t.Fatalf("empty memberships status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
 
 	r, response = request(http.MethodPost, "/api/v1/admin/courses/"+testCourse+participant+"/revoke", "student")
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "enrollment_forbidden") {

@@ -75,6 +75,7 @@ import type {
   MembershipGrant,
   MembershipState,
   ModerationQueuePage,
+  MyMembershipsPage,
   NewEmailRequest,
   NotFoundResponse,
   OptionalEmailRequest,
@@ -480,6 +481,76 @@ export const getMyCourseMembership = async (courseId: string, options?: RequestI
 
   const data: getMyCourseMembershipResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getMyCourseMembershipResponse
+}
+
+
+
+export type getMyCourseMembershipsResponse200 = {
+  data: MyMembershipsPage
+  status: 200
+}
+
+export type getMyCourseMembershipsResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipsResponseSuccess = (getMyCourseMembershipsResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipsResponseError = (getMyCourseMembershipsResponse400 | getMyCourseMembershipsResponse401 | getMyCourseMembershipsResponse403 | getMyCourseMembershipsResponse500 | getMyCourseMembershipsResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipsResponse = (getMyCourseMembershipsResponseSuccess | getMyCourseMembershipsResponseError)
+
+export const getGetMyCourseMembershipsUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/memberships`
+}
+
+/**
+ * @summary List the authenticated account course memberships
+ */
+export const getMyCourseMemberships = async ( options?: RequestInit): Promise<getMyCourseMembershipsResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyCourseMembershipsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipsResponse
 }
 
 
