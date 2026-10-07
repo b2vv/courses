@@ -120,17 +120,13 @@ describe('catalog presentation', () => {
     await user.click(screen.getByRole('button', { name: 'Записатися' }));
     expect(enrolled).toBe(true);
 
-    rerender(
-      <CourseView course={architectureCourse} membership={{ state: 'active' }} />,
-    );
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'active' }} />);
     expect(screen.getByRole('heading', { name: 'Ви учасник' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Почати навчання' }).getAttribute('href')).toBe(
       '/learn/go-architecture',
     );
 
-    rerender(
-      <CourseView course={architectureCourse} membership={{ state: 'blocked' }} />,
-    );
+    rerender(<CourseView course={architectureCourse} membership={{ state: 'blocked' }} />);
     expect(screen.getByRole('status').textContent).toContain(
       'Доступ до контенту відкрито, участь в обговореннях обмежено',
     );
@@ -158,7 +154,10 @@ describe('catalog presentation', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Поскаржитися на викладача' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Причина скарги' }), 'Неприйнятна поведінка');
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Причина скарги' }),
+      'Неприйнятна поведінка',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
     expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');
 

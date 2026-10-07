@@ -40,14 +40,16 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
       infiniteQueryOptions({
         queryKey: enrollmentRosterQueryKey(courseId),
         initialPageParam: undefined as string | undefined,
-        queryFn: ({ signal, pageParam }) => enrollment.roster(courseId, pageParam, signal).then(unwrap),
+        queryFn: ({ signal, pageParam }) =>
+          enrollment.roster(courseId, pageParam, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
     participantReports: () =>
       infiniteQueryOptions({
         queryKey: enrollmentParticipantReportsQueryKey,
         initialPageParam: undefined as string | undefined,
-        queryFn: ({ signal, pageParam }) => enrollment.participantReports(pageParam, signal).then(unwrap),
+        queryFn: ({ signal, pageParam }) =>
+          enrollment.participantReports(pageParam, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
     enroll: (client: QueryClient) =>
@@ -102,13 +104,21 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
       }),
     reportStudent: () =>
       mutationOptions({
-        mutationFn: ({ courseId, userId, reason }: { courseId: string; userId: string; reason: string }) =>
-          enrollment.reportStudent(courseId, userId, reason).then(unwrap),
+        mutationFn: ({
+          courseId,
+          userId,
+          reason,
+        }: {
+          courseId: string;
+          userId: string;
+          reason: string;
+        }) => enrollment.reportStudent(courseId, userId, reason).then(unwrap),
       }),
     resolveReport: (client: QueryClient) =>
       mutationOptions({
         mutationFn: (reportId: string) => enrollment.resolveReport(reportId).then(unwrap),
-        onSuccess: () => client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey }),
+        onSuccess: () =>
+          client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey }),
       }),
     revoke: (client: QueryClient) =>
       mutationOptions({

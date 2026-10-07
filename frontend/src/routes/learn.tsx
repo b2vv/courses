@@ -17,7 +17,11 @@ export const Route = createFileRoute('/learn')({
   },
   loader: ({ context, location, abortController }) =>
     location.pathname === '/learn' || location.pathname === '/learn/'
-      ? ensureRouteQuery(context.queryClient, context.enrollment.myMemberships(), abortController.signal)
+      ? ensureRouteQuery(
+          context.queryClient,
+          context.enrollment.myMemberships(),
+          abortController.signal,
+        )
       : undefined,
   component: LearnRoute,
   pendingComponent: ProtectedRoutePending,

@@ -30,7 +30,10 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 function uuid(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 function date(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
@@ -108,7 +111,8 @@ function participantReportPage(value: unknown): value is ParticipantReportQueueP
     Array.isArray(value.items) &&
     value.items.length <= 20 &&
     value.items.every(participantReportItem) &&
-    (value.nextCursor === null || (typeof value.nextCursor === 'string' && value.nextCursor.length > 0))
+    (value.nextCursor === null ||
+      (typeof value.nextCursor === 'string' && value.nextCursor.length > 0))
   );
 }
 function membershipGrant(value: unknown): boolean {
@@ -135,7 +139,8 @@ function namedError(
   response: WireResponse,
   allowed: Readonly<Record<number, readonly EnrollmentErrorCode[]>>,
 ): EnrollmentErrorCode {
-  const error = record(response.data) && record(response.data.error) ? response.data.error.code : undefined;
+  const error =
+    record(response.data) && record(response.data.error) ? response.data.error.code : undefined;
   const named = allowed[response.status]?.find((candidate) => candidate === error);
   return named ?? (unnamedStatusCode(response.status) as EnrollmentErrorCode);
 }
@@ -202,10 +207,17 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, readErrors));
-      return membership(outcome.data) ? { ok: true, value: outcome.data } : failure('invalid_response');
+      return membership(outcome.data)
+        ? { ok: true, value: outcome.data }
+        : failure('invalid_response');
     },
     async enroll(courseId, signal) {
-      const outcome = await send('enrollment.enroll', (init) => enrollInCourse(courseId, init), 201, signal);
+      const outcome = await send(
+        'enrollment.enroll',
+        (init) => enrollInCourse(courseId, init),
+        201,
+        signal,
+      );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 201) return failure(namedError(outcome, enrollErrors));
       const value = enrolled(outcome.data);
@@ -233,7 +245,9 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, rosterErrors));
-      return rosterPage(outcome.data) ? { ok: true, value: outcome.data } : failure('invalid_response');
+      return rosterPage(outcome.data)
+        ? { ok: true, value: outcome.data }
+        : failure('invalid_response');
     },
     async block(courseId, userId, signal) {
       const outcome = await send(
@@ -244,7 +258,9 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, membershipMutationErrors));
-      return membershipGrant(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
     },
     async unblock(courseId, userId, signal) {
       const outcome = await send(
@@ -255,7 +271,9 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, membershipMutationErrors));
-      return membershipGrant(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
     },
     async reportLecturer(courseId, reason, signal) {
       const outcome = await send(
@@ -313,7 +331,9 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, revokeErrors));
-      return membershipGrant(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
     },
   };
 }

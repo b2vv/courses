@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import axe from 'axe-core';
-import type { AdminCourseTree, CourseVideos, ErrorResponse, ErrorResponseError, MediaUploadTicket, MediaVideo, MembershipState, PlaybackSession } from '../src/adapters/api/generated/models';
+import type {
+  AdminCourseTree,
+  CourseVideos,
+  ErrorResponse,
+  ErrorResponseError,
+  MediaUploadTicket,
+  MediaVideo,
+  MembershipState,
+  PlaybackSession,
+} from '../src/adapters/api/generated/models';
 import { authFixtures, authStatePath } from './auth';
 import { contractField } from './contract';
 
@@ -26,7 +35,8 @@ function responseObject(value: unknown): object {
 /** Follow the actual worker playlists; never guess a segment filename. */
 async function mediaSegment(request: APIRequestContext, baseURL: string, lessonID: string) {
   const minted = await request.post('/api/v1/playback/sessions', {
-    data: { lessonId: lessonID }, headers: origin(baseURL),
+    data: { lessonId: lessonID },
+    headers: origin(baseURL),
   });
   expect(minted.status(), await minted.text()).toBe(201);
   const session = responseObject(await minted.json());
@@ -40,7 +50,9 @@ async function mediaSegment(request: APIRequestContext, baseURL: string, lessonI
   expect(master.pathname).toMatch(new RegExp(`^${prefix}hls/[0-9a-f-]+/master\\.m3u8$`));
   const masterResponse = await request.get(master.toString());
   expect(masterResponse.status()).toBe(200);
-  const variant = (await masterResponse.text()).split(/\r?\n/).map((line) => line.trim())
+  const variant = (await masterResponse.text())
+    .split(/\r?\n/)
+    .map((line) => line.trim())
     .find((line) => line !== '' && !line.startsWith('#'));
   if (variant === undefined) throw new Error('Master playlist has no rendition');
   const playlist = new URL(variant, master);
@@ -48,7 +60,9 @@ async function mediaSegment(request: APIRequestContext, baseURL: string, lessonI
   expect(playlist.pathname.startsWith(prefix)).toBe(true);
   const listed = await request.get(playlist.toString());
   expect(listed.status()).toBe(200);
-  const segment = (await listed.text()).split(/\r?\n/).map((line) => line.trim())
+  const segment = (await listed.text())
+    .split(/\r?\n/)
+    .map((line) => line.trim())
     .find((line) => line !== '' && !line.startsWith('#'));
   if (segment === undefined) throw new Error('Rendition playlist has no media segment');
   const url = new URL(segment, playlist);
@@ -64,11 +78,13 @@ function origin(baseURL: string) {
 function token(payload: object, slug: string, lessonID: string, title: string): CourseToken {
   const id = contractField<AdminCourseTree>(payload, 'id');
   const updatedAt = contractField<AdminCourseTree>(payload, 'updatedAt');
-  if (typeof id !== 'string' || typeof updatedAt !== 'string') throw new Error('course token is missing');
+  if (typeof id !== 'string' || typeof updatedAt !== 'string')
+    throw new Error('course token is missing');
   return { id, updatedAt, slug, lessonID, title };
 }
 function errorCode(payload: unknown) {
-  if (typeof payload !== 'object' || payload === null) throw new Error('error response is not an object');
+  if (typeof payload !== 'object' || payload === null)
+    throw new Error('error response is not an object');
   const error = contractField<ErrorResponse>(payload, 'error');
   if (typeof error !== 'object' || error === null) throw new Error('error response has no error');
   const code = contractField<ErrorResponseError>(error, 'code');
@@ -89,21 +105,31 @@ async function createFreeCourse(request: APIRequestContext, baseURL: string, suf
     description: 'A published free course for enrollment browser journeys.',
     instructorId: instructorID,
   };
-  const created = await request.post('/api/v1/admin/courses', { data: draft, headers: origin(baseURL) });
+  const created = await request.post('/api/v1/admin/courses', {
+    data: draft,
+    headers: origin(baseURL),
+  });
   expect(created.status(), await created.text()).toBe(201);
   const initial = token((await created.json()) as object, slug, lessonID, title);
   const saved = await request.put(`/api/v1/admin/courses/${initial.id}`, {
     data: {
       expectedUpdatedAt: initial.updatedAt,
       course: draft,
-      modules: [{ id: randomUUID(), title: `Модуль ${suffix}`, lessons: [{ id: lessonID, title: `Урок ${suffix}`, description: '' }] }],
+      modules: [
+        {
+          id: randomUUID(),
+          title: `Модуль ${suffix}`,
+          lessons: [{ id: lessonID, title: `Урок ${suffix}`, description: '' }],
+        },
+      ],
     },
     headers: origin(baseURL),
   });
   expect(saved.status(), await saved.text()).toBe(200);
   const stored = token((await saved.json()) as object, slug, lessonID, title);
   const status = await request.post(`/api/v1/admin/courses/${stored.id}/status`, {
-    data: { expectedUpdatedAt: stored.updatedAt, status: 'published' }, headers: origin(baseURL),
+    data: { expectedUpdatedAt: stored.updatedAt, status: 'published' },
+    headers: origin(baseURL),
   });
   expect(status.status(), await status.text()).toBe(200);
   const course = token((await status.json()) as object, slug, lessonID, title);
@@ -111,12 +137,18 @@ async function createFreeCourse(request: APIRequestContext, baseURL: string, suf
   return course;
 }
 async function enroll(request: APIRequestContext, baseURL: string, courseID: string) {
-  const response = await request.post(`/api/v1/learn/courses/${courseID}/enroll`, { headers: origin(baseURL) });
+  const response = await request.post(`/api/v1/learn/courses/${courseID}/enroll`, {
+    headers: origin(baseURL),
+  });
   expect(response.status(), await response.text()).toBe(201);
 }
 async function wcagViolations(page: Page) {
   await page.addScriptTag({ content: axe.source });
-  return page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'] })).violations.map((item) => item.id));
+  return page.evaluate(async () =>
+    (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'] })).violations.map(
+      (item) => item.id,
+    ),
+  );
 }
 async function overflowAtDoubleText(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -130,14 +162,20 @@ test.afterAll(async ({ browser, baseURL }) => {
   try {
     for (const course of published) {
       const response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' }, headers: origin(baseURL),
+        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
+        headers: origin(baseURL),
       });
       expect(response.status(), await response.text()).toBe(200);
     }
-  } finally { await admin.close(); }
+  } finally {
+    await admin.close();
+  }
 });
 
-test('En04 En10 nginx media bytes require membership except for a published preview', async ({ browser, baseURL }) => {
+test('En04 En10 nginx media bytes require membership except for a published preview', async ({
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(300_000);
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
@@ -146,31 +184,44 @@ test('En04 En10 nginx media bytes require membership except for a published prev
     const course = await createFreeCourse(admin.request, baseURL, 'media-preview');
     const editor = await admin.newPage();
     await editor.goto(`/admin/courses/${course.id}`);
-    const lesson = editor.getByRole('group', { name: 'Модуль 1', exact: true })
+    const lesson = editor
+      .getByRole('group', { name: 'Модуль 1', exact: true })
       .getByRole('group', { name: 'Урок 1', exact: true });
-    const minted = editor.waitForResponse((response) =>
-      new URL(response.url()).pathname === `/api/v1/admin/lessons/${course.lessonID}/video` &&
-      response.request().method() === 'POST');
-    await lesson.locator('input[type="file"]').setInputFiles(
-      path.join(import.meta.dirname, '..', 'playwright', '.fixtures', 'e2e-640x360.mp4'),
+    const minted = editor.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/admin/lessons/${course.lessonID}/video` &&
+        response.request().method() === 'POST',
     );
+    await lesson
+      .locator('input[type="file"]')
+      .setInputFiles(
+        path.join(import.meta.dirname, '..', 'playwright', '.fixtures', 'e2e-640x360.mp4'),
+      );
     const upload = await minted;
     expect(upload.status()).toBe(201);
-    const videoId = contractField<MediaUploadTicket>(responseObject(await upload.json()), 'videoId');
+    const videoId = contractField<MediaUploadTicket>(
+      responseObject(await upload.json()),
+      'videoId',
+    );
     if (typeof videoId !== 'string') throw new Error('Upload ticket has no videoId');
-    await expect.poll(async () => {
-      const videos = await admin.request.get(`/api/v1/admin/courses/${course.id}/videos`);
-      expect(videos.status()).toBe(200);
-      const items = contractField<CourseVideos>(responseObject(await videos.json()), 'items');
-      if (!Array.isArray(items)) throw new Error('Course videos has no items');
-      for (const item of items) {
-        const video = responseObject(item);
-        if (contractField<MediaVideo>(video, 'videoId') === videoId) {
-          return contractField<MediaVideo>(video, 'state');
-        }
-      }
-      return 'absent';
-    }, { timeout: 240_000, intervals: [1_000] }).toBe('ready');
+    await expect
+      .poll(
+        async () => {
+          const videos = await admin.request.get(`/api/v1/admin/courses/${course.id}/videos`);
+          expect(videos.status()).toBe(200);
+          const items = contractField<CourseVideos>(responseObject(await videos.json()), 'items');
+          if (!Array.isArray(items)) throw new Error('Course videos has no items');
+          for (const item of items) {
+            const video = responseObject(item);
+            if (contractField<MediaVideo>(video, 'videoId') === videoId) {
+              return contractField<MediaVideo>(video, 'state');
+            }
+          }
+          return 'absent';
+        },
+        { timeout: 240_000, intervals: [1_000] },
+      )
+      .toBe('ready');
 
     await enroll(student.request, baseURL, course.id);
     const memberSegment = await mediaSegment(student.request, baseURL, course.lessonID);
@@ -193,18 +244,25 @@ test('En04 En10 nginx media bytes require membership except for a published prev
     await expect(editor.getByRole('checkbox', { name: previewLabel })).not.toBeChecked();
     await editor.getByText(previewLabel, { exact: true }).click();
     await expect(editor.getByRole('checkbox', { name: previewLabel })).toBeChecked();
-    const saved = editor.waitForResponse((response) =>
-      new URL(response.url()).pathname === `/api/v1/admin/courses/${course.id}` &&
-      response.request().method() === 'PUT');
+    const saved = editor.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/admin/courses/${course.id}` &&
+        response.request().method() === 'PUT',
+    );
     await editor.getByRole('button', { name: 'Зберегти зміни' }).click();
     const updated = await saved;
     expect(updated.status()).toBe(200);
     // afterAll must archive using the version written by the preview edit.
-    Object.assign(course, token(responseObject(await updated.json()), course.slug, course.lessonID, course.title));
+    Object.assign(
+      course,
+      token(responseObject(await updated.json()), course.slug, course.lessonID, course.title),
+    );
 
     const membership = await student.request.get(`/api/v1/learn/courses/${course.id}/membership`);
     expect(membership.status()).toBe(200);
-    expect(contractField<MembershipState>(responseObject(await membership.json()), 'state')).toBe('revoked');
+    expect(contractField<MembershipState>(responseObject(await membership.json()), 'state')).toBe(
+      'revoked',
+    );
     // The original slot still works once preview permits access: the earlier 403 was not TTL expiry.
     expect((await student.request.get(memberSegment)).status()).toBe(200);
     const previewSegment = await mediaSegment(student.request, baseURL, course.lessonID);
@@ -217,7 +275,10 @@ test('En04 En10 nginx media bytes require membership except for a published prev
   }
 });
 
-test('En01 free enrollment shows CTA, creates membership, and appears in My learning', async ({ browser, baseURL }) => {
+test('En01 free enrollment shows CTA, creates membership, and appears in My learning', async ({
+  browser,
+  baseURL,
+}) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
   const student = await openAs(browser, baseURL, 'student');
@@ -236,10 +297,16 @@ test('En01 free enrollment shows CTA, creates membership, and appears in My lear
     await expect(page.getByRole('heading', { name: 'Моє навчання' })).toBeVisible();
     await expect(page.getByText(course.title)).toBeVisible();
     expect(await overflowAtDoubleText(page)).toBe(false);
-  } finally { await student.close(); await admin.close(); }
+  } finally {
+    await student.close();
+    await admin.close();
+  }
 });
 
-test('En03 keeps course metadata public while a non-member free lesson is denied', async ({ browser, baseURL }) => {
+test('En03 keeps course metadata public while a non-member free lesson is denied', async ({
+  browser,
+  baseURL,
+}) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
   const student = await openAs(browser, baseURL, 'student');
@@ -251,10 +318,16 @@ test('En03 keeps course metadata public while a non-member free lesson is denied
     await expect(page.getByRole('heading', { name: 'Програма курсу' })).toBeVisible();
     const learning = await page.request.get(`/api/v1/learn/lessons/${course.lessonID}/comments`);
     expect(learning.status()).toBe(403);
-  } finally { await student.close(); await admin.close(); }
+  } finally {
+    await student.close();
+    await admin.close();
+  }
 });
 
-test('En05 En08 blocked member retains content, loses communication, and roster toggles state', async ({ browser, baseURL }) => {
+test('En05 En08 blocked member retains content, loses communication, and roster toggles state', async ({
+  browser,
+  baseURL,
+}) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
   const student = await openAs(browser, baseURL, 'student');
@@ -273,7 +346,11 @@ test('En05 En08 blocked member retains content, loses communication, and roster 
     const studentPage = await student.newPage();
     await studentPage.goto(`/learn/${course.slug}/${course.lessonID}`);
     await expect(studentPage.getByRole('region', { name: 'Обговорення' })).toBeVisible();
-    const rejected = studentPage.waitForResponse((response) => new URL(response.url()).pathname === `/api/v1/learn/lessons/${course.lessonID}/comments` && response.request().method() === 'POST');
+    const rejected = studentPage.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/learn/lessons/${course.lessonID}/comments` &&
+        response.request().method() === 'POST',
+    );
     const discussion = studentPage.getByRole('region', { name: 'Обговорення' });
     await discussion.getByRole('textbox', { name: 'Коментар' }).fill(`blocked ${runNamespace}`);
     await discussion.getByRole('button', { name: 'Опублікувати' }).click();
@@ -286,17 +363,27 @@ test('En05 En08 blocked member retains content, loses communication, and roster 
     await roster.getByRole('button', { name: 'Розблокувати' }).click();
     await expect(roster.getByText('Активний')).toBeVisible();
     expect(await overflowAtDoubleText(teach)).toBe(false);
-  } finally { await instructor.close(); await student.close(); await admin.close(); }
+  } finally {
+    await instructor.close();
+    await student.close();
+    await admin.close();
+  }
 });
 
-test('En04 En15 revoke cuts learning access and re-enroll restores one roster row', async ({ browser, baseURL }) => {
+test('En04 En15 revoke cuts learning access and re-enroll restores one roster row', async ({
+  browser,
+  baseURL,
+}) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
   const student = await openAs(browser, baseURL, 'student');
   try {
     const course = await createFreeCourse(admin.request, baseURL, 'en04');
     await enroll(student.request, baseURL, course.id);
-    const revoke = await admin.request.post(`/api/v1/admin/courses/${course.id}/participants/${studentID}/revoke`, { headers: origin(baseURL) });
+    const revoke = await admin.request.post(
+      `/api/v1/admin/courses/${course.id}/participants/${studentID}/revoke`,
+      { headers: origin(baseURL) },
+    );
     expect(revoke.status(), await revoke.text()).toBe(200);
     const denied = await student.request.get(`/api/v1/learn/lessons/${course.lessonID}/comments`);
     expect(denied.status()).toBe(403);
@@ -315,11 +402,19 @@ test('En04 En15 revoke cuts learning access and re-enroll restores one roster ro
       const mine = body.entries?.filter((entry) => entry.userId === studentID) ?? [];
       expect(mine).toHaveLength(1);
       expect(mine[0]?.state).toBe('active');
-    } finally { await verify.close(); }
-  } finally { await student.close(); await admin.close(); }
+    } finally {
+      await verify.close();
+    }
+  } finally {
+    await student.close();
+    await admin.close();
+  }
 });
 
-test('En07 En14 participant reports resolve in the admin queue and an instructor self-enrolls in another course', async ({ browser, baseURL }) => {
+test('En07 En14 participant reports resolve in the admin queue and an instructor self-enrolls in another course', async ({
+  browser,
+  baseURL,
+}) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
   const admin = await openAs(browser, baseURL, 'admin');
   const student = await openAs(browser, baseURL, 'student');
@@ -330,7 +425,9 @@ test('En07 En14 participant reports resolve in the admin queue and an instructor
     const studentPage = await student.newPage();
     await studentPage.goto(`/courses/${course.slug}`);
     await studentPage.getByRole('button', { name: 'Поскаржитися на викладача' }).click();
-    await studentPage.getByRole('textbox', { name: 'Причина скарги' }).fill(`report ${runNamespace}`);
+    await studentPage
+      .getByRole('textbox', { name: 'Причина скарги' })
+      .fill(`report ${runNamespace}`);
     await studentPage.getByRole('button', { name: 'Надіслати скаргу' }).click();
     await expect(studentPage.getByText('Скаргу надіслано')).toBeVisible();
     const queue = await admin.newPage();
@@ -345,10 +442,18 @@ test('En07 En14 participant reports resolve in the admin queue and an instructor
     await teach.goto(`/teach/courses/${course.id}`);
     const studentRow = teach.locator('article').filter({ hasText: authFixtures.student.name });
     await studentRow.getByRole('button', { name: 'Поскаржитися' }).click();
-    await teach.getByRole('textbox', { name: 'Причина скарги' }).fill(`instructor report ${runNamespace}`);
+    await teach
+      .getByRole('textbox', { name: 'Причина скарги' })
+      .fill(`instructor report ${runNamespace}`);
     await teach.getByRole('button', { name: 'Надіслати скаргу' }).click();
     await expect(teach.getByText('Скаргу надіслано')).toBeVisible();
-    const selfEnroll = await instructor.request.post(`/api/v1/learn/courses/${course.id}/enroll`, { headers: origin(baseURL) });
+    const selfEnroll = await instructor.request.post(`/api/v1/learn/courses/${course.id}/enroll`, {
+      headers: origin(baseURL),
+    });
     expect(selfEnroll.status(), await selfEnroll.text()).toBe(201);
-  } finally { await instructor.close(); await student.close(); await admin.close(); }
+  } finally {
+    await instructor.close();
+    await student.close();
+    await admin.close();
+  }
 });

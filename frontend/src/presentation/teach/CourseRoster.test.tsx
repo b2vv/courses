@@ -68,7 +68,10 @@ describe('CourseRoster', () => {
   it('sends a report for the selected participant and announces success', async () => {
     const roster = renderRoster();
     await userEvent.click(screen.getByRole('button', { name: 'Поскаржитися' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Причина скарги' }), 'Образливе повідомлення');
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Причина скарги' }),
+      'Образливе повідомлення',
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Надіслати скаргу' }));
     expect(roster.onReportStudent).toHaveBeenCalledWith(active.userId, 'Образливе повідомлення');
     expect((await screen.findByRole('status')).textContent).toContain('Скаргу надіслано');

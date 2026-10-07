@@ -114,7 +114,8 @@ export function ParticipantReportQueue({
                 <article>
                   <h2>{t(`enrollment.reports.kind.${item.kind}`)}</h2>
                   <p>
-                    {t('enrollment.reports.reporter')}: {item.reporterName ?? t('ratings.formerAuthor')}
+                    {t('enrollment.reports.reporter')}:{' '}
+                    {item.reporterName ?? t('ratings.formerAuthor')}
                   </p>
                   <p>
                     {t('enrollment.reports.target')}: {item.targetName ?? t('ratings.formerAuthor')}

@@ -5,7 +5,8 @@ import { ParticipantReportQueue } from '../presentation/admin/ParticipantReportQ
 
 export const Route = createFileRoute('/admin/participant-reports')({
   ssr: false,
-  loader: ({ context }) => context.queryClient.prefetchInfiniteQuery(context.enrollment.participantReports()),
+  loader: ({ context }) =>
+    context.queryClient.prefetchInfiniteQuery(context.enrollment.participantReports()),
   component: ParticipantReportsRoute,
 });
 
