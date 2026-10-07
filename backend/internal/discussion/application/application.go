@@ -147,9 +147,11 @@ func (service *Service) ReportLecturer(ctx context.Context, actor Actor, courseI
 	if err != nil {
 		return domain.ParticipantReport{}, err
 	}
-	if err := service.repository.InsertParticipantReport(ctx, report); err != nil {
+	id, err := service.repository.InsertParticipantReport(ctx, report)
+	if err != nil {
 		return domain.ParticipantReport{}, err
 	}
+	report.ID = id
 	return report, nil
 }
 
@@ -174,9 +176,11 @@ func (service *Service) ReportStudent(ctx context.Context, actor Actor, courseID
 	if err != nil {
 		return domain.ParticipantReport{}, err
 	}
-	if err := service.repository.InsertParticipantReport(ctx, report); err != nil {
+	id, err := service.repository.InsertParticipantReport(ctx, report)
+	if err != nil {
 		return domain.ParticipantReport{}, err
 	}
+	report.ID = id
 	return report, nil
 }
 

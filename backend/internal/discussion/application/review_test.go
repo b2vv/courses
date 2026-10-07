@@ -146,8 +146,8 @@ func (f *reviewFake) Remove(context.Context, string, string, time.Time) error { 
 func (f *reviewFake) ReportSubject(context.Context, string, string) (string, access.Membership, bool, error) {
 	return "", access.MembershipNone, false, nil
 }
-func (f *reviewFake) InsertParticipantReport(context.Context, domain.ParticipantReport) error {
-	return nil
+func (f *reviewFake) InsertParticipantReport(context.Context, domain.ParticipantReport) (string, error) {
+	return "70000000-0000-4000-8000-0000000000dd", nil
 }
 func (f *reviewFake) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
 	return ports.ParticipantReportQueuePage{}, nil

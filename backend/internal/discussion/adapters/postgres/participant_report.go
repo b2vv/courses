@@ -32,17 +32,19 @@ WHERE c.id=$1::text::uuid`, courseID, userID).Scan(&ownerID, &membership)
 	return ownerID, access.Membership(membership.String), true, nil
 }
 
-func (repository *Repository) InsertParticipantReport(ctx context.Context, report domain.ParticipantReport) error {
-	result, err := repository.pool.Exec(ctx, `INSERT INTO participant_reports(id,course_id,reporter_id,target_id,kind,reason,state,created_at)
+func (repository *Repository) InsertParticipantReport(ctx context.Context, report domain.ParticipantReport) (string, error) {
+	var id string
+	err := repository.pool.QueryRow(ctx, `INSERT INTO participant_reports(id,course_id,reporter_id,target_id,kind,reason,state,created_at)
 VALUES(COALESCE(NULLIF($1::text,'')::uuid,gen_random_uuid()),$2::text::uuid,$3::text::uuid,$4::text::uuid,$5,$6,'open',$7)
-ON CONFLICT (course_id,reporter_id,target_id) WHERE state='open' DO NOTHING`, report.ID, report.CourseID, report.ReporterID, report.TargetID, report.Kind, report.Reason, report.CreatedAt)
+ON CONFLICT (course_id,reporter_id,target_id) WHERE state='open' DO NOTHING
+RETURNING id::text`, report.ID, report.CourseID, report.ReporterID, report.TargetID, report.Kind, report.Reason, report.CreatedAt).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrReportDuplicate
+	}
 	if err != nil {
-		return persistenceError(err)
+		return "", persistenceError(err)
 	}
-	if result.RowsAffected() == 0 {
-		return domain.ErrReportDuplicate
-	}
-	return nil
+	return id, nil
 }
 
 func (repository *Repository) ParticipantReportQueue(ctx context.Context, cursor string, limit int) (ports.ParticipantReportQueuePage, error) {

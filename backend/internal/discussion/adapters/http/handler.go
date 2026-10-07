@@ -27,6 +27,7 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin fu
 	mux.Handle("PUT /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.putReview))))
 	mux.Handle("DELETE /api/v1/learn/courses/{courseId}/review", sameOrigin(authenticate(http.HandlerFunc(handler.deleteReview))))
 	mux.Handle("POST /api/v1/learn/reviews/{reviewId}/reports", sameOrigin(authenticate(http.HandlerFunc(handler.reportReview))))
+	mux.Handle("POST /api/v1/learn/courses/{courseId}/report-lecturer", sameOrigin(authenticate(http.HandlerFunc(handler.reportLecturer))))
 	mux.Handle("GET /api/v1/learn/lessons/{lessonId}/comments", authenticate(http.HandlerFunc(handler.list)))
 	mux.Handle("POST /api/v1/learn/lessons/{lessonId}/comments", sameOrigin(authenticate(http.HandlerFunc(handler.publish))))
 	mux.Handle("PATCH /api/v1/learn/comments/{commentId}", sameOrigin(authenticate(http.HandlerFunc(handler.update))))
@@ -40,6 +41,12 @@ func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrig
 	mux.Handle("POST /api/v1/learn/comments/{commentId}/reports", sameOrigin(authenticate(http.HandlerFunc(handler.reportComment))))
 	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/remove", sameOrigin(authenticate(http.HandlerFunc(handler.removeReview))))
 	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/dismiss-report", sameOrigin(authenticate(http.HandlerFunc(handler.dismissReviewReports))))
+	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/report", sameOrigin(authenticate(http.HandlerFunc(handler.reportStudent))))
+}
+
+func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrigin, administrator func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/admin/participant-reports", authenticate(administrator(http.HandlerFunc(handler.participantReportQueue))))
+	mux.Handle("POST /api/v1/admin/participant-reports/{reportId}/resolve", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.resolveParticipantReport)))))
 }
 
 type authorDTO struct {
@@ -80,6 +87,33 @@ type updateRequest struct {
 
 type dismissReportsRequest struct {
 	Reason string `json:"reason"`
+}
+
+type participantReportRequest struct {
+	Reason string `json:"reason"`
+}
+
+type participantReportDTO struct {
+	ID         string    `json:"id"`
+	CourseID   string    `json:"courseId"`
+	ReporterID string    `json:"reporterId"`
+	TargetID   string    `json:"targetId"`
+	Kind       string    `json:"kind"`
+	Reason     string    `json:"reason"`
+	State      string    `json:"state"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type participantReportQueueItemDTO struct {
+	participantReportDTO
+	ReporterName *string `json:"reporterName"`
+	TargetName   *string `json:"targetName"`
+	CourseTitle  string  `json:"courseTitle"`
+}
+
+type participantReportQueueDTO struct {
+	Items      []participantReportQueueItemDTO `json:"items"`
+	NextCursor *string                         `json:"nextCursor"`
 }
 
 type moderationCommentDTO struct {
@@ -398,6 +432,80 @@ func (handler *Handler) reportReview(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (handler *Handler) reportLecturer(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[participantReportRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	report, err := handler.service.ReportLecturer(r.Context(), actor, r.PathValue("courseId"), input.Reason)
+	if err != nil {
+		writeParticipantReportError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, mapParticipantReport(report))
+}
+
+func (handler *Handler) reportStudent(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	input, err := decodeJSON[participantReportRequest](w, r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
+	report, err := handler.service.ReportStudent(r.Context(), actor, r.PathValue("courseId"), r.PathValue("userId"), input.Reason)
+	if err != nil {
+		writeParticipantReportError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, mapParticipantReport(report))
+}
+
+func (handler *Handler) participantReportQueue(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	page, err := handler.service.ReportQueue(r.Context(), actor, query.Get("cursor"))
+	if err != nil {
+		writeParticipantReportError(w, r, err)
+		return
+	}
+	items := make([]participantReportQueueItemDTO, len(page.Items))
+	for i, item := range page.Items {
+		items[i] = participantReportQueueItemDTO{participantReportDTO: mapParticipantReport(item.Report), ReporterName: item.ReporterName, TargetName: item.TargetName, CourseTitle: item.CourseTitle}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, participantReportQueueDTO{Items: items, NextCursor: nextCursorOrNull(page.NextCursor)})
+}
+
+func (handler *Handler) resolveParticipantReport(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := handler.service.ResolveReport(r.Context(), actor, r.PathValue("reportId")); err != nil {
+		writeParticipantReportError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 func (handler *Handler) removeReview(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
 	actor, ok := actorFromRequest(w, r)
@@ -524,6 +632,9 @@ func mapModerationComment(comment application.ModerationComment) moderationComme
 func mapReview(review application.Review) reviewDTO {
 	return reviewDTO{ID: review.ID, AuthorDisplayName: review.AuthorDisplayName, Stars: review.Stars, Body: review.Body, CompletedLessons: review.CompletedLessons, TotalLessons: review.TotalLessons, CreatedAt: review.CreatedAt, EditedAt: review.EditedAt}
 }
+func mapParticipantReport(report domain.ParticipantReport) participantReportDTO {
+	return participantReportDTO{ID: report.ID, CourseID: report.CourseID, ReporterID: report.ReporterID, TargetID: report.TargetID, Kind: string(report.Kind), Reason: report.Reason, State: string(report.State), CreatedAt: report.CreatedAt}
+}
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
 func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
@@ -588,16 +699,23 @@ func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFoun
 	}
 	writeError(w, r, statusFor(err), err)
 }
+func writeParticipantReportError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		return
+	}
+	writeError(w, r, statusFor(err), err)
+}
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrEnrollmentRequired), errors.Is(err, domain.ErrEnrollmentBlocked), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, application.ErrEmailNotVerified), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrPurchaseRequired), errors.Is(err, domain.ErrEnrollmentRequired), errors.Is(err, domain.ErrEnrollmentBlocked), errors.Is(err, domain.ErrReportOwnComment), errors.Is(err, application.ErrCommentForbidden), errors.Is(err, application.ErrEmailNotVerified), errors.Is(err, domain.ErrReviewOwnerForbidden), errors.Is(err, domain.ErrReviewNotAvailable), errors.Is(err, domain.ErrReviewPurchaseRequired), errors.Is(err, domain.ErrReviewNotStarted), errors.Is(err, domain.ErrReviewModerationForbidden), errors.Is(err, domain.ErrReportOwnReview), errors.Is(err, domain.ErrReportForbidden), errors.Is(err, domain.ErrReportSelf):
 		return http.StatusForbidden
-	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull), errors.Is(err, domain.ErrReviewAlreadyExists), errors.Is(err, domain.ErrReviewRemoved):
+	case errors.Is(err, application.ErrCommentRemoved), errors.Is(err, domain.ErrThreadFull), errors.Is(err, domain.ErrReviewAlreadyExists), errors.Is(err, domain.ErrReviewRemoved), errors.Is(err, domain.ErrReportDuplicate):
 		return http.StatusConflict
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		return http.StatusServiceUnavailable
-	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest), errors.Is(err, domain.ErrReviewInvalid):
+	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest), errors.Is(err, domain.ErrReviewInvalid), errors.Is(err, domain.ErrReportInvalid):
 		return http.StatusBadRequest
 	default:
 		return http.StatusBadRequest
@@ -639,6 +757,14 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 		message = "Origin is forbidden"
 	case "dependency_unavailable":
 		message = "A dependency is unavailable"
+	case "report_own_person":
+		message = "You cannot report yourself"
+	case "report_invalid":
+		message = "The participant report is invalid"
+	case "report_forbidden":
+		message = "Participant report access is forbidden"
+	case "report_already_open":
+		message = "An open report already exists"
 	}
 	httpserver.WriteError(w, r, status, code, message)
 }

@@ -25,9 +25,12 @@ type participantReportFake struct {
 func (f *participantReportFake) ReportSubject(context.Context, string, string) (string, access.Membership, bool, error) {
 	return f.ownerID, f.membership, f.courseFound, nil
 }
-func (f *participantReportFake) InsertParticipantReport(_ context.Context, report domain.ParticipantReport) error {
+func (f *participantReportFake) InsertParticipantReport(_ context.Context, report domain.ParticipantReport) (string, error) {
 	f.inserted = report
-	return f.insertErr
+	if f.insertErr != nil {
+		return "", f.insertErr
+	}
+	return "70000000-0000-4000-8000-0000000000dd", nil
 }
 func (f *participantReportFake) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
 	return f.queued, nil
@@ -63,7 +66,7 @@ func TestReportLecturer(t *testing.T) {
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err=%v want=%v", err, tc.want)
 			}
-			if tc.want == nil && (report.Kind != domain.ReportOnLecturer || f.inserted.TargetID != "owner") {
+			if tc.want == nil && (report.ID != "70000000-0000-4000-8000-0000000000dd" || report.Kind != domain.ReportOnLecturer || f.inserted.TargetID != "owner") {
 				t.Fatalf("report=%+v inserted=%+v", report, f.inserted)
 			}
 		})

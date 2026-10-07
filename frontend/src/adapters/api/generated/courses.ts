@@ -61,6 +61,7 @@ import type {
   ListCourseReviewsParams,
   ListLearningCourseReviewsParams,
   ListLessonCommentsParams,
+  ListParticipantReportsParams,
   ListPublishedCoursesParams,
   ListTeachCourseCommentsParams,
   ListTeachModerationQueueParams,
@@ -80,6 +81,9 @@ import type {
   OrderNotFoundResponse,
   OriginForbiddenResponse,
   OwnReview,
+  ParticipantReport,
+  ParticipantReportQueuePage,
+  ParticipantReportRequest,
   PlaybackExpiredResponse,
   PlaybackForbiddenResponse,
   PlaybackHeartbeatRequest,
@@ -709,6 +713,292 @@ export const unblockCourseParticipant = async (courseId: string,
 
   const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
+}
+
+
+
+export type reportCourseLecturerResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseLecturerResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseLecturerResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseLecturerResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseLecturerResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseLecturerResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseLecturerResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseLecturerResponseSuccess = (reportCourseLecturerResponse201) & {
+  headers: Headers;
+};
+export type reportCourseLecturerResponseError = (reportCourseLecturerResponse400 | reportCourseLecturerResponse401 | reportCourseLecturerResponse403 | reportCourseLecturerResponse404 | reportCourseLecturerResponse409 | reportCourseLecturerResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseLecturerResponse = (reportCourseLecturerResponseSuccess | reportCourseLecturerResponseError)
+
+export const getReportCourseLecturerUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/report-lecturer`
+}
+
+export const reportCourseLecturer = async (courseId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseLecturerResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getReportCourseLecturerUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseLecturerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseLecturerResponse
+}
+
+
+
+export type reportCourseParticipantResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseParticipantResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseParticipantResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseParticipantResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseParticipantResponseSuccess = (reportCourseParticipantResponse201) & {
+  headers: Headers;
+};
+export type reportCourseParticipantResponseError = (reportCourseParticipantResponse400 | reportCourseParticipantResponse401 | reportCourseParticipantResponse403 | reportCourseParticipantResponse404 | reportCourseParticipantResponse409 | reportCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseParticipantResponse = (reportCourseParticipantResponseSuccess | reportCourseParticipantResponseError)
+
+export const getReportCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/report`
+}
+
+export const reportCourseParticipant = async (courseId: string,
+    userId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseParticipantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getReportCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseParticipantResponse
+}
+
+
+
+export type listParticipantReportsResponse200 = {
+  data: ParticipantReportQueuePage
+  status: 200
+}
+
+export type listParticipantReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listParticipantReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listParticipantReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listParticipantReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listParticipantReportsResponseSuccess = (listParticipantReportsResponse200) & {
+  headers: Headers;
+};
+export type listParticipantReportsResponseError = (listParticipantReportsResponse400 | listParticipantReportsResponse401 | listParticipantReportsResponse403 | listParticipantReportsResponse503) & {
+  headers: Headers;
+};
+
+export type listParticipantReportsResponse = (listParticipantReportsResponseSuccess | listParticipantReportsResponseError)
+
+export const getListParticipantReportsUrl = (params?: ListParticipantReportsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/participant-reports?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/participant-reports`
+}
+
+export const listParticipantReports = async (params?: ListParticipantReportsParams, options?: RequestInit): Promise<listParticipantReportsResponse> => {
+
+  const res = await fetch(getListParticipantReportsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listParticipantReportsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listParticipantReportsResponse
+}
+
+
+
+export type resolveParticipantReportResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resolveParticipantReportResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resolveParticipantReportResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type resolveParticipantReportResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type resolveParticipantReportResponseSuccess = (resolveParticipantReportResponse204) & {
+  headers: Headers;
+};
+export type resolveParticipantReportResponseError = (resolveParticipantReportResponse401 | resolveParticipantReportResponse403 | resolveParticipantReportResponse503) & {
+  headers: Headers;
+};
+
+export type resolveParticipantReportResponse = (resolveParticipantReportResponseSuccess | resolveParticipantReportResponseError)
+
+export const getResolveParticipantReportUrl = (reportId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/participant-reports/${reportId}/resolve`
+}
+
+export const resolveParticipantReport = async (reportId: string, options?: RequestInit): Promise<resolveParticipantReportResponse> => {
+
+  const res = await fetch(getResolveParticipantReportUrl(reportId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveParticipantReportResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resolveParticipantReportResponse
 }
 
 
