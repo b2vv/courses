@@ -41,9 +41,25 @@ integration:
 	sh infrastructure/tests/integration.sh
 build:
 	docker compose build
+# K4: every browser run, green or red, leaves the whole run's api+nginx log in frontend/test-logs/
+# (gitignored via *.log). The R23 heartbeat 403 (O05) was never explained because the log was gone
+# by the time anyone looked: recovery.spec stops/`up`s api without the e2e overlay, which RECREATES
+# the container, and a dump taken after the run sees only the new one (2 api lines for a 15-minute
+# suite, measured 2026-10-07). So the log is STREAMED from before the run: `docker compose logs -f`
+# writes history to disk as it happens and re-attaches to a recreated container (verified on the
+# live stack: force-recreate api → follower still alive, both "server starting" lines and the
+# post-recreate requests in the file). It lives outside test-results/, which Playwright wipes on
+# start. The exit status is the e2e run's own, read right after the subshell and re-raised after
+# the follower is stopped, so a red run stays red.
 e2e:
 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 180 api frontend wayforpay-stub nginx
-	cd frontend && npm run e2e
+	mkdir -p frontend/test-logs; \
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs -f --no-color --timestamps api nginx > frontend/test-logs/api-nginx.log 2>&1 & \
+	follower=$$!; trap 'kill $$follower 2>/dev/null' EXIT; \
+	(cd frontend && npm run e2e); status=$$?; \
+	kill $$follower 2>/dev/null; wait $$follower 2>/dev/null; trap - EXIT; \
+	echo "api/nginx log (whole run): frontend/test-logs/api-nginx.log"; \
+	exit $$status
 # Run this, not bare `e2e`, for a standalone browser run. `e2e` raises the stack with the
 # e2e overlay (api, frontend, nginx and the WayForPay stub, `--wait` so chromium never meets a
 # still-starting 503) but does NOT reseed, so on its own it fails against a `delete-me` user a
