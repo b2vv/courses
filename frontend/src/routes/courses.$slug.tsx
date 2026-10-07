@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
+import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { CourseView } from '../presentation/storefront/CourseView';
 import {
   CatalogFailure,
@@ -38,7 +39,7 @@ export const Route = createFileRoute('/courses/$slug')({
 });
 function CourseRoute() {
   const { slug } = Route.useParams();
-  const { catalog, identityDependencies } = Route.useRouteContext();
+  const { catalog, enrollment, identityDependencies, queryClient } = Route.useRouteContext();
   const { data } = useSuspenseQuery(catalog.detail(slug));
   const reviews = useInfiniteQuery(catalog.reviews(slug));
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
@@ -46,6 +47,11 @@ function CourseRoute() {
     ...catalog.ownReview(data.id, session.data?.id ?? 'anonymous'),
     enabled: session.data !== null && session.data !== undefined,
   });
+  const membership = useQuery({
+    ...enrollment.membership(data.id),
+    enabled: session.data !== null && session.data !== undefined,
+  });
+  const enroll = useMutation(enrollment.enroll(queryClient));
   const report = useMutation(catalog.report());
   const page =
     reviews.data === undefined
@@ -67,6 +73,10 @@ function CourseRoute() {
       onRetry={() => void reviews.refetch()}
       onRetryMore={() => void reviews.fetchNextPage()}
       signedIn={session.data !== null && session.data !== undefined}
+      membership={membership.data}
+      enrolling={enroll.isPending}
+      enrollError={enroll.error instanceof EnrollmentQueryError ? enroll.error.code : undefined}
+      onEnroll={() => enroll.mutate(data.id)}
       ownReviewId={ownReview.data?.review?.id}
       onReport={(reviewId) => report.mutateAsync({ reviewId })}
     />
