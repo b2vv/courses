@@ -162,6 +162,19 @@ func (fake *fakeRepository) ListModerationQueue(context.Context, string, string,
 	return ports.ModerationQueuePage{Items: items, NextCursor: fake.queue.NextCursor}, nil
 }
 
+// Person reports have no HTTP route until L6. These inert methods keep the existing
+// comment-route fixture conformant with the complete discussion repository contract.
+func (fake *fakeRepository) ReportSubject(context.Context, string, string) (string, access.Membership, bool, error) {
+	return "", access.MembershipNone, false, nil
+}
+func (fake *fakeRepository) InsertParticipantReport(context.Context, domain.ParticipantReport) error {
+	return nil
+}
+func (fake *fakeRepository) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
+	return ports.ParticipantReportQueuePage{}, nil
+}
+func (fake *fakeRepository) ResolveParticipantReport(context.Context, string) error { return nil }
+
 func (fake *fakeRepository) LessonFacts(context.Context, string, string) (ports.LessonFacts, error) {
 	return fake.facts, fake.factsErr
 }

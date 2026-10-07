@@ -20,4 +20,8 @@ var (
 	ErrReviewRemoved             = errors.New("review_removed")
 	ErrReportOwnReview           = errors.New("report_own_review")
 	ErrReviewModerationForbidden = errors.New("review_moderation_forbidden")
+	ErrReportSelf                = errors.New("report_own_person")
+	ErrReportInvalid             = errors.New("report_invalid")
+	ErrReportForbidden           = errors.New("report_forbidden")
+	ErrReportDuplicate           = errors.New("report_already_open")
 )

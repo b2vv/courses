@@ -114,6 +114,94 @@ type OwnReview struct {
 	Eligibility string
 }
 
+type ParticipantReportQueueItem struct {
+	ReporterName *string
+	TargetName   *string
+	CourseTitle  string
+	Report       domain.ParticipantReport
+}
+
+type ParticipantReportQueuePage struct {
+	Items      []ParticipantReportQueueItem
+	NextCursor string
+}
+
+func (service *Service) ReportLecturer(ctx context.Context, actor Actor, courseID, reason string) (domain.ParticipantReport, error) {
+	if !actor.EmailVerified {
+		return domain.ParticipantReport{}, ErrEmailNotVerified
+	}
+	ownerID, membership, courseFound, err := service.repository.ReportSubject(ctx, courseID, actor.UserID)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if !courseFound {
+		return domain.ParticipantReport{}, domain.ErrNotFound
+	}
+	if actor.UserID == ownerID {
+		return domain.ParticipantReport{}, domain.ErrReportSelf
+	}
+	if !domain.IsParticipant(membership) {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	report, err := domain.NewParticipantReport("", courseID, actor.UserID, ownerID, domain.ReportOnLecturer, reason, service.now())
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if err := service.repository.InsertParticipantReport(ctx, report); err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	return report, nil
+}
+
+func (service *Service) ReportStudent(ctx context.Context, actor Actor, courseID, targetID, reason string) (domain.ParticipantReport, error) {
+	if !actor.EmailVerified {
+		return domain.ParticipantReport{}, ErrEmailNotVerified
+	}
+	ownerID, membership, courseFound, err := service.repository.ReportSubject(ctx, courseID, targetID)
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if !courseFound {
+		return domain.ParticipantReport{}, domain.ErrNotFound
+	}
+	if !actor.Administrator && actor.UserID != ownerID {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	if !domain.IsParticipant(membership) {
+		return domain.ParticipantReport{}, domain.ErrReportForbidden
+	}
+	report, err := domain.NewParticipantReport("", courseID, actor.UserID, targetID, domain.ReportOnStudent, reason, service.now())
+	if err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	if err := service.repository.InsertParticipantReport(ctx, report); err != nil {
+		return domain.ParticipantReport{}, err
+	}
+	return report, nil
+}
+
+func (service *Service) ReportQueue(ctx context.Context, actor Actor, cursor string) (ParticipantReportQueuePage, error) {
+	if !actor.Administrator {
+		return ParticipantReportQueuePage{}, domain.ErrReportForbidden
+	}
+	page, err := service.repository.ParticipantReportQueue(ctx, cursor, 20)
+	if err != nil {
+		return ParticipantReportQueuePage{}, err
+	}
+	result := ParticipantReportQueuePage{NextCursor: page.NextCursor, Items: make([]ParticipantReportQueueItem, len(page.Items))}
+	for i, item := range page.Items {
+		result.Items[i] = ParticipantReportQueueItem{Report: item.Report, ReporterName: item.ReporterName, TargetName: item.TargetName, CourseTitle: item.CourseTitle}
+	}
+	return result, nil
+}
+
+func (service *Service) ResolveReport(ctx context.Context, actor Actor, reportID string) error {
+	if !actor.Administrator {
+		return domain.ErrReportForbidden
+	}
+	return service.repository.ResolveParticipantReport(ctx, reportID)
+}
+
 func (service *Service) List(ctx context.Context, actor Actor, lessonID, cursor string) (Page, error) {
 	facts, err := service.repository.LessonFacts(ctx, actor.UserID, lessonID)
 	if err != nil {

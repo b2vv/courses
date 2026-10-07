@@ -84,6 +84,83 @@ func TestDiscussionPostgres(t *testing.T) {
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
 
+	t.Run("L5 participant reports use isolated course membership and admin queue", func(t *testing.T) {
+		// This fixture intentionally has no lesson and does not reuse the globally counted d1/b1 fixtures.
+		// Person reports only need a course and membership, so each identity/course is generated here.
+		createUser := func(t *testing.T, name string) string {
+			t.Helper()
+			var id string
+			if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash)
+				VALUES(gen_random_uuid(),concat('l5-',gen_random_uuid()::text,'@discussion.test'),$1,'student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`, name).Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			return id
+		}
+		owner, active, blocked, none, admin := createUser(t, "L5 owner"), createUser(t, "L5 active"), createUser(t, "L5 blocked"), createUser(t, "L5 none"), createUser(t, "L5 admin")
+		var course string
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at)
+			VALUES(gen_random_uuid(),concat('l5-',gen_random_uuid()::text),'L5 isolated reports','Summary','Description','published',$1::uuid,now()) RETURNING id::text`, owner).Scan(&course); err != nil {
+			t.Fatal(err)
+		}
+		for _, membership := range []struct{ user, state string }{{active, "active"}, {blocked, "blocked"}} {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1::uuid,$2::uuid,'admin',$3,$4::uuid)`, membership.user, course, membership.state, owner); err != nil {
+				t.Fatal(err)
+			}
+		}
+		service := application.New(repository, time.Now)
+		member := application.Actor{UserID: active, EmailVerified: true}
+		if report, err := service.ReportLecturer(ctx, member, course, "lecturer report"); err != nil || report.Kind != domain.ReportOnLecturer || report.TargetID != owner {
+			t.Fatalf("lecturer report=%+v err=%v", report, err)
+		}
+		if _, err := service.ReportLecturer(ctx, member, course, "duplicate"); !errors.Is(err, domain.ErrReportDuplicate) {
+			t.Fatalf("duplicate=%v", err)
+		}
+		if _, err := service.ReportLecturer(ctx, application.Actor{UserID: blocked, EmailVerified: true}, course, "blocked is participant"); err != nil {
+			t.Fatalf("blocked=%v", err)
+		}
+		if _, err := service.ReportLecturer(ctx, application.Actor{UserID: none, EmailVerified: true}, course, "none"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("none=%v", err)
+		}
+		if report, err := service.ReportStudent(ctx, application.Actor{UserID: owner, EmailVerified: true}, course, active, "student report"); err != nil || report.Kind != domain.ReportOnStudent {
+			t.Fatalf("student report=%+v err=%v", report, err)
+		}
+		if _, err := service.ReportStudent(ctx, application.Actor{UserID: owner, EmailVerified: true}, course, none, "not participant"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-member target=%v", err)
+		}
+		if _, err := service.ReportQueue(ctx, application.Actor{UserID: admin}, ""); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-admin queue=%v", err)
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin}, "00000000-0000-4000-8000-000000000001"); !errors.Is(err, domain.ErrReportForbidden) {
+			t.Fatalf("non-admin resolve=%v", err)
+		}
+		queue, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		if err != nil || len(queue.Items) != 3 {
+			t.Fatalf("queue=%+v err=%v", queue, err)
+		}
+		var lecturerID string
+		for _, item := range queue.Items {
+			if item.Report.Kind == domain.ReportOnLecturer && item.Report.ReporterID == active {
+				lecturerID = item.Report.ID
+			}
+			if item.ReporterName == nil || item.TargetName == nil {
+				t.Fatalf("names absent: %+v", item)
+			}
+		}
+		if lecturerID == "" {
+			t.Fatal("active lecturer report absent")
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin, Administrator: true}, lecturerID); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.ResolveReport(ctx, application.Actor{UserID: admin, Administrator: true}, lecturerID); err != nil {
+			t.Fatalf("idempotent resolve=%v", err)
+		}
+		queue, err = service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		if err != nil || len(queue.Items) != 2 {
+			t.Fatalf("resolved queue=%+v err=%v", queue, err)
+		}
+	})
+
 	t.Run("L4b communication gate uses seeded membership states through the application service", func(t *testing.T) {
 		service := application.New(repository, time.Now)
 		// Isolated course/lesson so this subtest's comments do not land on the shared discussion
