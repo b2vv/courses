@@ -51,7 +51,7 @@ Courses 1; code — Codex; review — Courses 2.
 | En10 | grandfather=active membership; preview lesson without enrolment | e2e En10 (preview bytes) + integration |
 | En11 | communication = active + verified; non-member→required, blocked→blocked, unverified→email_not_verified | e2e En05 (message) + integration |
 | En12 | a11y of new screens (keyboard/focus/44px/zoom/uk-en/axe) | e2e axe + Rstest |
-| En13 | backfill: existing free user with progress OR comment/review keeps access after migration | integration (migration on seeded DB) |
+| En13 | backfill: existing free user with progress OR comment/review keeps access after migration | integration — 00015 backfill on populated data (DownTo 14 → seed activity → UpTo 15): progress/comment/review each → self-active grant; paid & draft excluded; free-archived included; cross-source UNION + two-row dedup → one grant (course/postgres migration subtest, `make integration` green) |
 | En14 | G10: instructor/admin enrols as a participant of another's course (membership active, role unchanged) | e2e En07/En14 |
 | En15 | one row per (user,course): blocked/revoked «Записатися» → no 2nd active, no JOIN duplicates | e2e En04/En15 + integration |
 
@@ -98,6 +98,11 @@ Rstest 638; Go integration green; `check-generated` clean.
 - Behind-gate spec errors the full e2e exposed (test bugs, not product): asserting the public outline
   endpoint as gated (En03/En04), a non-existent lesson-title heading (En05), stale `/learn`→`/courses`
   redirect assertions (route-guards), a wrong roster path/authz/shape (En04/En15).
+- **L9 proof-gap** (caught by Courses 2 at the report gate, the phase-closing rule in action): En13 was
+  tagged proven at integration, but the only backfill coverage ran 00015 on an empty DB (no-op) and
+  seed self-active is a seed INSERT, not the backfill SELECT — the row was claimed by a same-named path,
+  not an actual test. Closed with a DownTo(14)→seed activity→UpTo(15) migration subtest exercising the
+  real 3-way UNION, the price/status filter, and cross-source dedup on populated data.
 
 ## 6. Limitations (named, not claimed away)
 - **Paid re-enrolment after revoke is refused** (`course_already_owned`) — enrollment is senior to grant;
