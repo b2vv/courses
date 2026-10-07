@@ -58,8 +58,11 @@ build:
 # burst override — and the container log history went with them. COMPOSE_FILE makes those bare calls
 # resolve to the same two files; the recipe's own explicit `-f` calls are unaffected (flags win).
 # Measured 2026-10-07: `config --hash=api` is identical for the env form and the `-f` form, and a
-# stop → up against a matching container keeps its id (base vs overlay differ → recreate). CI sets
-# nothing, so its bare calls keep matching the base stack it raises with `make up`.
+# stop → up against a matching container keeps its id (base vs overlay differ → recreate). CI does
+# not use this recipe: ci.yml sets its own job-level COMPOSE_FILE (base + e2e + ci override, K10).
+# K10: E2E_SKIP_ASR is CI's flag (ci.yml sets it inline; the CI override starts no asr-worker). The
+# local run always has the worker, so the flag is dropped here rather than trusted to be unset — a
+# value leaked into a shell would otherwise skip asr.spec silently and the local gate would under-count.
 # The paths are ABSOLUTE on purpose: COMPOSE_FILE is resolved against the caller's cwd and disables
 # compose's parent-directory discovery, so a relative value broke every spec that shells compose
 # from frontend/ (accounts, ratings: `stat frontend/docker-compose.yml`) — they had been finding
@@ -73,7 +76,7 @@ e2e:
 	stream="frontend/test-logs/api-nginx-$$(date -u +%Y%m%dT%H%M%SZ).log"; \
 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs -f --no-color --timestamps api nginx > "$$stream" 2>&1 & \
 	follower=$$!; trap 'kill $$follower 2>/dev/null' EXIT; \
-	(cd frontend && npm run e2e); status=$$?; \
+	(cd frontend && env -u E2E_SKIP_ASR npm run e2e); status=$$?; \
 	kill $$follower 2>/dev/null; wait $$follower 2>/dev/null; trap - EXIT; \
 	echo "api/nginx log (whole run): $$stream"; \
 	exit $$status

@@ -492,6 +492,56 @@ async function videoTime(page: Page): Promise<number> {
   });
 }
 
+// A position read AFTER openAndPlay measures the test process, not the player: the helper has
+// already waited for the Pause label (the `playing` event) and polled videoTime, and the video keeps
+// advancing meanwhile. Against a [39, 41] restore window that read measured 41.37 s on a loaded host
+// (2026-10-07, local e2e beside a format/typecheck run) and would fail routinely on a 2 vCPU runner.
+// The rows "resumes at the saved position" and "reopens from zero" name currentTime AT `playing`, so
+// that is what is captured: an init script (the helpers navigate again), on document in the capture
+// phase (`playing` does not bubble), first occurrence only. Init scripts are page-scoped, so arm the
+// probe on the page that will navigate — a new context's or a new page's — before its openAndPlay.
+async function armStartPositionProbe(page: Page) {
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'playing',
+      (event) => {
+        const probe = window as Window & { __startPosition?: number };
+        if (event.target instanceof HTMLVideoElement && probe.__startPosition === undefined) {
+          probe.__startPosition = event.target.currentTime;
+        }
+      },
+      true,
+    );
+  });
+}
+
+async function startPosition(page: Page): Promise<number> {
+  const position = await page.evaluate(
+    () => (window as Window & { __startPosition?: number }).__startPosition,
+  );
+  if (typeof position !== 'number') {
+    throw new Error('playing never fired on this page, or the probe was armed after navigation');
+  }
+  return position;
+}
+
+// Pauses and returns the position the pause heartbeat recorded - the value a later restore has to
+// reproduce. Waiting for the heartbeat response, not for the click, is what makes it the saved one:
+// heartbeatPayload reads the request body only behind a 204, so this is what the server stored, not
+// a client-side estimate. A paused player schedules no further ticks (LessonPlayer's tick effect is
+// gated on `playing`), so the target stops moving. Callers assert the restored start within ±1 s of
+// it: that allowance is seek granularity — the player seeks HLS/MSE media to the stored value and
+// `playing` reports currentTime after the seek lands on a frame — not a timing assumption.
+async function pauseAndRecord(page: Page, targetLessonID = lessonID): Promise<number> {
+  const paused = page.waitForResponse(
+    (response) => heartbeatPayload(response, targetLessonID)?.reason === 'pause',
+  );
+  await page.getByRole('button', { name: 'Пауза' }).click();
+  const payload = heartbeatPayload(await paused, targetLessonID);
+  if (payload === null) throw new Error('the pause heartbeat was not recorded');
+  return payload.positionSeconds;
+}
+
 async function videoEnded(page: Page): Promise<boolean> {
   return page.locator('video').evaluate((node) => {
     if (!(node instanceof HTMLVideoElement)) throw new Error('Video element is unavailable');
@@ -922,9 +972,10 @@ test.describe('T7 playback milestone', () => {
       await setPosition(page, 40);
       await saved;
 
+      await armStartPositionProbe(page);
       await page.reload();
       await openAndPlay(page);
-      const restored = await videoTime(page);
+      const restored = await startPosition(page);
       expect(restored).toBeGreaterThanOrEqual(39);
       expect(restored).toBeLessThanOrEqual(41);
     });
@@ -942,6 +993,12 @@ test.describe('T7 playback milestone', () => {
       });
       await setPosition(page, 40);
       await saved;
+      // The first page keeps playing and keeps recording (a tick every 2 s on the e2e profile), so
+      // "the saved position" is a moving target while the second context is being opened: on the
+      // 2 vCPU runner (2026-10-07) the second page started at 41.03 s, correctly restoring a position
+      // the first page had meanwhile saved. Freeze it: pause, and anchor the expectation on the
+      // position the pause heartbeat actually recorded instead of on the number the seek asked for.
+      const pausedAt = await pauseAndRecord(page);
 
       const secondContext = await browser.newContext({
         baseURL,
@@ -949,10 +1006,11 @@ test.describe('T7 playback milestone', () => {
       });
       try {
         const secondPage = await secondContext.newPage();
+        await armStartPositionProbe(secondPage);
         await openAndPlay(secondPage);
-        const restored = await videoTime(secondPage);
-        expect(restored).toBeGreaterThanOrEqual(39);
-        expect(restored).toBeLessThanOrEqual(41);
+        const restored = await startPosition(secondPage);
+        expect(restored).toBeGreaterThanOrEqual(pausedAt - 1);
+        expect(restored).toBeLessThanOrEqual(pausedAt + 1);
       } finally {
         await secondContext.close();
       }
@@ -991,10 +1049,11 @@ test.describe('T7 playback milestone', () => {
       await setPosition(page, 285);
       await completed;
 
+      await armStartPositionProbe(page);
       await page.reload();
       await expect(page.getByRole('slider', { name: 'Позиція відтворення' })).toHaveValue('0');
       await openAndPlay(page);
-      expect(await videoTime(page)).toBeLessThanOrEqual(1);
+      expect(await startPosition(page)).toBeLessThanOrEqual(1);
     });
 
     test('B18 keeps the last recorded position across a network break', async ({ page }) => {
@@ -1005,7 +1064,8 @@ test.describe('T7 playback milestone', () => {
       });
       await setPosition(page, 40);
       await saved;
-      await page.getByRole('button', { name: 'Пауза' }).click();
+      // Same anchor as P05: the row restores what the pause recorded, not the number the seek asked for.
+      const pausedAt = await pauseAndRecord(page);
 
       // The break has to be observable, or an offline toggle that changed nothing would pass.
       // It shows up as the player's unavailable state: losing the network exhausts the media
@@ -1021,10 +1081,11 @@ test.describe('T7 playback milestone', () => {
 
       const recoveredPage = await page.context().newPage();
       try {
+        await armStartPositionProbe(recoveredPage);
         await openAndPlay(recoveredPage);
-        const restored = await videoTime(recoveredPage);
-        expect(restored).toBeGreaterThanOrEqual(39);
-        expect(restored).toBeLessThanOrEqual(41);
+        const restored = await startPosition(recoveredPage);
+        expect(restored).toBeGreaterThanOrEqual(pausedAt - 1);
+        expect(restored).toBeLessThanOrEqual(pausedAt + 1);
       } finally {
         await recoveredPage.close();
       }

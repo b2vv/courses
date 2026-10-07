@@ -233,9 +233,29 @@ ADR, обов'язкові перед відповідними шарами: `00
    8090 без skip-guard. **Цілісність фаз не зачеплена:** усі звіти/AGENTS заявляють «behind an ordered
    `make check`» — локальний гейт, єдина заявлена авторитетність; «CI green» ніде не claim'ився.
    Рішення власника 2026-10-07: полагодити як окремий хвіст після K4/K5 (CI-override для cpus/mem,
-   не послаблення дефолту; CI підіймає той самий стек, що `make e2e-local`); застереження Courses 2 —
+   не послаблення дефолту; CI підіймає той самий стек, що `make e2e-local`). **Стек обрано 2026-10-07
+   (варіант B, AGENDA K10):** CI без asr-worker (образ 2.94 GB, whisper з HF на build, cpus 6.0 — не
+   вміщається в 2 vCPU/7 GB/30 хв), решта на overlay через job-level абсолютний `COMPOSE_FILE`;
+   asr.spec пропускається (`E2E_SKIP_ASR`), smoke C20 — за відсутності воркера; ASR авторитетний лише
+   локально (датований ліміт); час CI міряється раном PR; застереження Courses 2 —
    повний overlay-e2e на 2 vCPU може бути повільним/флакі (тюнінг під потужний хост) → можливо larger
-   runner або вужчий CI-сабсет.
+   runner або вужчий CI-сабсет. **Реалізовано 2026-10-07 (гілка `chore/ci-gate-k10`, PR #11):**
+   `docker-compose.ci.yml` (asr-worker → `profiles: [local-only]`; media-worker cpus 1.5/mem 1536m);
+   `ci.yml` job-level `COMPOSE_FILE` = 3 абсолютні файли; `E2E_SKIP_ASR` у `playwright.config.ts`;
+   `smoke.sh` став config-aware — читає факт зі змонтованого стека замість припущення base (на
+   overlay було ЧОТИРИ false-red, не один: ASR readyz/C20, C15 asr-метрики, WFP callback 404 base /
+   401 `invalid_callback` overlay, login burst 5 base / 50 `login-req.e2e.conf`). Strong-host доказ
+   CI-шляху (down -v → 3 файли → smoke → `E2E_SKIP_ASR=1` e2e): `make up` 37 с, smoke 0, e2e 101
+   passed за 750 с, media 91 с (+28 % проти 71 с без капу), playback 229 с (+12 % проти 204),
+   media-worker `OOMKilled=false RestartCount=0` — кап коректний; час на 2 vCPU — лише з CI-рану PR.
+   **CI-рани PR #11 на 2 vCPU (2026-10-07):** вперше з 09-11 пройшли `make up`/seed/smoke і оголили
+   три класи прихованих тест-дефектів за зеленими локальними гейтами (reaper sleep-race у TEMPORARY
+   пакеті; discussion K19/K20 — `getByText` збігався з відкритою textarea, не з опублікованою
+   відповіддю; playback P04/P05/P07/B18 — читання `videoTime` після `playing`+poll міряло швидкість
+   тест-процесу, P05 — рухома ціль, бо перша сторінка грає далі) — усі закриті test-only, датовано в
+   `docs/discussion/report.md` §5 і `docs/playback/report.md` §6. Час: pre-browser ≈16.5 хв (Go без
+   кешу), браузер ≈2.4× strong-host → зелений ран ≈38–40 хв; рішення — `timeout-minutes: 45`, один
+   ран на зміну (`push` лише `main` + `pull_request`); follow-up K12 — Go build-кеш.
 6. **e2e config-drift усередині suite — закрито 2026-10-07 (AGENDA K11), profile-drift лишається.** Bare
    `docker compose` у специ резолвились у base-конфіг і перестворювали api/nginx/frontend посеред
    overlay-suite (CSP report-only→enforcing, api без WayForPay-стаба). Фікс: рецепт `e2e` експортує
