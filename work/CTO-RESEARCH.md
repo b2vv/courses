@@ -248,6 +248,14 @@ ADR, обов'язкові перед відповідними шарами: `00
    CI-шляху (down -v → 3 файли → smoke → `E2E_SKIP_ASR=1` e2e): `make up` 37 с, smoke 0, e2e 101
    passed за 750 с, media 91 с (+28 % проти 71 с без капу), playback 229 с (+12 % проти 204),
    media-worker `OOMKilled=false RestartCount=0` — кап коректний; час на 2 vCPU — лише з CI-рану PR.
+   **CI-рани PR #11 на 2 vCPU (2026-10-07):** вперше з 09-11 пройшли `make up`/seed/smoke і оголили
+   три класи прихованих тест-дефектів за зеленими локальними гейтами (reaper sleep-race у TEMPORARY
+   пакеті; discussion K19/K20 — `getByText` збігався з відкритою textarea, не з опублікованою
+   відповіддю; playback P04/P05/P07/B18 — читання `videoTime` після `playing`+poll міряло швидкість
+   тест-процесу, P05 — рухома ціль, бо перша сторінка грає далі) — усі закриті test-only, датовано в
+   `docs/discussion/report.md` §5 і `docs/playback/report.md` §6. Час: pre-browser ≈16.5 хв (Go без
+   кешу), браузер ≈2.4× strong-host → зелений ран ≈38–40 хв; рішення — `timeout-minutes: 45`, один
+   ран на зміну (`push` лише `main` + `pull_request`); follow-up K12 — Go build-кеш.
 6. **e2e config-drift усередині suite — закрито 2026-10-07 (AGENDA K11), profile-drift лишається.** Bare
    `docker compose` у специ резолвились у base-конфіг і перестворювали api/nginx/frontend посеред
    overlay-suite (CSP report-only→enforcing, api без WayForPay-стаба). Фікс: рецепт `e2e` експортує
