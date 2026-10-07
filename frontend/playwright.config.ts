@@ -53,6 +53,9 @@ export default defineConfig({
         '**/playback.spec.ts',
         '**/playback.setup.ts',
         '**/playback.teardown.ts',
+        // K10: CI runs the stack without asr-worker (docker-compose.ci.yml); the ASR acceptance rows
+        // stay proven by the local ordered gate. Set only by ci.yml, never by `make e2e`.
+        ...(process.env.E2E_SKIP_ASR ? ['**/asr.spec.ts'] : []),
       ],
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
