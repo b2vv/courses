@@ -318,6 +318,21 @@ remain readable UI states rather than blank pages.
 - **Ownership timing was compressed.** Playback e2e recreates the API at heartbeat/TTL **2/6**,
   while the shipped Compose defaults are **30/180**. Both satisfy `heartbeat*3 <= ttl`, but
   renewal, expiry and takeover behavior was not timed at the shipped cadence.
+- **Four start-position rows measured the host, not the player, until 2026-10-07.** P04
+  (reload), P05 (another browser context), B18 (a new page after a network break) read
+  `currentTime` after `openAndPlay` had already waited for the Pause label and polled
+  `videoTime`, so their `[39, 41]` window was really "the read happens within ~1 s of playback
+  starting"; P07 ("reopens from zero", `<= 1`) had the same shape. A local run beside a
+  format/typecheck job measured **41.37 s** on P04 and failed; a 2 vCPU CI runner (K10) would fail
+  these routinely. The four rows now capture `currentTime` at the `playing` event
+  (`armStartPositionProbe`/`startPosition`: an init script armed on the page that will navigate,
+  capture phase because `playing` does not bubble) and assert that value in the same windows —
+  the start position itself, independent of how fast the test process reads afterwards. The
+  product did not change; the proofs moved onto the observable the rows name. P04 fell first;
+  the review (Courses 2) named P05/B18 as structural twins, and the scan added P07. A clean full
+  local run afterwards is a regression check (all rows still pass), not proof that the flake is
+  gone — the original needed concurrent load a quiet host does not reproduce; the proof of that is
+  the mechanism (a capture at the event is load-independent by construction) and the 2 vCPU CI run.
 - **AV1 telemetry begins only at the mint endpoint.** It includes denied mints, but a client
   consumes its page-scope probe before sending; if that request never reaches the server, the
   observation is lost. This narrow loss window avoids double counting when a response is lost.
