@@ -126,7 +126,7 @@ type ParticipantReportQueuePage struct {
 
 type ParticipantReportRepository interface {
 	ReportSubject(context.Context, string, string) (ownerID string, membership access.Membership, courseFound bool, err error)
-	InsertParticipantReport(context.Context, domain.ParticipantReport) error
+	InsertParticipantReport(context.Context, domain.ParticipantReport) (string, error)
 	ParticipantReportQueue(context.Context, string, int) (ParticipantReportQueuePage, error)
 	ResolveParticipantReport(context.Context, string) error
 }
