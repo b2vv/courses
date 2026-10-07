@@ -73,17 +73,21 @@ func TestStartRetriesTheRealReaperCreatedRace(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = testcontainers.TerminateContainer(reaper) })
 
-	go func() {
-		time.Sleep(time.Second)
-		_ = reaper.Start(context.Background())
-	}()
-
+	// The reaper is started only once the first attempt has failed, not on a timer: a fixed one-second
+	// sleep lost the race on 2026-10-07 (a loaded Docker Desktop reached the status check after ~2 s,
+	// found the reaper running, and the test failed with one clean attempt). Start waits for the
+	// "Started" log, so the retry that follows meets a running reaper.
 	var attempts []error
 	pg, err := Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
 		c, err := postgrescontainer.Run(ctx, "postgres:17.5",
 			postgrescontainer.WithDatabase("race"), postgrescontainer.WithUsername("race"), postgrescontainer.WithPassword("ephemeral-test-only"),
 			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
 		attempts = append(attempts, err)
+		if len(attempts) == 1 && err != nil {
+			if startErr := reaper.Start(context.Background()); startErr != nil {
+				t.Logf("start the created reaper after the first attempt: %v", startErr)
+			}
+		}
 		return c, err
 	})
 	if err != nil {
