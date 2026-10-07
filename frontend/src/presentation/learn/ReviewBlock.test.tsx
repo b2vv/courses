@@ -230,3 +230,23 @@ test('offers a retry when the own review cannot be loaded', async () => {
   await user.click(screen.getByRole('button', { name: 'Спробувати ще' }));
   expect(retried).toBe(1);
 });
+
+for (const [code, message] of [
+  ['enrollment_required', 'Щоб залишити відгук або поскаржитися на відгук, запишіться на курс.'],
+  [
+    'enrollment_blocked',
+    'Вас заблоковано в цьому курсі — відгуки та скарги на відгуки недоступні.',
+  ],
+] as const) {
+  test(`shows the ${code} message after submitting a review`, async () => {
+    const user = userEvent.setup();
+    renderBlock({ review: null, eligibility: 'ok' }, async () => {
+      throw new Error(code);
+    });
+    await user.click(screen.getByRole('radio', { name: '3 з 5' }));
+    await user.click(screen.getByRole('textbox'));
+    await user.paste(review.body);
+    await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+  });
+}

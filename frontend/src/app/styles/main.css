@@ -1681,9 +1681,10 @@ button.transcript-line-body:hover {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-text);
 }
+/* Text on the tinted surface: 12.77:1 light / 11.03:1 dark admin. */
 .admin-nav-link[aria-current='page'] {
   background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 .admin-to-client {
   margin-block-start: auto;

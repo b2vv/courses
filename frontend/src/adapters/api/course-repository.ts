@@ -46,6 +46,10 @@ function wireError(response: WireResponse): CatalogError {
       case 'authentication_required':
         if (response.status === 401) return { code: 'authentication_required' };
         break;
+      case 'enrollment_required':
+      case 'enrollment_blocked':
+        if (response.status === 403) return { code: parsed.data.error.code };
+        break;
       case 'report_own_review':
         if (response.status === 403) return { code: 'report_own_review' };
         break;
