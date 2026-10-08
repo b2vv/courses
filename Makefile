@@ -7,7 +7,7 @@ GO_BUILD_CACHE ?= courses-gobuild
 export GO_MOD_CACHE GO_BUILD_CACHE
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v $(GO_MOD_CACHE):/go/pkg/mod -v $(GO_BUILD_CACHE):/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local tunnel-up tunnel-down smoke generate check-generated check
+.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local e2e-reset tunnel-up tunnel-down smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -95,7 +95,29 @@ e2e:
 # stops the playback block from running at all. `e2e-local` adds the reseed. The reseed rule was
 # written down and then bypassed within an hour, because the cheap path was the wrong one. This
 # makes the cheap path correct by construction instead of by memory.
-e2e-local: up seed-identities seed e2e
+e2e-local: e2e-reset up seed-identities seed e2e
+# K13 (owner's decision 2026-10-08): the authoritative runs — `make check` and `make e2e-local` —
+# start from empty data volumes. The e2e database persisted between runs, so an interrupted run left
+# published fixtures behind and count assertions became order-dependent (L8: recovery:83 had to be
+# scoped to the seeded slugs; leaked e2e-ratings-* courses needed a manual `down -v`). Local dev data
+# lives in the same compose project, so it is wiped too — by decision, not by accident; `make e2e`
+# alone does not reset and stays the quick rerun against a live stack. prometheus-data is kept:
+# metrics history is no test input. The volumes are found by compose labels, not by guessed names,
+# and the target fails if any of them survived (a container still holding one makes `rm` refuse).
+# The list is explicit on purpose, not "every project volume except prometheus": a future volume is
+# as likely to be a cache someone wants kept (a model, a build cache) as test state, and an inverted
+# rule would wipe it silently. Whoever adds a stateful volume that tests write to adds it here.
+E2E_RESET_VOLUMES := postgres-data redis-data media-data
+e2e-reset:
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml down --remove-orphans
+	@project=$${COMPOSE_PROJECT_NAME:-$$(basename "$$PWD")}; \
+	for volume in $(E2E_RESET_VOLUMES); do \
+	  ids=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
+	  if [ -n "$$ids" ]; then docker volume rm $$ids > /dev/null || exit 1; fi; \
+	  left=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
+	  if [ -n "$$left" ]; then echo "e2e-reset: $$volume survived: $$left" >&2; exit 1; fi; \
+	done; \
+	echo "e2e-reset: project $$project, removed $(E2E_RESET_VOLUMES) (prometheus-data kept)"
 # Owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md. Needs only
 # WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
 # stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.
@@ -132,4 +154,4 @@ generate:
 check-generated: generate
 	git diff --exit-code -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated
 	@test -z "$$(git ls-files --others --exclude-standard -- backend/internal/course/adapters/postgres/generated backend/internal/identity/adapters/postgres/generated frontend/src/adapters/api/generated)"
-check: format-check lint typecheck test integration check-generated build up drain-queue seed-identities seed smoke e2e
+check: format-check lint typecheck test integration check-generated build e2e-reset up drain-queue seed-identities seed smoke e2e
