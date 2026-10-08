@@ -9,8 +9,8 @@ row-by-row report is LR6; this file records each slice as it closes.
 | Slice | State | Commits |
 |---|---|---|
 | LR0 | done 2026-10-08 | `43fabc9`, `26830a5`, `4a7166c`, `87753f8` |
-| LR1 | done 2026-10-08 | `e7214ae` |
-| LR2 | next | — |
+| LR1 | done 2026-10-08 | `e7214ae`, `2f4ae01` |
+| LR2 | in progress | — |
 | LR3–LR6 | pending | — |
 
 ## LR0 — G8: an administrator is never a learner
@@ -74,6 +74,12 @@ discussion queue test, which failed on a required `authorBlocked`, is green afte
 deferral). Frontend typecheck, lint, unit (638 cases) green. No HTTP contract test for
 the learner endpoints yet — they gain handlers in LR2/LR3, which is where their
 contract tests land.
+
+**Carry-forward from the LR1 review, closed in `2f4ae01`.** `grant_transition_invalid`
+entered the enum in LR1, but `writeError` had no case for `ErrGrantTransitionInvalid`,
+so blocking a non-member through the roster (a reachable direct-API path) fell to a
+500 instead of the contract's 409. Added the mapping and a contract test; this is the
+same refusal LR3's block-author needs for an author who is not a member.
 
 **Next.** LR2 — backend of the overview: port, SQL (same progress formula as the
 roster), service, HTTP. integration (Postgres) + contract.
