@@ -27,9 +27,11 @@ env:
   COMPOSE_FILE: ${{ github.workspace }}/docker-compose.yml:${{ github.workspace }}/docker-compose.e2e.yml:${{ github.workspace }}/docker-compose.ci.yml
   # K12: the Go module and build caches as host directories (Makefile GO_RUN, integration.sh), so
   # actions/cache carries them between runs. K10 measured the uncached Go steps at ~13 of the
-  # ~15 pre-browser minutes (unit 6.3, build 2.8, drift 1.9, integration 1.7).
-  GO_MOD_CACHE: ${{ github.workspace }}/../go-cache/mod
-  GO_BUILD_CACHE: ${{ github.workspace }}/../go-cache/build
+  # ~15 pre-browser minutes (unit 6.3, build 2.8, drift 1.9, integration 1.7). Inside the workspace
+  # under .cache/ (gitignored, and in the root .dockerignore, so no image context carries it):
+  # actions/cache refuses '..' in a path, which silently saved nothing on PR #12's first run.
+  GO_MOD_CACHE: ${{ github.workspace }}/.cache/go/mod
+  GO_BUILD_CACHE: ${{ github.workspace }}/.cache/go/build
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -41,12 +43,12 @@ jobs:
         with: { node-version: '24', cache: npm, cache-dependency-path: frontend/package-lock.json }
       - uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/../go-cache/mod
+          path: ${{ github.workspace }}/.cache/go/mod
           key: go-mod-${{ hashFiles('backend/go.sum') }}
           restore-keys: go-mod-
       - uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/../go-cache/build
+          path: ${{ github.workspace }}/.cache/go/build
           key: go-build-${{ hashFiles('backend/go.sum', 'backend/**/*.go') }}
           restore-keys: go-build-
       - name: Install
