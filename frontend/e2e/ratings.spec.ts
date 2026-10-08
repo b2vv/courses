@@ -17,7 +17,6 @@ const execute = promisify(execFile);
 const runNamespace = `e2e-ratings-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const studentID = '40000000-0000-4000-8000-000000000001';
 const instructorID = '40000000-0000-4000-8000-000000000002';
-const adminID = '40000000-0000-4000-8000-000000000003';
 const published: CourseToken[] = [];
 
 type CourseToken = { id: string; updatedAt: string };
@@ -279,11 +278,13 @@ test('Rt03 edits 4 stars to 2 and Rt04 deletes through the dialog then writes ag
   await expect(page.getByText(`Rt04 rewrite body ${runNamespace}`)).toBeVisible();
 });
 
-test('Rt05 an admin buys a paid course through the offline WayForPay stub and can review after progress', async ({
+test('Rt05 a student buys a paid course through the offline WayForPay stub and can review after progress', async ({
   browser,
   baseURL,
 }) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  // The admin only authors the course; G8 forbids an administrator from buying, so the buyer and
+  // reviewer below is a student.
   const admin = await openAs(browser, baseURL, 'admin');
   let course: CourseFixture;
   try {
@@ -291,13 +292,13 @@ test('Rt05 an admin buys a paid course through the offline WayForPay stub and ca
   } finally {
     await admin.close();
   }
-  const page = await (await openAs(browser, baseURL, 'admin')).newPage();
+  const page = await (await openAs(browser, baseURL, 'student')).newPage();
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
   await expect(page.getByRole('button', { name: 'Купити курс' })).toBeVisible();
   await page.getByRole('button', { name: 'Купити курс' }).click();
   await page.getByRole('button', { name: 'Перейти до оплати' }).click();
   await expect(page.locator('[data-status="paid"]')).toBeVisible({ timeout: 15_000 });
-  await seedProgress(course, adminID);
+  await seedProgress(course, studentID);
   await page.goto(`/learn/${course.slug}/${course.lessonId}`);
   await writeReviewInUI(page, 4, `Rt05 paid review ${runNamespace}`);
 });

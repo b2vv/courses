@@ -303,6 +303,28 @@ test('En01 free enrollment shows CTA, creates membership, and appears in My lear
   }
 });
 
+test('Lo19 an administrator sees a free course but never the enrol call to action', async ({
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const admin = await openAs(browser, baseURL, 'admin');
+  try {
+    const course = await createFreeCourse(admin.request, baseURL, 'lo19');
+    const page = await admin.newPage();
+    await page.goto(`/courses/${course.slug}`);
+    // Exempt: the administrator sees the course and can start learning.
+    await expect(page.getByRole('heading', { name: 'Програма курсу' })).toBeVisible();
+    const start = page.getByRole('link', { name: 'Почати навчання' });
+    await expect(start).toHaveAttribute('href', `/learn/${course.slug}`);
+    // G8: not a learner — the enrol button is absent.
+    await expect(page.getByRole('button', { name: 'Записатися' })).toHaveCount(0);
+    expect(await wcagViolations(page)).toEqual([]);
+  } finally {
+    await admin.close();
+  }
+});
+
 test('En03 keeps course metadata public while a non-member free lesson is denied', async ({
   browser,
   baseURL,
