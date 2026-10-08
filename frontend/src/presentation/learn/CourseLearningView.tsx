@@ -32,8 +32,10 @@ export function CourseLearningView({
         <header className="course-outline-heading">
           <p className="eyebrow">{t('learn.program')}</p>
           <h2 id="course-outline-heading">{t('learn.outline')}</h2>
-          {/* Only for a viewer with no locked lesson (an admin, G2): a student already gets the buy
-              path on the locked lesson, and two would be a duplicate. */}
+          {/* Only for a viewer who may buy but sees no locked lesson (e.g. a paid course whose
+              lessons are all preview): a student with a locked lesson buys there, and two entries
+              would duplicate. An administrator never reaches here — canPurchase is false for them
+              (G8). */}
           {course.canPurchase && !hasLocked && onBuy ? (
             <>
               <Button onPress={onBuy} isPending={buying}>

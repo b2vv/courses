@@ -19,6 +19,7 @@ export function CourseView({
   onRetry = () => {},
   onRetryMore = () => {},
   signedIn = false,
+  viewerIsAdmin = false,
   membership,
   enrolling = false,
   enrollError,
@@ -28,6 +29,7 @@ export function CourseView({
   onReport = async () => {},
 }: {
   course: CourseDetail;
+  viewerIsAdmin?: boolean | undefined;
   reviews?: PublicReviewPage | undefined;
   reviewsError?: boolean | undefined;
   hasMore?: boolean | undefined;
@@ -98,6 +100,7 @@ export function CourseView({
         </div>
         <EnrollmentCallToAction
           course={course}
+          viewerIsAdmin={viewerIsAdmin}
           membership={membership}
           enrolling={enrolling}
           enrollError={enrollError}
@@ -111,6 +114,7 @@ export function CourseView({
 
 function EnrollmentCallToAction({
   course,
+  viewerIsAdmin,
   membership,
   enrolling,
   enrollError,
@@ -118,6 +122,7 @@ function EnrollmentCallToAction({
   onReportLecturer,
 }: {
   course: CourseDetail;
+  viewerIsAdmin: boolean;
   membership: Membership | undefined;
   enrolling: boolean;
   enrollError: EnrollmentErrorCode | undefined;
@@ -131,7 +136,9 @@ function EnrollmentCallToAction({
   // re-enroll (free) — so branch on state, not the member boolean.
   const activeMember = membership?.state === 'active' || membership?.state === 'blocked';
   const blocked = membership?.state === 'blocked';
-  const canEnroll = !activeMember && course.price === null;
+  // G8 (Lo19): an administrator is not a learner — they view the course as exempt and start
+  // learning, but never see the enrol call to action.
+  const canEnroll = !activeMember && course.price === null && !viewerIsAdmin;
   return (
     <aside className="availability">
       <h2>{activeMember ? t('enrollment.member') : t('course.learningTitle')}</h2>
