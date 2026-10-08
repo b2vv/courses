@@ -223,15 +223,37 @@ func (service *Service) Enroll(ctx context.Context, actor Actor, courseID string
 }
 
 func (service *Service) Block(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "block", false, domain.Grant.Block)
+	return service.transitionMembership(ctx, actor, userID, courseID, "block", "", false, domain.Grant.Block)
 }
 
 func (service *Service) Unblock(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", false, domain.Grant.Unblock)
+	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", "", false, domain.Grant.Unblock)
 }
 
 func (service *Service) Revoke(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", true, domain.Grant.Revoke)
+	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", "", true, domain.Grant.Revoke)
+}
+
+// BlockAuthor and UnblockAuthor block or restore a moderation-queue item's author on the item's
+// course. They resolve (author, course) from the comment or review, then run the SAME membership
+// transition as the roster path — one rule, one audit (Lo17) — with a reason that records the
+// origin. G6 (admin or course owner) is enforced inside transitionMembership; an administrator
+// author is never a member (G8), so there is nobody to block and the transition refuses as
+// grant_transition_invalid.
+func (service *Service) BlockAuthor(ctx context.Context, actor Actor, kind, id string) (domain.Grant, error) {
+	userID, courseID, err := service.grants.AuthorOf(ctx, kind, id)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.transitionMembership(ctx, actor, userID, courseID, "block", "moderation_queue:"+kind+":"+id, false, domain.Grant.Block)
+}
+
+func (service *Service) UnblockAuthor(ctx context.Context, actor Actor, kind, id string) (domain.Grant, error) {
+	userID, courseID, err := service.grants.AuthorOf(ctx, kind, id)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", "moderation_queue:"+kind+":"+id, false, domain.Grant.Unblock)
 }
 
 func (service *Service) MembershipState(ctx context.Context, actor Actor, userID, courseID string) (domain.GrantState, bool, error) {
@@ -303,7 +325,7 @@ func (service *Service) Learners(ctx context.Context, actor Actor, adminScope bo
 	return service.grants.Learners(ctx, filter, cursor, limit)
 }
 
-func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
+func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action, reason string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
 	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
 	if err != nil {
 		return domain.Grant{}, err
@@ -330,7 +352,7 @@ func (service *Service) transitionMembership(ctx context.Context, actor Actor, u
 	if err != nil {
 		return domain.Grant{}, err
 	}
-	return service.grants.UpdateMembership(ctx, grant, membership.State(), action, "", &actor.UserID)
+	return service.grants.UpdateMembership(ctx, grant, membership.State(), action, reason, &actor.UserID)
 }
 
 func (service *Service) GrandfatherOnPriceSet(ctx context.Context, courseID string, expectedUpdatedAt time.Time, priceMinor int64, currency string, updatedAt time.Time) error {

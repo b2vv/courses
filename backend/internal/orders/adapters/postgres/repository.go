@@ -144,6 +144,32 @@ func (repository *Repository) IsAdministrator(ctx context.Context, userID string
 	return role == "admin", nil
 }
 
+// AuthorOf resolves a comment or review to (author, course). A comment reaches its course through
+// its lesson's module; a review carries course_id directly. Reading the discussion tables here is a
+// SQL read, not a module import (ADR 013). An unknown id yields the kind's not-found error.
+func (repository *Repository) AuthorOf(ctx context.Context, kind, id string) (string, string, error) {
+	var query string
+	notFound := domain.ErrCommentNotFound
+	switch kind {
+	case "comment":
+		query = `SELECT c.author_id::text, m.course_id::text FROM discussion_comments c JOIN course_lessons l ON l.id = c.lesson_id JOIN course_modules m ON m.id = l.module_id WHERE c.id = $1::text::uuid AND c.removed_at IS NULL`
+	case "review":
+		notFound = domain.ErrReviewNotFound
+		query = `SELECT author_id::text, course_id::text FROM discussion_reviews WHERE id = $1::text::uuid AND removed_at IS NULL`
+	default:
+		return "", "", domain.ErrCommentNotFound
+	}
+	var userID, courseID string
+	err := repository.pool.QueryRow(ctx, query, id).Scan(&userID, &courseID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", notFound
+	}
+	if err != nil {
+		return "", "", persistenceError(err)
+	}
+	return userID, courseID, nil
+}
+
 func (repository *Repository) MyMemberships(ctx context.Context, userID string) ([]ports.MembershipCard, error) {
 	rows, err := repository.pool.Query(ctx, `SELECT g.course_id::text, c.slug, c.title, g.state, g.granted_at,
   `+progressExpr+` AS progress_percent

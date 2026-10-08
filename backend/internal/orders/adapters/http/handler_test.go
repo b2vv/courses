@@ -52,6 +52,10 @@ type fakeStore struct {
 	learnerPage         ports.LearnerPage
 	learnerErr          error
 	learnerFilter       ports.LearnerFilter
+	authorUserID        string
+	authorCourseID      string
+	authorErr           error
+	authorKind          string
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -107,6 +111,10 @@ func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
 func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
 	store.learnerFilter = filter
 	return store.learnerPage, store.learnerErr
+}
+func (store *fakeStore) AuthorOf(_ context.Context, kind, id string) (string, string, error) {
+	store.authorKind = kind
+	return store.authorUserID, store.authorCourseID, store.authorErr
 }
 func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
 	return store.memberships, store.membershipsErr
@@ -564,6 +572,44 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 		t.Fatalf("student admin overview status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, r, response)
+
+	// Lo12/Lo13/Lo15: block/unblock an item's author from the queue returns the membership grant;
+	// an unknown comment or review is a named 404.
+	store.authorUserID, store.authorCourseID = testUser, testCourse
+	blocked, _ := domain.SelfEnroll(testGrant, testUser, testCourse, now)
+	store.membership = &blocked
+	r, response = request(http.MethodPost, "/api/v1/teach/comments/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"blocked"`) {
+		t.Fatalf("block comment author status=%d body=%s", response.Code, response.Body.String())
+	}
+	if store.authorKind != "comment" {
+		t.Fatalf("AuthorOf kind=%q", store.authorKind)
+	}
+	assertContract(t, r, response)
+
+	member, _ := domain.SelfEnroll(testGrant, testUser, testCourse, now)
+	blockedMember, _ := member.Block()
+	store.membership = &blockedMember
+	r, response = request(http.MethodPost, "/api/v1/teach/reviews/"+testGrant+"/unblock-author", "admin")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"active"`) {
+		t.Fatalf("unblock review author status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.authorErr = domain.ErrCommentNotFound
+	r, response = request(http.MethodPost, "/api/v1/teach/comments/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"comment_not_found"`) {
+		t.Fatalf("unknown comment status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.authorErr = domain.ErrReviewNotFound
+	r, response = request(http.MethodPost, "/api/v1/teach/reviews/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"review_not_found"`) {
+		t.Fatalf("unknown review status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.authorErr = nil
 }
 
 func assertContract(t *testing.T, request *http.Request, response *httptest.ResponseRecorder) {
