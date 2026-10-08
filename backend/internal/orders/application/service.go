@@ -145,16 +145,18 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 	if userID == actor.UserID {
 		return domain.Grant{}, domain.ErrGrantSelfForbidden
 	}
-	reason = strings.TrimSpace(reason)
-	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
-		return domain.Grant{}, domain.ErrGrantInvalid
-	}
+	// Role is the dominant fact of G8: refuse an administrator recipient before validating the
+	// reason, so the refusal is admin_not_learner regardless of what reason was sent.
 	recipientIsAdmin, err := service.grants.IsAdministrator(ctx, userID)
 	if err != nil {
 		return domain.Grant{}, err
 	}
 	if recipientIsAdmin {
 		return domain.Grant{}, domain.ErrAdminNotLearner
+	}
+	reason = strings.TrimSpace(reason)
+	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return domain.Grant{}, domain.ErrGrantInvalid
 	}
 	membership, err := service.grants.Membership(ctx, userID, courseID)
 	if err != nil {
