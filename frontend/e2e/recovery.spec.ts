@@ -3,6 +3,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
+// Every `up` here brings back what this file stopped, and uses `--no-recreate`: the rows are about
+// a STOPPED service coming back, not about a new container. Without it, compose compared the running
+// config to the recovery shell's environment (no PLAYBACK_*), saw a different hash and recreated api
+// at the 30/180 defaults in the middle of the playback-profile window (K11 profile-drift, measured
+// 2026-10-08: container id changed, heartbeat 2 → 30). Recreating also replaced the container whose
+// log the K4 follower was streaming.
 async function compose(...args: string[]) {
   return execute('docker', ['compose', ...args], {
     cwd: new URL('../../', import.meta.url).pathname,
@@ -29,7 +35,7 @@ test('static home remains available with an anonymous header while the API is st
       0,
     );
   } finally {
-    await compose('up', '-d', '--wait', 'api');
+    await compose('up', '-d', '--no-recreate', '--wait', 'api');
   }
 });
 
@@ -47,7 +53,7 @@ test('SSR API failure is visible and retry preserves search after recovery', asy
       path: '../docs/foundation/screenshots/catalog-error.png',
       fullPage: true,
     });
-    await compose('up', '-d', '--wait', 'api');
+    await compose('up', '-d', '--no-recreate', '--wait', 'api');
     await retry.click();
     await expect(
       page.getByRole('heading', { name: 'Go: фундамент надійного бекенду' }),
@@ -57,7 +63,7 @@ test('SSR API failure is visible and retry preserves search after recovery', asy
     expect(new URL(page.url()).searchParams.get('limit')).toBe('1');
     expect(new URL(page.url()).searchParams.get('offset')).toBe('0');
   } finally {
-    await compose('up', '-d', '--wait', 'api');
+    await compose('up', '-d', '--no-recreate', '--wait', 'api');
   }
 });
 
@@ -75,7 +81,7 @@ test('PostgreSQL outage produces a safe API error and recovers', async ({ reques
       },
     });
   } finally {
-    await compose('up', '-d', '--wait', 'postgres');
+    await compose('up', '-d', '--no-recreate', '--wait', 'postgres');
   }
   await expect.poll(async () => (await request.get('/api/v1/courses')).status()).toBe(200);
 });
@@ -84,7 +90,7 @@ test('restart retains seeded courses and Nginx never stores query or Referer', a
   request,
 }) => {
   await compose('restart', 'api', 'media-worker', 'frontend', 'nginx');
-  await compose('up', '-d', '--wait');
+  await compose('up', '-d', '--no-recreate', '--wait');
   const response = await request.get('/api/v1/courses');
   expect(response.status()).toBe(200);
   // "Retains seeded courses" is about the seed surviving the restart — assert the seeded slugs are
@@ -124,7 +130,7 @@ test('restart retains seeded courses and Nginx never stores query or Referer', a
       ).status(),
     ).toBeGreaterThanOrEqual(500);
   } finally {
-    await compose('up', '-d', '--wait', 'api');
+    await compose('up', '-d', '--no-recreate', '--wait', 'api');
   }
   const logs = await compose('logs', '--since', since, 'nginx');
   expect(logs.stdout + logs.stderr).not.toContain(marker);
