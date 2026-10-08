@@ -43,6 +43,8 @@ export const ErrorResponseErrorCode = {
   grant_forbidden: 'grant_forbidden',
   grant_self_forbidden: 'grant_self_forbidden',
   admin_not_learner: 'admin_not_learner',
+  learner_course_forbidden: 'learner_course_forbidden',
+  grant_transition_invalid: 'grant_transition_invalid',
   payment_event_rejected: 'payment_event_rejected',
   invalid_callback: 'invalid_callback',
   order_not_found: 'order_not_found',
