@@ -11,7 +11,7 @@ row-by-row report is LR6; this file records each slice as it closes.
 | LR0 | done 2026-10-08 | `43fabc9`, `26830a5`, `4a7166c`, `87753f8` |
 | LR1 | done 2026-10-08 | `e7214ae`, `2f4ae01` |
 | LR2 | done 2026-10-08 | `dcbabf6` |
-| LR3 | next | — |
+| LR3 | done 2026-10-08 | `be94327`, `4df5e5f` |
 | LR4–LR6 | pending | — |
 
 ## LR0 — G8: an administrator is never a learner
@@ -119,3 +119,31 @@ in the same slice, not only `go test` and e2e.
 and `authorBlocked` on `ModerationQueueItem` (schema + handler + Lo14), deferred from LR1.
 integration + contract. LR3's block-author inherits the 409 `grant_transition_invalid`
 mapping added in `2f4ae01`.
+
+## LR3 — block from the queue + authorBlocked
+
+**What. LR3a (orders, `be94327`):** `AuthorOf(kind, id)` resolves a comment (via
+lesson→module→course) or review (via `course_id`) to its author and course — a SQL read of
+the discussion tables, no module import (ADR 013). `BlockAuthor`/`UnblockAuthor` run the SAME
+`transitionMembership` as the roster, now threading a reason (`moderation_queue:<kind>:<id>`)
+into the audit — one rule, one record (Lo17). G6 (admin or course owner) is enforced inside the
+transition; an administrator author is never a member (G8), so there is nobody to block and the
+transition refuses `grant_transition_invalid` (the 409 mapped in `2f4ae01`). Unknown item → named
+404 (`comment_not_found`/`review_not_found`). Four `teach` routes return the membership grant.
+
+**LR3b (discussion, `4df5e5f`):** the moderation queue carries `authorBlocked` per item — an
+`EXISTS` over `course_grants` (state=`blocked`) for the item's author and course — so the UI can
+label the control. State only, never the author's id (Lo14). `ModerationQueueItem` gains the
+required `authorBlocked` in OpenAPI (the field deferred from LR1); Orval regenerated.
+
+**Verification (measured, 2026-10-08).** unit (`TestBlockAuthorFromQueue…`: resolve, reason,
+unknown, stranger-G6, non-member-G8). contract (block/unblock comment+review → grant; unknown →
+named 404; queue `authorBlocked` reflects state and leaks no author id). integration against
+Postgres (orders `Lo12-Lo17…`: AuthorOf both kinds + unknown, block writes the roster's blocked
+grant with the origin reason, idempotent, unblock; discussion queue `authorBlocked` false→true
+after a real blocked grant). `go build`/`go test ./...`, FE typecheck/lint, `check-generated`
+green. Authoritative gate green: full `make integration` (every package ok) + `make e2e-local`
+**108 passed (13.3m)** — the shared membership state the transition touches held across the full
+browser suite.
+
+**Next.** LR4 — frontend of the overview (teach + admin). LR5 — frontend of the queue buttons.
