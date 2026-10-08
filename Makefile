@@ -1,6 +1,11 @@
 SHELL := /bin/sh
 GO_IMAGE := golang:1.27.1-bookworm
-GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build $(GO_IMAGE)
+# K12: the Go caches are named volumes locally; CI points them at host directories (absolute paths)
+# that actions/cache restores and saves, so a runner does not rebuild the world on every run.
+GO_MOD_CACHE ?= courses-gomod
+GO_BUILD_CACHE ?= courses-gobuild
+export GO_MOD_CACHE GO_BUILD_CACHE
+GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v $(GO_MOD_CACHE):/go/pkg/mod -v $(GO_BUILD_CACHE):/root/.cache/go-build $(GO_IMAGE)
 
 .PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local tunnel-up tunnel-down smoke generate check-generated check
 env:
