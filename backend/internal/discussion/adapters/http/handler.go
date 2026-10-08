@@ -135,10 +135,11 @@ type courseCommentsDTO struct {
 }
 
 type queueItemDTO struct {
-	Kind        string                `json:"kind"`
-	Comment     *moderationCommentDTO `json:"comment"`
-	Review      *reviewDTO            `json:"review"`
-	OpenReports int                   `json:"openReports"`
+	Kind          string                `json:"kind"`
+	Comment       *moderationCommentDTO `json:"comment"`
+	Review        *reviewDTO            `json:"review"`
+	OpenReports   int                   `json:"openReports"`
+	AuthorBlocked bool                  `json:"authorBlocked"`
 }
 
 type reviewDTO struct {
@@ -307,7 +308,7 @@ func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]queueItemDTO, len(page.Items))
 	for i, item := range page.Items {
-		items[i] = queueItemDTO{Kind: item.Kind, OpenReports: item.OpenReports}
+		items[i] = queueItemDTO{Kind: item.Kind, OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
 		if item.Comment != nil {
 			comment := mapModerationComment(*item.Comment)
 			items[i].Comment = &comment

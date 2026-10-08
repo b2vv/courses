@@ -15,4 +15,5 @@ export interface ModerationQueueItem {
   review: Review | null;
   /** @minimum 1 */
   openReports: number;
+  authorBlocked: boolean;
 }
