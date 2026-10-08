@@ -589,6 +589,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "course_already_owned", "Course is already owned")
 	case errors.Is(err, domain.ErrMembershipConflict):
 		httpserver.WriteError(w, r, http.StatusConflict, "membership_conflict", "Membership changed concurrently")
+	case errors.Is(err, domain.ErrGrantTransitionInvalid):
+		httpserver.WriteError(w, r, http.StatusConflict, "grant_transition_invalid", "Membership cannot make that transition")
 	case errors.Is(err, domain.ErrCourseNotEnrollable):
 		httpserver.WriteError(w, r, http.StatusConflict, "course_not_enrollable", "Course is not available for enrollment")
 	case errors.Is(err, domain.ErrEnrollmentForbidden):
