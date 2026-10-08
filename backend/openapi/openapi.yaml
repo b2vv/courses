@@ -1987,12 +1987,15 @@ components:
     ModerationQueueItem:
       type: object
       additionalProperties: false
-      required: [kind, comment, review, openReports]
+      required: [kind, comment, review, openReports, authorBlocked]
       properties:
         kind: { type: string, enum: [comment, review] }
         comment: { allOf: [ { $ref: '#/components/schemas/TeachComment' } ], nullable: true }
         review: { allOf: [ { $ref: '#/components/schemas/Review' } ], nullable: true }
         openReports: { type: integer, minimum: 1 }
+        # The author's membership state on this item's course, so the queue can label the control
+        # "Block"/"Unblock". It is the state only, never the author's identifier (Lo14).
+        authorBlocked: { type: boolean }
     ModerationQueuePage:
       type: object
       additionalProperties: false
