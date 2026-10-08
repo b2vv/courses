@@ -40,6 +40,12 @@ type GrantRepository interface {
 	MyMemberships(context.Context, string) ([]MembershipCard, error)
 	Roster(context.Context, string, string, int) (RosterPage, error)
 	Learners(context.Context, LearnerFilter, string, int) (LearnerPage, error)
+	// AuthorOf resolves a moderation-queue item (kind "comment" or "review") to its author and the
+	// course it belongs to, so the block-from-queue path can reuse the membership transition. An
+	// unknown item returns ErrCommentNotFound or ErrReviewNotFound. The grants adapter reads the
+	// discussion tables directly (a SQL read, no module import — ADR 013), as the roster already
+	// reads lesson_progress.
+	AuthorOf(ctx context.Context, kind, id string) (userID, courseID string, err error)
 	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
 	UpdateMembership(context.Context, domain.Grant, domain.GrantState, string, string, *string) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error

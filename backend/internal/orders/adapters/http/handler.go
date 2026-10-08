@@ -59,6 +59,10 @@ func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrig
 	mux.Handle("GET /api/v1/teach/learners", authenticate(http.HandlerFunc(handler.teachLearners)))
 	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/block", sameOrigin(authenticate(http.HandlerFunc(handler.block))))
 	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/unblock", sameOrigin(authenticate(http.HandlerFunc(handler.unblock))))
+	mux.Handle("POST /api/v1/teach/comments/{commentId}/block-author", sameOrigin(authenticate(http.HandlerFunc(handler.blockCommentAuthor))))
+	mux.Handle("POST /api/v1/teach/comments/{commentId}/unblock-author", sameOrigin(authenticate(http.HandlerFunc(handler.unblockCommentAuthor))))
+	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/block-author", sameOrigin(authenticate(http.HandlerFunc(handler.blockReviewAuthor))))
+	mux.Handle("POST /api/v1/teach/reviews/{reviewId}/unblock-author", sameOrigin(authenticate(http.HandlerFunc(handler.unblockReviewAuthor))))
 }
 
 type moneyDTO struct {
@@ -383,6 +387,41 @@ func (handler *Handler) revoke(w http.ResponseWriter, r *http.Request) {
 	handler.transition(w, r, handler.service.Revoke)
 }
 
+func (handler *Handler) blockCommentAuthor(w http.ResponseWriter, r *http.Request) {
+	handler.authorTransition(w, r, "comment", "commentId", handler.service.BlockAuthor)
+}
+
+func (handler *Handler) unblockCommentAuthor(w http.ResponseWriter, r *http.Request) {
+	handler.authorTransition(w, r, "comment", "commentId", handler.service.UnblockAuthor)
+}
+
+func (handler *Handler) blockReviewAuthor(w http.ResponseWriter, r *http.Request) {
+	handler.authorTransition(w, r, "review", "reviewId", handler.service.BlockAuthor)
+}
+
+func (handler *Handler) unblockReviewAuthor(w http.ResponseWriter, r *http.Request) {
+	handler.authorTransition(w, r, "review", "reviewId", handler.service.UnblockAuthor)
+}
+
+func (handler *Handler) authorTransition(w http.ResponseWriter, r *http.Request, kind, pathParam string, operation func(context.Context, application.Actor, string, string) (domain.Grant, error)) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue(pathParam)
+	if !emptyQuery(r.URL.RawQuery) || !validID(id) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	grant, err := operation(r.Context(), actor, kind, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapGrant(grant))
+}
+
 func (handler *Handler) transition(w http.ResponseWriter, r *http.Request, operation func(context.Context, application.Actor, string, string) (domain.Grant, error)) {
 	noStore(w)
 	actor, ok := actorFromRequest(w, r)
@@ -700,6 +739,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrOrderNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "order_not_found", "Order was not found")
+	case errors.Is(err, domain.ErrCommentNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "comment_not_found", "Comment was not found")
+	case errors.Is(err, domain.ErrReviewNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "review_not_found", "Review was not found")
 	case errors.Is(err, domain.ErrCheckoutAlreadyOpened):
 		httpserver.WriteError(w, r, http.StatusConflict, "checkout_already_opened", "Checkout was already opened")
 	case errors.Is(err, domain.ErrGrantForbidden):

@@ -348,6 +348,74 @@ func TestLearnersScopesAuthorizesAndClampsLimit(t *testing.T) {
 	})
 }
 
+// Lo12-Lo17: blocking from the queue resolves the author and course, then runs the same membership
+// transition as the roster — one audit, an origin reason — and refuses unknown items, strangers and
+// non-members by name.
+func TestBlockAuthorFromQueueReusesTheMembershipTransition(t *testing.T) {
+	admin := application.Actor{UserID: adminID, Administrator: true}
+
+	t.Run("blocks the comment author with a moderation-origin reason", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = membership(t, domain.GrantSelf, domain.GrantActive)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		grant, err := service.BlockAuthor(context.Background(), admin, "comment", "comment-1")
+		if err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("block author grant=%#v err=%v", grant, err)
+		}
+		if store.authorKind != "comment" || store.authorID != "comment-1" {
+			t.Fatalf("AuthorOf called with kind=%q id=%q", store.authorKind, store.authorID)
+		}
+		if store.membershipAction != "block" || store.membershipReason != "moderation_queue:comment:comment-1" {
+			t.Fatalf("audit action=%q reason=%q", store.membershipAction, store.membershipReason)
+		}
+	})
+
+	t.Run("unblocks the review author", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = membership(t, domain.GrantSelf, domain.GrantBlocked)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		grant, err := service.UnblockAuthor(context.Background(), admin, "review", "review-9")
+		if err != nil || grant.State() != domain.GrantActive {
+			t.Fatalf("unblock author grant=%#v err=%v", grant, err)
+		}
+		if store.membershipReason != "moderation_queue:review:review-9" {
+			t.Fatalf("audit reason=%q", store.membershipReason)
+		}
+	})
+
+	t.Run("an unknown item is refused by name", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorErr = domain.ErrCommentNotFound
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), admin, "comment", "missing"); !errors.Is(err, domain.ErrCommentNotFound) {
+			t.Fatalf("unknown comment err=%v", err)
+		}
+	})
+
+	t.Run("a stranger to the course is forbidden (G6)", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: "another-instructor"}
+		store.membership = membership(t, domain.GrantSelf, domain.GrantActive)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), application.Actor{UserID: "stranger"}, "comment", "c"); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+			t.Fatalf("stranger block err=%v", err)
+		}
+	})
+
+	t.Run("an author who is not a member cannot be blocked (G8 construction)", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = nil
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), admin, "comment", "c"); !errors.Is(err, domain.ErrGrantTransitionInvalid) {
+			t.Fatalf("non-member author err=%v", err)
+		}
+	})
+}
+
 func TestEnrollmentWritesTransitionsAndPreservesNoOps(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -571,6 +639,11 @@ type fakeStore struct {
 	learnerCursor         string
 	learnerLimit          int
 	enrollmentErr         error
+	authorUserID          string
+	authorCourseID        string
+	authorErr             error
+	authorKind            string
+	authorID              string
 }
 
 type fakePaymentProvider struct {
@@ -681,6 +754,12 @@ func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, 
 	store.learnerCursor = cursor
 	store.learnerLimit = limit
 	return store.learnerPage, store.learnerErr
+}
+
+func (store *fakeStore) AuthorOf(_ context.Context, kind, id string) (string, string, error) {
+	store.authorKind = kind
+	store.authorID = id
+	return store.authorUserID, store.authorCourseID, store.authorErr
 }
 
 func (store *fakeStore) MyMemberships(_ context.Context, userID string) ([]ports.MembershipCard, error) {

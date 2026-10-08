@@ -974,6 +974,81 @@ INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,update
 		}
 	})
 
+	t.Run("Lo12-Lo17 block from the queue resolves the author and reuses the membership transition", func(t *testing.T) {
+		const (
+			inst      = "40000000-0000-4000-8000-000000000301"
+			author    = "40000000-0000-4000-8000-000000000302"
+			course    = "50000000-0000-4000-8000-000000000301"
+			moduleID  = "51000000-0000-4000-8000-000000000301"
+			lessonID  = "52000000-0000-4000-8000-000000000301"
+			commentID = "53000000-0000-4000-8000-000000000301"
+			reviewID  = "54000000-0000-4000-8000-000000000301"
+		)
+		if _, err := pool.Exec(ctx, `WITH u AS (
+INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'lo3-inst@example.test','Lo3 inst','instructor',$8),
+($2,'lo3-author@example.test','Lo3 author','student',$8)
+), c AS (
+INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($3,'lo3','Lo3','S','D','published',$1,$9,$9,$9)
+), m AS (
+INSERT INTO course_modules(id,course_id,title,position) VALUES($4,$3,'M',0)
+), l AS (
+INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($5,$4,'One','',0)
+), g AS (
+INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($2,$3,'self','active',$9)
+), cm AS (
+INSERT INTO discussion_comments(id,lesson_id,author_id,body,created_at) VALUES($6,$5,$2,'a comment',$9)
+)
+INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at)
+VALUES($7,$3,$2,4,'a sufficiently long review body',0,1,$9)`,
+			inst, author, course, moduleID, lessonID, commentID, reviewID,
+			"$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is", now); err != nil {
+			t.Fatal(err)
+		}
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("30"), nil)
+		admin := application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}
+
+		// AuthorOf resolves both kinds and refuses an unknown id by name.
+		if u, c, err := repository.AuthorOf(ctx, "comment", commentID); err != nil || u != author || c != course {
+			t.Fatalf("AuthorOf comment=(%s,%s) err=%v", u, c, err)
+		}
+		if u, c, err := repository.AuthorOf(ctx, "review", reviewID); err != nil || u != author || c != course {
+			t.Fatalf("AuthorOf review=(%s,%s) err=%v", u, c, err)
+		}
+		if _, _, err := repository.AuthorOf(ctx, "comment", lessonID); !errors.Is(err, domain.ErrCommentNotFound) {
+			t.Fatalf("AuthorOf unknown comment err=%v", err)
+		}
+
+		// Lo12/Lo17: blocking the comment author writes the same blocked membership as the roster,
+		// with an origin reason in the audit; a repeat is an idempotent no-op.
+		if grant, err := svc.BlockAuthor(ctx, admin, "comment", commentID); err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("block author grant=%#v err=%v", grant, err)
+		}
+		if grant, err := svc.BlockAuthor(ctx, admin, "comment", commentID); err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("repeat block author grant=%#v err=%v", grant, err)
+		}
+		var rows int
+		var action, reason, state string
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid), g.state, (SELECT a.action FROM grant_audit a JOIN course_grants gg ON gg.id=a.grant_id WHERE gg.user_id=$1::text::uuid AND gg.course_id=$2::text::uuid ORDER BY a.created_at DESC LIMIT 1), (SELECT a.reason FROM grant_audit a JOIN course_grants gg ON gg.id=a.grant_id WHERE gg.user_id=$1::text::uuid AND gg.course_id=$2::text::uuid ORDER BY a.created_at DESC LIMIT 1) FROM course_grants g WHERE g.user_id=$1::text::uuid AND g.course_id=$2::text::uuid`, author, course).Scan(&rows, &state, &action, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 1 || state != "blocked" || action != "block" || reason != "moderation_queue:comment:"+commentID {
+			t.Fatalf("after block rows=%d state=%q action=%q reason=%q", rows, state, action, reason)
+		}
+
+		// Lo13/Lo16: unblocking via the author's review restores the one shared membership to active.
+		if grant, err := svc.UnblockAuthor(ctx, admin, "review", reviewID); err != nil || grant.State() != domain.GrantActive {
+			t.Fatalf("unblock author grant=%#v err=%v", grant, err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*), max(state) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, author, course).Scan(&rows, &state); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 1 || state != "active" {
+			t.Fatalf("after unblock rows=%d state=%q", rows, state)
+		}
+	})
+
 	t.Run("En01 my memberships returns own active and blocked course cards", func(t *testing.T) {
 		const (
 			memberUser    = "40000000-0000-4000-8000-000000000151"
