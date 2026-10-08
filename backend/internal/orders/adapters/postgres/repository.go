@@ -146,22 +146,9 @@ func (repository *Repository) IsAdministrator(ctx context.Context, userID string
 
 func (repository *Repository) MyMemberships(ctx context.Context, userID string) ([]ports.MembershipCard, error) {
 	rows, err := repository.pool.Query(ctx, `SELECT g.course_id::text, c.slug, c.title, g.state, g.granted_at,
-  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+  `+progressExpr+` AS progress_percent
 FROM course_grants AS g
-JOIN courses AS c ON c.id = g.course_id
-CROSS JOIN LATERAL (
-  SELECT count(*)::int AS completed
-  FROM course_modules AS m
-  JOIN course_lessons AS l ON l.module_id = m.id
-  JOIN lesson_progress AS p ON p.lesson_id = l.id
-  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
-) AS completed
-CROSS JOIN LATERAL (
-  SELECT count(*)::int AS total
-  FROM course_modules AS m
-  JOIN course_lessons AS l ON l.module_id = m.id
-  WHERE m.course_id = g.course_id
-) AS totals
+JOIN courses AS c ON c.id = g.course_id`+progressJoins+`
 WHERE g.user_id = $1::text::uuid AND g.state IN ('active', 'blocked')
 ORDER BY g.granted_at DESC
 LIMIT 200`, userID)
@@ -189,22 +176,9 @@ func (repository *Repository) Roster(ctx context.Context, courseID, cursor strin
 		return ports.RosterPage{}, err
 	}
 	rows, err := repository.pool.Query(ctx, `SELECT g.user_id::text, u.display_name, g.state, g.granted_at,
-  CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
+  `+progressExpr+` AS progress_percent
 FROM course_grants AS g
-LEFT JOIN users AS u ON u.id = g.user_id AND u.deleted_at IS NULL
-CROSS JOIN LATERAL (
-  SELECT count(*)::int AS completed
-  FROM course_modules AS m
-  JOIN course_lessons AS l ON l.module_id = m.id
-  JOIN lesson_progress AS p ON p.lesson_id = l.id
-  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
-) AS completed
-CROSS JOIN LATERAL (
-  SELECT count(*)::int AS total
-  FROM course_modules AS m
-  JOIN course_lessons AS l ON l.module_id = m.id
-  WHERE m.course_id = g.course_id
-) AS totals
+LEFT JOIN users AS u ON u.id = g.user_id AND u.deleted_at IS NULL`+progressJoins+`
 WHERE g.course_id = $1::text::uuid AND g.state IN ('active', 'blocked')
   AND ($2::timestamptz IS NULL OR g.granted_at < $2 OR (g.granted_at = $2 AND g.user_id > $3::text::uuid))
 ORDER BY g.granted_at DESC, g.user_id ASC
@@ -231,6 +205,188 @@ LIMIT $4`, courseID, stamp, userID, limit+1)
 		page.Entries = entries[:limit]
 	}
 	return page, nil
+}
+
+// progressJoins and progressExpr are the single source of the per-member progress percent. Roster,
+// MyMemberships and Learners all read it through these so Lo02 cannot drift from the roster: the
+// two LATERALs count completed and total lessons of g.course_id for g.user_id, and the expression
+// rounds completed/total to a percent. They assume the grant alias is g.
+const progressJoins = `
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS completed
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id AND p.completed_at IS NOT NULL
+) AS completed
+CROSS JOIN LATERAL (
+  SELECT count(*)::int AS total
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  WHERE m.course_id = g.course_id
+) AS totals`
+
+const progressExpr = `CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END`
+
+// Learners returns the learner overview: one row per user who has at least one membership visible to
+// the viewer, each row carrying that user's visible courses (state, progress, enrolment) and last
+// activity. The page is read in two steps — a keyset page of users, then their course detail — which
+// reads more plainly than one aggregate query and keeps the shared progress fragment intact.
+func (repository *Repository) Learners(ctx context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
+	cursorName, cursorUserID, err := decodeLearnerCursor(cursor)
+	if err != nil {
+		return ports.LearnerPage{}, err
+	}
+	admin := filter.Administrator
+	viewer := nullableText(filter.ViewerID)
+	courseID := nullableText(filter.CourseID)
+	state := nullableText(filter.State)
+	q := learnerQueryPattern(filter.Query)
+	rows, err := repository.pool.Query(ctx, `SELECT user_id::text, display_name FROM (
+  SELECT DISTINCT g.user_id AS user_id, coalesce(u.display_name, '') AS display_name
+  FROM course_grants AS g
+  JOIN courses AS c ON c.id = g.course_id
+  LEFT JOIN users AS u ON u.id = g.user_id AND u.deleted_at IS NULL
+  WHERE g.state IN ('active', 'blocked')
+    AND ($1::boolean OR c.instructor_id = $2::text::uuid)
+    AND ($3::text IS NULL OR g.course_id = $3::text::uuid)
+    AND ($4::text IS NULL OR g.state = $4)
+    AND ($5::text IS NULL OR u.display_name ILIKE $5)
+) AS p
+WHERE ($6::text IS NULL OR (lower(p.display_name), p.user_id) > ($6, $7::text::uuid))
+ORDER BY lower(p.display_name) ASC, p.user_id ASC
+LIMIT $8`, admin, viewer, courseID, state, q, cursorName, cursorUserID, limit+1)
+	if err != nil {
+		return ports.LearnerPage{}, persistenceError(err)
+	}
+	type person struct {
+		userID      string
+		displayName string
+	}
+	people := make([]person, 0, limit+1)
+	for rows.Next() {
+		var pers person
+		if scanErr := rows.Scan(&pers.userID, &pers.displayName); scanErr != nil {
+			rows.Close()
+			return ports.LearnerPage{}, persistenceError(scanErr)
+		}
+		people = append(people, pers)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return ports.LearnerPage{}, persistenceError(err)
+	}
+	page := ports.LearnerPage{Entries: make([]ports.LearnerRow, 0, len(people))}
+	hasMore := len(people) > limit
+	if hasMore {
+		people = people[:limit]
+	}
+	if len(people) == 0 {
+		return page, nil
+	}
+	order := make(map[string]int, len(people))
+	ids := make([]string, len(people))
+	for index, pers := range people {
+		order[pers.userID] = index
+		ids[index] = pers.userID
+		page.Entries = append(page.Entries, ports.LearnerRow{UserID: pers.userID, DisplayName: pers.displayName})
+	}
+	detail, err := repository.pool.Query(ctx, `SELECT g.user_id::text, g.course_id::text, c.slug, c.title, g.state, g.granted_at,
+  `+progressExpr+` AS progress_percent, activity.last_activity
+FROM course_grants AS g
+JOIN courses AS c ON c.id = g.course_id`+progressJoins+`
+LEFT JOIN LATERAL (
+  SELECT max(p.updated_at) AS last_activity
+  FROM course_modules AS m
+  JOIN course_lessons AS l ON l.module_id = m.id
+  JOIN lesson_progress AS p ON p.lesson_id = l.id
+  WHERE m.course_id = g.course_id AND p.user_id = g.user_id
+) AS activity ON true
+WHERE g.user_id = ANY($1::uuid[]) AND g.state IN ('active', 'blocked')
+  AND ($2::boolean OR c.instructor_id = $3::text::uuid)
+  AND ($4::text IS NULL OR g.course_id = $4::text::uuid)
+  AND ($5::text IS NULL OR g.state = $5)
+ORDER BY g.user_id, lower(c.title) ASC, g.course_id ASC`, ids, admin, viewer, courseID, state)
+	if err != nil {
+		return ports.LearnerPage{}, persistenceError(err)
+	}
+	defer detail.Close()
+	for detail.Next() {
+		var userID string
+		var course ports.LearnerCourse
+		var state string
+		var lastActivity pgtype.Timestamptz
+		if scanErr := detail.Scan(&userID, &course.CourseID, &course.Slug, &course.Title, &state, &course.EnrolledAt, &course.ProgressPercent, &lastActivity); scanErr != nil {
+			return ports.LearnerPage{}, persistenceError(scanErr)
+		}
+		switch domain.GrantState(state) {
+		case domain.GrantActive, domain.GrantBlocked:
+			course.State = domain.GrantState(state)
+		default:
+			return ports.LearnerPage{}, domain.ErrDependencyUnavailable
+		}
+		index, ok := order[userID]
+		if !ok {
+			continue
+		}
+		entry := &page.Entries[index]
+		entry.Courses = append(entry.Courses, course)
+		if lastActivity.Valid && (entry.LastActivityAt == nil || lastActivity.Time.After(*entry.LastActivityAt)) {
+			stamp := lastActivity.Time
+			entry.LastActivityAt = &stamp
+		}
+	}
+	if err := detail.Err(); err != nil {
+		return ports.LearnerPage{}, persistenceError(err)
+	}
+	if hasMore {
+		last := page.Entries[len(page.Entries)-1]
+		page.NextCursor = encodeLearnerCursor(last.DisplayName, last.UserID)
+	}
+	return page, nil
+}
+
+// learnerQueryPattern turns a name search into an ILIKE pattern with the wildcards escaped, or NULL
+// (no filter) for an empty query, so a literal % or _ in the search matches itself.
+func learnerQueryPattern(query string) pgtype.Text {
+	if query == "" {
+		return pgtype.Text{}
+	}
+	escaped := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query)
+	return pgtype.Text{String: "%" + escaped + "%", Valid: true}
+}
+
+func nullableText(value string) pgtype.Text {
+	if value == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: value, Valid: true}
+}
+
+func encodeLearnerCursor(displayName, userID string) string {
+	// userID is a UUID and holds no '|', so splitting on the first '|' recovers both parts even when
+	// the display name itself contains '|'.
+	return base64.RawURLEncoding.EncodeToString([]byte(userID + "|" + displayName))
+}
+
+func decodeLearnerCursor(value string) (pgtype.Text, pgtype.Text, error) {
+	if value == "" {
+		return pgtype.Text{}, pgtype.Text{}, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return pgtype.Text{}, pgtype.Text{}, domain.ErrInvalidCursor
+	}
+	parts := strings.SplitN(string(decoded), "|", 2)
+	if len(parts) != 2 {
+		return pgtype.Text{}, pgtype.Text{}, domain.ErrInvalidCursor
+	}
+	var id pgtype.UUID
+	if err := id.Scan(parts[0]); err != nil {
+		return pgtype.Text{}, pgtype.Text{}, domain.ErrInvalidCursor
+	}
+	// The keyset compares lower(display_name); the cursor stores the raw name, so lower it here.
+	return pgtype.Text{String: strings.ToLower(parts[1]), Valid: true}, pgtype.Text{String: parts[0], Valid: true}, nil
 }
 
 type rosterRow interface {

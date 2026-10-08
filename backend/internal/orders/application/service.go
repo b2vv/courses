@@ -272,6 +272,37 @@ func (service *Service) Roster(ctx context.Context, actor Actor, courseID, curso
 	return service.grants.Roster(ctx, courseID, cursor, limit)
 }
 
+// Learners returns the learner overview. adminScope distinguishes the admin view (every course,
+// administrator only) from the instructor view (the caller's own courses). A courseId filter in the
+// instructor view must name a course the caller instructs; an unknown or other instructor's course
+// is refused as learner_course_forbidden rather than revealing whether it exists.
+func (service *Service) Learners(ctx context.Context, actor Actor, adminScope bool, courseID, state, query, cursor string, limit int) (ports.LearnerPage, error) {
+	if adminScope && !actor.Administrator {
+		return ports.LearnerPage{}, domain.ErrEnrollmentForbidden
+	}
+	if courseID != "" && !adminScope {
+		facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+		if errors.Is(err, domain.ErrCourseNotEnrollable) || (err == nil && facts.InstructorID != actor.UserID) {
+			return ports.LearnerPage{}, domain.ErrLearnerCourseForbidden
+		}
+		if err != nil {
+			return ports.LearnerPage{}, err
+		}
+	}
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	filter := ports.LearnerFilter{CourseID: courseID, State: state, Query: query}
+	if adminScope {
+		filter.Administrator = true
+	} else {
+		filter.ViewerID = actor.UserID
+	}
+	return service.grants.Learners(ctx, filter, cursor, limit)
+}
+
 func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
 	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
 	if err != nil {
