@@ -100,6 +100,11 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      # K13: an EMPTY media-data volume is populated from the image's /media tree by whichever
+      # container mounts it first; three images doing that in parallel collided on a fresh volume
+      # ("mkdir …/_data/source: file exists", 2026-10-08, first `up` after a volume reset — the same
+      # race a fresh clone can hit). upload goes first; the other writers start after it.
+      upload: { condition: service_started }
     volumes: [media-data:/media]
     cpus: 2.0
     mem_limit: 2g
@@ -126,6 +131,8 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      # K13: see media-worker — upload populates a fresh media-data volume alone.
+      upload: { condition: service_started }
     volumes: [media-data:/media]
     cpus: 6.0
     mem_limit: 5g
