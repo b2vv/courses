@@ -241,6 +241,43 @@ func TestGrantCourseReinstatesOnlyRevokedMembership(t *testing.T) {
 	}
 }
 
+// Lo18 (G8): an administrator is never a learner. Enrol, StartPurchase and GrantCourse-to-an-admin
+// all refuse with the one named code before any membership or order is written.
+func TestAdministratorIsNeverALearner(t *testing.T) {
+	admin := application.Actor{UserID: adminID, Administrator: true, EmailVerified: true}
+	t.Run("admin cannot enrol", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Enroll(context.Background(), admin, courseID); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("enrol error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createMembershipCalls != 0 {
+			t.Fatalf("enrol wrote membership: calls=%d want=0", store.createMembershipCalls)
+		}
+	})
+	t.Run("admin cannot start a purchase", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.StartPurchase(context.Background(), admin, courseID, "idem-1"); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("purchase error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("purchase wrote order: calls=%d want=0", store.createCalls)
+		}
+	})
+	t.Run("an administrator cannot be granted a course", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.recipientIsAdmin = true
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.GrantCourse(context.Background(), admin, userID, courseID, "support decision"); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("grant error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createMembershipCalls != 0 {
+			t.Fatalf("grant wrote membership: calls=%d want=0", store.createMembershipCalls)
+		}
+	})
+}
+
 func TestEnrollmentWritesTransitionsAndPreservesNoOps(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -457,6 +494,7 @@ type fakeStore struct {
 	rosterLimit           int
 	memberships           []ports.MembershipCard
 	membershipsUserID     string
+	recipientIsAdmin      bool
 }
 
 type fakePaymentProvider struct {
@@ -553,6 +591,10 @@ func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID st
 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+
+func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
+	return store.recipientIsAdmin, nil
 }
 
 func (store *fakeStore) MyMemberships(_ context.Context, userID string) ([]ports.MembershipCard, error) {

@@ -603,6 +603,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "grant_forbidden", "Administrator permission is required")
 	case errors.Is(err, domain.ErrGrantSelfForbidden):
 		httpserver.WriteError(w, r, http.StatusForbidden, "grant_self_forbidden", "Administrators cannot grant themselves access")
+	case errors.Is(err, domain.ErrAdminNotLearner):
+		httpserver.WriteError(w, r, http.StatusForbidden, "admin_not_learner", "Administrators are not learners and cannot enrol, purchase, or be granted a course")
 	case errors.Is(err, domain.ErrPaymentEventRejected), errors.Is(err, domain.ErrPaymentEventUnmatched):
 		httpserver.WriteError(w, r, http.StatusConflict, "payment_event_rejected", "Payment event was rejected")
 	case errors.Is(err, domain.ErrCourseModified):

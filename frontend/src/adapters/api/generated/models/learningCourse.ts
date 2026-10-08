@@ -48,6 +48,6 @@ export interface LearningCourse {
   modules: LearningModule[];
   /** @nullable */
   continueLessonId: string | null;
-  /** True when this actor can buy this published paid course: no active grant and not its owner. Administrators are deliberately not exempt. */
+  /** True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy. */
   canPurchase: boolean;
 }

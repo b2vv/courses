@@ -32,21 +32,23 @@ const (
 )
 
 type fakeStore struct {
-	order          domain.Order
-	grant          domain.Grant
-	courseErr      error
-	getErr         error
-	grantErr       error
-	membership     *domain.Grant
-	applyCalls     int
-	applyErr       error
-	grantCalls     int
-	checkoutErr    error
-	enrollment     ports.EnrollmentFacts
-	roster         ports.RosterPage
-	rosterErr      error
-	memberships    []ports.MembershipCard
-	membershipsErr error
+	order               domain.Order
+	grant               domain.Grant
+	courseErr           error
+	getErr              error
+	grantErr            error
+	membership          *domain.Grant
+	recipientIsAdmin    bool
+	recipientIsAdminErr error
+	applyCalls          int
+	applyErr            error
+	grantCalls          int
+	checkoutErr         error
+	enrollment          ports.EnrollmentFacts
+	roster              ports.RosterPage
+	rosterErr           error
+	memberships         []ports.MembershipCard
+	membershipsErr      error
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -95,6 +97,9 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 }
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
+	return store.recipientIsAdmin, store.recipientIsAdminErr
 }
 func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
 	return store.memberships, store.membershipsErr
@@ -244,6 +249,34 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		assertContract(t, request, response)
 	})
 
+	t.Run("Lo18 an administrator recipient cannot be granted a course", func(t *testing.T) {
+		store.recipientIsAdmin = true
+		defer func() { store.recipientIsAdmin = false }()
+		body := []byte(`{"userId":"` + testUser + `","reason":"support resolution"}`)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/courses/"+testCourse+"/grants", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		request.Body = io.NopCloser(bytes.NewReader(body))
+		assertContract(t, request, response)
+	})
+
+	t.Run("Lo18 an administrator cannot start a purchase", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
+		request.Header.Set("Idempotency-Key", "purchase-admin")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, request, response)
+	})
+
 	t.Run("Pay22 dependency failures are explicit", func(t *testing.T) {
 		store.courseErr = domain.ErrDependencyUnavailable
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
@@ -356,6 +389,13 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	r, response := request(http.MethodPost, path+"/enroll", "student")
 	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"source":"self"`) {
 		t.Fatalf("enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	// Lo18 (G8): an administrator is not a learner and cannot self-enrol.
+	r, response = request(http.MethodPost, path+"/enroll", "admin")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+		t.Fatalf("admin enroll status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, r, response)
 

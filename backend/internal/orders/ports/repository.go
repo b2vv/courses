@@ -34,6 +34,9 @@ type OrderRepository interface {
 // GrantRepository reads and writes membership records and their audit rows.
 type GrantRepository interface {
 	Membership(context.Context, string, string) (*domain.Grant, error)
+	// IsAdministrator reports whether the user is a live administrator, so the service can keep
+	// an administrator from being made a learner (G8). The grants adapter already reads users.
+	IsAdministrator(context.Context, string) (bool, error)
 	MyMemberships(context.Context, string) ([]MembershipCard, error)
 	Roster(context.Context, string, string, int) (RosterPage, error)
 	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
