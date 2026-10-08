@@ -42,7 +42,7 @@ LearnerCourse { courseId: uuid, slug, title, state: active|blocked, progressPerc
 кнопка знала «Заблокувати»/«Розблокувати») — **не** ідентифікатор автора (Lo14).
 
 Коди відмов (нові — у `ErrorCode` enum): `learner_course_forbidden` (фільтр чужим курсом, 403),
-`membership_author_not_blockable` (ранг автора не нижчий за ранг актора, 409), наявні
+`membership_author_not_blockable` (ціль — адмін, 409), наявні
 `membership_transition_invalid` (автор без членства, 409), `course_forbidden`/`comment_not_found`/
 `review_not_found` (404 невідомий об'єкт). Точні наявні імена звіряє бриф із `ErrorCode` enum — не вигадує.
 
@@ -62,9 +62,10 @@ LearnerCourse { courseId: uuid, slug, title, state: active|blocked, progressPerc
 ## 4. Блок із черги
 
 `AuthorOf(kind, id)` → `(userID, courseID)` або not-found. Сервіс: `BlockAuthor(actor, kind, id)` →
-перевірка G6 — ранг ролі (`student`<`instructor`<`admin`, `users.role`): ранг автора має бути **нижчим**
-за ранг актора (адмін блокує інструкторів і студентів, інструктор — лише студентів); чиста функція рангу
-в `orders/domain` з юніт-тестом таблиці 3×3 → `transitionMembership(…,
+перевірка G6 — ціль за `users.role`: **адміна не блокує ніхто**; адмін блокує студентів та інструкторів;
+власник курсу — студентів та інструкторів-учасників свого курсу. Чиста функція
+`CanBlock(actorAdmin bool, targetRole string) bool` в `orders/domain` з юніт-таблицею (актор адмін/власник ×
+ціль student/instructor/admin) → `transitionMembership(…,
 "block")` з `reason = "moderation_queue:<kind>:<id>"` у `grant_audit` (стан і дія ті самі, що з ростера;
 reason показує походження — Lo17). Перевірку G6 додати і в шлях ростера — одне правило для обох.
 `authorBlocked` у черзі: `EXISTS` по `course_grants` (state=blocked) для автора елемента.
