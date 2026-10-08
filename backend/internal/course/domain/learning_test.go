@@ -163,7 +163,7 @@ func TestLearningCourseCanPurchaseBy(t *testing.T) {
 		status   coursedomain.Status
 		want     bool
 	}{
-		{name: "admin without grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorAdmin}, paid: true, status: coursedomain.Published, want: true},
+		{name: "admin without grant is not a learner (G8)", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorAdmin}, paid: true, status: coursedomain.Published},
 		{name: "admin with grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorAdmin}, paid: true, entitled: true, status: coursedomain.Published},
 		{name: "owner", actor: coursedomain.Actor{UserID: learningOwnerID, Role: coursedomain.ActorInstructor}, paid: true, status: coursedomain.Published},
 		{name: "student with grant", actor: coursedomain.Actor{UserID: learningViewerID, Role: coursedomain.ActorStudent}, paid: true, entitled: true, status: coursedomain.Published},

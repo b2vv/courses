@@ -42,6 +42,9 @@ func New(courses ports.CourseReader, orders ports.OrderRepository, store interfa
 }
 
 func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID, idempotencyKey string) (domain.Order, error) {
+	if actor.Administrator {
+		return domain.Order{}, domain.ErrAdminNotLearner
+	}
 	if !actor.EmailVerified {
 		return domain.Order{}, domain.ErrEmailNotVerified
 	}
@@ -146,6 +149,13 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
 		return domain.Grant{}, domain.ErrGrantInvalid
 	}
+	recipientIsAdmin, err := service.grants.IsAdministrator(ctx, userID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if recipientIsAdmin {
+		return domain.Grant{}, domain.ErrAdminNotLearner
+	}
 	membership, err := service.grants.Membership(ctx, userID, courseID)
 	if err != nil {
 		return domain.Grant{}, err
@@ -168,6 +178,9 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 }
 
 func (service *Service) Enroll(ctx context.Context, actor Actor, courseID string) (domain.Grant, error) {
+	if actor.Administrator {
+		return domain.Grant{}, domain.ErrAdminNotLearner
+	}
 	if !actor.EmailVerified {
 		return domain.Grant{}, domain.ErrEmailNotVerified
 	}

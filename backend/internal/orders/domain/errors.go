@@ -21,6 +21,7 @@ const (
 	ErrCheckoutAlreadyOpened  Error = "checkout_already_opened"
 	ErrGrantForbidden         Error = "grant_forbidden"
 	ErrGrantSelfForbidden     Error = "grant_self_forbidden"
+	ErrAdminNotLearner        Error = "admin_not_learner"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrCourseModified         Error = "course_modified"
 	ErrEmailNotVerified       Error = "email_not_verified"

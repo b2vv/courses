@@ -42,6 +42,7 @@ export const ErrorResponseErrorCode = {
   checkout_already_opened: 'checkout_already_opened',
   grant_forbidden: 'grant_forbidden',
   grant_self_forbidden: 'grant_self_forbidden',
+  admin_not_learner: 'admin_not_learner',
   payment_event_rejected: 'payment_event_rejected',
   invalid_callback: 'invalid_callback',
   order_not_found: 'order_not_found',

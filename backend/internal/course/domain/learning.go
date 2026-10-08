@@ -103,10 +103,11 @@ func (course LearningCourse) PurchaseRequiredBy(actor Actor, lesson LearningLess
 	return access.PurchaseRequired(access.Subject{UserID: actor.UserID, Administrator: actor.Role == ActorAdmin}, access.Course{OwnerID: course.InstructorID, Published: course.Status == Published, Paid: course.Paid, Entitled: course.Entitled, Membership: course.Membership, Preview: lesson.IsPreview})
 }
 
-// CanPurchaseBy controls whether the learning outline presents a purchase entry.
-// Unlike viewing access, an administrator without a grant may buy the course.
+// CanPurchaseBy controls whether the learning outline presents a purchase entry. An administrator
+// is never a learner (G8): they view the course as exempt but cannot buy it, so they are excluded
+// here just as the owner is. StartPurchase refuses an administrator at the service too.
 func (course LearningCourse) CanPurchaseBy(actor Actor) bool {
-	return course.Status == Published && course.Paid && !course.Entitled && actor.UserID != course.InstructorID
+	return course.Status == Published && course.Paid && !course.Entitled && actor.UserID != course.InstructorID && actor.Role != ActorAdmin
 }
 
 func (state LearningVideoState) Valid() bool {

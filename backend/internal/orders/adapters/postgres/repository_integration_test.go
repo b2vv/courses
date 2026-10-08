@@ -501,6 +501,31 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
+	t.Run("Lo18 an administrator recipient is refused and no grant row is written", func(t *testing.T) {
+		var secondAdmin string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+(gen_random_uuid(),'lo18-second-admin@example.test','Lo18 second admin','admin','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&secondAdmin); err != nil {
+			t.Fatal(err)
+		}
+		if isAdmin, err := repository.IsAdministrator(ctx, secondAdmin); err != nil || !isAdmin {
+			t.Fatalf("IsAdministrator(second admin)=%v err=%v", isAdmin, err)
+		}
+		if nonAdmin, err := repository.IsAdministrator(ctx, integrationUserID); err != nil || nonAdmin {
+			t.Fatalf("IsAdministrator(student)=%v err=%v", nonAdmin, err)
+		}
+		lo18Service := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("73"), nil)
+		if _, err := lo18Service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, secondAdmin, integrationCourseID, "support decision"); err != domain.ErrAdminNotLearner {
+			t.Fatalf("grant to admin error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		var rows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, secondAdmin, integrationCourseID).Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 0 {
+			t.Fatalf("grant to admin wrote %d rows, want 0", rows)
+		}
+	})
+
 	t.Run("paid event settles when active admin grant already exists", func(t *testing.T) {
 		var userID string
 		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES

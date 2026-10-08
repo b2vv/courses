@@ -129,6 +129,21 @@ func (repository *Repository) Membership(ctx context.Context, userID, courseID s
 	return &grant, nil
 }
 
+// IsAdministrator reports whether userID names a live administrator. The grants adapter already
+// reads the users table (Roster joins display_name); this reads the same table's role so the
+// service can refuse making an administrator a learner (G8). A missing user is not an admin.
+func (repository *Repository) IsAdministrator(ctx context.Context, userID string) (bool, error) {
+	var role string
+	err := repository.pool.QueryRow(ctx, `SELECT role FROM users WHERE id=$1::text::uuid AND deleted_at IS NULL LIMIT 1`, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, persistenceError(err)
+	}
+	return role == "admin", nil
+}
+
 func (repository *Repository) MyMemberships(ctx context.Context, userID string) ([]ports.MembershipCard, error) {
 	rows, err := repository.pool.Query(ctx, `SELECT g.course_id::text, c.slug, c.title, g.state, g.granted_at,
   CASE WHEN totals.total = 0 THEN 0 ELSE (completed.completed * 100 + totals.total / 2) / totals.total END AS progress_percent
