@@ -447,6 +447,13 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	}
 	assertContract(t, r, response)
 
+	// Blocking a non-member is an invalid transition, not a server error: 409 grant_transition_invalid.
+	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/block", "instructor")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"grant_transition_invalid"`) {
+		t.Fatalf("non-member block status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
 	active, err := domain.SelfEnroll(testGrant, testUser, testCourse, now)
 	if err != nil {
 		t.Fatal(err)
