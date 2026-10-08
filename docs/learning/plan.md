@@ -42,7 +42,6 @@ LearnerCourse { courseId: uuid, slug, title, state: active|blocked, progressPerc
 кнопка знала «Заблокувати»/«Розблокувати») — **не** ідентифікатор автора (Lo14).
 
 Коди відмов (нові — у `ErrorCode` enum): `learner_course_forbidden` (фільтр чужим курсом, 403),
-`membership_author_not_blockable` (ціль — адмін, 409), наявні
 `membership_transition_invalid` (автор без членства, 409), `course_forbidden`/`comment_not_found`/
 `review_not_found` (404 невідомий об'єкт). Точні наявні імена звіряє бриф із `ErrorCode` enum — не вигадує.
 
@@ -62,10 +61,7 @@ LearnerCourse { courseId: uuid, slug, title, state: active|blocked, progressPerc
 ## 4. Блок із черги
 
 `AuthorOf(kind, id)` → `(userID, courseID)` або not-found. Сервіс: `BlockAuthor(actor, kind, id)` →
-перевірка G6 — ціль за `users.role`: **адміна не блокує ніхто**; адмін блокує студентів та інструкторів;
-власник курсу — студентів та інструкторів-учасників свого курсу. Чиста функція
-`CanBlock(actorAdmin bool, targetRole string) bool` в `orders/domain` з юніт-таблицею (актор адмін/власник ×
-ціль student/instructor/admin) → `transitionMembership(…,
+перевірки рангу немає (G8: адмін ніколи не учасник) → `transitionMembership(…,
 "block")` з `reason = "moderation_queue:<kind>:<id>"` у `grant_audit` (стан і дія ті самі, що з ростера;
 reason показує походження — Lo17). Перевірку G6 додати і в шлях ростера — одне правило для обох.
 `authorBlocked` у черзі: `EXISTS` по `course_grants` (state=blocked) для автора елемента.
@@ -85,7 +81,7 @@ reason показує походження — Lo17). Перевірку G6 до
 
 | Зріз | Зміст | Рядки | Доказ |
 |---|---|---|---|
-| LR0 | G8: `Enroll`/`StartPurchase` відмовляють адміну (новий код у `ErrorCode`, напр. `enrollment_admin_not_learner`, 409 — звірити наявні); UI ховає запис/покупку для адміна; **Rt05 переписати на студента-покупця** (зараз адмін купує й рецензує); grep e2e на інші admin-як-учасник | Lo18, Lo19 | unit + contract + integration; повний `make e2e-local` (зміна злитої поведінки enrollment) |
+| LR0 | G8: `Enroll`/`StartPurchase`/адмін-видача відмовляють адміну (новий код у `ErrorCode`, напр. `enrollment_admin_not_learner`, 409 — звірити наявні); UI ховає запис/покупку для адміна; **Rt05 переписати на студента-покупця** (зараз адмін купує й рецензує); grep e2e на інші admin-як-учасник | Lo18, Lo19 | unit + contract + integration; повний `make e2e-local` (зміна злитої поведінки enrollment) |
 | LR1 | OpenAPI (огляд + block-author + `authorBlocked`) + генерація | Lo07, Lo14 (контракт) | `make check-generated`, contract-тести |
 | LR2 | Backend огляду: порт, SQL, сервіс, HTTP | Lo01–Lo09 | integration (Postgres) + contract |
 | LR3 | Backend блоку з черги + G6 у ростері + `authorBlocked` | Lo12–Lo17 | integration + contract |
@@ -97,6 +93,9 @@ reason показує походження — Lo17). Перевірку G6 до
 і LR5 — повний `make e2e-local` (спільний стан: членство). Фінальний гейт — ordered `make check`.
 
 ## 7. Ризики й рішення, що закривають альтернативи
+
+- **Pre-launch: без зворотної сумісності (власник, 2026-10-08).** Продукт не запущено — злиту поведінку
+  міняємо прямо (G8 ламає En14 для адмінів), мертві гілки й захисти «для старих даних» не пишемо.
 
 - **Без нової міграції/індексу (2026-10-08, Courses 1).** Огляд читає ті самі таблиці, що ростер; індекс
   на `course_grants(user_id, course_id)` уже є (unique). Перевірка: `EXPLAIN` запиту огляду на сідах +
