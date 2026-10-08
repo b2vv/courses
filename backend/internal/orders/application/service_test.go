@@ -283,6 +283,71 @@ func TestAdministratorIsNeverALearner(t *testing.T) {
 	})
 }
 
+func TestLearnersScopesAuthorizesAndClampsLimit(t *testing.T) {
+	instructor := application.Actor{UserID: userID}
+	admin := application.Actor{UserID: adminID, Administrator: true}
+
+	t.Run("admin scope requires an administrator", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), application.Actor{UserID: userID}, true, "", "", "", "", 0); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+			t.Fatalf("non-admin admin scope err=%v", err)
+		}
+	})
+
+	t.Run("admin scope passes an administrator filter and clamps the limit", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), admin, true, "", "blocked", "ann", "", 500); err != nil {
+			t.Fatalf("admin learners err=%v", err)
+		}
+		if !store.learnerFilter.Administrator || store.learnerFilter.ViewerID != "" || store.learnerFilter.State != "blocked" || store.learnerFilter.Query != "ann" || store.learnerLimit != 100 {
+			t.Fatalf("admin filter=%#v limit=%d", store.learnerFilter, store.learnerLimit)
+		}
+	})
+
+	t.Run("instructor scope views own courses and defaults the limit", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, "", "", "", "", 0); err != nil {
+			t.Fatalf("instructor learners err=%v", err)
+		}
+		if store.learnerFilter.Administrator || store.learnerFilter.ViewerID != userID || store.learnerLimit != 20 {
+			t.Fatalf("instructor filter=%#v limit=%d", store.learnerFilter, store.learnerLimit)
+		}
+	})
+
+	t.Run("instructor filtering by an owned course passes it through", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: userID}
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); err != nil {
+			t.Fatalf("own course err=%v", err)
+		}
+		if store.learnerFilter.CourseID != courseID {
+			t.Fatalf("course filter=%q", store.learnerFilter.CourseID)
+		}
+	})
+
+	t.Run("instructor filtering by another course is refused", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: "someone-else"}
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); !errors.Is(err, domain.ErrLearnerCourseForbidden) {
+			t.Fatalf("foreign course err=%v", err)
+		}
+	})
+
+	t.Run("instructor filtering by an unknown course is refused, not revealed", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollmentErr = domain.ErrCourseNotEnrollable
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); !errors.Is(err, domain.ErrLearnerCourseForbidden) {
+			t.Fatalf("unknown course err=%v", err)
+		}
+	})
+}
+
 func TestEnrollmentWritesTransitionsAndPreservesNoOps(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -500,6 +565,12 @@ type fakeStore struct {
 	memberships           []ports.MembershipCard
 	membershipsUserID     string
 	recipientIsAdmin      bool
+	learnerPage           ports.LearnerPage
+	learnerErr            error
+	learnerFilter         ports.LearnerFilter
+	learnerCursor         string
+	learnerLimit          int
+	enrollmentErr         error
 }
 
 type fakePaymentProvider struct {
@@ -551,6 +622,9 @@ func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.Course
 }
 
 func (store *fakeStore) CourseForEnrollment(context.Context, string) (ports.EnrollmentFacts, error) {
+	if store.enrollmentErr != nil {
+		return ports.EnrollmentFacts{}, store.enrollmentErr
+	}
 	if store.enrollment.Status == "" {
 		return ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: adminID}, nil
 	}
@@ -600,6 +674,13 @@ func (store *fakeStore) Membership(context.Context, string, string) (*domain.Gra
 
 func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
 	return store.recipientIsAdmin, nil
+}
+
+func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
+	store.learnerFilter = filter
+	store.learnerCursor = cursor
+	store.learnerLimit = limit
+	return store.learnerPage, store.learnerErr
 }
 
 func (store *fakeStore) MyMemberships(_ context.Context, userID string) ([]ports.MembershipCard, error) {

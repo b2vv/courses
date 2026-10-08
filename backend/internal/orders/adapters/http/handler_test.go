@@ -49,6 +49,9 @@ type fakeStore struct {
 	rosterErr           error
 	memberships         []ports.MembershipCard
 	membershipsErr      error
+	learnerPage         ports.LearnerPage
+	learnerErr          error
+	learnerFilter       ports.LearnerFilter
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -100,6 +103,10 @@ func (store *fakeStore) Membership(context.Context, string, string) (*domain.Gra
 }
 func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
 	return store.recipientIsAdmin, store.recipientIsAdminErr
+}
+func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
+	store.learnerFilter = filter
+	return store.learnerPage, store.learnerErr
 }
 func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
 	return store.memberships, store.membershipsErr
@@ -505,6 +512,56 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	r, response = request(http.MethodGet, "/api/v1/teach/courses/"+testCourse+"/roster?cursor=invalid", "instructor")
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("cursor status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	// Lo07/Lo02: the learner overview returns the page shape with no email, and a row carries its
+	// courses and last activity. assertContract validates the body against LearnerPage.
+	lastActivity := now
+	store.learnerPage = ports.LearnerPage{
+		Entries: []ports.LearnerRow{{
+			UserID:         testUser,
+			DisplayName:    "Ada",
+			LastActivityAt: &lastActivity,
+			Courses:        []ports.LearnerCourse{{CourseID: testCourse, Slug: "course", Title: "Course", State: domain.GrantActive, ProgressPercent: 35, EnrolledAt: now}},
+		}},
+		NextCursor: "next",
+	}
+	for _, path := range []string{"/api/v1/teach/learners", "/api/v1/admin/learners"} {
+		role := "instructor"
+		if strings.Contains(path, "admin") {
+			role = "admin"
+		}
+		r, response = request(http.MethodGet, path+"?limit=20", role)
+		if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "email") || !strings.Contains(response.Body.String(), `"displayName":"Ada"`) || !strings.Contains(response.Body.String(), `"lastActivityAt":"`) {
+			t.Fatalf("%s status=%d body=%s", path, response.Code, response.Body.String())
+		}
+		assertContract(t, r, response)
+	}
+
+	// Lo05: invalid query parameters are rejected before the service is reached. (The response is
+	// not contract-checked here: the spec validator rejects these as malformed requests, which is
+	// exactly what the handler is also doing.)
+	for _, bad := range []string{"state=paused", "limit=0", "limit=200", "q=", "unknown=1"} {
+		_, response = request(http.MethodGet, "/api/v1/teach/learners?"+bad, "instructor")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("bad query %q status=%d body=%s", bad, response.Code, response.Body.String())
+		}
+	}
+
+	// Lo05: filtering by a course the instructor does not teach is refused by name, not revealed.
+	store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: testUser}
+	r, response = request(http.MethodGet, "/api/v1/teach/learners?courseId="+testCourse, "instructor")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"learner_course_forbidden"`) {
+		t.Fatalf("foreign course status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.enrollment = ports.EnrollmentFacts{}
+
+	// Lo08: a student cannot read the administrator overview.
+	r, response = request(http.MethodGet, "/api/v1/admin/learners", "student")
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("student admin overview status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, r, response)
 }

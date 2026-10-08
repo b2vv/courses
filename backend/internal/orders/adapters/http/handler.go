@@ -51,10 +51,12 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, sameOrigin fu
 func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrigin, administrator func(http.Handler) http.Handler) {
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/grants", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.grantCourse)))))
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/participants/{userId}/revoke", sameOrigin(authenticate(http.HandlerFunc(handler.revoke))))
+	mux.Handle("GET /api/v1/admin/learners", authenticate(administrator(http.HandlerFunc(handler.adminLearners))))
 }
 
 func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
 	mux.Handle("GET /api/v1/teach/courses/{courseId}/roster", authenticate(http.HandlerFunc(handler.roster)))
+	mux.Handle("GET /api/v1/teach/learners", authenticate(http.HandlerFunc(handler.teachLearners)))
 	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/block", sameOrigin(authenticate(http.HandlerFunc(handler.block))))
 	mux.Handle("POST /api/v1/teach/courses/{courseId}/participants/{userId}/unblock", sameOrigin(authenticate(http.HandlerFunc(handler.unblock))))
 }
@@ -121,6 +123,27 @@ type rosterEntryDTO struct {
 type rosterPageDTO struct {
 	Entries    []rosterEntryDTO `json:"entries"`
 	NextCursor *string          `json:"nextCursor"`
+}
+
+type learnerCourseDTO struct {
+	CourseID        string `json:"courseId"`
+	Slug            string `json:"slug"`
+	Title           string `json:"title"`
+	State           string `json:"state"`
+	ProgressPercent int    `json:"progressPercent"`
+	EnrolledAt      string `json:"enrolledAt"`
+}
+
+type learnerRowDTO struct {
+	UserID         string             `json:"userId"`
+	DisplayName    string             `json:"displayName"`
+	LastActivityAt *string            `json:"lastActivityAt"`
+	Courses        []learnerCourseDTO `json:"courses"`
+}
+
+type learnerPageDTO struct {
+	Entries    []learnerRowDTO `json:"entries"`
+	NextCursor *string         `json:"nextCursor"`
 }
 
 func (handler *Handler) startPurchase(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +293,82 @@ func lenPresent(query url.Values, keys ...string) int {
 		}
 	}
 	return n
+}
+
+func (handler *Handler) teachLearners(w http.ResponseWriter, r *http.Request) {
+	handler.learners(w, r, false)
+}
+
+func (handler *Handler) adminLearners(w http.ResponseWriter, r *http.Request) {
+	handler.learners(w, r, true)
+}
+
+func (handler *Handler) learners(w http.ResponseWriter, r *http.Request, adminScope bool) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	query := r.URL.Query()
+	for key, values := range query {
+		switch key {
+		case "courseId", "state", "q", "cursor", "limit":
+			if len(values) != 1 {
+				writeError(w, r, domain.ErrInvalidCursor)
+				return
+			}
+		default:
+			writeError(w, r, domain.ErrInvalidCursor)
+			return
+		}
+	}
+	courseID := query.Get("courseId")
+	if query.Has("courseId") && !validID(courseID) {
+		writeError(w, r, domain.ErrInvalidCursor)
+		return
+	}
+	state := query.Get("state")
+	if query.Has("state") && state != "active" && state != "blocked" {
+		writeError(w, r, domain.ErrInvalidCursor)
+		return
+	}
+	q := query.Get("q")
+	if n := utf8.RuneCountInString(q); query.Has("q") && (!utf8.ValidString(q) || n < 1 || n > 80) {
+		writeError(w, r, domain.ErrInvalidCursor)
+		return
+	}
+	limit := 0
+	if values := query["limit"]; len(values) == 1 {
+		parsed, err := strconv.Atoi(values[0])
+		if err != nil || parsed < 1 || parsed > 100 {
+			writeError(w, r, domain.ErrInvalidCursor)
+			return
+		}
+		limit = parsed
+	}
+	page, err := handler.service.Learners(r.Context(), actor, adminScope, courseID, state, q, query.Get("cursor"), limit)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	entries := make([]learnerRowDTO, 0, len(page.Entries))
+	for _, row := range page.Entries {
+		courses := make([]learnerCourseDTO, 0, len(row.Courses))
+		for _, course := range row.Courses {
+			courses = append(courses, learnerCourseDTO{CourseID: course.CourseID, Slug: course.Slug, Title: course.Title, State: string(course.State), ProgressPercent: course.ProgressPercent, EnrolledAt: course.EnrolledAt.UTC().Format(dateTimeLayout)})
+		}
+		dto := learnerRowDTO{UserID: row.UserID, DisplayName: row.DisplayName, Courses: courses}
+		if row.LastActivityAt != nil {
+			stamp := row.LastActivityAt.UTC().Format(dateTimeLayout)
+			dto.LastActivityAt = &stamp
+		}
+		entries = append(entries, dto)
+	}
+	response := learnerPageDTO{Entries: entries}
+	if page.NextCursor != "" {
+		response.NextCursor = &page.NextCursor
+	}
+	httpserver.WriteJSON(w, http.StatusOK, response)
 }
 
 func (handler *Handler) block(w http.ResponseWriter, r *http.Request) {
@@ -595,6 +694,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "course_not_enrollable", "Course is not available for enrollment")
 	case errors.Is(err, domain.ErrEnrollmentForbidden):
 		httpserver.WriteError(w, r, http.StatusForbidden, "enrollment_forbidden", "Enrollment permission is required")
+	case errors.Is(err, domain.ErrLearnerCourseForbidden):
+		httpserver.WriteError(w, r, http.StatusForbidden, "learner_course_forbidden", "The overview cannot be filtered by another instructor's course")
 	case errors.Is(err, domain.ErrInvalidCursor):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrOrderNotFound):

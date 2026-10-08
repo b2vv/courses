@@ -26,4 +26,5 @@ const (
 	ErrCourseModified         Error = "course_modified"
 	ErrEmailNotVerified       Error = "email_not_verified"
 	ErrInvalidCursor          Error = "roster_cursor_invalid"
+	ErrLearnerCourseForbidden Error = "learner_course_forbidden"
 )

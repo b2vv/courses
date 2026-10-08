@@ -39,9 +39,42 @@ type GrantRepository interface {
 	IsAdministrator(context.Context, string) (bool, error)
 	MyMemberships(context.Context, string) ([]MembershipCard, error)
 	Roster(context.Context, string, string, int) (RosterPage, error)
+	Learners(context.Context, LearnerFilter, string, int) (LearnerPage, error)
 	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
 	UpdateMembership(context.Context, domain.Grant, domain.GrantState, string, string, *string) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error
+}
+
+// LearnerFilter selects which learners and which of their memberships the overview returns.
+// Administrator sees every course; otherwise only courses ViewerID instructs. CourseID, State and
+// Query are optional narrowings (empty means no narrowing).
+type LearnerFilter struct {
+	ViewerID      string
+	Administrator bool
+	CourseID      string
+	State         string
+	Query         string
+}
+
+type LearnerCourse struct {
+	CourseID        string
+	Slug            string
+	Title           string
+	State           domain.GrantState
+	ProgressPercent int
+	EnrolledAt      time.Time
+}
+
+type LearnerRow struct {
+	UserID         string
+	DisplayName    string
+	LastActivityAt *time.Time
+	Courses        []LearnerCourse
+}
+
+type LearnerPage struct {
+	Entries    []LearnerRow
+	NextCursor string
 }
 
 type MembershipCard struct {
