@@ -7,7 +7,7 @@ GO_BUILD_CACHE ?= courses-gobuild
 export GO_MOD_CACHE GO_BUILD_CACHE
 GO_RUN := docker run --rm -v "$(CURDIR)/backend:/work" -w /work -v $(GO_MOD_CACHE):/go/pkg/mod -v $(GO_BUILD_CACHE):/root/.cache/go-build $(GO_IMAGE)
 
-.PHONY: env up down dev logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local e2e-reset tunnel-up tunnel-down smoke generate check-generated check
+.PHONY: env up down dev up-stub dev-stub logs migrate seed seed-identities drain-queue format format-check lint typecheck test integration build e2e e2e-local e2e-reset tunnel-up tunnel-down smoke generate check-generated check
 env:
 	@test -f .env || cp .env.example .env
 up: env
@@ -20,6 +20,14 @@ down:
 dev: env
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait --wait-timeout 180
 	docker compose exec -T nginx nginx -s reload
+# up-stub / dev-stub add the offline WayForPay stub so a purchase settles locally without the real
+# provider (docker-compose.stub.yml). `make down` tears either down. Not an authoritative gate.
+up-stub: env
+	docker compose -f docker-compose.yml -f docker-compose.stub.yml up -d --build --wait --wait-timeout 180
+	docker compose -f docker-compose.yml -f docker-compose.stub.yml exec -T nginx nginx -s reload
+dev-stub: env
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.stub.yml up -d --build --wait --wait-timeout 180
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.stub.yml exec -T nginx nginx -s reload
 logs:
 	docker compose logs -f --tail=100
 migrate: env
