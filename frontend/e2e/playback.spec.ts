@@ -958,9 +958,16 @@ test.describe('T7 playback milestone', () => {
         'Recreate api with the documented T7 2s/6s profile',
       ).toEqual({ heartbeatSeconds: 2, ownershipTtlSeconds: 6 });
       await page.waitForTimeout(30_000);
+      const watched = await videoTime(page);
+      // The measured values, not only the verdict, so a CI log shows how far each sits from its
+      // threshold (K12: the list reporter gives durations, never an assertion's margin). At the 2 s
+      // cadence a 30 s view should renew ~15 times; a count drifting toward 4 is the early warning.
+      console.log(
+        `P08 measurements: heartbeats=${heartbeats} (min 4), deniedSegments=${deniedSegments} (must be 0), videoTime=${watched.toFixed(1)}s (min 25)`,
+      );
       expect(heartbeats).toBeGreaterThanOrEqual(4);
       expect(deniedSegments).toBe(0);
-      expect(await videoTime(page)).toBeGreaterThan(25);
+      expect(watched).toBeGreaterThan(25);
     });
 
     test('P04 restores the position after a reload', async ({ page }) => {
