@@ -50,12 +50,14 @@ import type {
   InternalErrorResponse,
   InvalidAccountTokenResponse,
   InvalidRequestResponse,
+  LearnerPage,
   LearningCourse,
   LearningForbiddenResponse,
   LessonDraft,
   LessonNotFoundResponse,
   LessonTranscript,
   ListAdminCoursesParams,
+  ListAdminLearnersParams,
   ListAdminUsersParams,
   ListCourseDocuments200,
   ListCourseReviewsParams,
@@ -64,6 +66,7 @@ import type {
   ListParticipantReportsParams,
   ListPublishedCoursesParams,
   ListTeachCourseCommentsParams,
+  ListTeachLearnersParams,
   ListTeachModerationQueueParams,
   LoginRequest,
   MediaBadRequestResponse,
@@ -784,6 +787,480 @@ export const unblockCourseParticipant = async (courseId: string,
 
   const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
+}
+
+
+
+export type listTeachLearnersResponse200 = {
+  data: LearnerPage
+  status: 200
+}
+
+export type listTeachLearnersResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listTeachLearnersResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listTeachLearnersResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listTeachLearnersResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listTeachLearnersResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listTeachLearnersResponseSuccess = (listTeachLearnersResponse200) & {
+  headers: Headers;
+};
+export type listTeachLearnersResponseError = (listTeachLearnersResponse400 | listTeachLearnersResponse401 | listTeachLearnersResponse403 | listTeachLearnersResponse500 | listTeachLearnersResponse503) & {
+  headers: Headers;
+};
+
+export type listTeachLearnersResponse = (listTeachLearnersResponseSuccess | listTeachLearnersResponseError)
+
+export const getListTeachLearnersUrl = (params?: ListTeachLearnersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/learners?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/learners`
+}
+
+/**
+ * @summary List learners across the instructor's own courses
+ */
+export const listTeachLearners = async (params?: ListTeachLearnersParams, options?: RequestInit): Promise<listTeachLearnersResponse> => {
+
+  const res = await fetch(getListTeachLearnersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeachLearnersResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listTeachLearnersResponse
+}
+
+
+
+export type listAdminLearnersResponse200 = {
+  data: LearnerPage
+  status: 200
+}
+
+export type listAdminLearnersResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listAdminLearnersResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listAdminLearnersResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listAdminLearnersResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listAdminLearnersResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listAdminLearnersResponseSuccess = (listAdminLearnersResponse200) & {
+  headers: Headers;
+};
+export type listAdminLearnersResponseError = (listAdminLearnersResponse400 | listAdminLearnersResponse401 | listAdminLearnersResponse403 | listAdminLearnersResponse500 | listAdminLearnersResponse503) & {
+  headers: Headers;
+};
+
+export type listAdminLearnersResponse = (listAdminLearnersResponseSuccess | listAdminLearnersResponseError)
+
+export const getListAdminLearnersUrl = (params?: ListAdminLearnersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/learners?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/learners`
+}
+
+/**
+ * @summary List learners across every course for an administrator
+ */
+export const listAdminLearners = async (params?: ListAdminLearnersParams, options?: RequestInit): Promise<listAdminLearnersResponse> => {
+
+  const res = await fetch(getListAdminLearnersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminLearnersResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminLearnersResponse
+}
+
+
+
+export type blockCommentAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockCommentAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockCommentAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockCommentAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockCommentAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type blockCommentAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockCommentAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockCommentAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockCommentAuthorResponseSuccess = (blockCommentAuthorResponse200) & {
+  headers: Headers;
+};
+export type blockCommentAuthorResponseError = (blockCommentAuthorResponse400 | blockCommentAuthorResponse401 | blockCommentAuthorResponse403 | blockCommentAuthorResponse404 | blockCommentAuthorResponse409 | blockCommentAuthorResponse500 | blockCommentAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type blockCommentAuthorResponse = (blockCommentAuthorResponseSuccess | blockCommentAuthorResponseError)
+
+export const getBlockCommentAuthorUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/block-author`
+}
+
+/**
+ * @summary Block the author of a comment from course communication (owner or administrator)
+ */
+export const blockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<blockCommentAuthorResponse> => {
+
+  const res = await fetch(getBlockCommentAuthorUrl(commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockCommentAuthorResponse
+}
+
+
+
+export type unblockCommentAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockCommentAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockCommentAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockCommentAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockCommentAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type unblockCommentAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockCommentAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockCommentAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockCommentAuthorResponseSuccess = (unblockCommentAuthorResponse200) & {
+  headers: Headers;
+};
+export type unblockCommentAuthorResponseError = (unblockCommentAuthorResponse400 | unblockCommentAuthorResponse401 | unblockCommentAuthorResponse403 | unblockCommentAuthorResponse404 | unblockCommentAuthorResponse409 | unblockCommentAuthorResponse500 | unblockCommentAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type unblockCommentAuthorResponse = (unblockCommentAuthorResponseSuccess | unblockCommentAuthorResponseError)
+
+export const getUnblockCommentAuthorUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/unblock-author`
+}
+
+/**
+ * @summary Restore the comment author's course communication (owner or administrator)
+ */
+export const unblockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<unblockCommentAuthorResponse> => {
+
+  const res = await fetch(getUnblockCommentAuthorUrl(commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockCommentAuthorResponse
+}
+
+
+
+export type blockReviewAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockReviewAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockReviewAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockReviewAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockReviewAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type blockReviewAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockReviewAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockReviewAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockReviewAuthorResponseSuccess = (blockReviewAuthorResponse200) & {
+  headers: Headers;
+};
+export type blockReviewAuthorResponseError = (blockReviewAuthorResponse400 | blockReviewAuthorResponse401 | blockReviewAuthorResponse403 | blockReviewAuthorResponse404 | blockReviewAuthorResponse409 | blockReviewAuthorResponse500 | blockReviewAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type blockReviewAuthorResponse = (blockReviewAuthorResponseSuccess | blockReviewAuthorResponseError)
+
+export const getBlockReviewAuthorUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/block-author`
+}
+
+/**
+ * @summary Block the author of a review from course communication (owner or administrator)
+ */
+export const blockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<blockReviewAuthorResponse> => {
+
+  const res = await fetch(getBlockReviewAuthorUrl(reviewId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockReviewAuthorResponse
+}
+
+
+
+export type unblockReviewAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockReviewAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockReviewAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockReviewAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockReviewAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type unblockReviewAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockReviewAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockReviewAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockReviewAuthorResponseSuccess = (unblockReviewAuthorResponse200) & {
+  headers: Headers;
+};
+export type unblockReviewAuthorResponseError = (unblockReviewAuthorResponse400 | unblockReviewAuthorResponse401 | unblockReviewAuthorResponse403 | unblockReviewAuthorResponse404 | unblockReviewAuthorResponse409 | unblockReviewAuthorResponse500 | unblockReviewAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type unblockReviewAuthorResponse = (unblockReviewAuthorResponseSuccess | unblockReviewAuthorResponseError)
+
+export const getUnblockReviewAuthorUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/unblock-author`
+}
+
+/**
+ * @summary Restore the review author's course communication (owner or administrator)
+ */
+export const unblockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<unblockReviewAuthorResponse> => {
+
+  const res = await fetch(getUnblockReviewAuthorUrl(reviewId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockReviewAuthorResponse
 }
 
 
