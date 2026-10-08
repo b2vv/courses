@@ -85,6 +85,7 @@ reason показує походження — Lo17). Перевірку G6 до
 
 | Зріз | Зміст | Рядки | Доказ |
 |---|---|---|---|
+| LR0 | G8: `Enroll`/`StartPurchase` відмовляють адміну (новий код у `ErrorCode`, напр. `enrollment_admin_not_learner`, 409 — звірити наявні); UI ховає запис/покупку для адміна; **Rt05 переписати на студента-покупця** (зараз адмін купує й рецензує); grep e2e на інші admin-як-учасник | Lo18, Lo19 | unit + contract + integration; повний `make e2e-local` (зміна злитої поведінки enrollment) |
 | LR1 | OpenAPI (огляд + block-author + `authorBlocked`) + генерація | Lo07, Lo14 (контракт) | `make check-generated`, contract-тести |
 | LR2 | Backend огляду: порт, SQL, сервіс, HTTP | Lo01–Lo09 | integration (Postgres) + contract |
 | LR3 | Backend блоку з черги + G6 у ростері + `authorBlocked` | Lo12–Lo17 | integration + contract |
