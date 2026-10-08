@@ -275,6 +275,11 @@ func TestAdministratorIsNeverALearner(t *testing.T) {
 		if store.createMembershipCalls != 0 {
 			t.Fatalf("grant wrote membership: calls=%d want=0", store.createMembershipCalls)
 		}
+		// Role is checked before the reason: an admin recipient with an empty reason still fails
+		// as admin_not_learner, not grant_invalid.
+		if _, err := service.GrantCourse(context.Background(), admin, userID, courseID, ""); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("grant with empty reason error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
 	})
 }
 
