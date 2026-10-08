@@ -255,7 +255,12 @@ ADR, обов'язкові перед відповідними шарами: `00
    тест-процесу, P05 — рухома ціль, бо перша сторінка грає далі) — усі закриті test-only, датовано в
    `docs/discussion/report.md` §5 і `docs/playback/report.md` §6. Час: pre-browser ≈16.5 хв (Go без
    кешу), браузер ≈2.4× strong-host → зелений ран ≈38–40 хв; рішення — `timeout-minutes: 45`, один
-   ран на зміну (`push` лише `main` + `pull_request`); follow-up K12 — Go build-кеш.
+   ран на зміну (`push` лише `main` + `pull_request`). **Закрито 2026-10-07: ран 5 (37677792282) —
+   перший повний зелений CI з 09-11, 40m16s** (pre-browser ≈15 хв, Install browser 6m19, Browser
+   tests 18m49 — 101 passed, ×1.5 проти strong-host); PR #9/#10/#11 злиті (`ba53961`). **K12
+   (рішення власника):** CI на кожен коміт PR — лише легкі кроки з Go-кешем і per-PR concurrency,
+   таймаут назад до 30; e2e в CI — на теги `v*.*.0` і `workflow_dispatch`; без pre-push; локальний
+   ordered `make check` — авторитетний гейт фаз (AGENDA K12).
 6. **e2e config-drift усередині suite — закрито 2026-10-07 (AGENDA K11), profile-drift лишається.** Bare
    `docker compose` у специ резолвились у base-конфіг і перестворювали api/nginx/frontend посеред
    overlay-suite (CSP report-only→enforcing, api без WayForPay-стаба). Фікс: рецепт `e2e` експортує
