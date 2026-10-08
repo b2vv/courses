@@ -1,0 +1,46 @@
+# Local payment mock. Runs the offline WayForPay stub (the same one the e2e suite uses) and points
+# the API and the frontend at it, so a purchase can be clicked through end to end on a local stack
+# without touching the real WayForPay sandbox. The live sandbox flow was already proven once in the
+# payment phase; this is for day-to-day local verification.
+#
+# Combine with the base stack or the dev stack:
+#   make up-stub    # production-like local stack + payment stub
+#   make dev-stub   # hot-reload dev stack + payment stub
+#
+# The stub records each checkout and answers CHECK_STATUS with a signed "Approved", so a started
+# purchase settles to paid once the app polls its status. The merchant/secret below are mock values
+# shared by the API and the stub; they never reach the real provider.
+services:
+  api:
+    environment:
+      WAYFORPAY_MERCHANT_ACCOUNT: local_stub_merchant
+      WAYFORPAY_SECRET_KEY: local-stub-secret
+      WAYFORPAY_MERCHANT_DOMAIN: localhost
+      PUBLIC_BASE_URL: http://localhost:8080
+      WAYFORPAY_PAY_URL: http://localhost:8090/pay
+      WAYFORPAY_STATUS_URL: http://wayforpay-stub:8080/api
+    depends_on:
+      wayforpay-stub: { condition: service_healthy }
+  frontend:
+    # purchase-repository.ts accepts a non-production (http) pay host only when the bundle was built
+    # with this set; the production build (make up-stub) reads the build arg, the dev server (make
+    # dev-stub) reads the environment. Setting both covers either base stack.
+    environment:
+      PUBLIC_WAYFORPAY_PAY_HOST: localhost
+    build:
+      args:
+        PUBLIC_WAYFORPAY_PAY_HOST: localhost
+  wayforpay-stub:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: frontend/e2e/wayforpay-stub/Dockerfile
+    environment:
+      WAYFORPAY_MERCHANT_ACCOUNT: local_stub_merchant
+      WAYFORPAY_SECRET_KEY: local-stub-secret
+    ports: ['127.0.0.1:8090:8080']
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', '--max-time', '3', 'http://127.0.0.1:8080/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 15
