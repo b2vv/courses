@@ -10,8 +10,9 @@ row-by-row report is LR6; this file records each slice as it closes.
 |---|---|---|
 | LR0 | done 2026-10-08 | `43fabc9`, `26830a5`, `4a7166c`, `87753f8` |
 | LR1 | done 2026-10-08 | `e7214ae`, `2f4ae01` |
-| LR2 | in progress | — |
-| LR3–LR6 | pending | — |
+| LR2 | done 2026-10-08 | `dcbabf6` |
+| LR3 | next | — |
+| LR4–LR6 | pending | — |
 
 ## LR0 — G8: an administrator is never a learner
 
@@ -83,3 +84,38 @@ same refusal LR3's block-author needs for an author who is not a member.
 
 **Next.** LR2 — backend of the overview: port, SQL (same progress formula as the
 roster), service, HTTP. integration (Postgres) + contract.
+
+## LR2 — learner overview backend
+
+**What.** `GrantRepository.Learners` reads the overview in two steps: a keyset page
+of users ordered by `(lower(display_name), user_id)`, then the visible course detail
+for that page. The per-member progress percent is a single shared SQL fragment
+(`progressJoins`/`progressExpr`) that `Roster`, `MyMemberships` and `Learners` all
+use, so Lo02 cannot drift from the roster (the plan's "shared fragment" over a DB
+function, since the phase adds no migration). A row carries only the viewer's visible
+courses, their state and progress, and `lastActivityAt = max(lesson_progress.updated_at)`
+(null without progress); no email (G3); a deleted account is anonymised to `""`. The
+service separates the instructor view (own courses) from the admin view (every course,
+administrator only); an instructor filtering by a course they do not teach — or by an
+unknown course — is refused `learner_course_forbidden`, not told whether it exists.
+
+**Verification (measured, 2026-10-08).** unit `TestLearnersScopesAuthorizesAndClampsLimit`
+(scope, authz, limit clamp, filter passthrough). contract in `TestEnrollmentHTTPMatchesOpenAPI`
+(page shape with no email, malformed-query rejection, foreign-course 403, student-on-admin
+403). integration `Lo01-Lo09 …` against Postgres (scoping, aggregation, progress equals the
+roster's, revoked excluded, `lastActivityAt`, keyset stable when a learner becomes visible
+between pages, admin breadth, state/name/course filters). `go build ./...`, `go test ./...`
+and the **full `make integration`** green; `Roster`/`MyMemberships` stayed green through the
+shared-fragment refactor.
+
+**LR0 follow-up closed here.** The full `make integration` surfaced that `L2b` asserted an
+administrator could self-enrol, which G8 forbids. `go test ./...` and the browser e2e do not
+run the integration-tagged suite, so it passed LR0's gate; the case now asserts
+`admin_not_learner`. Lesson recorded: an enrolment/membership change runs `make integration`
+in the same slice, not only `go test` and e2e.
+
+**Next.** LR3 — backend of the block-from-queue: `AuthorOf(kind, id)`, `BlockAuthor`/
+`UnblockAuthor` over the same `transitionMembership`, G6 in both the queue and roster paths,
+and `authorBlocked` on `ModerationQueueItem` (schema + handler + Lo14), deferred from LR1.
+integration + contract. LR3's block-author inherits the 409 `grant_transition_invalid`
+mapping added in `2f4ae01`.
