@@ -8,8 +8,10 @@ export function ReviewModerationRow({
   item,
   busy,
   admin,
+  authorPending,
   onDismiss,
   onRemove,
+  onToggleAuthorBlock,
 }: {
   readonly item: ModerationQueueItem & {
     readonly kind: 'review';
@@ -17,8 +19,10 @@ export function ReviewModerationRow({
   };
   readonly busy: boolean;
   readonly admin: boolean;
+  readonly authorPending: boolean;
   readonly onDismiss: () => void;
   readonly onRemove: () => void;
+  readonly onToggleAuthorBlock: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -40,6 +44,15 @@ export function ReviewModerationRow({
               {t('teach.removeReview')}
             </Button>
           ) : null}
+          {/* isPending (per row), not isDisabled: the native disabled would drop focus to <body>
+              while the membership transition runs (B-L7b.1). */}
+          <Button
+            variant={item.authorBlocked ? 'secondary' : 'danger'}
+            isPending={authorPending}
+            onPress={onToggleAuthorBlock}
+          >
+            {t(item.authorBlocked ? 'teach.unblockAuthor' : 'teach.blockAuthor')}
+          </Button>
         </div>
       </article>
     </li>

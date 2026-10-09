@@ -164,7 +164,7 @@ func (fake *fakeRepository) ListModerationQueue(context.Context, string, string,
 		items[i] = ports.ModerationQueueItem{Kind: "comment", ID: record.Comment.ID, DisplayName: record.DisplayName, Body: record.Comment.Body, CreatedAt: record.Comment.CreatedAt, OpenReports: item.OpenReports, LessonID: &record.Comment.LessonID, LessonTitle: &record.LessonTitle}
 	}
 	stars := 5
-	items = append(items, ports.ModerationQueueItem{Kind: "review", ID: discussionReview, DisplayName: stringPointer("Review author"), Stars: &stars, Body: "a sufficiently long review body", CreatedAt: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), OpenReports: 1})
+	items = append(items, ports.ModerationQueueItem{Kind: "review", ID: discussionReview, DisplayName: stringPointer("Review author"), Stars: &stars, Body: "a sufficiently long review body", CreatedAt: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), OpenReports: 1, AuthorBlocked: true})
 	return ports.ModerationQueuePage{Items: items, NextCursor: fake.queue.NextCursor}, nil
 }
 
@@ -747,6 +747,7 @@ func TestI03ModerationContracts(t *testing.T) {
 				Review *struct {
 					Stars int `json:"stars"`
 				} `json:"review"`
+				AuthorBlocked bool `json:"authorBlocked"`
 			} `json:"items"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
@@ -754,6 +755,14 @@ func TestI03ModerationContracts(t *testing.T) {
 		}
 		if len(body.Items) != 2 || body.Items[0].Kind != "comment" || body.Items[0].Comment == nil || body.Items[0].Comment.LessonTitle != "Lesson one" || body.Items[1].Kind != "review" || body.Items[1].Review == nil || body.Items[1].Review.Stars != 5 {
 			t.Fatalf("items=%+v", body.Items)
+		}
+		// Lo14: authorBlocked carries the state (the review author is blocked here, the comment
+		// author is not), and the queue never exposes the author's identifier.
+		if body.Items[0].AuthorBlocked || !body.Items[1].AuthorBlocked {
+			t.Fatalf("authorBlocked: comment=%t review=%t", body.Items[0].AuthorBlocked, body.Items[1].AuthorBlocked)
+		}
+		if raw := response.Body.String(); strings.Contains(raw, "authorId") || strings.Contains(raw, "\"userId\"") {
+			t.Fatalf("moderation queue leaked an author identifier: %s", raw)
 		}
 	})
 	t.Run("invalid cursor", func(t *testing.T) {

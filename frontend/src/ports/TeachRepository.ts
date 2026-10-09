@@ -1,11 +1,20 @@
 import type {
   DismissReportsInput,
+  LearnerFilters,
+  LearnerPage,
+  LearnerScope,
   ModerationQueuePage,
   TeachCommentPage,
   TeachResult,
 } from '../domain/teach/teach';
 
 export interface TeachRepository {
+  listLearners(
+    scope: LearnerScope,
+    filters: LearnerFilters,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<LearnerPage>>;
   listCourseComments(
     courseId: string,
     cursor?: string,
@@ -16,6 +25,16 @@ export interface TeachRepository {
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<TeachResult<ModerationQueuePage>>;
+  blockAuthor(
+    kind: 'comment' | 'review',
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
+  unblockAuthor(
+    kind: 'comment' | 'review',
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
   dismissReport(
     commentId: string,
     input: DismissReportsInput,

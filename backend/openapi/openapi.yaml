@@ -217,6 +217,108 @@ paths:
         '409': { $ref: '#/components/responses/MembershipConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/learners:
+    get:
+      operationId: listTeachLearners
+      summary: List learners across the instructor's own courses
+      parameters:
+        - { name: courseId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: state, in: query, required: false, schema: { type: string, enum: [active, blocked] } }
+        - { name: q, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 80 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: A cursor page of learners; email addresses are not exposed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/LearnerPage' } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/learners:
+    get:
+      operationId: listAdminLearners
+      summary: List learners across every course for an administrator
+      parameters:
+        - { name: courseId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: state, in: query, required: false, schema: { type: string, enum: [active, blocked] } }
+        - { name: q, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 80 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: A cursor page of learners; email addresses are not exposed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/LearnerPage' } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/comments/{commentId}/block-author:
+    post:
+      operationId: blockCommentAuthor
+      summary: Block the author of a comment from course communication (owner or administrator)
+      parameters: [ { name: commentId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/comments/{commentId}/unblock-author:
+    post:
+      operationId: unblockCommentAuthor
+      summary: Restore the comment author's course communication (owner or administrator)
+      parameters: [ { name: commentId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/reviews/{reviewId}/block-author:
+    post:
+      operationId: blockReviewAuthor
+      summary: Block the author of a review from course communication (owner or administrator)
+      parameters: [ { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/teach/reviews/{reviewId}/unblock-author:
+    post:
+      operationId: unblockReviewAuthor
+      summary: Restore the review author's course communication (owner or administrator)
+      parameters: [ { name: reviewId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/learn/courses/{courseId}/report-lecturer:
     post:
       operationId: reportCourseLecturer
@@ -1885,12 +1987,15 @@ components:
     ModerationQueueItem:
       type: object
       additionalProperties: false
-      required: [kind, comment, review, openReports]
+      required: [kind, comment, review, openReports, authorBlocked]
       properties:
         kind: { type: string, enum: [comment, review] }
         comment: { allOf: [ { $ref: '#/components/schemas/TeachComment' } ], nullable: true }
         review: { allOf: [ { $ref: '#/components/schemas/Review' } ], nullable: true }
         openReports: { type: integer, minimum: 1 }
+        # The author's membership state on this item's course, so the queue can label the control
+        # "Block"/"Unblock". It is the state only, never the author's identifier (Lo14).
+        authorBlocked: { type: boolean }
     ModerationQueuePage:
       type: object
       additionalProperties: false
@@ -2149,7 +2254,7 @@ components:
           nullable: true
         canPurchase:
           type: boolean
-          description: "True when this actor can buy this published paid course: no active grant and not its owner. Administrators are deliberately not exempt."
+          description: "True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy."
     Course:
       type: object
       additionalProperties: false
@@ -2469,6 +2574,40 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RosterEntry' }
         nextCursor: { type: string, nullable: true }
+    LearnerCourse:
+      type: object
+      additionalProperties: false
+      required: [courseId, slug, title, state, progressPercent, enrolledAt]
+      properties:
+        courseId: { type: string, format: uuid }
+        slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        state: { type: string, enum: [active, blocked] }
+        progressPercent: { type: integer, minimum: 0, maximum: 100 }
+        enrolledAt: { type: string, format: date-time }
+    LearnerRow:
+      type: object
+      additionalProperties: false
+      required: [userId, displayName, lastActivityAt, courses]
+      properties:
+        userId: { type: string, format: uuid }
+        # Empty for a deleted account, which the UI renders anonymously (as the roster does).
+        displayName: { type: string, maxLength: 120 }
+        lastActivityAt: { type: string, format: date-time, nullable: true }
+        courses:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/LearnerCourse' }
+    LearnerPage:
+      type: object
+      additionalProperties: false
+      required: [entries, nextCursor]
+      properties:
+        entries:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/LearnerRow' }
+        nextCursor: { type: string, nullable: true }
     CourseGrant:
       type: object
       additionalProperties: false
@@ -2691,7 +2830,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, email_not_verified, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, membership_conflict, course_not_enrollable, enrollment_forbidden, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, report_own_person, report_invalid, report_forbidden, report_already_open, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, email_not_verified, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, membership_conflict, course_not_enrollable, enrollment_forbidden, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, admin_not_learner, learner_course_forbidden, grant_transition_invalid, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, report_own_person, report_invalid, report_forbidden, report_already_open, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

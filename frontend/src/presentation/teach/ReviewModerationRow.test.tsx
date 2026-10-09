@@ -8,6 +8,7 @@ const item = {
   kind: 'review' as const,
   comment: null,
   openReports: 2,
+  authorBlocked: false,
   review: {
     id: '75000000-0000-4000-8000-000000000001',
     authorDisplayName: 'Студентка',
@@ -20,19 +21,32 @@ const item = {
   },
 } satisfies ModerationQueueItem;
 
-function renderRow(admin: boolean, onDismiss = rs.fn(), onRemove = rs.fn()) {
+function renderRow(
+  admin: boolean,
+  overrides: Partial<Pick<ModerationQueueItem, 'authorBlocked'>> = {},
+  handlers: {
+    onDismiss?: () => void;
+    onRemove?: () => void;
+    onToggleAuthorBlock?: () => void;
+  } = {},
+) {
+  const onDismiss = handlers.onDismiss ?? rs.fn();
+  const onRemove = handlers.onRemove ?? rs.fn();
+  const onToggleAuthorBlock = handlers.onToggleAuthorBlock ?? rs.fn();
   render(
     <ul>
       <ReviewModerationRow
-        item={item}
+        item={{ ...item, ...overrides }}
         busy={false}
         admin={admin}
+        authorPending={false}
         onDismiss={onDismiss}
         onRemove={onRemove}
+        onToggleAuthorBlock={onToggleAuthorBlock}
       />
     </ul>,
   );
-  return { onDismiss, onRemove };
+  return { onDismiss, onRemove, onToggleAuthorBlock };
 }
 
 describe('teach queue review row', () => {
@@ -55,5 +69,18 @@ describe('teach queue review row', () => {
     const admin = renderRow(true);
     await userEvent.click(screen.getByRole('button', { name: 'Зняти' }));
     expect(admin.onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks the review author from the queue (Lo13)', async () => {
+    const owner = renderRow(false, { authorBlocked: false });
+    expect(screen.queryByRole('button', { name: 'Розблокувати автора' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Заблокувати автора' }));
+    expect(owner.onToggleAuthorBlock).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers unblock when the author is already blocked', () => {
+    renderRow(false, { authorBlocked: true });
+    expect(screen.getByRole('button', { name: 'Розблокувати автора' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Заблокувати автора' })).toBeNull();
   });
 });

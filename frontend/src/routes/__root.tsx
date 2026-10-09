@@ -143,10 +143,14 @@ function Layout() {
   if (surface === 'admin' && session.data != null) {
     const viewer = session.data;
     const navItems: AdminNavItem[] = onTeachPath
-      ? [{ to: '/teach', label: t('common.navModeration'), exact: true }]
+      ? [
+          { to: '/teach', label: t('common.navModeration'), exact: true },
+          { to: '/teach/learners', label: t('common.navLearners') },
+        ]
       : [
           { to: '/admin', label: t('common.navCourses'), exact: true },
           { to: '/admin/participant-reports', label: t('common.navParticipantReports') },
+          { to: '/admin/learners', label: t('common.navLearners') },
           ...(canAdministerAccounts(viewer)
             ? [{ to: '/admin/users', label: t('adminUsers.title') }]
             : []),

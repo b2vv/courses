@@ -112,8 +112,13 @@ test('restart retains seeded courses and Nginx never stores query or Referer', a
 
   const marker = 'courses-log-probe-' + Date.now();
   const since = new Date().toISOString();
+  // This flood must out-run the api zone's burst so at least one request is 429'd. The e2e stack
+  // runs a deliberately generous api burst (api-req.e2e.conf, 200) so the suite's legitimate
+  // one-IP traffic — purchase-wayforpay's callbacks + status polling above all — is never
+  // anti-abuse-429'd; so the deliberate-abuse probe here must exceed that, not the strict
+  // production burst (20). 300 concurrent misses clears 200 with margin.
   const burst = await Promise.all(
-    Array.from({ length: 60 }, () =>
+    Array.from({ length: 300 }, () =>
       request.get(`/api/v1/missing?probe=${marker}`, {
         headers: { Referer: `https://example.test/?probe=${marker}` },
       }),

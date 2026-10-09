@@ -79,10 +79,11 @@ type CourseCommentPage struct {
 }
 
 type QueueItem struct {
-	Kind        string
-	Comment     *ModerationComment
-	Review      *Review
-	OpenReports int
+	Kind          string
+	Comment       *ModerationComment
+	Review        *Review
+	OpenReports   int
+	AuthorBlocked bool
 }
 
 type QueuePage struct {
@@ -380,7 +381,7 @@ func (service *Service) Queue(ctx context.Context, actor Actor, courseID, cursor
 	}
 	result := QueuePage{NextCursor: page.NextCursor, Items: make([]QueueItem, len(page.Items))}
 	for i, item := range page.Items {
-		result.Items[i] = QueueItem{Kind: item.Kind, OpenReports: item.OpenReports}
+		result.Items[i] = QueueItem{Kind: item.Kind, OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
 		if item.Kind == "review" {
 			review := service.presentReview(ports.ReviewRecord{ID: item.ID, DisplayName: item.DisplayName, Stars: *item.Stars, Body: item.Body, CreatedAt: item.CreatedAt})
 			result.Items[i].Review = &review

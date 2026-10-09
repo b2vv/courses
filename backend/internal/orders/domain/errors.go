@@ -21,8 +21,13 @@ const (
 	ErrCheckoutAlreadyOpened  Error = "checkout_already_opened"
 	ErrGrantForbidden         Error = "grant_forbidden"
 	ErrGrantSelfForbidden     Error = "grant_self_forbidden"
+	ErrAdminNotLearner        Error = "admin_not_learner"
 	ErrDependencyUnavailable  Error = "dependency_unavailable"
 	ErrCourseModified         Error = "course_modified"
 	ErrEmailNotVerified       Error = "email_not_verified"
 	ErrInvalidCursor          Error = "roster_cursor_invalid"
+	ErrInvalidQuery           Error = "learner_query_invalid"
+	ErrLearnerCourseForbidden Error = "learner_course_forbidden"
+	ErrCommentNotFound        Error = "comment_not_found"
+	ErrReviewNotFound         Error = "review_not_found"
 )

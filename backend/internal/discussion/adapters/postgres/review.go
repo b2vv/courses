@@ -290,7 +290,9 @@ const moderationQueueQuery = `WITH queued AS (
    reports.open_count,reports.latest_report,NULL::uuid,NULL::text
  FROM discussion_reviews r JOIN (SELECT review_id,count(*) open_count,max(created_at) latest_report FROM discussion_review_reports WHERE dismissed_at IS NULL GROUP BY review_id) reports ON reports.review_id=r.id
  LEFT JOIN users u ON u.id=r.author_id AND u.deleted_at IS NULL WHERE r.course_id=$1::text::uuid AND r.removed_at IS NULL
- ) SELECT kind,id::text,course_id::text,author_id::text,display_name,stars,body,created_at,open_count,latest_report,lesson_id::text,lesson_title FROM queued
+ ) SELECT kind,id::text,course_id::text,author_id::text,display_name,stars,body,created_at,open_count,latest_report,lesson_id::text,lesson_title,
+   EXISTS(SELECT 1 FROM course_grants g WHERE g.user_id=queued.author_id AND g.course_id=queued.course_id AND g.state='blocked') author_blocked
+ FROM queued
  WHERE ($2::int IS NULL OR (open_count,latest_report,kind,id) < ($2::int,$3::timestamptz,$4::text,$5::text::uuid))
  ORDER BY open_count DESC,latest_report DESC,kind DESC,id DESC LIMIT $6`
 
@@ -319,7 +321,7 @@ func (repository *Repository) ListModerationQueue(ctx context.Context, courseID,
 		var item ports.ModerationQueueItem
 		var display, lessonID, lessonTitle pgtype.Text
 		var stars pgtype.Int2
-		if err := rows.Scan(&item.Kind, &item.ID, &item.CourseID, &item.AuthorID, &display, &stars, &item.Body, &item.CreatedAt, &item.OpenReports, &item.LatestReport, &lessonID, &lessonTitle); err != nil {
+		if err := rows.Scan(&item.Kind, &item.ID, &item.CourseID, &item.AuthorID, &display, &stars, &item.Body, &item.CreatedAt, &item.OpenReports, &item.LatestReport, &lessonID, &lessonTitle, &item.AuthorBlocked); err != nil {
 			return ports.ModerationQueuePage{}, persistenceError(err)
 		}
 		if display.Valid {

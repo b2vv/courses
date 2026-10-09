@@ -241,6 +241,181 @@ func TestGrantCourseReinstatesOnlyRevokedMembership(t *testing.T) {
 	}
 }
 
+// Lo18 (G8): an administrator is never a learner. Enrol, StartPurchase and GrantCourse-to-an-admin
+// all refuse with the one named code before any membership or order is written.
+func TestAdministratorIsNeverALearner(t *testing.T) {
+	admin := application.Actor{UserID: adminID, Administrator: true, EmailVerified: true}
+	t.Run("admin cannot enrol", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Enroll(context.Background(), admin, courseID); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("enrol error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createMembershipCalls != 0 {
+			t.Fatalf("enrol wrote membership: calls=%d want=0", store.createMembershipCalls)
+		}
+	})
+	t.Run("admin cannot start a purchase", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.StartPurchase(context.Background(), admin, courseID, "idem-1"); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("purchase error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("purchase wrote order: calls=%d want=0", store.createCalls)
+		}
+	})
+	t.Run("an administrator cannot be granted a course", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.recipientIsAdmin = true
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.GrantCourse(context.Background(), admin, userID, courseID, "support decision"); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("grant error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		if store.createMembershipCalls != 0 {
+			t.Fatalf("grant wrote membership: calls=%d want=0", store.createMembershipCalls)
+		}
+		// Role is checked before the reason: an admin recipient with an empty reason still fails
+		// as admin_not_learner, not grant_invalid.
+		if _, err := service.GrantCourse(context.Background(), admin, userID, courseID, ""); !errors.Is(err, domain.ErrAdminNotLearner) {
+			t.Fatalf("grant with empty reason error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+	})
+}
+
+func TestLearnersScopesAuthorizesAndClampsLimit(t *testing.T) {
+	instructor := application.Actor{UserID: userID}
+	admin := application.Actor{UserID: adminID, Administrator: true}
+
+	t.Run("admin scope requires an administrator", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), application.Actor{UserID: userID}, true, "", "", "", "", 0); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+			t.Fatalf("non-admin admin scope err=%v", err)
+		}
+	})
+
+	t.Run("admin scope passes an administrator filter and clamps the limit", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), admin, true, "", "blocked", "ann", "", 500); err != nil {
+			t.Fatalf("admin learners err=%v", err)
+		}
+		if !store.learnerFilter.Administrator || store.learnerFilter.ViewerID != "" || store.learnerFilter.State != "blocked" || store.learnerFilter.Query != "ann" || store.learnerLimit != 100 {
+			t.Fatalf("admin filter=%#v limit=%d", store.learnerFilter, store.learnerLimit)
+		}
+	})
+
+	t.Run("instructor scope views own courses and defaults the limit", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, "", "", "", "", 0); err != nil {
+			t.Fatalf("instructor learners err=%v", err)
+		}
+		if store.learnerFilter.Administrator || store.learnerFilter.ViewerID != userID || store.learnerLimit != 20 {
+			t.Fatalf("instructor filter=%#v limit=%d", store.learnerFilter, store.learnerLimit)
+		}
+	})
+
+	t.Run("instructor filtering by an owned course passes it through", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: userID}
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); err != nil {
+			t.Fatalf("own course err=%v", err)
+		}
+		if store.learnerFilter.CourseID != courseID {
+			t.Fatalf("course filter=%q", store.learnerFilter.CourseID)
+		}
+	})
+
+	t.Run("instructor filtering by another course is refused", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: "someone-else"}
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); !errors.Is(err, domain.ErrLearnerCourseForbidden) {
+			t.Fatalf("foreign course err=%v", err)
+		}
+	})
+
+	t.Run("instructor filtering by an unknown course is refused, not revealed", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.enrollmentErr = domain.ErrCourseNotEnrollable
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.Learners(context.Background(), instructor, false, courseID, "", "", "", 20); !errors.Is(err, domain.ErrLearnerCourseForbidden) {
+			t.Fatalf("unknown course err=%v", err)
+		}
+	})
+}
+
+// Lo12-Lo17: blocking from the queue resolves the author and course, then runs the same membership
+// transition as the roster — one audit, an origin reason — and refuses unknown items, strangers and
+// non-members by name.
+func TestBlockAuthorFromQueueReusesTheMembershipTransition(t *testing.T) {
+	admin := application.Actor{UserID: adminID, Administrator: true}
+
+	t.Run("blocks the comment author with a moderation-origin reason", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = membership(t, domain.GrantSelf, domain.GrantActive)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		grant, err := service.BlockAuthor(context.Background(), admin, "comment", "comment-1")
+		if err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("block author grant=%#v err=%v", grant, err)
+		}
+		if store.authorKind != "comment" || store.authorID != "comment-1" {
+			t.Fatalf("AuthorOf called with kind=%q id=%q", store.authorKind, store.authorID)
+		}
+		if store.membershipAction != "block" || store.membershipReason != "moderation_queue:comment:comment-1" {
+			t.Fatalf("audit action=%q reason=%q", store.membershipAction, store.membershipReason)
+		}
+	})
+
+	t.Run("unblocks the review author", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = membership(t, domain.GrantSelf, domain.GrantBlocked)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		grant, err := service.UnblockAuthor(context.Background(), admin, "review", "review-9")
+		if err != nil || grant.State() != domain.GrantActive {
+			t.Fatalf("unblock author grant=%#v err=%v", grant, err)
+		}
+		if store.membershipReason != "moderation_queue:review:review-9" {
+			t.Fatalf("audit reason=%q", store.membershipReason)
+		}
+	})
+
+	t.Run("an unknown item is refused by name", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorErr = domain.ErrCommentNotFound
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), admin, "comment", "missing"); !errors.Is(err, domain.ErrCommentNotFound) {
+			t.Fatalf("unknown comment err=%v", err)
+		}
+	})
+
+	t.Run("a stranger to the course is forbidden (G6)", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: "another-instructor"}
+		store.membership = membership(t, domain.GrantSelf, domain.GrantActive)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), application.Actor{UserID: "stranger"}, "comment", "c"); !errors.Is(err, domain.ErrEnrollmentForbidden) {
+			t.Fatalf("stranger block err=%v", err)
+		}
+	})
+
+	t.Run("an author who is not a member cannot be blocked (G8 construction)", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.authorUserID, store.authorCourseID = userID, courseID
+		store.membership = nil
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.BlockAuthor(context.Background(), admin, "comment", "c"); !errors.Is(err, domain.ErrGrantTransitionInvalid) {
+			t.Fatalf("non-member author err=%v", err)
+		}
+	})
+}
+
 func TestEnrollmentWritesTransitionsAndPreservesNoOps(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -457,6 +632,18 @@ type fakeStore struct {
 	rosterLimit           int
 	memberships           []ports.MembershipCard
 	membershipsUserID     string
+	recipientIsAdmin      bool
+	learnerPage           ports.LearnerPage
+	learnerErr            error
+	learnerFilter         ports.LearnerFilter
+	learnerCursor         string
+	learnerLimit          int
+	enrollmentErr         error
+	authorUserID          string
+	authorCourseID        string
+	authorErr             error
+	authorKind            string
+	authorID              string
 }
 
 type fakePaymentProvider struct {
@@ -508,6 +695,9 @@ func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.Course
 }
 
 func (store *fakeStore) CourseForEnrollment(context.Context, string) (ports.EnrollmentFacts, error) {
+	if store.enrollmentErr != nil {
+		return ports.EnrollmentFacts{}, store.enrollmentErr
+	}
 	if store.enrollment.Status == "" {
 		return ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: adminID}, nil
 	}
@@ -553,6 +743,23 @@ func (store *fakeStore) MarkCheckoutOpened(_ context.Context, userID, orderID st
 
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+
+func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
+	return store.recipientIsAdmin, nil
+}
+
+func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
+	store.learnerFilter = filter
+	store.learnerCursor = cursor
+	store.learnerLimit = limit
+	return store.learnerPage, store.learnerErr
+}
+
+func (store *fakeStore) AuthorOf(_ context.Context, kind, id string) (string, string, error) {
+	store.authorKind = kind
+	store.authorID = id
+	return store.authorUserID, store.authorCourseID, store.authorErr
 }
 
 func (store *fakeStore) MyMemberships(_ context.Context, userID string) ([]ports.MembershipCard, error) {

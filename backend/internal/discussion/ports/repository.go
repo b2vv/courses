@@ -93,18 +93,19 @@ type ReviewPage struct {
 }
 
 type ModerationQueueItem struct {
-	Kind         string
-	ID           string
-	CourseID     string
-	AuthorID     string
-	DisplayName  *string
-	Stars        *int
-	Body         string
-	CreatedAt    time.Time
-	OpenReports  int
-	LatestReport time.Time
-	LessonID     *string
-	LessonTitle  *string
+	Kind          string
+	ID            string
+	CourseID      string
+	AuthorID      string
+	DisplayName   *string
+	Stars         *int
+	Body          string
+	CreatedAt     time.Time
+	OpenReports   int
+	LatestReport  time.Time
+	LessonID      *string
+	LessonTitle   *string
+	AuthorBlocked bool
 }
 
 type ModerationQueuePage struct {
