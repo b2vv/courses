@@ -21,6 +21,7 @@ test('W01/W04/W05/W07/W08 loads pages and invalidates teach and learn after mode
   let commentReads = 0;
   let queueReads = 0;
   const repository: TeachRepository = {
+    listLearners: async () => ({ ok: true, value: { entries: [], nextCursor: null } }),
     listCourseComments: async () => {
       commentReads += 1;
       return { ok: true, value: page };

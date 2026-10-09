@@ -1,6 +1,8 @@
 import {
   dismissCommentReports,
+  listAdminLearners,
   listTeachCourseComments,
+  listTeachLearners,
   listTeachModerationQueue,
   removeLessonComment,
   dismissCourseReviewReports,
@@ -12,6 +14,9 @@ import type { TransportOptions, WireResponse } from './transport';
 import type { TeachRepository } from '../../ports/TeachRepository';
 import type {
   DismissReportsInput,
+  LearnerCourse,
+  LearnerPage,
+  LearnerRow,
   ModerationQueuePage,
   TeachComment,
   TeachCommentPage,
@@ -88,6 +93,45 @@ function queuePage(value: unknown): value is ModerationQueuePage {
     })
   );
 }
+function learnerCourse(value: unknown): value is LearnerCourse {
+  return (
+    record(value) &&
+    uuid(value.courseId) &&
+    typeof value.slug === 'string' &&
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.slug) &&
+    typeof value.title === 'string' &&
+    value.title.length >= 1 &&
+    value.title.length <= 200 &&
+    (value.state === 'active' || value.state === 'blocked') &&
+    typeof value.progressPercent === 'number' &&
+    Number.isInteger(value.progressPercent) &&
+    value.progressPercent >= 0 &&
+    value.progressPercent <= 100 &&
+    date(value.enrolledAt)
+  );
+}
+function learnerRow(value: unknown): value is LearnerRow {
+  return (
+    record(value) &&
+    uuid(value.userId) &&
+    // "" is the anonymised deleted account — a valid, expected value, not a parse failure.
+    typeof value.displayName === 'string' &&
+    value.displayName.length <= 120 &&
+    (value.lastActivityAt === null || date(value.lastActivityAt)) &&
+    Array.isArray(value.courses) &&
+    value.courses.length >= 1 &&
+    value.courses.every(learnerCourse)
+  );
+}
+function learnerPage(value: unknown): value is LearnerPage {
+  return (
+    record(value) &&
+    Array.isArray(value.entries) &&
+    value.entries.length <= 100 &&
+    value.entries.every(learnerRow) &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string')
+  );
+}
 function failure(code: TeachErrorCode): TeachResult<never> {
   return { ok: false, error: { code } };
 }
@@ -105,6 +149,13 @@ const readErrors = {
   401: ['authentication_required'],
   403: ['course_forbidden'],
   404: ['course_not_found'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+const learnerErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['course_forbidden', 'learner_course_forbidden'],
+  404: ['course_not_found'],
+  503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
 const dismissErrors = {
   400: ['invalid_request'],
@@ -136,6 +187,49 @@ const reviewRemoveErrors = {
 export function createApiTeachRepository(options: TransportOptions = {}): TeachRepository {
   const send = createApiTransport(options);
   return {
+    async listLearners(scope, filters, cursor, signal) {
+      const params = {
+        ...(filters.courseId === undefined ? {} : { courseId: filters.courseId }),
+        ...(filters.state === undefined ? {} : { state: filters.state }),
+        ...(filters.q === undefined || filters.q === '' ? {} : { q: filters.q }),
+        ...(cursor === undefined ? {} : { cursor }),
+        limit: 20,
+      };
+      const outcome = await send(
+        scope === 'admin' ? 'teach.learners.admin' : 'teach.learners.teach',
+        (init) =>
+          scope === 'admin' ? listAdminLearners(params, init) : listTeachLearners(params, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      if (outcome.status !== 200) return failure(namedError(outcome, learnerErrors));
+      if (!learnerPage(outcome.data)) return failure('invalid_response');
+      return {
+        ok: true,
+        value: {
+          // Explicit per-field mapping, not a pass-through: the frontend itself enforces Lo07
+          // (email never reaches the domain) rather than leaning on the contract alone. Any wire
+          // field the schema does not name — email above all — is dropped here.
+          entries: outcome.data.entries.map((entry) => ({
+            userId: entry.userId,
+            displayName: entry.displayName,
+            lastActivityAt: entry.lastActivityAt,
+            courses: entry.courses.map((course) => ({
+              courseId: course.courseId,
+              slug: course.slug,
+              title: course.title,
+              state: course.state,
+              progressPercent: course.progressPercent,
+              enrolledAt: course.enrolledAt,
+            })),
+          })),
+          // Normalise an empty-string cursor to null: a Go handler emits "" for "no more pages",
+          // not null (the last-page sentinel bug class), and "Показати ще" keys off null.
+          nextCursor: outcome.data.nextCursor === '' ? null : outcome.data.nextCursor,
+        },
+      };
+    },
     async listCourseComments(courseId, cursor, signal) {
       const outcome = await send(
         'teach.comments.list',
