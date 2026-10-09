@@ -1,4 +1,6 @@
 import {
+  blockCommentAuthor,
+  blockReviewAuthor,
   dismissCommentReports,
   listAdminLearners,
   listTeachCourseComments,
@@ -7,6 +9,8 @@ import {
   removeLessonComment,
   dismissCourseReviewReports,
   removeCourseReview,
+  unblockCommentAuthor,
+  unblockReviewAuthor,
 } from './generated/courses';
 import { reviewSchema } from './course-schema';
 import { createApiTransport, unnamedStatusCode } from './transport';
@@ -84,6 +88,7 @@ function queuePage(value: unknown): value is ModerationQueuePage {
         return false;
       // A review row is validated as strictly as a comment row: its fields reach the queue UI directly
       // ('★'.repeat(stars) throws on a negative or infinite count).
+      if (typeof item.authorBlocked !== 'boolean') return false;
       return (
         (item.kind === 'comment' && comment(item.comment) && item.review === null) ||
         (item.kind === 'review' &&
@@ -91,6 +96,18 @@ function queuePage(value: unknown): value is ModerationQueuePage {
           reviewSchema.safeParse(item.review).success)
       );
     })
+  );
+}
+function membershipGrant(value: unknown): boolean {
+  return (
+    record(value) &&
+    uuid(value.id) &&
+    uuid(value.userId) &&
+    uuid(value.courseId) &&
+    typeof value.source === 'string' &&
+    (value.state === 'active' || value.state === 'blocked' || value.state === 'revoked') &&
+    date(value.grantedAt) &&
+    (value.grantedBy === null || uuid(value.grantedBy))
   );
 }
 function learnerCourse(value: unknown): value is LearnerCourse {
@@ -155,6 +172,17 @@ const learnerErrors = {
   401: ['authentication_required'],
   403: ['course_forbidden', 'learner_course_forbidden'],
   404: ['course_not_found'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
+// Block/unblock an author from the queue runs the roster's membership transition (Lo17), so its
+// refusals match: 403 on a stranger (G6), 409 when the target has no membership or an admin is the
+// author (grant_transition_invalid), 409 on a concurrent change, 404 on an unknown item.
+const authorBlockErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['enrollment_forbidden'],
+  404: ['comment_not_found', 'review_not_found'],
+  409: ['grant_transition_invalid', 'membership_conflict'],
   503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly TeachErrorCode[]>>;
 const dismissErrors = {
@@ -267,6 +295,33 @@ export function createApiTeachRepository(options: TransportOptions = {}): TeachR
           nextCursor: outcome.data.nextCursor === '' ? null : outcome.data.nextCursor,
         },
       };
+    },
+    async blockAuthor(kind, id, signal) {
+      const outcome = await send(
+        kind === 'comment' ? 'teach.comments.block-author' : 'teach.reviews.block-author',
+        (init) => (kind === 'comment' ? blockCommentAuthor(id, init) : blockReviewAuthor(id, init)),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      if (outcome.status !== 200) return failure(namedError(outcome, authorBlockErrors));
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
+    },
+    async unblockAuthor(kind, id, signal) {
+      const outcome = await send(
+        kind === 'comment' ? 'teach.comments.unblock-author' : 'teach.reviews.unblock-author',
+        (init) =>
+          kind === 'comment' ? unblockCommentAuthor(id, init) : unblockReviewAuthor(id, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as TeachErrorCode);
+      if (outcome.status !== 200) return failure(namedError(outcome, authorBlockErrors));
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
     },
     async dismissReport(commentId, input: DismissReportsInput, signal) {
       const outcome = await send(

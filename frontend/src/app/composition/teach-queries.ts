@@ -104,5 +104,27 @@ export function createTeachQueries(teach: TeachRepository) {
         },
         onSuccess: () => invalidateWorkspace(client),
       }),
+    blockAuthor: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: ({ kind, id }: { kind: 'comment' | 'review'; id: string }) =>
+          teach.blockAuthor(kind, id).then(unwrap),
+        // Re-read the queue either way: on success so authorBlocked flips, and on a concurrent
+        // change (409) so the stale state does not mislead the control (mirrors the roster).
+        onSuccess: () => invalidateWorkspace(client),
+        onError: (error) =>
+          error instanceof TeachQueryError && error.code === 'membership_conflict'
+            ? invalidateWorkspace(client)
+            : undefined,
+      }),
+    unblockAuthor: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: ({ kind, id }: { kind: 'comment' | 'review'; id: string }) =>
+          teach.unblockAuthor(kind, id).then(unwrap),
+        onSuccess: () => invalidateWorkspace(client),
+        onError: (error) =>
+          error instanceof TeachQueryError && error.code === 'membership_conflict'
+            ? invalidateWorkspace(client)
+            : undefined,
+      }),
   };
 }

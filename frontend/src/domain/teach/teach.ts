@@ -11,7 +11,11 @@ export type TeachErrorCode =
   | 'comment_not_found'
   | 'comment_forbidden'
   | 'review_not_found'
-  | 'review_moderation_forbidden';
+  | 'review_moderation_forbidden'
+  // Author block/unblock from the queue (shared with the roster's transition, Lo17).
+  | 'enrollment_forbidden'
+  | 'grant_transition_invalid'
+  | 'membership_conflict';
 
 export type TeachResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -49,6 +53,9 @@ export type ModerationQueueItem = {
     readonly editedAt: string | null;
   } | null;
   readonly openReports: number;
+  // Whether the item's author is blocked on the course, so the control reads Block / Unblock
+  // (Lo14: state only — the author's id is never in the response).
+  readonly authorBlocked: boolean;
 };
 
 export type ModerationQueuePage = {

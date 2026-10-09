@@ -30,6 +30,8 @@ test('W01/W04/W05/W07/W08 loads pages and invalidates teach and learn after mode
       queueReads += 1;
       return { ok: true, value: { items: [], nextCursor: null } };
     },
+    blockAuthor: async () => ({ ok: true, value: undefined }),
+    unblockAuthor: async () => ({ ok: true, value: undefined }),
     dismissReport: async () => {
       dismissed += 1;
       return { ok: true, value: undefined };

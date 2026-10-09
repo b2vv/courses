@@ -1,13 +1,55 @@
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import axe from 'axe-core';
-import type { AdminCourseTree } from '../src/adapters/api/generated/models';
+import type { AdminCourseTree, Comment } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
 
+const execute = promisify(execFile);
 const runNamespace = `e2e-learning-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const studentID = '40000000-0000-4000-8000-000000000001';
+
+function literal(value: string) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+// Fixture-only: seed progress so the student is review-eligible. Review and comment WRITES below
+// all take the production HTTP path; only this precondition uses Compose psql (as ratings.spec does).
+async function sql(statement: string) {
+  await execute('docker', [
+    'compose',
+    'exec',
+    '-T',
+    'postgres',
+    'psql',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-U',
+    'courses',
+    '-d',
+    'courses',
+    '-c',
+    statement,
+  ]);
+}
+// Put a comment or review into the moderation queue without a second logged-in member: the open
+// report is a fixture precondition (reporter is the instructor), exactly as ratings.spec seeds rows
+// it cannot make through a public account. The block path itself runs through the real UI + API.
+async function seedCommentReport(commentId: string) {
+  await sql(
+    `INSERT INTO discussion_comment_reports(comment_id,reporter_id) VALUES (${literal(commentId)}::uuid,${literal(instructorID)}::uuid) ON CONFLICT (comment_id,reporter_id) DO NOTHING`,
+  );
+}
+async function seedReportedReview(courseId: string, reviewId: string, body: string) {
+  await sql(
+    `INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES (${literal(reviewId)}::uuid,${literal(courseId)}::uuid,${literal(studentID)}::uuid,2,${literal(body)},0,1,now())`,
+  );
+  await sql(
+    `INSERT INTO discussion_review_reports(review_id,reporter_id) VALUES (${literal(reviewId)}::uuid,${literal(instructorID)}::uuid) ON CONFLICT (review_id,reporter_id) DO NOTHING`,
+  );
+}
 
 type CourseToken = { id: string; updatedAt: string };
 const published: CourseToken[] = [];
@@ -35,6 +77,7 @@ async function createCourse(
   baseURL: string,
   slug: string,
   title: string,
+  lessonId: string = randomUUID(),
 ): Promise<CourseToken> {
   const draft = {
     slug,
@@ -57,7 +100,7 @@ async function createCourse(
         {
           id: randomUUID(),
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: randomUUID(), title: `Урок ${runNamespace}`, description: '' }],
+          lessons: [{ id: lessonId, title: `Урок ${runNamespace}`, description: '' }],
         },
       ],
     },
@@ -67,6 +110,28 @@ async function createCourse(
   const result = token((await saved.json()) as object);
   drafts.push(result);
   return result;
+}
+
+async function publishComment(
+  request: APIRequestContext,
+  baseURL: string,
+  lessonId: string,
+  body: string,
+): Promise<string> {
+  const response = await request.post(`/api/v1/learn/lessons/${lessonId}/comments`, {
+    data: { body, positionMs: null },
+    headers: origin(baseURL),
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  const id = contractField<Comment>((await response.json()) as object, 'id');
+  if (typeof id !== 'string') throw new Error('Comment response must carry id');
+  return id;
+}
+
+function queueRow(page: Page, text: string) {
+  return page.getByRole('region', { name: 'Черга модерації' }).locator('article').filter({
+    hasText: text,
+  });
 }
 
 // Publish, then enrol the seeded student as an active member so the course has a learner to list.
@@ -204,6 +269,93 @@ test.describe('learner overview', () => {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       ).toBe(true);
+    } finally {
+      await instructor.close();
+      await admin.close();
+    }
+  });
+});
+
+test.describe('author block from the moderation queue', () => {
+  test('Lo12 blocks a comment author from the queue so they can no longer communicate', async ({
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const admin = await openAs(browser, baseURL, 'admin');
+    const instructor = await openAs(browser, baseURL, 'instructor');
+    const student = await openAs(browser, baseURL, 'student');
+    try {
+      const lessonId = randomUUID();
+      const course = await createCourse(
+        admin.request,
+        baseURL,
+        `${runNamespace}-lo12`,
+        `Lo12 ${runNamespace}`,
+        lessonId,
+      );
+      await publishWithLearner(admin.request, baseURL, course);
+      const body = `Lo12 student comment ${runNamespace}`;
+      const commentId = await publishComment(student.request, baseURL, lessonId, body);
+      await seedCommentReport(commentId);
+
+      const page = await instructor.newPage();
+      await page.goto(`/teach/courses/${course.id}`);
+      const row = queueRow(page, body);
+      await row.getByRole('button', { name: 'Заблокувати автора' }).click();
+      // The transition refetches the queue and the control flips to Unblock.
+      await expect(row.getByRole('button', { name: 'Розблокувати автора' })).toBeVisible();
+
+      // CanCommunicate: the blocked author can no longer post, but can still read (CanConsume).
+      const blocked = await student.request.post(`/api/v1/learn/lessons/${lessonId}/comments`, {
+        data: { body: `after block ${runNamespace}`, positionMs: null },
+        headers: origin(baseURL),
+      });
+      expect(blocked.status()).toBe(403);
+      expect(await blocked.text()).toContain('enrollment_blocked');
+      const read = await student.request.get(`/api/v1/learn/lessons/${lessonId}/comments`);
+      expect(read.status()).toBe(200);
+    } finally {
+      await student.close();
+      await instructor.close();
+      await admin.close();
+    }
+  });
+
+  test('Lo13 blocks a review author from the queue; the review stays visible', async ({
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const admin = await openAs(browser, baseURL, 'admin');
+    const instructor = await openAs(browser, baseURL, 'instructor');
+    try {
+      const slug = `${runNamespace}-lo13`;
+      const course = await createCourse(admin.request, baseURL, slug, `Lo13 ${runNamespace}`);
+      await publishWithLearner(admin.request, baseURL, course);
+      const reviewId = randomUUID();
+      const body = `Lo13 student review ${runNamespace}`;
+      await seedReportedReview(course.id, reviewId, body);
+
+      const page = await instructor.newPage();
+      await page.goto(`/teach/courses/${course.id}`);
+      const row = queueRow(page, body);
+      await row.getByRole('button', { name: 'Заблокувати автора' }).click();
+      await expect(row.getByRole('button', { name: 'Розблокувати автора' })).toBeVisible();
+
+      // The toggle must round-trip: the flipped control is itself clickable. A pending flag that
+      // never cleared once left Unblock inert and the block one-way (Courses 2 review, LR5).
+      await row.getByRole('button', { name: 'Розблокувати автора' }).click();
+      await expect(row.getByRole('button', { name: 'Заблокувати автора' })).toBeVisible();
+      // Re-block so the state under test is "blocked" for the visibility check below.
+      await row.getByRole('button', { name: 'Заблокувати автора' }).click();
+      await expect(row.getByRole('button', { name: 'Розблокувати автора' })).toBeVisible();
+
+      // Lo13: blocking the author does NOT remove the review — it stays in the public list.
+      const listed = await admin.request.get(`/api/v1/courses/${slug}/reviews`);
+      expect(listed.status()).toBe(200);
+      const reviews = (await listed.json()) as { items: ReadonlyArray<{ id: string }> };
+      expect(reviews.items.some((review) => review.id === reviewId)).toBe(true);
     } finally {
       await instructor.close();
       await admin.close();

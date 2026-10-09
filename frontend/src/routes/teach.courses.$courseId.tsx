@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
+import { useTranslation } from 'react-i18next';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { validEntityId } from '../domain/course/course';
@@ -60,11 +61,24 @@ function errorMessage(error: unknown): string | undefined {
       ? undefined
       : 'dependency_unavailable';
 }
+function authorErrorKey(code: string): string {
+  switch (code) {
+    case 'enrollment_forbidden':
+    case 'grant_transition_invalid':
+    case 'membership_conflict':
+    case 'comment_not_found':
+    case 'review_not_found':
+      return code;
+    default:
+      return 'generic';
+  }
+}
 function commentLabel(comment: TeachComment): string {
   return `${comment.author.displayName ?? 'Former participant'}: ${comment.body ?? 'Comment removed'}`;
 }
 
 function TeachCourseRoute() {
+  const { t } = useTranslation();
   const { teach } = Route.useRouteContext();
   const { enrollment } = Route.useRouteContext();
   const { identity } = Route.useRouteContext();
@@ -77,11 +91,29 @@ function TeachCourseRoute() {
   const remove = useMutation(teach.remove(queryClient));
   const dismissReview = useMutation(teach.dismissReview(queryClient));
   const removeReview = useMutation(teach.removeReview(queryClient));
+  const blockAuthor = useMutation(teach.blockAuthor(queryClient));
+  const unblockAuthor = useMutation(teach.unblockAuthor(queryClient));
   const block = useMutation(enrollment.block(queryClient));
   const unblock = useMutation(enrollment.unblock(queryClient));
   const reportStudent = useMutation(enrollment.reportStudent());
   const [actionError, setActionError] = useState<string>();
   const [rosterActionError, setRosterActionError] = useState<string>();
+  const [authorError, setAuthorError] = useState<string>();
+  // Per-row pending: authorActing only SCOPES the spinner to the acted row (keyed by the item id —
+  // the comment or review id, never the author's id, Lo14). The busy state itself comes from the
+  // mutation's isPending (see authorPending below), which falls back to false when the request
+  // settles — so authorActing needs no reset, exactly as CourseRoster's actedUserId. Dropping that
+  // multiplier left the flipped button stuck pending and unclickable (Courses 2 review, LR5).
+  const [authorActing, setAuthorActing] = useState<string>();
+  const runAuthor = async (kind: 'comment' | 'review', itemId: string, blocked: boolean) => {
+    setAuthorError(undefined);
+    setAuthorActing(itemId);
+    try {
+      await (blocked ? unblockAuthor : blockAuthor).mutateAsync({ kind, id: itemId });
+    } catch (error) {
+      setAuthorError(error instanceof TeachQueryError ? error.code : 'dependency_unavailable');
+    }
+  };
   const commentItems = useMemo(
     () => comments.data?.pages.flatMap((page) => page.comments) ?? [],
     [comments.data],
@@ -170,6 +202,9 @@ function TeachCourseRoute() {
           <p>Відкритих скарг немає.</p>
         ) : null}
         {actionError ? <p role="alert">{actionError}</p> : null}
+        {authorError ? (
+          <p role="alert">{t(`teach.authorBlock.errors.${authorErrorKey(authorError)}`)}</p>
+        ) : null}
         {queueItems.length > 0 ? (
           <ul aria-label="Черга модерації">
             {queueItems.map((item) =>
@@ -178,6 +213,10 @@ function TeachCourseRoute() {
                   key={item.comment.id}
                   item={item}
                   busy={dismiss.isPending || remove.isPending}
+                  authorPending={
+                    (blockAuthor.isPending || unblockAuthor.isPending) &&
+                    authorActing === item.comment.id
+                  }
                   onDismiss={(reason) =>
                     void run(() =>
                       dismiss.mutateAsync({ commentId: item.comment.id, input: { reason } }),
@@ -191,6 +230,9 @@ function TeachCourseRoute() {
                       }),
                     )
                   }
+                  onToggleAuthorBlock={() =>
+                    void runAuthor('comment', item.comment.id, item.authorBlocked)
+                  }
                 />
               ) : isReviewQueueItem(item) ? (
                 <ReviewModerationRow
@@ -198,6 +240,13 @@ function TeachCourseRoute() {
                   item={item}
                   busy={dismissReview.isPending || removeReview.isPending}
                   admin={identity.status === 'signed-in' && identity.user.role === 'admin'}
+                  authorPending={
+                    (blockAuthor.isPending || unblockAuthor.isPending) &&
+                    authorActing === item.review.id
+                  }
+                  onToggleAuthorBlock={() =>
+                    void runAuthor('review', item.review.id, item.authorBlocked)
+                  }
                   onDismiss={() =>
                     void run(() =>
                       dismissReview.mutateAsync({
@@ -256,14 +305,19 @@ function TeachCourseRoute() {
 function ModerationRow({
   item,
   busy,
+  authorPending,
   onDismiss,
   onRemove,
+  onToggleAuthorBlock,
 }: {
   readonly item: ModerationQueueItem & { readonly kind: 'comment'; readonly comment: TeachComment };
   readonly busy: boolean;
+  readonly authorPending: boolean;
   readonly onDismiss: (reason: string) => void;
   readonly onRemove: () => void;
+  readonly onToggleAuthorBlock: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <li>
       <article>
@@ -275,6 +329,15 @@ function ModerationRow({
           </Button>
           <Button variant="danger" isDisabled={busy || item.comment.removed} onPress={onRemove}>
             Прибрати коментар
+          </Button>
+          {/* isPending (per row), not isDisabled: a native disabled drops focus to <body> while the
+              membership transition runs (B-L7b.1). */}
+          <Button
+            variant={item.authorBlocked ? 'secondary' : 'danger'}
+            isPending={authorPending}
+            onPress={onToggleAuthorBlock}
+          >
+            {t(item.authorBlocked ? 'teach.unblockAuthor' : 'teach.blockAuthor')}
           </Button>
         </div>
       </article>
