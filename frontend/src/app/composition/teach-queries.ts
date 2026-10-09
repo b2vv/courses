@@ -1,13 +1,22 @@
 import { infiniteQueryOptions, mutationOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import type { TeachRepository } from '../../ports/TeachRepository';
-import type { DismissReportsInput, TeachErrorCode, TeachResult } from '../../domain/teach/teach';
+import type {
+  DismissReportsInput,
+  LearnerFilters,
+  LearnerScope,
+  TeachErrorCode,
+  TeachResult,
+} from '../../domain/teach/teach';
 
 export function teachCourseCommentsQueryKey(courseId: string) {
   return ['teach', 'comments', courseId] as const;
 }
 export function teachModerationQueueQueryKey(courseId: string) {
   return ['teach', 'moderation', courseId] as const;
+}
+export function teachLearnersQueryKey(scope: LearnerScope, filters: LearnerFilters) {
+  return ['teach', 'learners', scope, filters] as const;
 }
 export class TeachQueryError extends Error {
   readonly code: TeachErrorCode;
@@ -29,6 +38,14 @@ export function createTeachQueries(teach: TeachRepository) {
   };
   return {
     teach,
+    learners: (scope: LearnerScope, filters: LearnerFilters) =>
+      infiniteQueryOptions({
+        queryKey: teachLearnersQueryKey(scope, filters),
+        initialPageParam: undefined as string | undefined,
+        queryFn: ({ signal, pageParam }) =>
+          teach.listLearners(scope, filters, pageParam, signal).then(unwrap),
+        getNextPageParam: (page) => page.nextCursor ?? undefined,
+      }),
     courseComments: (courseId: string) =>
       infiniteQueryOptions({
         queryKey: teachCourseCommentsQueryKey(courseId),

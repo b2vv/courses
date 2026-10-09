@@ -18,6 +18,7 @@ import { Route as TeachRouteImport } from './routes/teach'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminSplatRouteImport } from './routes/admin.$'
+import { Route as AdminLearnersRouteImport } from './routes/admin.learners'
 import { Route as AdminParticipantReportsRouteImport } from './routes/admin.participant-reports'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
@@ -26,6 +27,7 @@ import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as PasswordForgotRouteImport } from './routes/password.forgot'
 import { Route as PasswordResetRouteImport } from './routes/password.reset'
 import { Route as SettingsAccountRouteImport } from './routes/settings.account'
+import { Route as TeachLearnersRouteImport } from './routes/teach.learners'
 import { Route as AdminCoursesCourseIdRouteImport } from './routes/admin.courses.$courseId'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin.users.index'
 import { Route as EmailChangeConfirmRouteImport } from './routes/email.change.confirm'
@@ -76,6 +78,11 @@ const AdminSplatRoute = AdminSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminLearnersRoute = AdminLearnersRouteImport.update({
+  id: '/learners',
+  path: '/learners',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminParticipantReportsRoute = AdminParticipantReportsRouteImport.update({
   id: '/participant-reports',
   path: '/participant-reports',
@@ -116,6 +123,11 @@ const SettingsAccountRoute = SettingsAccountRouteImport.update({
   path: '/settings/account',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeachLearnersRoute = TeachLearnersRouteImport.update({
+  id: '/learners',
+  path: '/learners',
+  getParentRoute: () => TeachRoute,
+} as any)
 const AdminCoursesCourseIdRoute = AdminCoursesCourseIdRouteImport.update({
   id: '/courses/$courseId',
   path: '/courses/$courseId',
@@ -146,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/teach': typeof TeachRouteWithChildren
   '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
@@ -153,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
   '/settings/account': typeof SettingsAccountRoute
+  '/teach/learners': typeof TeachLearnersRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -168,6 +182,7 @@ export interface FileRoutesByTo {
   '/teach': typeof TeachRouteWithChildren
   '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
@@ -175,6 +190,7 @@ export interface FileRoutesByTo {
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
   '/settings/account': typeof SettingsAccountRoute
+  '/teach/learners': typeof TeachLearnersRoute
   '/admin': typeof AdminIndexRoute
   '/courses': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -192,6 +208,7 @@ export interface FileRoutesById {
   '/teach': typeof TeachRouteWithChildren
   '/verify-email': typeof VerifyEmailRoute
   '/admin/$': typeof AdminSplatRoute
+  '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
@@ -199,6 +216,7 @@ export interface FileRoutesById {
   '/password/forgot': typeof PasswordForgotRoute
   '/password/reset': typeof PasswordResetRoute
   '/settings/account': typeof SettingsAccountRoute
+  '/teach/learners': typeof TeachLearnersRoute
   '/admin/': typeof AdminIndexRoute
   '/courses/': typeof CoursesIndexRoute
   '/admin/courses/$courseId': typeof AdminCoursesCourseIdRoute
@@ -217,6 +235,7 @@ export interface FileRouteTypes {
     | '/teach'
     | '/verify-email'
     | '/admin/$'
+    | '/admin/learners'
     | '/admin/participant-reports'
     | '/courses/$slug'
     | '/learn/$'
@@ -224,6 +243,7 @@ export interface FileRouteTypes {
     | '/password/forgot'
     | '/password/reset'
     | '/settings/account'
+    | '/teach/learners'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
@@ -239,6 +259,7 @@ export interface FileRouteTypes {
     | '/teach'
     | '/verify-email'
     | '/admin/$'
+    | '/admin/learners'
     | '/admin/participant-reports'
     | '/courses/$slug'
     | '/learn/$'
@@ -246,6 +267,7 @@ export interface FileRouteTypes {
     | '/password/forgot'
     | '/password/reset'
     | '/settings/account'
+    | '/teach/learners'
     | '/admin'
     | '/courses'
     | '/admin/courses/$courseId'
@@ -262,6 +284,7 @@ export interface FileRouteTypes {
     | '/teach'
     | '/verify-email'
     | '/admin/$'
+    | '/admin/learners'
     | '/admin/participant-reports'
     | '/courses/$slug'
     | '/learn/$'
@@ -269,6 +292,7 @@ export interface FileRouteTypes {
     | '/password/forgot'
     | '/password/reset'
     | '/settings/account'
+    | '/teach/learners'
     | '/admin/'
     | '/courses/'
     | '/admin/courses/$courseId'
@@ -359,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSplatRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/learners': {
+      id: '/admin/learners'
+      path: '/learners'
+      fullPath: '/admin/learners'
+      preLoaderRoute: typeof AdminLearnersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/participant-reports': {
       id: '/admin/participant-reports'
       path: '/participant-reports'
@@ -415,6 +446,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/teach/learners': {
+      id: '/teach/learners'
+      path: '/learners'
+      fullPath: '/teach/learners'
+      preLoaderRoute: typeof TeachLearnersRouteImport
+      parentRoute: typeof TeachRoute
+    }
     '/admin/courses/$courseId': {
       id: '/admin/courses/$courseId'
       path: '/courses/$courseId'
@@ -448,6 +486,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminSplatRoute: typeof AdminSplatRoute
+  AdminLearnersRoute: typeof AdminLearnersRoute
   AdminParticipantReportsRoute: typeof AdminParticipantReportsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminCoursesCourseIdRoute: typeof AdminCoursesCourseIdRoute
@@ -456,6 +495,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminSplatRoute: AdminSplatRoute,
+  AdminLearnersRoute: AdminLearnersRoute,
   AdminParticipantReportsRoute: AdminParticipantReportsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminCoursesCourseIdRoute: AdminCoursesCourseIdRoute,
@@ -475,10 +515,12 @@ const LearnRouteChildren: LearnRouteChildren = {
 const LearnRouteWithChildren = LearnRoute._addFileChildren(LearnRouteChildren)
 
 interface TeachRouteChildren {
+  TeachLearnersRoute: typeof TeachLearnersRoute
   TeachCoursesCourseIdRoute: typeof TeachCoursesCourseIdRoute
 }
 
 const TeachRouteChildren: TeachRouteChildren = {
+  TeachLearnersRoute: TeachLearnersRoute,
   TeachCoursesCourseIdRoute: TeachCoursesCourseIdRoute,
 }
 

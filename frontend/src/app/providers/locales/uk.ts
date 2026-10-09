@@ -22,6 +22,7 @@ export const uk = {
       navCourses: 'Курси',
       navModeration: 'Модерація',
       navParticipantReports: 'Скарги учасників',
+      navLearners: 'Учні',
     },
     home: {
       label: 'Практичне навчання для розробників',
@@ -355,6 +356,29 @@ export const uk = {
       reviewReports_other: 'Скарг: {{count}}',
       dismissReviewReport: 'Відхилити скаргу',
       removeReview: 'Зняти',
+      learners: {
+        title: 'Учні',
+        empty: 'Учнів поки немає',
+        more: 'Показати ще',
+        coursesLabel: 'Курси',
+        lastActivity: 'Остання активність:',
+        neverActive: 'активності ще не було',
+        searchLabel: 'Пошук за ім’ям',
+        searchPlaceholder: 'Ім’я учня',
+        searchSubmit: 'Шукати',
+        stateLabel: 'Стан участі',
+        stateAll: 'Усі',
+        clearCourse: 'Скинути фільтр за курсом',
+        errors: {
+          learner_course_forbidden: 'Ви не можете переглядати учнів цього курсу.',
+          course_forbidden: 'Немає прав на перегляд учнів.',
+          course_not_found: 'Курс не знайдено.',
+          invalid_request: 'Не вдалося завантажити учнів. Спробуйте ще раз.',
+          authentication_required: 'Увійдіть, щоб продовжити.',
+          dependency_unavailable: 'Сервіс тимчасово недоступний. Спробуйте ще раз.',
+          generic: 'Не вдалося завантажити учнів. Спробуйте ще раз.',
+        },
+      },
     },
     administration: {
       documentLibrary: {

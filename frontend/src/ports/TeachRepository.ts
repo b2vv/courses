@@ -1,11 +1,20 @@
 import type {
   DismissReportsInput,
+  LearnerFilters,
+  LearnerPage,
+  LearnerScope,
   ModerationQueuePage,
   TeachCommentPage,
   TeachResult,
 } from '../domain/teach/teach';
 
 export interface TeachRepository {
+  listLearners(
+    scope: LearnerScope,
+    filters: LearnerFilters,
+    cursor?: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<LearnerPage>>;
   listCourseComments(
     courseId: string,
     cursor?: string,
