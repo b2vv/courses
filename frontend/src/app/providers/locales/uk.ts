@@ -356,6 +356,18 @@ export const uk = {
       reviewReports_other: 'Скарг: {{count}}',
       dismissReviewReport: 'Відхилити скаргу',
       removeReview: 'Зняти',
+      blockAuthor: 'Заблокувати автора',
+      unblockAuthor: 'Розблокувати автора',
+      authorBlock: {
+        errors: {
+          enrollment_forbidden: 'Ви не можете блокувати учасників цього курсу.',
+          grant_transition_invalid: 'Автор не є учасником курсу — блокувати нема кого.',
+          membership_conflict: 'Стан участі змінився. Перевірте його та спробуйте ще раз.',
+          comment_not_found: 'Коментар не знайдено.',
+          review_not_found: 'Відгук не знайдено.',
+          generic: 'Не вдалося змінити доступ автора. Спробуйте ще раз.',
+        },
+      },
       learners: {
         title: 'Учні',
         empty: 'Учнів поки немає',

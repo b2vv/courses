@@ -57,6 +57,7 @@ test('parses a review item in the moderation queue', async () => {
               editedAt: null,
             },
             openReports: 2,
+            authorBlocked: false,
           },
         ],
         nextCursor: '',
@@ -66,6 +67,7 @@ test('parses a review item in the moderation queue', async () => {
   const result = await createApiTeachRepository().listModerationQueue(courseId);
   expect(result.ok).toBe(true);
   if (result.ok) expect(result.value.items[0]?.kind).toBe('review');
+  if (result.ok) expect(result.value.items[0]?.authorBlocked).toBe(false);
 });
 
 test('rejects a malformed review row in the moderation queue', async () => {
@@ -180,4 +182,54 @@ test('maps a forbidden course filter to learner_course_forbidden', async () => {
     ok: false,
     error: { code: 'learner_course_forbidden' },
   });
+});
+
+const grant = {
+  id: reviewId,
+  userId,
+  courseId,
+  source: 'moderation',
+  state: 'blocked',
+  grantedAt: '2026-10-01T09:00:00Z',
+  grantedBy: null,
+};
+
+test('blocks and unblocks a comment or review author from the queue', async () => {
+  for (const [kind, path] of [
+    ['comment', 'comments'],
+    ['review', 'reviews'],
+  ] as const) {
+    const id = '60000000-0000-4000-8000-000000000001';
+    for (const action of ['block-author', 'unblock-author'] as const) {
+      server.use(
+        http.post(`${apiOrigin()}/api/v1/teach/${path}/${id}/${action}`, () =>
+          HttpResponse.json(grant),
+        ),
+      );
+      const result =
+        action === 'block-author'
+          ? await createApiTeachRepository().blockAuthor(kind, id)
+          : await createApiTeachRepository().unblockAuthor(kind, id);
+      expect(result).toEqual({ ok: true, value: undefined });
+    }
+  }
+});
+
+test('maps named author-block refusals', async () => {
+  const id = '60000000-0000-4000-8000-000000000002';
+  for (const [status, code] of [
+    [409, 'grant_transition_invalid'],
+    [403, 'enrollment_forbidden'],
+    [404, 'comment_not_found'],
+  ] as const) {
+    server.use(
+      http.post(`${apiOrigin()}/api/v1/teach/comments/${id}/block-author`, () =>
+        HttpResponse.json(error(code), { status }),
+      ),
+    );
+    expect(await createApiTeachRepository().blockAuthor('comment', id)).toEqual({
+      ok: false,
+      error: { code },
+    });
+  }
 });

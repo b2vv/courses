@@ -347,6 +347,18 @@ export const en = {
       reviewReports_other: '{{count}} reports',
       dismissReviewReport: 'Dismiss report',
       removeReview: 'Remove',
+      blockAuthor: 'Block author',
+      unblockAuthor: 'Unblock author',
+      authorBlock: {
+        errors: {
+          enrollment_forbidden: 'You cannot block participants of this course.',
+          grant_transition_invalid: 'The author is not a course member — there is nobody to block.',
+          membership_conflict: 'Membership state changed. Check it and try again.',
+          comment_not_found: 'Comment not found.',
+          review_not_found: 'Review not found.',
+          generic: 'Could not change the author’s access. Please try again.',
+        },
+      },
       learners: {
         title: 'Learners',
         empty: 'No learners yet',

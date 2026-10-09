@@ -25,6 +25,16 @@ export interface TeachRepository {
     cursor?: string,
     signal?: AbortSignal,
   ): Promise<TeachResult<ModerationQueuePage>>;
+  blockAuthor(
+    kind: 'comment' | 'review',
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
+  unblockAuthor(
+    kind: 'comment' | 'review',
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<TeachResult<void>>;
   dismissReport(
     commentId: string,
     input: DismissReportsInput,
