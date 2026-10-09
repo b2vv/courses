@@ -23,6 +23,7 @@ export const en = {
       navModeration: 'Moderation',
       navParticipantReports: 'Participant reports',
       navLearners: 'Learners',
+      navGroupPeople: 'People',
     },
     home: {
       label: 'Practical learning for developers',
