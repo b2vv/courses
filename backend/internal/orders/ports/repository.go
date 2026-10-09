@@ -79,8 +79,10 @@ type LearnerRow struct {
 }
 
 type LearnerPage struct {
-	Entries    []LearnerRow
-	NextCursor string
+	Entries []LearnerRow
+	// nil on the last page — the overview's cursor is null, not "" (the roster still uses the
+	// string sentinel; the learner page carries the absence natively, LR2 review nit).
+	NextCursor *string
 }
 
 type MembershipCard struct {

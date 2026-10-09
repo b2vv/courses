@@ -367,7 +367,8 @@ ORDER BY g.user_id, lower(c.title) ASC, g.course_id ASC`, ids, admin, viewer, co
 	}
 	if hasMore {
 		last := page.Entries[len(page.Entries)-1]
-		page.NextCursor = encodeLearnerCursor(last.DisplayName, last.UserID)
+		cursor := encodeLearnerCursor(last.DisplayName, last.UserID)
+		page.NextCursor = &cursor
 	}
 	return page, nil
 }
