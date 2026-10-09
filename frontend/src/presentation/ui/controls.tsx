@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import * as Aria from 'react-aria-components';
 
 type ButtonProps = Omit<Aria.ButtonProps, 'className'> & {
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'danger-ghost';
 };
 
 export function Button({ variant = 'primary', ...props }: ButtonProps) {

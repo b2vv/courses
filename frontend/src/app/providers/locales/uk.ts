@@ -23,6 +23,7 @@ export const uk = {
       navModeration: 'Модерація',
       navParticipantReports: 'Скарги учасників',
       navLearners: 'Учні',
+      navGroupPeople: 'Люди',
     },
     home: {
       label: 'Практичне навчання для розробників',
