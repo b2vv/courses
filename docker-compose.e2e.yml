@@ -23,10 +23,11 @@ services:
       args:
         PUBLIC_WAYFORPAY_PAY_HOST: localhost
   nginx:
-    # Larger login burst for the auth-heavy accounts e2e; overrides the strict production
-    # login-req.conf at the same path (last mount wins). Production nginx.conf is untouched.
+    # Larger login + api bursts for the request-heavy browser suite; each overrides the strict
+    # production include at the same path (last mount wins). Production nginx.conf is untouched.
     volumes:
       - ./infrastructure/nginx/login-req.e2e.conf:/etc/nginx/login-req.conf:ro
+      - ./infrastructure/nginx/api-req.e2e.conf:/etc/nginx/api-req.conf:ro
   wayforpay-stub:
     restart: unless-stopped
     build:
