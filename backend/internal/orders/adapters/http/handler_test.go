@@ -526,6 +526,7 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	// Lo07/Lo02: the learner overview returns the page shape with no email, and a row carries its
 	// courses and last activity. assertContract validates the body against LearnerPage.
 	lastActivity := now
+	nextCursor := "next"
 	store.learnerPage = ports.LearnerPage{
 		Entries: []ports.LearnerRow{{
 			UserID:         testUser,
@@ -533,7 +534,7 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 			LastActivityAt: &lastActivity,
 			Courses:        []ports.LearnerCourse{{CourseID: testCourse, Slug: "course", Title: "Course", State: domain.GrantActive, ProgressPercent: 35, EnrolledAt: now}},
 		}},
-		NextCursor: "next",
+		NextCursor: &nextCursor,
 	}
 	for _, path := range []string{"/api/v1/teach/learners", "/api/v1/admin/learners"} {
 		role := "instructor"

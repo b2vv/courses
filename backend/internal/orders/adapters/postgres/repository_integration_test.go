@@ -939,7 +939,7 @@ INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,update
 
 		// Lo06: a learner inserted between pages neither duplicates nor drops an existing row.
 		first, err := teachA("", "", "", "", 1)
-		if err != nil || len(first.Entries) != 1 || first.Entries[0].UserID != u1 || first.NextCursor == "" {
+		if err != nil || len(first.Entries) != 1 || first.Entries[0].UserID != u1 || first.NextCursor == nil {
 			t.Fatalf("keyset first page=%#v err=%v", first, err)
 		}
 		// Carol becomes visible between the two pages (revoked → active); keyset must pick her up
@@ -947,7 +947,7 @@ INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,update
 		if _, err := pool.Exec(ctx, `UPDATE course_grants SET state='active' WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, u3, courseA1); err != nil {
 			t.Fatal(err)
 		}
-		rest, err := teachA("", "", "", first.NextCursor, 20)
+		rest, err := teachA("", "", "", *first.NextCursor, 20)
 		if err != nil {
 			t.Fatalf("keyset continuation err=%v", err)
 		}

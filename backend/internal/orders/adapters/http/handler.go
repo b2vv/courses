@@ -314,38 +314,40 @@ func (handler *Handler) learners(w http.ResponseWriter, r *http.Request, adminSc
 		return
 	}
 	query := r.URL.Query()
+	// Malformed query parameters (shape, courseId, state, q, limit) are a bad request, not a bad
+	// cursor — they map to the same invalid_request, but ErrInvalidQuery names the cause correctly.
 	for key, values := range query {
 		switch key {
 		case "courseId", "state", "q", "cursor", "limit":
 			if len(values) != 1 {
-				writeError(w, r, domain.ErrInvalidCursor)
+				writeError(w, r, domain.ErrInvalidQuery)
 				return
 			}
 		default:
-			writeError(w, r, domain.ErrInvalidCursor)
+			writeError(w, r, domain.ErrInvalidQuery)
 			return
 		}
 	}
 	courseID := query.Get("courseId")
 	if query.Has("courseId") && !validID(courseID) {
-		writeError(w, r, domain.ErrInvalidCursor)
+		writeError(w, r, domain.ErrInvalidQuery)
 		return
 	}
 	state := query.Get("state")
 	if query.Has("state") && state != "active" && state != "blocked" {
-		writeError(w, r, domain.ErrInvalidCursor)
+		writeError(w, r, domain.ErrInvalidQuery)
 		return
 	}
 	q := query.Get("q")
 	if n := utf8.RuneCountInString(q); query.Has("q") && (!utf8.ValidString(q) || n < 1 || n > 80) {
-		writeError(w, r, domain.ErrInvalidCursor)
+		writeError(w, r, domain.ErrInvalidQuery)
 		return
 	}
 	limit := 0
 	if values := query["limit"]; len(values) == 1 {
 		parsed, err := strconv.Atoi(values[0])
 		if err != nil || parsed < 1 || parsed > 100 {
-			writeError(w, r, domain.ErrInvalidCursor)
+			writeError(w, r, domain.ErrInvalidQuery)
 			return
 		}
 		limit = parsed
@@ -368,11 +370,7 @@ func (handler *Handler) learners(w http.ResponseWriter, r *http.Request, adminSc
 		}
 		entries = append(entries, dto)
 	}
-	response := learnerPageDTO{Entries: entries}
-	if page.NextCursor != "" {
-		response.NextCursor = &page.NextCursor
-	}
-	httpserver.WriteJSON(w, http.StatusOK, response)
+	httpserver.WriteJSON(w, http.StatusOK, learnerPageDTO{Entries: entries, NextCursor: page.NextCursor})
 }
 
 func (handler *Handler) block(w http.ResponseWriter, r *http.Request) {
@@ -735,7 +733,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusForbidden, "enrollment_forbidden", "Enrollment permission is required")
 	case errors.Is(err, domain.ErrLearnerCourseForbidden):
 		httpserver.WriteError(w, r, http.StatusForbidden, "learner_course_forbidden", "The overview cannot be filtered by another instructor's course")
-	case errors.Is(err, domain.ErrInvalidCursor):
+	case errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidQuery):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is invalid")
 	case errors.Is(err, domain.ErrOrderNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "order_not_found", "Order was not found")
