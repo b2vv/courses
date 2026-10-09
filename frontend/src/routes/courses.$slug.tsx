@@ -74,6 +74,7 @@ function CourseRoute() {
       onRetry={() => void reviews.refetch()}
       onRetryMore={() => void reviews.fetchNextPage()}
       signedIn={session.data !== null && session.data !== undefined}
+      viewerIsAdmin={session.data?.role === 'admin'}
       membership={membership.data}
       enrolling={enroll.isPending}
       enrollError={enroll.error instanceof EnrollmentQueryError ? enroll.error.code : undefined}

@@ -467,6 +467,36 @@ func TestDiscussionPostgres(t *testing.T) {
 			if queue.Items[0].Kind == second.Items[0].Kind || (queue.Items[0].Kind != "comment" && queue.Items[0].Kind != "review") || (second.Items[0].Kind != "comment" && second.Items[0].Kind != "review") {
 				t.Fatalf("kinds=%q,%q", queue.Items[0].Kind, second.Items[0].Kind)
 			}
+			// LR3: authorBlocked reflects a real blocked membership. The comment author has none yet;
+			// after a blocked grant the same queued comment reports authorBlocked.
+			both, err := repository.ListModerationQueue(ctx, fx.course, "", 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range both.Items {
+				if item.AuthorBlocked {
+					t.Fatalf("unexpected authorBlocked before any block: %+v", item)
+				}
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($1::uuid,$2::uuid,'self','blocked',now()) ON CONFLICT (user_id,course_id) DO UPDATE SET state='blocked'`, fx.concurrent, fx.course); err != nil {
+				t.Fatal(err)
+			}
+			reblocked, err := repository.ListModerationQueue(ctx, fx.course, "", 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sawComment bool
+			for _, item := range reblocked.Items {
+				if item.Kind == "comment" {
+					sawComment = true
+					if !item.AuthorBlocked {
+						t.Fatalf("comment author should be blocked: %+v", item)
+					}
+				}
+			}
+			if !sawComment {
+				t.Fatal("comment item missing after block")
+			}
 		})
 		t.Run("Rt25 own report refused and duplicate idempotent", func(t *testing.T) {
 			if err := repository.InsertReviewReport(ctx, fx.reviewA, fx.buyer, time.Now().UTC()); !errors.Is(err, domain.ErrReportOwnReview) {

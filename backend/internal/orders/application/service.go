@@ -42,6 +42,9 @@ func New(courses ports.CourseReader, orders ports.OrderRepository, store interfa
 }
 
 func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID, idempotencyKey string) (domain.Order, error) {
+	if actor.Administrator {
+		return domain.Order{}, domain.ErrAdminNotLearner
+	}
 	if !actor.EmailVerified {
 		return domain.Order{}, domain.ErrEmailNotVerified
 	}
@@ -142,6 +145,15 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 	if userID == actor.UserID {
 		return domain.Grant{}, domain.ErrGrantSelfForbidden
 	}
+	// Role is the dominant fact of G8: refuse an administrator recipient before validating the
+	// reason, so the refusal is admin_not_learner regardless of what reason was sent.
+	recipientIsAdmin, err := service.grants.IsAdministrator(ctx, userID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	if recipientIsAdmin {
+		return domain.Grant{}, domain.ErrAdminNotLearner
+	}
 	reason = strings.TrimSpace(reason)
 	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
 		return domain.Grant{}, domain.ErrGrantInvalid
@@ -168,6 +180,9 @@ func (service *Service) GrantCourse(ctx context.Context, actor Actor, userID, co
 }
 
 func (service *Service) Enroll(ctx context.Context, actor Actor, courseID string) (domain.Grant, error) {
+	if actor.Administrator {
+		return domain.Grant{}, domain.ErrAdminNotLearner
+	}
 	if !actor.EmailVerified {
 		return domain.Grant{}, domain.ErrEmailNotVerified
 	}
@@ -208,15 +223,37 @@ func (service *Service) Enroll(ctx context.Context, actor Actor, courseID string
 }
 
 func (service *Service) Block(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "block", false, domain.Grant.Block)
+	return service.transitionMembership(ctx, actor, userID, courseID, "block", "", false, domain.Grant.Block)
 }
 
 func (service *Service) Unblock(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", false, domain.Grant.Unblock)
+	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", "", false, domain.Grant.Unblock)
 }
 
 func (service *Service) Revoke(ctx context.Context, actor Actor, userID, courseID string) (domain.Grant, error) {
-	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", true, domain.Grant.Revoke)
+	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", "", true, domain.Grant.Revoke)
+}
+
+// BlockAuthor and UnblockAuthor block or restore a moderation-queue item's author on the item's
+// course. They resolve (author, course) from the comment or review, then run the SAME membership
+// transition as the roster path — one rule, one audit (Lo17) — with a reason that records the
+// origin. G6 (admin or course owner) is enforced inside transitionMembership; an administrator
+// author is never a member (G8), so there is nobody to block and the transition refuses as
+// grant_transition_invalid.
+func (service *Service) BlockAuthor(ctx context.Context, actor Actor, kind, id string) (domain.Grant, error) {
+	userID, courseID, err := service.grants.AuthorOf(ctx, kind, id)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.transitionMembership(ctx, actor, userID, courseID, "block", "moderation_queue:"+kind+":"+id, false, domain.Grant.Block)
+}
+
+func (service *Service) UnblockAuthor(ctx context.Context, actor Actor, kind, id string) (domain.Grant, error) {
+	userID, courseID, err := service.grants.AuthorOf(ctx, kind, id)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.transitionMembership(ctx, actor, userID, courseID, "unblock", "moderation_queue:"+kind+":"+id, false, domain.Grant.Unblock)
 }
 
 func (service *Service) MembershipState(ctx context.Context, actor Actor, userID, courseID string) (domain.GrantState, bool, error) {
@@ -257,7 +294,38 @@ func (service *Service) Roster(ctx context.Context, actor Actor, courseID, curso
 	return service.grants.Roster(ctx, courseID, cursor, limit)
 }
 
-func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
+// Learners returns the learner overview. adminScope distinguishes the admin view (every course,
+// administrator only) from the instructor view (the caller's own courses). A courseId filter in the
+// instructor view must name a course the caller instructs; an unknown or other instructor's course
+// is refused as learner_course_forbidden rather than revealing whether it exists.
+func (service *Service) Learners(ctx context.Context, actor Actor, adminScope bool, courseID, state, query, cursor string, limit int) (ports.LearnerPage, error) {
+	if adminScope && !actor.Administrator {
+		return ports.LearnerPage{}, domain.ErrEnrollmentForbidden
+	}
+	if courseID != "" && !adminScope {
+		facts, err := service.courses.CourseForEnrollment(ctx, courseID)
+		if errors.Is(err, domain.ErrCourseNotEnrollable) || (err == nil && facts.InstructorID != actor.UserID) {
+			return ports.LearnerPage{}, domain.ErrLearnerCourseForbidden
+		}
+		if err != nil {
+			return ports.LearnerPage{}, err
+		}
+	}
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	filter := ports.LearnerFilter{CourseID: courseID, State: state, Query: query}
+	if adminScope {
+		filter.Administrator = true
+	} else {
+		filter.ViewerID = actor.UserID
+	}
+	return service.grants.Learners(ctx, filter, cursor, limit)
+}
+
+func (service *Service) transitionMembership(ctx context.Context, actor Actor, userID, courseID, action, reason string, administratorOnly bool, transition func(domain.Grant) (domain.Grant, error)) (domain.Grant, error) {
 	facts, err := service.courses.CourseForEnrollment(ctx, courseID)
 	if err != nil {
 		return domain.Grant{}, err
@@ -284,7 +352,7 @@ func (service *Service) transitionMembership(ctx context.Context, actor Actor, u
 	if err != nil {
 		return domain.Grant{}, err
 	}
-	return service.grants.UpdateMembership(ctx, grant, membership.State(), action, "", &actor.UserID)
+	return service.grants.UpdateMembership(ctx, grant, membership.State(), action, reason, &actor.UserID)
 }
 
 func (service *Service) GrandfatherOnPriceSet(ctx context.Context, courseID string, expectedUpdatedAt time.Time, priceMinor int64, currency string, updatedAt time.Time) error {

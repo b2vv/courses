@@ -34,11 +34,55 @@ type OrderRepository interface {
 // GrantRepository reads and writes membership records and their audit rows.
 type GrantRepository interface {
 	Membership(context.Context, string, string) (*domain.Grant, error)
+	// IsAdministrator reports whether the user is a live administrator, so the service can keep
+	// an administrator from being made a learner (G8). The grants adapter already reads users.
+	IsAdministrator(context.Context, string) (bool, error)
 	MyMemberships(context.Context, string) ([]MembershipCard, error)
 	Roster(context.Context, string, string, int) (RosterPage, error)
+	Learners(context.Context, LearnerFilter, string, int) (LearnerPage, error)
+	// AuthorOf resolves a moderation-queue item (kind "comment" or "review") to its author and the
+	// course it belongs to, so the block-from-queue path can reuse the membership transition. An
+	// unknown item returns ErrCommentNotFound or ErrReviewNotFound. The grants adapter reads the
+	// discussion tables directly (a SQL read, no module import — ADR 013), as the roster already
+	// reads lesson_progress.
+	AuthorOf(ctx context.Context, kind, id string) (userID, courseID string, err error)
 	CreateMembership(context.Context, domain.Grant, string, string, *string) (domain.Grant, error)
 	UpdateMembership(context.Context, domain.Grant, domain.GrantState, string, string, *string) (domain.Grant, error)
 	GrandfatherOnPriceSet(context.Context, string, time.Time, domain.Money, time.Time) error
+}
+
+// LearnerFilter selects which learners and which of their memberships the overview returns.
+// Administrator sees every course; otherwise only courses ViewerID instructs. CourseID, State and
+// Query are optional narrowings (empty means no narrowing).
+type LearnerFilter struct {
+	ViewerID      string
+	Administrator bool
+	CourseID      string
+	State         string
+	Query         string
+}
+
+type LearnerCourse struct {
+	CourseID        string
+	Slug            string
+	Title           string
+	State           domain.GrantState
+	ProgressPercent int
+	EnrolledAt      time.Time
+}
+
+type LearnerRow struct {
+	UserID         string
+	DisplayName    string
+	LastActivityAt *time.Time
+	Courses        []LearnerCourse
+}
+
+type LearnerPage struct {
+	Entries []LearnerRow
+	// nil on the last page — the overview's cursor is null, not "" (the roster still uses the
+	// string sentinel; the learner page carries the absence natively, LR2 review nit).
+	NextCursor *string
 }
 
 type MembershipCard struct {

@@ -32,21 +32,30 @@ const (
 )
 
 type fakeStore struct {
-	order          domain.Order
-	grant          domain.Grant
-	courseErr      error
-	getErr         error
-	grantErr       error
-	membership     *domain.Grant
-	applyCalls     int
-	applyErr       error
-	grantCalls     int
-	checkoutErr    error
-	enrollment     ports.EnrollmentFacts
-	roster         ports.RosterPage
-	rosterErr      error
-	memberships    []ports.MembershipCard
-	membershipsErr error
+	order               domain.Order
+	grant               domain.Grant
+	courseErr           error
+	getErr              error
+	grantErr            error
+	membership          *domain.Grant
+	recipientIsAdmin    bool
+	recipientIsAdminErr error
+	applyCalls          int
+	applyErr            error
+	grantCalls          int
+	checkoutErr         error
+	enrollment          ports.EnrollmentFacts
+	roster              ports.RosterPage
+	rosterErr           error
+	memberships         []ports.MembershipCard
+	membershipsErr      error
+	learnerPage         ports.LearnerPage
+	learnerErr          error
+	learnerFilter       ports.LearnerFilter
+	authorUserID        string
+	authorCourseID      string
+	authorErr           error
+	authorKind          string
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -95,6 +104,17 @@ func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID 
 }
 func (store *fakeStore) Membership(context.Context, string, string) (*domain.Grant, error) {
 	return store.membership, nil
+}
+func (store *fakeStore) IsAdministrator(context.Context, string) (bool, error) {
+	return store.recipientIsAdmin, store.recipientIsAdminErr
+}
+func (store *fakeStore) Learners(_ context.Context, filter ports.LearnerFilter, cursor string, limit int) (ports.LearnerPage, error) {
+	store.learnerFilter = filter
+	return store.learnerPage, store.learnerErr
+}
+func (store *fakeStore) AuthorOf(_ context.Context, kind, id string) (string, string, error) {
+	store.authorKind = kind
+	return store.authorUserID, store.authorCourseID, store.authorErr
 }
 func (store *fakeStore) MyMemberships(context.Context, string) ([]ports.MembershipCard, error) {
 	return store.memberships, store.membershipsErr
@@ -244,6 +264,34 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		assertContract(t, request, response)
 	})
 
+	t.Run("Lo18 an administrator recipient cannot be granted a course", func(t *testing.T) {
+		store.recipientIsAdmin = true
+		defer func() { store.recipientIsAdmin = false }()
+		body := []byte(`{"userId":"` + testUser + `","reason":"support resolution"}`)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/courses/"+testCourse+"/grants", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		request.Body = io.NopCloser(bytes.NewReader(body))
+		assertContract(t, request, response)
+	})
+
+	t.Run("Lo18 an administrator cannot start a purchase", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
+		request.Header.Set("Idempotency-Key", "purchase-admin")
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, request, response)
+	})
+
 	t.Run("Pay22 dependency failures are explicit", func(t *testing.T) {
 		store.courseErr = domain.ErrDependencyUnavailable
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/learn/courses/"+testCourse+"/purchase", nil)
@@ -359,6 +407,13 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	}
 	assertContract(t, r, response)
 
+	// Lo18 (G8): an administrator is not a learner and cannot self-enrol.
+	r, response = request(http.MethodPost, path+"/enroll", "admin")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"admin_not_learner"`) {
+		t.Fatalf("admin enroll status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
 	store.membership = &store.grant
 	r, response = request(http.MethodGet, path+"/membership", "student")
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"member":true`) {
@@ -404,6 +459,13 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/block", "student")
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "enrollment_forbidden") {
 		t.Fatalf("stranger block status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	// Blocking a non-member is an invalid transition, not a server error: 409 grant_transition_invalid.
+	r, response = request(http.MethodPost, "/api/v1/teach/courses/"+testCourse+participant+"/block", "instructor")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"grant_transition_invalid"`) {
+		t.Fatalf("non-member block status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, r, response)
 
@@ -460,6 +522,95 @@ func TestEnrollmentHTTPMatchesOpenAPI(t *testing.T) {
 		t.Fatalf("cursor status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertContract(t, r, response)
+
+	// Lo07/Lo02: the learner overview returns the page shape with no email, and a row carries its
+	// courses and last activity. assertContract validates the body against LearnerPage.
+	lastActivity := now
+	nextCursor := "next"
+	store.learnerPage = ports.LearnerPage{
+		Entries: []ports.LearnerRow{{
+			UserID:         testUser,
+			DisplayName:    "Ada",
+			LastActivityAt: &lastActivity,
+			Courses:        []ports.LearnerCourse{{CourseID: testCourse, Slug: "course", Title: "Course", State: domain.GrantActive, ProgressPercent: 35, EnrolledAt: now}},
+		}},
+		NextCursor: &nextCursor,
+	}
+	for _, path := range []string{"/api/v1/teach/learners", "/api/v1/admin/learners"} {
+		role := "instructor"
+		if strings.Contains(path, "admin") {
+			role = "admin"
+		}
+		r, response = request(http.MethodGet, path+"?limit=20", role)
+		if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "email") || !strings.Contains(response.Body.String(), `"displayName":"Ada"`) || !strings.Contains(response.Body.String(), `"lastActivityAt":"`) {
+			t.Fatalf("%s status=%d body=%s", path, response.Code, response.Body.String())
+		}
+		assertContract(t, r, response)
+	}
+
+	// Lo05: invalid query parameters are rejected before the service is reached. (The response is
+	// not contract-checked here: the spec validator rejects these as malformed requests, which is
+	// exactly what the handler is also doing.)
+	for _, bad := range []string{"state=paused", "limit=0", "limit=200", "q=", "unknown=1"} {
+		_, response = request(http.MethodGet, "/api/v1/teach/learners?"+bad, "instructor")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("bad query %q status=%d body=%s", bad, response.Code, response.Body.String())
+		}
+	}
+
+	// Lo05: filtering by a course the instructor does not teach is refused by name, not revealed.
+	store.enrollment = ports.EnrollmentFacts{Status: "published", Free: true, InstructorID: testUser}
+	r, response = request(http.MethodGet, "/api/v1/teach/learners?courseId="+testCourse, "instructor")
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"learner_course_forbidden"`) {
+		t.Fatalf("foreign course status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.enrollment = ports.EnrollmentFacts{}
+
+	// Lo08: a student cannot read the administrator overview.
+	r, response = request(http.MethodGet, "/api/v1/admin/learners", "student")
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("student admin overview status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	// Lo12/Lo13/Lo15: block/unblock an item's author from the queue returns the membership grant;
+	// an unknown comment or review is a named 404.
+	store.authorUserID, store.authorCourseID = testUser, testCourse
+	blocked, _ := domain.SelfEnroll(testGrant, testUser, testCourse, now)
+	store.membership = &blocked
+	r, response = request(http.MethodPost, "/api/v1/teach/comments/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"blocked"`) {
+		t.Fatalf("block comment author status=%d body=%s", response.Code, response.Body.String())
+	}
+	if store.authorKind != "comment" {
+		t.Fatalf("AuthorOf kind=%q", store.authorKind)
+	}
+	assertContract(t, r, response)
+
+	member, _ := domain.SelfEnroll(testGrant, testUser, testCourse, now)
+	blockedMember, _ := member.Block()
+	store.membership = &blockedMember
+	r, response = request(http.MethodPost, "/api/v1/teach/reviews/"+testGrant+"/unblock-author", "admin")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"active"`) {
+		t.Fatalf("unblock review author status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.authorErr = domain.ErrCommentNotFound
+	r, response = request(http.MethodPost, "/api/v1/teach/comments/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"comment_not_found"`) {
+		t.Fatalf("unknown comment status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+
+	store.authorErr = domain.ErrReviewNotFound
+	r, response = request(http.MethodPost, "/api/v1/teach/reviews/"+testGrant+"/block-author", "admin")
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"review_not_found"`) {
+		t.Fatalf("unknown review status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertContract(t, r, response)
+	store.authorErr = nil
 }
 
 func assertContract(t *testing.T, request *http.Request, response *httptest.ResponseRecorder) {

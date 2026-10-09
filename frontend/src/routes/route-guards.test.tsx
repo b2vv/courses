@@ -380,6 +380,7 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
         path: 'participant-reports',
         fullPath: '/admin/participant-reports',
       },
+      { id: '/admin/learners', path: 'learners', fullPath: '/admin/learners' },
       { id: '/admin/users/', path: 'users/', fullPath: '/admin/users/' },
       { id: '/courses/', path: 'courses/', fullPath: '/courses/' },
       { id: '/courses/$slug', path: 'courses/$slug', fullPath: '/courses/$slug' },
@@ -403,6 +404,7 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
         path: 'courses/$courseId',
         fullPath: '/teach/courses/$courseId',
       },
+      { id: '/teach/learners', path: 'learners', fullPath: '/teach/learners' },
     ].sort((left, right) => left.id.localeCompare(right.id)),
   );
 });

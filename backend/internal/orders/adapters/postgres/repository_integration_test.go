@@ -501,6 +501,31 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
+	t.Run("Lo18 an administrator recipient is refused and no grant row is written", func(t *testing.T) {
+		var secondAdmin string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+(gen_random_uuid(),'lo18-second-admin@example.test','Lo18 second admin','admin','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&secondAdmin); err != nil {
+			t.Fatal(err)
+		}
+		if isAdmin, err := repository.IsAdministrator(ctx, secondAdmin); err != nil || !isAdmin {
+			t.Fatalf("IsAdministrator(second admin)=%v err=%v", isAdmin, err)
+		}
+		if nonAdmin, err := repository.IsAdministrator(ctx, integrationUserID); err != nil || nonAdmin {
+			t.Fatalf("IsAdministrator(student)=%v err=%v", nonAdmin, err)
+		}
+		lo18Service := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("73"), nil)
+		if _, err := lo18Service.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, secondAdmin, integrationCourseID, "support decision"); err != domain.ErrAdminNotLearner {
+			t.Fatalf("grant to admin error=%v want=%v", err, domain.ErrAdminNotLearner)
+		}
+		var rows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, secondAdmin, integrationCourseID).Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 0 {
+			t.Fatalf("grant to admin wrote %d rows, want 0", rows)
+		}
+	})
+
 	t.Run("paid event settles when active admin grant already exists", func(t *testing.T) {
 		var userID string
 		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES
@@ -632,8 +657,10 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if enrolled, err := svc.Enroll(ctx, application.Actor{UserID: otherUser, EmailVerified: true}, integrationFreeID); err != nil || enrolled.Source() != domain.GrantSelf {
 			t.Fatalf("En14 instructor enrolls in another free course: grant=%#v error=%v", enrolled, err)
 		}
-		if enrolled, err := svc.Enroll(ctx, admin, otherFreeCourse); err != nil || enrolled.Source() != domain.GrantSelf {
-			t.Fatalf("En14 admin enrolls in another free course: grant=%#v error=%v", enrolled, err)
+		// G8 (LR0): an administrator is never a learner, so self-enrol is refused even on a free
+		// course they do not own. En14's open enrolment stands only for the instructor above.
+		if _, err := svc.Enroll(ctx, admin, otherFreeCourse); err != domain.ErrAdminNotLearner {
+			t.Fatalf("G8 admin cannot self-enrol: error=%v", err)
 		}
 
 		grant, err := svc.Enroll(ctx, student, integrationFreeID)
@@ -815,6 +842,210 @@ INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,update
 		}
 		if !sawDeleted {
 			t.Fatal("deleted-but-enrolled member dropped from roster; expected anonymized row")
+		}
+	})
+
+	t.Run("Lo01-Lo09 learner overview scopes, aggregates, keysets and filters", func(t *testing.T) {
+		const (
+			instA    = "40000000-0000-4000-8000-000000000201"
+			instB    = "40000000-0000-4000-8000-000000000202"
+			courseA1 = "50000000-0000-4000-8000-000000000201"
+			courseA2 = "50000000-0000-4000-8000-000000000202"
+			courseB1 = "50000000-0000-4000-8000-000000000203"
+			moduleA1 = "51000000-0000-4000-8000-000000000201"
+			lessonA1 = "52000000-0000-4000-8000-000000000201"
+			lessonA2 = "52000000-0000-4000-8000-000000000202"
+			u1       = "40000000-0000-4000-8000-000000000211"
+			u2       = "40000000-0000-4000-8000-000000000212"
+			u3       = "40000000-0000-4000-8000-000000000213"
+			u4       = "40000000-0000-4000-8000-000000000214"
+		)
+		if _, err := pool.Exec(ctx, `WITH u AS (
+INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'lo-inst-a@example.test','Instructor A','instructor',$14),
+($2,'lo-inst-b@example.test','Instructor B','instructor',$14),
+($3,'lo-alice@example.test','Alice','student',$14),
+($4,'lo-bob@example.test','Bob','student',$14),
+($5,'lo-carol@example.test','Carol','student',$14),
+($6,'lo-dave@example.test','Dave','student',$14)
+), c AS (
+INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($7,'lo-a1','Lo A1','S','D','published',$1,$13,$13,$13),
+($8,'lo-a2','Lo A2','S','D','published',$1,$13,$13,$13),
+($9,'lo-b1','Lo B1','S','D','published',$2,$13,$13,$13)
+), m AS (
+INSERT INTO course_modules(id,course_id,title,position) VALUES($10,$7,'M',0)
+), l AS (
+INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($11,$10,'One','',0),($12,$10,'Two','',1)
+), g AS (
+INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
+($3,$7,'self','active',$13 + interval '1 minute'),
+($3,$9,'self','active',$13 + interval '2 minutes'),
+($4,$7,'self','blocked',$13 + interval '3 minutes'),
+($5,$7,'self','revoked',$13 + interval '4 minutes'),
+($6,$8,'self','active',$13 + interval '5 minutes')
+)
+INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at,completed_at) VALUES
+($3,$11,1,1,$13 + interval '30 minutes',$13 + interval '30 minutes')`,
+			instA, instB, u1, u2, u3, u4, courseA1, courseA2, courseB1, moduleA1, lessonA1, lessonA2, now,
+			"$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is"); err != nil {
+			t.Fatal(err)
+		}
+		teachA := func(courseID, state, q, cursor string, limit int) (ports.LearnerPage, error) {
+			return service.Learners(ctx, application.Actor{UserID: instA}, false, courseID, state, q, cursor, limit)
+		}
+
+		// Lo01/Lo02/Lo04: instructor A sees Alice, Bob, Dave — one row each, only A's courses.
+		// Alice's row carries courseA1 only (not courseB1, which A does not teach) at 50% with her
+		// last activity; Dave has no progress so lastActivityAt is null.
+		page, err := teachA("", "", "", "", 20)
+		if err != nil || len(page.Entries) != 3 {
+			t.Fatalf("teach overview=%#v err=%v", page, err)
+		}
+		if page.Entries[0].UserID != u1 || page.Entries[0].DisplayName != "Alice" || len(page.Entries[0].Courses) != 1 ||
+			page.Entries[0].Courses[0].CourseID != courseA1 || page.Entries[0].Courses[0].State != domain.GrantActive ||
+			page.Entries[0].Courses[0].ProgressPercent != 50 || page.Entries[0].LastActivityAt == nil ||
+			!page.Entries[0].LastActivityAt.Equal(now.Add(30*time.Minute)) {
+			t.Fatalf("Alice row=%#v", page.Entries[0])
+		}
+		if page.Entries[1].UserID != u2 || page.Entries[1].Courses[0].State != domain.GrantBlocked {
+			t.Fatalf("Bob row=%#v", page.Entries[1])
+		}
+		if page.Entries[2].UserID != u4 || page.Entries[2].LastActivityAt != nil || page.Entries[2].Courses[0].CourseID != courseA2 {
+			t.Fatalf("Dave row=%#v", page.Entries[2])
+		}
+
+		// Lo03: Carol is revoked on her only visible course, so she has no row.
+		for _, entry := range page.Entries {
+			if entry.UserID == u3 {
+				t.Fatal("revoked-only learner must not appear")
+			}
+		}
+
+		// Lo09: the admin view spans every course — Alice now carries both A1 and B1.
+		adminPage, err := service.Learners(ctx, application.Actor{UserID: integrationAdminID, Administrator: true}, true, "", "", "", "", 20)
+		if err != nil {
+			t.Fatalf("admin overview err=%v", err)
+		}
+		var aliceAdmin *ports.LearnerRow
+		for index := range adminPage.Entries {
+			if adminPage.Entries[index].UserID == u1 {
+				aliceAdmin = &adminPage.Entries[index]
+			}
+		}
+		if aliceAdmin == nil || len(aliceAdmin.Courses) != 2 {
+			t.Fatalf("admin Alice row=%#v", aliceAdmin)
+		}
+
+		// Lo06: a learner inserted between pages neither duplicates nor drops an existing row.
+		first, err := teachA("", "", "", "", 1)
+		if err != nil || len(first.Entries) != 1 || first.Entries[0].UserID != u1 || first.NextCursor == nil {
+			t.Fatalf("keyset first page=%#v err=%v", first, err)
+		}
+		// Carol becomes visible between the two pages (revoked → active); keyset must pick her up
+		// without duplicating or skipping the rows after the cursor.
+		if _, err := pool.Exec(ctx, `UPDATE course_grants SET state='active' WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, u3, courseA1); err != nil {
+			t.Fatal(err)
+		}
+		rest, err := teachA("", "", "", *first.NextCursor, 20)
+		if err != nil {
+			t.Fatalf("keyset continuation err=%v", err)
+		}
+		seen := map[string]int{}
+		for _, entry := range rest.Entries {
+			seen[entry.UserID]++
+		}
+		if seen[u1] != 0 || seen[u2] != 1 || seen[u3] != 1 || seen[u4] != 1 {
+			t.Fatalf("keyset continuation after insert=%v", seen)
+		}
+
+		// Lo05: a state filter narrows to blocked; a name search finds one learner; filtering by a
+		// course instructor A does not teach is refused, not revealed.
+		blocked, err := teachA("", "blocked", "", "", 20)
+		if err != nil || len(blocked.Entries) != 1 || blocked.Entries[0].UserID != u2 {
+			t.Fatalf("state filter=%#v err=%v", blocked, err)
+		}
+		named, err := teachA("", "", "ali", "", 20)
+		if err != nil || len(named.Entries) != 1 || named.Entries[0].UserID != u1 {
+			t.Fatalf("name filter=%#v err=%v", named, err)
+		}
+		if _, err := teachA(courseB1, "", "", "", 20); !errors.Is(err, domain.ErrLearnerCourseForbidden) {
+			t.Fatalf("foreign course filter err=%v", err)
+		}
+	})
+
+	t.Run("Lo12-Lo17 block from the queue resolves the author and reuses the membership transition", func(t *testing.T) {
+		const (
+			inst      = "40000000-0000-4000-8000-000000000301"
+			author    = "40000000-0000-4000-8000-000000000302"
+			course    = "50000000-0000-4000-8000-000000000301"
+			moduleID  = "51000000-0000-4000-8000-000000000301"
+			lessonID  = "52000000-0000-4000-8000-000000000301"
+			commentID = "53000000-0000-4000-8000-000000000301"
+			reviewID  = "54000000-0000-4000-8000-000000000301"
+		)
+		if _, err := pool.Exec(ctx, `WITH u AS (
+INSERT INTO users(id,email,display_name,role,password_hash) VALUES
+($1,'lo3-inst@example.test','Lo3 inst','instructor',$8),
+($2,'lo3-author@example.test','Lo3 author','student',$8)
+), c AS (
+INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,created_at,updated_at) VALUES
+($3,'lo3','Lo3','S','D','published',$1,$9,$9,$9)
+), m AS (
+INSERT INTO course_modules(id,course_id,title,position) VALUES($4,$3,'M',0)
+), l AS (
+INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($5,$4,'One','',0)
+), g AS (
+INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($2,$3,'self','active',$9)
+), cm AS (
+INSERT INTO discussion_comments(id,lesson_id,author_id,body,created_at) VALUES($6,$5,$2,'a comment',$9)
+)
+INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at)
+VALUES($7,$3,$2,4,'a sufficiently long review body',0,1,$9)`,
+			inst, author, course, moduleID, lessonID, commentID, reviewID,
+			"$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is", now); err != nil {
+			t.Fatal(err)
+		}
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("30"), nil)
+		admin := application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}
+
+		// AuthorOf resolves both kinds and refuses an unknown id by name.
+		if u, c, err := repository.AuthorOf(ctx, "comment", commentID); err != nil || u != author || c != course {
+			t.Fatalf("AuthorOf comment=(%s,%s) err=%v", u, c, err)
+		}
+		if u, c, err := repository.AuthorOf(ctx, "review", reviewID); err != nil || u != author || c != course {
+			t.Fatalf("AuthorOf review=(%s,%s) err=%v", u, c, err)
+		}
+		if _, _, err := repository.AuthorOf(ctx, "comment", lessonID); !errors.Is(err, domain.ErrCommentNotFound) {
+			t.Fatalf("AuthorOf unknown comment err=%v", err)
+		}
+
+		// Lo12/Lo17: blocking the comment author writes the same blocked membership as the roster,
+		// with an origin reason in the audit; a repeat is an idempotent no-op.
+		if grant, err := svc.BlockAuthor(ctx, admin, "comment", commentID); err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("block author grant=%#v err=%v", grant, err)
+		}
+		if grant, err := svc.BlockAuthor(ctx, admin, "comment", commentID); err != nil || grant.State() != domain.GrantBlocked {
+			t.Fatalf("repeat block author grant=%#v err=%v", grant, err)
+		}
+		var rows int
+		var action, reason, state string
+		if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid), g.state, (SELECT a.action FROM grant_audit a JOIN course_grants gg ON gg.id=a.grant_id WHERE gg.user_id=$1::text::uuid AND gg.course_id=$2::text::uuid ORDER BY a.created_at DESC LIMIT 1), (SELECT a.reason FROM grant_audit a JOIN course_grants gg ON gg.id=a.grant_id WHERE gg.user_id=$1::text::uuid AND gg.course_id=$2::text::uuid ORDER BY a.created_at DESC LIMIT 1) FROM course_grants g WHERE g.user_id=$1::text::uuid AND g.course_id=$2::text::uuid`, author, course).Scan(&rows, &state, &action, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 1 || state != "blocked" || action != "block" || reason != "moderation_queue:comment:"+commentID {
+			t.Fatalf("after block rows=%d state=%q action=%q reason=%q", rows, state, action, reason)
+		}
+
+		// Lo13/Lo16: unblocking via the author's review restores the one shared membership to active.
+		if grant, err := svc.UnblockAuthor(ctx, admin, "review", reviewID); err != nil || grant.State() != domain.GrantActive {
+			t.Fatalf("unblock author grant=%#v err=%v", grant, err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT count(*), max(state) FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, author, course).Scan(&rows, &state); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 1 || state != "active" {
+			t.Fatalf("after unblock rows=%d state=%q", rows, state)
 		}
 	})
 
