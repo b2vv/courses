@@ -5,15 +5,27 @@ import { Button } from './controls';
 
 type DialogProps = {
   triggerLabel: string;
+  /** When set, the trigger keeps `triggerLabel` as its visible text but exposes this as its
+   * accessible name — lets a dense table show a short verb while assistive tech and tests still
+   * read the full, name-qualified action. */
+  triggerAriaLabel?: string;
   title: string;
   closeLabel: string;
   children: ReactNode | ((close: () => void) => ReactNode);
 };
 
-export function Dialog({ triggerLabel, title, closeLabel, children }: DialogProps) {
+export function Dialog({
+  triggerLabel,
+  triggerAriaLabel,
+  title,
+  closeLabel,
+  children,
+}: DialogProps) {
   return (
     <Aria.DialogTrigger>
-      <Button variant="secondary">{triggerLabel}</Button>
+      <Button variant="secondary" {...(triggerAriaLabel ? { 'aria-label': triggerAriaLabel } : {})}>
+        {triggerLabel}
+      </Button>
       <Aria.ModalOverlay className="ui-modal-overlay" isDismissable>
         <Aria.Modal className="ui-modal">
           <Aria.Dialog className="ui-dialog">
