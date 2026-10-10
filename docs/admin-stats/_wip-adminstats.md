@@ -124,3 +124,12 @@ Frontend:
   чисто; repo-тест 2/2 на ізольованому Postgres — порожня БД=нулі+avg nil (рядок 5/8-null),
   seed рахує всі 6 доменів, `active+blocked == COUNT non-deleted` (A3, рядок 14-прекурсор).
   Повний ordered `make check` — за планом ПІСЛЯ T6. Далі: **T4** (instructors leaderboard).
+- **T4 (instructors leaderboard) готово** (Claude): `adapters/postgres/instructors.go` —
+  `loadInstructors` будує leaderboard: base `SELECT DISTINCT instructor_id FROM courses`,
+  кожна метрика (publishedCourses/activeEnrollments/revenue) — **окремий pre-aggregated subquery
+  LEFT JOIN на instructor_id** (щоб 3 незалежні one-to-many не давали fan-out), zero-fill COALESCE,
+  `ORDER BY revenue DESC, enroll DESC, id`, LIMIT 10. `Snapshot()` тепер кличе loadInstructors.
+  Тест `instructors_integration_test.go`: 3 інструктори, A(10000)>B(3000)>C(0); інструктор без
+  продажів присутній із 0 (9c), не випадає; читання через `Snapshot().Instructors` (перевіряє wiring).
+  Контейнер-бойлерплейт винесено у спільний `newTestPool(t,ctx)`. Верифікація: gofmt/build/vet
+  чисто; обидва repo-тести зелені (leaderboard + snapshot). `4d3a141`→наступний коміт. Далі: **T5** (timeseries).

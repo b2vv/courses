@@ -346,7 +346,7 @@ RequireAdministrator) → `GET /admin/stats` (знімок + per-instructor lead
 | T1 | OpenAPI-контракт 2 ендпоінтів (Snapshot+instructors[]+platform, avgDuration nullable) + `make generate` | — | **done** `1cfb967` (check-generated green) | 1,3,9,12b (контракт) |
 | T2 | adminstats domain+ports+validation (cap UTC, parse RFC3339, коди) + unit | — | **done** `1cfb967` (go test+vet+gofmt clean) | 7,11,12,12b |
 | T3 | snapshot repo 6 доменів (COUNT FILTER zero-fill, media 6→3, duration) + repo-тест | T2 | **done** (gofmt/build/vet clean; repo-тест 2/2 на ізольованому Postgres: порожня=нулі+avg nil, seed рахує 6 доменів, active+blocked==non-deleted) | 1,5,8 |
-| T4 | instructors leaderboard repo (join courses.instructor_id, LEFT JOIN, топ-N revenue) + repo-тест | T2 | planned | 9b,9c |
+| T4 | instructors leaderboard repo (join courses.instructor_id, LEFT JOIN, топ-N revenue) + repo-тест | T2 | **done** (pre-agg subqueries без fan-out, LEFT JOIN zero-fill; `Snapshot()` тепер кличе loadInstructors; repo-тест: A>B>C за revenue DESC [9b], інструктор без продажів = 0, не випадає [9c]) | 9b,9c |
 | T5 | timeseries repo 4 метрики (revenue за paid_at, date_trunc UTC) + repo-тест | T2 | planned | 3,4,6 |
 | T6 | http handler + wiring main.go + RequireAdministrator + PLATFORM_SINGLE_INSTRUCTOR env у payload + contract-тести | T1,T2,T3,T4,T5 | planned | 1,3,9a,10,11,12,12b |
 | T7 | engagement-slice (активні/avg progress/completion, вимір вартості, деградація) + repo-тест | T3 | planned | 13 (частк.) |
