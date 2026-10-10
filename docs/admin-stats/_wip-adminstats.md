@@ -183,3 +183,14 @@ Frontend:
   - **Наслідок для рядка 13:** engagement тепер covered, тож плейсхолдер (сценарій 13) у T10/T11
     націлюється на ВІДКЛАДЕНІ метрики (watch-through/теги/популярність), не на engagement.
   - **Бекенд фази ПОВНІСТЮ завершено.** Далі: FE **T8** (repo/schema/port/queries) → T9 → T10 → T11.
+- **T8 (FE repo/schema/port/queries) готово** (Claude): `domain/admin/stats.ts` (view-model типи +
+  StatsResult/StatsError union: 4 transport-коди + authentication_required/forbidden + 4 range-коди);
+  `adapters/api/admin-stats-schema.ts` (Zod strict; avgDurationSeconds+avgProgress nullable; engagement;
+  instructors[]); `ports/AdminStatsRepository.ts`; `adapters/api/admin-stats-repository.ts`
+  (`createApiAdminStatsRepository` через createApiTransport; wireError: 401→auth, 403 grant_forbidden→
+  forbidden, 400→range-коди, 503/500→dependency_unavailable, unnamed→invalid_response);
+  `app/composition/admin-stats-queries.ts` (snapshot()+timeseries(range) queryOptions, AdminStatsQueryError);
+  додано `stats` у `createAdminDependencies` (`admin.ts`) + фікс мока в `route-guards.test.tsx`.
+  Тести: `admin-stats-schema.test.ts` (повний знімок + null avg + відмови), `admin-stats-repository.test.ts`
+  (msw: parse snapshot/timeseries, мапінг усіх кодів помилок). Гейт слайсу: format/lint/typecheck ✔,
+  **FE test 676 passed** (+23). Повний e2e — на T11. Далі: **T9** (StatTile + TrendChart).
