@@ -194,3 +194,15 @@ Frontend:
   Тести: `admin-stats-schema.test.ts` (повний знімок + null avg + відмови), `admin-stats-repository.test.ts`
   (msw: parse snapshot/timeseries, мапінг усіх кодів помилок). Гейт слайсу: format/lint/typecheck ✔,
   **FE test 676 passed** (+23). Повний e2e — на T11. Далі: **T9** (StatTile + TrendChart).
+- **T9 (StatTile + TrendChart) готово** (Claude): `presentation/ui/StatTile.tsx` (над наявним `.ui-stat`;
+  label/value(string, caller формат)/meta/children). `TrendChart.tsx` — ОДИН параметризований inline-SVG
+  `mode: line|bar` (без Donut, N5); доступність через нативний SVG `<title>` + visually-hidden
+  data-list `<ul>` (екранний читач читає значення, не картинку); порожнє вікно → `<output>` empty-state
+  (не вісь без даних); all-zero → bars на baseline. CSS `.ui-stat-row`+`.ui-chart*` у tokens.css; експорт
+  у `presentation/ui/index.ts`; стори `StatTiles`/`Trends` в AdminKit.
+  - **a11y-пастки (зловлено axe у юнітах):** `role="img"`+`aria-label` на `<svg>` / `aria-labelledby`
+    без ролі → `aria-prohibited-attr`; рішення — нативний `<title>`. `role="status"` на `<p>` →
+    oxlint `prefer-tag-over-role`; рішення — `<output>`. Delta має латентний `aria-label` на generic
+    span (axe `aria-prohibited-attr`) — НЕ чіпав (поза скоупом, його тест на getByLabelText);
+    на сторінці аналітики Delta не потрібен — у знімку немає даних порівняння з попереднім періодом.
+  - Гейт слайсу: format/lint/typecheck ✔, **FE test 680 passed** (+4 StatTile/TrendChart +axe). Далі: **T10**.
