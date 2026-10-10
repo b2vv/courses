@@ -156,7 +156,18 @@ function Layout() {
         ]
       : [
           {
-            items: [{ to: '/admin', label: t('common.navCourses'), exact: true, icon: 'overview' }],
+            items: [
+              { to: '/admin', label: t('common.navCourses'), exact: true, icon: 'overview' },
+              ...(canAdministerAccounts(viewer)
+                ? [
+                    {
+                      to: '/admin/analytics',
+                      label: t('common.navAnalytics'),
+                      icon: 'analytics' as const,
+                    },
+                  ]
+                : []),
+            ],
           },
           {
             label: t('common.navGroupPeople'),

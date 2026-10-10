@@ -206,3 +206,15 @@ Frontend:
     span (axe `aria-prohibited-attr`) — НЕ чіпав (поза скоупом, його тест на getByLabelText);
     на сторінці аналітики Delta не потрібен — у знімку немає даних порівняння з попереднім періодом.
   - Гейт слайсу: format/lint/typecheck ✔, **FE test 680 passed** (+4 StatTile/TrendChart +axe). Далі: **T10**.
+- **T10 (`/admin/analytics` сторінка) готово** (Claude): route `routes/admin.analytics.tsx` (ssr:false,
+  beforeLoad `canAdministerAccounts` guard як у users, loader `ensureRouteQuery(…stats.snapshot())`,
+  component useSuspenseQuery, pending/error exports). `presentation/admin/AnalyticsView.tsx`: hero-плитки
+  (усього акаунтів=active+blocked, published, revenue, open reports) + секції Люди/Контент/Доступ+продажі/
+  Залученість/Операції/Модерація на StatTile + instructor-leaderboard Table + TrendSection (SegmentedControl
+  metric × useQuery timeseries bucket=day, revenue→bar, решта→line) + deferred EmptyState (сценарій 13 →
+  watch-through/теги/популярність). single-instructor ховає instructor-tile І leaderboard (9a). avg
+  null→«—», durationCoverage meta, revenue як UAH currency. nav-entry у `__root.tsx` (гейт admin),
+  `analytics` icon у AdminNavIcon, i18n `common.navAnalytics`+`adminAnalytics.*` (en+uk). CSS
+  `.admin-analytics*`. routeTree.gen.ts регенеровано (rsbuild build, tracked-файл). R24 route-list тест
+  оновлено (+/admin/analytics). Гейт слайсу: rsbuild build ✔, format/lint/typecheck ✔, **FE test 680**.
+  Повний e2e+axe — T11 (ФІНАЛ). Delta не використано (нема даних порівняння). Далі: **T11**.
