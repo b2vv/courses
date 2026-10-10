@@ -11,6 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	adminstatshttp "courses/internal/adminstats/adapters/http"
+	adminstatspostgres "courses/internal/adminstats/adapters/postgres"
+	adminstatsapplication "courses/internal/adminstats/application"
 	coursehttp "courses/internal/course/adapters/http"
 	coursepostgres "courses/internal/course/adapters/postgres"
 	courseapplication "courses/internal/course/application"
@@ -65,6 +68,11 @@ func main() {
 		os.Exit(1)
 	}
 	playbackConfig, err := playbackhttp.ConfigFromEnvironment(os.Getenv)
+	if err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
+	adminStatsConfig, err := adminstatshttp.ConfigFromEnvironment(os.Getenv)
 	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
@@ -149,6 +157,8 @@ func main() {
 		playbackHandler := playbackhttp.NewHandler(playbackAuthorizer, playbackSessions, playbackConfig, func(result string) {
 			dependencies.Metrics.PlaybackAV1Probe.WithLabelValues(result).Inc()
 		})
+		adminStatsRepository := adminstatspostgres.NewRepository(dependencies.Database)
+		adminStatsHandler := adminstatshttp.NewHandler(adminstatsapplication.New(adminStatsRepository, adminStatsConfig.SingleInstructor, time.Now))
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
@@ -168,6 +178,7 @@ func main() {
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				adminStatsHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireAdministrator)
 			},
 		})
 		logger.Info("server starting", "address", runtime.Address(":8080"))

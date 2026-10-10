@@ -143,3 +143,24 @@ Frontend:
   robust до revenue-фікстур); revenue 1 бакет за paid_at=7777, той самий ордер у orders-метриці (за created_at)
   поза вікном=0 [4]; порожнє вікно non-nil len0 [6]. Верифікація: gofmt/build/vet чисто; усі 3 adminstats
   repo-тести зелені. Далі: **T6** (handler+wiring+flag → **повний ordered make check ПІСЛЯ T6**).
+- **T6 (handler+service+config+wiring+env) готово** (Claude): `adapters/http/handler.go` (2 GET-ендпоінти
+  за `authenticate→RequireAdministrator`, no-store, DTO точно за openapi, instructors→non-nil `[]`,
+  avg→`*float64` null), `adapters/http/config.go` (`PLATFORM_SINGLE_INSTRUCTOR` дефолт true,
+  empty→fallback), `application/service.go` (Snapshot стемпить Platform.SingleInstructor; Timeseries
+  ParseMetric→ParseBucket→ResolveRange перед repo). Wiring `cmd/api/main.go` (config+repo+service+
+  RegisterAdmin). Env у `.env.example`+`docker-compose.yml`.
+  - **Знахідка/дефект:** T1 додав операції+схеми, але **НЕ** додав коди `invalid_range/range_too_wide/
+    unknown_metric/unknown_bucket` у `ErrorResponse.code` enum → contract-валідатор відхиляв би тіло.
+    Додав 4 коди в enum + `make generate` → `errorResponseErrorCode.ts` +4 (check-generated 0 drift).
+  - **РІШЕННЯ (2026-10-10, Claude):** адмін-гейт живе ЛИШЕ в middleware `RequireAdministrator`
+    (єдина точка; прод-шлях і contract-тест через нього). Service НЕ приймає actor і не дублює
+    перевірку — прибирає недосяжну гілку; спостережувана поведінка (401/403) незмінна й покрита
+    contract-тестом. Закриває альтернативу plan §1 «service re-checks admin via actor».
+  - contract-тест `handler_test.go`: 200 admin+no-store+singleInstructor+revenue; порожній leaderboard→`[]`,
+    nil avg→null; авторизація guest401/student403/instructor403/admin200 [10]; timeseries 200+parsed
+    metric/bucket; порожня серія→`[]`; range-помилки invalid_range/range_too_wide/unknown_metric/
+    unknown_bucket [11/12/12b] (unknown-* out-of-contract request → assertContract skip, бо прод не
+    openapi-валідує запити; kin-openapi таки чекає date-time формат).
+  - **ВЕРИФІКАЦІЯ: повний ordered `make check` зелений** — format/lint/typecheck, test (FE 653, BE усе),
+    integration EXIT=0 (adminstats repo 8.1s), check-generated 0 drift, build усі образи,
+    **e2e 112 passed (12.7m, 0 failed/0 did-not-run)**. Бекенд фази завершено. Далі: **T7** (engagement) / FE T8–T11.
