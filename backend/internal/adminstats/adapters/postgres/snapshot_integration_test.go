@@ -24,9 +24,10 @@ import (
 // 60..512 chars) without being a real credential.
 const validArgon2Hash = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHR2YWx1ZQ$c29tZWRlcml2ZWRrZXl2YWx1ZXRoYXRpc2xvbmdlbm91Z2g"
 
-func TestAdminStatsSnapshotAgainstPostgreSQL(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+// newTestPool starts a disposable Postgres, runs every migration and returns a
+// pool wired to it; the container and pool are torn down via t.Cleanup.
+func newTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
+	t.Helper()
 	container, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
 		return postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("courses_test"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(3*time.Minute)))
 	})
@@ -54,7 +55,14 @@ func TestAdminStatsSnapshotAgainstPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+func TestAdminStatsSnapshotAgainstPostgreSQL(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	pool := newTestPool(t, ctx)
 
 	repository := adminstatspostgres.NewRepository(pool)
 
@@ -247,6 +255,15 @@ var fixtureUUIDs = map[string]string{
 	"c-draft":          "50000000-0000-4000-8000-000000000001",
 	"c-pub":            "50000000-0000-4000-8000-000000000002",
 	"c-arch":           "50000000-0000-4000-8000-000000000003",
+	// Leaderboard fixtures (instructors_integration_test.go).
+	"ins-a": "10000000-0000-4000-8000-0000000000a1",
+	"ins-b": "10000000-0000-4000-8000-0000000000a2",
+	"ins-c": "10000000-0000-4000-8000-0000000000a3",
+	"buy-1": "10000000-0000-4000-8000-0000000000b1",
+	"buy-2": "10000000-0000-4000-8000-0000000000b2",
+	"ca":    "50000000-0000-4000-8000-0000000000c1",
+	"cb":    "50000000-0000-4000-8000-0000000000c2",
+	"cc":    "50000000-0000-4000-8000-0000000000c3",
 }
 
 func userUUID(slug string) string   { return fixtureUUIDs[slug] }

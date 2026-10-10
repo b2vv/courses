@@ -43,8 +43,11 @@ func (repository *Repository) Snapshot(ctx context.Context) (domain.Snapshot, er
 	if err := repository.scanMedia(ctx, &snapshot.Media); err != nil {
 		return domain.Snapshot{}, err
 	}
-	// Instructors leaderboard is appended by the leaderboard query (T4,
-	// instructors.go); until then the field stays empty.
+	instructors, err := repository.loadInstructors(ctx)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+	snapshot.Instructors = instructors
 	return snapshot, nil
 }
 
