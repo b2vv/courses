@@ -164,3 +164,22 @@ Frontend:
   - **ВЕРИФІКАЦІЯ: повний ordered `make check` зелений** — format/lint/typecheck, test (FE 653, BE усе),
     integration EXIT=0 (adminstats repo 8.1s), check-generated 0 drift, build усі образи,
     **e2e 112 passed (12.7m, 0 failed/0 did-not-run)**. Бекенд фази завершено. Далі: **T7** (engagement) / FE T8–T11.
+- **T7 (engagement) готово** (Claude). **РІШЕННЯ ВЛАСНИКА 2026-10-10:** реалізувати всі 3 метрики
+  (не плейсхолдер; вартість не блокер на цьому масштабі). Семантика (підтверджена вибором):
+  - ActiveLearners30d = distinct студенти з active-grant, що торкались уроку курсу за 30д (SQL `now()`).
+  - AvgProgress = середнє по active-grants від (completed уроки / усього уроків курсу); завершення
+    за `lesson_progress.completed_at`; курс без уроків виключено (NULL); без active-grant → nil (nullable).
+  - Completions = active-grants, де ВСІ уроки курсу completed.
+  - **Engagement НЕ був у контракті** (T1 пропустив) → додав `AdminStatsEngagement` у openapi +
+    поле `engagement` у Snapshot + domain `EngagementStat` + repo `engagement.go` (один WITH-запит,
+    joins grants×lessons; шлях lesson→module→course) + handler DTO + `make generate` (новий
+    `adminStatsEngagement.ts`, check-generated 0 drift). `Snapshot()` кличе loadEngagement.
+  - **Без міграції/індексу:** існуючі PK вистачають на масштабі (single-instructor, тест-режим);
+    задокументовано в engagement.go — revisit якщо lesson_progress виросте (mechanism, не bare hypothesis).
+  - repo-тест `engagement_integration_test.go`: active=3 (s4 40д стара активність виключена),
+    avg=0.5 ((0.5+1.0+0.0+0.5)/4 по active-grants), completions=1 (лише s2 завершив усі); порожнє→nil avg.
+  - **ВЕРИФІКАЦІЯ: повний ordered `make check` зелений** — FE 653, BE усе, integration (adminstats
+    repo 11.9s), check-generated 0 drift, build, **e2e 112 passed (13.3m, 0 failed)**.
+  - **Наслідок для рядка 13:** engagement тепер covered, тож плейсхолдер (сценарій 13) у T10/T11
+    націлюється на ВІДКЛАДЕНІ метрики (watch-through/теги/популярність), не на engagement.
+  - **Бекенд фази ПОВНІСТЮ завершено.** Далі: FE **T8** (repo/schema/port/queries) → T9 → T10 → T11.

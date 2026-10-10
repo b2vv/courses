@@ -131,6 +131,12 @@ type mediaDTO struct {
 	WithDurationCount    int      `json:"withDurationCount"`
 }
 
+type engagementDTO struct {
+	ActiveLearners30d int      `json:"activeLearners30d"`
+	AvgProgress       *float64 `json:"avgProgress"`
+	Completions       int      `json:"completions"`
+}
+
 type instructorDTO struct {
 	InstructorID      string `json:"instructorId"`
 	DisplayName       string `json:"displayName"`
@@ -150,6 +156,7 @@ type snapshotDTO struct {
 	Orders      ordersDTO       `json:"orders"`
 	Reports     reportsDTO      `json:"reports"`
 	Media       mediaDTO        `json:"media"`
+	Engagement  engagementDTO   `json:"engagement"`
 	Instructors []instructorDTO `json:"instructors"`
 	Platform    platformDTO     `json:"platform"`
 }
@@ -190,6 +197,11 @@ func snapshotToDTO(snapshot domain.Snapshot) snapshotDTO {
 			RevenueMinorUAH: snapshot.Orders.RevenueMinorUAH,
 		},
 		Reports: reportsDTO{Open: snapshot.Reports.Open, Resolved: snapshot.Reports.Resolved},
+		Engagement: engagementDTO{
+			ActiveLearners30d: snapshot.Engagement.ActiveLearners30d,
+			AvgProgress:       snapshot.Engagement.AvgProgress,
+			Completions:       snapshot.Engagement.Completions,
+		},
 		Media: mediaDTO{
 			InProgress:           snapshot.Media.InProgress,
 			Ready:                snapshot.Media.Ready,

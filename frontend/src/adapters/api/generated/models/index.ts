@@ -22,6 +22,7 @@ export * from './adminLesson.ts';
 export * from './adminModule.ts';
 export * from './adminMutationForbiddenResponse.ts';
 export * from './adminStatsCourses.ts';
+export * from './adminStatsEngagement.ts';
 export * from './adminStatsGrants.ts';
 export * from './adminStatsInstructor.ts';
 export * from './adminStatsMedia.ts';

@@ -46,13 +46,15 @@ func (repository *fakeRepository) Timeseries(_ context.Context, metric domain.Me
 
 func sampleSnapshot() domain.Snapshot {
 	avg := 123.5
+	progress := 0.42
 	return domain.Snapshot{
-		Users:   domain.UsersStat{Active: 5, Blocked: 1, Deleted: 2, ByRole: domain.RoleStat{Student: 3, Instructor: 2, Admin: 1}, Verified: 4, TwoFactor: 1},
-		Courses: domain.CoursesStat{Draft: 1, Published: 2, Archived: 1},
-		Grants:  domain.GrantsStat{Active: 3, Blocked: 1, Revoked: 1},
-		Orders:  domain.OrdersStat{Pending: 1, Paid: 2, Failed: 1, RevenueMinorUAH: 12000},
-		Reports: domain.ReportsStat{Open: 1, Resolved: 2},
-		Media:   domain.MediaStat{InProgress: 1, Ready: 2, Failed: 1, TotalDurationSeconds: 247, AvgDurationSeconds: &avg, WithDurationCount: 2},
+		Users:      domain.UsersStat{Active: 5, Blocked: 1, Deleted: 2, ByRole: domain.RoleStat{Student: 3, Instructor: 2, Admin: 1}, Verified: 4, TwoFactor: 1},
+		Courses:    domain.CoursesStat{Draft: 1, Published: 2, Archived: 1},
+		Grants:     domain.GrantsStat{Active: 3, Blocked: 1, Revoked: 1},
+		Orders:     domain.OrdersStat{Pending: 1, Paid: 2, Failed: 1, RevenueMinorUAH: 12000},
+		Reports:    domain.ReportsStat{Open: 1, Resolved: 2},
+		Engagement: domain.EngagementStat{ActiveLearners30d: 4, AvgProgress: &progress, Completions: 2},
+		Media:      domain.MediaStat{InProgress: 1, Ready: 2, Failed: 1, TotalDurationSeconds: 247, AvgDurationSeconds: &avg, WithDurationCount: 2},
 		Instructors: []domain.InstructorStat{
 			{InstructorID: testInstructorID, DisplayName: "Ada", PublishedCourses: 2, ActiveEnrollments: 3, RevenueMinorUAH: 12000},
 		},

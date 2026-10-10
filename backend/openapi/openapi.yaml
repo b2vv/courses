@@ -2424,7 +2424,7 @@ components:
     AdminStatsSnapshot:
       type: object
       additionalProperties: false
-      required: [users, courses, grants, orders, reports, media, instructors, platform]
+      required: [users, courses, grants, orders, reports, media, engagement, instructors, platform]
       properties:
         users: { $ref: '#/components/schemas/AdminStatsUsers' }
         courses: { $ref: '#/components/schemas/AdminStatsCourses' }
@@ -2432,6 +2432,7 @@ components:
         orders: { $ref: '#/components/schemas/AdminStatsOrders' }
         reports: { $ref: '#/components/schemas/AdminStatsReports' }
         media: { $ref: '#/components/schemas/AdminStatsMedia' }
+        engagement: { $ref: '#/components/schemas/AdminStatsEngagement' }
         instructors:
           type: array
           items: { $ref: '#/components/schemas/AdminStatsInstructor' }
@@ -2498,6 +2499,14 @@ components:
         totalDurationSeconds: { type: number }
         avgDurationSeconds: { type: number, nullable: true }
         withDurationCount: { type: integer }
+    AdminStatsEngagement:
+      type: object
+      additionalProperties: false
+      required: [activeLearners30d, avgProgress, completions]
+      properties:
+        activeLearners30d: { type: integer }
+        avgProgress: { type: number, nullable: true }
+        completions: { type: integer }
     AdminStatsInstructor:
       type: object
       additionalProperties: false

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminStatsCourses } from './adminStatsCourses.ts';
+import type { AdminStatsEngagement } from './adminStatsEngagement.ts';
 import type { AdminStatsGrants } from './adminStatsGrants.ts';
 import type { AdminStatsInstructor } from './adminStatsInstructor.ts';
 import type { AdminStatsMedia } from './adminStatsMedia.ts';
@@ -21,6 +22,7 @@ export interface AdminStatsSnapshot {
   orders: AdminStatsOrders;
   reports: AdminStatsReports;
   media: AdminStatsMedia;
+  engagement: AdminStatsEngagement;
   instructors: AdminStatsInstructor[];
   platform: AdminStatsPlatform;
 }
