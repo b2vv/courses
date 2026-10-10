@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from '@rstest/core';
+import axe from 'axe-core';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -15,11 +16,13 @@ import {
   Select,
   SegmentedControl,
   Skeleton,
+  StatTile,
   Switch,
   Table,
   Tabs,
   TextField,
   Toast,
+  TrendChart,
 } from './index';
 
 afterEach(cleanup);
@@ -324,5 +327,63 @@ describe('accessible UI primitives', () => {
     await user.tab();
     await user.keyboard('{Enter}');
     expect(dismissed).toBe(true);
+  });
+
+  it('renders a stat tile with a value, meta and trailing content, axe-clean', async () => {
+    const { container } = render(
+      <StatTile label="Активні учні · 30 днів" value="4 820" meta="2 з 3 курсів">
+        <span className="ui-stat-trailing">covered</span>
+      </StatTile>,
+    );
+    expect(screen.getByText('4 820').textContent).toBe('4 820');
+    expect(screen.getByText('2 з 3 курсів').textContent).toBe('2 з 3 курсів');
+    expect(screen.getByText('covered').textContent).toBe('covered');
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('renders a line trend whose values are readable as a list, axe-clean', async () => {
+    const { container } = render(
+      <TrendChart
+        title="Реєстрації"
+        mode="line"
+        points={[
+          { label: '2026-03-01', value: 4 },
+          { label: '2026-03-02', value: 7 },
+          { label: '2026-03-03', value: 2 },
+        ]}
+        emptyLabel="Немає даних у вікні"
+      />,
+    );
+    expect(screen.getByTitle('Реєстрації').textContent).toBe('Реєстрації');
+    expect(container.querySelector('svg')).not.toBeNull();
+    expect(container.querySelector('.ui-chart-line')).not.toBeNull();
+    expect(screen.getByText('2026-03-02: 7').textContent).toBe('2026-03-02: 7');
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('renders a bar trend and keeps a flat all-zero series on the baseline', () => {
+    render(
+      <TrendChart
+        title="Замовлення"
+        mode="bar"
+        points={[
+          { label: '2026-03-01', value: 0 },
+          { label: '2026-03-02', value: 0 },
+        ]}
+        emptyLabel="Немає даних у вікні"
+      />,
+    );
+    const bars = document.querySelectorAll('.ui-chart-bar');
+    expect(bars).toHaveLength(2);
+    bars.forEach((bar) => expect(bar.getAttribute('height')).toBe('0'));
+  });
+
+  it('shows an empty state instead of an axis when the window is quiet, axe-clean', async () => {
+    const { container } = render(
+      <TrendChart title="Дохід" mode="line" points={[]} emptyLabel="Немає даних у вікні" />,
+    );
+    expect(screen.getByRole('status').textContent).toBe('Немає даних у вікні');
+    expect(container.querySelector('svg')).toBeNull();
+    expect((await axe.run(container)).violations).toEqual([]);
   });
 });

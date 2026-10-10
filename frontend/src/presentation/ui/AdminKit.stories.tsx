@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Button, Delta, LoadMeter, SegmentedControl, Table } from './index';
+import { Button, Delta, LoadMeter, SegmentedControl, StatTile, Table, TrendChart } from './index';
 import { AdminNavIcon } from '../admin/AdminNavIcon';
 
 /**
@@ -64,6 +64,62 @@ export const Metrics: Story = {
         <span className="ui-stat-value">4 820</span>
         <Delta label="проти минулого тижня" value="6.2%" direction="up" tone="success" />
       </div>
+    </div>
+  ),
+};
+
+export const StatTiles: Story = {
+  render: () => (
+    <div
+      style={{
+        display: 'grid',
+        gap: 'var(--space-4)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
+      }}
+    >
+      <StatTile label="Усього акаунтів" value="4 820" />
+      <StatTile label="Активні учні · 30 днів" value="1 204" meta="по курсах з прогресом" />
+      <StatTile label="Середня тривалість відео" value="—" meta="нема покриття" />
+      <StatTile label="Дохід, грн" value="128 400">
+        <Delta label="проти минулого місяця" value="6.2%" direction="up" tone="success" />
+      </StatTile>
+    </div>
+  ),
+};
+
+export const Trends: Story = {
+  render: () => (
+    <div
+      style={{
+        display: 'grid',
+        gap: 'var(--space-6)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(18rem, 1fr))',
+      }}
+    >
+      <TrendChart
+        title="Реєстрації · день"
+        mode="line"
+        emptyLabel="Немає даних у вікні"
+        points={[
+          { label: '01.03', value: 4 },
+          { label: '02.03', value: 9 },
+          { label: '03.03', value: 6 },
+          { label: '04.03', value: 12 },
+          { label: '05.03', value: 8 },
+        ]}
+      />
+      <TrendChart
+        title="Замовлення · тиждень"
+        mode="bar"
+        emptyLabel="Немає даних у вікні"
+        points={[
+          { label: 'Т1', value: 3 },
+          { label: 'Т2', value: 7 },
+          { label: 'Т3', value: 5 },
+          { label: 'Т4', value: 9 },
+        ]}
+      />
+      <TrendChart title="Дохід · день" mode="line" emptyLabel="Немає даних у вікні" points={[]} />
     </div>
   ),
 };
