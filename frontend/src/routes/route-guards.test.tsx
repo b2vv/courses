@@ -26,6 +26,7 @@ import { createTeachQueries } from '../app/composition/teach-queries';
 import { createPurchaseQueries } from '../app/composition/purchase-queries';
 import { createEnrollmentQueries } from '../app/composition/enrollment-queries';
 import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
+import { createAdminStatsQueries } from '../app/composition/admin-stats-queries';
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
@@ -247,6 +248,10 @@ function createTestRouter(
             },
           }),
           regenerate: async () => ({ ok: true, value: undefined }),
+        }),
+        stats: createAdminStatsQueries({
+          snapshot: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          timeseries: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
         }),
       },
       // Route guards never open the editor, so the in-memory store is the whole truth here.
