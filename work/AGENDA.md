@@ -42,6 +42,19 @@
 
 `work/tasks.md`: T01–T08 → done.
 
+**Admin-reconstruction + admin-stats — закрито й злито 2026-10-10 (PR #17 `f88cf96`).**
+Owner-initiated міні-фаза **поза роадмапом §24** (не змінює «§24 пройдено»): NorthWind admin
+shell (S0), `/admin/users` як Fleet-таблиця (S2), і повний spec-flow admin-stats (GATE 1 ✔,
+GATE 2 ✔ обидва рев'юери; T1–T11) — новий бекенд-модуль `internal/adminstats`
+(domain→application→ports→postgres/http), два admin-only read-ендпойнти
+(`/api/v1/admin/stats`, `/stats/timeseries`) за `RequireAdministrator`, і екран
+`/admin/analytics` (снапшот 6 доменів, лідерборд інструкторів, трендовий графік). Закривний
+ordered `make check` EXIT=0, **e2e 114 passed**; усі 17 приймальних рядків §6.1 мають row-level
+доказ (`docs/admin-stats/report.md` §2). Дефекти, що гейт/e2e виловили: OpenAPI без 4 range/metric
+кодів і engagement-схеми; grid overflow при 200 % zoom. Обмеження (report §5): deferred
+watch-through/теги/популярність (placeholder, не фабриковані числа); 9b доведено unit+repo, не
+live-e2e; без engagement-індексу (fine at scale); latent axe-баг у невикористаному `Delta`.
+
 ## Джерела та кількість кандидатів
 
 | Джерело | Кандидатів | Які |
@@ -96,7 +109,8 @@ GATE 2, En01–En15, L1–L9, рев'ю Courses 2 на кожному зрізі
 
 **Роадмап §24 пройдено; identity-кластер (accounts) закрито 2026-10-06.** Оплата (остання фаза §24 п.21)
 закрита 2026-10-03; рейтинги 2026-10-04; хвости B-28/B-23 2026-10-04; accounts 2026-10-06 (PR #7);
-**enrollment 2026-10-07 (PR #8)**.
+**enrollment 2026-10-07 (PR #8)**; learning 2026-10-09; **admin-reconstruction + admin-stats
+2026-10-10 (PR #17 `f88cf96`) — owner-initiated міні-фаза поза §24**.
 
 **Наступного продуктового ходу немає — роадмап §24 пройдено повністю.** Що лишилось, усе — не хід
 агента, а рішення власника або дрібні хвости: **деплой (K2/Р1)**, відкладений власником 2026-10-03,
