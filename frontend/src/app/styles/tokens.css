@@ -581,6 +581,24 @@
   color: var(--color-muted);
   padding-block: var(--space-4);
 }
+.admin-analytics {
+  display: grid;
+  gap: var(--space-6);
+}
+.admin-analytics-group {
+  display: grid;
+  gap: var(--space-4);
+}
+.admin-analytics-group h2 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  margin: 0;
+}
+.admin-analytics-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
 .ui-delta {
   display: inline-flex;
   align-items: center;
