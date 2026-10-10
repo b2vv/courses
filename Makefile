@@ -126,7 +126,7 @@ e2e-reset:
 	  if [ -n "$$left" ]; then echo "e2e-reset: $$volume survived: $$left" >&2; exit 1; fi; \
 	done; \
 	echo "e2e-reset: project $$project, removed $(E2E_RESET_VOLUMES) (prometheus-data kept)"
-# Owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md. Needs only
+# Owner-run live WayForPay proof (Pay25-live), work/archive/runbook-o06c-tunnel.md. Needs only
 # WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
 # stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.
 tunnel-up: env

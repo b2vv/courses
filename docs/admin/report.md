@@ -6,7 +6,7 @@ close. One report per feature; the Post-deploy section is left for `post-deploy-
 ## 1. What was done
 
 Fifteen tasks A01–A15, each implemented with Codex (gpt-5.6-sol) and re-verified here
-before commit; per-task evidence in `work/report-a01.md` … `report-a14.md`. Everything
+before commit; per-task evidence in `work/archive/report-a01.md` … `report-a14.md`. Everything
 landed as planned except the deviations below.
 
 - **Backend** (A01–A07): migration 00003 adds `courses.instructor_id` (nullable add →
@@ -67,7 +67,7 @@ task's evidence ran green inside the final `make check` (exit 0, twelve steps). 
 | B03 | Slug uniqueness survives concurrency | A03 | closed by A03 evidence; in the exit-0 `make check` | збіглося |
 | B04 | A slug is mutable before publication | A05 | closed by A05 evidence; in the exit-0 `make check` | збіглося |
 | B05 | A maximal legal tree saves | A05 | closed by A05 evidence; in the exit-0 `make check` | збіглося |
-| B06 | Tree bounds are refused | A05 | closed by A05 evidence; in the exit-0 `make check`. **Amended 2026-09-17 (backlog B-3):** the `121 lessons` case now expects `400 lesson_limit`, the other two stay `400 invalid_request` — dated in `plan.md` §8, evidence `work/report-b3.md`. The proof does not weaken; it splits into three cases carrying two codes | збіглося |
+| B06 | Tree bounds are refused | A05 | closed by A05 evidence; in the exit-0 `make check`. **Amended 2026-09-17 (backlog B-3):** the `121 lessons` case now expects `400 lesson_limit`, the other two stay `400 invalid_request` — dated in `plan.md` §8, evidence `work/archive/report-b3.md`. The proof does not weaken; it splits into three cases carrying two codes | збіглося |
 | B07 | Oversized bodies are refused | A05 | closed by A05 evidence; in the exit-0 `make check` | збіглося |
 | B08 | Summary bounds | A05 | closed by A05 evidence; in the exit-0 `make check` | збіглося |
 | B09 | A deep tree stays operable | A11 | closed by A11 evidence; in the exit-0 `make check` | збіглося |

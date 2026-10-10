@@ -2,7 +2,7 @@
 
 Сесія-рецензент, 2026-09-12. Код T11 не змінювався: дерево лишається рівно
 `frontend/e2e/accessibility.spec.ts`, `frontend/e2e/playback.spec.ts`,
-`frontend/src/adapters/playback/hls-media.ts` + журнал `work/report-t11.md`.
+`frontend/src/adapters/playback/hls-media.ts` + журнал `work/archive/report-t11.md`.
 Тут записано те, чого бриф T11 не міг знати: Docker цього разу доступний, тож
 `make check` уперше пройшов не на папері.
 
@@ -49,7 +49,7 @@ Select у UI kit. Детерміновано, ідентично в light і в 
 Станом на цей запис неviміряні **всі три** рядки T11, з різних причин:
 B24a і B25 — бо red; R35 — бо не запускався жодного разу.
 
-Це суперечить рядку `work/report-t11.md`: «T11 code/test scope завершено
+Це суперечить рядку `work/archive/report-t11.md`: «T11 code/test scope завершено
 локально… Specification review PASS». Відсутність Docker звіт назвав чесно, але
 висновок «авторовано, лишилось прогнати» прогін не підтверджує.
 

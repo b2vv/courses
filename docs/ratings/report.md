@@ -60,7 +60,7 @@ row has an automated level; manual rows: 0.
 | Rt29 | FE `ReviewBlock.test` «keeps the typed text when a save fails (Rt29)»; «names a save refused because the review was removed meanwhile» | unit | proven |
 | Rt30 | e2e «Rt26 Rt30…» (grant holder sees reviews on the learning page, public page 404); contract `TestT05ReviewRoutesGaps/learning list permits an archived course grant holder`, `…/learning list refuses a viewer without a right` | e2e, contract | proven |
 
-Notes from the independent row check (Courses 2, `work/review-ratings-report.md`), recorded rather than
+Notes from the independent row check (Courses 2, `work/archive/review-ratings-report.md`), recorded rather than
 rounded up: **Rt12** proves the freeze; the capture from real facts at write time is proven by the application
 tests and on the real path only at 0 % (Rt01). **Rt20**'s refusal to edit after revocation is an application unit
 with a fake (the integration row proves the review stays). **Rt04** shows the review gone; the count drop is

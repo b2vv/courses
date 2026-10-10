@@ -192,7 +192,7 @@ opens with no callback able to reach the stack; the tunnel run's log shows the c
   against the stub); a replayed callback changes nothing.
 - **O06c-live (by hand, owner):** one recorded run through a cloudflared tunnel where WayForPay's
   **real** `serviceUrl` callback reaches the stack, is signature-verified and applied once. Courses 1
-  writes a runbook (`work/runbook-o06c-tunnel.md`); the owner runs it with the real test-merchant
+  writes a runbook (`work/archive/runbook-o06c-tunnel.md`); the owner runs it with the real test-merchant
   secret key (kept only in the owner's local `.env`, never in the repo) and returns the log/screenshot;
   Courses 1 records it in the phase report as the production-path proof.
 **Seam:** the WayForPay adapter's `PayURL`/`StatusURL` become env-configurable, **defaulting to the

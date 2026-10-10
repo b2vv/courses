@@ -4,7 +4,7 @@
 
 ## Plan-critique: перевірка рішень
 
-Координатор передав результати чотирьох незалежних лінз: logic — 2 blocking, edges — 2 blocking, slop — 2 non-blocking, complexity — без знахідок. [Ledger](../../work/ledger.md) підтверджує 4 launched / 4 returned, зокрема `plan_complexity` — 0 blocking / 0 non-blocking. Reviewer нижче перевірив наявність виправлень у поточному плані, не підміняючи цим авторство початкових critiques.
+Координатор передав результати чотирьох незалежних лінз: logic — 2 blocking, edges — 2 blocking, slop — 2 non-blocking, complexity — без знахідок. [Ledger](../../work/archive/ledger.md) підтверджує 4 launched / 4 returned, зокрема `plan_complexity` — 0 blocking / 0 non-blocking. Reviewer нижче перевірив наявність виправлень у поточному плані, не підміняючи цим авторство початкових critiques.
 
 | Лінза / знахідка | Рішення у плані | Перевірка |
 |---|---|---|

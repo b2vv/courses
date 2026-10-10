@@ -1,5 +1,5 @@
 #!/bin/sh
-# `make tunnel-up` — the owner-run live WayForPay proof (Pay25-live), work/runbook-o06c-tunnel.md.
+# `make tunnel-up` — the owner-run live WayForPay proof (Pay25-live), work/archive/runbook-o06c-tunnel.md.
 # Starts a public tunnel to nginx (localhost.run by default, TUNNEL_PROVIDER=cloudflared optional), then recreates the api with WayForPay configured for
 # that tunnel's random public URL. Only two values come from .env (the merchant account and key);
 # the URL and domain are exported here, and shell variables take precedence over .env in Compose,

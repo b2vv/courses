@@ -5,7 +5,7 @@
 | Дата | 2026-10-09 |
 | Автор | Courses (design-pass) |
 | Рішення власника | «1 в 1 як на відео» = **макет-граматика NorthWind на НАШИХ реальних даних** (не дослівні infra-екрани, не лише скін). Обсяг сесії: **спершу цей план**, код — після узгодження. |
-| Джерела | Дизайн-система: `docs/design/northwind-admin-spec.md`. Рекон даних: `work/_wip-admin11-recon.md`. Розкадровка відео: scratchpad `admin-ref/p_*.jpg`. |
+| Джерела | Дизайн-система: `docs/design/northwind-admin-spec.md`. Рекон даних: `work/archive/_wip-admin11-recon.md`. Розкадровка відео: scratchpad `admin-ref/p_*.jpg`. |
 | Метод | `reference-ui-reconstruction` (факти зафіксовано) → план → слайси з Playwright-скрінами (3 ширини) + ordered `make check`. |
 
 ## 0.5. Рішення власника (2026-10-09) — закривають альтернативи
@@ -16,7 +16,7 @@
 
 ## 0. Залізне обмеження (визначає все нижче)
 
-**На беку НЕМАЄ жодного stats/aggregate/dashboard-ендпоінта** (`work/_wip-admin11-recon.md` §підсумок). Усі 5 `/admin`-сторінок — списки або редактор. Отже кожне NorthWind-число треба класифікувати:
+**На беку НЕМАЄ жодного stats/aggregate/dashboard-ендпоінта** (`work/archive/_wip-admin11-recon.md` §підсумок). Усі 5 `/admin`-сторінок — списки або редактор. Отже кожне NorthWind-число треба класифікувати:
 
 - 🟢 **Реальне зараз** — є в наявній відповіді: `pagination.total` (курси, юзери — по 1 на фільтр), `progressPercent` 0–100 (learner×course), video `receivedBytes/declaredBytes`+`state` (список відео повний), module/lesson counts із course tree, status-пігулки (courses, users).
 - 🟡 **Клієнт-агрегація** — рахується на фронті з наявного: video-states донат (повний список), розподіл по сторінці (⚠️ лише завантажене, не весь набір).

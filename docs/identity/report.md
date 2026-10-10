@@ -228,5 +228,5 @@ login attempts proving the limiter answers `429`, and since I06g several browser
 through the real endpoint immediately afterwards. Nobody had run those two steps back to back
 before. They pass: the limiter's window recovers between them, and `e2e` authenticates normally.
 Recorded because the failure, had it happened, would have looked exactly like a product defect and
-is not one — `work/report-i06g.md` describes the same `429` arriving from a different cause when
+is not one — `work/archive/report-i06g.md` describes the same `429` arriving from a different cause when
 the suite is run twice by hand.

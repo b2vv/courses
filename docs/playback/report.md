@@ -1,7 +1,7 @@
 # Phase 6 — playback: delivery report
 
 Delta to [plan.md](plan.md) and [spec.md](spec.md). Written 2026-09-12 at phase close from
-the task evidence in `work/report-t1.md` … `work/report-t12.md` and the reviewer's ordered
+the task evidence in `work/archive/report-t1.md` … `work/archive/report-t12.md` and the reviewer's ordered
 gate recorded in T11 and T12. There is no production deployment to check.
 
 ## 1. What was done
@@ -33,7 +33,7 @@ number of `ok` lines, not the number of packages. The head of the gate runs Go *
 `make test` → `go test -race ./...`, and `infrastructure/tests/integration.sh` →
 `go test -count=1 -tags=integration ./...` — and each prints its own `ok` lines, so packages
 that run in both are counted twice. Measured on this phase's own gate logs
-(`work/make-check-final2.log`, `work/make-check-final3.log`): **48 `ok` lines, 26 unique
+(`work/archive/make-check-final2.log`, `work/archive/make-check-final3.log`): **48 `ok` lines, 26 unique
 packages** — 22 from the race run plus 4 that only `-tags=integration` adds. The runs
 happened as recorded and no row's evidence weakens; only the word «packages» was wrong, and
 it read as roughly twice the coverage actually exercised. Found by the parallel session while
@@ -161,7 +161,7 @@ proof; `gate` only records the final execution of proofs that actually exist.
 | B04 | Failed video has an explicit state | T7 component test; frontend gate | matched |
 | B05 | 95.0 completes and 94.9 does not | T3 domain boundary tests; Go gate | matched |
 | B06 | NULL duration saves position without completion or clamp | T3 domain and PostgreSQL integration; Go/integration gate | matched |
-| B07 | Shorter replacement clamps a saved position | `work/report-b07.md`; the course postgres integration package green against real PostgreSQL, fix in `819dcac` | verified (gate) |
+| B07 | Shorter replacement clamps a saved position | `work/archive/report-b07.md`; the course postgres integration package green against real PostgreSQL, fix in `819dcac` | verified (gate) |
 | B08 | Replacing video preserves the watched mark | T15 PostgreSQL integration: the completed mark survives eviction of the first asset (precondition asserted) | **verified** |
 | B09 | 90 s of playing time produces exactly three writes | T9 frontend cadence test; frontend gate | matched |
 | B10 | Pause, seek, hide and navigation each write | T9 frontend event tests; frontend gate | matched |

@@ -513,7 +513,7 @@ test.describe('the transcript editor, with a stored admin session', () => {
     await text.blur();
 
     // The adapter really wrote. The key carries the author and lesson; per the 2026-09-24
-    // decision in work/brief-a13-language.md, the language lives in the snapshot itself. This is
+    // decision in work/archive/brief-a13-language.md, the language lives in the snapshot itself. This is
     // the assertion the unit tests cannot make: they run against the in-memory store.
     const ownSnapshotKey = `${adminID}:${editorLessonID}`;
     await expect.poll(() => storedSnapshotKeys(page)).toEqual([ownSnapshotKey]);
