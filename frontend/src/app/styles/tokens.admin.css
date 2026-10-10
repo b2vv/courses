@@ -1,18 +1,20 @@
 /*
- * Admin surface — the dense, editorial density (D-d), on NorthWindLab's
- * stylistics (https://northwindlab.com): near-black editorial dark, a teal
- * accent, Space Grotesk display, thin borders, elevated card surfaces. Applied
- * via `data-surface="admin"` on the page container (admin + instructor).
+ * Admin surface — dense editorial density (D-d), measured 1:1 from the Northwind
+ * Labs ops-dashboard reference the owner supplied (docs/design/northwind-admin-spec.md,
+ * browsable system: docs/design/reference/*). Applied via `data-surface="admin"` on
+ * the page container (admin + instructor).
  *
- * Same SYSTEM as the client — the primitives and scales live in tokens.css.
- * This scope re-binds the density knobs AND the surface palette / accent /
- * display font for admin, in BOTH themes (owner's call: admin follows
- * light/dark, not dark-only). NorthWind itself is dark-only, so the dark values
- * are the faithful ones; the light values are a derived editorial-light theme.
- * The airy client counterpart is tokens.client.css.
+ * Same SYSTEM as the client — primitives/scales live in tokens.css. This scope
+ * re-binds the density knobs AND the surface palette / brand / display font for admin.
+ *
+ * DARK-ONLY (owner decision 2026-10-09, reverses the earlier light/dark call; allowed
+ * pre-launch). The dark values sit directly on the scope — unconditional — so admin
+ * ignores prefers-color-scheme and any [data-theme]; `color-scheme: dark` makes native
+ * controls/scrollbars follow. BRAND IS BLUE #5273f2 (the reference's primary); teal is
+ * demoted to success/load only. The airy client counterpart is tokens.client.css.
  */
 
-/* Density (dense) + display font — theme-independent. */
+/* Density (dense) + display font. */
 [data-surface='admin'] {
   --font-display: 'Space Grotesk Variable', var(--font-body);
   --radius-control: calc(var(--radius-panel) - 2px);
@@ -23,58 +25,156 @@
   --surface-gap: var(--space-6);
 }
 
-/* Light admin — derived editorial-light (NorthWind is dark-only). */
+/* Palette — dark-only, measured. Unconditional on the scope so it always wins. */
 [data-surface='admin'] {
-  --color-background: #f7f9fa;
-  --color-surface: #eef2f4;
-  --color-text: #0f1720;
-  --color-muted: #5b6675;
-  /* Control-grade border, >=3:1 on the light admin bg (WCAG 1.4.11). */
-  --color-border: #7d828c;
-  --color-hairline: #dfe4e8;
-  /* Teal accent. Button = teal fill + white text. Deep teal so links/labels as
-     TEXT clear 4.5:1 on both the light bg and the card surface. */
-  --color-primary: #0b6b78;
-  --color-primary-hover: #095863;
+  color-scheme: dark;
+
+  /* Grounds. Cards are NOT lighter than the page — set off by border + shadow. */
+  --color-background: #0c0d12;
+  --color-surface: #111317; /* sidebar, table th, menus */
+  --color-elevated: #17181d; /* row hover, popovers, secondary-button fill */
+  --color-text: #e6e8ec;
+  --color-muted: #8b95a3;
+  /* Micro-label ink. Reference sits near 3:1; lifted here to clear ~4.5:1 on the bg. */
+  --color-faint: #828b99;
+  /* Control-grade border, >=3:1 on #0c0d12 (WCAG 1.4.11). */
+  --color-border: #656e7b;
+  /* Decorative hairline for cards/tables/dividers. */
+  --color-hairline: #20232b;
+
+  /* Brand is blue. Primary button fills with the gradient below, never flat. */
+  --color-primary: #5273f2;
+  --color-primary-hover: #6986ff;
   --color-on-primary: #ffffff;
-  --color-accent: #0b6b78;
+  --color-focus: #7b93ff;
+
+  /* Signal colours — separate from the brand accent. */
+  --color-success: #4ed6a8; /* healthy / active / positive / load */
+  --color-warning: #fcb646; /* degraded / pending / chart highlight */
+  --color-danger: #e5695f; /* error / failed / blocked / destructive */
+  --color-info: #6986ff; /* in-progress / canary; env prod tag */
+
+  /* Accent token (used by ui-pill--accent, icon-tiles). Keep it the brand blue. */
+  --color-accent: #5273f2;
   --color-on-accent: #ffffff;
-  --color-focus: #0b6b78;
+
+  /* Data-viz secondary only (duration, allocation, chart series 2). */
+  --color-viz-purple: #8668f3;
+
   --card-border-color: var(--color-hairline);
+
+  /* Primary-button gloss (D3). Gradient + top highlight + blue glow. */
+  --btn-primary-bg: linear-gradient(180deg, #6986ff 0%, #4c6bf0 100%);
+  --btn-primary-bg-hover: linear-gradient(180deg, #7e99ff 0%, #5a78f6 100%);
+  --btn-primary-highlight: inset 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+  --btn-primary-glow: 0 2px 10px color-mix(in srgb, var(--color-primary) 45%, transparent);
+
+  /* Active sidebar pill: frosted blue gradient + top gloss + one contained glow.
+     Translucent so it reads as a selected surface, not a CTA button (ref parity). */
+  --nav-active-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 30%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary) 14%, transparent) 100%
+  );
+  --nav-active-ring: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  --nav-active-highlight: inset 0 1px 0 color-mix(in srgb, #ffffff 16%, transparent);
+  --nav-active-glow: 0 1px 12px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
-/* Dark admin — faithful NorthWind. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) [data-surface='admin'] {
-    --color-background: #070a13;
-    --color-surface: #0d121c;
-    --color-text: #dae0e7;
-    --color-muted: #8b95a3;
-    /* Control-grade border, >=3:1 on #070a13. NorthWind's own #242932 is a
-       decorative hairline, kept for cards/tables via --color-hairline. */
-    --color-border: #656e7b;
-    --color-hairline: #242932;
-    --color-primary: #20b2c5;
-    --color-primary-hover: #3cc3d4;
-    --color-on-primary: #071018;
-    --color-accent: #20b2c5;
-    --color-on-accent: #071018;
-    --color-focus: #20b2c5;
-    --card-border-color: var(--color-hairline);
-  }
+/* ---- Admin-scoped component overrides (do not touch the client) ---------- */
+
+/* Primary button: glossy blue gradient, not a flat fill. */
+[data-surface='admin'] .ui-button--primary {
+  background: var(--btn-primary-bg);
+  border-color: transparent;
+  box-shadow: var(--btn-primary-highlight), var(--btn-primary-glow);
 }
-:root[data-theme='dark'] [data-surface='admin'] {
-  --color-background: #070a13;
-  --color-surface: #0d121c;
-  --color-text: #dae0e7;
-  --color-muted: #8b95a3;
-  --color-border: #656e7b;
-  --color-hairline: #242932;
-  --color-primary: #20b2c5;
-  --color-primary-hover: #3cc3d4;
-  --color-on-primary: #071018;
-  --color-accent: #20b2c5;
-  --color-on-accent: #071018;
-  --color-focus: #20b2c5;
-  --card-border-color: var(--color-hairline);
+[data-surface='admin'] .ui-button--primary[data-hovered] {
+  background: var(--btn-primary-bg-hover);
+  box-shadow:
+    var(--btn-primary-highlight),
+    0 3px 14px color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+[data-surface='admin'] .ui-button--primary[data-pressed] {
+  box-shadow: var(--btn-primary-highlight);
+}
+
+/* Destructive-ghost: red text on the neutral surface, not a red fill ("Roll back"). */
+[data-surface='admin'] .ui-button--danger-ghost {
+  color: var(--color-danger);
+  background: var(--color-elevated);
+  border-color: var(--color-hairline);
+}
+[data-surface='admin'] .ui-button--danger-ghost[data-hovered] {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-elevated));
+}
+
+/* Secondary button sits on the elevated surface here (reference "Pause"). */
+[data-surface='admin'] .ui-button--secondary {
+  background: var(--color-elevated);
+  border-color: var(--color-hairline);
+}
+[data-surface='admin'] .ui-button--secondary[data-hovered] {
+  background: var(--color-surface);
+}
+
+/* Status pills: stronger tint, brighter text, no visible border (reference look). */
+[data-surface='admin'] .ui-pill--success,
+[data-surface='admin'] .ui-pill--danger,
+[data-surface='admin'] .ui-pill--info {
+  border-color: transparent;
+}
+[data-surface='admin'] .ui-pill--success {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-background));
+}
+[data-surface='admin'] .ui-pill--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 16%, var(--color-background));
+}
+[data-surface='admin'] .ui-pill--info {
+  color: var(--color-primary-hover);
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-background));
+}
+
+/* Table header: micro-label treatment on the raised surface. */
+[data-surface='admin'] .ui-table th {
+  color: var(--color-faint);
+  font-family: var(--font-utility);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-block-end-color: var(--color-hairline);
+}
+[data-surface='admin'] .ui-table td {
+  border-block-end-color: var(--color-hairline);
+}
+[data-surface='admin'] .ui-table tbody tr[data-hovered] td,
+[data-surface='admin'] .ui-table tbody tr:hover td {
+  background: var(--color-elevated);
+}
+
+/* Active segmented/tab keeps the gloss, matching the primary button. */
+[data-surface='admin'] .ui-segment[data-selected] {
+  background: var(--btn-primary-bg);
+  border-color: transparent;
+  box-shadow: var(--btn-primary-highlight);
+}
+
+/* Active sidebar link: frosted blue gradient pill, top gloss, edge ring + one glow.
+   Targets the real admin nav (.admin-nav-link), not the unused .ui-sidebar-link. */
+[data-surface='admin'] .admin-nav-link[aria-current='page'] {
+  color: #ffffff;
+  background: var(--nav-active-bg);
+  box-shadow: var(--nav-active-ring), var(--nav-active-highlight), var(--nav-active-glow);
+}
+
+/* Active language toggle: the flat brand blue is too light for white text at
+   12px bold (4.12:1, WCAG AA fail — axe caught it on every admin page via the
+   shared header). Deepen the fill on the admin surface only so it clears AA
+   (5.30:1 measured) while still reading as the same brand blue; the client
+   surface keeps its own --color-primary and is untouched. */
+[data-surface='admin'] .language-switcher button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--color-primary) 86%, #000);
 }

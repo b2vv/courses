@@ -19,6 +19,8 @@ import type {
   AdminCourseWrite,
   AdminGrantRequest,
   AdminMutationForbiddenResponse,
+  AdminStatsSnapshot,
+  AdminStatsTimeseries,
   AdminUserConflictResponse,
   AdminUserMutationForbiddenResponse,
   AdminUserPage,
@@ -43,6 +45,7 @@ import type {
   EmailRequest,
   EmailTakenResponse,
   ForbiddenResponse,
+  GetAdminStatsTimeseriesParams,
   GetCourseRosterParams,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
@@ -1915,6 +1918,150 @@ const res = await fetch(getGrantCourseAccessUrl(courseId),
 
   const data: grantCourseAccessResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as grantCourseAccessResponse
+}
+
+
+
+export type getAdminStatsResponse200 = {
+  data: AdminStatsSnapshot
+  status: 200
+}
+
+export type getAdminStatsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getAdminStatsResponse403 = {
+  data: GrantForbiddenResponse
+  status: 403
+}
+
+export type getAdminStatsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getAdminStatsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getAdminStatsResponseSuccess = (getAdminStatsResponse200) & {
+  headers: Headers;
+};
+export type getAdminStatsResponseError = (getAdminStatsResponse401 | getAdminStatsResponse403 | getAdminStatsResponse500 | getAdminStatsResponse503) & {
+  headers: Headers;
+};
+
+export type getAdminStatsResponse = (getAdminStatsResponseSuccess | getAdminStatsResponseError)
+
+export const getGetAdminStatsUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/stats`
+}
+
+/**
+ * Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
+ * @summary Platform statistics snapshot
+ */
+export const getAdminStats = async ( options?: RequestInit): Promise<getAdminStatsResponse> => {
+
+  const res = await fetch(getGetAdminStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminStatsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAdminStatsResponse
+}
+
+
+
+export type getAdminStatsTimeseriesResponse200 = {
+  data: AdminStatsTimeseries
+  status: 200
+}
+
+export type getAdminStatsTimeseriesResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getAdminStatsTimeseriesResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getAdminStatsTimeseriesResponse403 = {
+  data: GrantForbiddenResponse
+  status: 403
+}
+
+export type getAdminStatsTimeseriesResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getAdminStatsTimeseriesResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getAdminStatsTimeseriesResponseSuccess = (getAdminStatsTimeseriesResponse200) & {
+  headers: Headers;
+};
+export type getAdminStatsTimeseriesResponseError = (getAdminStatsTimeseriesResponse400 | getAdminStatsTimeseriesResponse401 | getAdminStatsTimeseriesResponse403 | getAdminStatsTimeseriesResponse500 | getAdminStatsTimeseriesResponse503) & {
+  headers: Headers;
+};
+
+export type getAdminStatsTimeseriesResponse = (getAdminStatsTimeseriesResponseSuccess | getAdminStatsTimeseriesResponseError)
+
+export const getGetAdminStatsTimeseriesUrl = (params: GetAdminStatsTimeseriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/stats/timeseries?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/stats/timeseries`
+}
+
+/**
+ * Admin-only. Buckets one metric (signups, enrollments, orders or revenue) by day or week over a UTC window. Revenue buckets by paid time, enrollments by grant time, the rest by creation time. An unparseable or inverted range is invalid_range; a window wider than the bucket cap is range_too_wide; an unknown metric or bucket is rejected. Responses are never cached.
+ * @summary Platform statistics timeseries
+ */
+export const getAdminStatsTimeseries = async (params: GetAdminStatsTimeseriesParams, options?: RequestInit): Promise<getAdminStatsTimeseriesResponse> => {
+
+  const res = await fetch(getGetAdminStatsTimeseriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminStatsTimeseriesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAdminStatsTimeseriesResponse
 }
 
 

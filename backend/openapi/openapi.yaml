@@ -477,6 +477,68 @@ paths:
         '409': { $ref: '#/components/responses/PurchaseConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/stats:
+    get:
+      operationId: getAdminStats
+      summary: Platform statistics snapshot
+      description: >-
+        Admin-only. A point-in-time aggregate across people, content, access and sales,
+        moderation and media, plus the per-instructor leaderboard and the single-instructor
+        flag. Accepts no query parameters and responses are never cached.
+      responses:
+        '200':
+          description: The platform snapshot.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminStatsSnapshot' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/GrantForbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/stats/timeseries:
+    get:
+      operationId: getAdminStatsTimeseries
+      summary: Platform statistics timeseries
+      description: >-
+        Admin-only. Buckets one metric (signups, enrollments, orders or revenue) by day or
+        week over a UTC window. Revenue buckets by paid time, enrollments by grant time, the
+        rest by creation time. An unparseable or inverted range is invalid_range; a window
+        wider than the bucket cap is range_too_wide; an unknown metric or bucket is rejected.
+        Responses are never cached.
+      parameters:
+        - name: metric
+          in: query
+          required: true
+          schema: { type: string, enum: [signups, enrollments, orders, revenue] }
+        - name: bucket
+          in: query
+          required: true
+          schema: { type: string, enum: [day, week] }
+        - name: from
+          in: query
+          description: Inclusive RFC 3339 start; defaults to `to` minus 30 days.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Inclusive RFC 3339 end; defaults to now.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Ordered timeseries buckets.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminStatsTimeseries' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/GrantForbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/users:
     get:
       operationId: listAdminUsers
@@ -2359,6 +2421,118 @@ components:
         status: { type: string, enum: [draft, published, archived] }
         instructorId: { type: string, format: uuid }
         updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    AdminStatsSnapshot:
+      type: object
+      additionalProperties: false
+      required: [users, courses, grants, orders, reports, media, engagement, instructors, platform]
+      properties:
+        users: { $ref: '#/components/schemas/AdminStatsUsers' }
+        courses: { $ref: '#/components/schemas/AdminStatsCourses' }
+        grants: { $ref: '#/components/schemas/AdminStatsGrants' }
+        orders: { $ref: '#/components/schemas/AdminStatsOrders' }
+        reports: { $ref: '#/components/schemas/AdminStatsReports' }
+        media: { $ref: '#/components/schemas/AdminStatsMedia' }
+        engagement: { $ref: '#/components/schemas/AdminStatsEngagement' }
+        instructors:
+          type: array
+          items: { $ref: '#/components/schemas/AdminStatsInstructor' }
+        platform: { $ref: '#/components/schemas/AdminStatsPlatform' }
+    AdminStatsUsers:
+      type: object
+      additionalProperties: false
+      required: [active, blocked, deleted, byRole, verified, twoFactor]
+      properties:
+        active: { type: integer }
+        blocked: { type: integer }
+        deleted: { type: integer }
+        byRole: { $ref: '#/components/schemas/AdminStatsRole' }
+        verified: { type: integer }
+        twoFactor: { type: integer }
+    AdminStatsRole:
+      type: object
+      additionalProperties: false
+      required: [student, instructor, admin]
+      properties:
+        student: { type: integer }
+        instructor: { type: integer }
+        admin: { type: integer }
+    AdminStatsCourses:
+      type: object
+      additionalProperties: false
+      required: [draft, published, archived]
+      properties:
+        draft: { type: integer }
+        published: { type: integer }
+        archived: { type: integer }
+    AdminStatsGrants:
+      type: object
+      additionalProperties: false
+      required: [active, blocked, revoked]
+      properties:
+        active: { type: integer }
+        blocked: { type: integer }
+        revoked: { type: integer }
+    AdminStatsOrders:
+      type: object
+      additionalProperties: false
+      required: [pending, paid, failed, revenueMinorUAH]
+      properties:
+        pending: { type: integer }
+        paid: { type: integer }
+        failed: { type: integer }
+        revenueMinorUAH: { type: integer, format: int64 }
+    AdminStatsReports:
+      type: object
+      additionalProperties: false
+      required: [open, resolved]
+      properties:
+        open: { type: integer }
+        resolved: { type: integer }
+    AdminStatsMedia:
+      type: object
+      additionalProperties: false
+      required: [inProgress, ready, failed, totalDurationSeconds, avgDurationSeconds, withDurationCount]
+      properties:
+        inProgress: { type: integer }
+        ready: { type: integer }
+        failed: { type: integer }
+        totalDurationSeconds: { type: number }
+        avgDurationSeconds: { type: number, nullable: true }
+        withDurationCount: { type: integer }
+    AdminStatsEngagement:
+      type: object
+      additionalProperties: false
+      required: [activeLearners30d, avgProgress, completions]
+      properties:
+        activeLearners30d: { type: integer }
+        avgProgress: { type: number, nullable: true }
+        completions: { type: integer }
+    AdminStatsInstructor:
+      type: object
+      additionalProperties: false
+      required: [instructorId, displayName, publishedCourses, activeEnrollments, revenueMinorUAH]
+      properties:
+        instructorId: { type: string, format: uuid }
+        displayName: { type: string }
+        publishedCourses: { type: integer }
+        activeEnrollments: { type: integer }
+        revenueMinorUAH: { type: integer, format: int64 }
+    AdminStatsPlatform:
+      type: object
+      additionalProperties: false
+      required: [singleInstructor]
+      properties:
+        singleInstructor: { type: boolean }
+    AdminStatsTimeseriesPoint:
+      type: object
+      additionalProperties: false
+      required: [bucketStart, value]
+      properties:
+        bucketStart: { type: string, format: date-time }
+        value: { type: number }
+    AdminStatsTimeseries:
+      type: array
+      items: { $ref: '#/components/schemas/AdminStatsTimeseriesPoint' }
     AdminUser:
       type: object
       additionalProperties: false
@@ -2830,7 +3004,7 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, email_not_verified, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, membership_conflict, course_not_enrollable, enrollment_forbidden, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, admin_not_learner, learner_course_forbidden, grant_transition_invalid, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, report_own_person, report_invalid, report_forbidden, report_already_open, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, dependency_unavailable, internal_error, not_found, method_not_allowed]
+              enum: [invalid_query, invalid_slug, course_not_found, invalid_request, invalid_credentials, authentication_required, origin_forbidden, forbidden, email_taken, weak_password, invalid_email, invalid_display_name, password_unchanged, token_used, invalid_account_token, rate_limited, invalid_totp, recovery_code_invalid, twofactor_already_enabled, twofactor_not_enabled, email_not_verified, course_forbidden, course_purchase_required, enrollment_required, enrollment_blocked, membership_conflict, course_not_enrollable, enrollment_forbidden, course_already_owned, checkout_already_opened, grant_forbidden, grant_self_forbidden, admin_not_learner, learner_course_forbidden, grant_transition_invalid, payment_event_rejected, invalid_callback, order_not_found, playback_forbidden, playback_taken_over, playback_session_expired, slug_taken, slug_immutable, invalid_owner, invalid_status_transition, course_not_deletable, course_modified, lesson_limit, transcript_document_referenced, transcript_document_exists, transcript_segment_limit, transcript_text_limit, transcript_document_limit, transcript_modified, transcript_exists, already_running, cannot_target_self, admin_immutable, last_admin, user_not_found, lesson_not_found, comment_not_found, comment_forbidden, comment_removed, comment_body_invalid, comment_position_invalid, comment_parent_invalid, comment_cursor_invalid, comment_thread_full, report_own_comment, report_own_person, report_invalid, report_forbidden, report_already_open, review_owner_forbidden, review_not_available, review_purchase_required, review_not_started, review_moderation_forbidden, report_own_review, review_already_exists, review_removed, review_invalid, review_not_found, upload_in_progress, unsupported_media, upload_too_large, video_not_found, video_not_ready, video_not_retryable, invalid_range, range_too_wide, unknown_metric, unknown_bucket, dependency_unavailable, internal_error, not_found, method_not_allowed]
             message: { type: string }
             requestId: { type: string, pattern: '^[a-f0-9]{32}$' }
   responses:

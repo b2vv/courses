@@ -17,3 +17,6 @@ export type { MenuOption, TabItem } from './overlays';
 export { Table, ProgressBar, LoadMeter, Delta, Pagination } from './data';
 export type { TableColumn, TableRow, MeterTone } from './data';
 export { EmptyState, ErrorState, Skeleton } from './states';
+export { StatTile } from './StatTile';
+export { TrendChart } from './TrendChart';
+export type { TrendPoint } from './TrendChart';

@@ -88,7 +88,7 @@ test.describe('with a stored admin session', () => {
     await expect(page.getByRole('status')).toHaveText('Обліковий запис видалено.');
     await expect(deleteRow).toHaveCount(0);
 
-    await page.getByRole('tab', { name: 'Видалений' }).click();
+    await page.getByRole('radio', { name: 'Видалений' }).click();
     const deletedRow = userRow(page, users.delete.email);
     await expect(deletedRow).toContainText('Видалений');
     await expect(deletedRow.getByText('Немає доступних дій')).toBeVisible();

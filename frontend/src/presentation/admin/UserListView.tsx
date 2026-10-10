@@ -17,9 +17,9 @@ import {
   EmptyState,
   ErrorState,
   Pagination,
+  SegmentedControl,
   Skeleton,
   Table,
-  Tabs,
   TextField,
 } from '../ui';
 import { administrationErrorMessage, ResetPasswordDialog } from './ResetPasswordDialog';
@@ -49,13 +49,21 @@ export function UserListView({
   onResetPassword,
   onAuthenticationRequired,
 }: UserListViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [pendingUser, setPendingUser] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
   const selectedStatus = state.status ?? 'all';
+  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage === 'en' ? 'en' : 'uk-UA', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  const statusOptions = (['all', 'active', 'blocked', 'deleted'] as const).map((status) => ({
+    id: status,
+    label: t(status === 'all' ? 'adminUsers.allStatuses' : `adminUsers.${status}`),
+  }));
 
   async function runAction(user: AdminUser, action: () => Promise<void>, success: string) {
     setPendingUser(user.id);
@@ -74,71 +82,59 @@ export function UserListView({
     }
   }
 
-  const results = (
-    <div className="admin-list-results">
-      {page.items.length === 0 ? (
-        <EmptyState title={t('adminUsers.empty')}>
-          <p>{t('adminUsers.emptyHint')}</p>
-        </EmptyState>
-      ) : (
-        <Table
-          label={t('adminUsers.userTable')}
-          columns={[
-            { id: 'email', label: t('adminUsers.email') },
-            { id: 'name', label: t('adminUsers.name') },
-            { id: 'role', label: t('adminUsers.role') },
-            { id: 'status', label: t('adminUsers.status') },
-            { id: 'actions', label: t('adminUsers.actions') },
-          ]}
-          rows={page.items.map((user) => ({
-            id: user.id,
-            cells: [
-              <span key="email">{user.email}</span>,
-              <span key="name">{user.displayName}</span>,
-              <span key="role">{t(`adminUsers.${user.role}`)}</span>,
-              <span key="status" className="admin-user-status" data-status={user.status}>
-                {t(`adminUsers.${user.status}`)}
-              </span>,
-              <UserActions
-                key="actions"
-                user={user}
-                actor={actor}
-                isPending={pendingUser === user.id}
-                onSetStatus={(status) =>
-                  runAction(
-                    user,
-                    () => onSetStatus(user.id, status),
-                    t('adminUsers.actionComplete'),
-                  )
-                }
-                onDelete={() =>
-                  runAction(user, () => onDelete(user.id), t('adminUsers.deletedComplete'))
-                }
-                onReset={(password) => onResetPassword(user.id, password)}
-                onAuthenticationRequired={onAuthenticationRequired}
-              />,
-            ],
-          }))}
-          emptyMessage={t('ui.noRecords')}
-        />
-      )}
-      <Pagination
-        label={t('adminUsers.pages')}
-        previousLabel={t('ui.back')}
-        nextLabel={t('ui.forward')}
-        pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
-        emptyLabel={t('ui.noPages')}
-        page={currentPage}
-        totalPages={totalPages}
-        onPageChange={onPageChange}
+  const results =
+    page.items.length === 0 ? (
+      <EmptyState title={t('adminUsers.empty')}>
+        <p>{t('adminUsers.emptyHint')}</p>
+      </EmptyState>
+    ) : (
+      <Table
+        label={t('adminUsers.userTable')}
+        columns={[
+          { id: 'account', label: t('adminUsers.email') },
+          { id: 'role', label: t('adminUsers.role') },
+          { id: 'status', label: t('adminUsers.status') },
+          { id: 'updated', label: t('adminUsers.updated') },
+          { id: 'actions', label: t('adminUsers.actions') },
+        ]}
+        rows={page.items.map((user) => ({
+          id: user.id,
+          cells: [
+            <span key="account" className="admin-user-identity">
+              <span className="admin-status-dot" data-status={user.status} aria-hidden="true" />
+              <span className="admin-user-ident-text">
+                <span className="admin-user-primary">{user.email}</span>
+                <span className="admin-user-secondary">{user.displayName}</span>
+              </span>
+            </span>,
+            <span key="role" className="admin-role-tag" data-role={user.role}>
+              {t(`adminUsers.${user.role}`)}
+            </span>,
+            <span key="status" className="admin-user-status" data-status={user.status}>
+              {t(`adminUsers.${user.status}`)}
+            </span>,
+            <time key="updated" className="admin-user-updated" dateTime={user.updatedAt}>
+              {dateFormatter.format(new Date(user.updatedAt))}
+            </time>,
+            <UserActions
+              key="actions"
+              user={user}
+              actor={actor}
+              isPending={pendingUser === user.id}
+              onSetStatus={(status) =>
+                runAction(user, () => onSetStatus(user.id, status), t('adminUsers.actionComplete'))
+              }
+              onDelete={() =>
+                runAction(user, () => onDelete(user.id), t('adminUsers.deletedComplete'))
+              }
+              onReset={(password) => onResetPassword(user.id, password)}
+              onAuthenticationRequired={onAuthenticationRequired}
+            />,
+          ],
+        }))}
+        emptyMessage={t('ui.noRecords')}
       />
-    </div>
-  );
-  const tabs = (['all', 'active', 'blocked', 'deleted'] as const).map((status) => ({
-    id: status,
-    label: t(status === 'all' ? 'adminUsers.allStatuses' : `adminUsers.${status}`),
-    content: selectedStatus === status ? results : null,
-  }));
+    );
 
   return (
     <section className="admin-user-list">
@@ -147,22 +143,37 @@ export function UserListView({
           <p className="eyebrow">{t('adminUsers.eyebrow')}</p>
           <h1>{t('adminUsers.title')}</h1>
         </div>
-        <span className="admin-list-count">
+      </div>
+      <div className="admin-filter-bar">
+        <UserSearch key={state.q} initialQuery={state.q} onSearch={onSearch} />
+        <SegmentedControl
+          label={t('adminUsers.statusTabs')}
+          options={statusOptions}
+          selectedKeys={new Set([selectedStatus])}
+          onSelectionChange={(keys) => onStatusChange(statusFromKey(String([...keys][0] ?? 'all')))}
+        />
+        <span className="admin-filter-count">
           {t('adminUsers.userCount', { count: page.pagination.total })}
         </span>
       </div>
-      <UserSearch key={state.q} initialQuery={state.q} onSearch={onSearch} />
       {message && (
         <div className="admin-editor-message" role={messageKind}>
           {message}
         </div>
       )}
-      <Tabs
-        label={t('adminUsers.statusTabs')}
-        selectedKey={selectedStatus}
-        onSelectionChange={(key) => onStatusChange(statusFromKey(String(key)))}
-        items={tabs}
-      />
+      <div className="admin-list-results">
+        {results}
+        <Pagination
+          label={t('adminUsers.pages')}
+          previousLabel={t('ui.back')}
+          nextLabel={t('ui.forward')}
+          pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
+          emptyLabel={t('ui.noPages')}
+          page={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+        />
+      </div>
     </section>
   );
 }
@@ -220,14 +231,21 @@ function UserActions({
         type="button"
         variant="secondary"
         isDisabled={isPending}
-        onPress={() => void onSetStatus(user.status === 'active' ? 'blocked' : 'active')}
-      >
-        {t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
+        aria-label={t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
           name: user.displayName,
         })}
+        onPress={() => void onSetStatus(user.status === 'active' ? 'blocked' : 'active')}
+      >
+        {t(user.status === 'active' ? 'adminUsers.blockShort' : 'adminUsers.restoreShort')}
       </Button>
-      <Button type="button" variant="danger" isDisabled={isPending} onPress={() => void onDelete()}>
-        {t('adminUsers.delete', { name: user.displayName })}
+      <Button
+        type="button"
+        variant="danger"
+        isDisabled={isPending}
+        aria-label={t('adminUsers.delete', { name: user.displayName })}
+        onPress={() => void onDelete()}
+      >
+        {t('adminUsers.deleteShort')}
       </Button>
       <ResetPasswordDialog
         user={user}

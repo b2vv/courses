@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../application/transcript/recovery';
 import { useSignOut } from '../app/composition/use-sign-out';
 import { canAccessAdministration, canAdministerAccounts } from '../domain/identity/identity';
-import { AdminShell, type AdminNavItem } from '../presentation/admin/AdminShell';
+import { AdminShell, type AdminNavSection } from '../presentation/admin/AdminShell';
 import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../presentation/identity/IdentityHeader';
@@ -142,18 +142,58 @@ function Layout() {
   // viewer never sees an anonymous frame before hydration.
   if (surface === 'admin' && session.data != null) {
     const viewer = session.data;
-    const navItems: AdminNavItem[] = onTeachPath
+    const navSections: AdminNavSection[] = onTeachPath
       ? [
-          { to: '/teach', label: t('common.navModeration'), exact: true },
-          { to: '/teach/learners', label: t('common.navLearners') },
+          {
+            items: [
+              { to: '/teach', label: t('common.navModeration'), exact: true, icon: 'moderation' },
+            ],
+          },
+          {
+            label: t('common.navGroupPeople'),
+            items: [{ to: '/teach/learners', label: t('common.navLearners'), icon: 'people' }],
+          },
         ]
       : [
-          { to: '/admin', label: t('common.navCourses'), exact: true },
-          { to: '/admin/participant-reports', label: t('common.navParticipantReports') },
-          { to: '/admin/learners', label: t('common.navLearners') },
-          ...(canAdministerAccounts(viewer)
-            ? [{ to: '/admin/users', label: t('adminUsers.title') }]
-            : []),
+          {
+            items: [
+              { to: '/admin', label: t('common.navCourses'), exact: true, icon: 'overview' },
+              ...(canAdministerAccounts(viewer)
+                ? [
+                    {
+                      to: '/admin/analytics',
+                      label: t('common.navAnalytics'),
+                      icon: 'analytics' as const,
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            label: t('common.navGroupPeople'),
+            items: [
+              { to: '/admin/learners', label: t('common.navLearners'), icon: 'people' },
+              ...(canAdministerAccounts(viewer)
+                ? [
+                    {
+                      to: '/admin/users',
+                      label: t('adminUsers.title'),
+                      icon: 'accounts' as const,
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            label: t('common.navModeration'),
+            items: [
+              {
+                to: '/admin/participant-reports',
+                label: t('common.navParticipantReports'),
+                icon: 'moderation',
+              },
+            ],
+          },
         ];
     return (
       <div className="app-shell" data-surface="admin">
@@ -163,7 +203,7 @@ function Layout() {
         <AdminShell
           title={onTeachPath ? t('common.teachArea') : t('administration.title')}
           navLabel={onTeachPath ? t('common.teachArea') : t('common.adminArea')}
-          navItems={navItems}
+          navSections={navSections}
           user={viewer}
           identityDependencies={identityDependencies}
         >

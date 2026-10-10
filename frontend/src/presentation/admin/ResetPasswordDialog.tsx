@@ -51,7 +51,8 @@ export function ResetPasswordDialog({
 
   return (
     <Dialog
-      triggerLabel={t('adminUsers.resetPassword', { name: user.displayName })}
+      triggerLabel={t('adminUsers.resetPasswordShort')}
+      triggerAriaLabel={t('adminUsers.resetPassword', { name: user.displayName })}
       title={t('adminUsers.resetTitle', { name: user.displayName })}
       closeLabel={t('common.close')}
     >
