@@ -673,9 +673,99 @@ nav a {
 .admin-user-status[data-status='active'] {
   color: var(--color-success);
 }
-.admin-user-status[data-status='blocked'],
+.admin-user-status[data-status='blocked'] {
+  color: var(--color-danger);
+}
 .admin-user-status[data-status='deleted'] {
   color: var(--color-muted);
+}
+
+/* Fleet-table grammar for the account roster (NorthWind §4.7/§4.8, slice S2).
+   Structural rules are unscoped (the page is admin-only); colours resolve
+   through the admin palette tokens. */
+.admin-filter-bar {
+  display: flex;
+  align-items: end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.admin-filter-bar .admin-user-search {
+  flex: 1 1 22rem;
+}
+.admin-filter-count {
+  margin-inline-start: auto;
+  align-self: center;
+  color: var(--color-muted);
+  font: 500 0.875rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* First column: status dot + mono email over a muted display-name subtitle. */
+.admin-user-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.admin-status-dot {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-muted);
+}
+.admin-status-dot[data-status='active'] {
+  background: var(--color-success);
+}
+.admin-status-dot[data-status='blocked'] {
+  background: var(--color-danger);
+}
+.admin-status-dot[data-status='deleted'] {
+  background: var(--color-muted);
+}
+.admin-user-ident-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+}
+.admin-user-primary {
+  font-family: var(--font-utility);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.admin-user-secondary {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+.admin-user-updated {
+  font-family: var(--font-utility);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+/* Role as a small env-style category tag (NorthWind §4.3): mono UPPERCASE,
+   tinted wash, bright text. Tints sit on the near-black admin surface. */
+.admin-role-tag {
+  display: inline-flex;
+  padding: 2px 0.5rem;
+  border-radius: 0.375rem;
+  font: 700 0.6875rem var(--font-utility);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-muted);
+  background: color-mix(in srgb, var(--color-muted) 16%, transparent);
+}
+.admin-role-tag[data-role='admin'] {
+  color: var(--color-primary-hover);
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+.admin-role-tag[data-role='instructor'] {
+  color: #b3a1ff;
+  background: color-mix(in srgb, var(--color-viz-purple) 18%, transparent);
 }
 
 /* Admin — NorthWind editorial (D-d). Structural refinements on top of the
@@ -750,8 +840,11 @@ nav a {
 }
 .admin-user-actions {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  inline-size: 11.5rem;
+  margin-inline-start: auto;
 }
 .admin-editor {
   display: grid;
@@ -1632,8 +1725,60 @@ button.transcript-line-body:hover {
    on the root .app-shell, so this inherits the NorthWind editorial palette. */
 .admin-shell {
   display: grid;
-  grid-template-columns: 15.5rem minmax(0, 1fr);
+  grid-template-columns: 3.5rem 15.5rem minmax(0, 1fr);
   min-block-size: 100dvh;
+}
+/* Narrow icon rail: product mark + one glyph per destination (NorthWind grammar). */
+.admin-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding: var(--space-4) 0;
+  background: var(--color-background);
+  border-inline-end: 1px solid var(--color-hairline);
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 100dvh;
+}
+.admin-rail-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 0.55rem;
+  background: var(--btn-primary-bg);
+  color: var(--color-on-primary);
+  box-shadow: var(--btn-primary-highlight), var(--btn-primary-glow);
+  font: 700 0.7rem var(--font-utility);
+  text-decoration: none;
+  margin-block-end: var(--space-2);
+}
+.admin-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.admin-rail-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--radius-control);
+  color: var(--color-muted);
+  text-decoration: none;
+}
+.admin-rail-item:hover {
+  color: var(--color-text);
+  background: var(--color-elevated);
+}
+.admin-rail-item[aria-current='page'] {
+  color: #ffffff;
+  background: var(--nav-active-bg);
+  box-shadow: var(--nav-active-ring), var(--nav-active-highlight), var(--nav-active-glow);
 }
 .admin-sidebar {
   display: flex;
@@ -1646,45 +1791,73 @@ button.transcript-line-body:hover {
   inset-block-start: 0;
   block-size: 100dvh;
 }
-.admin-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
+/* Workspace header: product wordmark + current area (not a tenant switcher). */
+.admin-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-inline: 0.75rem;
+}
+.admin-workspace-name {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
   color: var(--color-text);
-  text-decoration: none;
 }
-.admin-brand span[aria-hidden] {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font: 700 0.85rem var(--font-utility);
-  padding: 0.25rem 0.4rem;
-  border-radius: 0.5rem;
+.admin-workspace-area {
+  font-size: 0.8rem;
+  color: var(--color-muted);
 }
 .admin-nav {
   display: flex;
   flex-direction: column;
+  /* Override the generic `nav` rule (align-items: center; flex-wrap: wrap),
+     or sections shrink to content and float centred instead of filling the rail. */
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+}
+.admin-nav-section {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
 }
+.admin-nav-section-label {
+  font-family: var(--font-utility);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  padding-inline: 0.75rem;
+  margin-block-end: var(--space-1);
+}
 .admin-nav-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   padding: 0.6rem 0.75rem;
   border-radius: var(--radius-control);
   color: var(--color-muted);
   text-decoration: none;
-  font-weight: 600;
+  /* Inactive stays lighter so the active item reads as selected, not just tinted. */
+  font-weight: 500;
+}
+.admin-nav-icon {
+  flex: none;
+  color: var(--color-muted);
+}
+.admin-nav-link[aria-current='page'] .admin-nav-icon {
+  color: inherit;
 }
 .admin-nav-link:hover {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-text);
 }
-/* Text on the tinted surface: 12.77:1 light / 11.03:1 dark admin. */
+/* Active weight carries the hierarchy; its fill/gloss come from tokens.admin.css. */
 .admin-nav-link[aria-current='page'] {
-  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-text);
+  font-weight: 700;
 }
 .admin-to-client {
   margin-block-start: auto;
@@ -1740,27 +1913,20 @@ button.transcript-line-body:hover {
   min-inline-size: 0;
   padding: var(--space-8) var(--space-6);
 }
-/* Narrow screens: the sidebar becomes a horizontal top strip. */
+/* Narrow screens: the rail folds away; the sidebar sits full-width above the
+   content but stays a VERTICAL grouped list (reference mobile = vertical nav with
+   its sections intact), never a horizontal wrap. */
 @media (max-width: 52rem) {
   .admin-shell {
     grid-template-columns: 1fr;
   }
+  .admin-rail {
+    display: none;
+  }
   .admin-sidebar {
     position: static;
     block-size: auto;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-3);
     border-inline-end: 0;
     border-block-end: 1px solid var(--color-hairline);
-  }
-  .admin-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .admin-to-client {
-    margin-block-start: 0;
-    margin-inline-start: auto;
   }
 }
