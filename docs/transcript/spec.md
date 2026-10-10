@@ -8,7 +8,7 @@
 | Скоуп | `work/PRODUCT-BRIEF.md` §13 (`:520-558`) + §21 (`:849-856`) |
 | Прийняте рішення до фази | `docs/adr/006-transcript-model.md` — «accepted design; implementation scheduled for Phase 7». **Потребує датованої поправки:** рішення Q1 скасувало його «WebVTT export is a later adapter» |
 | Брифінг | `work/CTO-RESEARCH.md` перезібрано на `78d0117` (`996125b`, Courses 2); §2/§5/§7 правляться після рев'ю |
-| Жива нота | `work/_wip-spec-c1.md` |
+| Жива нота | `work/archive/_wip-spec-c1.md` |
 | Гейт 1 | **Пройдено 2026-09-17.** Шістнадцять рішень: десять у Q-таблиці (§5.1), шість у `grilling` (§5.3). Розвилок нуль, непідтверджених нуль |
 
 ---
@@ -380,7 +380,7 @@ Python-рантайму лежить на **`:558`**. Хибний рядок с
   `/courses` `z.catch()` вставляв ключ, якого не було в URL, і робив редірект безумовним;
   розв'язок — валідатор віддає відомі параметри дослівно й **не відмовляє нікому**, а
   відмова живе в `beforeLoad` через `notFound()`, бо `notFound()` з `validateSearch` не
-  класифікується як такий (`work/ledger.md`, 2026-09-04).
+  класифікується як такий (`work/archive/ledger.md`, 2026-09-04).
 - **Редірект зі slug курсу губить search — і це та сама пастка, з іншого боку.**
   `frontend/src/routes/learn.$.tsx`, `throw redirect`, рядок 25 на 2026-09-18: голий slug летить на continue-урок через
   `throw redirect({ to, params, replace: true })` **без `search`**. Тобто

@@ -94,7 +94,7 @@ worker, the real stack, the browser — not by reviewing text.
 ## 5. Ordered gate
 
 `make check` (`Makefile:83`), last run at the close of A14 on the tree committed as `3cc8754`;
-log `work/make-check-a14.log` (not tracked). **`CHECK_EXIT=0`.**
+log `work/archive/make-check-a14.log` (not tracked). **`CHECK_EXIT=0`.**
 
 | Step | Result |
 |---|---|
@@ -107,7 +107,7 @@ log `work/make-check-a14.log` (not tracked). **`CHECK_EXIT=0`.**
 | `e2e` | **74 passed**, 0 failed (11.6 min); B19 login budget total 7, maximum consecutive 3 |
 
 At the close of A13 the same gate ran green on `915c987` (480 frontend, 33 packages, e2e 74/74,
-`work/make-check-a13.log`). Its first two runs had been red, both on tests, not the product:
+`work/archive/make-check-a13.log`). Its first two runs had been red, both on tests, not the product:
 1. `transcript.spec.ts:467` (7a) asserted the recovery key `author:lesson:uk`. The language
    decision (§6) changed the key to `author:lesson`, and the e2e of other phases was not run after
    that change. The test now expects the new key and asserts the stored snapshot's language, so it
@@ -129,7 +129,7 @@ backlog B-18 and they are not committed.
   snapshot carries language and draft token; loading a draft in another language over an existing
   transcript is refused instead of silently switching the editor and creating a second
   transcript. Closes the 7a «lesson + language» recovery key for this phase; revisit when an
-  editor for several languages exists. Full text: `work/brief-a13-language.md`.
+  editor for several languages exists. Full text: `work/archive/brief-a13-language.md`.
 - **C09 held as an invariant, not by queue order** — Courses 2, 2026-09-24:
   `WHERE asr_drafts.generation <= EXCLUDED.generation`; a late old claim returns `Claimed: false`
   with no failure metric. Check: the C09 subtests.

@@ -92,7 +92,7 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   existing SecretKey (it had appeared in chat) — acceptable for a one-off 1-грн test-mode charge.
   **Superseded the same day (owner, 2026-10-03):** the `site_ex` shop is to be deleted, so the leaked
   key dies with it and no rotation is needed; a future live run uses a new shop and a new key. The
-  password is not used by the project and is stored nowhere. Runbook: `work/runbook-o06c-tunnel.md`.
+  password is not used by the project and is stored nowhere. Runbook: `work/archive/runbook-o06c-tunnel.md`.
 - **Pay25-live — earlier same-day attempts on the shared test merchant `test_merch_n1` (record).** Run 2026-10-02 by Courses 1 (owner away; public test merchant
   `test_merch_n1`, tunnel via localhost.run because this network blocks Cloudflare's quick-tunnel API).
   Proven against the real provider: (1) WayForPay accepted our signed Purchase form and opened its
@@ -130,7 +130,7 @@ so the buy panel had no amount. Both found by the slice work, fixed, and covered
   store is in test mode, all payments are refunded automatically within 15 minutes". That matches every
   live outcome above. So the Approved → grant leg is provable only with a real card on a merchant in
   test mode — a step the owner must perform (an agent never enters a real card); the auto-refund is
-  unofficial until WayForPay confirms it. Trace: `work/_wip-wfp-test-cards.md`.
+  unofficial until WayForPay confirms it. Trace: `work/archive/_wip-wfp-test-cards.md`.
 - **Defect found by the live run — closed (B-25, 2026-10-02).** We send the order id as WayForPay's
   `orderReference`, and WayForPay refused a second hosted form for the same pending order
   (`(1112) Duplicate Order ID`), leaving that order unpayable; the stub could not show it. Fixed: a

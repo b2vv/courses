@@ -4,7 +4,7 @@
 acceptance rows`. Obsidian був недоступний (`ConnectionRefused`) від початку сесії до того моменту,
 тож цей файл вів роль живої ноти; далі він лишається як запис для репозиторію.
 
-Не дублює докази — вони в `docs/playback/report.md`, `work/report-*.md` і `work/handoff-phase6.md`.
+Не дублює докази — вони в `docs/playback/report.md`, `work/report-*.md` і `work/archive/handoff-phase6.md`.
 Тут лише те, що інакше існує **тільки в міжсесійних повідомленнях** і зникне разом із сесією.
 
 ## Ролі
@@ -61,6 +61,6 @@ acceptance rows`. Obsidian був недоступний (`ConnectionRefused`) �
 
 - Черга й ранжування: `work/AGENDA.md` (перезібрана на брифінгу `b913e81`).
 - Стан фази й підрахунок: `docs/playback/report.md` §2 — **не** копіювати число деінде.
-- Уроки методу: `work/handoff-phase6.md` — чотири питання, сімейство спостерігачів, квантори,
+- Уроки методу: `work/archive/handoff-phase6.md` — чотири питання, сімейство спостерігачів, квантори,
   твердження поперед доказу, дрейф посилань.
-- Робоча модель Codex: `work/codex-working-model.md` (Docker у пісочниці немає — гейт завжди тут).
+- Робоча модель Codex: `work/archive/codex-working-model.md` (Docker у пісочниці немає — гейт завжди тут).

@@ -7,7 +7,7 @@ Delta to [plan.md](plan.md) (edition 3.3 plus amendments §17–§25) and
 ## 1. What was done
 
 Eighteen tasks M01–M17 (M03a added mid-phase), each implemented with Codex (gpt-5.6-sol)
-and re-verified here before commit; per-task evidence in `work/report-m01.md` …
+and re-verified here before commit; per-task evidence in `work/archive/report-m01.md` …
 `report-m16.md`.
 
 A person can now put a video on a lesson. The chain: the editor mints a ticket, a

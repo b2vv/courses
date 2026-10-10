@@ -251,8 +251,8 @@ assets.generation DESC, assets.id LIMIT 1` (`learning.go:44`). Читання т
   форма знімає питання: порівнюєш із тим, що вибирає селектор.
 
 **Преcедент Phase 5 — проти розширення транзакції:** побічна дія зроблена як
-**commit-then-enqueue** (`work/report-m11.md:16`), а «completion inside the queueing
-transaction» (`work/ledger.md:47`) стосується зміни стану, не побічної дії.
+**commit-then-enqueue** (`work/archive/report-m11.md:16`), а «completion inside the queueing
+transaction» (`work/archive/ledger.md:47`) стосується зміни стану, не побічної дії.
 
 **Три межі, без яких поле не визначене:**
 
@@ -287,7 +287,7 @@ transaction» (`work/ledger.md:47`) стосується зміни стану, 
 
 `validateSearch` на `/learn/$` **віддає відомі параметри дослівно й не відмовляє нікому**;
 відмова живе в `beforeLoad` через `notFound()`. Причина — оплачений урок каталогу
-(`work/ledger.md`, 2026-09-04): `z.catch()` вставляв ключ, якого не було, і робив редірект
+(`work/archive/ledger.md`, 2026-09-04): `z.catch()` вставляв ключ, якого не було, і робив редірект
 безумовним, а `notFound()` з `validateSearch` не класифікується як такий.
 
 `?t=` перебиває `resumeFrom = lesson.completed ? 0 : lesson.position`

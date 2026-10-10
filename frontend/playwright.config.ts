@@ -25,7 +25,7 @@ export default defineConfig({
   // That reason is closed as of 2026-09-17: `catalog.spec` no longer reads a global offset
   // window. It scopes the window with `q`, which no run-scoped fixture matches, so a sibling
   // publish cannot move what it asserts - proven by publishing a course at position zero and
-  // running the file red on the old assertion and green on the new one (`work/report-b13.md`).
+  // running the file red on the old assertion and green on the new one (`work/archive/report-b13.md`).
   // Nothing else asserts a position-sensitive catalogue window; the other files that open
   // `/courses` do not depend on which course sits where.
   //

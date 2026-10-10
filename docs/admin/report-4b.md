@@ -6,7 +6,7 @@ close. The Post-deploy section is left for `post-deploy-check`.
 ## 1. What was done
 
 Nine tasks T01–T09, each implemented with Codex (gpt-5.6-sol) and re-verified here before
-commit; per-task evidence in `work/report-t01.md` … `report-t08.md`. Everything landed as
+commit; per-task evidence in `work/archive/report-t01.md` … `report-t08.md`. Everything landed as
 planned except the deviations below.
 
 - **Backend** (T01–T05): migration 00004 adds `users.deleted_at`, a CHECK enforcing

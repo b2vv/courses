@@ -2,7 +2,7 @@
 
 Edition 3.4, 2026-09-06. Edition 3.4 is a **focused amendment made after implementation
 began**: M01–M03 landed green, then M04 stopped without writing code and reported six
-contract-shape gaps (`work/report-m04.md`). The report is right and the fault is this plan's —
+contract-shape gaps (`work/archive/report-m04.md`). The report is right and the fault is this plan's —
 §2 listed port **method names**, which cannot express the inside-one-transaction ordering D-7,
 D-8, D-10 and D-15 require. §2.1 now gives exact Go signatures with three policy callbacks and
 states where each runs; D-8 gains the container sniff as a named domain function; D-10 gains
@@ -262,7 +262,7 @@ mistake, closed by BLK-2 (D-1).
 
 ### 2.1 Port contracts — exact signatures
 
-Added after M04 stopped on contract shape (`work/report-m04.md`, §16). Method *names* alone
+Added after M04 stopped on contract shape (`work/archive/report-m04.md`, §16). Method *names* alone
 could not express the atomicity D-7, D-8, D-10 and D-15 require: three sequences must run
 **inside one transaction, between the row lock and the guarded write**, and a port whose
 methods are separate calls cannot order them. The fix is the 4b policy-callback idiom
@@ -2204,7 +2204,7 @@ Retained from round 6: **none**.
 ## 16. Amendment after M04 — port contracts made expressible
 
 M01–M03 landed green. **M04 stopped without writing code** and reported six contract-shape gaps
-(`work/report-m04.md`); the report is correct, and the fault is this plan's, not the
+(`work/archive/report-m04.md`); the report is correct, and the fault is this plan's, not the
 implementer's. §2's port table listed **method names**, M03 implemented exactly those names, and
 names carry no signature: three of the sequences D-7, D-8, D-10 and D-15 require must run
 *inside one transaction between the row lock and the guarded write*, and separate port calls
@@ -2262,7 +2262,7 @@ process-group signalling**. The brief was corrected; D-10 stands.
 ## §18 — Amendments, 2026-09-06 (gate owner, during M09)
 
 M09 opened the first `## Discussion` under the two-channel protocol
-(`work/codex-working-model.md`). All three items were accepted.
+(`work/archive/codex-working-model.md`). All three items were accepted.
 
 **1. R22's precondition was impossible as written.** It asked for "a storage failure through
 the port" while calling mint and the course-videos read, but neither operation touches
@@ -2481,7 +2481,7 @@ under a second against a three-second poll.
 §24 п.1 routed the tus client's wire proof to e2e because "custom headers do not survive the
 MSW + happy-dom pairing **in either direction**". Measured on both environments with one
 probe (reviewer, confirmed independently by the implementer's `## Discussion` in
-`work/report-b02.md`): **only the response side breaks.** The request-side
+`work/archive/report-b02.md`): **only the response side breaks.** The request-side
 `Tus-Resumable` arrives intact under happy-dom. The Phase 3 precedent cited alongside it
 (`docs/identity/report.md` §I05, cookie forwarding) is a **different mechanism** — `Cookie`
 is a forbidden header name — and is not fixed by changing environments. Two symptoms were

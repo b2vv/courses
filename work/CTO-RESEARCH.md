@@ -151,7 +151,7 @@ dependency»). `orders/ports/provider.go` і `orders/adapters/wayforpay/` нар
 | **Новий модуль `orders` (O01–O06a)** | Повний доменний модуль: `domain` (Money/Order/Grant/PaymentEvent/errors), `application/service.go` (StartPurchase, PurchaseStatus, ApplyPaymentEvent), `ports` (provider.go, repository.go), `adapters/{http,postgres,wayforpay}`. Інші модулі читають `course_grants` SQL-ом, не імпортують `orders`; `orders` не імпортує жоден модуль | `backend/internal/orders/**`, `docs/payment/plan.md` A2 |
 | **Контракт доступу — 5 фактів, 4 мапінги (ADR 013+014)** | `contracts/access.CanView`/`PurchaseRequired` — чисті функції, лише stdlib; `course`/`playback`/`transcript`/`discussion` маплять свої факти через `CanBeViewedBy` = `return access.CanView(…)`; AST-тест `expectedMethods=4` незмінний (оплата не додала п'ятого мапінгу — `orders` сам не вирішує видимість, лише постачає факт `Entitled` через SQL) | `backend/internal/contracts/access/access.go`, `platform/architecture/access_mapping_ast_test.go` |
 | **Провайдерний порт з'явився з першим адаптером (A4)** | `orders/ports/provider.go` (Checkout, OrderStatus) + `orders/adapters/wayforpay` (HMAC_MD5-підпис форми й callback, CHECK_STATUS) — стандартна бібліотека, жодної платіжної SDK | `backend/internal/orders/ports/provider.go`, `backend/internal/orders/adapters/wayforpay/wayforpay.go` |
-| **Callback-ендпоінт — неавтентифікована поверхня** | `POST /api/v1/payments/wayforpay/callback` без сесії й без `sameOrigin`; авторизує лише підпис; невідоме замовлення → не термінальна відмова (503, ретрай), а не reject (Pay21b) | `docs/payment/plan.md` §Side-effects; `work/brief-codex-o06a-wayforpay-backend.md` |
+| **Callback-ендпоінт — неавтентифікована поверхня** | `POST /api/v1/payments/wayforpay/callback` без сесії й без `sameOrigin`; авторизує лише підпис; невідоме замовлення → не термінальна відмова (503, ретрай), а не reject (Pay21b) | `docs/payment/plan.md` §Side-effects; `work/archive/brief-codex-o06a-wayforpay-backend.md` |
 | **Міграція `00011_payment.sql`** | `courses.price_minor`/`currency` (NULL=безкоштовний), `course_lessons.is_preview`, нові таблиці `orders`, `course_grants` (частковий UNIQUE на активне право), `payment_events` (UNIQUE provider+event_id), `grant_audit`; без каскадів на видалення курсу/користувача (фінансовий слід) | `docs/payment/plan.md` §План міграції |
 | **Ціна/замовлення-ендпоінти в OpenAPI/Orval** | Каталог несе `price`/`paid`; нові операції старту покупки, статусу, адмін-видачі, чекауту; `check-generated` у ланцюгу гейта | `backend/openapi/openapi.yaml`, `frontend/orval.config.ts` |
 | Правило доступу у решти модулів | `course`/`playback`/`transcript`/`discussion` незмінні щодо своєї структури; лише 4 з 6 їхніх SQL-запитів навчились джойнити `course_grants` і читати `price_minor`/`is_preview` (O03) | `docs/payment/plan.md` §«Де ляже join» (6 запитів у 5 файлах) |
@@ -172,10 +172,10 @@ ADR, обов'язкові перед відповідними шарами: `00
 |---|---|---|
 | Гейти, у порядку | `format-check`, `lint`, `typecheck`, `test`, `integration`, `check-generated`, `build`, `up`, `drain-queue`, `seed-identities`, `seed`, `smoke`, `e2e` — без змін | `Makefile:83` (`check:`) |
 | CI жене те саме | Так | `.github/workflows/ci.yml` |
-| Гейт O05 (фронт покупки, 2026-10-01) | Ordered `make check` exit 0: rstest **520/520**, e2e **88/88** (87+`purchase.spec.ts`); окремий прогін після 200%-зум фіксу знову зелений | `work/review-o05-purchase-ui.md` §Gate result |
-| Гейт O05 slice 3 (адмін ціна/гранти) | Rstest/e2e без регресії; ComboBox a11y добре, 1 nb (loading-vs-empty SR-оголошення) | `work/review-o05-grant-ui.md` |
-| Гейт O06a (бекенд WayForPay) | `make generate format-check lint typecheck test integration` exit 0 (реальний Docker Postgres); **e2e НЕ прогнано** (відкладено на O06c); 1 BLOCKING (гонка даних на `statusAt`) знайдено й закрито раундом 5 | `work/review-o06a-wayforpay-backend.md` |
-| Два відкриті тестові флейки (нові, O05) | **R23** (`playback.spec.ts`, heartbeat 403): раз упав, 9 залежних не побігли; ізольований пересів 84/84 зелений; наступний повний гейт 88/88 без повтору; механізм звужено до `loadViewablePlayback` або `sameOrigin`-перевірки, непідтверджено. **`TestAdministrationRepositoryAgainstPostgreSQL`** (identity, пакет не чіпано слайсом O05): раз упав під час integration O05 slice2, 2 пересіви зелені, текст помилки не збережено — підозра на спільний стан БД/порядок тестів | `work/review-o05-grant-ui.md` (кінець), `work/review-o05-purchase-ui.md` (кінець) |
+| Гейт O05 (фронт покупки, 2026-10-01) | Ordered `make check` exit 0: rstest **520/520**, e2e **88/88** (87+`purchase.spec.ts`); окремий прогін після 200%-зум фіксу знову зелений | `work/archive/review-o05-purchase-ui.md` §Gate result |
+| Гейт O05 slice 3 (адмін ціна/гранти) | Rstest/e2e без регресії; ComboBox a11y добре, 1 nb (loading-vs-empty SR-оголошення) | `work/archive/review-o05-grant-ui.md` |
+| Гейт O06a (бекенд WayForPay) | `make generate format-check lint typecheck test integration` exit 0 (реальний Docker Postgres); **e2e НЕ прогнано** (відкладено на O06c); 1 BLOCKING (гонка даних на `statusAt`) знайдено й закрито раундом 5 | `work/archive/review-o06a-wayforpay-backend.md` |
+| Два відкриті тестові флейки (нові, O05) | **R23** (`playback.spec.ts`, heartbeat 403): раз упав, 9 залежних не побігли; ізольований пересів 84/84 зелений; наступний повний гейт 88/88 без повтору; механізм звужено до `loadViewablePlayback` або `sameOrigin`-перевірки, непідтверджено. **`TestAdministrationRepositoryAgainstPostgreSQL`** (identity, пакет не чіпано слайсом O05): раз упав під час integration O05 slice2, 2 пересіви зелені, текст помилки не збережено — підозра на спільний стан БД/порядок тестів | `work/archive/review-o05-grant-ui.md` (кінець), `work/archive/review-o05-purchase-ui.md` (кінець) |
 | Пастка `check-generated` | Без змін — порівнює з індексом | `Makefile:59-61` |
 | Пастка docker (гейт) | Без змін | пам'ять `docker-credential-helper-hang` |
 | Розгортання | Немає, не заявлено | `AGENTS.md` §Scope |
@@ -217,12 +217,12 @@ ADR, обов'язкові перед відповідними шарами: `00
    (`playback_forbidden`/`course_purchase_required`) або `sameOrigin`-перевірка — непідтверджено;
    неавтентифікований шлях виключено (`normalizeAuthenticationDenial` огортає лише
    `GET /internal/playback/authorize`, не heartbeat). Наступного разу — зберігати тіло відповіді й
-   лог API (`work/review-o05-grant-ui.md`). **Інструментовано 2026-10-07 (K4):** R23 валиться з кодом
+   лог API (`work/archive/review-o05-grant-ui.md`). **Інструментовано 2026-10-07 (K4):** R23 валиться з кодом
    і requestId відмовленого heartbeat'а; `make e2e` стрімить api+nginx лог усього прогону у
    `frontend/test-logs/api-nginx.log` (переживає recreate — доведено 7× «server starting» у 107/107).
 2. **`TestAdministrationRepositoryAgainstPostgreSQL` — одноразовий фейл, пакет identity не чіпано.**
    Два пересіви зелені, текст помилки втрачено; підозра на спільний стан БД/порядок паралельних
-   тестів, не на зміни O05 (`work/review-o05-purchase-ui.md`). Тест має власний контейнер і послідовні
+   тестів, не на зміни O05 (`work/archive/review-o05-purchase-ui.md`). Тест має власний контейнер і послідовні
    `t.Run` — міжпакетний стан виключено. **Інструментовано 2026-10-07 (K5):** `make integration`
    персистить вивід у `backend/test-results/integration.log` зі статусом `go test`'а; retry в
    `containers.Start` логує помилку. Механізм досі невстановлений.

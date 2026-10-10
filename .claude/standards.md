@@ -71,7 +71,7 @@ Tasks: `work/tasks.md`, one row per task with an explicit status
 Archive: a completed row **stays in place** and its "Result / archive pointer" column
 becomes the pointer — commit, report section, or evidence file. Rows are never deleted,
 because a deleted task takes the trace of the decision with it.
-Coordination ledger: `work/ledger.md`, append-only by meaning: a correction is a new entry
+Coordination ledger: `work/archive/ledger.md`, append-only by meaning: a correction is a new entry
 referencing the earlier one.
 Living notes: `docs/<phase>/assumptions.md`, or `docs/<phase>/_wip-<topic>.md` while work is
 in flight.

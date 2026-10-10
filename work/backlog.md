@@ -30,7 +30,7 @@ call site starts using container reuse (Start would terminate a shared container
 
 **Known bound:** a permanent #3918 orphan (a reaper that never starts) matches the same text, so each package
 spends the full 30 s budget (~15 create/terminate cycles) and then fails loudly naming #3868. Bounded, not hidden.
-Review: Courses 2, `work/review-ryuk-retry.md` (approve, 0 blocking).
+Review: Courses 2, `work/archive/review-ryuk-retry.md` (approve, 0 blocking).
 
 ## B-23 — e2e B39 впав раз у повному гейті — ЗАКРИТО 2026-10-04: дефект тесту (застарілий знімок)
 
@@ -174,7 +174,7 @@ comes first.
 
 **Raised:** 2026-09-06 (user pushed back on accepting it), during Phase 5 M14.
 **Shape:** small test-infrastructure fix; likely a config change, not a rewrite.
-**Status: DONE, 2026-09-07** — task `B02`, evidence `work/report-b02.md`. What follows is
+**Status: DONE, 2026-09-07** — task `B02`, evidence `work/archive/report-b02.md`. What follows is
 kept as the record of the diagnosis, with its one error corrected below.
 
 ### The symptom, corrected 2026-09-07
@@ -264,7 +264,7 @@ still call it. Previously only the browser branch ran anywhere.
 **Знайдено:** 2026-09-07, лінзою `plan-critique` під час GATE 2 Phase 6; підтверджено
 рецензентом власноруч. **Фаза 6 цей дефект не створила — лише виявила.**
 
-**Status: DONE з датованою перекласифікацією, 2026-09-17** — доказ `work/report-b3.md`; напрям
+**Status: DONE з датованою перекласифікацією, 2026-09-17** — доказ `work/archive/report-b3.md`; напрям
 («домен правий: 120 на курс») ухвалила людина. Запис нижче лишається як був, бо його §«Що
 зробити» **виявилось нездійсненним у варіанті 1**, і це варте того, щоб пережити фазу:
 
@@ -388,7 +388,7 @@ violations`: максимальний список модулів плюс по�
 
 **Знайдено:** 2026-09-08 сесією-рецензентом, за симптомом ведучої сесії.
 
-**Status: DONE, 2026-09-17** — доказ `work/report-b5.md`. Причину прибрано з ланцюга гейта:
+**Status: DONE, 2026-09-17** — доказ `work/archive/report-b5.md`. Причину прибрано з ланцюга гейта:
 ціль `drain-queue` у `Makefile` стоїть між `up` і `seed-identities`, тобто **раніше за `smoke`** —
 саме та дірка, яку цей запис називав («перед `smoke` дренаж не виконується ніколи»). Ціль друкує
 `before=N after=M` і валить крок, якщо `after != 0`; червоне доведено відтворенням історичного
@@ -518,7 +518,7 @@ asynq:{default}:active     EXISTS=0  LLEN=0  ZCARD=0   ← і так усі пʼ
 **Знайдено:** 2026-09-08, побічно з пастки імен у T8 (heartbeat приймає `positionSeconds`,
 читальна модель віддає `position`).
 
-**Status: DONE, 2026-09-17** — доказ `work/report-b6.md`; узято перед фазою `7a` за правилом
+**Status: DONE, 2026-09-17** — доказ `work/archive/report-b6.md`; узято перед фазою `7a` за правилом
 §24 (`work/PRODUCT-BRIEF.md:1015`). `frontend/e2e/contract.ts` дає `contractField<Model>`, ключ
 якого мусить бути полем генерованої моделі; анотовано 23 виклики у трьох spec-файлах, 18
 унікальних пар. Червоний доказ — підміна пари з T8 в обидва боки дає два `TS2345`. Зонди
@@ -565,7 +565,7 @@ HTTP, які `AGENTS.md` вимагає окремо.
 
 ## B-7 — стан `playing` не стежить за відеоелементом, і каденція це переживає
 
-**Status: DONE, 2026-09-09** — таск `T10`, доказ `work/report-t10.md:240,261`. `onPause` і
+**Status: DONE, 2026-09-09** — таск `T10`, доказ `work/archive/report-t10.md:240,261`. `onPause` і
 `onPlaying` беруть стан із подій відеоелемента (`LessonPlayer.tsx:426,437`), і рядок **R39**
 доводить, що пауза поза кнопкою зупиняє поновлення володіння **і** пише прогрес. Позначку
 додано 2026-09-12: `work/tasks.md:163` заявляв закриття, а цей файл його не ніс, і два
@@ -776,7 +776,7 @@ Serial успадковується від `configure`. Заодно закри�
 
 **Знайдено:** 2026-09-08, коли `make check` упав на `smoke` після дня прогонів.
 
-**Status: DONE — виправлено 2026-09-09, позначено 2026-09-17.** Доказ `work/report-b10.md`.
+**Status: DONE — виправлено 2026-09-09, позначено 2026-09-17.** Доказ `work/archive/report-b10.md`.
 Відкритою була не робота, а **реєстр**: ліки з §Ліки уже стояли в
 `infrastructure/tests/smoke.sh:61-68` (вісім серій у формі `…{reason="probe_failed"} ` з
 пробілом, не `… 0`). Приїхали вони комітом **`8cec836`**, чия тема — *«the heredoc terminator
@@ -934,7 +934,7 @@ e2e-local: up seed-identities seed e2e
 **Знайдено:** 2026-09-09, після того як `catalog.spec.ts:29` упав **удруге** й спокуса списати
 його на навантаження була найбільшою.
 
-**Status: DONE, 2026-09-17, із переглянутим діагнозом** — доказ `work/report-b13.md`. Запис
+**Status: DONE, 2026-09-17, із переглянутим діагнозом** — доказ `work/archive/report-b13.md`. Запис
 нижче лікував **ізоляцію тестів**; справжній дефект був інший: тест вимагав стабільності
 глобального offset-вікна, якої продукт ніколи не обіцяв
 (`docs/foundation/assumptions.md:21` — «offset pagination може зміщуватися між окремими
@@ -1344,7 +1344,7 @@ explicitly to domain entities»).
 Один такий шлях уже існував: правило кроку 4a A13 («завантаження ASR-чернетки перемикає редактор на
 її мову») давало зберегти `en`-чернетку поверх `uk`-транскрипту. Крок 4g його закрив: завантаження
 чернетки іншою мовою поверх наявного транскрипту тепер відмовляється (рішення користувача
-2026-09-24, `work/brief-a13-language.md`). Але крихкість самого читання лишилась: алфавіт замість
+2026-09-24, `work/archive/brief-a13-language.md`). Але крихкість самого читання лишилась: алфавіт замість
 мови уроку.
 
 ### Спосіб перевірки, коли візьмуть
@@ -1362,7 +1362,7 @@ explicitly to domain entities»).
 
 ## B-24 — payment PR #3 review findings (Courses 2, 2026-10-02, non-blocking)
 
-From `work/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary. Four polish items:
+From `work/archive/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary. Four polish items:
 
 1. **Duplicate-JSON-key check is asymmetric and copy-pasted.** `validateUniqueJSONObject` (reject
    duplicate keys) lives in `decodeGrant` (orders), and independently in `admin_handler.go` and

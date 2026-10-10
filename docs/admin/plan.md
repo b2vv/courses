@@ -487,7 +487,7 @@ The briefing (§4) records the trap exactly: e2e signs in from the host into the
    current `EmptyState` body moves aside for `admin.index.tsx`. `admin.$.tsx` stays as the
    unknown-address sink. `route-guards.test.tsx` and `e2e/route-guards.spec.ts` assert on that
    screen and are updated in the task that moves it (A10).
-6. **UI-kit debt trigger fires** (briefing §6, `work/report-i06d.md`). The real change is
+6. **UI-kit debt trigger fires** (briefing §6, `work/archive/report-i06d.md`). The real change is
    "Ukrainian defaults removed, labels required" (NB-16): `Pagination` carries **five**
    Ukrainian strings — two buttons, the page label, the empty label and the `nav` aria-label —
    while `Table.emptyMessage` and `Skeleton.label` are optional-with-Ukrainian-default. All
@@ -626,7 +626,7 @@ Why the row changed rather than the code: the course-wide lesson ceiling is a su
 `modules[*].lessons`, which JSON Schema cannot bound, so the contract declares a course of 4800
 lessons valid while the domain refuses it. With a generic `invalid_request` the client could not
 name which rule it broke. The number now lives once, in the domain, and the refusal carries
-`lesson_limit`. Evidence: `work/report-b3.md`; the boundary is pinned in both directions in
+`lesson_limit`. Evidence: `work/archive/report-b3.md`; the boundary is pinned in both directions in
 `admin_handler_test.go` (the schema accepts `60+61` and the server refuses it; the schema itself
 refuses `121` in one module).
 
