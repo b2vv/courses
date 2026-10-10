@@ -47,6 +47,11 @@ func (repository *Repository) Snapshot(ctx context.Context) (domain.Snapshot, er
 	if err := repository.scanMedia(ctx, &snapshot.Media); err != nil {
 		return domain.Snapshot{}, err
 	}
+	engagement, err := repository.loadEngagement(ctx)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+	snapshot.Engagement = engagement
 	instructors, err := repository.loadInstructors(ctx)
 	if err != nil {
 		return domain.Snapshot{}, err

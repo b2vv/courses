@@ -57,6 +57,15 @@ type MediaStat struct {
 	WithDurationCount    int
 }
 
+// EngagementStat aggregates learning activity across active memberships.
+// AvgProgress is the mean completed-lesson fraction over active grants and is
+// nil when there is no active grant (AVG over zero rows), never a misleading 0.
+type EngagementStat struct {
+	ActiveLearners30d int
+	AvgProgress       *float64
+	Completions       int
+}
+
 // InstructorStat is one row of the per-instructor leaderboard.
 type InstructorStat struct {
 	InstructorID      string
@@ -79,6 +88,7 @@ type Snapshot struct {
 	Orders      OrdersStat
 	Reports     ReportsStat
 	Media       MediaStat
+	Engagement  EngagementStat
 	Instructors []InstructorStat
 	Platform    Platform
 }
