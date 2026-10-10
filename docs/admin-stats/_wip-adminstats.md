@@ -218,3 +218,17 @@ Frontend:
   `.admin-analytics*`. routeTree.gen.ts регенеровано (rsbuild build, tracked-файл). R24 route-list тест
   оновлено (+/admin/analytics). Гейт слайсу: rsbuild build ✔, format/lint/typecheck ✔, **FE test 680**.
   Повний e2e+axe — T11 (ФІНАЛ). Delta не використано (нема даних порівняння). Далі: **T11**.
+- **T11 (e2e+axe) готово — ФАЗА ЗАКРИТА** (Claude): `e2e/admin-analytics.spec.ts` — admin: реальні числа
+  (hero `/\d/`), 9a leaderboard+instructor прихований + payload singleInstructor=true, тренд рендериться,
+  13 deferred-placeholder видимий, **14 звірка `stats.active+blocked == users.list.total` через API**,
+  axe 0 (wcag2a/aa/21aa), 200%-zoom без overflow; instructor: not-found + API 403 grant_forbidden (10).
+  Component-юніт `AnalyticsView.test.tsx`: 9b leaderboard у порядку A>B>C + instructor-tile (OFF),
+  9a hide (ON), null avg→«—», deferred placeholder.
+  - **Дефект, зловлений 1-м повним прогоном:** сітка `.admin-analytics-grid` давала горизонтальний
+    overflow при 200% zoom (`minmax(13rem,1fr)` → floor 13rem > вузьке вікно); фікс
+    `minmax(min(13rem,100%),1fr)`. 2-й прогон зелений.
+  - **ВЕРИФІКАЦІЯ: повний ordered `make check` EXIT=0, e2e 114 passed** (0 failed/0 did-not-run, 12.5m).
+    Усі 17 рядків §6.1 мають row-level доказ → звіт `docs/admin-stats/report.md` §2.
+  - Рішення зафіксовані у звіті §3 (admin-gate лише middleware; engagement усі 3; 9a-live/9b-unit+repo;
+    без engagement-індексу). Обмеження §5 (deferred watch-through/теги/популярність; Delta latent a11y).
+  - **ФАЗА admin-stats ЗАКРИТА.** Роадмап §24 лишається завершеним; це була owner-mini-фаза через spec-flow.

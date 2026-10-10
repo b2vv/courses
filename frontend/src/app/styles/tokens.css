@@ -584,10 +584,12 @@
 .admin-analytics {
   display: grid;
   gap: var(--space-6);
+  min-inline-size: 0;
 }
 .admin-analytics-group {
   display: grid;
   gap: var(--space-4);
+  min-inline-size: 0;
 }
 .admin-analytics-group h2 {
   font-family: var(--font-display);
@@ -597,7 +599,9 @@
 .admin-analytics-grid {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  /* min() caps the track floor at the container width so the grid never forces
+     horizontal overflow at 200% text zoom on a narrow viewport. */
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
 }
 .ui-delta {
   display: inline-flex;
