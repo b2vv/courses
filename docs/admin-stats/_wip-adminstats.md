@@ -23,8 +23,19 @@
    **GATE 2 GREEN обидва** (defense + critique re-verify; critique звірив новий leaderboard-SQL із
    міграціями 00003/00011). Дрібний косметичний борг: §3 рядки courses/grants/reports/media ще
    кажуть «COUNT GROUP BY» — керує N1-правило зверху, Codex робить FILTER. Далі: tasks.md.
-6. [~] tasks.md + work/tasks.md рядки.
-7. [ ] implement (tdd, таск за таском).
+6. [x] tasks.md (T1–T11) + work/tasks.md секція admin-stats. Планувальні доки закомічено `9cc7f72`
+      (не запушено). GATE 1✔ GATE 2✔. Готово до implement.
+7. [!] implement — **ЗАБЛОКОВАНО**: Codex usage limit вичерпано (reset 14.10 07:54). codex-rescue
+      сабагент падав на Sonnet-safeguard (reasoning_extraction); codex exec напряму — «hit usage limit».
+      Жодних code-змін не зроблено. Чекаю рішення власника: ждати до 14.10 / поповнити кредити /
+      Claude реалізує цю сесію (відступ від «код через Codex»).
+      РІШЕННЯ власника 2026-10-10: **Claude реалізує цю сесію** (Codex недоступний до 14.10).
+      **T2 + T1 DONE `1cfb967`**: domain/ports/validation (unit+vet+gofmt clean) + OpenAPI 2 ендпоінти
+      + Orval regen (check-generated green, build+typecheck ok). Планувальні доки — `9cc7f72`.
+      ЗАЛИШИЛОСЬ: T3 snapshot repo · T4 leaderboard repo · T5 timeseries repo (всі потребують
+      ізольованого Postgres + repo-тести) · T6 handler+wiring+flag · T7 engagement · T8 FE repo/queries
+      · T9 StatTile+TrendChart · T10 /admin/analytics сторінка · T11 e2e+axe.
+      Повний ordered `make check` — після T6 (handler) і фінально на T11.
 8. [ ] verify (code-review на діф).
 9. [ ] ship-report (дельта до плану).
 
