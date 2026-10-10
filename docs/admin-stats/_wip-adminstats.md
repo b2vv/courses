@@ -115,3 +115,12 @@ Frontend:
   (A6b); watch-through/гістограма відкладені. Перехід до plan.md підтверджено.
 - Рішення власника: **код — через Codex** (крок implement; split impl/tests, npm run format per-slice).
   Я пишу plan.md/tasks; реалізацію делегую Codex. Далі: plan.md.
+- T1/T2 реалізовано (`1cfb967`), трекери `9193e34`. Codex недоступний до 14.10 → код пише Claude.
+- **T3 (snapshot repo) готово** (Claude): `adapters/postgres/snapshot.go` (6 доменів, COUNT FILTER
+  per-key zero-fill N1; media 6→3 CASE; revenue `SUM(amount_minor) FILTER paid ::bigint`;
+  duration total `COALESCE(SUM,0)`, avg `AVG FILTER (duration IS NOT NULL)`→nullable, withDurationCount)
+  + `snapshot_integration_test.go`. Instructors лишено порожнім (T4 допише Snapshot()).
+  Додав `domain.ErrDependencyUnavailable` (read-path фейл). Верифікація: gofmt/build/`go vet ./...`
+  чисто; repo-тест 2/2 на ізольованому Postgres — порожня БД=нулі+avg nil (рядок 5/8-null),
+  seed рахує всі 6 доменів, `active+blocked == COUNT non-deleted` (A3, рядок 14-прекурсор).
+  Повний ordered `make check` — за планом ПІСЛЯ T6. Далі: **T4** (instructors leaderboard).
