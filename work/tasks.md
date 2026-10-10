@@ -343,8 +343,8 @@ RequireAdministrator) → `GET /admin/stats` (знімок + per-instructor lead
 
 | ID | Опис | Залежить | Статус | Приймальні |
 |---|---|---|---|---|
-| T1 | OpenAPI-контракт 2 ендпоінтів (Snapshot+instructors[]+platform, avgDuration nullable) + `make generate` | — | planned | 1,3,9,12b (контракт) |
-| T2 | adminstats domain+ports+validation (cap UTC `floor((to−from)/bucket)+1`, parse RFC3339, коди) + unit | — | planned | 7,11,12,12b |
+| T1 | OpenAPI-контракт 2 ендпоінтів (Snapshot+instructors[]+platform, avgDuration nullable) + `make generate` | — | **done** `1cfb967` (check-generated green) | 1,3,9,12b (контракт) |
+| T2 | adminstats domain+ports+validation (cap UTC, parse RFC3339, коди) + unit | — | **done** `1cfb967` (go test+vet+gofmt clean) | 7,11,12,12b |
 | T3 | snapshot repo 6 доменів (COUNT FILTER zero-fill, media 6→3, duration) + repo-тест | T2 | planned | 1,5,8 |
 | T4 | instructors leaderboard repo (join courses.instructor_id, LEFT JOIN, топ-N revenue) + repo-тест | T2 | planned | 9b,9c |
 | T5 | timeseries repo 4 метрики (revenue за paid_at, date_trunc UTC) + repo-тест | T2 | planned | 3,4,6 |
