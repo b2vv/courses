@@ -10,4 +10,7 @@ const (
 	ErrRangeTooWide  Error = "range_too_wide"
 	ErrUnknownMetric Error = "unknown_metric"
 	ErrUnknownBucket Error = "unknown_bucket"
+	// ErrDependencyUnavailable is a read-path failure the adapter cannot
+	// attribute to the caller's input (the database is unreachable or errored).
+	ErrDependencyUnavailable Error = "dependency_unavailable"
 )
