@@ -9,11 +9,15 @@ import (
 	"errors"
 
 	"courses/internal/adminstats/domain"
+	"courses/internal/adminstats/ports"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository reads admin aggregates from the shared Postgres pool.
 type Repository struct{ pool *pgxpool.Pool }
+
+// Repository implements the stats read port.
+var _ ports.StatsRepository = (*Repository)(nil)
 
 // NewRepository builds the read adapter over the shared pool.
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
