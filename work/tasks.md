@@ -328,3 +328,29 @@ re-review ЗЕЛЕНИЙ, +3 non-blocking пінів; робочі файли `w
 | L7d | (amendment 2026-10-07, Courses 2 BLOCKING для En05/En11) named comms-gate errors у UI: enrollment_required/enrollment_blocked у discussion+review repo/domain/presentation + i18n + 8 message-рівневих тестів; +фікс learn.$.tsx report-false-success; +a11y active admin-nav contrast 4.39→12.77:1 | L7 | done (`2d21b99`; revoke-gate NB `b803007`; tsc+lint+Rstest 638 green) | En05,En11 |
 | L8 | e2e `enrollment.spec.ts` + axe: enroll(free/paid), контент-гейт, blocked-комунікація, media-bytes-blocked, revoke, overview, скарги, grandfather/preview, backfill, single-row, G10 | L7,L7d | done (`42cebce`: enrollment.spec En01/En03/En04+En10 media-bytes nginx/En04+En15/En05+En08(message)/En07+En14 + axe/44px/zoom; route-guards /learn-редірект оновлено; recovery:83 scoped на seeded-слаги (AGENTS — не total==3); **повний make e2e на свіжій БД 107 passed 0 failed**; e2e зловив 1 реальний a11y + report-false-success (у L7d) + мої spec-помилки; grandfather/preview/backfill лишені integration-доведеними; Courses 2 row-by-row pending) | En01–En15 |
 | L9 | Упорядкований `make check` + звіт `docs/enrollment/report.md` + PR | L1–L8 | **done** — ordered `make check` GREEN end-to-end (e2e 107 passed); звіт `docs/enrollment/report.md`; B-L9.1 FIXED `57dd18d` (En13 backfill integration-proven); **Courses 2 L1–L9 усі APPROVE (чесно 15/15)**; PR #8 відкрито (https://github.com/b2vv/courses/pull/8), merge — рішення власника. **ФАЗА ENROLLMENT ЗАВЕРШЕНА** | усі |
+
+## Фаза `admin-stats` — аналітика адміна
+
+Джерело: [spec](../docs/admin-stats/spec.md) (GATE 1 2026-10-10), [plan](../docs/admin-stats/plan.md)
+(GATE 2 2026-10-10: 1-й прохід ЧЕРВОНИЙ — critique B1+N1..N5, defense Q1; виправлено; re-verify
+**ЗЕЛЕНИЙ обидва рев'юери**), [tasks](../docs/admin-stats/tasks.md). Відкладене (теги/популярність/
+довжина-watch-through) — `docs/design/admin-analytics-tags-popularity.md`.
+Ролі: план/гейти/коміти — Courses 1; **код — Codex**; рев'ю — Courses 2. Гілка `feat/admin-reconstruction`
+(на S0). Тест-режим. Ключове: новий `backend/internal/adminstats`-модуль (raw-SQL крос-таблиці під
+RequireAdministrator) → `GET /admin/stats` (знімок + per-instructor leaderboard + `platform.singleInstructor`)
+і `GET /admin/stats/timeseries` (signups/enrollments/orders/revenue; revenue за paid_at); фронт
+`/admin/analytics` (NorthWind, 6 доменів, hand-SVG TrendChart, плейсхолдер-деградація).
+
+| ID | Опис | Залежить | Статус | Приймальні |
+|---|---|---|---|---|
+| T1 | OpenAPI-контракт 2 ендпоінтів (Snapshot+instructors[]+platform, avgDuration nullable) + `make generate` | — | planned | 1,3,9,12b (контракт) |
+| T2 | adminstats domain+ports+validation (cap UTC `floor((to−from)/bucket)+1`, parse RFC3339, коди) + unit | — | planned | 7,11,12,12b |
+| T3 | snapshot repo 6 доменів (COUNT FILTER zero-fill, media 6→3, duration) + repo-тест | T2 | planned | 1,5,8 |
+| T4 | instructors leaderboard repo (join courses.instructor_id, LEFT JOIN, топ-N revenue) + repo-тест | T2 | planned | 9b,9c |
+| T5 | timeseries repo 4 метрики (revenue за paid_at, date_trunc UTC) + repo-тест | T2 | planned | 3,4,6 |
+| T6 | http handler + wiring main.go + RequireAdministrator + PLATFORM_SINGLE_INSTRUCTOR env у payload + contract-тести | T1,T2,T3,T4,T5 | planned | 1,3,9a,10,11,12,12b |
+| T7 | engagement-slice (активні/avg progress/completion, вимір вартості, деградація) + repo-тест | T3 | planned | 13 (частк.) |
+| T8 | FE repo+schema(Zod nullable avg)+port+queries | T1 | planned | — |
+| T9 | FE StatTile + один TrendChart (line/bar, без Donut) + story/юніт | — | planned | — |
+| T10 | FE `/admin/analytics` route+nav+icon+i18n, секції+leaderboard, плейсхолдер, single-instructor hide | T8,T9 | planned | 2,9a |
+| T11 | e2e `admin-analytics.spec.ts` + axe (числа, звірка зі списком, 403, тренд, leaderboard-порядок) | T6,T10 | planned | 2,3,6,9a,9b,10,13,14 |
