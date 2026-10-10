@@ -133,3 +133,13 @@ Frontend:
   продажів присутній із 0 (9c), не випадає; читання через `Snapshot().Instructors` (перевіряє wiring).
   Контейнер-бойлерплейт винесено у спільний `newTestPool(t,ctx)`. Верифікація: gofmt/build/vet
   чисто; обидва repo-тести зелені (leaderboard + snapshot). `4d3a141`→наступний коміт. Далі: **T5** (timeseries).
+- **T5 (timeseries repo) готово** (Claude): `adapters/postgres/timeseries.go` — `Timeseries(...)` реалізує порт.
+  `date_trunc($1, <timecol> AT TIME ZONE 'UTC')` (N3 UTC-бакети), half-open `[from,to)`,
+  `value::double precision`. Per-metric: signups=users.created_at, enrollments=grants.granted_at,
+  orders=orders.created_at, revenue=orders.paid_at `WHERE status='paid'` (SUM amount_minor). Ідентифікатори
+  фіксовані (не інпут), параметри лише bucket-unit+вікно. Порожнє вікно → **non-nil `[]`** (не null).
+  `Repository` тепер повністю реалізує `ports.StatsRepository` — додано `var _ ports.StatsRepository`.
+  Тест `timeseries_integration_test.go` (3 сабтести): signups сума==`COUNT` у вікні [3] (звірка з таблицею,
+  robust до revenue-фікстур); revenue 1 бакет за paid_at=7777, той самий ордер у orders-метриці (за created_at)
+  поза вікном=0 [4]; порожнє вікно non-nil len0 [6]. Верифікація: gofmt/build/vet чисто; усі 3 adminstats
+  repo-тести зелені. Далі: **T6** (handler+wiring+flag → **повний ordered make check ПІСЛЯ T6**).
