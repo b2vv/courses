@@ -34,8 +34,8 @@ func (q *Queries) CountAuthoringCourses(ctx context.Context, arg CountAuthoringC
 const countPublishedCourses = `-- name: CountPublishedCourses :one
 SELECT count(*) FROM courses
 WHERE status = 'published'
-  AND (title ILIKE '%' || $1::text || '%' ESCAPE '!'
-       OR summary ILIKE '%' || $1::text || '%' ESCAPE '!')
+  AND ($1::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', $1::text))
 `
 
 func (q *Queries) CountPublishedCourses(ctx context.Context, searchPattern string) (int64, error) {
@@ -407,8 +407,8 @@ LEFT JOIN LATERAL (
   WHERE course_modules.course_id = courses.id
 ) AS lessons ON true
 WHERE status = 'published'
-  AND (title ILIKE '%' || $1::text || '%' ESCAPE '!'
-       OR summary ILIKE '%' || $1::text || '%' ESCAPE '!')
+  AND ($1::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', $1::text))
 ORDER BY
   CASE WHEN $2::text = 'title' THEN title COLLATE "C" END ASC,
   CASE WHEN $2::text = 'recent' THEN published_at END DESC,

@@ -75,7 +75,7 @@ LEFT JOIN LATERAL (
   WHERE course_modules.course_id = courses.id
 ) AS lessons ON true
 WHERE status = 'published'
-  AND (title ILIKE '%' || ''::text || '%' ESCAPE '!' OR summary ILIKE '%' || ''::text || '%' ESCAPE '!')
+  AND (''::text = '' OR search_vector @@ websearch_to_tsquery('simple', ''::text))
 ORDER BY
   CASE WHEN 'recent'::text = 'title' THEN title COLLATE "C" END ASC,
   CASE WHEN 'recent'::text = 'recent' THEN published_at END DESC,
@@ -85,7 +85,7 @@ LIMIT 20 OFFSET 0`
   price_minor, currency
 FROM courses
 WHERE status = 'published'
-  AND (title ILIKE '%' || ''::text || '%' ESCAPE '!' OR summary ILIKE '%' || ''::text || '%' ESCAPE '!')
+  AND (''::text = '' OR search_vector @@ websearch_to_tsquery('simple', ''::text))
 ORDER BY
   CASE WHEN 'recent'::text = 'title' THEN title COLLATE "C" END ASC,
   CASE WHEN 'recent'::text = 'recent' THEN published_at END DESC,

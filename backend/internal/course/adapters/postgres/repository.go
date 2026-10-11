@@ -31,12 +31,13 @@ func (r *Repository) ListPublished(ctx context.Context, input domain.Query) (dom
 	}
 	defer rollback(tx)
 	queries := generated.New(tx)
-	pattern := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(query.Search)
-	rows, err := queries.ListPublishedCourses(ctx, generated.ListPublishedCoursesParams{SearchPattern: pattern, SortBy: string(query.Sort), PageLimit: int32(query.Limit), PageOffset: int32(query.Offset)})
+	// query.Search goes straight into websearch_to_tsquery (full-text match, not an
+	// ILIKE pattern), so no wildcard escaping is needed here.
+	rows, err := queries.ListPublishedCourses(ctx, generated.ListPublishedCoursesParams{SearchPattern: query.Search, SortBy: string(query.Sort), PageLimit: int32(query.Limit), PageOffset: int32(query.Offset)})
 	if err != nil {
 		return domain.Page{}, persistenceError(err)
 	}
-	total, err := queries.CountPublishedCourses(ctx, pattern)
+	total, err := queries.CountPublishedCourses(ctx, query.Search)
 	if err != nil {
 		return domain.Page{}, persistenceError(err)
 	}

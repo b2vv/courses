@@ -181,7 +181,7 @@ export const getListPublishedCoursesUrl = (params?: ListPublishedCoursesParams,)
 }
 
 /**
- * Only published courses are visible. Search is a case-insensitive literal substring of title or summary; percent and underscore are literal characters. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+ * Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
  * @summary List published courses
  */
 export const listPublishedCourses = async (params?: ListPublishedCoursesParams, options?: RequestInit): Promise<listPublishedCoursesResponse> => {

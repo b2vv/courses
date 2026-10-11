@@ -34,8 +34,9 @@ test('catalog and detail include PostgreSQL course data in initial HTML', async 
 // `workers: 1` was the only thing holding it up.
 //
 // The window is now scoped with `q`, and the scope is what makes it deterministic: no
-// run-scoped fixture matches `React` or `Go` in its title or summary (the catalog searches both,
-// `courses.sql.go:355-356`), so the claim holds whatever else the catalog contains. Row H04 asks
+// run-scoped fixture matches `React` or `Go` in its title or summary (the catalog's full-text
+// search covers both, `courses.sql.go:37-38`), so the claim holds whatever else the catalog
+// contains. Row H04 asks
 // that reopening a q/sort/limit/offset URL show the same filtered order - which is what is
 // asserted here - not that a particular course sit at a particular global offset.
 //

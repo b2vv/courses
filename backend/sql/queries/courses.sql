@@ -17,8 +17,8 @@ LEFT JOIN LATERAL (
   WHERE course_modules.course_id = courses.id
 ) AS lessons ON true
 WHERE status = 'published'
-  AND (title ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
-       OR summary ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!')
+  AND (sqlc.arg(search_pattern)::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text))
 ORDER BY
   CASE WHEN sqlc.arg(sort_by)::text = 'title' THEN title COLLATE "C" END ASC,
   CASE WHEN sqlc.arg(sort_by)::text = 'recent' THEN published_at END DESC,
@@ -28,8 +28,8 @@ LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
 -- name: CountPublishedCourses :one
 SELECT count(*) FROM courses
 WHERE status = 'published'
-  AND (title ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
-       OR summary ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!');
+  AND (sqlc.arg(search_pattern)::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text));
 
 -- name: GetPublishedCourse :many
 SELECT
