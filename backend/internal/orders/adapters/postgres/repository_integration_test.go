@@ -567,6 +567,170 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
+	// settlePurchase drives the production settle path: a pending order paid by a PaymentSucceeded
+	// event, leaving an active purchase grant whose order_id is the order. Returns the order and the
+	// service (its own unbounded id source, so the follow-up refund apply does not starve a fixture).
+	settlePurchase := func(t *testing.T, email, prefix, key string) (domain.Order, *application.Service) {
+		t.Helper()
+		var userID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),$1,'Refund case','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`, email).Scan(&userID); err != nil {
+			t.Fatal(err)
+		}
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs(prefix), nil)
+		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: key + ":paid", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: order.Amount(), ReceivedAt: now.Add(time.Minute)}); err != nil {
+			t.Fatalf("settle: %v", err)
+		}
+		return order, svc
+	}
+	refundEvent := func(order domain.Order, suffix string, amount domain.Money) domain.PaymentEvent {
+		return domain.PaymentEvent{Provider: "provider", EventID: order.ID() + ":" + suffix, OrderID: order.ID(), Type: domain.PaymentRefunded, Amount: amount, ReceivedAt: now.Add(5 * time.Minute)}
+	}
+	grantState := func(t *testing.T, orderID string) (string, int) {
+		t.Helper()
+		var state string
+		var revokeAudits int
+		if err := pool.QueryRow(ctx, `SELECT g.state, (SELECT count(*) FROM grant_audit a WHERE a.grant_id=g.id AND a.action='revoke' AND a.actor_id IS NULL AND a.reason='wayforpay_refund' AND a.payment_event_id IS NOT NULL) FROM course_grants g WHERE g.order_id=$1::text::uuid`, orderID).Scan(&state, &revokeAudits); err != nil {
+			t.Fatal(err)
+		}
+		return state, revokeAudits
+	}
+
+	t.Run("Rf4 refund webhook revokes a paid order's grant with a system audit row", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf4@example.test", "a0", "rf4-key")
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Refunded", order.Amount())); err != nil {
+			t.Fatalf("apply refund: %v", err)
+		}
+		state, revokeAudits := grantState(t, order.ID())
+		var refundedEvents int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE order_id=$1::text::uuid AND type='refunded'`, order.ID()).Scan(&refundedEvents); err != nil {
+			t.Fatal(err)
+		}
+		if state != "revoked" || revokeAudits != 1 || refundedEvents != 1 {
+			t.Fatalf("state=%q revokeAudits=%d refundedEvents=%d, want revoked/1/1", state, revokeAudits, refundedEvents)
+		}
+	})
+
+	t.Run("Rf17 partial refund still revokes the whole grant", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf17@example.test", "a1", "rf17-key")
+		partial, err := domain.NewMoney("1", "UAH")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Refunded", partial)); err != nil {
+			t.Fatalf("apply partial refund: %v", err)
+		}
+		if state, audits := grantState(t, order.ID()); state != "revoked" || audits != 1 {
+			t.Fatalf("partial refund state=%q audits=%d, want revoked/1", state, audits)
+		}
+	})
+
+	t.Run("Rf6 void revokes a blocked grant", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf6@example.test", "a2", "rf6-key")
+		if _, err := pool.Exec(ctx, `UPDATE course_grants SET state='blocked' WHERE order_id=$1::text::uuid`, order.ID()); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Voided", order.Amount())); err != nil {
+			t.Fatalf("apply void: %v", err)
+		}
+		if state, audits := grantState(t, order.ID()); state != "revoked" || audits != 1 {
+			t.Fatalf("void on blocked state=%q audits=%d, want revoked/1", state, audits)
+		}
+	})
+
+	t.Run("Rf19 refunded then voided revokes once, two events one audit", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf19@example.test", "a3", "rf19-key")
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Refunded", order.Amount())); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Voided", order.Amount())); err != nil {
+			t.Fatalf("second refund errored: %v", err)
+		}
+		state, revokeAudits := grantState(t, order.ID())
+		var events int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE order_id=$1::text::uuid AND type='refunded'`, order.ID()).Scan(&events); err != nil {
+			t.Fatal(err)
+		}
+		if state != "revoked" || revokeAudits != 1 || events != 2 {
+			t.Fatalf("state=%q revokeAudits=%d events=%d, want revoked/1/2", state, revokeAudits, events)
+		}
+	})
+
+	t.Run("Rf8 duplicate refund is deduped by the inbox, no second audit", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf8@example.test", "a4", "rf8-key")
+		event := refundEvent(order, "Refunded", order.Amount())
+		if err := svc.ApplyPaymentEvent(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, event); err != nil {
+			t.Fatalf("duplicate refund errored: %v", err)
+		}
+		state, revokeAudits := grantState(t, order.ID())
+		var events int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_events WHERE order_id=$1::text::uuid AND type='refunded'`, order.ID()).Scan(&events); err != nil {
+			t.Fatal(err)
+		}
+		if state != "revoked" || revokeAudits != 1 || events != 1 {
+			t.Fatalf("state=%q revokeAudits=%d events=%d, want revoked/1/1", state, revokeAudits, events)
+		}
+	})
+
+	t.Run("Rf10 refund on a non-paid order is ignored without refund_required", func(t *testing.T) {
+		var userID string
+		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'rf10@example.test','Refund ignore','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {
+			t.Fatal(err)
+		}
+		svc := application.New(repository, repository, repository, func() time.Time { return now }, subtestIDs("a5"), nil)
+		order, err := svc.StartPurchase(ctx, application.Actor{UserID: userID, EmailVerified: true}, integrationCourseID, "rf10-key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, domain.PaymentEvent{Provider: "provider", EventID: "rf10-key:failed", OrderID: order.ID(), Type: domain.PaymentFailed, Amount: order.Amount(), ReceivedAt: now.Add(time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Refunded", order.Amount())); err != nil {
+			t.Fatalf("refund on failed order errored: %v", err)
+		}
+		var status string
+		var refundRequired bool
+		var refunded int
+		if err := pool.QueryRow(ctx, `SELECT o.status, o.refund_required, (SELECT count(*) FROM payment_events WHERE order_id=o.id AND type='refunded') FROM orders o WHERE o.id=$1::text::uuid`, order.ID()).Scan(&status, &refundRequired, &refunded); err != nil {
+			t.Fatal(err)
+		}
+		if status != "failed" || refundRequired || refunded != 1 {
+			t.Fatalf("status=%q refundRequired=%v refundedEvents=%d, want failed/false/1", status, refundRequired, refunded)
+		}
+	})
+
+	t.Run("Rf18 refund does not touch an admin re-grant under a different order", func(t *testing.T) {
+		order, svc := settlePurchase(t, "rf18@example.test", "a6", "rf18-key")
+		var userID string
+		if err := pool.QueryRow(ctx, `SELECT user_id::text FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&userID); err != nil {
+			t.Fatal(err)
+		}
+		// Admin revokes the purchase grant, then re-grants as admin (order_id becomes NULL).
+		if _, err := svc.Revoke(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, userID, integrationCourseID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.GrantCourse(ctx, application.Actor{UserID: integrationAdminID, Administrator: true, EmailVerified: true}, userID, integrationCourseID, "re-granted after manual revoke"); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.ApplyPaymentEvent(ctx, refundEvent(order, "Refunded", order.Amount())); err != nil {
+			t.Fatalf("refund after re-grant errored: %v", err)
+		}
+		var state, source string
+		var orderID *string
+		if err := pool.QueryRow(ctx, `SELECT state,source,order_id::text FROM course_grants WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid`, userID, integrationCourseID).Scan(&state, &source, &orderID); err != nil {
+			t.Fatal(err)
+		}
+		if state != "active" || source != "admin" || orderID != nil {
+			t.Fatalf("re-granted admin grant state=%q source=%q order=%v, want active/admin/nil", state, source, orderID)
+		}
+	})
+
 	t.Run("En02 paid event upgrades an active self membership in place", func(t *testing.T) {
 		var userID string
 		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'self-upgrade@example.test','Self upgrade','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {
