@@ -5,10 +5,13 @@ import {
   getMyCourseMembership,
   getMyCourseMemberships,
   listParticipantReports,
+  listRefundQueue,
   reportCourseLecturer,
   reportCourseParticipant,
   resolveParticipantReport,
+  resolveRefund,
   revokeCourseParticipant,
+  revokeRefundGrant,
   unblockCourseParticipant,
 } from './generated/courses';
 import { createApiTransport, unnamedStatusCode } from './transport';
@@ -22,6 +25,9 @@ import type {
   MembershipState,
   ParticipantReportQueueItem,
   ParticipantReportQueuePage,
+  RefundQueueItem,
+  RefundQueuePage,
+  RefundReason,
   RosterEntry,
   RosterPage,
 } from '../../domain/enrollment/enrollment';
@@ -115,6 +121,50 @@ function participantReportPage(value: unknown): value is ParticipantReportQueueP
       (typeof value.nextCursor === 'string' && value.nextCursor.length > 0))
   );
 }
+function refundReason(value: unknown): RefundReason | null {
+  if (value === 'settlement_rejected' || value === 'grant_conflict') return value;
+  if (value === '') return 'unknown';
+  return null;
+}
+function refundItem(value: unknown): RefundQueueItem | null {
+  if (
+    !record(value) ||
+    !uuid(value.orderId) ||
+    !uuid(value.courseId) ||
+    !uuid(value.userId) ||
+    typeof value.orderAmountMinor !== 'number' ||
+    !Number.isInteger(value.orderAmountMinor) ||
+    value.orderAmountMinor < 1 ||
+    !(
+      value.chargedAmountMinor === null ||
+      (typeof value.chargedAmountMinor === 'number' && Number.isInteger(value.chargedAmountMinor))
+    ) ||
+    !(value.receivedAt === null || date(value.receivedAt))
+  ) {
+    return null;
+  }
+  const reason = refundReason(value.reason);
+  if (reason === null) return null;
+  return {
+    orderId: value.orderId,
+    courseId: value.courseId,
+    userId: value.userId,
+    orderAmountMinor: value.orderAmountMinor,
+    chargedAmountMinor: value.chargedAmountMinor,
+    receivedAt: value.receivedAt,
+    reason,
+  };
+}
+function refundPage(value: unknown): RefundQueuePage | null {
+  if (!record(value) || !Array.isArray(value.items)) return null;
+  const items: RefundQueueItem[] = [];
+  for (const raw of value.items) {
+    const item = refundItem(raw);
+    if (item === null) return null;
+    items.push(item);
+  }
+  return { items };
+}
 function membershipGrant(value: unknown): boolean {
   return (
     record(value) &&
@@ -188,6 +238,29 @@ const revokeErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
   403: ['enrollment_forbidden'],
+  409: ['membership_conflict'],
+  500: ['internal_error'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const refundListErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['grant_forbidden'],
+  500: ['internal_error'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const refundResolveErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['grant_forbidden'],
+  500: ['internal_error'],
+  503: ['dependency_unavailable'],
+} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
+const refundRevokeErrors = {
+  400: ['invalid_request'],
+  401: ['authentication_required'],
+  403: ['grant_forbidden'],
+  404: ['order_not_found'],
   409: ['membership_conflict'],
   500: ['internal_error'],
   503: ['dependency_unavailable'],
@@ -331,6 +404,43 @@ export function createApiEnrollmentRepository(
       );
       if (!outcome.ok) return failure(outcome.code);
       if (outcome.status !== 200) return failure(namedError(outcome, revokeErrors));
+      return membershipGrant(outcome.data)
+        ? { ok: true, value: undefined }
+        : failure('invalid_response');
+    },
+    async refundQueue(signal) {
+      const outcome = await send(
+        'enrollment.refund-queue',
+        (init) => listRefundQueue(init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 200) return failure(namedError(outcome, refundListErrors));
+      const page = refundPage(outcome.data);
+      return page ? { ok: true, value: page } : failure('invalid_response');
+    },
+    async resolveRefund(orderId, signal) {
+      const outcome = await send(
+        'enrollment.resolve-refund',
+        (init) => resolveRefund(orderId, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, refundResolveErrors));
+    },
+    async revokeRefund(orderId, signal) {
+      const outcome = await send(
+        'enrollment.revoke-refund',
+        (init) => revokeRefundGrant(orderId, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      if (outcome.status !== 200) return failure(namedError(outcome, refundRevokeErrors));
       return membershipGrant(outcome.data)
         ? { ok: true, value: undefined }
         : failure('invalid_response');

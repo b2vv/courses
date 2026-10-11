@@ -23,6 +23,7 @@ export function enrollmentRosterQueryKey(courseId: string) {
   return ['enrollment', 'roster', courseId] as const;
 }
 export const enrollmentParticipantReportsQueryKey = ['enrollment', 'participantReports'] as const;
+export const enrollmentRefundQueueQueryKey = ['enrollment', 'refundQueue'] as const;
 
 export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
   return {
@@ -51,6 +52,11 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
         queryFn: ({ signal, pageParam }) =>
           enrollment.participantReports(pageParam, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
+      }),
+    refundQueue: () =>
+      queryOptions({
+        queryKey: enrollmentRefundQueueQueryKey,
+        queryFn: ({ signal }) => enrollment.refundQueue(signal).then(unwrap),
       }),
     enroll: (client: QueryClient) =>
       mutationOptions({
@@ -132,6 +138,24 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
           if (error instanceof EnrollmentQueryError && error.code === 'membership_conflict') {
             void client.invalidateQueries({ queryKey: enrollmentParticipantReportsQueryKey });
             return client.invalidateQueries({ queryKey: enrollmentRosterQueryKey(courseId) });
+          }
+          return undefined;
+        },
+      }),
+    resolveRefund: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: (orderId: string) => enrollment.resolveRefund(orderId).then(unwrap),
+        onSuccess: () => client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey }),
+      }),
+    revokeRefund: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: (orderId: string) => enrollment.revokeRefund(orderId).then(unwrap),
+        // Revoke leaves the row in the queue (it is cleared by resolve), but re-read so the
+        // membership state the screen shows reflects the revoke, and to surface a 409 conflict.
+        onSuccess: () => client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey }),
+        onError: (error) => {
+          if (error instanceof EnrollmentQueryError && error.code === 'membership_conflict') {
+            return client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey });
           }
           return undefined;
         },

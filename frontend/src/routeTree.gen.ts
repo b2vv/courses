@@ -21,6 +21,7 @@ import { Route as AdminSplatRouteImport } from './routes/admin.$'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminLearnersRouteImport } from './routes/admin.learners'
 import { Route as AdminParticipantReportsRouteImport } from './routes/admin.participant-reports'
+import { Route as AdminRefundsRouteImport } from './routes/admin.refunds'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as CoursesSlugRouteImport } from './routes/courses.$slug'
 import { Route as LearnSplatRouteImport } from './routes/learn.$'
@@ -92,6 +93,11 @@ const AdminLearnersRoute = AdminLearnersRouteImport.update({
 const AdminParticipantReportsRoute = AdminParticipantReportsRouteImport.update({
   id: '/participant-reports',
   path: '/participant-reports',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRefundsRoute = AdminRefundsRouteImport.update({
+  id: '/refunds',
+  path: '/refunds',
   getParentRoute: () => AdminRoute,
 } as any)
 const CoursesIndexRoute = CoursesIndexRouteImport.update({
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
+  '/admin/refunds': typeof AdminRefundsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
+  '/admin/refunds': typeof AdminRefundsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/learners': typeof AdminLearnersRoute
   '/admin/participant-reports': typeof AdminParticipantReportsRoute
+  '/admin/refunds': typeof AdminRefundsRoute
   '/courses/$slug': typeof CoursesSlugRoute
   '/learn/$': typeof LearnSplatRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
@@ -247,6 +256,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/learners'
     | '/admin/participant-reports'
+    | '/admin/refunds'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/learners'
     | '/admin/participant-reports'
+    | '/admin/refunds'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
@@ -298,6 +309,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/learners'
     | '/admin/participant-reports'
+    | '/admin/refunds'
     | '/courses/$slug'
     | '/learn/$'
     | '/orders/$orderId'
@@ -416,6 +428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminParticipantReportsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/refunds': {
+      id: '/admin/refunds'
+      path: '/refunds'
+      fullPath: '/admin/refunds'
+      preLoaderRoute: typeof AdminRefundsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/courses/': {
       id: '/courses/'
       path: '/courses'
@@ -508,6 +527,7 @@ interface AdminRouteChildren {
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminLearnersRoute: typeof AdminLearnersRoute
   AdminParticipantReportsRoute: typeof AdminParticipantReportsRoute
+  AdminRefundsRoute: typeof AdminRefundsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminCoursesCourseIdRoute: typeof AdminCoursesCourseIdRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
@@ -518,6 +538,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminLearnersRoute: AdminLearnersRoute,
   AdminParticipantReportsRoute: AdminParticipantReportsRoute,
+  AdminRefundsRoute: AdminRefundsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminCoursesCourseIdRoute: AdminCoursesCourseIdRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
@@ -566,12 +587,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
