@@ -50,4 +50,10 @@
 
 ## 3. Наступний таск
 
-- R8 — frontend: `RefundQueue.tsx` + `admin.refunds` route + `enrollment-queries` + AdminShell nav + e2e.
+- **R7 (HTTP) `b64d2a1`, R8 (frontend) `775b5c1`** закрито фінальним ordered `make check` EXIT=0:
+  e2e **115 passed** (12.8m, 0 failed/0 did-not-run), `refund.spec.ts` green (A1 список+axe, A2 revoke
+  через діалог, A3 resolve чистить чергу), FE unit 688. refund.spec створює `grant_conflict`
+  справжнім шляхом (purchase+admin-grant-while-pending+Approved callback). A5 (empty-state) —
+  покрито рендером компонента (гілка `items.length===0`), не окремим e2e-асертом: спільна БД не
+  гарантує порожню чергу під час прогону.
+- **Наступне:** code-review дифу гілки + ship-report + PR у main.
