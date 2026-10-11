@@ -753,6 +753,9 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if found.Reason != "grant_conflict" || found.ChargedAmountMinor == nil || *found.ChargedAmountMinor != int64(order.Amount().MinorUnits()) || found.ReceivedAt == nil {
 			t.Fatalf("queue item=%+v wantReason=grant_conflict charged=%d", found, order.Amount().MinorUnits())
 		}
+		if found.MembershipState == nil || *found.MembershipState != domain.GrantActive {
+			t.Fatalf("queue item membership=%v, want active", found.MembershipState)
+		}
 
 		if err := repository.ResolveRefund(ctx, order.ID(), integrationAdminID); err != nil {
 			t.Fatal(err)

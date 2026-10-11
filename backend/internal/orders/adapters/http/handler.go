@@ -95,6 +95,7 @@ type refundQueueItemDTO struct {
 	ChargedAmountMinor *int64  `json:"chargedAmountMinor"`
 	ReceivedAt         *string `json:"receivedAt"`
 	Reason             string  `json:"reason"`
+	MembershipState    *string `json:"membershipState"`
 }
 
 type refundQueueDTO struct {
@@ -462,6 +463,10 @@ func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
 		if item.ReceivedAt != nil {
 			stamp := item.ReceivedAt.UTC().Format(dateTimeLayout)
 			dto.ReceivedAt = &stamp
+		}
+		if item.MembershipState != nil {
+			state := string(*item.MembershipState)
+			dto.MembershipState = &state
 		}
 		dtos = append(dtos, dto)
 	}

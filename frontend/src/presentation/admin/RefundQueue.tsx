@@ -23,6 +23,7 @@ function errorKey(error: unknown): string {
     case 'order_not_found':
     case 'invalid_request':
     case 'membership_conflict':
+    case 'grant_transition_invalid':
     case 'dependency_unavailable':
     case 'internal_error':
       return code;
@@ -120,24 +121,29 @@ export function RefundQueue({
                     </time>
                   ) : null}
                   <div className="admin-user-actions">
-                    <Dialog
-                      triggerLabel={t('enrollment.refunds.revoke')}
-                      title={t('enrollment.refunds.revoke')}
-                      closeLabel={t('common.close')}
-                    >
-                      {(close) => (
-                        <>
-                          <p>{t('enrollment.refunds.revokeConfirm')}</p>
-                          <Button
-                            variant="danger"
-                            isPending={isPending}
-                            onPress={() => void revoke(item, close)}
-                          >
-                            {t('enrollment.refunds.revoke')}
-                          </Button>
-                        </>
-                      )}
-                    </Dialog>
+                    {/* Revoke only for a live grant (active/blocked). When the grant is gone or
+                        already revoked, the backend would refuse — so the control is hidden and
+                        only resolve remains (A14). */}
+                    {item.membershipState === 'active' || item.membershipState === 'blocked' ? (
+                      <Dialog
+                        triggerLabel={t('enrollment.refunds.revoke')}
+                        title={t('enrollment.refunds.revoke')}
+                        closeLabel={t('common.close')}
+                      >
+                        {(close) => (
+                          <>
+                            <p>{t('enrollment.refunds.revokeConfirm')}</p>
+                            <Button
+                              variant="danger"
+                              isPending={isPending}
+                              onPress={() => void revoke(item, close)}
+                            >
+                              {t('enrollment.refunds.revoke')}
+                            </Button>
+                          </>
+                        )}
+                      </Dialog>
+                    ) : null}
                     <Button
                       variant="secondary"
                       isPending={isPending}

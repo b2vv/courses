@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { RefundQueueItemMembershipState } from './refundQueueItemMembershipState.ts';
 import type { RefundQueueItemReason } from './refundQueueItemReason.ts';
 
 export interface RefundQueueItem {
@@ -18,4 +19,6 @@ export interface RefundQueueItem {
   /** @nullable */
   receivedAt: string | null;
   reason: RefundQueueItemReason;
+  /** @nullable */
+  membershipState: RefundQueueItemMembershipState;
 }

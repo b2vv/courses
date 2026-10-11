@@ -4,7 +4,7 @@ import { RefundQueue } from '../presentation/admin/RefundQueue';
 
 export const Route = createFileRoute('/admin/refunds')({
   ssr: false,
-  loader: ({ context }) => context.queryClient.ensureQueryData(context.enrollment.refundQueue()),
+  loader: ({ context }) => context.queryClient.prefetchQuery(context.enrollment.refundQueue()),
   component: RefundsRoute,
 });
 

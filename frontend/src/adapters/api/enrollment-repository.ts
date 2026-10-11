@@ -145,6 +145,7 @@ function refundItem(value: unknown): RefundQueueItem | null {
   }
   const reason = refundReason(value.reason);
   if (reason === null) return null;
+  if (!(value.membershipState === null || membershipState(value.membershipState))) return null;
   return {
     orderId: value.orderId,
     courseId: value.courseId,
@@ -153,6 +154,7 @@ function refundItem(value: unknown): RefundQueueItem | null {
     chargedAmountMinor: value.chargedAmountMinor,
     receivedAt: value.receivedAt,
     reason,
+    membershipState: value.membershipState,
   };
 }
 function refundPage(value: unknown): RefundQueuePage | null {
@@ -261,7 +263,7 @@ const refundRevokeErrors = {
   401: ['authentication_required'],
   403: ['grant_forbidden'],
   404: ['order_not_found'],
-  409: ['membership_conflict'],
+  409: ['membership_conflict', 'grant_transition_invalid'],
   500: ['internal_error'],
   503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;

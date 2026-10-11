@@ -2797,7 +2797,8 @@ components:
     RefundQueueItem:
       type: object
       additionalProperties: false
-      required: [orderId, courseId, userId, orderAmountMinor, chargedAmountMinor, receivedAt, reason]
+      required:
+        [orderId, courseId, userId, orderAmountMinor, chargedAmountMinor, receivedAt, reason, membershipState]
       properties:
         orderId: { type: string, format: uuid }
         courseId: { type: string, format: uuid }
@@ -2809,6 +2810,9 @@ components:
         receivedAt: { type: string, format: date-time, nullable: true }
         # Empty string is a historical row flagged before refund_reason existed.
         reason: { type: string, enum: ['', settlement_rejected, grant_conflict] }
+        # Current (user, course) grant state, or null when no grant exists; the UI offers revoke
+        # only for a live grant (active/blocked) — A14.
+        membershipState: { type: string, enum: [active, blocked, revoked], nullable: true }
     RefundQueuePage:
       type: object
       additionalProperties: false
