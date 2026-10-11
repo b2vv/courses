@@ -111,6 +111,51 @@ RETURNING id::text,user_id::text,course_id::text,amount_minor,currency,status,id
 	return domain.Order{}, domain.ErrOrderNotFound
 }
 
+func (repository *Repository) OrderByID(ctx context.Context, orderID string) (domain.Order, error) {
+	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE id=$1::text::uuid`, orderID))
+}
+
+func (repository *Repository) RefundQueue(ctx context.Context) ([]ports.RefundQueueItem, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT o.id::text,o.course_id::text,o.user_id::text,o.amount_minor,e.amount_minor,e.received_at,COALESCE(o.refund_reason,'')
+FROM orders o
+LEFT JOIN payment_events e ON e.order_id=o.id AND e.type='paid'
+WHERE o.refund_required AND o.refund_resolved_at IS NULL
+ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	items := []ports.RefundQueueItem{}
+	for rows.Next() {
+		var item ports.RefundQueueItem
+		var charged pgtype.Int8
+		var received pgtype.Timestamptz
+		if err := rows.Scan(&item.OrderID, &item.CourseID, &item.UserID, &item.OrderAmountMinor, &charged, &received, &item.Reason); err != nil {
+			return nil, persistenceError(err)
+		}
+		if charged.Valid {
+			value := charged.Int64
+			item.ChargedAmountMinor = &value
+		}
+		if received.Valid {
+			value := received.Time
+			item.ReceivedAt = &value
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return items, nil
+}
+
+func (repository *Repository) ResolveRefund(ctx context.Context, orderID, actorID string) error {
+	// Idempotent: the refund_resolved_at IS NULL predicate makes a repeat a no-op (zero rows, no
+	// error), and refund_required keeps a never-flagged order from being resolved.
+	_, err := repository.pool.Exec(ctx, `UPDATE orders SET refund_resolved_at=now(),refund_resolved_by=$2::text::uuid WHERE id=$1::text::uuid AND refund_required AND refund_resolved_at IS NULL`, orderID, actorID)
+	return persistenceError(err)
+}
+
 func (repository *Repository) Membership(ctx context.Context, userID, courseID string) (*domain.Grant, error) {
 	var id, grantUserID, grantCourseID, source, state string
 	var orderID, grantedBy pgtype.Text

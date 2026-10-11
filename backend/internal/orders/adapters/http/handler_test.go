@@ -56,6 +56,12 @@ type fakeStore struct {
 	authorCourseID      string
 	authorErr           error
 	authorKind          string
+	refundQueue         []ports.RefundQueueItem
+	refundQueueErr      error
+	orderByIDErr        error
+	resolveErr          error
+	resolvedOrderID     string
+	resolvedActorID     string
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -89,6 +95,23 @@ func (store *fakeStore) Get(context.Context, string, string) (domain.Order, erro
 		return domain.Order{}, domain.ErrOrderNotFound
 	}
 	return store.order, nil
+}
+func (store *fakeStore) OrderByID(context.Context, string) (domain.Order, error) {
+	if store.orderByIDErr != nil {
+		return domain.Order{}, store.orderByIDErr
+	}
+	if store.order.ID() == "" {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	return store.order, nil
+}
+func (store *fakeStore) RefundQueue(context.Context) ([]ports.RefundQueueItem, error) {
+	return store.refundQueue, store.refundQueueErr
+}
+func (store *fakeStore) ResolveRefund(_ context.Context, orderID, actorID string) error {
+	store.resolvedOrderID = orderID
+	store.resolvedActorID = actorID
+	return store.resolveErr
 }
 func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID string) (domain.Order, error) {
 	if store.checkoutErr != nil {

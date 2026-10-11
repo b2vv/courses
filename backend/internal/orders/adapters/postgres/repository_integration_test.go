@@ -731,6 +731,84 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}
 	})
 
+	t.Run("Rf1 refund queue reads charged amount from the paid event and resolve is idempotent", func(t *testing.T) {
+		order, _ := settlePurchase(t, "rf1@example.test", "a7", "rf1-key")
+		// The detection paths (R1) set refund_required; here we exercise the queue read and resolve.
+		if _, err := pool.Exec(ctx, `UPDATE orders SET refund_required=true,refund_reason='grant_conflict' WHERE id=$1::text::uuid`, order.ID()); err != nil {
+			t.Fatal(err)
+		}
+		queue, err := repository.RefundQueue(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found *ports.RefundQueueItem
+		for i := range queue {
+			if queue[i].OrderID == order.ID() {
+				found = &queue[i]
+			}
+		}
+		if found == nil {
+			t.Fatalf("order %s missing from refund queue of %d", order.ID(), len(queue))
+		}
+		if found.Reason != "grant_conflict" || found.ChargedAmountMinor == nil || *found.ChargedAmountMinor != int64(order.Amount().MinorUnits()) || found.ReceivedAt == nil {
+			t.Fatalf("queue item=%+v wantReason=grant_conflict charged=%d", found, order.Amount().MinorUnits())
+		}
+
+		if err := repository.ResolveRefund(ctx, order.ID(), integrationAdminID); err != nil {
+			t.Fatal(err)
+		}
+		var resolvedBy *string
+		var resolvedAt *time.Time
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt); err != nil {
+			t.Fatal(err)
+		}
+		if resolvedBy == nil || *resolvedBy != integrationAdminID || resolvedAt == nil {
+			t.Fatalf("resolvedBy=%v resolvedAt=%v", resolvedBy, resolvedAt)
+		}
+		firstResolvedAt := *resolvedAt
+		// A resolved order leaves the queue.
+		queueAfter, err := repository.RefundQueue(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range queueAfter {
+			if item.OrderID == order.ID() {
+				t.Fatalf("resolved order still in queue")
+			}
+		}
+		// Idempotent: a repeat resolve does not move resolved_at or overwrite the resolver.
+		if err := repository.ResolveRefund(ctx, order.ID(), integrationUserID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt); err != nil {
+			t.Fatal(err)
+		}
+		if resolvedBy == nil || *resolvedBy != integrationAdminID || !resolvedAt.Equal(firstResolvedAt) {
+			t.Fatalf("repeat resolve mutated row: by=%v at=%v want %s/%v", resolvedBy, resolvedAt, integrationAdminID, firstResolvedAt)
+		}
+	})
+
+	t.Run("Rf20 resolve on a never-flagged order is a no-op and OrderByID reads it", func(t *testing.T) {
+		order, _ := settlePurchase(t, "rf20@example.test", "a8", "rf20-key")
+		if err := repository.ResolveRefund(ctx, order.ID(), integrationAdminID); err != nil {
+			t.Fatalf("resolve never-flagged errored: %v", err)
+		}
+		var resolvedAt *time.Time
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedAt); err != nil {
+			t.Fatal(err)
+		}
+		if resolvedAt != nil {
+			t.Fatalf("never-flagged order was resolved: %v", resolvedAt)
+		}
+		got, err := repository.OrderByID(ctx, order.ID())
+		if err != nil || got.ID() != order.ID() || got.UserID() != order.UserID() {
+			t.Fatalf("OrderByID got=%+v err=%v", got, err)
+		}
+		if _, err := repository.OrderByID(ctx, "60000000-0000-4000-8000-0000deadbeef"); !errors.Is(err, domain.ErrOrderNotFound) {
+			t.Fatalf("OrderByID unknown err=%v", err)
+		}
+	})
+
 	t.Run("En02 paid event upgrades an active self membership in place", func(t *testing.T) {
 		var userID string
 		if err := pool.QueryRow(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES(gen_random_uuid(),'self-upgrade@example.test','Self upgrade','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is') RETURNING id::text`).Scan(&userID); err != nil {

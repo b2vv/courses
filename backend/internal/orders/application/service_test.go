@@ -601,6 +601,76 @@ func TestGrandfatherOnPriceSetUsesOneRepositoryOperation(t *testing.T) {
 	}
 }
 
+func TestRefundQueueOperations(t *testing.T) {
+	admin := application.Actor{UserID: adminID, Administrator: true}
+	student := application.Actor{UserID: userID}
+	ctx := context.Background()
+
+	t.Run("RefundQueue requires an administrator and returns the flagged orders", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.RefundQueue(ctx, student); !errors.Is(err, domain.ErrGrantForbidden) {
+			t.Fatalf("student RefundQueue err=%v", err)
+		}
+		charged := int64(50000)
+		store.refundQueue = []ports.RefundQueueItem{{OrderID: orderID, CourseID: courseID, UserID: userID, OrderAmountMinor: 50000, ChargedAmountMinor: &charged, Reason: "grant_conflict"}}
+		items, err := service.RefundQueue(ctx, admin)
+		if err != nil || len(items) != 1 || items[0].Reason != "grant_conflict" {
+			t.Fatalf("admin RefundQueue items=%+v err=%v", items, err)
+		}
+	})
+
+	t.Run("ResolveRefund requires an administrator and records the actor", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if err := service.ResolveRefund(ctx, student, orderID); !errors.Is(err, domain.ErrGrantForbidden) {
+			t.Fatalf("student ResolveRefund err=%v", err)
+		}
+		if err := service.ResolveRefund(ctx, admin, orderID); err != nil {
+			t.Fatalf("admin ResolveRefund err=%v", err)
+		}
+		if store.resolveCalls != 1 || store.resolvedOrderID != orderID || store.resolvedActorID != adminID {
+			t.Fatalf("resolve calls=%d order=%q actor=%q", store.resolveCalls, store.resolvedOrderID, store.resolvedActorID)
+		}
+	})
+
+	t.Run("RevokeForRefund resolves the order and reuses the revoke transition", func(t *testing.T) {
+		store := newFakeStore(t)
+		order := pendingOrder(t)
+		paid, err := order.MarkPaid(fixedNow.Add(time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.orderByID = &paid
+		store.membership = membership(t, domain.GrantPurchase, domain.GrantActive)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		grant, err := service.RevokeForRefund(ctx, admin, orderID)
+		if err != nil || grant.State() != domain.GrantRevoked {
+			t.Fatalf("revoke grant=%#v err=%v", grant, err)
+		}
+		if store.membershipAction != "revoke" || store.membershipReason != "refund_queue:"+orderID {
+			t.Fatalf("audit action=%q reason=%q", store.membershipAction, store.membershipReason)
+		}
+	})
+
+	t.Run("RevokeForRefund requires an administrator", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.RevokeForRefund(ctx, student, orderID); !errors.Is(err, domain.ErrGrantForbidden) {
+			t.Fatalf("student RevokeForRefund err=%v", err)
+		}
+	})
+
+	t.Run("RevokeForRefund surfaces an unknown order", func(t *testing.T) {
+		store := newFakeStore(t)
+		store.orderByIDErr = domain.ErrOrderNotFound
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if _, err := service.RevokeForRefund(ctx, admin, orderID); !errors.Is(err, domain.ErrOrderNotFound) {
+			t.Fatalf("unknown order err=%v", err)
+		}
+	})
+}
+
 func newFakeStore(t *testing.T) *fakeStore {
 	t.Helper()
 	return &fakeStore{course: ports.CourseFacts{Published: true, Price: money(t, "50000")}}
@@ -644,6 +714,13 @@ type fakeStore struct {
 	authorErr             error
 	authorKind            string
 	authorID              string
+	refundQueue           []ports.RefundQueueItem
+	refundQueueErr        error
+	orderByID             *domain.Order
+	orderByIDErr          error
+	resolvedOrderID       string
+	resolvedActorID       string
+	resolveCalls          int
 }
 
 type fakePaymentProvider struct {
@@ -815,6 +892,27 @@ func (store *fakeStore) GrandfatherOnPriceSet(_ context.Context, courseID string
 func (store *fakeStore) Apply(_ context.Context, event domain.PaymentEvent, _ func() string) error {
 	store.appliedEvent = event
 	return store.applyErr
+}
+
+func (store *fakeStore) OrderByID(_ context.Context, _ string) (domain.Order, error) {
+	if store.orderByIDErr != nil {
+		return domain.Order{}, store.orderByIDErr
+	}
+	if store.orderByID == nil {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	return *store.orderByID, nil
+}
+
+func (store *fakeStore) RefundQueue(context.Context) ([]ports.RefundQueueItem, error) {
+	return store.refundQueue, store.refundQueueErr
+}
+
+func (store *fakeStore) ResolveRefund(_ context.Context, orderID, actorID string) error {
+	store.resolveCalls++
+	store.resolvedOrderID = orderID
+	store.resolvedActorID = actorID
+	return nil
 }
 
 func money(t *testing.T, amount string) *domain.Money {
