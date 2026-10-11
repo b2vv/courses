@@ -18,6 +18,8 @@ type ListUsersInput struct {
 	Offset int
 	Search string
 	Status domain.AccountStatus
+	Role   domain.Role
+	Sort   domain.UserSort
 }
 
 type UserPage struct {
@@ -36,6 +38,7 @@ func (administration *Administration) ListUsers(ctx context.Context, input ListU
 	defer cancel()
 	users, total, err := administration.repository.List(callCtx, ports.AdministrationQuery{
 		Limit: input.Limit, Offset: input.Offset, Search: input.Search, Status: input.Status,
+		Role: input.Role, Sort: input.Sort,
 	})
 	if err != nil {
 		return UserPage{}, administrationOperationError(ctx, err)

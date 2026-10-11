@@ -3,12 +3,15 @@ import type { FormEvent } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { formatLocale } from '../../app/providers/format-locale';
 import { AdminUserQueryError } from '../../app/composition/admin-user-queries';
 import type { AdminUserListState } from '../../app/router/admin-search';
 import type {
   AccountStatus,
   AdminUser,
   AdminUserPage,
+  AdminUserRole,
+  AdminUserSort,
   WritableAccountStatus,
 } from '../../domain/identity/administration';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
@@ -18,6 +21,7 @@ import {
   ErrorState,
   Pagination,
   SegmentedControl,
+  Select,
   Skeleton,
   Table,
   TextField,
@@ -29,6 +33,8 @@ type UserListViewProps = {
   state: AdminUserListState;
   actor: AuthenticatedUser;
   onStatusChange: (status: AccountStatus | undefined) => void;
+  onRoleChange: (role: AdminUserRole | undefined) => void;
+  onSortChange: (sort: AdminUserSort) => void;
   onSearch: (query: string) => void;
   onPageChange: (page: number) => void;
   onSetStatus: (id: string, status: WritableAccountStatus) => Promise<void>;
@@ -42,6 +48,8 @@ export function UserListView({
   state,
   actor,
   onStatusChange,
+  onRoleChange,
+  onSortChange,
   onSearch,
   onPageChange,
   onSetStatus,
@@ -56,13 +64,21 @@ export function UserListView({
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
   const selectedStatus = state.status ?? 'all';
-  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage === 'en' ? 'en' : 'uk-UA', {
+  const dateFormatter = new Intl.DateTimeFormat(formatLocale(i18n.resolvedLanguage), {
     dateStyle: 'short',
     timeStyle: 'short',
   });
   const statusOptions = (['all', 'active', 'blocked', 'deleted'] as const).map((status) => ({
     id: status,
     label: t(status === 'all' ? 'adminUsers.allStatuses' : `adminUsers.${status}`),
+  }));
+  const roleOptions = (['all', 'student', 'instructor', 'admin'] as const).map((role) => ({
+    id: role,
+    label: t(role === 'all' ? 'adminUsers.allRoles' : `adminUsers.${role}`),
+  }));
+  const sortOptions = (['email', 'name', 'recent'] as const).map((sort) => ({
+    id: sort,
+    label: t(`adminUsers.sort_${sort}`),
   }));
 
   async function runAction(user: AdminUser, action: () => Promise<void>, success: string) {
@@ -151,6 +167,18 @@ export function UserListView({
           options={statusOptions}
           selectedKeys={new Set([selectedStatus])}
           onSelectionChange={(keys) => onStatusChange(statusFromKey(String([...keys][0] ?? 'all')))}
+        />
+        <Select
+          label={t('adminUsers.roleFilter')}
+          options={roleOptions}
+          selectedKey={state.role ?? 'all'}
+          onSelectionChange={(key) => onRoleChange(roleFromKey(String(key)))}
+        />
+        <Select
+          label={t('adminUsers.sortBy')}
+          options={sortOptions}
+          selectedKey={state.sort}
+          onSelectionChange={(key) => onSortChange(sortFromKey(String(key)))}
         />
         <span className="admin-filter-count">
           {t('adminUsers.userCount', { count: page.pagination.total })}
@@ -285,5 +313,26 @@ function statusFromKey(key: string): AccountStatus | undefined {
       return key;
     default:
       return undefined;
+  }
+}
+
+function roleFromKey(key: string): AdminUserRole | undefined {
+  switch (key) {
+    case 'student':
+    case 'instructor':
+    case 'admin':
+      return key;
+    default:
+      return undefined;
+  }
+}
+
+function sortFromKey(key: string): AdminUserSort {
+  switch (key) {
+    case 'name':
+    case 'recent':
+      return key;
+    default:
+      return 'email';
   }
 }

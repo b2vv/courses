@@ -1,5 +1,6 @@
 export type AccountStatus = 'active' | 'blocked' | 'deleted';
 export type AdminUserRole = 'student' | 'instructor' | 'admin';
+export type AdminUserSort = 'email' | 'name' | 'recent';
 export type WritableAccountStatus = Exclude<AccountStatus, 'deleted'>;
 export type AdministrationErrorCode =
   | 'invalid_request'
@@ -31,6 +32,8 @@ export type AdminUserQuery = {
   readonly limit: number;
   readonly offset: number;
   readonly status?: AccountStatus;
+  readonly role?: AdminUserRole;
+  readonly sort?: AdminUserSort;
 };
 export type AdminUserPage = {
   readonly items: readonly AdminUser[];
@@ -39,6 +42,8 @@ export type AdminUserPage = {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const accountStatuses: readonly AccountStatus[] = ['active', 'blocked', 'deleted'];
+const adminUserRoles: readonly AdminUserRole[] = ['student', 'instructor', 'admin'];
+const adminUserSorts: readonly AdminUserSort[] = ['email', 'name', 'recent'];
 
 export function validAdminUserId(value: string): boolean {
   return uuidPattern.test(value) && value !== '00000000-0000-0000-0000-000000000000';
@@ -57,6 +62,8 @@ export function makeAdminUserQuery(
     limit: input.limit ?? 20,
     offset: input.offset ?? 0,
     status: input.status,
+    role: input.role,
+    sort: input.sort,
   };
   if (
     !Number.isInteger(query.limit) ||
@@ -67,7 +74,9 @@ export function makeAdminUserQuery(
     query.offset > 10000 ||
     [...query.q].length > 100 ||
     query.q.includes('\u0000') ||
-    (query.status !== undefined && !accountStatuses.includes(query.status))
+    (query.status !== undefined && !accountStatuses.includes(query.status)) ||
+    (query.role !== undefined && !adminUserRoles.includes(query.role)) ||
+    (query.sort !== undefined && !adminUserSorts.includes(query.sort))
   )
     return { ok: false, error: { code: 'invalid_request' } };
   return {
@@ -77,6 +86,8 @@ export function makeAdminUserQuery(
       limit: query.limit,
       offset: query.offset,
       ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.role === undefined ? {} : { role: query.role }),
+      ...(query.sort === undefined ? {} : { sort: query.sort }),
     },
   };
 }

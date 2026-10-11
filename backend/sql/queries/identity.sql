@@ -175,11 +175,15 @@ WHERE (
     OR (sqlc.arg(status)::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
     OR (sqlc.arg(status)::text = 'deleted' AND deleted_at IS NOT NULL)
   )
+  AND (sqlc.arg(role_filter)::text = '' OR role = sqlc.arg(role_filter)::text)
   AND (
     email ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
     OR display_name ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
   )
-ORDER BY email COLLATE "C", id
+ORDER BY
+  CASE WHEN sqlc.arg(sort_by)::text = 'name' THEN display_name COLLATE "C" END ASC,
+  CASE WHEN sqlc.arg(sort_by)::text = 'recent' THEN created_at END DESC,
+  email COLLATE "C", id
 LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
 
 -- name: CountAdminUsers :one
@@ -191,6 +195,7 @@ WHERE (
     OR (sqlc.arg(status)::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
     OR (sqlc.arg(status)::text = 'deleted' AND deleted_at IS NOT NULL)
   )
+  AND (sqlc.arg(role_filter)::text = '' OR role = sqlc.arg(role_filter)::text)
   AND (
     email ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'
     OR display_name ILIKE '%' || sqlc.arg(search_pattern)::text || '%' ESCAPE '!'

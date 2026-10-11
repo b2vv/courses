@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { formatLocale } from '../../app/providers/format-locale';
 import { AdminStatsQueryError } from '../../app/composition/admin-stats-queries';
 import type { createAdminStatsQueries } from '../../app/composition/admin-stats-queries';
 import type { Metric, Snapshot } from '../../domain/admin/stats';
@@ -39,7 +40,7 @@ function isMetric(value: string): value is Metric {
 
 export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
   const { t, i18n } = useTranslation();
-  const lang = i18n.resolvedLanguage === 'en' ? 'en' : 'uk-UA';
+  const lang = formatLocale(i18n.resolvedLanguage);
   const num = new Intl.NumberFormat(lang);
   const money = new Intl.NumberFormat(lang, {
     style: 'currency',

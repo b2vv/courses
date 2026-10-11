@@ -1,6 +1,7 @@
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { formatLocale } from '../../app/providers/format-locale';
 import type { ReactNode } from 'react';
 import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
 import type { AdminListState } from '../../app/router/admin-search';
@@ -24,7 +25,7 @@ export function CourseListView({
   const { t, i18n } = useTranslation();
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
-  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage === 'en' ? 'en' : 'uk-UA', {
+  const dateFormatter = new Intl.DateTimeFormat(formatLocale(i18n.resolvedLanguage), {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
