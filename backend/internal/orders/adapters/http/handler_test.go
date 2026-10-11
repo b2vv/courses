@@ -273,6 +273,88 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		})
 	}
 
+	t.Run("refund queue is administrator-only and lists flagged orders", func(t *testing.T) {
+		charged := int64(50000)
+		received := now.Add(time.Minute)
+		store.refundQueue = []ports.RefundQueueItem{{OrderID: testOrder, CourseID: testCourse, UserID: testUser, OrderAmountMinor: 50000, ChargedAmountMinor: &charged, ReceivedAt: &received, Reason: "grant_conflict"}}
+		defer func() { store.refundQueue = nil }()
+		forbidden := httptest.NewRequest(http.MethodGet, "/api/v1/admin/refunds", nil)
+		forbidden.Header.Set("X-Test-Role", "student")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, forbidden)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("student refund queue status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, forbidden, response)
+
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/refunds", nil)
+		request.Header.Set("X-Test-Role", "admin")
+		response = httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"reason":"grant_conflict"`) {
+			t.Fatalf("admin refund queue status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, request, response)
+	})
+
+	t.Run("refund resolve is administrator-only and idempotent-ack", func(t *testing.T) {
+		forbidden := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/resolve", nil)
+		forbidden.Header.Set("X-Test-Role", "student")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, forbidden)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("student resolve status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, forbidden, response)
+
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/resolve", nil)
+		request.Header.Set("X-Test-Role", "admin")
+		response = httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent || store.resolvedOrderID != testOrder || store.resolvedActorID != testAdmin {
+			t.Fatalf("admin resolve status=%d order=%q actor=%q", response.Code, store.resolvedOrderID, store.resolvedActorID)
+		}
+		assertContract(t, request, response)
+	})
+
+	t.Run("refund revoke reuses the revoke transition and maps not-found", func(t *testing.T) {
+		adminID := testAdmin
+		owned, err := domain.NewGrant(testGrant, testUser, testCourse, domain.GrantPurchase, &[]string{testOrder}[0], domain.GrantActive, now, &adminID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.membership = &owned
+		defer func() { store.membership = nil }()
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/revoke", nil)
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"state":"revoked"`) {
+			t.Fatalf("admin refund revoke status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, request, response)
+
+		forbidden := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/revoke", nil)
+		forbidden.Header.Set("X-Test-Role", "student")
+		response = httptest.NewRecorder()
+		server.ServeHTTP(response, forbidden)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("student refund revoke status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, forbidden, response)
+
+		store.orderByIDErr = domain.ErrOrderNotFound
+		defer func() { store.orderByIDErr = nil }()
+		missing := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/revoke", nil)
+		missing.Header.Set("X-Test-Role", "admin")
+		response = httptest.NewRecorder()
+		server.ServeHTTP(response, missing)
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"order_not_found"`) {
+			t.Fatalf("missing order refund revoke status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertContract(t, missing, response)
+	})
+
 	t.Run("admin cannot grant themselves", func(t *testing.T) {
 		body := []byte(`{"userId":"` + testAdmin + `","reason":"support resolution"}`)
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/courses/"+testCourse+"/grants", bytes.NewReader(body))
