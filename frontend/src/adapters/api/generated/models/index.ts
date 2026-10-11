@@ -111,6 +111,8 @@ export * from './listAdminCoursesStatus.ts';
 export * from './listAdminLearnersParams.ts';
 export * from './listAdminLearnersState.ts';
 export * from './listAdminUsersParams.ts';
+export * from './listAdminUsersRole.ts';
+export * from './listAdminUsersSort.ts';
 export * from './listAdminUsersStatus.ts';
 export * from './listCourseDocuments200.ts';
 export * from './listCourseReviewsParams.ts';

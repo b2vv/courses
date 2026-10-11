@@ -562,6 +562,14 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [active, blocked, deleted] }
+        - name: role
+          in: query
+          description: Optional single-role filter; omitted returns every role.
+          schema: { type: string, enum: [student, instructor, admin] }
+        - name: sort
+          in: query
+          description: Row ordering; omitted or 'email' sorts by email, 'name' by display name, 'recent' by newest account first.
+          schema: { type: string, enum: [email, name, recent] }
       responses:
         '200':
           description: Status-projected account rows and pagination.

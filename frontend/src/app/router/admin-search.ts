@@ -1,12 +1,19 @@
 import type { SearchSchemaInput } from '@tanstack/react-router';
 import { z } from 'zod';
 import type { AdminCourseQuery, CourseStatus } from '../../domain/course/course';
-import type { AccountStatus, AdminUserQuery } from '../../domain/identity/administration';
+import type {
+  AccountStatus,
+  AdminUserQuery,
+  AdminUserRole,
+  AdminUserSort,
+} from '../../domain/identity/administration';
 
 const pageSize = 20;
 const maximumPage = Math.floor(10000 / pageSize) + 1;
 const statusSchema = z.enum(['draft', 'published', 'archived']);
 const userStatusSchema = z.enum(['active', 'blocked', 'deleted']);
+const userRoleSchema = z.enum(['student', 'instructor', 'admin']);
+const userSortSchema = z.enum(['email', 'name', 'recent']);
 const userQuerySchema = z
   .string()
   .refine((value) => [...value].length <= 100 && !value.includes('\u0000'))
@@ -34,12 +41,16 @@ export type AdminListState = {
 
 export type AdminUserSearch = {
   readonly status?: unknown;
+  readonly role?: unknown;
+  readonly sort?: unknown;
   readonly q?: unknown;
   readonly page?: unknown;
 };
 
 export type AdminUserListState = {
   readonly status?: AccountStatus;
+  readonly role?: AdminUserRole;
+  readonly sort: AdminUserSort;
   readonly q: string;
   readonly page: number;
 };
@@ -70,6 +81,8 @@ export function validateAdminUserSearch(search: unknown): AdminUserSearch {
   if (typeof search !== 'object' || search === null) return {};
   return {
     ...(Object.hasOwn(search, 'status') ? { status: Reflect.get(search, 'status') } : {}),
+    ...(Object.hasOwn(search, 'role') ? { role: Reflect.get(search, 'role') } : {}),
+    ...(Object.hasOwn(search, 'sort') ? { sort: Reflect.get(search, 'sort') } : {}),
     ...(Object.hasOwn(search, 'q') ? { q: Reflect.get(search, 'q') } : {}),
     ...(Object.hasOwn(search, 'page') ? { page: Reflect.get(search, 'page') } : {}),
   };
@@ -95,10 +108,14 @@ export function adminCourseQuery(state: AdminListState): AdminCourseQuery {
 
 export function adminUserListState(search: AdminUserSearch): AdminUserListState {
   const status = userStatusSchema.safeParse(search.status);
+  const role = userRoleSchema.safeParse(search.role);
+  const sort = userSortSchema.safeParse(search.sort);
   const q = userQuerySchema.safeParse(search.q ?? '');
   const page = pageSchema.safeParse(search.page);
   return {
     ...(status.success ? { status: status.data } : {}),
+    ...(role.success ? { role: role.data } : {}),
+    sort: sort.success ? sort.data : 'email',
     q: q.success ? q.data : '',
     page: page.success ? page.data : 1,
   };
@@ -110,5 +127,7 @@ export function adminUserQuery(state: AdminUserListState): AdminUserQuery {
     limit: pageSize,
     offset: (state.page - 1) * pageSize,
     ...(state.status === undefined ? {} : { status: state.status }),
+    ...(state.role === undefined ? {} : { role: state.role }),
+    ...(state.sort === 'email' ? {} : { sort: state.sort }),
   };
 }

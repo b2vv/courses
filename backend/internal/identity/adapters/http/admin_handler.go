@@ -178,7 +178,7 @@ func parseAdministrationQuery(raw string) (application.ListUsersInput, error) {
 			return application.ListUsersInput{}, domain.ErrInvalidUser
 		}
 		switch key {
-		case "limit", "offset", "q", "status":
+		case "limit", "offset", "q", "status", "role", "sort":
 		default:
 			return application.ListUsersInput{}, domain.ErrInvalidUser
 		}
@@ -205,6 +205,18 @@ func parseAdministrationQuery(raw string) (application.ListUsersInput, error) {
 	if value, exists := values["status"]; exists {
 		input.Status = domain.AccountStatus(value[0])
 		if input.Status != domain.AccountActive && input.Status != domain.AccountBlocked && input.Status != domain.AccountDeleted {
+			return application.ListUsersInput{}, domain.ErrInvalidUser
+		}
+	}
+	if value, exists := values["role"]; exists {
+		input.Role = domain.Role(value[0])
+		if input.Role != domain.Student && input.Role != domain.Instructor && input.Role != domain.Admin {
+			return application.ListUsersInput{}, domain.ErrInvalidUser
+		}
+	}
+	if value, exists := values["sort"]; exists {
+		input.Sort = domain.UserSort(value[0])
+		if input.Sort != domain.SortByEmail && input.Sort != domain.SortByName && input.Sort != domain.SortByRecent {
 			return application.ListUsersInput{}, domain.ErrInvalidUser
 		}
 	}

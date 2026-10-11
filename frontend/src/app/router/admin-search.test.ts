@@ -54,33 +54,63 @@ describe('admin list URL search contract', () => {
 describe('admin user list URL search contract', () => {
   it('emits no defaults and creates the default directory query', () => {
     expect(validateAdminUserSearch({})).toEqual({});
-    expect(adminUserListState({})).toEqual({ q: '', page: 1 });
+    expect(adminUserListState({})).toEqual({ q: '', page: 1, sort: 'email' });
     expect(adminUserQuery(adminUserListState({}))).toEqual({ q: '', limit: 20, offset: 0 });
   });
 
   it('echoes the known user fields verbatim and drops unknown fields', () => {
-    expect(validateAdminUserSearch({ status: 'blocked', q: 'Ada', page: '3', x: '1' })).toEqual({
+    expect(
+      validateAdminUserSearch({
+        status: 'blocked',
+        role: 'instructor',
+        sort: 'recent',
+        q: 'Ada',
+        page: '3',
+        x: '1',
+      }),
+    ).toEqual({
       status: 'blocked',
+      role: 'instructor',
+      sort: 'recent',
       q: 'Ada',
       page: '3',
     });
   });
 
   it.each([
-    ['?status=deleted&q=Ada&page=2', { status: 'deleted', q: 'Ada', page: 2 }],
-    ['?status=nonsense&q=Ada&page=abc', { q: 'Ada', page: 1 }],
-    ['?status=active&q=%00&page=3', { status: 'active', q: '', page: 3 }],
-    [`?q=${'a'.repeat(101)}&page=2`, { q: '', page: 2 }],
-    ['?status=blocked&q=Ada&q=Grace&page=2', { status: 'blocked', q: '', page: 2 }],
+    ['?status=deleted&q=Ada&page=2', { status: 'deleted', q: 'Ada', page: 2, sort: 'email' }],
+    ['?status=nonsense&q=Ada&page=abc', { q: 'Ada', page: 1, sort: 'email' }],
+    ['?status=active&q=%00&page=3', { status: 'active', q: '', page: 3, sort: 'email' }],
+    [`?q=${'a'.repeat(101)}&page=2`, { q: '', page: 2, sort: 'email' }],
+    ['?status=blocked&q=Ada&q=Grace&page=2', { status: 'blocked', q: '', page: 2, sort: 'email' }],
+    ['?role=instructor&sort=recent&page=2', { role: 'instructor', sort: 'recent', q: '', page: 2 }],
+    ['?role=nonsense&sort=nonsense&page=1', { q: '', page: 1, sort: 'email' }],
   ])('parses each user field independently for %s', (url, expected) => {
     expect(adminUserListState(validateAdminUserSearch(parseUrlSearch(url)))).toEqual(expected);
   });
 
+  it('carries role and non-default sort into the backend query, omitting the email default', () => {
+    expect(adminUserQuery({ role: 'student', sort: 'name', q: '', page: 1 })).toEqual({
+      q: '',
+      limit: 20,
+      offset: 0,
+      role: 'student',
+      sort: 'name',
+    });
+    expect(adminUserQuery({ sort: 'email', q: '', page: 1 })).toEqual({
+      q: '',
+      limit: 20,
+      offset: 0,
+    });
+  });
+
   it('never throws and maps the last bounded page to the backend contract', () => {
     expect(() =>
-      adminUserListState(validateAdminUserSearch({ status: Symbol('active'), q: {}, page: [] })),
+      adminUserListState(
+        validateAdminUserSearch({ status: Symbol('active'), role: {}, sort: [], q: {}, page: [] }),
+      ),
     ).not.toThrow();
-    expect(adminUserQuery({ status: 'blocked', q: 'Ada', page: 501 })).toEqual({
+    expect(adminUserQuery({ status: 'blocked', sort: 'email', q: 'Ada', page: 501 })).toEqual({
       status: 'blocked',
       q: 'Ada',
       limit: 20,

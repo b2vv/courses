@@ -12,6 +12,8 @@ type AdministrationQuery struct {
 	Offset int
 	Search string
 	Status domain.AccountStatus
+	Role   domain.Role
+	Sort   domain.UserSort
 }
 
 type StatusPolicy func(domain.User, int) error

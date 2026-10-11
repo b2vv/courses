@@ -8,6 +8,18 @@ const (
 	AccountDeleted AccountStatus = "deleted"
 )
 
+// UserSort is the whitelisted ordering of the admin user roster. The empty
+// value and SortByEmail both mean the default (email, then id); SortByName
+// orders by display name, SortByRecent by newest account first. Any other
+// value is refused at the transport boundary rather than reaching SQL.
+type UserSort string
+
+const (
+	SortByEmail  UserSort = "email"
+	SortByName   UserSort = "name"
+	SortByRecent UserSort = "recent"
+)
+
 type Actor struct {
 	UserID string
 }

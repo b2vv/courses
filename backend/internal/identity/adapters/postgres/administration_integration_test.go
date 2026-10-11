@@ -395,6 +395,31 @@ func (h *administrationHarness) testList(t *testing.T) {
 		items[0].DisabledAt == nil || items[0].DeletedAt == nil || items[0].AccountStatus() != domain.AccountDeleted {
 		t.Fatalf("deleted list total=%d items=%+v err=%v", total, items, err)
 	}
+
+	// Give the three non-deleted accounts deterministic names and ages so email,
+	// name and recency produce three distinct orders. Emails (COLLATE "C"):
+	// admin-one < admin-two < literal%_! (student). Names put admin-two first;
+	// recency puts the student first.
+	if _, err := h.pool.Exec(h.ctx, `UPDATE users SET display_name=CASE id
+		WHEN $1 THEN 'Bohdan' WHEN $2 THEN 'Andrii' WHEN $3 THEN 'Zoriana' END,
+		created_at=CASE id WHEN $1 THEN $4::timestamptz WHEN $2 THEN $5::timestamptz WHEN $3 THEN $6::timestamptz END
+		WHERE id IN ($1,$2,$3)`,
+		administrationAdminOneID, administrationAdminTwoID, administrationStudentID,
+		now.Add(-3*time.Hour), now.Add(-2*time.Hour), now.Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	recent, _, err := h.repository.List(h.ctx, ports.AdministrationQuery{Limit: 10, Sort: domain.SortByRecent})
+	if err != nil || len(recent) != 3 || recent[0].ID != administrationStudentID || recent[2].ID != administrationAdminOneID {
+		t.Fatalf("recent sort items=%+v err=%v", recent, err)
+	}
+	byName, _, err := h.repository.List(h.ctx, ports.AdministrationQuery{Limit: 10, Sort: domain.SortByName})
+	if err != nil || len(byName) != 3 || byName[0].ID != administrationAdminTwoID || byName[2].ID != administrationStudentID {
+		t.Fatalf("name sort items=%+v err=%v", byName, err)
+	}
+	admins, total, err := h.repository.List(h.ctx, ports.AdministrationQuery{Limit: 10, Role: domain.Admin})
+	if err != nil || total != 2 || len(admins) != 2 || admins[0].Role != domain.Admin || admins[1].Role != domain.Admin {
+		t.Fatalf("role filter total=%d items=%+v err=%v", total, admins, err)
+	}
 }
 
 func (h *administrationHarness) testBlockNonLastAdmin(t *testing.T) {
