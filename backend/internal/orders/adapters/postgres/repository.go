@@ -603,6 +603,30 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 		return persistenceError(err)
 	}
 	decision, decisionErr := domain.DecidePaymentEvent(event, &order, false)
+	switch decision.Action {
+	case domain.PaymentEventIgnore:
+		// A refund on a non-paid order (G11): record the event (already inserted above), warn,
+		// ACK. No state change, no refund_required — this is benign WayForPay-side noise.
+		slog.Warn("refund on a non-paid order ignored", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID(), "event_id", event.EventID)
+		return persistenceError(tx.Commit(ctx))
+	case domain.PaymentEventRevoke:
+		// A refund on a paid order (G9/G10): revoke the grant of THIS order from any live state.
+		// RETURNING yields a row only when one was actually revoked (order_id is unique to one
+		// grant), so the audit row is written only on a real transition — a repeat Refunded/Voided
+		// or an admin re-grant under a different order_id revokes nothing and writes no audit.
+		var revokedGrantID string
+		err := tx.QueryRow(ctx, `UPDATE course_grants SET state='revoked' WHERE order_id=$1::text::uuid AND state IN ('active','blocked') RETURNING id::text`, order.ID()).Scan(&revokedGrantID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return persistenceError(tx.Commit(ctx))
+		}
+		if err != nil {
+			return persistenceError(err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO grant_audit(grant_id,action,payment_event_id,reason,created_at) VALUES($1::text::uuid,'revoke',$2::text::uuid,'wayforpay_refund',$3)`, revokedGrantID, eventDatabaseID, event.ReceivedAt); err != nil {
+			return persistenceError(err)
+		}
+		return persistenceError(tx.Commit(ctx))
+	}
 	if decision.Action == domain.PaymentEventReject {
 		if event.Type == domain.PaymentSucceeded {
 			if _, err := tx.Exec(ctx, `UPDATE orders SET refund_required=true,refund_reason='settlement_rejected' WHERE id=$1::text::uuid`, order.ID()); err != nil {
