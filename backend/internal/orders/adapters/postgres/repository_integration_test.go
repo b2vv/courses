@@ -134,11 +134,15 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("paid after failed error=%v", err)
 		}
 		var refundRequired bool
-		if err := pool.QueryRow(ctx, `SELECT refund_required FROM orders WHERE id=$1`, approvedOld.ID()).Scan(&refundRequired); err != nil {
+		var refundReason *string
+		if err := pool.QueryRow(ctx, `SELECT refund_required,refund_reason FROM orders WHERE id=$1`, approvedOld.ID()).Scan(&refundRequired, &refundReason); err != nil {
 			t.Fatal(err)
 		}
 		if !refundRequired {
 			t.Fatal("rejected paid event did not mark failed order for refund")
+		}
+		if refundReason == nil || *refundReason != "settlement_rejected" {
+			t.Fatalf("rejected paid event refund_reason=%v, want settlement_rejected", refundReason)
 		}
 		var grants int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM course_grants WHERE order_id=$1`, approvedOld.ID()).Scan(&grants); err != nil {
@@ -184,8 +188,12 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("active grants=%d refund orders=%d", grants, refunds)
 		}
 		var secondRefundRequired bool
-		if err := pool.QueryRow(ctx, `SELECT refund_required FROM orders WHERE id=$1`, second.ID()).Scan(&secondRefundRequired); err != nil {
+		var secondRefundReason *string
+		if err := pool.QueryRow(ctx, `SELECT refund_required,refund_reason FROM orders WHERE id=$1`, second.ID()).Scan(&secondRefundRequired, &secondRefundReason); err != nil {
 			t.Fatal(err)
+		}
+		if secondRefundReason == nil || *secondRefundReason != "grant_conflict" {
+			t.Fatalf("duplicate payment refund_reason=%v, want grant_conflict", secondRefundReason)
 		}
 		if !secondRefundRequired {
 			t.Fatalf("second paid order %s was not marked for refund", second.ID())
