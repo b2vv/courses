@@ -23,14 +23,14 @@ func (repository *Repository) List(ctx context.Context, query ports.Administrati
 	queries := generated.New(tx)
 	search := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(query.Search)
 	params := generated.ListAdminUsersParams{
-		Status: string(query.Status), SearchPattern: search,
+		Status: string(query.Status), RoleFilter: string(query.Role), SortBy: string(query.Sort), SearchPattern: search,
 		PageLimit: int32(query.Limit), PageOffset: int32(query.Offset),
 	}
 	rows, err := queries.ListAdminUsers(ctx, params)
 	if err != nil {
 		return nil, 0, persistenceError(err)
 	}
-	total, err := queries.CountAdminUsers(ctx, generated.CountAdminUsersParams{Status: string(query.Status), SearchPattern: search})
+	total, err := queries.CountAdminUsers(ctx, generated.CountAdminUsersParams{Status: string(query.Status), RoleFilter: string(query.Role), SearchPattern: search})
 	if err != nil {
 		return nil, 0, persistenceError(err)
 	}

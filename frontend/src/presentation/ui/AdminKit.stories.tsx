@@ -20,7 +20,6 @@ export const Buttons: Story = {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center' }}>
       <Button variant="primary">Створити курс</Button>
       <Button variant="secondary">Призупинити</Button>
-      <Button variant="danger-ghost">Відкликати</Button>
       <Button variant="danger">Видалити назавжди</Button>
     </div>
   ),

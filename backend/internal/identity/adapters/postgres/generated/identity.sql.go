@@ -68,19 +68,21 @@ WHERE (
     OR ($1::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
     OR ($1::text = 'deleted' AND deleted_at IS NOT NULL)
   )
+  AND ($2::text = '' OR role = $2::text)
   AND (
-    email ILIKE '%' || $2::text || '%' ESCAPE '!'
-    OR display_name ILIKE '%' || $2::text || '%' ESCAPE '!'
+    email ILIKE '%' || $3::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || $3::text || '%' ESCAPE '!'
   )
 `
 
 type CountAdminUsersParams struct {
 	Status        string
+	RoleFilter    string
 	SearchPattern string
 }
 
 func (q *Queries) CountAdminUsers(ctx context.Context, arg CountAdminUsersParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAdminUsers, arg.Status, arg.SearchPattern)
+	row := q.db.QueryRow(ctx, countAdminUsers, arg.Status, arg.RoleFilter, arg.SearchPattern)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -473,17 +475,23 @@ WHERE (
     OR ($1::text = 'blocked' AND deleted_at IS NULL AND disabled_at IS NOT NULL)
     OR ($1::text = 'deleted' AND deleted_at IS NOT NULL)
   )
+  AND ($2::text = '' OR role = $2::text)
   AND (
-    email ILIKE '%' || $2::text || '%' ESCAPE '!'
-    OR display_name ILIKE '%' || $2::text || '%' ESCAPE '!'
+    email ILIKE '%' || $3::text || '%' ESCAPE '!'
+    OR display_name ILIKE '%' || $3::text || '%' ESCAPE '!'
   )
-ORDER BY email COLLATE "C", id
-LIMIT $4::integer OFFSET $3::integer
+ORDER BY
+  CASE WHEN $4::text = 'name' THEN display_name COLLATE "C" END ASC,
+  CASE WHEN $4::text = 'recent' THEN created_at END DESC,
+  email COLLATE "C", id
+LIMIT $6::integer OFFSET $5::integer
 `
 
 type ListAdminUsersParams struct {
 	Status        string
+	RoleFilter    string
 	SearchPattern string
+	SortBy        string
 	PageOffset    int32
 	PageLimit     int32
 }
@@ -502,7 +510,9 @@ type ListAdminUsersRow struct {
 func (q *Queries) ListAdminUsers(ctx context.Context, arg ListAdminUsersParams) ([]ListAdminUsersRow, error) {
 	rows, err := q.db.Query(ctx, listAdminUsers,
 		arg.Status,
+		arg.RoleFilter,
 		arg.SearchPattern,
+		arg.SortBy,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

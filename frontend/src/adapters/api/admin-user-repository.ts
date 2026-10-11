@@ -92,6 +92,8 @@ export function createApiAdminUserRepository(options: TransportOptions = {}): Ad
         offset: query.offset,
         ...(query.q === '' ? {} : { q: query.q }),
         ...(query.status === undefined ? {} : { status: query.status }),
+        ...(query.role === undefined ? {} : { role: query.role }),
+        ...(query.sort === undefined ? {} : { sort: query.sort }),
       };
       return request<AdminUserPage>(
         'admin.users.list',

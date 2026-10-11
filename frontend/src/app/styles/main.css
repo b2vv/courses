@@ -764,7 +764,7 @@ nav a {
   background: color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 .admin-role-tag[data-role='instructor'] {
-  color: #b3a1ff;
+  color: var(--color-viz-purple-text);
   background: color-mix(in srgb, var(--color-viz-purple) 18%, transparent);
 }
 
@@ -1776,7 +1776,7 @@ button.transcript-line-body:hover {
   background: var(--color-elevated);
 }
 .admin-rail-item[aria-current='page'] {
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--nav-active-bg);
   box-shadow: var(--nav-active-ring), var(--nav-active-highlight), var(--nav-active-glow);
 }

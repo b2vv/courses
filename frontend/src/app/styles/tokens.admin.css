@@ -45,6 +45,7 @@
   /* Brand is blue. Primary button fills with the gradient below, never flat. */
   --color-primary: #5273f2;
   --color-primary-hover: #6986ff;
+  --color-primary-pressed: color-mix(in srgb, var(--color-primary) 86%, #000);
   --color-on-primary: #ffffff;
   --color-focus: #7b93ff;
 
@@ -60,6 +61,8 @@
 
   /* Data-viz secondary only (duration, allocation, chart series 2). */
   --color-viz-purple: #8668f3;
+  /* Lightened purple ink for the instructor role tag text on its tinted chip. */
+  --color-viz-purple-text: #b3a1ff;
 
   --card-border-color: var(--color-hairline);
 
@@ -97,16 +100,6 @@
 }
 [data-surface='admin'] .ui-button--primary[data-pressed] {
   box-shadow: var(--btn-primary-highlight);
-}
-
-/* Destructive-ghost: red text on the neutral surface, not a red fill ("Roll back"). */
-[data-surface='admin'] .ui-button--danger-ghost {
-  color: var(--color-danger);
-  background: var(--color-elevated);
-  border-color: var(--color-hairline);
-}
-[data-surface='admin'] .ui-button--danger-ghost[data-hovered] {
-  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-elevated));
 }
 
 /* Secondary button sits on the elevated surface here (reference "Pause"). */
@@ -165,7 +158,7 @@
 /* Active sidebar link: frosted blue gradient pill, top gloss, edge ring + one glow.
    Targets the real admin nav (.admin-nav-link), not the unused .ui-sidebar-link. */
 [data-surface='admin'] .admin-nav-link[aria-current='page'] {
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--nav-active-bg);
   box-shadow: var(--nav-active-ring), var(--nav-active-highlight), var(--nav-active-glow);
 }
@@ -176,5 +169,5 @@
    (5.30:1 measured) while still reading as the same brand blue; the client
    surface keeps its own --color-primary and is untouched. */
 [data-surface='admin'] .language-switcher button[aria-pressed='true'] {
-  background: color-mix(in srgb, var(--color-primary) 86%, #000);
+  background: var(--color-primary-pressed);
 }

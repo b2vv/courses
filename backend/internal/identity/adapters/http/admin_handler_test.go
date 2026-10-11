@@ -116,6 +116,19 @@ func TestAdminUsersListContract(t *testing.T) {
 		t.Fatalf("status=%d input=%+v body=%s", response.Code, service.lastList, response.Body.String())
 	}
 
+	response = serveAdminUsersContract(t, handler, adminUsersRequest(http.MethodGet, "/api/v1/admin/users?role=instructor&sort=recent", "", false, true), true)
+	if response.Code != http.StatusOK || service.lastList.Role != domain.Instructor || service.lastList.Sort != domain.SortByRecent {
+		t.Fatalf("role/sort parse status=%d input=%+v", response.Code, service.lastList)
+	}
+	// The handler re-checks role/sort behind the OpenAPI enum (defense in depth):
+	// serve without contract validation so an out-of-enum value reaches it.
+	for _, bad := range []string{"role=owner", "sort=price"} {
+		rejected := serveAdminUsersContract(t, handler, adminUsersRequest(http.MethodGet, "/api/v1/admin/users?"+bad, "", false, true), false)
+		if rejected.Code != http.StatusBadRequest {
+			t.Fatalf("%s expected 400 got %d body=%s", bad, rejected.Code, rejected.Body.String())
+		}
+	}
+
 	service.list = func(input application.ListUsersInput) (application.UserPage, error) {
 		return application.UserPage{Items: nil, Limit: input.Limit, Offset: input.Offset, Total: 0}, nil
 	}
