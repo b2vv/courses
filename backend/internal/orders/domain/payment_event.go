@@ -7,6 +7,9 @@ type PaymentEventType string
 const (
 	PaymentSucceeded PaymentEventType = "paid"
 	PaymentFailed    PaymentEventType = "failed"
+	// PaymentRefunded carries both WayForPay Refunded and Voided — for us a single outcome:
+	// money returned, access must go. The adapter maps both statuses onto this type.
+	PaymentRefunded PaymentEventType = "refunded"
 )
 
 type PaymentEvent struct {
@@ -25,6 +28,11 @@ const (
 	PaymentEventNoOp   PaymentEventAction = "no_op"
 	PaymentEventRetry  PaymentEventAction = "retry_unmatched"
 	PaymentEventReject PaymentEventAction = "reject"
+	// PaymentEventRevoke: a refund on a paid order — revoke that order's grant (GrantOrderID).
+	PaymentEventRevoke PaymentEventAction = "revoke"
+	// PaymentEventIgnore: a refund on a non-paid order — benign no-op (warn+ACK), not a reject,
+	// so it does not flag refund_required the way a rejected paid event does.
+	PaymentEventIgnore PaymentEventAction = "ignore"
 )
 
 type PaymentEventDecision struct {
@@ -40,8 +48,12 @@ type PaymentEventDecision struct {
 // DecidePaymentEvent is persistence-free. The application owns the inbox transaction and tells
 // the domain whether this provider event was already applied.
 func DecidePaymentEvent(event PaymentEvent, order *Order, alreadyApplied bool) (PaymentEventDecision, error) {
+	// Envelope validation common to every type. Amount is checked per-type below: a settle
+	// (paid/failed) needs a positive amount matching the order; a refund (G9 all-or-nothing)
+	// never inspects the amount — a partial Refunded or a zero-amount Voided still revokes.
+	knownType := event.Type == PaymentSucceeded || event.Type == PaymentFailed || event.Type == PaymentRefunded
 	if event.Provider == "" || event.EventID == "" || event.OrderID == "" || event.ReceivedAt.IsZero() ||
-		event.Type != PaymentSucceeded && event.Type != PaymentFailed || event.Amount.MinorUnits() <= 0 || event.Amount.Currency() != CurrencyUAH {
+		!knownType || event.Amount.Currency() != CurrencyUAH {
 		return rejectedPaymentEvent()
 	}
 	if alreadyApplied {
@@ -50,7 +62,19 @@ func DecidePaymentEvent(event PaymentEvent, order *Order, alreadyApplied bool) (
 	if order == nil {
 		return PaymentEventDecision{Action: PaymentEventRetry}, nil
 	}
-	if order.ID() != event.OrderID || order.Status() != OrderPending || !order.Amount().Equal(event.Amount) {
+	if order.ID() != event.OrderID {
+		return rejectedPaymentEvent()
+	}
+	// Refund branch BEFORE the settle amount-guard (G9): a signed Refunded/Voided revokes the
+	// order's grant regardless of amount; on any non-paid order it is a benign ignore (G11),
+	// not a reject (which would flag refund_required for a paid event).
+	if event.Type == PaymentRefunded {
+		if order.Status() != OrderPaid {
+			return PaymentEventDecision{Action: PaymentEventIgnore}, nil
+		}
+		return PaymentEventDecision{Action: PaymentEventRevoke, GrantOrderID: order.ID()}, nil
+	}
+	if order.Status() != OrderPending || event.Amount.MinorUnits() <= 0 || !order.Amount().Equal(event.Amount) {
 		return rejectedPaymentEvent()
 	}
 	if event.Type == PaymentFailed {
