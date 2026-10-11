@@ -743,22 +743,60 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 			}
 		}
 	})
-	t.Run("literal wildcard search", func(t *testing.T) {
-		for index, title := range []string{"100% reliable", "snake_case", `path\to!`} {
+	// Full-text search (websearch_to_tsquery over a generated tsvector, migration
+	// 00016), not ILIKE substring match. Measured against a live Postgres 17
+	// before writing this test: a punctuation-only term ("%", "_", "!", "\")
+	// tokenizes to an empty tsquery, and "@@" with an empty tsquery is false for
+	// every row, including the one that literally contains that character — so
+	// those terms now correctly match nothing, not the one ILIKE-era row they
+	// used to match via substring. This replaces the old "literal wildcard
+	// search" test, whose premise (substring match on punctuation) no longer
+	// applies to word-based search (pre-launch decision, Courses 1, 2026-10-11:
+	// change the shipped behaviour directly, no ILIKE fallback kept for it).
+	t.Run("full-text search", func(t *testing.T) {
+		for index, title := range []string{"100% reliable", "snake_case", `path\to!`, "Reliable backend course"} {
 			_, err := pool.Exec(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at) VALUES($1,'40000000-0000-4000-8000-000000000002',$2,$3,'Literal fixture','Fixture description','published','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z')`, fmt.Sprintf("30000000-0000-4000-8000-%012d", index+1), fmt.Sprintf("literal-%d", index), title)
 			if err != nil {
 				t.Fatal(err)
 			}
 		}
-		for _, search := range []string{"%", "_", "!", `\`, "RELIABLE"} {
+		for _, search := range []string{"%", "_", "!", `\`} {
 			q, _ := domain.NewQuery(20, 0, search, "recent")
 			page, err := repository.ListPublished(ctx, q)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if page.Total != 1 || len(page.Items) != 1 {
-				t.Fatalf("%q matched nonliteral rows: %+v", search, page)
+			if page.Total != 0 || len(page.Items) != 0 {
+				t.Fatalf("punctuation-only %q matched: %+v", search, page)
 			}
+		}
+		q, _ := domain.NewQuery(20, 0, "RELIABLE", "recent")
+		page, err := repository.ListPublished(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != 2 || len(page.Items) != 2 {
+			t.Fatalf("case-insensitive single-word search expected both reliable courses: %+v", page)
+		}
+		// "course backend" matches "Reliable backend course" although neither the
+		// word order nor the exact phrase appears in the title — websearch_to_tsquery
+		// ANDs space-separated terms by lexeme, not by substring (the ILIKE-era
+		// query could never do this).
+		q, _ = domain.NewQuery(20, 0, "course backend", "recent")
+		page, err = repository.ListPublished(ctx, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != 1 || len(page.Items) != 1 || page.Items[0].Slug != "literal-3" {
+			t.Fatalf("word-order-independent multi-term search: %+v", page)
+		}
+		emptyQuery, _ := domain.NewQuery(20, 0, "", "recent")
+		emptyPage, err := repository.ListPublished(ctx, emptyQuery)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if emptyPage.Total == 0 {
+			t.Fatalf("empty search term matched nothing: %+v", emptyPage)
 		}
 	})
 	t.Run("query cancellation releases the connection", func(t *testing.T) {
