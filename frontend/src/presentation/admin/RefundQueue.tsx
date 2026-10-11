@@ -94,7 +94,9 @@ export function RefundQueue({
       {items.length > 0 ? (
         <ul aria-label={t('enrollment.refunds.title')} className="teach-section">
           {items.map((item) => {
-            const isPending = actedOrderId === item.orderId && (resolvePending || revokePending);
+            const acted = actedOrderId === item.orderId;
+            const resolveIsPending = acted && resolvePending;
+            const revokeIsPending = acted && revokePending;
             return (
               <li key={item.orderId}>
                 <article>
@@ -135,7 +137,7 @@ export function RefundQueue({
                             <p>{t('enrollment.refunds.revokeConfirm')}</p>
                             <Button
                               variant="danger"
-                              isPending={isPending}
+                              isPending={revokeIsPending}
                               onPress={() => void revoke(item, close)}
                             >
                               {t('enrollment.refunds.revoke')}
@@ -146,7 +148,7 @@ export function RefundQueue({
                     ) : null}
                     <Button
                       variant="secondary"
-                      isPending={isPending}
+                      isPending={resolveIsPending}
                       onPress={() => void resolve(item)}
                     >
                       {t('enrollment.refunds.resolve')}

@@ -244,14 +244,8 @@ const revokeErrors = {
   500: ['internal_error'],
   503: ['dependency_unavailable'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
-const refundListErrors = {
-  400: ['invalid_request'],
-  401: ['authentication_required'],
-  403: ['grant_forbidden'],
-  500: ['internal_error'],
-  503: ['dependency_unavailable'],
-} as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
-const refundResolveErrors = {
+// The queue read and the resolve POST share the same error shape; revoke adds 404/409.
+const refundErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
   403: ['grant_forbidden'],
@@ -418,7 +412,7 @@ export function createApiEnrollmentRepository(
         signal,
       );
       if (!outcome.ok) return failure(outcome.code);
-      if (outcome.status !== 200) return failure(namedError(outcome, refundListErrors));
+      if (outcome.status !== 200) return failure(namedError(outcome, refundErrors));
       const page = refundPage(outcome.data);
       return page ? { ok: true, value: page } : failure('invalid_response');
     },
@@ -432,7 +426,7 @@ export function createApiEnrollmentRepository(
       if (!outcome.ok) return failure(outcome.code);
       return outcome.status === 204
         ? { ok: true, value: undefined }
-        : failure(namedError(outcome, refundResolveErrors));
+        : failure(namedError(outcome, refundErrors));
     },
     async revokeRefund(orderId, signal) {
       const outcome = await send(
