@@ -234,6 +234,38 @@ func (service *Service) Revoke(ctx context.Context, actor Actor, userID, courseI
 	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", "", true, domain.Grant.Revoke)
 }
 
+// RefundQueue returns the orders that need an administrator's attention (refund_required, not yet
+// resolved). Administrator-only.
+func (service *Service) RefundQueue(ctx context.Context, actor Actor) ([]ports.RefundQueueItem, error) {
+	if !actor.Administrator {
+		return nil, domain.ErrGrantForbidden
+	}
+	return service.orders.RefundQueue(ctx)
+}
+
+// ResolveRefund marks a refund-queue row handled. Administrator-only; idempotent (a repeat on an
+// already-resolved or never-flagged order is a no-op, not an error).
+func (service *Service) ResolveRefund(ctx context.Context, actor Actor, orderID string) error {
+	if !actor.Administrator {
+		return domain.ErrGrantForbidden
+	}
+	return service.orders.ResolveRefund(ctx, orderID, actor.UserID)
+}
+
+// RevokeForRefund revokes the grant of a refund-queue order. It resolves the order to its (user,
+// course) and runs the SAME membership transition as the roster revoke (one rule, one audit —
+// mirrors BlockAuthor), stamping the origin in the reason. Administrator-only.
+func (service *Service) RevokeForRefund(ctx context.Context, actor Actor, orderID string) (domain.Grant, error) {
+	if !actor.Administrator {
+		return domain.Grant{}, domain.ErrGrantForbidden
+	}
+	order, err := service.orders.OrderByID(ctx, orderID)
+	if err != nil {
+		return domain.Grant{}, err
+	}
+	return service.transitionMembership(ctx, actor, order.UserID(), order.CourseID(), "revoke", "refund_queue:"+orderID, true, domain.Grant.Revoke)
+}
+
 // BlockAuthor and UnblockAuthor block or restore a moderation-queue item's author on the item's
 // course. They resolve (author, course) from the comment or review, then run the SAME membership
 // transition as the roster path — one rule, one audit (Lo17) — with a reason that records the

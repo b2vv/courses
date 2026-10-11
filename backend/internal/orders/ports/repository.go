@@ -29,6 +29,28 @@ type OrderRepository interface {
 	Create(context.Context, domain.Order) (domain.Order, error)
 	Get(context.Context, string, string) (domain.Order, error)
 	MarkCheckoutOpened(context.Context, string, string) (domain.Order, error)
+	// OrderByID reads an order by id alone, for an administrator acting on the refund queue who
+	// does not know the buyer up front. ErrOrderNotFound when it does not exist.
+	OrderByID(context.Context, string) (domain.Order, error)
+	// RefundQueue lists orders flagged refund_required and not yet resolved, each with its charged
+	// amount and received time read from the paid payment_events row (nil when none exists).
+	RefundQueue(context.Context) ([]RefundQueueItem, error)
+	// ResolveRefund marks a refund-queue row handled (idempotent: a no-op when already resolved or
+	// not flagged). actorID records who resolved it.
+	ResolveRefund(ctx context.Context, orderID, actorID string) error
+}
+
+// RefundQueueItem is one order needing attention: money arrived without the expected grant, or a
+// WayForPay refund needs follow-up. Charged amount and received time come from the paid event, so
+// they are nil for a row whose settle was rejected before any paid event (Reason "" is historical).
+type RefundQueueItem struct {
+	OrderID            string
+	CourseID           string
+	UserID             string
+	OrderAmountMinor   int64
+	ChargedAmountMinor *int64
+	ReceivedAt         *time.Time
+	Reason             string
 }
 
 // GrantRepository reads and writes membership records and their audit rows.
