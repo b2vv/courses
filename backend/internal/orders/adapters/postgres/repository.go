@@ -605,7 +605,7 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 	decision, decisionErr := domain.DecidePaymentEvent(event, &order, false)
 	if decision.Action == domain.PaymentEventReject {
 		if event.Type == domain.PaymentSucceeded {
-			if _, err := tx.Exec(ctx, `UPDATE orders SET refund_required=true WHERE id=$1::text::uuid`, order.ID()); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE orders SET refund_required=true,refund_reason='settlement_rejected' WHERE id=$1::text::uuid`, order.ID()); err != nil {
 				return persistenceError(err)
 			}
 			slog.Warn("payment event rejected", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID(), "reason", "rejected paid event")
@@ -651,7 +651,7 @@ RETURNING id::text, (xmax = 0) AS inserted`, grantID, decision.GrantUserID, deci
 			return persistenceError(err)
 		}
 	} else {
-		if _, updateErr := tx.Exec(ctx, `UPDATE orders SET refund_required=true WHERE id=$1::text::uuid`, order.ID()); updateErr != nil {
+		if _, updateErr := tx.Exec(ctx, `UPDATE orders SET refund_required=true,refund_reason='grant_conflict' WHERE id=$1::text::uuid`, order.ID()); updateErr != nil {
 			return persistenceError(updateErr)
 		}
 		slog.Warn("paid order requires refund", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID())
