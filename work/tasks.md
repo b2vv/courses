@@ -354,3 +354,30 @@ RequireAdministrator) → `GET /admin/stats` (знімок + per-instructor lead
 | T9 | FE StatTile + один TrendChart (line/bar, без Donut) + story/юніт | — | **done** (`presentation/ui/StatTile.tsx` над `.ui-stat`; `TrendChart.tsx` один inline-SVG line/bar, нативний `<title>`+visually-hidden data-list, порожнє вікно→`<output>` empty-state; CSS `.ui-stat-row`/`.ui-chart*`; стори StatTiles/Trends; юніти+axe-чисто line/bar/empty/all-zero; typecheck/lint/FE test 680) | — |
 | T10 | FE `/admin/analytics` route+nav+icon+i18n, секції+leaderboard, плейсхолдер, single-instructor hide | T8,T9 | **done** (route `admin.analytics.tsx` ssr:false+canAdministerAccounts guard+ensureRouteQuery(snapshot); `AnalyticsView` hero+6 секцій StatTile+leaderboard Table+TrendSection(SegmentedControl+useQuery timeseries)+deferred EmptyState[13]; nav-entry+`analytics` icon+i18n en/uk; single-instructor ховає instructor-tile+leaderboard[9a]; avg null→«—». rsbuild build ✔, typecheck/lint/FE test 680, R24 route-list оновлено) | 2,9a |
 | T11 | e2e `admin-analytics.spec.ts` + axe (числа, звірка зі списком, 403, тренд, leaderboard-порядок) | T6,T10 | **done — ФАЗА ЗАКРИТА**. Повний ordered `make check` EXIT=0, **e2e 114 passed** (0 failed/0 did-not-run). e2e: admin числа+9a hide+тренд+13 placeholder+14 звірка active+blocked==users.total+axe 0+200%-zoom; instructor not-found+API 403. Юніт `AnalyticsView` (9a/9b-order/null-«—»/13). Усі 17 рядків §6.1 мають row-level доказ (звіт §2). Фікс: 200%-overflow у сітці (`minmax(min(13rem,100%),1fr)`). Звіт `docs/admin-stats/report.md` | 2,3,6,9a,9b,10,13,14 |
+
+## Фаза `refund` — обробка повернень коштів
+
+Джерело: [spec](../docs/refund/spec.md) (GATE 1 2026-10-11, рішення G1–G8), [plan](../docs/refund/plan.md)
+(GATE 2 2026-10-11: 1-й прохід ЧЕРВОНИЙ — critique 2 BLOCKING [частковий рефанд, джерело
+charged_amount] + defense Q1 [кривий інпут/тихий swallow]; виправлено рішеннями G9–G12 власника;
+re-verify **ЗЕЛЕНИЙ обидва рев'юери 5/5**). Гілка `feat/refund-handling` (на main @9178c04). Тест-режим,
+pre-launch (ріж сміливо). Закриває `docs/payment/report.md` §6 + backlog B-26.
+Ролі: план/гейти/коміти — Courses 1; **код — Codex**; рев'ю — Courses 2.
+Ключове: усе в наявному модулі `orders`; новий доменний тип `PaymentRefunded` (Refunded+Voided) +
+дії `PaymentEventRevoke`/`PaymentEventIgnore`, рефанд-гілка в `DecidePaymentEvent` ПЕРЕД amount-guard
+(all-or-nothing, суму не звіряємо); webhook-revoke інлайн у tx `Apply` scoping за `order_id`
+(audit лише коли RowsAffected==1); admin-екран `/admin/refunds` (список refund_required + ручний
+revoke/resolve) дзеркалить ParticipantReportQueue; міграція 00017 (refund_reason + resolved_at/by).
+
+| ID | Опис | Залежить | Статус | Приймальні |
+|---|---|---|---|---|
+| R1 | Міграція 00017: `orders.refund_reason` (CHECK settlement_rejected/grant_conflict), `refund_resolved_at`, `refund_resolved_by` (FK users); заповнити `refund_reason` у двох наявних точках `refund_required=true` (repository.go:608 settlement_rejected, :654 grant_conflict); migration-preservation тест (seed на downgraded схемі) | — | planned | A15 |
+| R2 | Домен: `PaymentRefunded` тип (map Refunded+Voided), дії `PaymentEventRevoke`/`PaymentEventIgnore`; рефанд-гілка в `DecidePaymentEvent` ПЕРЕД amount-guard — paid-замовлення→Revoke (суму не звіряє), не-paid→Ignore; unit domain `payment_event_test.go` | — | planned | A4,A6,A7,A10,A17 (домен) |
+| R3 | wayforpay адаптер: `event()`/`VerifyCallback` мапить Refunded/Voided→PaymentRefunded (сигнатура лишається ПЕРЕД мапінгом); unit adapter test | R2 | planned | A7,A16 (адаптер) |
+| R4 | repository `Apply` рефанд-гілка: revoke `WHERE order_id=$1 AND state IN('active','blocked')`, audit лише RowsAffected==1 (action=revoke, payment_event_id, actor_id=NULL, reason=wayforpay_refund); Ignore→slog.Warn без refund_required; інбокс-дедуп; integration `repository_integration_test.go` | R1,R2 | planned | A4,A5,A6,A8,A10,A11,A17,A18,A19 |
+| R5 | application+ports: `RefundQueue(actor)` (read), `ResolveRefund(actor,orderID)` (ідемпотентний), `RevokeForRefund(actor,orderID)` (order→(user,course)→transitionMembership, дзеркалить BlockAuthor); unit `service_test.go` | R1 | planned | A2,A3,A9,A12,A14,A20 (app) |
+| R6 | repository: `RefundQueue` SQL (`orders` LEFT JOIN `payment_events` type=paid для charged/received; WHERE refund_required AND NOT resolved), `ResolveRefund` (`UPDATE ... WHERE refund_resolved_at IS NULL`, no-op); integration | R1,R5 | planned | A1,A3,A9,A20 (integration) |
+| R7 | HTTP у `RegisterAdmin`: `GET /api/v1/admin/refunds`, `POST .../refunds/{orderId}/resolve`, `POST .../refunds/{orderId}/revoke`; OpenAPI+Orval (`make generate`); contract-тести (403 неадмін, 409 конкурентний revoke) | R5 | planned | A1,A2,A3,A12,A13,A14,A20 (HTTP) |
+| R8 | frontend: `RefundQueue.tsx` (дзеркало ParticipantReportQueue) + `admin.refunds.tsx` route + `enrollment-queries` (refundQueue/resolveRefund/revokeForRefund) + AdminShell nav+icon+i18n; e2e `refund.spec.ts`+axe | R7 | planned | A1,A2,A3,A5 (e2e) |
+
+Верифікація фази: ordered `make check` (format→lint→typecheck→test→integration→check-generated→build→up→seed→smoke→e2e). Зміна чіпає стан гранта (CanConsume/CanCommunicate) — e2e повним набором, не таргетним (gotcha integration-tag-skipped). Звіт: `docs/refund/report.md` (дельта до плану).
