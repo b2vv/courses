@@ -38,10 +38,16 @@
   (queue+idempotent resolve, resolved_at не рухається на повторі) + Rf20 (no-op на нефлагованому +
   OrderByID). HTTP-фейк доповнено методами (build). A1/A2/A3/A9/A20 (service/repo).
 
+- **R7 (HTTP + OpenAPI/Orval):** `5252f2d`. 3 admin-роути (GET refunds / POST resolve 204 / POST
+  revoke 200) за `administrator` middleware; OpenAPI +3 операції + RefundQueueItem/RefundQueuePage
+  (charged/received nullable, reason enum з історичним ''); Orval regen, sqlc без дрейфу. Contract-
+  тести зелені проти специфікації: student→403 усі три, список повертає item, resolve→204+actor,
+  revoke→200 revoked, unknown→404. A1/A2/A3/A12/A13/A14/A20 (HTTP). Resolve повертає 204 (не 200).
+
 ## 2. Обмеження (named)
 
 - Refund-before-paid reordering (spec §Named limitations): реконсиляції нема, поза scope.
 
 ## 3. Наступний таск
 
-- R7 — HTTP: 3 admin-роути (список/resolve/revoke) + OpenAPI + Orval + contract-тести (403, 409).
+- R8 — frontend: `RefundQueue.tsx` + `admin.refunds` route + `enrollment-queries` + AdminShell nav + e2e.

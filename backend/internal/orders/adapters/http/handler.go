@@ -52,6 +52,9 @@ func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrig
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/grants", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.grantCourse)))))
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/participants/{userId}/revoke", sameOrigin(authenticate(http.HandlerFunc(handler.revoke))))
 	mux.Handle("GET /api/v1/admin/learners", authenticate(administrator(http.HandlerFunc(handler.adminLearners))))
+	mux.Handle("GET /api/v1/admin/refunds", authenticate(administrator(http.HandlerFunc(handler.refundQueue))))
+	mux.Handle("POST /api/v1/admin/refunds/{orderId}/resolve", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.resolveRefund)))))
+	mux.Handle("POST /api/v1/admin/refunds/{orderId}/revoke", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.revokeForRefund)))))
 }
 
 func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, sameOrigin func(http.Handler) http.Handler) {
@@ -82,6 +85,20 @@ type orderDTO struct {
 type grantRequest struct {
 	UserID string `json:"userId"`
 	Reason string `json:"reason"`
+}
+
+type refundQueueItemDTO struct {
+	OrderID            string  `json:"orderId"`
+	CourseID           string  `json:"courseId"`
+	UserID             string  `json:"userId"`
+	OrderAmountMinor   int64   `json:"orderAmountMinor"`
+	ChargedAmountMinor *int64  `json:"chargedAmountMinor"`
+	ReceivedAt         *string `json:"receivedAt"`
+	Reason             string  `json:"reason"`
+}
+
+type refundQueueDTO struct {
+	Items []refundQueueItemDTO `json:"items"`
 }
 
 type checkoutRequest struct {
@@ -413,6 +430,72 @@ func (handler *Handler) authorTransition(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	grant, err := operation(r.Context(), actor, kind, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapGrant(grant))
+}
+
+func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	items, err := handler.service.RefundQueue(r.Context(), actor)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	dtos := make([]refundQueueItemDTO, 0, len(items))
+	for _, item := range items {
+		dto := refundQueueItemDTO{OrderID: item.OrderID, CourseID: item.CourseID, UserID: item.UserID, OrderAmountMinor: item.OrderAmountMinor, Reason: item.Reason}
+		if item.ChargedAmountMinor != nil {
+			value := *item.ChargedAmountMinor
+			dto.ChargedAmountMinor = &value
+		}
+		if item.ReceivedAt != nil {
+			stamp := item.ReceivedAt.UTC().Format(dateTimeLayout)
+			dto.ReceivedAt = &stamp
+		}
+		dtos = append(dtos, dto)
+	}
+	httpserver.WriteJSON(w, http.StatusOK, refundQueueDTO{Items: dtos})
+}
+
+func (handler *Handler) resolveRefund(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("orderId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	if err := handler.service.ResolveRefund(r.Context(), actor, r.PathValue("orderId")); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) revokeForRefund(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	actor, ok := actorFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if !emptyQuery(r.URL.RawQuery) || !validID(r.PathValue("orderId")) {
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	grant, err := handler.service.RevokeForRefund(r.Context(), actor, r.PathValue("orderId"))
 	if err != nil {
 		writeError(w, r, err)
 		return

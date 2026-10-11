@@ -382,6 +382,43 @@ paths:
         '409': { $ref: '#/components/responses/MembershipConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/refunds:
+    get:
+      operationId: listRefundQueue
+      summary: List orders flagged for refund attention
+      responses:
+        '200': { description: Orders needing refund attention., content: { application/json: { schema: { $ref: '#/components/schemas/RefundQueuePage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/refunds/{orderId}/resolve:
+    post:
+      operationId: resolveRefund
+      summary: Mark a refund-queue order handled
+      parameters: [ { name: orderId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '204': { description: Refund-queue row resolved }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/refunds/{orderId}/revoke:
+    post:
+      operationId: revokeRefundGrant
+      summary: Revoke the grant of a refund-queue order
+      parameters: [ { name: orderId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: Updated membership., content: { application/json: { schema: { $ref: '#/components/schemas/MembershipGrant' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/OrderNotFound' }
+        '409': { $ref: '#/components/responses/MembershipConflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/learn/orders/{orderId}:
     get:
       operationId: getPurchaseStatus
@@ -2757,6 +2794,29 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RosterEntry' }
         nextCursor: { type: string, nullable: true }
+    RefundQueueItem:
+      type: object
+      additionalProperties: false
+      required: [orderId, courseId, userId, orderAmountMinor, chargedAmountMinor, receivedAt, reason]
+      properties:
+        orderId: { type: string, format: uuid }
+        courseId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        orderAmountMinor: { type: integer, format: int64, minimum: 1 }
+        # Charged amount and received time come from the paid event; null when the settle was
+        # rejected before any paid event existed.
+        chargedAmountMinor: { type: integer, format: int64, nullable: true }
+        receivedAt: { type: string, format: date-time, nullable: true }
+        # Empty string is a historical row flagged before refund_reason existed.
+        reason: { type: string, enum: ['', settlement_rejected, grant_conflict] }
+    RefundQueuePage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RefundQueueItem' }
     LearnerCourse:
       type: object
       additionalProperties: false
