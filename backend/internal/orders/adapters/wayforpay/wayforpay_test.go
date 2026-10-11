@@ -52,6 +52,8 @@ func TestCallbackVerificationMapsTerminalStatusesAndRejectsTampering(t *testing.
 		{status: "Approved", want: domain.PaymentSucceeded},
 		{status: "Declined", want: domain.PaymentFailed},
 		{status: "Expired", want: domain.PaymentFailed},
+		{status: "Refunded", want: domain.PaymentRefunded},
+		{status: "Voided", want: domain.PaymentRefunded},
 	} {
 		t.Run(test.status, func(t *testing.T) {
 			body := callbackJSON("test_merchant", "order-1", "1890.00", "UAH", "123", "44****1212", test.status, "1100", "secret")
