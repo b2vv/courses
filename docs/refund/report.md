@@ -1,59 +1,104 @@
 # Refund handling — report
 
-Дельта до [plan.md](plan.md). Фаза в роботі на гілці `feat/refund-handling`.
+Дельта до [plan.md](plan.md). Гілка `feat/refund-handling`, фаза закрита (фінальний ordered
+`make check` EXIT=0, e2e **115 passed**). Закриває `docs/payment/report.md` §6 + backlog B-26.
 
-## 1. Верифікація по слайсах
+## 1. Що зроблено
 
-- **R1 (міграція 00017 + `refund_reason`):** `make integration` EXIT=0 (повний прогін у
-  golang-контейнері). `orders/adapters/postgres` ok (два наявні тести розширено: rejected-paid →
-  `refund_reason='settlement_rejected'`, duplicate-payment → `'grant_conflict'`);
-  `course/adapters/postgres` ok (migration-preservation — повний DownTo→Up цикл покриває 00017,
-  seed не торкається нових колонок). Build/vet/gofmt чисто. sqlc-дрейфу нема (orders — raw SQL,
-  не в query-файлах). Закриває A15.
+Усе — як у plan.md §Розміщення/§Reuse; розгорнуто лише відхилення від плану.
 
-- **R2 (домен `PaymentRefunded` + рефанд-гілка):** `77f4f61`. `go test ./internal/orders/domain`
-  зелений — нові рефанд-кейси (частковий→revoke, void-0→revoke, non-paid→ignore, dup→no-op,
-  wrong-order→reject) + збережені paid/failed/reject. Гілка стоїть перед amount-guard; envelope-
-  валідація розділена. Sentinel наявного тесту "refund"→"chargeback". Домен A4/A6/A7/A10/A17.
+- **R1** `3e05fb7` — міграція 00017 (`refund_reason` CHECK, `refund_resolved_at/by`); заповнення
+  `refund_reason` у двох наявних точках `Apply`. Як у плані.
+- **R2** `77f4f61` — домен `PaymentRefunded` + дії `PaymentEventRevoke`/`PaymentEventIgnore`,
+  рефанд-гілка перед amount-guard. Як у плані (G9/G11).
+- **R3** `3d4c40b` — wayforpay `Refunded`/`Voided`→`PaymentRefunded`. Як у плані.
+- **R4** `4b04c63` — рефанд-гілка в `Apply` (revoke за `order_id`, audit лише RowsAffected==1,
+  Ignore→warn). Як у плані (G5/G7/G10).
+- **R5+R6** `a16e0c7` — **відхилення від плану:** план розділяв R5 (application) і R6 (repository),
+  але зміна інтерфейсу `OrderRepository` їх злютувала (реальний репозиторій мусить задовольняти
+  інтерфейс, щоб пакет компілювався) → один коміт. Логіка — як у плані.
+- **R7** `b64d2a1` — 3 admin-роути + OpenAPI/Orval. **Відхилення:** resolve повертає `204` (план не
+  фіксував код; 204 бо нема тіла).
+- **R8** `775b5c1` — frontend екран/роут/nav/i18n + e2e. **Відхилення:** route вимагав регену
+  `routeTree.gen.ts` (поза build — через `@tanstack/router-generator`) і оновлення R24 route-list
+  тесту — у плані не передбачено.
+- **review-followup** `9124286` — закрив знахідки code-review: **A14** (рядок несе membership-стан,
+  revoke-кнопка лише для живого гранта — план/spec цього вимагали, перша реалізація показувала
+  кнопку завжди); AC6-лог `transaction_status`; 409 `grant_transition_invalid`; loader `prefetchQuery`.
 
-- **R3 (wayforpay адаптер):** `3d4c40b`. `go test ./internal/orders/adapters/wayforpay` зелений —
-  Refunded/Voided→PaymentRefunded (EventID orderReference:status, різні рядки інбоксу), сигнатура
-  перед мапінгом (AC8), InProcessing/tamper/wrong-key збережені. Адаптер A7/A16.
+## 2. Протестовані сценарії (приймальна таблиця plan.md A1–A20)
 
-- **R4 (repository `Apply` рефанд-гілка):** `4b04c63`. `make integration` EXIT=0 (повний прогін,
-  orders/adapters/postgres ok). Нові кейси: Rf4 (revoke+system-audit actor_id NULL/reason/
-  payment_event_id), Rf17 (частковий→revoke), Rf6 (Voided на blocked→revoked), Rf19 (Refunded→Voided:
-  1 revoke, 2 події), Rf8 (інбокс-дедуп), Rf10 (non-paid→ignore, без refund_required), Rf18 (admin
-  re-grant під NULL order_id не чіпається). Audit лише при RowsAffected==1 (RETURNING). Знайдено+
-  виправлено під час слайсу: рефанд через пакетний `service` вичерпував фіксований 10-id слайс
-  (panic index-out-of-range) → усі рефанд-виклики переведено на svc з unbounded subtestIDs.
-  Закриває A4,A5,A6,A8,A10,A11,A17,A18,A19 (repository-рівень).
+| # | Очікуване (скорочено) | Фактичний результат | Вердикт |
+|---|---|---|---|
+| A1 | Список refund_required із причиною+сумами | HTTP contract + e2e refund.spec (grant_conflict, charged з paid-події, membershipState) | збіглося |
+| A2 | Ручний revoke через `RevokeForRefund` | app unit + HTTP contract (200 revoked) + e2e (діалог) | збіглося |
+| A3 | Resolve ідемпотентний, рядок зникає | integration Rf1 + HTTP 204 + e2e (рядок зникає) | збіглося |
+| A4 | Вебхук revoke за order_id + system-audit | integration Rf4 (actor NULL/reason/payment_event_id) | збіглося |
+| A5 | Порожня черга → empty-state | **не перевірено e2e** (shared DB не гарантує порожню чергу); покрито рендером компонента (`items.length===0`) | частково |
+| A6 | Рефанд відкликає active+blocked | integration Rf6 (Voided на blocked→revoked) | збіглося |
+| A7 | Voided == Refunded | domain unit + wayforpay unit + integration | збіглося |
+| A8 | Повтор того самого статусу — дедуп | integration Rf8 (1 подія, 1 audit) | збіглося |
+| A9 | Повторний resolve — no-op, не перезапис | integration Rf1 (resolved_at не рухається) | збіглося |
+| A10 | Рефанд на не-paid → warn+ACK, без refund_required | integration Rf10 | збіглося |
+| A11 | Рефанд на вже-revoked → no-op | integration Rf11 (у Rf-наборі) | збіглося |
+| A12 | Конкурентний revoke → 409 | HTTP contract (membership_conflict) | збіглося |
+| A13 | Неадмін → 403 | HTTP contract (student→403 усі три) | збіглося |
+| A14 | Нема живого гранта → нема revoke-кнопки | DTO membershipState + e2e (після revoke кнопка зникає) | збіглося (після review-fix) |
+| A15 | Migration-preservation | course migration-preservation (повний DownTo→Up+seed) | збіглося |
+| A16 | Невалідна сигнатура → 401 | wayforpay unit (tamper/wrong-key) | збіглося |
+| A17 | Частковий рефанд теж відкликає | domain unit + integration Rf17 (10000 на 50000) | збіглося |
+| A18 | Admin re-grant під NULL order_id не чіпається | integration Rf18 | збіглося |
+| A19 | Refunded потім Voided → 1 revoke, 2 події | integration Rf19 | збіглося |
+| A20 | Resolve на нефлагованому → no-op | integration Rf20 + HTTP | збіглося |
 
-- **R5+R6 (application+ports+repository):** `0c755a2` (злютовані — зміна інтерфейсу OrderRepository).
-  Порт `RefundQueueItem` + OrderByID/RefundQueue/ResolveRefund; сервіс RefundQueue/ResolveRefund/
-  RevokeForRefund (admin-only `ErrGrantForbidden`; revoke через transitionMembership
-  reason=`refund_queue:`+orderID, дзеркалить BlockAuthor). Repo: RefundQueue LEFT JOIN
-  payment_events(type=paid) для charged/received (nil якщо нема), фільтр refund_required AND NOT
-  resolved; ResolveRefund ідемпотентний (WHERE resolved_at IS NULL). Unit green; integration Rf1
-  (queue+idempotent resolve, resolved_at не рухається на повторі) + Rf20 (no-op на нефлагованому +
-  OrderByID). HTTP-фейк доповнено методами (build). A1/A2/A3/A9/A20 (service/repo).
+«Не перевірено» рядків: **0** повних; A5 — частково (компонент, не e2e), причина названа.
 
-- **R7 (HTTP + OpenAPI/Orval):** `5252f2d`. 3 admin-роути (GET refunds / POST resolve 204 / POST
-  revoke 200) за `administrator` middleware; OpenAPI +3 операції + RefundQueueItem/RefundQueuePage
-  (charged/received nullable, reason enum з історичним ''); Orval regen, sqlc без дрейфу. Contract-
-  тести зелені проти специфікації: student→403 усі три, список повертає item, resolve→204+actor,
-  revoke→200 revoked, unknown→404. A1/A2/A3/A12/A13/A14/A20 (HTTP). Resolve повертає 204 (не 200).
+## 3. Неочевидне
 
-## 2. Обмеження (named)
+- **Фіксований id-слайс пакетного `service` вичерпується рефандом** — рефанд-подія з'їдає ще один
+  `newID`; рефанд-виклики через пакетний `service` дали panic index-out-of-range
+  (`repository_integration_test.go` — виправлено на svc з unbounded `subtestIDs`).
+- **`DecidePaymentEvent` guard reject'ив би рефанд** — новий тип падав у amount-guard
+  (`payment_event.go:44`: `Type∉{paid,failed}`, `amount≤0`), а `handler.go` ковтає
+  `ErrPaymentEventRejected` → підписаний рефанд тихо лишив би грант active. Закрито гілкою перед
+  guard + окремими діями (не reject). Знайдено на GATE 2 (defense Q1).
+- **`refund_required` додано в 00012, не 00011** — spec-драфт помилявся; звірено з
+  `backend/migrations/00012_payment_checkout_refunds.sql:6`.
+- **Додавання роуту вимагає регену `routeTree.gen.ts`** поза Docker-build (плагін `tanstackStart`);
+  зроблено через `@tanstack/router-generator` `Generator.run()`.
 
-- Refund-before-paid reordering (spec §Named limitations): реконсиляції нема, поза scope.
+## 4. Скріни
 
-## 3. Наступний таск
+Не застосовно для бекенд-слайсів (схема/домен/HTTP). Фронтенд-екран `/admin/refunds` перевірено
+e2e-прогоном (`refund.spec.ts`) з axe-аудитом (0 порушень), не скріншотами до/після — новий екран,
+«до» не існує.
 
-- **R7 (HTTP) `b64d2a1`, R8 (frontend) `775b5c1`** закрито фінальним ordered `make check` EXIT=0:
-  e2e **115 passed** (12.8m, 0 failed/0 did-not-run), `refund.spec.ts` green (A1 список+axe, A2 revoke
-  через діалог, A3 resolve чистить чергу), FE unit 688. refund.spec створює `grant_conflict`
-  справжнім шляхом (purchase+admin-grant-while-pending+Approved callback). A5 (empty-state) —
-  покрито рендером компонента (гілка `items.length===0`), не окремим e2e-асертом: спільна БД не
-  гарантує порожню чергу під час прогону.
-- **Наступне:** code-review дифу гілки + ship-report + PR у main.
+## 5. Проходка по user flow
+
+Прогнано e2e (`frontend/e2e/refund.spec.ts`), наскрізь:
+1. Студент стартує покупку курсу (pending-замовлення).
+2. Адмін видає цьому студенту доступ, поки замовлення pending.
+3. Приходить підписаний `Approved` callback → settle конфліктує з admin-грантом → замовлення
+   позначається `refund_required` (`grant_conflict`), доступ не дублюється.
+4. Адмін відкриває `/admin/refunds` → бачить рядок із причиною «Доступ уже був», сумами, часом;
+   axe чисто.
+5. Адмін тисне «Відкликати доступ» → підтверджує в діалозі → грант стає `revoked`; черга
+   перезапитується, і рядок більше не пропонує revoke (лишається тільки «Позначити розглянутим»).
+6. Адмін тисне «Позначити розглянутим» → рядок зникає з черги.
+
+## 6. Ризики й обмеження
+
+- **Refund-before-paid reordering** (spec §Named limitations): якщо `Refunded`/`Voided` прийде
+  раніше за `Approved` (WayForPay переставив доставку — рідко), не-paid-гілка зробить warn+no-op, а
+  пізніший `Approved` видасть доступ попри повернення коштів. Реконсиляції нема — поза scope.
+- **A5 empty-state** перевірено лише рендером компонента, не e2e (спільна БД не гарантує порожню
+  чергу під час прогону).
+- **Ми не ініціюємо рефанд** — фіча лише реагує на вже зроблений у кабінеті WayForPay рефанд і дає
+  видимість розбіжностей; повернення коштів покупцю через WayForPay API — окрема інтеграція, поза
+  scope (spec §Out of scope).
+- **Відображення курсу/юзера в черзі — сирі id** (не назви): екран адмінський, діагностичний;
+  людські назви можна додати пізніше (окремий join), борг названо тут.
+
+## 7. Post-deploy
+
+(Порожньо — заповнюється `post-deploy-check` після деплою. Деплою нема — тест-режим, Р1.)
