@@ -180,6 +180,10 @@ test('Rf-e2e refund queue surfaces a grant conflict, revoke and resolve clear it
     await expect(dialog).toHaveCount(0);
     await expect(refunds.getByRole('alert')).toHaveCount(0);
 
+    // A14: once the grant is revoked, the queue refetches and the row no longer offers revoke —
+    // only resolve remains. (The row stays until resolve; revoke and resolve are independent.)
+    await expect(row.getByRole('button', { name: 'Відкликати доступ' })).toHaveCount(0);
+
     // A3: resolve removes the row from the queue.
     await row.getByRole('button', { name: 'Позначити розглянутим' }).click();
     await expect(refunds.locator('li', { hasText: courseId })).toHaveCount(0);

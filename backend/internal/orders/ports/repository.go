@@ -51,6 +51,9 @@ type RefundQueueItem struct {
 	ChargedAmountMinor *int64
 	ReceivedAt         *time.Time
 	Reason             string
+	// MembershipState is the current (user, course) grant state, or nil when no grant row exists.
+	// The admin UI offers revoke only for a live grant (active/blocked) — A14.
+	MembershipState *domain.GrantState
 }
 
 // GrantRepository reads and writes membership records and their audit rows.

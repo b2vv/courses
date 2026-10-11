@@ -63,6 +63,9 @@ export type RefundQueueItem = {
   readonly chargedAmountMinor: number | null;
   readonly receivedAt: string | null;
   readonly reason: RefundReason;
+  // Current (user, course) grant state, null when no grant exists; revoke is offered only for a
+  // live grant (active/blocked) — A14.
+  readonly membershipState: MembershipState | null;
 };
 
 export type RefundQueuePage = {
@@ -91,6 +94,7 @@ export type EnrollmentErrorCode =
   | 'comment_cursor_invalid'
   | 'course_not_found'
   | 'grant_forbidden'
+  | 'grant_transition_invalid'
   | 'order_not_found';
 
 export type EnrollmentResult<T> =

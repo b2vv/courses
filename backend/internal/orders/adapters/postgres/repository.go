@@ -116,9 +116,10 @@ func (repository *Repository) OrderByID(ctx context.Context, orderID string) (do
 }
 
 func (repository *Repository) RefundQueue(ctx context.Context) ([]ports.RefundQueueItem, error) {
-	rows, err := repository.pool.Query(ctx, `SELECT o.id::text,o.course_id::text,o.user_id::text,o.amount_minor,e.amount_minor,e.received_at,COALESCE(o.refund_reason,'')
+	rows, err := repository.pool.Query(ctx, `SELECT o.id::text,o.course_id::text,o.user_id::text,o.amount_minor,e.amount_minor,e.received_at,COALESCE(o.refund_reason,''),g.state
 FROM orders o
 LEFT JOIN payment_events e ON e.order_id=o.id AND e.type='paid'
+LEFT JOIN course_grants g ON g.user_id=o.user_id AND g.course_id=o.course_id
 WHERE o.refund_required AND o.refund_resolved_at IS NULL
 ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 	if err != nil {
@@ -130,7 +131,8 @@ ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 		var item ports.RefundQueueItem
 		var charged pgtype.Int8
 		var received pgtype.Timestamptz
-		if err := rows.Scan(&item.OrderID, &item.CourseID, &item.UserID, &item.OrderAmountMinor, &charged, &received, &item.Reason); err != nil {
+		var state pgtype.Text
+		if err := rows.Scan(&item.OrderID, &item.CourseID, &item.UserID, &item.OrderAmountMinor, &charged, &received, &item.Reason, &state); err != nil {
 			return nil, persistenceError(err)
 		}
 		if charged.Valid {
@@ -140,6 +142,10 @@ ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 		if received.Valid {
 			value := received.Time
 			item.ReceivedAt = &value
+		}
+		if state.Valid {
+			value := domain.GrantState(state.String)
+			item.MembershipState = &value
 		}
 		items = append(items, item)
 	}
@@ -652,7 +658,13 @@ ON CONFLICT (provider,event_id) DO NOTHING RETURNING id::text`, eventDatabaseID,
 	case domain.PaymentEventIgnore:
 		// A refund on a non-paid order (G11): record the event (already inserted above), warn,
 		// ACK. No state change, no refund_required — this is benign WayForPay-side noise.
-		slog.Warn("refund on a non-paid order ignored", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID(), "event_id", event.EventID)
+		// EventID is the adapter's orderReference:transactionStatus; log the status suffix so the
+		// warning names the WayForPay outcome (Refunded/Voided), per AC6.
+		transactionStatus := event.EventID
+		if index := strings.LastIndexByte(event.EventID, ':'); index >= 0 {
+			transactionStatus = event.EventID[index+1:]
+		}
+		slog.Warn("refund on a non-paid order ignored", "order_id", order.ID(), "course_id", order.CourseID(), "user_id", order.UserID(), "transaction_status", transactionStatus)
 		return persistenceError(tx.Commit(ctx))
 	case domain.PaymentEventRevoke:
 		// A refund on a paid order (G9/G10): revoke the grant of THIS order from any live state.

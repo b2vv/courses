@@ -276,7 +276,8 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 	t.Run("refund queue is administrator-only and lists flagged orders", func(t *testing.T) {
 		charged := int64(50000)
 		received := now.Add(time.Minute)
-		store.refundQueue = []ports.RefundQueueItem{{OrderID: testOrder, CourseID: testCourse, UserID: testUser, OrderAmountMinor: 50000, ChargedAmountMinor: &charged, ReceivedAt: &received, Reason: "grant_conflict"}}
+		activeState := domain.GrantActive
+		store.refundQueue = []ports.RefundQueueItem{{OrderID: testOrder, CourseID: testCourse, UserID: testUser, OrderAmountMinor: 50000, ChargedAmountMinor: &charged, ReceivedAt: &received, Reason: "grant_conflict", MembershipState: &activeState}}
 		defer func() { store.refundQueue = nil }()
 		forbidden := httptest.NewRequest(http.MethodGet, "/api/v1/admin/refunds", nil)
 		forbidden.Header.Set("X-Test-Role", "student")
@@ -291,7 +292,9 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		request.Header.Set("X-Test-Role", "admin")
 		response = httptest.NewRecorder()
 		server.ServeHTTP(response, request)
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"reason":"grant_conflict"`) {
+		if response.Code != http.StatusOK ||
+			!strings.Contains(response.Body.String(), `"reason":"grant_conflict"`) ||
+			!strings.Contains(response.Body.String(), `"membershipState":"active"`) {
 			t.Fatalf("admin refund queue status=%d body=%s", response.Code, response.Body.String())
 		}
 		assertContract(t, request, response)

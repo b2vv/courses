@@ -190,6 +190,7 @@ export const en = {
         comment_cursor_invalid: 'Could not load the next reports. Please try again.',
         report_forbidden: 'You cannot manage participant reports.',
         grant_forbidden: 'Administrator permission is required.',
+        grant_transition_invalid: 'The membership already changed. Reload and try again.',
         order_not_found: 'The order was not found.',
         generic: 'Could not complete the action. Please try again.',
       },
