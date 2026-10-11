@@ -7,7 +7,12 @@ import {
   adminUserQuery,
   parseAdminUserSearch,
 } from '../app/router/admin-search';
-import type { AccountStatus, WritableAccountStatus } from '../domain/identity/administration';
+import type {
+  AccountStatus,
+  AdminUserRole,
+  AdminUserSort,
+  WritableAccountStatus,
+} from '../domain/identity/administration';
 import { canAdministerAccounts } from '../domain/identity/identity';
 import { UserListFailure, UserListPending, UserListView } from '../presentation/admin/UserListView';
 
@@ -40,10 +45,23 @@ function AdminUserListRoute() {
   const remove = useMutation(admin.users.delete(queryClient));
   const resetPassword = useMutation(admin.users.resetPassword(queryClient));
 
-  function search(status: AccountStatus | undefined, q: string, page = 1) {
+  function go(next: {
+    status?: AccountStatus | undefined;
+    role?: AdminUserRole | undefined;
+    sort?: AdminUserSort;
+    q?: string;
+    page?: number;
+  }) {
+    const status = 'status' in next ? next.status : state.status;
+    const role = 'role' in next ? next.role : state.role;
+    const sort = next.sort ?? state.sort;
+    const q = next.q ?? state.q;
+    const page = next.page ?? 1;
     void navigate({
       search: {
         ...(status === undefined ? {} : { status }),
+        ...(role === undefined ? {} : { role }),
+        ...(sort === 'email' ? {} : { sort }),
         ...(q === '' ? {} : { q }),
         ...(page === 1 ? {} : { page }),
       },
@@ -55,9 +73,11 @@ function AdminUserListRoute() {
       page={data}
       state={state}
       actor={adminActor}
-      onStatusChange={(status) => search(status, state.q)}
-      onSearch={(q) => search(state.status, q.trim())}
-      onPageChange={(page) => search(state.status, state.q, page)}
+      onStatusChange={(status) => go({ status })}
+      onRoleChange={(role) => go({ role })}
+      onSortChange={(sort) => go({ sort })}
+      onSearch={(q) => go({ q: q.trim() })}
+      onPageChange={(page) => go({ page })}
       onSetStatus={async (id: string, status: WritableAccountStatus) => {
         await setStatus.mutateAsync({ id, status });
       }}

@@ -5,6 +5,8 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { ListAdminUsersRole } from './listAdminUsersRole.ts';
+import type { ListAdminUsersSort } from './listAdminUsersSort.ts';
 import type { ListAdminUsersStatus } from './listAdminUsersStatus.ts';
 
 export type ListAdminUsersParams = {
@@ -23,4 +25,12 @@ offset?: number;
  */
 q?: string;
 status?: ListAdminUsersStatus;
+/**
+ * Optional single-role filter; omitted returns every role.
+ */
+role?: ListAdminUsersRole;
+/**
+ * Row ordering; omitted or 'email' sorts by email, 'name' by display name, 'recent' by newest account first.
+ */
+sort?: ListAdminUsersSort;
 };

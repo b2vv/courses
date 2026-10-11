@@ -61,9 +61,11 @@ afterAll(() => server.close());
 function renderList(overrides: Partial<React.ComponentProps<typeof UserListView>> = {}) {
   const props: React.ComponentProps<typeof UserListView> = {
     page: firstPage,
-    state: { q: '', page: 1 },
+    state: { q: '', page: 1, sort: 'email' },
     actor,
     onStatusChange: () => {},
+    onRoleChange: () => {},
+    onSortChange: () => {},
     onSearch: () => {},
     onPageChange: () => {},
     onSetStatus: async () => {},
@@ -105,9 +107,11 @@ describe('admin user directory', () => {
     rerender(
       <UserListView
         page={{ ...firstPage, items: [{ ...listedUser, status: 'blocked' }] }}
-        state={{ q: '', page: 1 }}
+        state={{ q: '', page: 1, sort: 'email' }}
         actor={actor}
         onStatusChange={() => {}}
+        onRoleChange={() => {}}
+        onSortChange={() => {}}
         onSearch={() => {}}
         onPageChange={() => {}}
         onSetStatus={async (id, status) => {
@@ -135,6 +139,24 @@ describe('admin user directory', () => {
     await browser.keyboard('{Escape}');
     await browser.click(screen.getByRole('button', { name: 'Видалити Student' }));
     expect(deletes).toEqual([listedUser.id]);
+  });
+
+  it('invokes the role and sort handlers from the filter controls', async () => {
+    const browser = userEvent.setup();
+    const roles: Array<string | undefined> = [];
+    const sorts: string[] = [];
+    renderList({
+      onRoleChange: (role) => roles.push(role),
+      onSortChange: (sort) => sorts.push(sort),
+    });
+
+    await browser.click(screen.getByRole('button', { name: /Фільтр за роллю/ }));
+    await browser.click(await screen.findByRole('option', { name: 'Викладач' }));
+    expect(roles).toEqual(['instructor']);
+
+    await browser.click(screen.getByRole('button', { name: /Сортувати за/ }));
+    await browser.click(await screen.findByRole('option', { name: 'Найновіші' }));
+    expect(sorts).toEqual(['recent']);
   });
 
   it('B02 renders a localized empty state and preserves the pagination boundary', async () => {

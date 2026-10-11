@@ -16,9 +16,10 @@ import (
 //   - ActiveLearners30d: distinct students who hold an active grant and touched
 //     a lesson of that course in the last 30 days (DB clock).
 //   - AvgProgress: the mean completed-lesson fraction over active grants, where
-//     a lesson counts as done by its completed_at; a course with no lessons is
-//     excluded (NULL) rather than counted as 0, and no active grant at all
-//     leaves the average nil.
+//     a lesson counts as done by its completed_at; a course with no lessons
+//     never enters the set (the join to totals requires at least one lesson), so
+//     it is excluded rather than counted as 0, and no active grant at all leaves
+//     the average nil (AVG over zero rows).
 //   - Completions: active grants whose every course lesson is completed.
 func (repository *Repository) loadEngagement(ctx context.Context) (domain.EngagementStat, error) {
 	var stat domain.EngagementStat
@@ -46,7 +47,7 @@ SELECT
      JOIN course_modules cm ON cm.id = cl.module_id
      JOIN course_grants g ON g.user_id = lp.user_id AND g.course_id = cm.course_id AND g.state = 'active'
      WHERE lp.updated_at >= now() - interval '30 days') AS active_learners,
-  AVG(CASE WHEN gp.total_lessons = 0 THEN NULL ELSE gp.completed::double precision / gp.total_lessons END) AS avg_progress,
+  AVG(gp.completed::double precision / gp.total_lessons) AS avg_progress,
   COUNT(*) FILTER (WHERE gp.total_lessons > 0 AND gp.completed = gp.total_lessons) AS completions
 FROM grant_progress gp`).Scan(&stat.ActiveLearners30d, &stat.AvgProgress, &stat.Completions)
 	return stat, persistenceError(err)
