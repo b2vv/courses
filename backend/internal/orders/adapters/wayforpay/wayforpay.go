@@ -148,7 +148,8 @@ func (provider *Provider) VerifyCallback(body []byte, receivedAt time.Time) (por
 	if payload.MerchantAccount != provider.config.MerchantAccount || !provider.validCallbackSignature(payload) {
 		return ports.Callback{}, errors.New("invalid callback signature")
 	}
-	if payload.TransactionStatus != "Approved" && payload.TransactionStatus != "Declined" && payload.TransactionStatus != "Expired" {
+	if payload.TransactionStatus != "Approved" && payload.TransactionStatus != "Declined" && payload.TransactionStatus != "Expired" &&
+		payload.TransactionStatus != "Refunded" && payload.TransactionStatus != "Voided" {
 		return ports.Callback{OrderReference: payload.OrderReference, ReceivedAt: receivedAt}, nil
 	}
 	event, err := provider.event(payload, receivedAt)
@@ -203,6 +204,8 @@ func (provider *Provider) event(payload callbackPayload, receivedAt time.Time) (
 		typeValue = domain.PaymentSucceeded
 	case "Declined", "Expired":
 		typeValue = domain.PaymentFailed
+	case "Refunded", "Voided":
+		typeValue = domain.PaymentRefunded
 	default:
 		return domain.PaymentEvent{}, nil
 	}
