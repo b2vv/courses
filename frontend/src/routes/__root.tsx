@@ -192,6 +192,11 @@ function Layout() {
                 label: t('common.navParticipantReports'),
                 icon: 'moderation',
               },
+              {
+                to: '/admin/refunds',
+                label: t('common.navRefunds'),
+                icon: 'refunds',
+              },
             ],
           },
         ];

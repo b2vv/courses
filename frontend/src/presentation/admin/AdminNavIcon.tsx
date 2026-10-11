@@ -1,4 +1,10 @@
-export type AdminNavIconKey = 'overview' | 'people' | 'accounts' | 'moderation' | 'analytics';
+export type AdminNavIconKey =
+  | 'overview'
+  | 'people'
+  | 'accounts'
+  | 'moderation'
+  | 'analytics'
+  | 'refunds';
 
 /** 16px stroke glyphs for the admin rail and sidebar links (NorthWind grammar). */
 export function AdminNavIcon({ name }: { readonly name: AdminNavIconKey }) {
@@ -50,6 +56,12 @@ export function AdminNavIcon({ name }: { readonly name: AdminNavIconKey }) {
           <rect x="3.5" y="8.5" width="2.2" height="4" rx="0.5" />
           <rect x="7" y="5.5" width="2.2" height="7" rx="0.5" />
           <rect x="10.5" y="9.5" width="2.2" height="3" rx="0.5" />
+        </>
+      )}
+      {name === 'refunds' && (
+        <>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M6 5.5h3.2a1.6 1.6 0 0 1 0 3.2H6M6 8.7l2.2 2.2M6 5.5v5.4" />
         </>
       )}
     </svg>

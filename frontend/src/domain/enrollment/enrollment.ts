@@ -51,6 +51,24 @@ export type ParticipantReportQueuePage = {
   readonly nextCursor: string | null;
 };
 
+// 'unknown' is a row flagged before refund_reason existed (backend sends ""); the screen renders it
+// as such rather than hiding the discrepancy.
+export type RefundReason = 'settlement_rejected' | 'grant_conflict' | 'unknown';
+
+export type RefundQueueItem = {
+  readonly orderId: string;
+  readonly courseId: string;
+  readonly userId: string;
+  readonly orderAmountMinor: number;
+  readonly chargedAmountMinor: number | null;
+  readonly receivedAt: string | null;
+  readonly reason: RefundReason;
+};
+
+export type RefundQueuePage = {
+  readonly items: readonly RefundQueueItem[];
+};
+
 export type EnrollmentErrorCode =
   | 'request_cancelled'
   | 'request_timeout'
@@ -71,7 +89,9 @@ export type EnrollmentErrorCode =
   | 'report_forbidden'
   | 'report_already_open'
   | 'comment_cursor_invalid'
-  | 'course_not_found';
+  | 'course_not_found'
+  | 'grant_forbidden'
+  | 'order_not_found';
 
 export type EnrollmentResult<T> =
   | { readonly ok: true; readonly value: T }
