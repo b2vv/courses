@@ -85,6 +85,8 @@ func main() {
 	err = func() error {
 		defer dependencies.Close()
 		courseRepository := coursepostgres.NewRepository(dependencies.Database)
+		documents := courseapplication.NewDocuments(courseRepository, courseRepository)
+		documentHandler := coursehttp.NewDocumentHandler(documents)
 		catalog := courseapplication.NewCatalog(courseRepository)
 		learning := courseapplication.NewLearning(courseRepository)
 		ordersRepository := orderspostgres.NewRepository(dependencies.Database)
@@ -169,6 +171,8 @@ func main() {
 				ordersHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				identityHandler.Register(mux)
 				learningHandler.Register(mux, identityHandler.Authenticate)
+				documentHandler.Register(mux, identityHandler.Authenticate)
+				documentHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
 				discussionHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				discussionHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

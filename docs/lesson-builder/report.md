@@ -222,3 +222,134 @@ go test -tags=integration ./internal/course/adapters/postgres -run '^TestLessonD
 
 LB04 implementation is ready for that runtime verification. Next implementation
 slice is LB05 (HTTP/OpenAPI/contract tests); the complete phase gate remains LB15.
+
+## LB05 — document HTTP contract (2026-10-12, Codex)
+
+Implemented `DocumentHandler` and API composition wiring over the existing
+`Documents` service and PostgreSQL repository. Four operations were added:
+
+- `GET /api/v1/admin/lessons/{lessonId}/document`: draft plus nullable updatedAt;
+  a missing draft supplies an empty valid document and null first-write token.
+- `PUT /api/v1/admin/lessons/{lessonId}/document`: save the domain document directly,
+  using its locale and an optional/null first-write token; returns updatedAt.
+- `POST /api/v1/admin/lessons/{lessonId}/document/publish`: required microsecond
+  token, optional uk/en locale, empty 200 response.
+- `GET /api/v1/learn/lessons/{lessonId}/document`: published domain document directly;
+  absent publication remains an empty valid document with 200.
+
+All handlers set no-store, reuse the admin/learning actor helpers and delegate
+editor, email-first, consumption and validation policies to the service. Mutations
+use RequireSameOrigin outside Authenticate, matching admin course wiring. The
+admin JSON decoder now delegates to a limit-parameterized helper: existing admin
+writes retain 512 KiB, document saves allow 2 MiB, publication allows 1 KiB.
+Duplicate object keys, unknown fields (including nested document fields), trailing
+bytes and invalid content types remain rejected. Query locales default to uk;
+unknown, duplicated or invalid query keys/values are refused. PUT has no query.
+
+Publication advances updated_at but the port returns no timestamp. **The editor
+must re-GET the draft after publish to obtain the fresh lock token.** The port is
+unchanged, as explicitly requested by the owner on 2026-10-12; check the empty
+publish response and token forwarding in `TestDocumentDraftRoundTrip`.
+
+OpenAPI adds `getAdminLessonDocument`, `saveAdminLessonDocument`,
+`publishAdminLessonDocument`, `getLearnLessonDocument`, and the LessonDocument,
+LessonSection (recursive columns), LessonRichText, LessonBlock, LessonSpan,
+LessonDocumentDraft, LessonDocumentUpdated, SaveLessonDocumentRequest and
+PublishLessonDocumentRequest schemas. It adds a document-conflict response and
+the invalid_lesson_document/document_conflict error codes. Adjacent admin/learn
+operations have no tags, so these follow that convention. Optional fields mirror
+Go omitempty. Required slice fields permit null because nil sections/blocks/list
+items are accepted by the existing domain and encoded as null; absent publications
+still specifically return sections: []. Recursive nullable schemas generate
+usable Orval types and pass request/response schema checks.
+
+### Contract evidence
+
+The owner's LB05 instruction supersedes the plan's older error-code wording and
+row-label assignments; the exact observed behaviors below identify the evidence
+without claiming every similarly numbered phase row closed:
+
+- `TestDocumentInvalidDraftNeverPersists`: unknown type, video carrying content
+  and nested row return 400 invalid_lesson_document without persistence (plan #11/#12).
+- `TestDocumentNonEditor`: non-owner instructor draft GET/save/publish return 403
+  forbidden before the content repository.
+- `TestDocumentPublishedAccess`: paid nonmember returns course_purchase_required;
+  active member gets only published content, verified preview is allowed; unverified
+  email is denied before access lookup; absent publication is a valid en empty
+  document with 200. Covers the requested access/absence/email behaviors; image
+  serving and browser draft visibility remain LB09–12, not proven here.
+- `TestDocumentConflicts`: stale save and publish map wrapped repository conflicts
+  to 409 document_conflict, with exact locale/token forwarding (#18).
+- `TestDocumentDraftRoundTrip`: null initial token, absent/null PUT token, draft
+  document/token reads, PUT token response and GET→PUT→publish token forwarding.
+- `TestLearningOutlineHasNoDocumentBody`: structural guard on learningLessonDTO
+  forbids document/sections/body (AC7 / plan #14), using the requested lighter option.
+- Transport tables cover query, JSON and timestamp rejection, nested unknown and
+  duplicate fields, body limits, all error mappings, authentication and mutation
+  origin wiring. A body above the old admin limit succeeds under the new limit.
+- `TestDocumentHTTPMatchesOpenAPI` validates all four operations through the real
+  HTTP wrapper (including request IDs); `TestDocumentRecursiveSchemaRoundTrip`
+  checks rich text, recursive columns, images/tasks/video and nullable collections.
+
+These tests use in-package port fakes and the real application service, HTTP
+handlers and platform wrapper. They prove transport/service composition, not
+PostgreSQL concurrency or deployed nginx behavior.
+
+### Verification and remaining work
+
+From `backend`, using the existing writable cache, ran this ordered sequence twice:
+
+```sh
+gofmt -w internal/course/adapters/http/document_handler.go internal/course/adapters/http/document_handler_test.go internal/course/adapters/http/admin_handler.go cmd/api/main.go
+GOCACHE=/private/tmp/courses-lb03-go-build go build ./...
+GOCACHE=/private/tmp/courses-lb03-go-build go vet ./internal/course/...
+GOCACHE=/private/tmp/courses-lb03-go-build go test ./internal/course/adapters/http/
+```
+
+First run: formatting/build/vet passed; HTTP tests failed because the new contract
+fixture manually supplied a request ID outside the OpenAPI hex pattern. Replaced
+that fixture with `httpserver.NewHandler`, which generates real request IDs, and
+added recursive-schema/authentication/origin checks. Second complete sequence:
+**all exit 0**, HTTP package `ok` (6.168s).
+
+From `frontend`:
+
+```sh
+npm run generate && npm run typecheck
+```
+
+**Exit 0**: Orval regenerated the client/models and TypeScript passed.
+
+Offline sqlc attempt, from `backend`:
+
+```sh
+GOCACHE=/private/tmp/courses-lb03-go-build GOPROXY=off GOSUMDB=off go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+```
+
+**Exit 1 / regeneration skipped:** module lookup disabled by GOPROXY=off while
+loading sqlc module deprecation metadata. No SQL queries changed and no sqlc output
+changed. Root `git diff --check` passed.
+
+**Human-side verification remains `make check-generated` and the full ordered
+`make check` gate, including the full e2e suite.** Docker, integration, listeners
+and e2e were deliberately not run under the owner's sandbox-safe instruction.
+LB05 implementation and local contract verification are complete; the phase is
+not closed. Next implementation slice: LB06 Description removal. No commits made;
+existing unrelated screenshots and archive files preserved.
+
+### LB05 — session verification (2026-10-12, Courses 1)
+
+Closed the sqlc-offline gap Codex flagged. From the repo root, after staging the
+LB05 paths (explicit paths only — no stray screenshots), ran the full generator:
+
+```sh
+make check-generated   # sqlc via Docker (golang:1.27.1) + orval, then git diff --exit-code
+```
+
+**CG_EXIT=0** — sqlc regenerated with **no drift** and the Orval client/models match
+the staged output. Plus `go build ./...`, `go vet ./internal/course/...` (clean) and
+`go test ./internal/course/adapters/http/` (**ok 6.223s**) re-run in-session.
+
+LB05 is **done** at the slice level. The ordered `make check` + full e2e under enforcing
+CSP is the phase gate (LB15), not a per-slice run; LB05 adds no migration or SQL query,
+so `make integration` is unchanged by it.

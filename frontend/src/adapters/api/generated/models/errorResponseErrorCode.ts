@@ -10,6 +10,8 @@ export type ErrorResponseErrorCode = typeof ErrorResponseErrorCode[keyof typeof 
 
 
 export const ErrorResponseErrorCode = {
+  invalid_lesson_document: 'invalid_lesson_document',
+  document_conflict: 'document_conflict',
   invalid_query: 'invalid_query',
   invalid_slug: 'invalid_slug',
   course_not_found: 'course_not_found',

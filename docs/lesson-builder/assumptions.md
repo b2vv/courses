@@ -1,12 +1,13 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-12, для перезапуску сесії — транскрипт 5.1 МБ)
+## Handoff (2026-10-12, оновлено після LB05)
 
-- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB04 + планування ЗАКОМІЧЕНО** (5 логічних
-  комітів, HEAD `1352e4a`: cb33b70 docs · 9e262d7 LB01 · 8145569 LB02 · edda4aa LB03 · 1352e4a LB04).
-  НЕ запушено, PR ще нема. Реалізація — **через Codex** (`codex exec "$(cat prompt)" < /dev/null`;
-  CODEX_EXIT з лога; пісочниця Codex НЕ гонить Docker/listen — integration/bundle проганяю сам у
-  сесії). Промпти-зразки — scratchpad `codex-lb0X-prompt.md`.
+- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB04 ЗАКОМІЧЕНО** (6 комітів, HEAD `cde20d3`:
+  cb33b70 docs · 9e262d7 LB01 · 8145569 LB02 · edda4aa LB03 · 1352e4a LB04 · cde20d3 handoff). НЕ запушено, PR
+  ще нема. **LB05 — ЗРОБЛЕНО й верифіковано в сесії, але ще НЕ закомічено** (staged; коміт — лише на прохання
+  власника). Реалізація — **через Codex** (`codex exec "$(cat prompt)" < /dev/null`; CODEX_EXIT з лога;
+  пісочниця Codex НЕ гонить Docker/listen — integration/generate/gate проганяю сам). Промпти — scratchpad
+  `codex-lb0X-prompt.md` (є й `codex-lb05-prompt.md`).
 - **Пройдено:** GATE 1 + GATE 2 (вердикт свіжим Opus-4.8; блокери закриті). Рішення власника:
   секції video/text/image/row/task (gallery→фаза `portfolio`); Description→односекційний text тоді
   DROP; i18n схема locale-aware UI одна локаль; draft+published дві ревізії; task=rich-text; окремий
@@ -14,18 +15,23 @@
   транскрипта, без lease).
 - **Слайси (durable статуси — `work/tasks.md`):**
   - **LB00** спайк GO · **LB01** домен · **LB02** міграція 00018+backfill (integration ok) ·
-    **LB03** ports+app (gate) · **LB04** postgres-адаптер (integration ok 3.2s) — **УСІ зелені**.
-  - **ДАЛІ: LB05** — HTTP (admin PUT document / POST publish; learn GET document gated
-    CanConsume+EmailVerified ОКРЕМО від outline) + OpenAPI+Orval + contract-тести. Промпти-зразки в
-    scratchpad `codex-lb0X-prompt.md`.
-  - Далі LB06 (drop Description + міграція 00019), LB07–10 image-модуль `internal/image` `[P]`,
-    LB11–13 фронт (reader чистий / lazy Tiptap editor / bundle-grep), LB14 DOM-вимір, LB15 gate+звіт.
-- **Докази Codex** — `docs/lesson-builder/report.md`. Жива схема-контракт — LB01 `document.go`
-  (json-теги schemaVersion/sections/content/imageId/columns/blocks/spans/text/marks/href).
-- **Відкритих питань власника немає.**
-
-ДАЛІ (точно): LB05 через Codex — HTTP document-ендпоінти + image ще ні (LB09). Мірник гейта тіла —
-transcript read.go (EmailVerified→CanConsume).
+    **LB03** ports+app (gate) · **LB04** postgres-адаптер (integration ok 3.2s) — закомічені зелені.
+  - **LB05** HTTP документа — `course/adapters/http/document_handler.go`: admin GET draft / PUT / POST
+    publish + learn GET published (гейт делеговано сервісу EmailVerified→CanConsume, ОКРЕМО від outline);
+    OpenAPI 4 шляхи + рекурсивні схеми LessonDocument/Section/RichText/Block/Span; Orval regen; contract-
+    тести на фейках. Сесія: `go build`/`go vet ./internal/course/...` чисті, `go test
+    ./internal/course/adapters/http/` **ok 6.2s**, `make check-generated` **CG_EXIT=0** (sqlc через Docker
+    без дрейфу + Orval збіг). **ЗРОБЛЕНО** (staged, не закомічено).
+  - **ДАЛІ: LB06** — видалення `course_lessons.description` (крос-cutting) + міграція **00019** (DROP COLUMN;
+    Down re-add порожнім — named втрата); суцільний `grep description`: domain-поле authoring.go:65,
+    validateModules:209, MaximumLessonDescription:35, sqlc-regen (generated/courses.sql.go:315 + courses.sql),
+    Orval-regen, маппери, admin DTO (adminLessonDTO.Description, saveAdminLessonRequest), authoring-форма
+    фронта; збірка зелена після слайсу. Тоді LB07–10 `internal/image` `[P]`, LB11–13 фронт (reader чистий /
+    lazy Tiptap editor / bundle-grep), LB14 DOM-вимір, LB15 ordered gate+звіт.
+- **Докази Codex** — `docs/lesson-builder/report.md` (є LB05-секція + session-verification). Жива схема-
+  контракт — LB01 `document.go` (json-теги schemaVersion/sections/content/imageId/columns/blocks/spans/text/
+  marks/href). Мірник гейта тіла — `transcript read.go` (EmailVerified→CanConsume).
+- **Відкритих питань власника немає.** Коміт LB05 — коли власник підтвердить.
 
 ## Ключові рішення плану (reuse-first, 3 агенти 2026-10-12)
 

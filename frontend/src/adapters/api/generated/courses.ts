@@ -45,8 +45,10 @@ import type {
   EmailRequest,
   EmailTakenResponse,
   ForbiddenResponse,
+  GetAdminLessonDocumentParams,
   GetAdminStatsTimeseriesParams,
   GetCourseRosterParams,
+  GetLearnLessonDocumentParams,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
   Instructor,
@@ -56,6 +58,10 @@ import type {
   LearnerPage,
   LearningCourse,
   LearningForbiddenResponse,
+  LessonDocument,
+  LessonDocumentConflictResponse,
+  LessonDocumentDraft,
+  LessonDocumentUpdated,
   LessonDraft,
   LessonNotFoundResponse,
   LessonTranscript,
@@ -99,7 +105,9 @@ import type {
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
   PublicReviewPage,
+  PublishAdminLessonDocumentParams,
   PublishCommentRequest,
+  PublishLessonDocumentRequest,
   PublishLessonDraft200,
   PublishLessonDraftRequest,
   PurchaseConflictResponse,
@@ -114,6 +122,7 @@ import type {
   ResetPasswordRequest,
   Review,
   RosterPage,
+  SaveLessonDocumentRequest,
   SaveLessonTranscript200,
   SaveTranscriptRequest,
   TeachCourseCommentPage,
@@ -4680,6 +4689,357 @@ export const getLearningCourse = async (slug: string, options?: RequestInit): Pr
 
   const data: getLearningCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getLearningCourseResponse
+}
+
+
+
+export type getAdminLessonDocumentResponse200 = {
+  data: LessonDocumentDraft
+  status: 200
+}
+
+export type getAdminLessonDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getAdminLessonDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getAdminLessonDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getAdminLessonDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getAdminLessonDocumentResponseSuccess = (getAdminLessonDocumentResponse200) & {
+  headers: Headers;
+};
+export type getAdminLessonDocumentResponseError = (getAdminLessonDocumentResponse400 | getAdminLessonDocumentResponse401 | getAdminLessonDocumentResponse403 | getAdminLessonDocumentResponse404 | getAdminLessonDocumentResponse500 | getAdminLessonDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type getAdminLessonDocumentResponse = (getAdminLessonDocumentResponseSuccess | getAdminLessonDocumentResponseError)
+
+export const getGetAdminLessonDocumentUrl = (lessonId: string,
+    params?: GetAdminLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
+}
+
+/**
+ * Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
+ */
+export const getAdminLessonDocument = async (lessonId: string,
+    params?: GetAdminLessonDocumentParams, options?: RequestInit): Promise<getAdminLessonDocumentResponse> => {
+
+  const res = await fetch(getGetAdminLessonDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAdminLessonDocumentResponse
+}
+
+
+
+export type saveAdminLessonDocumentResponse200 = {
+  data: LessonDocumentUpdated
+  status: 200
+}
+
+export type saveAdminLessonDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type saveAdminLessonDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type saveAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type saveAdminLessonDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type saveAdminLessonDocumentResponse409 = {
+  data: LessonDocumentConflictResponse
+  status: 409
+}
+
+export type saveAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type saveAdminLessonDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type saveAdminLessonDocumentResponseSuccess = (saveAdminLessonDocumentResponse200) & {
+  headers: Headers;
+};
+export type saveAdminLessonDocumentResponseError = (saveAdminLessonDocumentResponse400 | saveAdminLessonDocumentResponse401 | saveAdminLessonDocumentResponse403 | saveAdminLessonDocumentResponse404 | saveAdminLessonDocumentResponse409 | saveAdminLessonDocumentResponse500 | saveAdminLessonDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type saveAdminLessonDocumentResponse = (saveAdminLessonDocumentResponseSuccess | saveAdminLessonDocumentResponseError)
+
+export const getSaveAdminLessonDocumentUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
+}
+
+/**
+ * Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+ */
+export const saveAdminLessonDocument = async (lessonId: string,
+    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<saveAdminLessonDocumentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getSaveAdminLessonDocumentUrl(lessonId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveLessonDocumentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveAdminLessonDocumentResponse
+}
+
+
+
+export type publishAdminLessonDocumentResponse200 = {
+  data: void
+  status: 200
+}
+
+export type publishAdminLessonDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type publishAdminLessonDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type publishAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type publishAdminLessonDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type publishAdminLessonDocumentResponse409 = {
+  data: LessonDocumentConflictResponse
+  status: 409
+}
+
+export type publishAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type publishAdminLessonDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type publishAdminLessonDocumentResponseSuccess = (publishAdminLessonDocumentResponse200) & {
+  headers: Headers;
+};
+export type publishAdminLessonDocumentResponseError = (publishAdminLessonDocumentResponse400 | publishAdminLessonDocumentResponse401 | publishAdminLessonDocumentResponse403 | publishAdminLessonDocumentResponse404 | publishAdminLessonDocumentResponse409 | publishAdminLessonDocumentResponse500 | publishAdminLessonDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type publishAdminLessonDocumentResponse = (publishAdminLessonDocumentResponseSuccess | publishAdminLessonDocumentResponseError)
+
+export const getPublishAdminLessonDocumentUrl = (lessonId: string,
+    params?: PublishAdminLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish`
+}
+
+/**
+ * Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+ */
+export const publishAdminLessonDocument = async (lessonId: string,
+    publishLessonDocumentRequest: PublishLessonDocumentRequest,
+    params?: PublishAdminLessonDocumentParams, options?: RequestInit): Promise<publishAdminLessonDocumentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPublishAdminLessonDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishLessonDocumentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: publishAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as publishAdminLessonDocumentResponse
+}
+
+
+
+export type getLearnLessonDocumentResponse200 = {
+  data: LessonDocument
+  status: 200
+}
+
+export type getLearnLessonDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getLearnLessonDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLearnLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getLearnLessonDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getLearnLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getLearnLessonDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLearnLessonDocumentResponseSuccess = (getLearnLessonDocumentResponse200) & {
+  headers: Headers;
+};
+export type getLearnLessonDocumentResponseError = (getLearnLessonDocumentResponse400 | getLearnLessonDocumentResponse401 | getLearnLessonDocumentResponse403 | getLearnLessonDocumentResponse404 | getLearnLessonDocumentResponse500 | getLearnLessonDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type getLearnLessonDocumentResponse = (getLearnLessonDocumentResponseSuccess | getLearnLessonDocumentResponseError)
+
+export const getGetLearnLessonDocumentUrl = (lessonId: string,
+    params?: GetLearnLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document`
+}
+
+/**
+ * Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
+ */
+export const getLearnLessonDocument = async (lessonId: string,
+    params?: GetLearnLessonDocumentParams, options?: RequestInit): Promise<getLearnLessonDocumentResponse> => {
+
+  const res = await fetch(getGetLearnLessonDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLearnLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLearnLessonDocumentResponse
 }
 
 
