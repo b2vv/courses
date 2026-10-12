@@ -1,0 +1,180 @@
+# lesson-builder — жива нота (assumptions / розвилки)
+
+## Handoff (2026-10-12, для перезапуску сесії — транскрипт 5.1 МБ)
+
+- **Гілка** `feat/lesson-builder` off main@9e7759e. **Нічого НЕ закомічено** (правило «коміт лише на
+  прохання»); усе у робочому дереві. Реалізація — **через Codex** (`codex exec "$(cat prompt)" <
+  /dev/null`; CODEX_EXIT з лога; пісочниця Codex НЕ гонить Docker/listen — integration/bundle
+  проганяю сам у сесії).
+- **Пройдено:** GATE 1 + GATE 2 (вердикт свіжим Opus-4.8; блокери закриті). Рішення власника:
+  секції video/text/image/row/task (gallery→фаза `portfolio`); Description→односекційний text тоді
+  DROP; i18n схема locale-aware UI одна локаль; draft+published дві ревізії; task=rich-text; окремий
+  editor-route явне збереження; гейт тіла+зображень = **CanConsume+EmailVerified** (дзеркало
+  транскрипта, без lease).
+- **Слайси (durable статуси — `work/tasks.md`):**
+  - **LB00** спайк GO · **LB01** домен · **LB02** міграція 00018+backfill (integration ok) ·
+    **LB03** ports+app (gate) · **LB04** postgres-адаптер (integration ok 3.2s) — **УСІ зелені**.
+  - **ДАЛІ: LB05** — HTTP (admin PUT document / POST publish; learn GET document gated
+    CanConsume+EmailVerified ОКРЕМО від outline) + OpenAPI+Orval + contract-тести. Промпти-зразки в
+    scratchpad `codex-lb0X-prompt.md`.
+  - Далі LB06 (drop Description + міграція 00019), LB07–10 image-модуль `internal/image` `[P]`,
+    LB11–13 фронт (reader чистий / lazy Tiptap editor / bundle-grep), LB14 DOM-вимір, LB15 gate+звіт.
+- **Докази Codex** — `docs/lesson-builder/report.md`. Жива схема-контракт — LB01 `document.go`
+  (json-теги schemaVersion/sections/content/imageId/columns/blocks/spans/text/marks/href).
+- **Відкритих питань власника немає.**
+
+ДАЛІ (точно): LB05 через Codex — HTTP document-ендпоінти + image ще ні (LB09). Мірник гейта тіла —
+transcript read.go (EmailVerified→CanConsume).
+
+## Ключові рішення плану (reuse-first, 3 агенти 2026-10-12)
+
+- **Бекенд розміщення:** розширити модуль `course` (володіє уроками) — document.go у domain/app/
+  ports/adapters; новий окремий модуль `internal/image` (НЕ розширювати відео-media).
+- **Персистенс:** таблиця `lesson_documents` PK `(lesson_id, locale)`, draft_body+published_body
+  jsonb, updated_at optimistic-lock; raw pgx (asr-прецедент), не sqlc. Publish = `UPDATE SET
+  published_body = draft_body` (атомарно). PK з locale → мультимовність без зміни схеми.
+- **Гейт (AC7):** новий `GET /learn/lessons/{id}/document` gated `access.CanConsume`, ОКРЕМО від
+  outline (`getLearningCourse` — Preview:true-видимий будь-кому; body туди НЕ класти). Повний
+  факт-сет (owner/status/paid/entitled/membership/preview), не transcript-ів edit-гейт.
+- **Reader без редактора (AC4):** route-компоненти auto-split; АЛЕ важкі vendor-деп з eager
+  router-контексту падають у 1.64MB main-chunk (доказ: hls.js). → reader = чистий компонент
+  секції→HTML, нуль редактор-деп; Tiptap лише в `React.lazy` editor-піддереві, НЕ в
+  createAdminDependencies/router-контексті.
+- **Зображення:** модуль `internal/image`; multipart POST на `api` (admin, requireSameOrigin,
+  magic-bytes jpeg/png/webp, MaxBytesReader, піксельний бюджет); store `/media/images/<id>`;
+  nginx `/media/i/` → `/internal/image/authorize` (власний, `CanConsume`, без lease/EmailVerified);
+  окремий upload-location (більший body-limit, `/api/`=1m). CSP не чіпати (`img-src 'self'`).
+- **Міграція:** 00018 (goose); backfill Description→односекційний text (locale uk), потім DROP
+  COLUMN description (pre-launch cut-freely). Міграцію-down втрата published-документів — named.
+- **Факт-корекція:** Tailwind НЕ в бан-листі AGENTS.md і вже залежність (4.3.3) — дозволено.
+
+## GATE 2 (закрито 2026-10-12, свіжий Opus-4.8, вердикт виносив не автор плану)
+
+- **Вердикт:** NOT READY → усі несучі anchor'и ПІДТВЕРДЖЕНО (learning-запит не селектить lesson
+  description; `access.CanConsume` — правильний гейт; media відео-only; route auto-split але eager
+  router-ctx vendor-деп у main-chunk — доказ hls.js; 00018 наступний; конституція ✓). 2 блокери +
+  прогалина — усі дешеві правки плану, ВНЕСЕНО:
+  - **B1 (міграція):** зафіксовано ТОЧНУ форму backfill-документа (JSON у plan §Міграція); backfill
+    через доменний валідатор, не сирий SQL; сценарій №7 сідить НЕПОРОЖНІЙ description і доводить
+    валідність+рендер (не «майже-порожній» прогін). DROP COLUMN лише після доведеного backfill.
+  - **B2 (AC3 reorder):** move-кнопки секцій НЕ копіюють `isDisabled` (пастка
+    [[isdisabled-on-focused-button-drops-focus]] — фокус злітає на body, jsdom ховає); межа = no-op
+    фокусованої кнопки / явне перенесення фокуса; сценарій №6 перевіряє real-browser keyboard.
+  - **Прогалини закрито:** повний `grep description` + sqlc/Orval regen у side-effects; nginx
+    upload-location нова, `client_max_body_size 5m` (не переюз /uploads tus); reader на відсутній
+    рядок/0 секцій → порожній стан, не 404.
+- **Найризикованіше припущення:** Tiptap тримається поза learn/main-chunk — де-ризик спайком
+  (вимір бандла, сценарій №10); hls.js — живий доказ ризику, mitigation адресна.
+
+## Рішення власника про гейт (ЗАКРИТО 2026-10-12)
+
+- **Тіло-документ + зображення = `CanConsume` + EmailVerified** (власник: «є спека, що лише
+  верифіковані мають доступ до курсів»). Authorize дзеркалить гейт транскрипта, без playback-lease.
+  Прев'ю видно лише верифікованому акаунту, не аноніму. Питання публічності прев'ю-зображень закрите.
+
+## Рішення (датовано, хто вирішив, що закриває)
+
+- **2026-10-12, власник:** фаза `white-label` згорнута (fork-per-brand знімає потребу);
+  єдина реальна інженерія — **редактор уроку (WYSIWYG)**. Гілка `feat/white-label →
+  feat/lesson-builder`; дім `docs/white-label → docs/lesson-builder` (white-label артефакти
+  були untracked, прибрані без втрат; гілка не мала комітів понад main 9e7759e).
+- **2026-10-12, Codex (адверсар-критика, прийнято):** відхилити рекомендацію Craft.js «як є».
+  Перейти на **власний структурований документ уроку** (упорядковані типізовані секції +
+  обмежені пресети). Повну критику зберегти в артефакти фази. Несучі пункти прийнято:
+  (1) не зберігати сирий JSON стороннього рушія — власна валідована версійована схема;
+  (2) `learn.$.tsx:33` — `ssr:false`, тож «reader-SSR» був хибний claim; рендерер = власний скоуп;
+  (3) один наявний відео-слот, не довільні відео-блоки; (4) безпека = валідований документ, не
+  «довірений автор+CSP»; outline(public) ≠ content(gated) — тіло не підшивати в outline-відповідь
+  (`learning.go CanBeViewedBy` Preview:true); (5) Tiptap MIT — правильний rich-text шар; (6)
+  images/публікація/i18n — реальні підсистеми, не деталі JSON.
+- **2026-10-12, власник (приклади уроків — вирішальний вхід Codex #4):**
+  - Езотерика: відео → текст(замовляння) → ряд[зображення|пояснення] → завдання; частина без відео
+    (текст+зображення). → розкладається в упорядковані секції, depth-1 вкладення в `row`.
+  - Б'юті: відео-уроки + портфоліо **галереєю** (масштабована). → `gallery` як окрема типізована
+    секція, не емуляція `row`+`image`.
+  - Вигляд обох клієнтів ≈ totaltypescript.com → візуальний north-star клієнт-поверхні; тема/дизайн
+    downstream (per-brand у копії), НЕ ця фаза.
+- **2026-10-12, я (рекомендація, прийнято):** модель = власний документ + секції; drag-рушій НЕ
+  потрібен (жоден приклад його не виправдовує). Інвентар v1: `video`(0..1) `text` `image`
+  `row`(1–3 кол, діти text/image, depth-1) `task` `gallery`.
+
+## Факти (ґрунт, 2026-10-12)
+
+- `backend/internal/course/domain/authoring.go:62` — `Lesson{ID,Title,Description string,Position,
+  IsPreview}`. Тіло уроку = **один плоский рядок `Description`**; структури немає.
+- `frontend/src/routes/learn.$.tsx:33` — `ssr:false` (learn-шлях клієнтський; reader-SSR = новий скоуп).
+- `backend/internal/course/domain/learning.go CanBeViewedBy` — outline видимий (Preview:true), контент
+  гейтиться по-уроково; тіло не можна підшивати в широко-видиму outline-відповідь (AC7).
+- Відео/транскрипт/прогрес/дискусія вже прив'язані до уроку (playback/transcript/discussion).
+- Зображення: media-pipeline — nginx `/media/` auth_request, upload-модуль; загальної img-бібліотеки
+  нема (потрібен шлях авторизації/лімітів для не-playback зображень — уточнити в plan).
+- CSP (server.mjs): `img-src 'self' data:`, `style-src 'self' 'unsafe-inline'`, `script-src 'self'
+  'nonce-…'`; e2e CSP report-only — зелений звичайний ран не доказ під enforcing.
+- **(2026-10-12) Довільних зображень ніде зберігати/віддавати.** Media-модуль суто відео: tus по
+  `videoId`, HLS, thumbnail'и генеруються з відео (`asset.go` StorageKind: source/hls/thumbnails/
+  temporary; tus `server.go` keyed videoId). nginx (`nginx.conf`): `/media/p/<hex>/hls/` auth-gated
+  відео (:67), решта `/media/` відмовляється (:102). → `image`/`row`-image/`gallery` ВСІ вимагають
+  НОВОЇ підсистеми зображень (upload+store+authorize+serve), неминучої навіть для одного зображення.
+- **(2026-10-12) Q5: сотні + before/after пари** (власник). Галерея = підсистема, не секція: альбоми/
+  колекції на сотні, тип-пара «до/після» + UI-порівняння, пагінація/lazy. Поверх підсистеми зображень.
+
+## Припущення (підтвердити на GATE 1)
+
+- Pre-launch (власник 08.10): плоский `Description` можна мігрувати в односекційний `text`-документ
+  сміливо, без shim для «старих даних» — але спершу підтвердити, чи є наповнені уроки (Q2).
+- Чернетка/публікація потрібні (AC8) — форма (ревізії vs прапорець) відкрита (Q6).
+- `task` v1 = стилізований rich-text, НЕ структуроване завдання зі здачею (Q7) — інакше окрема фаза.
+
+## Поріг
+
+Строго за `.claude/standards.md`: тригер «cross-cutting, more than one layer of BOTH backend and
+frontend» СПРАЦЮВАВ (бек: таблиця документа+міграція+API+валідація; фронт: admin-білдер+learn-рендерер).
+Повний spec-flow виправданий.
+
+## Рішення GATE 1 (закрито 2026-10-12, підтвердив власник — вердикт гейту)
+
+- **Розбивка на дві фази (Q10):** `lesson-builder` (ця) = схема документа + секції video/text/image/
+  row/task + **підсистема довільних зображень** + draft/publish + learn-рендерер + безпека +
+  міграція. `portfolio` (наступна) = gallery на сотні + альбоми + before/after. Причина: кожна фаза
+  поставна; підсистема зображень усе одно потрібна тут і її переюзає portfolio; Codex-ризик «другого
+  продукту». Езотерика після цієї фази працює повністю; б'юті-відео+одиночні зображення теж.
+- **Q1–Q9** (деталі) — у spec.md «Рішення GATE 1». Ключове: gallery OUT; Description→односекційний
+  text, старе поле геть; i18n — схема locale-aware, UI одна локаль; rich-text мінімальний allowlist
+  без код-блоків; draft+published дві ревізії, атомарна публікація, без історії; task=rich-text;
+  окремий маршрут редактора, явне збереження; спайк доводить 5 найгостріших ризиків.
+- **Q11 (before/after, для фази `portfolio`, зафіксовано поки свіже):** елемент галереї = одиночне
+  зображення АБО пара «до/після»; порівняння side-by-side (доступний дефолт), драг-повзунок —
+  підсилення пізніше; галерея посилається на альбом, не інлайнить сотні референсів.
+
+## Журнал
+
+### LB03 — відкрите питання контракту (2026-10-12, Codex)
+
+**STOP до уточнення власником.** Запитаний порт
+`LoadLessonAccess(ctx, lessonID string) (domain.LessonDocumentAccess, error)` не приймає
+ідентифікатор читача, хоча `Entitled` і `Membership` — факти конкретного користувача в курсі.
+Самого `lessonID` недостатньо для JOIN `course_grants` за користувачем. Наявний transcript-read
+передає `actor.UserID` явно в `GetLessonTranscript(ctx, actor.UserID, lessonID, language)`;
+course learning-reader також приймає ідентифікатор користувача. Контракту передачі actor через
+`context.Context` або прив'язування access-reader до користувача для LB03 не задано.
+
+**Питання:** чи змінюємо порт на
+`LoadLessonAccess(ctx context.Context, userID, lessonID string) (domain.LessonDocumentAccess, error)`
+і передаємо `actor.UserID` з усіх чотирьох application-методів? Рекомендація — так, за наявним
+патерном явного userID. Перевірка після погодження: fake reader фіксує отриманий userID;
+два верифіковані студенти одного уроку з різними membership отримують різні результати гейту;
+LB04 перевіряє той самий сценарій на реальному JOIN `course_grants`.
+
+Код LB03 і тести не змінено; перевірки Go не запускалися, бо реалізацію зупинено на контракті.
+
+**РІШЕННЯ (2026-10-12, я — погоджено):** ТАК, порт =
+`LoadLessonAccess(ctx, userID, lessonID string) (domain.LessonDocumentAccess, error)`; усі чотири
+application-методи передають `actor.UserID`. `Entitled`/`Membership` — пер-глядацькі факти (JOIN
+`course_grants` за користувачем), дзеркалить transcript-read і course learning-reader. Перевірка:
+fake фіксує userID; два верифіковані студенти з різними membership → різні гейти; LB04 — реальний JOIN.
+
+- 2026-10-12: пивот white-label→lesson-builder; гілка/дім перейменовано; spec.md написано.
+- 2026-10-12: GATE 1 Раунд 1 (Q1–Q8) — власник «погоджую все», Q5 уточнив: сотні + before/after.
+- 2026-10-12: факт — підсистема зображень не існує (media відео-only); Раунд 2 (Q9–Q11) + розбивка
+  фази. Власник підтвердив. GATE 1 ЗАКРИТО. spec.md оновлено (gallery OUT, AC9 переписано під нову
+  підсистему, рішення зафіксовані). Далі — plan.md.
