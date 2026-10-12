@@ -437,12 +437,16 @@ func domainPrice(price *priceDTO) *domain.Price {
 }
 
 func decodeAdminJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
+	return decodeLimitedAdminJSON[T](w, r, maximumAdminWriteBody)
+}
+
+func decodeLimitedAdminJSON[T any](w http.ResponseWriter, r *http.Request, limit int64) (T, error) {
 	var result T
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
 		return result, domain.ErrInvalidRequest
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maximumAdminWriteBody)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	body, err := io.ReadAll(r.Body)
 	if err != nil || validateUniqueJSONObject(body) != nil {
 		return result, domain.ErrInvalidRequest
