@@ -1,0 +1,211 @@
+package domain
+
+import (
+	"fmt"
+	"net/url"
+	"unicode/utf8"
+)
+
+const ErrInvalidLessonDocument Error = "invalid_lesson_document"
+
+// String ceilings count Unicode code points, as in lesson authoring. The section
+// ceiling includes row children; text is also bounded across the whole document.
+const (
+	CurrentLessonDocumentSchemaVersion = 1
+	MaximumDocumentSections            = 200
+	MaximumRowColumns                  = 3
+	MaximumSectionID                   = 200
+	MaximumImageAlt                    = 2000
+	MaximumRichTextBlocks              = 200
+	MaximumListItems                   = 200
+	MaximumBlockSpans                  = 200
+	MaximumSpanText                    = 20000
+	MaximumSpanHref                    = 2048
+	MaximumSpanMarks                   = 2
+	MaximumDocumentText                = 200000
+)
+
+type SectionType string
+
+const (
+	SectionVideo SectionType = "video"
+	SectionText  SectionType = "text"
+	SectionImage SectionType = "image"
+	SectionRow   SectionType = "row"
+	SectionTask  SectionType = "task"
+)
+
+type BlockType string
+
+const (
+	BlockParagraph BlockType = "paragraph"
+	BlockHeading   BlockType = "heading"
+	BlockList      BlockType = "list"
+)
+
+type Mark string
+
+const (
+	MarkBold   Mark = "bold"
+	MarkItalic Mark = "italic"
+)
+
+type LessonDocument struct {
+	SchemaVersion int       `json:"schemaVersion"`
+	Locale        string    `json:"locale"`
+	Sections      []Section `json:"sections"`
+}
+
+type Section struct {
+	ID      string      `json:"id"`
+	Type    SectionType `json:"type"`
+	Content *RichText   `json:"content,omitempty"`
+	ImageID string      `json:"imageId,omitempty"`
+	Alt     string      `json:"alt,omitempty"`
+	Columns []Section   `json:"columns,omitempty"`
+}
+
+type RichText struct {
+	Blocks []Block `json:"blocks"`
+}
+
+type Block struct {
+	Type    BlockType `json:"type"`
+	Level   int       `json:"level,omitempty"`
+	Ordered bool      `json:"ordered,omitempty"`
+	Spans   []Span    `json:"spans,omitempty"`
+	Items   [][]Span  `json:"items,omitempty"`
+}
+
+// Text stays literal: HTML escaping belongs to the reader, not stored content.
+type Span struct {
+	Text  string `json:"text"`
+	Marks []Mark `json:"marks,omitempty"`
+	Href  string `json:"href,omitempty"`
+}
+
+func ValidateLessonDocument(document LessonDocument) error {
+	if document.SchemaVersion != CurrentLessonDocumentSchemaVersion || document.Locale != "uk" && document.Locale != "en" {
+		return ErrInvalidLessonDocument
+	}
+	sectionCount, videoCount, textCount := len(document.Sections), 0, 0
+	if sectionCount > MaximumDocumentSections {
+		return ErrInvalidLessonDocument
+	}
+	for i, section := range document.Sections {
+		sectionCount += len(section.Columns)
+		if section.Type == SectionVideo {
+			videoCount++
+		}
+		if sectionCount > MaximumDocumentSections || videoCount > 1 {
+			return ErrInvalidLessonDocument
+		}
+		if err := validateDocumentSection(section, false, &textCount); err != nil {
+			return fmt.Errorf("section %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func validateDocumentSection(section Section, inRow bool, textCount *int) error {
+	if !validText(section.ID, MaximumSectionID) || inRow && section.Type != SectionText && section.Type != SectionImage {
+		return ErrInvalidLessonDocument
+	}
+	switch section.Type {
+	case SectionVideo:
+		if section.Content != nil || section.ImageID != "" || section.Alt != "" || section.Columns != nil {
+			return ErrInvalidLessonDocument
+		}
+	case SectionText, SectionTask:
+		if section.Content == nil || section.ImageID != "" || section.Alt != "" || section.Columns != nil {
+			return ErrInvalidLessonDocument
+		}
+		return validateRichText(*section.Content, textCount)
+	case SectionImage:
+		if !validText(section.ImageID, MaximumSectionID) || !validText(section.Alt, MaximumImageAlt) || section.Content != nil || section.Columns != nil {
+			return ErrInvalidLessonDocument
+		}
+		*textCount += utf8.RuneCountInString(section.Alt)
+	case SectionRow:
+		if section.Content != nil || section.ImageID != "" || section.Alt != "" || len(section.Columns) < 1 || len(section.Columns) > MaximumRowColumns {
+			return ErrInvalidLessonDocument
+		}
+		for i, column := range section.Columns {
+			if err := validateDocumentSection(column, true, textCount); err != nil {
+				return fmt.Errorf("column %d: %w", i, err)
+			}
+		}
+	default:
+		return ErrInvalidLessonDocument
+	}
+	if *textCount > MaximumDocumentText {
+		return ErrInvalidLessonDocument
+	}
+	return nil
+}
+
+func validateRichText(content RichText, textCount *int) error {
+	if len(content.Blocks) > MaximumRichTextBlocks {
+		return ErrInvalidLessonDocument
+	}
+	for i, block := range content.Blocks {
+		if err := validateDocumentBlock(block, textCount); err != nil {
+			return fmt.Errorf("block %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func validateDocumentBlock(block Block, textCount *int) error {
+	switch block.Type {
+	case BlockParagraph, BlockHeading:
+		if block.Ordered || block.Items != nil || block.Type == BlockParagraph && block.Level != 0 || block.Type == BlockHeading && block.Level != 2 && block.Level != 3 {
+			return ErrInvalidLessonDocument
+		}
+		return validateDocumentSpans(block.Spans, textCount)
+	case BlockList:
+		if block.Level != 0 || block.Spans != nil || len(block.Items) < 1 || len(block.Items) > MaximumListItems {
+			return ErrInvalidLessonDocument
+		}
+		for _, item := range block.Items {
+			if err := validateDocumentSpans(item, textCount); err != nil {
+				return err
+			}
+		}
+	default:
+		return ErrInvalidLessonDocument
+	}
+	return nil
+}
+
+func validateDocumentSpans(spans []Span, textCount *int) error {
+	if len(spans) > MaximumBlockSpans {
+		return ErrInvalidLessonDocument
+	}
+	for _, span := range spans {
+		if !validOptionalText(span.Text, MaximumSpanText) || len(span.Marks) > MaximumSpanMarks || !validDocumentHref(span.Href) {
+			return ErrInvalidLessonDocument
+		}
+		for _, mark := range span.Marks {
+			if mark != MarkBold && mark != MarkItalic {
+				return ErrInvalidLessonDocument
+			}
+		}
+		*textCount += utf8.RuneCountInString(span.Text)
+		if *textCount > MaximumDocumentText {
+			return ErrInvalidLessonDocument
+		}
+	}
+	return nil
+}
+
+func validDocumentHref(href string) bool {
+	if href == "" {
+		return true
+	}
+	if !validOptionalText(href, MaximumSpanHref) {
+		return false
+	}
+	parsed, err := url.Parse(href)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != ""
+}
