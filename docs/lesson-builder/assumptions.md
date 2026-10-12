@@ -35,8 +35,19 @@
     pixel 40 MP) — рішення в Журналі нижче. Сесія незалежно: gofmt/vet/test зелені, boundary-тест ok.
     **Access-reader порт (cross-module lesson→course CanConsume+EmailVerified) свідомо НЕ в LB07** —
     без consumer був би unused interface (конституція); заводиться в LB09 разом з application.Authorize.
-  - **ДАЛІ: LB08** `internal/image` adapters: fs-store `/media/images/<id>` 0750/0640 (os.Root-патерн як
-    media `filesystem/storage.go:19-43`) + postgres repo (Insert/FindByID); integration. Тоді LB09
+  - **LB08** `internal/image` adapters — **ЗРОБЛЕНО** Codex 2026-10-12 (ще НЕ закомічено на момент запису):
+    `adapters/filesystem/storage.go` (os.Root на images-дир, `Put` O_WRONLY|O_CREATE|O_EXCL + fsync +
+    partial-cleanup, validUUID проти traversal, fileMode 0640, flat `<id>`), `adapters/postgres/
+    repository.go` (`Repository{pool}`, Insert/FindByID, `$::text::uuid`, pgx.ErrNoRows→ErrImageNotFound,
+    created_by nullable→""). Сесія: gofmt/vet/unit зелені; **integration під Docker PASS 3.0s** (round-trip
+    усіх полів+created_at.Equal, missing, dup 23505, FK 23503, nullable creator). directoryMode прибрано.
+  - **ДАЛІ: LB09** `internal/image` HTTP+application: `POST /api/v1/admin/lessons/{id}/images` (multipart,
+    admin|instructor, requireSameOrigin, MaxBytesReader 5m; sniff→DetectContentType, image.DecodeConfig→
+    AcceptDimensions, NewImage, Storage.Put, Repo.Insert) + internal `GET /internal/image/authorize`
+    (власний reader imageID→lessonID→course→**CanConsume+EmailVerified**, без lease). ТУТ заводиться
+    access-reader порт (cross-module seam) + application.Authorize-use-case (його consumer). Composition-
+    root wiring course+image ендпоінтів. Contract-тести (крива mime/розмір/bomb→явні коди AC9:
+    unsupported_media_type/payload_too_large/invalid_request). Тоді LB10 nginx.
     (HTTP: admin multipart upload + internal `/internal/image/authorize` reader lesson→course→CanConsume+
     EmailVerified, без lease)→LB10 (nginx `^~ /media/i/` + нова upload-location 5m; compose; auth_request
     integration). Потім LB11–13 фронт (reader чистий / lazy Tiptap editor / bundle-grep), LB14 DOM-вимір,
