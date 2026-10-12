@@ -3,8 +3,10 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -418,6 +420,74 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if _, err := provider.Up(ctx); err != nil {
 			t.Fatal(err)
+		}
+	})
+	t.Run("lesson-document migration preserves populated database", func(t *testing.T) {
+		if _, err := provider.DownTo(ctx, 17); err != nil {
+			t.Fatal(err)
+		}
+		const lessonID = "73000000-0000-4000-8000-000000000001"
+		const description = "Замовляння на достаток."
+		t.Cleanup(func() {
+			if _, err := pool.Exec(context.Background(), `DELETE FROM courses WHERE id='53000000-0000-4000-8000-000000000001'`); err != nil {
+				t.Errorf("cleanup lesson-document migration fixture: %v", err)
+			}
+		})
+		if _, err := pool.Exec(ctx, preAdministrationIdentitySeed); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO courses (id,instructor_id,slug,title,summary,description,status) VALUES
+		('53000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000002','lesson-document-backfill','Document backfill','Fixture summary','Fixture description','draft');
+		INSERT INTO course_modules (id,course_id,title,position) VALUES
+		('63000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001','Document migration module',0)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
+		($1,'63000000-0000-4000-8000-000000000001','Document migration lesson',$2,0),
+		('73000000-0000-4000-8000-000000000002','63000000-0000-4000-8000-000000000001','Empty description lesson','',1)`, lessonID, description); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var draftBody, publishedBody []byte
+		if err := db.QueryRowContext(ctx, `SELECT draft_body, published_body FROM lesson_documents WHERE lesson_id=$1 AND locale='uk'`, lessonID).Scan(&draftBody, &publishedBody); err != nil {
+			t.Fatal(err)
+		}
+		var doc domain.LessonDocument
+		if err := json.Unmarshal(draftBody, &doc); err != nil {
+			t.Fatal(err)
+		}
+		if err := domain.ValidateLessonDocument(doc); err != nil {
+			t.Fatalf("backfilled document is invalid: %v", err)
+		}
+		if doc.Locale != "uk" || len(doc.Sections) != 1 {
+			t.Fatalf("backfilled document locale/sections: %+v", doc)
+		}
+		section := doc.Sections[0]
+		if section.ID != lessonID+"-s1" || section.Type != domain.SectionText || section.Content == nil || len(section.Content.Blocks) != 1 {
+			t.Fatalf("backfilled text section: %+v", section)
+		}
+		block := section.Content.Blocks[0]
+		if block.Type != domain.BlockParagraph || len(block.Spans) != 1 || block.Spans[0].Text != description {
+			t.Fatalf("backfilled paragraph did not preserve description: %+v", block)
+		}
+		if !bytes.Equal(draftBody, publishedBody) {
+			t.Fatal("backfilled draft and published documents differ")
+		}
+		var preservedDescription string
+		if err := db.QueryRowContext(ctx, `SELECT description FROM course_lessons WHERE id=$1`, lessonID).Scan(&preservedDescription); err != nil {
+			t.Fatal(err)
+		}
+		if preservedDescription != description {
+			t.Fatalf("migration changed lesson description: %q", preservedDescription)
+		}
+		var emptyDocuments int
+		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM lesson_documents WHERE lesson_id='73000000-0000-4000-8000-000000000002'`).Scan(&emptyDocuments); err != nil {
+			t.Fatal(err)
+		}
+		if emptyDocuments != 0 {
+			t.Fatalf("empty description backfilled %d documents", emptyDocuments)
 		}
 	})
 	t.Run("playback migration lock timeout rolls back and retry succeeds", func(t *testing.T) {
