@@ -2,10 +2,11 @@
 
 ## Handoff (2026-10-12, для перезапуску сесії — транскрипт 5.1 МБ)
 
-- **Гілка** `feat/lesson-builder` off main@9e7759e. **Нічого НЕ закомічено** (правило «коміт лише на
-  прохання»); усе у робочому дереві. Реалізація — **через Codex** (`codex exec "$(cat prompt)" <
-  /dev/null`; CODEX_EXIT з лога; пісочниця Codex НЕ гонить Docker/listen — integration/bundle
-  проганяю сам у сесії).
+- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB04 + планування ЗАКОМІЧЕНО** (5 логічних
+  комітів, HEAD `1352e4a`: cb33b70 docs · 9e262d7 LB01 · 8145569 LB02 · edda4aa LB03 · 1352e4a LB04).
+  НЕ запушено, PR ще нема. Реалізація — **через Codex** (`codex exec "$(cat prompt)" < /dev/null`;
+  CODEX_EXIT з лога; пісочниця Codex НЕ гонить Docker/listen — integration/bundle проганяю сам у
+  сесії). Промпти-зразки — scratchpad `codex-lb0X-prompt.md`.
 - **Пройдено:** GATE 1 + GATE 2 (вердикт свіжим Opus-4.8; блокери закриті). Рішення власника:
   секції video/text/image/row/task (gallery→фаза `portfolio`); Description→односекційний text тоді
   DROP; i18n схема locale-aware UI одна локаль; draft+published дві ревізії; task=rich-text; окремий
