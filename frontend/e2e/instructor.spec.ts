@@ -84,7 +84,7 @@ async function createCourse(
         {
           id: randomUUID(),
           title: `Модуль ${runNamespace}`,
-          lessons: lessons.map((lesson) => ({ ...lesson, description: '' })),
+          lessons,
         },
       ],
     },

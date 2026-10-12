@@ -528,11 +528,8 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 		}
 	})
 
-	// B06 expects 400 invalid_request for all three bounds (docs/admin/plan.md:654). The lesson
-	// ceiling now answers with its own code, so one of the three cases changed - dated in that
-	// plan's §8 amendment of 2026-09-17 and in docs/admin/report.md, because the row belongs to
-	// a closed phase and the change has to be recorded where the row lives, not only here. The
-	// rest of the row is asserted exactly as before: refused, repository untouched, tree equal.
+	// LB06 removes the lesson-description ceiling. Module and total-lesson ceilings
+	// still refuse the write without changing the stored tree (B06).
 	t.Run("B06 invalid tree ceilings leave the tree unchanged", func(t *testing.T) {
 		cases := []struct {
 			name   string
@@ -540,13 +537,10 @@ func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {
 			code   string
 		}{
 			{name: "41 modules", code: "invalid_request", mutate: func(tree *domain.CourseTree) {
-				tree.Modules = makeModules(41, 0, 0)
+				tree.Modules = makeModules(41, 0)
 			}},
 			{name: "121 lessons", code: "lesson_limit", mutate: func(tree *domain.CourseTree) {
-				tree.Modules = makeModules(1, 121, 0)
-			}},
-			{name: "1001 character lesson description", code: "invalid_request", mutate: func(tree *domain.CourseTree) {
-				tree.Modules = makeModules(1, 1, 1001)
+				tree.Modules = makeModules(1, 121)
 			}},
 		}
 		for _, test := range cases {
@@ -1099,9 +1093,8 @@ type adminTreeResponse struct {
 		ID      string `json:"id"`
 		Title   string `json:"title"`
 		Lessons []struct {
-			ID          string `json:"id"`
-			Title       string `json:"title"`
-			Description string `json:"description"`
+			ID    string `json:"id"`
+			Title string `json:"title"`
 		} `json:"lessons"`
 	} `json:"modules"`
 }
@@ -1203,7 +1196,7 @@ func saveCourseBody(tree domain.CourseTree, expectedUpdatedAt string) map[string
 		lessons := make([]map[string]any, 0, len(module.Lessons))
 		for _, lesson := range module.Lessons {
 			lessons = append(lessons, map[string]any{
-				"id": lesson.ID, "title": lesson.Title, "description": lesson.Description,
+				"id": lesson.ID, "title": lesson.Title,
 			})
 		}
 		modules = append(modules, map[string]any{"id": module.ID, "title": module.Title, "lessons": lessons})
@@ -1222,7 +1215,7 @@ func maximalAdminTree(tree domain.CourseTree) domain.CourseTree {
 	tree.Title = strings.Repeat("Ж", 200)
 	tree.Summary = strings.Repeat("Ж", 500)
 	tree.Description = strings.Repeat("Ж", 20000)
-	tree.Modules = makeModules(40, 3, 1000)
+	tree.Modules = makeModules(40, 3)
 	return tree
 }
 
@@ -1250,20 +1243,16 @@ func positionsAreContiguous(modules []domain.Module) bool {
 	return true
 }
 
-func makeModules(moduleCount, lessonsPerModule, descriptionLength int) []domain.Module {
+func makeModules(moduleCount, lessonsPerModule int) []domain.Module {
 	modules := make([]domain.Module, 0, moduleCount)
 	lessonNumber := 0
 	for modulePosition := 0; modulePosition < moduleCount; modulePosition++ {
 		lessons := make([]domain.Lesson, 0, lessonsPerModule)
 		for lessonPosition := 0; lessonPosition < lessonsPerModule; lessonPosition++ {
 			lessonNumber++
-			description := ""
-			if descriptionLength > 0 {
-				description = strings.Repeat("Ж", descriptionLength)
-			}
 			lessons = append(lessons, domain.Lesson{
 				ID:    fmt.Sprintf("30000000-0000-4000-8000-%012d", lessonNumber),
-				Title: strings.Repeat("Ж", 200), Description: description, Position: lessonPosition,
+				Title: strings.Repeat("Ж", 200), Position: lessonPosition,
 			})
 		}
 		modules = append(modules, domain.Module{
@@ -1489,7 +1478,7 @@ func adminCourseTree(ownerID string) domain.CourseTree {
 		CreatedAt: now, UpdatedAt: now,
 		Modules: []domain.Module{{
 			ID: "20000000-0000-4000-8000-000000000001", Title: "First module", Position: 0,
-			Lessons: []domain.Lesson{{ID: "30000000-0000-4000-8000-000000000001", Title: "First lesson", Description: "Lesson text", Position: 0}},
+			Lessons: []domain.Lesson{{ID: "30000000-0000-4000-8000-000000000001", Title: "First lesson", Position: 0}},
 		}},
 	}
 }

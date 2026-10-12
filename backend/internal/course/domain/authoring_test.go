@@ -173,9 +173,6 @@ func TestCourseTreeBoundsAndIdentity(t *testing.T) {
 				tree.Modules = append(tree.Modules, domain.Module{ID: nodeID(1000 + position), Title: "Module", Position: position})
 			}
 		}},
-		{name: "lesson description over 1000", change: func(tree *domain.CourseTree) {
-			tree.Modules[0].Lessons[0].Description = strings.Repeat("ї", domain.MaximumLessonDescription+1)
-		}},
 		{name: "module title over 200", change: func(tree *domain.CourseTree) { tree.Modules[0].Title = strings.Repeat("m", 201) }},
 		{name: "blank lesson title", change: func(tree *domain.CourseTree) { tree.Modules[0].Lessons[0].Title = " " }},
 		{name: "gapped module position", change: func(tree *domain.CourseTree) { tree.Modules[0].Position = 1 }},
@@ -200,7 +197,7 @@ func TestCourseTreeBoundsAndIdentity(t *testing.T) {
 	}
 }
 
-func TestCourseTreeAcceptsBoundsAndEmptyLessonDescription(t *testing.T) {
+func TestCourseTreeAcceptsBounds(t *testing.T) {
 	t.Parallel()
 
 	tree := validAuthoringTree()
@@ -209,15 +206,13 @@ func TestCourseTreeAcceptsBoundsAndEmptyLessonDescription(t *testing.T) {
 		module := domain.Module{ID: nodeID(1000 + modulePosition), Title: strings.Repeat("м", 200), Position: modulePosition}
 		for lessonPosition := range 3 {
 			module.Lessons = append(module.Lessons, domain.Lesson{
-				ID:          nodeID(2000 + modulePosition*3 + lessonPosition),
-				Title:       strings.Repeat("у", 200),
-				Description: strings.Repeat("ї", domain.MaximumLessonDescription),
-				Position:    lessonPosition,
+				ID:       nodeID(2000 + modulePosition*3 + lessonPosition),
+				Title:    strings.Repeat("у", 200),
+				Position: lessonPosition,
 			})
 		}
 		tree.Modules = append(tree.Modules, module)
 	}
-	tree.Modules[0].Lessons[0].Description = ""
 	if err := domain.ValidateCourseTree(tree); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +292,7 @@ func validAuthoringTree() domain.CourseTree {
 			ID:       nodeID(1),
 			Title:    "Module",
 			Position: 0,
-			Lessons:  []domain.Lesson{{ID: nodeID(2), Title: "Lesson", Description: "", Position: 0}},
+			Lessons:  []domain.Lesson{{ID: nodeID(2), Title: "Lesson", Position: 0}},
 		}},
 	}
 }

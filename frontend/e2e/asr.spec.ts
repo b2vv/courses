@@ -95,7 +95,7 @@ async function seed(
         {
           id: moduleID,
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: lessonID, title: `Урок ${suffix}`, description: '' }],
+          lessons: [{ id: lessonID, title: `Урок ${suffix}` }],
         },
       ],
     },

@@ -353,3 +353,182 @@ the staged output. Plus `go build ./...`, `go vet ./internal/course/...` (clean)
 LB05 is **done** at the slice level. The ordered `make check` + full e2e under enforcing
 CSP is the phase gate (LB15), not a per-slice run; LB05 adds no migration or SQL query,
 so `make integration` is unchanged by it.
+
+
+## LB06 — remove the flat lesson description (2026-10-12, Codex)
+
+Implementation complete on `feat/lesson-builder`; verification remains pending outside
+this sandbox. No commits made. Owner's pre-launch “cut freely” decision (2026-10-08,
+reconfirmed in this task) is implemented without a compatibility shim. Only the lesson
+field is removed. `courses.description`, course Summary, CourseDraft/CourseTree
+Description, course API descriptions and course form fields/fixtures are preserved.
+
+Migration 00019 drops `course_lessons.description` after 00018's document backfill.
+Both directions use `SET LOCAL lock_timeout = '5s'`. **Named downgrade loss:** Down
+adds a NOT NULL text column with default `''` and the original 0–1000-character CHECK;
+it does not reconstruct flat text from lesson_documents. The Down block says this
+explicitly. Check via the extended lesson-document migration-preservation subtest:
+DownTo(17) → populated seed → Up (now 19) → validated/preserved document + absent
+column → DownTo(18) → empty restored column + unchanged published document → Up.
+That integration test was edited but NOT run here.
+
+### Completed checklist
+
+- Removed the Lesson field and ceiling/validation, SQL lesson projection, lesson
+  upsert column/value/update and aligned arguments, tree mapper, admin lesson DTOs,
+  request nil-check/mapping, and AdminLesson OpenAPI property/required entry.
+- Kept `validOptionalText`: document.go still uses it for rich-text spans and links.
+  Removed only the obsolete lesson-bound tests and their fixture/helper fields;
+  retained course bounds and HTTP request-body limit coverage.
+- Regenerated Orval. Removed the lesson field from the API mapper, authoring domain
+  type/validation, Zod schema, form type/control/default, and en/uk label.
+  The admin lesson schema is actually in `admin-course-schema.ts`; inspected
+  `course-schema.ts` and left its course description unchanged. Inspected
+  `admin-queries.test.ts` and `course-schema.test.ts`: only course descriptions,
+  so neither needed edits.
+- Updated lesson fixtures in unit tests, shared backend integration tests, browser
+  journeys and the playback authorization shell fixture. These other modules insert
+  into the current schema and would otherwise reference the dropped column.
+  The three lesson INSERT fixtures below migration 19 in course's
+  `repository_integration_test.go` remain unchanged. Historical migrations 00003
+  and 00018 also remain unchanged.
+- Reviewed remaining lesson-description references: historical migration/backfill
+  and downgrade assertions, plus intentionally stale generated sqlc output. No
+  hand-written production mapper reads a lesson Description field.
+
+Files completed (all paths relative to repository root):
+
+- `backend/internal/adminstats/adapters/postgres/engagement_integration_test.go`
+- `backend/internal/course/adapters/http/admin_handler.go`
+- `backend/internal/course/adapters/http/admin_handler_test.go`
+- `backend/internal/course/adapters/http/contract_ceilings_test.go`
+- `backend/internal/course/adapters/postgres/authoring.go`
+- `backend/internal/course/adapters/postgres/authoring_integration_test.go`
+- `backend/internal/course/adapters/postgres/catalog_measure_test.go`
+- `backend/internal/course/adapters/postgres/document_integration_test.go`
+- `backend/internal/course/adapters/postgres/learning_integration_test.go`
+- `backend/internal/course/adapters/postgres/repository_integration_test.go`
+- `backend/internal/course/application/authoring_test.go`
+- `backend/internal/course/domain/authoring.go`
+- `backend/internal/course/domain/authoring_test.go`
+- `backend/internal/discussion/adapters/postgres/repository_integration_test.go`
+- `backend/internal/media/adapters/postgres/repository_integration_test.go`
+- `backend/internal/media/adapters/tus/server_test.go`
+- `backend/internal/orders/adapters/postgres/repository_integration_test.go`
+- `backend/internal/playback/adapters/postgres/access_integration_test.go`
+- `backend/internal/playback/adapters/postgres/progress_integration_test.go`
+- `backend/internal/playback/application/sessions_integration_test.go`
+- `backend/internal/transcript/adapters/postgres/draft_integration_test.go`
+- `backend/internal/transcript/adapters/postgres/repository_integration_test.go`
+- `backend/migrations/00019_drop_lesson_description.sql`
+- `backend/openapi/openapi.yaml`
+- `backend/sql/queries/courses.sql`
+- `frontend/e2e/accounts.spec.ts`
+- `frontend/e2e/admin.spec.ts`
+- `frontend/e2e/asr.spec.ts`
+- `frontend/e2e/discussion.spec.ts`
+- `frontend/e2e/enrollment.spec.ts`
+- `frontend/e2e/instructor.spec.ts`
+- `frontend/e2e/learn-access.spec.ts`
+- `frontend/e2e/learning.spec.ts`
+- `frontend/e2e/media.spec.ts`
+- `frontend/e2e/purchase-wayforpay.spec.ts`
+- `frontend/e2e/purchase.spec.ts`
+- `frontend/e2e/ratings.spec.ts`
+- `frontend/e2e/refund.spec.ts`
+- `frontend/e2e/transcript.spec.ts`
+- `frontend/src/adapters/api/admin-course-repository.test.ts`
+- `frontend/src/adapters/api/admin-course-repository.ts`
+- `frontend/src/adapters/api/admin-course-schema.test.ts`
+- `frontend/src/adapters/api/admin-course-schema.ts`
+- `frontend/src/adapters/api/generated/courses.ts`
+- `frontend/src/adapters/api/generated/models/adminLesson.ts`
+- `frontend/src/app/providers/locales/en.ts`
+- `frontend/src/app/providers/locales/uk.ts`
+- `frontend/src/domain/course/course.test.ts`
+- `frontend/src/domain/course/course.ts`
+- `frontend/src/presentation/admin/CourseEditorView.test.tsx`
+- `frontend/src/presentation/admin/CourseEditorView.tsx`
+- `frontend/src/presentation/admin/LessonVideoField.test.tsx`
+- `infrastructure/tests/playback-authorize.sh`
+
+### Commands and results
+
+From repository root (run after Go edits; all edited Go files formatted):
+
+```sh
+git diff --name-only -- '*.go' | xargs gofmt -w
+cd backend
+GOCACHE=/private/tmp/courses-lb03-go-build go build ./...
+GOCACHE=/private/tmp/courses-lb03-go-build go vet ./internal/course/...
+GOCACHE=/private/tmp/courses-lb03-go-build go test ./internal/course/domain/ ./internal/course/application/ ./internal/course/adapters/http/
+```
+
+**PASS:** formatting, build and vet exit 0; domain, application and HTTP tests pass.
+The final run used cached domain/application results and HTTP passed in 5.875s.
+The writable cache location avoids the restricted default cache. This build uses
+stale sqlc output; it is not evidence that generated SQL works after migration 19.
+
+From `frontend`:
+
+```sh
+npm run generate && npm run typecheck && npm test > /private/tmp/courses-lb06-frontend-test.log 2>&1
+npm run typecheck
+```
+
+First generation passed; first typecheck failed (exit 2) on a residual lesson
+`description` in CourseFormValues. Removed it and reran the chain: generation and
+typecheck passed; **npm test FAILED before executing tests**, because Rstest attempted
+`listen ::1:3000` and received `EPERM`. No listener workaround or configuration change
+was attempted. The final standalone typecheck passed (exit 0).
+
+Formatted the 25 modified hand-written TS/TSX paths with the existing formatter
+(`./node_modules/.bin/oxfmt <changed TS/TSX paths>`, cwd frontend; generated output
+excluded): **PASS**. Root `git diff --check`: **PASS**.
+
+### Required human handoff / limitations
+
+**Backend sqlc output could not be regenerated in-sandbox and is intentionally stale.**
+In particular the old generated ListAuthoringLessons SELECT still names the dropped
+column; running the migrated application before regenerating it will fail that query.
+Hand-written Go compiles without reading the stale generated Description field.
+
+The human must run from the repository root:
+
+```sh
+make generate          # includes sqlc via Docker; Orval already regenerated here
+make check-generated
+make integration       # full migration-preservation + authoring + shared fixture coverage
+(cd backend && go build ./...)  # fresh build against regenerated sqlc
+(cd frontend && npm test)      # rerun where Rstest can bind its local port
+```
+
+Docker, integration, sqlc generation, check-generated and e2e were not run here,
+per the task's sandbox constraints; none is claimed passed. Full ordered
+`make check` and the full e2e suite remain the LB15 phase gate. LB06 is not marked
+fully verified until the human handoff passes. Next implementation slice is LB07.
+Existing unrelated screenshot modifications and untracked archive files were preserved.
+
+### LB06 — session verification (2026-10-12, Courses 1)
+
+Ran the human-side gates Codex could not run in its sandbox, from the repo root:
+
+```sh
+make generate        # sqlc via Docker (drops lessons.description) + Orval → GEN_EXIT=0
+make check-generated # regenerate + diff → CG_EXIT=0 (no drift)
+(cd backend && go build ./... && go vet ./internal/course/...)  # EXIT 0 vs regenerated sqlc
+make integration     # INTEG_EXIT=0; courses/internal/course/adapters/postgres ok 23.258s
+(cd frontend && npm test)   # all passed; typecheck green
+```
+
+The integration run exercised migration **00019** (DROP COLUMN course_lessons.description),
+every `*migration preserves populated database` subtest (incl. the LB02 lesson-document
+backfill at DownTo 17 → Up through 18/19), authoring write/load against the dropped
+column, and the cross-module lesson fixtures Codex updated (adminstats/discussion/media/
+orders/playback/transcript). Guardrail held: `courses.description` and course summaries
+untouched; no hand-written reference to the lesson description remains.
+
+Blast radius note: LB06 touched **every** e2e spec (lesson-creation payloads dropped the
+`description` field, now rejected by DisallowUnknownFields). e2e was NOT run here — it is
+the LB15 phase gate (full ordered `make check` + e2e under enforcing CSP), which must run
+the whole suite because this slice changes shared/persisted schema.

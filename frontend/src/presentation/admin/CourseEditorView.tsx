@@ -39,7 +39,6 @@ type CourseFormValues = {
     lessons: Array<{
       id: CourseTreeEdit['modules'][number]['lessons'][number]['id'];
       title: string;
-      description: string;
       isPreview: boolean;
     }>;
   }>;
@@ -307,13 +306,6 @@ function LessonFields({
                 maximum={200}
                 required
               />
-              <StringField
-                control={form.control}
-                name={`modules.${moduleIndex}.lessons.${lessonIndex}.description`}
-                label={t('administration.lessonDescription')}
-                maximum={1000}
-                multiline
-              />
               <PreviewField
                 control={form.control}
                 name={`modules.${moduleIndex}.lessons.${lessonIndex}.isPreview`}
@@ -409,9 +401,7 @@ function LessonFields({
         type="button"
         variant="secondary"
         isDisabled={lessonCount >= 120}
-        onPress={() =>
-          lessons.append({ id: newLessonId(), title: '', description: '', isPreview: false })
-        }
+        onPress={() => lessons.append({ id: newLessonId(), title: '', isPreview: false })}
       >
         {t('administration.addLesson', { number: moduleIndex + 1 })}
       </Button>

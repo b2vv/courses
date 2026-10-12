@@ -74,7 +74,6 @@ async function createCourse(
   const lessons = Array.from({ length: options.lessons ?? 1 }, (_, index) => ({
     id: randomUUID(),
     title: `Урок ${index + 1} ${label}`,
-    description: '',
   }));
   const modules = [{ id: randomUUID(), title: `Модуль ${label}`, lessons }];
   const saved = await admin.put(`/api/v1/admin/courses/${initial.id}`, {

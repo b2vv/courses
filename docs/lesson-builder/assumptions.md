@@ -1,13 +1,16 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-12, оновлено після LB05)
+## Handoff (2026-10-12, оновлено після LB06)
 
-- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB04 ЗАКОМІЧЕНО** (6 комітів, HEAD `cde20d3`:
-  cb33b70 docs · 9e262d7 LB01 · 8145569 LB02 · edda4aa LB03 · 1352e4a LB04 · cde20d3 handoff). НЕ запушено, PR
-  ще нема. **LB05 — ЗРОБЛЕНО й верифіковано в сесії, але ще НЕ закомічено** (staged; коміт — лише на прохання
-  власника). Реалізація — **через Codex** (`codex exec "$(cat prompt)" < /dev/null`; CODEX_EXIT з лога;
-  пісочниця Codex НЕ гонить Docker/listen — integration/generate/gate проганяю сам). Промпти — scratchpad
-  `codex-lb0X-prompt.md` (є й `codex-lb05-prompt.md`).
+- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB05 ЗАКОМІЧЕНО** (7 комітів, HEAD `5cdb1bf`:
+  …LB04 · cde20d3 handoff · 5cdb1bf LB05 HTTP). НЕ запушено, PR ще нема. **LB06 — ЗРОБЛЕНО й ПОВНІСТЮ
+  верифіковано в сесії, але ще НЕ закомічено** (staged; коміт — лише на прохання власника). Реалізація —
+  **через Codex** (`codex exec "$(cat prompt)" < /dev/null`; CODEX_EXIT з лога; пісочниця Codex НЕ гонить
+  Docker/listen — sqlc-generate/check-generated/integration/фронт-тести проганяю сам). Промпти — scratchpad
+  `codex-lb0X-prompt.md` (є й lb05, lb06).
+- **ГОТЧА підтверджена знову:** фоновий `make … | tail; echo EXIT=$pipestatus` маскує код — перший запуск
+  integration показав «exit 0» (обгортка), а насправді make впав «No rule to make target» бо cd не спрацював
+  для фонового шелла → гони `make -C <root>` і читай EXIT із лога. [[background-exit-code-is-last-pipe]].
 - **Пройдено:** GATE 1 + GATE 2 (вердикт свіжим Opus-4.8; блокери закриті). Рішення власника:
   секції video/text/image/row/task (gallery→фаза `portfolio`); Description→односекційний text тоді
   DROP; i18n схема locale-aware UI одна локаль; draft+published дві ревізії; task=rich-text; окремий
@@ -19,19 +22,23 @@
   - **LB05** HTTP документа — `course/adapters/http/document_handler.go`: admin GET draft / PUT / POST
     publish + learn GET published (гейт делеговано сервісу EmailVerified→CanConsume, ОКРЕМО від outline);
     OpenAPI 4 шляхи + рекурсивні схеми LessonDocument/Section/RichText/Block/Span; Orval regen; contract-
-    тести на фейках. Сесія: `go build`/`go vet ./internal/course/...` чисті, `go test
-    ./internal/course/adapters/http/` **ok 6.2s**, `make check-generated` **CG_EXIT=0** (sqlc через Docker
-    без дрейфу + Orval збіг). **ЗРОБЛЕНО** (staged, не закомічено).
-  - **ДАЛІ: LB06** — видалення `course_lessons.description` (крос-cutting) + міграція **00019** (DROP COLUMN;
-    Down re-add порожнім — named втрата); суцільний `grep description`: domain-поле authoring.go:65,
-    validateModules:209, MaximumLessonDescription:35, sqlc-regen (generated/courses.sql.go:315 + courses.sql),
-    Orval-regen, маппери, admin DTO (adminLessonDTO.Description, saveAdminLessonRequest), authoring-форма
-    фронта; збірка зелена після слайсу. Тоді LB07–10 `internal/image` `[P]`, LB11–13 фронт (reader чистий /
-    lazy Tiptap editor / bundle-grep), LB14 DOM-вимір, LB15 ordered gate+звіт.
-- **Докази Codex** — `docs/lesson-builder/report.md` (є LB05-секція + session-verification). Жива схема-
+    тести на фейках. ЗАКОМІЧЕНО `5cdb1bf`.
+  - **LB06** DROP `course_lessons.description` — міграція 00019 + lesson-only прибирання (домен, sqlc-джерело
+    + inline-upsert, admin DTO/handler, OpenAPI, фронт форма/zod/locales, + фікстури ВСІХ модулів і УСІ e2e-
+    спеки, бо колонку сіяли скрізь). Сесія: generate/check-generated/build/vet/**integration INTEG=0**
+    (`course/adapters/postgres` ok 23.3s) + фронт-тести зелені. Guardrail: курс-description/summary цілі.
+    **ЗРОБЛЕНО** (staged, не закомічено).
+  - **ДАЛІ: LB07** `[P]` — модуль `internal/image` домен+порти: `Image{id,lessonId,contentType,w,h,byteSize,
+    createdBy}` + валідація (magic-bytes allowlist jpeg/png/webp, ліміт байтів, піксельний бюджет проти
+    decompression-bomb); unit. Блок LB07→LB08 (fs-store `/media/images/<id>` 0750/0640 + postgres repo)→LB09
+    (HTTP: admin multipart upload + internal `/internal/image/authorize` reader lesson→course→CanConsume+
+    EmailVerified, без lease)→LB10 (nginx `^~ /media/i/` + нова upload-location 5m; compose; auth_request
+    integration). Потім LB11–13 фронт (reader чистий / lazy Tiptap editor / bundle-grep), LB14 DOM-вимір,
+    LB15 ordered gate+повний e2e+звіт.
+- **Докази Codex** — `docs/lesson-builder/report.md` (LB05+LB06 секції + session-verification). Жива схема-
   контракт — LB01 `document.go` (json-теги schemaVersion/sections/content/imageId/columns/blocks/spans/text/
   marks/href). Мірник гейта тіла — `transcript read.go` (EmailVerified→CanConsume).
-- **Відкритих питань власника немає.** Коміт LB05 — коли власник підтвердить.
+- **Відкритих питань власника немає.** Коміт LB06 — коли власник підтвердить.
 
 ## Ключові рішення плану (reuse-first, 3 агенти 2026-10-12)
 

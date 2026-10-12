@@ -52,14 +52,14 @@ func fixtures() []string {
 		`INSERT INTO course_modules (id,course_id,title,position) VALUES
 		 ('20000000-0000-4000-8000-0000000000d1','10000000-0000-4000-8000-0000000000c1','M',0),
 		 ('20000000-0000-4000-8000-0000000000d2','10000000-0000-4000-8000-0000000000c2','M',0)`,
-		`INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
-		 ('` + publishedLesson + `','20000000-0000-4000-8000-0000000000d1','L1','',0),
-		 ('` + bareLesson + `','20000000-0000-4000-8000-0000000000d1','L2','',1),
-		 ('` + replacedLesson + `','20000000-0000-4000-8000-0000000000d1','L3','',2),
-		 ('` + uploadingLesson + `','20000000-0000-4000-8000-0000000000d1','L4','',3),
-		 ('` + twoLangLesson + `','20000000-0000-4000-8000-0000000000d1','L5','',4),
-		 ('` + reuploadLesson + `','20000000-0000-4000-8000-0000000000d1','L7','',5),
-		 ('` + draftLesson + `','20000000-0000-4000-8000-0000000000d2','L6','',0)`,
+		`INSERT INTO course_lessons (id,module_id,title,position) VALUES
+		 ('` + publishedLesson + `','20000000-0000-4000-8000-0000000000d1','L1',0),
+		 ('` + bareLesson + `','20000000-0000-4000-8000-0000000000d1','L2',1),
+		 ('` + replacedLesson + `','20000000-0000-4000-8000-0000000000d1','L3',2),
+		 ('` + uploadingLesson + `','20000000-0000-4000-8000-0000000000d1','L4',3),
+		 ('` + twoLangLesson + `','20000000-0000-4000-8000-0000000000d1','L5',4),
+		 ('` + reuploadLesson + `','20000000-0000-4000-8000-0000000000d1','L7',5),
+		 ('` + draftLesson + `','20000000-0000-4000-8000-0000000000d2','L6',0)`,
 
 		// A ready asset must carry renditions (video_assets_ready_has_renditions) — the constraint
 		// Phase 5 had to repair because array_length of an empty array is NULL and a NULL CHECK
@@ -176,7 +176,7 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 
@@ -298,8 +298,8 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 		// The lesson that has NO transcript on a draft course must answer forbidden too, not
 		// "no transcript" — otherwise the absence of text confirms the course exists.
 		var draftBare string
-		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons (id,module_id,title,description,position)
-			VALUES (gen_random_uuid(),'20000000-0000-4000-8000-0000000000d2','L7','',1) RETURNING id::text`).Scan(&draftBare); err != nil {
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons (id,module_id,title,position)
+			VALUES (gen_random_uuid(),'20000000-0000-4000-8000-0000000000d2','L7',1) RETURNING id::text`).Scan(&draftBare); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := reading.Get(ctx, student, draftBare, ""); err != domain.ErrForbidden {

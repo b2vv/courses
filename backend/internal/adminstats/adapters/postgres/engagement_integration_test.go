@@ -107,8 +107,8 @@ func insertModule(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id, cou
 
 func insertLesson(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id, moduleID string, position int, now time.Time) {
 	t.Helper()
-	exec(t, ctx, pool, `INSERT INTO course_lessons(id,module_id,title,description,position,created_at,updated_at)
-		VALUES ($1,$2,'Lesson','',$3,$4,$4)`, id, moduleID, position, now)
+	exec(t, ctx, pool, `INSERT INTO course_lessons(id,module_id,title,position,created_at,updated_at)
+		VALUES ($1,$2,'Lesson',$3,$4,$4)`, id, moduleID, position, now)
 }
 
 func insertProgress(t *testing.T, ctx context.Context, pool *pgxpool.Pool, userSlug, lessonID string, completedAt *time.Time, updatedAt time.Time) {

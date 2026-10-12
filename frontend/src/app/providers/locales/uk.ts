@@ -520,7 +520,6 @@ export const uk = {
       deleteModule: 'Видалити модуль {{number}}',
       lessonNumber: 'Урок {{number}}',
       lessonTitle: 'Назва уроку {{lesson}} у модулі {{module}}',
-      lessonDescription: 'Опис уроку',
       lessonPreview: 'Відкритий до покупки — урок {{lesson}}, модуль {{module}}',
       grant: {
         eyebrow: 'Доступ',

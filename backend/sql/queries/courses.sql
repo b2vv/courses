@@ -131,7 +131,7 @@ ORDER BY position, id;
 
 -- name: ListAuthoringLessons :many
 SELECT lessons.id::text AS id, lessons.module_id::text AS module_id,
-  lessons.title, lessons.description, lessons.position, lessons.is_preview
+  lessons.title, lessons.position, lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 WHERE modules.course_id = sqlc.arg(course_id)::text::uuid

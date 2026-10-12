@@ -101,10 +101,7 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
       {
         id: randomUUID(),
         title: `Модуль ${runNamespace}`,
-        lessons: [
-          { ...lockedLesson, description: '' },
-          { ...previewLesson, description: '' },
-        ],
+        lessons: [lockedLesson, previewLesson],
       },
     ];
     const structured = await admin.request.put(`/api/v1/admin/courses/${course.id}`, {

@@ -35,10 +35,9 @@ type adminCoursePageDTO struct {
 }
 
 type adminLessonDTO struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	IsPreview   bool   `json:"isPreview"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	IsPreview bool   `json:"isPreview"`
 }
 
 type adminModuleDTO struct {
@@ -93,10 +92,9 @@ func (price *optionalPriceDTO) UnmarshalJSON(data []byte) error {
 type createAdminCourseRequest adminCourseWriteRequest
 
 type saveAdminLessonRequest struct {
-	ID          *string `json:"id"`
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	IsPreview   *bool   `json:"isPreview"`
+	ID        *string `json:"id"`
+	Title     *string `json:"title"`
+	IsPreview *bool   `json:"isPreview"`
 }
 
 type saveAdminModuleRequest struct {
@@ -358,7 +356,7 @@ func mapAdminCourseTree(tree domain.CourseTree) adminCourseTreeDTO {
 	for _, module := range tree.Modules {
 		lessons := make([]adminLessonDTO, 0, len(module.Lessons))
 		for _, lesson := range module.Lessons {
-			lessons = append(lessons, adminLessonDTO{ID: lesson.ID, Title: lesson.Title, Description: lesson.Description, IsPreview: lesson.IsPreview})
+			lessons = append(lessons, adminLessonDTO{ID: lesson.ID, Title: lesson.Title, IsPreview: lesson.IsPreview})
 		}
 		modules = append(modules, adminModuleDTO{ID: module.ID, Title: module.Title, Lessons: lessons})
 	}
@@ -403,7 +401,7 @@ func (request saveAdminCourseRequest) tree(id string) (domain.CourseTree, time.T
 		}
 		lessons := make([]domain.Lesson, 0, len(*input.Lessons))
 		for lessonPosition, lesson := range *input.Lessons {
-			if lesson.ID == nil || lesson.Title == nil || lesson.Description == nil {
+			if lesson.ID == nil || lesson.Title == nil {
 				return domain.CourseTree{}, time.Time{}, domain.ErrInvalidRequest
 			}
 			isPreview := false
@@ -411,7 +409,7 @@ func (request saveAdminCourseRequest) tree(id string) (domain.CourseTree, time.T
 				isPreview = *lesson.IsPreview
 			}
 			lessons = append(lessons, domain.Lesson{
-				ID: *lesson.ID, Title: *lesson.Title, Description: *lesson.Description, Position: lessonPosition, IsPreview: isPreview, PreviewSet: lesson.IsPreview != nil,
+				ID: *lesson.ID, Title: *lesson.Title, Position: lessonPosition, IsPreview: isPreview, PreviewSet: lesson.IsPreview != nil,
 			})
 		}
 		modules = append(modules, domain.Module{ID: *input.ID, Title: *input.Title, Position: modulePosition, Lessons: lessons})

@@ -100,7 +100,7 @@ async function createCourse(
         {
           id: randomUUID(),
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: lessonId, title: `Урок ${runNamespace}`, description: '' }],
+          lessons: [{ id: lessonId, title: `Урок ${runNamespace}` }],
         },
       ],
     },

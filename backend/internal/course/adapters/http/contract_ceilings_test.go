@@ -79,20 +79,6 @@ func TestContractCeilingsEqualTheDomainConstants(t *testing.T) {
 		})
 	}
 
-	t.Run("AdminLesson.description", func(t *testing.T) {
-		t.Parallel()
-		field, ok := document.Components.Schemas["AdminLesson"].Value.Properties["description"]
-		if !ok {
-			t.Fatal("AdminLesson has no description property")
-		}
-		if field.Value.MaxLength == nil {
-			t.Fatal("AdminLesson.description declares no maxLength")
-		}
-		if got := *field.Value.MaxLength; got != uint64(domain.MaximumLessonDescription) {
-			t.Fatalf("AdminLesson.description maxLength=%d, domain.MaximumLessonDescription=%d", got, domain.MaximumLessonDescription)
-		}
-	})
-
 	// TranscriptSegment.text is counted in RUNES on both sides: OpenAPI maxLength counts
 	// characters, and so does the domain constant. The byte budgets derived from it (the request
 	// body limit, and nginx's client_max_body_size above it) are a different unit and are pinned

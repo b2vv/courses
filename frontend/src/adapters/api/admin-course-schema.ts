@@ -13,11 +13,6 @@ const requiredText = (maximum: number) =>
     .min(1)
     .max(maximum)
     .refine((value) => value.trim().length > 0 && !value.includes('\u0000'));
-const optionalText = (maximum: number) =>
-  z
-    .string()
-    .max(maximum)
-    .refine((value) => !value.includes('\u0000'));
 
 export const adminTimestampSchema = z.iso.datetime({ offset: true, precision: 6 });
 
@@ -55,7 +50,6 @@ const adminLessonSchema = z
   .object({
     id: lessonIdSchema,
     title: requiredText(200),
-    description: optionalText(1000),
     // Optional in the contract with default false; saves always state it.
     isPreview: z.boolean().default(false),
   })

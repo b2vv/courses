@@ -510,7 +510,6 @@ export const en = {
       deleteModule: 'Delete module {{number}}',
       lessonNumber: 'Lesson {{number}}',
       lessonTitle: 'Lesson {{lesson}} title in module {{module}}',
-      lessonDescription: 'Lesson description',
       lessonPreview: 'Open before purchase — lesson {{lesson}}, module {{module}}',
       grant: {
         eyebrow: 'Access',

@@ -110,7 +110,7 @@ func TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL(t *testing.T)
 		{`INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
 		 VALUES($1,$2,'playback-sessions-test','Playback sessions','Playback sessions summary','Playback sessions description','published',now())`, []any{courseID, userID}},
 		{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1,$2,'Module',0)`, []any{moduleID, courseID}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1,$2,'Lesson','',0)`, []any{lessonID, moduleID}},
+		{`INSERT INTO course_lessons(id,module_id,title,position) VALUES($1,$2,'Lesson',0)`, []any{lessonID, moduleID}},
 		{`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,duration_seconds,expires_at,created_at,updated_at)
 		 VALUES($1,$2,1,'ready',1,1,'test.mp4',ARRAY['360p'],100,now()+interval '1 day',now(),now())`, []any{videoID, lessonID}},
 		{`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at)

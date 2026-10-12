@@ -87,7 +87,7 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		{`INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at)
 		 VALUES($1,$2,'playback-test','Playback test','Playback test summary','Playback test description','published',now())`, []any{courseID, ownerID}},
 		{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1,$2,'Module',0)`, []any{moduleID, courseID}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1,$2,'Lesson','',0)`, []any{lessonID, moduleID}},
+		{`INSERT INTO course_lessons(id,module_id,title,position) VALUES($1,$2,'Lesson',0)`, []any{lessonID, moduleID}},
 		{`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
 		 VALUES($1,$2,1,'ready',1,1,'test.mp4',ARRAY['360p'],now()+interval '1 day',now(),now())`, []any{videoID, lessonID}},
 	}
@@ -129,7 +129,7 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 				if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
@@ -180,7 +180,7 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, membershipCourseID).Scan(&membershipModuleID); err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(),$1,'Lesson',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
 			t.Fatal(err)
 		}
 		if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
@@ -218,7 +218,7 @@ func TestVideoAccessReaderAgainstPostgreSQL(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, measuredCourseID).Scan(&measuredModuleID); err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, measuredModuleID).Scan(&measuredLessonID); err != nil {
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(),$1,'Lesson',0) RETURNING id::text`, measuredModuleID).Scan(&measuredLessonID); err != nil {
 			t.Fatal(err)
 		}
 		if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
