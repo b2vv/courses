@@ -41,7 +41,20 @@
     repository.go` (`Repository{pool}`, Insert/FindByID, `$::text::uuid`, pgx.ErrNoRows→ErrImageNotFound,
     created_by nullable→""). Сесія: gofmt/vet/unit зелені; **integration під Docker PASS 3.0s** (round-trip
     усіх полів+created_at.Equal, missing, dup 23505, FK 23503, nullable creator). directoryMode прибрано.
-  - **ДАЛІ: LB09** `internal/image` HTTP+application: `POST /api/v1/admin/lessons/{id}/images` (multipart,
+  - **LB09a** image domain-access + application — **ЗРОБЛЕНО** Codex 2026-10-13 (ще НЕ закомічено на момент
+    запису): `domain/access.go` (`Actor{UserID,Administrator,EmailVerified}`+`CanEditLesson`;
+    `ImageAccess`+`CanConsumeBy` через `contracts/access`), errors +forbidden/lesson_not_found/
+    email_not_verified, `application/{upload,authorize}.go`, `ports/access.go` (AccessReader/
+    AuthoringReader). Unit на фейках зелені (Put/Insert call-counts + порядок Put→Insert). gofmt/vet/
+    test/boundary зелені. Orphan-bytes-on-insert-fail — named limitation (нема sweeper у v1).
+  - **ДАЛІ: LB09b** `internal/image` postgres+HTTP+wiring: postgres `LoadImageAccess` (JOIN lesson_images→
+    …→course_grants) + `LoadLessonOwner` (instructor_id) + integration; HTTP `POST /api/v1/admin/lessons/
+    {id}/images` (multipart, MaxBytesReader 5m, sniff→DecodeConfig→Upload) + internal `GET /internal/image/
+    authorize` (`X-Image-Id`, actor з cookie, normalizeAuthenticationDenial як playback); OpenAPI(upload)+
+    Orval; composition `cmd/api/main.go` (NewUploader(repo,fsStorage,repo,newUUID,time.Now), NewAuthorizer,
+    RegisterAdmin+RegisterInternal); `golang.org/x/image/webp` у go.mod; contract-тести AC9. Гейт: contract+
+    integration+check-generated. Тоді LB10 nginx.
+  - **(старий текст LB09, замінено розбивкою вище):** `POST /api/v1/admin/lessons/{id}/images` (multipart,
     admin|instructor, requireSameOrigin, MaxBytesReader 5m; sniff→DetectContentType, image.DecodeConfig→
     AcceptDimensions, NewImage, Storage.Put, Repo.Insert) + internal `GET /internal/image/authorize`
     (власний reader imageID→lessonID→course→**CanConsume+EmailVerified**, без lease). ТУТ заводиться
@@ -179,6 +192,28 @@ frontend» СПРАЦЮВАВ (бек: таблиця документа+міг�
   підсилення пізніше; галерея посилається на альбом, не інлайнить сотні референсів.
 
 ## Журнал
+
+### LB09 — розвилки HTTP/application image (2026-10-12, я — рішення, закривають альтернативи)
+
+- **webp-розміри через `golang.org/x/image/webp` (НЕ ручний парс RIFF-заголовка).** Механізм:
+  stdlib `image/jpeg`+`image/png` дають `DecodeConfig` (лише заголовок, без декоду пікселів → жодної
+  bomb), але webp у stdlib нема. x/image — golang.org-модуль, не в бан-листі AGENTS.md, used (webp у
+  погодженому allowlist). Альтернатива (ручний парс VP8/VP8L/VP8X) — більше коду й крихкіше. Дод. у
+  go.mod у LB09b, side-effect import `_ "golang.org/x/image/webp"` поряд з `image/jpeg`,`image/png`.
+- **Cross-module authorize-reader = власний SQL-JOIN у image-postgres (НЕ Go-імпорт course).** Прецедент
+  `playback/adapters/postgres/access.go:39 LoadVideoCourse` — playback JOIN-ить course-таблиці своїм SQL
+  і мапить у власний домен-тип. Image так само: `LoadImageAccess(userID,imageID)` JOIN lesson_images→
+  course_lessons→course_modules→courses→course_grants → `domain.ImageAccess` (дзеркало course
+  `LessonDocumentAccess`). ADR 013 ✓ (SQL-факт, не імпорт модуля).
+- **Upload авторизує автора через окремий owner-read (НЕ по imageID — рядка ще нема).** `LoadLessonOwner
+  (lessonID)→instructorID`; `actor.CanEditLesson(ownerID)` (admin|owner); тоді NewImage→Storage.Put→
+  Repo.Insert. Гейт serve (authorize) = EmailVerified+CanConsume (дзеркало playback); гейт upload =
+  CanEditLesson (авторський, як media mint).
+- **LB09 розбито** (завеликий на 1 Codex-прогін, [[codex-split-impl-and-tests]]): **LB09a** домен
+  (ImageAccess/Actor/+errors) + application (Upload+Authorize) + порти (AccessReader/AuthoringReader) +
+  unit на фейках; **LB09b** postgres-методи (LoadImageAccess/LoadLessonOwner)+integration + HTTP
+  (multipart upload + internal authorize `X-Image-Id` як playback `X-Playback-Id`) + OpenAPI(upload)+
+  Orval + composition wiring (`newUUID`, `filesystem.New(imagesPath)`) + contract-тести (AC9 коди).
 
 ### LB07 — ліміти зображень (2026-10-12, я — рішення, закриває альтернативу)
 
