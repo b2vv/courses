@@ -257,7 +257,7 @@ export const getGetPublishedCourseUrl = (slug: string,) => {
 }
 
 /**
- * Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions, lesson descriptions or ownership. Query parameters are not supported.
+ * Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
  * @summary Get a published course
  */
 export const getPublishedCourse = async (slug: string, options?: RequestInit): Promise<getPublishedCourseResponse> => {

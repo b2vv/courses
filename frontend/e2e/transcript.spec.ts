@@ -88,7 +88,7 @@ async function seed(request: APIRequestContext, baseURL: string) {
         {
           id: moduleID,
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: lessonID, title: `Урок ${runNamespace}`, description: '' }],
+          lessons: [{ id: lessonID, title: `Урок ${runNamespace}` }],
         },
       ],
     },
@@ -271,9 +271,7 @@ test.describe('with a real two-second video', () => {
           {
             id: videoModuleID,
             title: `Модуль ${runNamespace}`,
-            lessons: [
-              { id: videoLessonID, title: `Урок з відео ${runNamespace}`, description: '' },
-            ],
+            lessons: [{ id: videoLessonID, title: `Урок з відео ${runNamespace}` }],
           },
         ],
       },
@@ -410,7 +408,7 @@ async function seedDraftCourse(request: APIRequestContext, baseURL: string) {
         {
           id: editorModuleID,
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: editorLessonID, title: `Урок ${runNamespace}`, description: '' }],
+          lessons: [{ id: editorLessonID, title: `Урок ${runNamespace}` }],
         },
       ],
     },

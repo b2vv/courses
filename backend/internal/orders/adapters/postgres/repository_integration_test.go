@@ -291,7 +291,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		}{
 			{`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency,created_at,updated_at) VALUES($1,'pay26','Pay26','Summary','Description','published',$2,$3,NULL,NULL,$3,$3)`, []any{pay26CourseID, integrationAdminID, now}},
 			{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1,$2,'Module',0)`, []any{pay26ModuleID, pay26CourseID}},
-			{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1,$2,'Lesson','',0)`, []any{pay26LessonID, pay26ModuleID}},
+			{`INSERT INTO course_lessons(id,module_id,title,position) VALUES($1,$2,'Lesson',0)`, []any{pay26LessonID, pay26ModuleID}},
 			{`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at) VALUES($1,$3,1,1,$4),($2,$3,2,1,$4)`, []any{pay26StudentOne, pay26StudentTwo, pay26LessonID, now}},
 		} {
 			if _, err := pool.Exec(ctx, stmt.sql, stmt.args...); err != nil {
@@ -1035,7 +1035,7 @@ INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,publi
 ), inserted_modules AS (
 INSERT INTO course_modules(id,course_id,title,position) VALUES($9,$5,'Roster module',0)
 ), inserted_lessons AS (
-INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($10,$9,'One','',0),($11,$9,'Two','',1),($13,$9,'Three','',2)
+INSERT INTO course_lessons(id,module_id,title,position) VALUES($10,$9,'One',0),($11,$9,'Two',1),($13,$9,'Three',2)
 ), inserted_grants AS (
 INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
 ($1,$5,'self','active',$7 + interval '3 minutes'),
@@ -1129,7 +1129,7 @@ INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,publi
 ), m AS (
 INSERT INTO course_modules(id,course_id,title,position) VALUES($10,$7,'M',0)
 ), l AS (
-INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($11,$10,'One','',0),($12,$10,'Two','',1)
+INSERT INTO course_lessons(id,module_id,title,position) VALUES($11,$10,'One',0),($12,$10,'Two',1)
 ), g AS (
 INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
 ($3,$7,'self','active',$13 + interval '1 minute'),
@@ -1247,7 +1247,7 @@ INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,publi
 ), m AS (
 INSERT INTO course_modules(id,course_id,title,position) VALUES($4,$3,'M',0)
 ), l AS (
-INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($5,$4,'One','',0)
+INSERT INTO course_lessons(id,module_id,title,position) VALUES($5,$4,'One',0)
 ), g AS (
 INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($2,$3,'self','active',$9)
 ), cm AS (
@@ -1325,7 +1325,7 @@ INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,publi
 ), inserted_modules AS (
 INSERT INTO course_modules(id,course_id,title,position) VALUES($6,$3,'Module',0)
 ), inserted_lessons AS (
-INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($7,$6,'One','',0),($10,$6,'Two','',1)
+INSERT INTO course_lessons(id,module_id,title,position) VALUES($7,$6,'One',0),($10,$6,'Two',1)
 ), inserted_grants AS (
 INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES
 ($1,$3,'self','active',$9 + interval '2 minutes'),
@@ -1390,7 +1390,7 @@ INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,publi
 ('50000000-0000-4000-8000-000000000001','paid','Paid','Paid summary','Paid description','published','40000000-0000-4000-8000-000000000003','2026-09-30T08:00:00Z',50000,'UAH','2026-09-30T08:00:00Z','2026-09-30T08:00:00Z'),
 ('50000000-0000-4000-8000-000000000002','free','Free','Free summary','Free description','published','40000000-0000-4000-8000-000000000003','2026-09-30T08:00:00Z',NULL,NULL,'2026-09-30T08:00:00Z','2026-09-30T08:00:00Z');
 INSERT INTO course_modules(id,course_id,title,position) VALUES('51000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000002','Module',0);
-INSERT INTO course_lessons(id,module_id,title,description,position) VALUES('52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000001','Lesson','',0);
+INSERT INTO course_lessons(id,module_id,title,position) VALUES('52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000001','Lesson',0);
 INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,client_seq,updated_at) VALUES('40000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000001',1,1,'2026-09-30T08:30:00Z')`)
 	if err != nil {
 		t.Fatal(err)

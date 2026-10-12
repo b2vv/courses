@@ -20,11 +20,11 @@ SET title = EXCLUDED.title, position = EXCLUDED.position, updated_at = EXCLUDED.
 WHERE course_modules.course_id = $2::text::uuid`
 
 const upsertAuthoringLesson = `
-INSERT INTO course_lessons (id, module_id, title, description, position, is_preview, created_at, updated_at)
-VALUES ($1::text::uuid, $3::text::uuid, $4, $5, $6, $7, $8, $8)
+INSERT INTO course_lessons (id, module_id, title, position, is_preview, created_at, updated_at)
+VALUES ($1::text::uuid, $3::text::uuid, $4, $5, $6, $7, $7)
 ON CONFLICT (id) DO UPDATE
 SET module_id = EXCLUDED.module_id, title = EXCLUDED.title,
-    description = EXCLUDED.description, position = EXCLUDED.position, is_preview = EXCLUDED.is_preview,
+    position = EXCLUDED.position, is_preview = EXCLUDED.is_preview,
     updated_at = EXCLUDED.updated_at
 WHERE EXISTS (
   SELECT 1
@@ -232,7 +232,7 @@ func (r *Repository) Save(ctx context.Context, actor domain.Actor, tree domain.C
 	}
 	for _, module := range tree.Modules {
 		for _, lesson := range module.Lessons {
-			result, err := tx.Exec(ctx, upsertAuthoringLesson, lesson.ID, tree.ID, module.ID, lesson.Title, lesson.Description, lesson.Position, lesson.IsPreview, writeTime)
+			result, err := tx.Exec(ctx, upsertAuthoringLesson, lesson.ID, tree.ID, module.ID, lesson.Title, lesson.Position, lesson.IsPreview, writeTime)
 			if err != nil {
 				return domain.CourseTree{}, persistenceError(err)
 			}
@@ -399,7 +399,7 @@ func loadAuthoringTree(ctx context.Context, queries *generated.Queries, id strin
 			return domain.CourseTree{}, domain.ErrDependencyUnavailable
 		}
 		tree.Modules[index].Lessons = append(tree.Modules[index].Lessons, domain.Lesson{
-			ID: lesson.ID, Title: lesson.Title, Description: lesson.Description, Position: int(lesson.Position), IsPreview: lesson.IsPreview,
+			ID: lesson.ID, Title: lesson.Title, Position: int(lesson.Position), IsPreview: lesson.IsPreview,
 		})
 	}
 	return tree, nil

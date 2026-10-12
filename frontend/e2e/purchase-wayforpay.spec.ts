@@ -78,9 +78,7 @@ async function createPaidCourse(admin: BrowserContext, baseURL: string, label: s
     description: 'A run-scoped paid course.',
     instructorId: adminID,
   };
-  const modules = [
-    { id: randomUUID(), title: `Модуль ${label}`, lessons: [{ ...lesson, description: '' }] },
-  ];
+  const modules = [{ id: randomUUID(), title: `Модуль ${label}`, lessons: [lesson] }];
   const created = await admin.request.post('/api/v1/admin/courses', {
     data: draft,
     headers: origin(baseURL),

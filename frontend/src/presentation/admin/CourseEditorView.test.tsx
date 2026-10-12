@@ -74,8 +74,8 @@ describe('course editor', () => {
           id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
           title: 'Module',
           lessons: [
-            { id: firstLessonId, title: 'First', description: '', isPreview: false },
-            { id: secondLessonId, title: 'Second', description: '', isPreview: false },
+            { id: firstLessonId, title: 'First', isPreview: false },
+            { id: secondLessonId, title: 'Second', isPreview: false },
           ],
         },
       ],
@@ -178,7 +178,7 @@ describe('course editor', () => {
         {
           id: asBrandedId('10000000-0000-4000-8000-000000000201', 'module'),
           title: 'Module',
-          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
+          lessons: [{ id: lessonId, title: 'Lesson', isPreview: false }],
         },
       ],
     } satisfies CourseTree;
@@ -218,7 +218,7 @@ describe('course editor', () => {
         {
           id: asBrandedId('10000000-0000-4000-8000-000000000202', 'module'),
           title: 'Module',
-          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
+          lessons: [{ id: lessonId, title: 'Lesson', isPreview: false }],
         },
       ],
     } satisfies CourseTree;
@@ -307,13 +307,11 @@ describe('course editor', () => {
             {
               id: asBrandedId('20000000-0000-4000-8000-000000000101', 'lesson'),
               title: 'First lesson',
-              description: '',
               isPreview: false,
             },
             {
               id: asBrandedId('20000000-0000-4000-8000-000000000102', 'lesson'),
               title: 'Second lesson',
-              description: '',
               isPreview: false,
             },
           ],
@@ -425,7 +423,6 @@ describe('course editor', () => {
             'lesson',
           ),
           title: `Lesson ${moduleIndex + 1}.${lessonIndex + 1}`,
-          description: '',
           isPreview: false,
         })),
       })),
@@ -724,7 +721,7 @@ describe('course price and previews', () => {
       {
         id: asBrandedId('10000000-0000-4000-8000-000000000301', 'module'),
         title: 'Module',
-        lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: false }],
+        lessons: [{ id: lessonId, title: 'Lesson', isPreview: false }],
       },
     ],
   };

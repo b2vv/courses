@@ -84,7 +84,7 @@ VALUES(gen_random_uuid(),$1,'document-course','Document course','Summary','Descr
 	if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(),$1,'Lesson',0) RETURNING id::text`, moduleID).Scan(&lessonID); err != nil {
 		t.Fatal(err)
 	}
 

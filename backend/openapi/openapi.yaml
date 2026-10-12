@@ -50,7 +50,7 @@ paths:
       description: >-
         Draft, archived and unknown courses all return the same 404 response. The program
         contains ordered module titles and ordered lesson titles only; it exposes no ids,
-        positions, lesson descriptions or ownership. Query parameters are not supported.
+        positions or ownership. Query parameters are not supported.
       parameters:
         - name: slug
           in: path
@@ -2832,11 +2832,10 @@ components:
     AdminLesson:
       type: object
       additionalProperties: false
-      required: [id, title, description]
+      required: [id, title]
       properties:
         id: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 200 }
-        description: { type: string, maxLength: 1000 }
         isPreview: { type: boolean, default: false }
     AdminModule:
       type: object

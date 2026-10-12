@@ -738,8 +738,8 @@ func (h *mediaHarness) reset(t *testing.T) {
 			[]any{mediaCourseID, mediaInstructorA, mediaNow}},
 		{`INSERT INTO course_modules(id,course_id,title,position,created_at,updated_at) VALUES($1,$2,'Media module',0,$3,$3)`,
 			[]any{mediaModuleID, mediaCourseID, mediaNow}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position,created_at,updated_at) VALUES
-		($1,$3,'Lesson one','',0,$4,$4),($2,$3,'Lesson two','',1,$4,$4)`,
+		{`INSERT INTO course_lessons(id,module_id,title,position,created_at,updated_at) VALUES
+		($1,$3,'Lesson one',0,$4,$4),($2,$3,'Lesson two',1,$4,$4)`,
 			[]any{mediaLessonOne, mediaLessonTwo, mediaModuleID, mediaNow}},
 	}
 	for _, statement := range statements {

@@ -475,12 +475,15 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		if !bytes.Equal(draftBody, publishedBody) {
 			t.Fatal("backfilled draft and published documents differ")
 		}
-		var preservedDescription string
-		if err := db.QueryRowContext(ctx, `SELECT description FROM course_lessons WHERE id=$1`, lessonID).Scan(&preservedDescription); err != nil {
+		var hasDescription bool
+		if err := db.QueryRowContext(ctx, `SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='course_lessons' AND column_name='description'
+		)`).Scan(&hasDescription); err != nil {
 			t.Fatal(err)
 		}
-		if preservedDescription != description {
-			t.Fatalf("migration changed lesson description: %q", preservedDescription)
+		if hasDescription {
+			t.Fatal("migration 19 retained the flat lesson description column")
 		}
 		var emptyDocuments int
 		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM lesson_documents WHERE lesson_id='73000000-0000-4000-8000-000000000002'`).Scan(&emptyDocuments); err != nil {
@@ -488,6 +491,27 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if emptyDocuments != 0 {
 			t.Fatalf("empty description backfilled %d documents", emptyDocuments)
+		}
+		// LB06 downgrade deliberately restores an empty column, not the old flat text.
+		if _, err := provider.DownTo(ctx, 18); err != nil {
+			t.Fatal(err)
+		}
+		var restoredDescription string
+		if err := db.QueryRowContext(ctx, `SELECT description FROM course_lessons WHERE id=$1`, lessonID).Scan(&restoredDescription); err != nil {
+			t.Fatal(err)
+		}
+		if restoredDescription != "" {
+			t.Fatalf("downgrade reconstructed flat lesson text: %q", restoredDescription)
+		}
+		var retainedBody []byte
+		if err := db.QueryRowContext(ctx, `SELECT published_body FROM lesson_documents WHERE lesson_id=$1 AND locale='uk'`, lessonID).Scan(&retainedBody); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(retainedBody, publishedBody) {
+			t.Fatal("downgrade changed the published lesson document")
+		}
+		if _, err := provider.Up(ctx); err != nil {
+			t.Fatal(err)
 		}
 	})
 	t.Run("playback migration lock timeout rolls back and retry succeeds", func(t *testing.T) {
@@ -684,12 +708,12 @@ func TestRepositoryAgainstPostgreSQL(t *testing.T) {
 		('60000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','HTTP API',0),
 		('60000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000004','Draft secret',0),
 		('60000000-0000-4000-8000-000000000004','10000000-0000-4000-8000-000000000005','Archived secret',0);
-		INSERT INTO course_lessons (id,module_id,title,description,position) VALUES
-		('70000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000001','Contracts','Must stay private',1),
-		('70000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','Handlers','Must stay private',0),
-		('70000000-0000-4000-8000-000000000003','60000000-0000-4000-8000-000000000002','Transactions','Must stay private',0),
-		('70000000-0000-4000-8000-000000000004','60000000-0000-4000-8000-000000000003','Draft lesson','Must stay private',0),
-		('70000000-0000-4000-8000-000000000005','60000000-0000-4000-8000-000000000004','Archived lesson','Must stay private',0)`); err != nil {
+		INSERT INTO course_lessons (id,module_id,title,position) VALUES
+		('70000000-0000-4000-8000-000000000002','60000000-0000-4000-8000-000000000001','Contracts',1),
+		('70000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','Handlers',0),
+		('70000000-0000-4000-8000-000000000003','60000000-0000-4000-8000-000000000002','Transactions',0),
+		('70000000-0000-4000-8000-000000000004','60000000-0000-4000-8000-000000000003','Draft lesson',0),
+		('70000000-0000-4000-8000-000000000005','60000000-0000-4000-8000-000000000004','Archived lesson',0)`); err != nil {
 			t.Fatal(err)
 		}
 		for _, slug := range []string{"draft-course", "archived-course", "missing-course"} {
