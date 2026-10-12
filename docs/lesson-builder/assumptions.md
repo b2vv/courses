@@ -28,9 +28,15 @@
     спеки, бо колонку сіяли скрізь). Сесія: generate/check-generated/build/vet/**integration INTEG=0**
     (`course/adapters/postgres` ok 23.3s) + фронт-тести зелені. Guardrail: курс-description/summary цілі.
     **ЗРОБЛЕНО** (staged, не закомічено).
-  - **ДАЛІ: LB07** `[P]` — модуль `internal/image` домен+порти: `Image{id,lessonId,contentType,w,h,byteSize,
-    createdBy}` + валідація (magic-bytes allowlist jpeg/png/webp, ліміт байтів, піксельний бюджет проти
-    decompression-bomb); unit. Блок LB07→LB08 (fs-store `/media/images/<id>` 0750/0640 + postgres repo)→LB09
+  - **LB07** `[P]` модуль `internal/image` домен+порти — **ЗРОБЛЕНО** Codex 2026-10-12 (ще НЕ закомічено
+    на момент запису): `domain/image.go` (`Image`, `DetectContentType` magic jpeg/png/webp sniff 12,
+    `AcceptDimensions` int64×int64 ≤40 MP, `NewImage` allowlist+5 MiB+dims у фіксованому порядку),
+    `domain/errors.go` (5 sentinel), `ports/{repository,storage}.go`. Ліміти (byte 5 MiB = nginx 5m,
+    pixel 40 MP) — рішення в Журналі нижче. Сесія незалежно: gofmt/vet/test зелені, boundary-тест ok.
+    **Access-reader порт (cross-module lesson→course CanConsume+EmailVerified) свідомо НЕ в LB07** —
+    без consumer був би unused interface (конституція); заводиться в LB09 разом з application.Authorize.
+  - **ДАЛІ: LB08** `internal/image` adapters: fs-store `/media/images/<id>` 0750/0640 (os.Root-патерн як
+    media `filesystem/storage.go:19-43`) + postgres repo (Insert/FindByID); integration. Тоді LB09
     (HTTP: admin multipart upload + internal `/internal/image/authorize` reader lesson→course→CanConsume+
     EmailVerified, без lease)→LB10 (nginx `^~ /media/i/` + нова upload-location 5m; compose; auth_request
     integration). Потім LB11–13 фронт (reader чистий / lazy Tiptap editor / bundle-grep), LB14 DOM-вимір,
@@ -162,6 +168,20 @@ frontend» СПРАЦЮВАВ (бек: таблиця документа+міг�
   підсилення пізніше; галерея посилається на альбом, не інлайнить сотні референсів.
 
 ## Журнал
+
+### LB07 — ліміти зображень (2026-10-12, я — рішення, закриває альтернативу)
+
+План фіксує `internal/image` домен+валідацію, але НЕ числа. Зафіксовано:
+- **Byte-ліміт `MaximumImageBytes = 5<<20` (5 MiB).** Магнітуда+механізм: дорівнює
+  `client_max_body_size 5m`, який LB10 ставить на upload-location nginx — одне число на двох шарах,
+  інакше або nginx ріже те, що домен пустив, або навпаки. Enforcement на дроті — MaxBytesReader
+  (LB09); домен валідує `byteSize > max → ErrImageTooLarge` як другий бар'єр.
+- **Pixel-бюджет `MaximumImagePixels = 40_000_000` (40 MP).** Механізм: `width*height` (int64, щоб
+  не переповнити int32) перевіряється ДО повного декоду — `image.DecodeConfig` (LB09) дає розміри з
+  заголовка дешево. 40 MP при 4 B/px ≈ 160 MB RAM на картинку — стеля проти decompression-bomb, але
+  вище за будь-яку реальну камеру (12–50 MP), тож легітимні б'юті/портфоліо-фото проходять.
+- Magic-bytes allowlist jpeg(FF D8 FF)/png(89 50 4E 47…)/webp(RIFF….WEBP); sniff 12 байтів (webp
+  потребує 12). CSP `img-src 'self'` не чіпається (serve через nginx `/media/i/`, не base64/data:).
 
 ### LB03 — відкрите питання контракту (2026-10-12, Codex)
 
