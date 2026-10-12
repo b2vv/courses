@@ -38,7 +38,8 @@
 - **Докази Codex** — `docs/lesson-builder/report.md` (LB05+LB06 секції + session-verification). Жива схема-
   контракт — LB01 `document.go` (json-теги schemaVersion/sections/content/imageId/columns/blocks/spans/text/
   marks/href). Мірник гейта тіла — `transcript read.go` (EmailVerified→CanConsume).
-- **Відкритих питань власника немає.** Коміт LB06 — коли власник підтвердить.
+- **Відкритих питань власника немає.** **Standing-авторизація (власник 2026-10-12):** авто-коміт кожного
+  зеленого слайсу до кінця фази lesson-builder без повторного питання. LB06 закомічено `6156afe`.
 
 ## Ключові рішення плану (reuse-first, 3 агенти 2026-10-12)
 
