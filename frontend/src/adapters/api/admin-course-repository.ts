@@ -122,7 +122,6 @@ function courseSave(edit: CourseTreeEdit, expectedUpdatedAt: string) {
       lessons: module.lessons.map((lesson) => ({
         id: lesson.id,
         title: lesson.title,
-        description: lesson.description,
         isPreview: lesson.isPreview,
       })),
     })),

@@ -83,7 +83,7 @@ async function createCourse(admin: APIRequestContext, baseURL: string) {
         {
           id: randomUUID(),
           title: 'Account fixture',
-          lessons: [{ id: lessonId, title: 'Visible lesson', description: '' }],
+          lessons: [{ id: lessonId, title: 'Visible lesson' }],
         },
       ],
     },

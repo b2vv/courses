@@ -138,7 +138,6 @@ export type AdminCourseDraft = {
 export type AuthoringLesson = {
   readonly id: LessonId;
   readonly title: string;
-  readonly description: string;
   /** Open to every signed-in viewer of a published paid course. */
   readonly isPreview: boolean;
 };
@@ -265,12 +264,7 @@ export function validCourseTreeEdit(input: CourseTreeEdit): boolean {
     lessonCount += module.lessons.length;
     if (lessonCount > 120) return false;
     for (const lesson of module.lessons) {
-      if (
-        !validEntityId(lesson.id) ||
-        ids.has(lesson.id) ||
-        !validText(lesson.title, 200) ||
-        !validText(lesson.description, 1000, true)
-      )
+      if (!validEntityId(lesson.id) || ids.has(lesson.id) || !validText(lesson.title, 200))
         return false;
       ids.add(lesson.id);
     }

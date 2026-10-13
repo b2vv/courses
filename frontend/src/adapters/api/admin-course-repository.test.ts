@@ -190,7 +190,7 @@ describe('price and preview on the wire', () => {
         {
           id: asBrandedId('20000000-0000-4000-8000-000000000001', 'module'),
           title: 'Module',
-          lessons: [{ id: lessonId, title: 'Lesson', description: '', isPreview: true }],
+          lessons: [{ id: lessonId, title: 'Lesson', isPreview: true }],
         },
       ],
     };

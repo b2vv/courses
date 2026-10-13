@@ -21,7 +21,6 @@ const tree = {
         {
           id: '60000000-0000-4000-8000-000000000001',
           title: 'Урок',
-          description: '',
         },
       ],
     },
@@ -47,7 +46,6 @@ describe('admin response schemas', () => {
             {
               id: '60000000-0000-4000-8000-000000000001',
               title: 'Урок',
-              description: '',
               isPreview: true,
             },
           ],

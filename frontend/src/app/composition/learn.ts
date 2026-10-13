@@ -4,10 +4,12 @@ import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiPlaybackRepository } from '../../adapters/api/playback-repository';
 import { createApiDiscussionRepository } from '../../adapters/api/discussion-repository';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
+import { createApiDocumentRepository } from '../../adapters/api/document-repository';
 import { createPlaybackMedia } from '../../adapters/playback/hls-media';
 import { primeAv1Probe, takeAv1ProbeResult } from './av1-probe';
 import { createLearnQueries } from './learn-queries';
 import { createTranscriptQueries } from './transcript-queries';
+import { createDocumentQueries } from './document-queries';
 import { createDiscussionQueries } from './discussion-queries';
 import { createApiPurchaseRepository } from '../../adapters/api/purchase-repository';
 import { createPurchaseQueries } from './purchase-queries';
@@ -24,6 +26,7 @@ export function createLearnDependencies(queryClient: QueryClient) {
       createApiCourseRepository(requestOptions()),
     ),
     ...createTranscriptQueries(createApiTranscriptRepository(requestOptions())),
+    ...createDocumentQueries(createApiDocumentRepository(requestOptions())),
     discussion: createDiscussionQueries(createApiDiscussionRepository(requestOptions())),
     purchase: createPurchaseQueries(createApiPurchaseRepository(requestOptions())),
     createMedia: createPlaybackMedia,
