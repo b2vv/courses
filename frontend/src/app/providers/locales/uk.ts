@@ -289,6 +289,7 @@ export const uk = {
       },
       document: {
         region: 'Матеріали уроку',
+        task: 'Завдання',
       },
       transcript: {
         heading: 'Транскрипт',
@@ -422,6 +423,8 @@ export const uk = {
     administration: {
       document: {
         heading: 'Редактор уроку',
+        empty: 'У цьому уроці ще немає секцій',
+        emptyHint: 'Оберіть тип у палітрі «Додати секцію» нижче, щоб почати наповнювати урок.',
         loading: 'Завантажуємо документ…',
         loadError: 'Не вдалося завантажити документ уроку.',
         retry: 'Спробувати ще раз',

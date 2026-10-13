@@ -46,7 +46,14 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
     // A mutable clone: Tiptap's Content type is not readonly, and the editor owns its copy.
     content: JSON.parse(JSON.stringify(richTextToPmDoc(value))),
     onUpdate: ({ editor: instance }) => onChange(pmDocToRichText(instance.getJSON() as PmDoc)),
-    editorProps: { attributes: { 'aria-label': label, role: 'textbox', 'aria-multiline': 'true' } },
+    editorProps: {
+      attributes: {
+        'aria-label': label,
+        role: 'textbox',
+        'aria-multiline': 'true',
+        class: 'lesson-prose',
+      },
+    },
   });
   if (editor === null) return null;
   const applyLink = () => {
@@ -62,55 +69,63 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
         role="toolbar"
         aria-label={t('administration.document.toolbar')}
       >
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('bold')}
-          onPress={() => editor.chain().focus().toggleBold().run()}
-        >
-          {t('administration.document.bold')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('italic')}
-          onPress={() => editor.chain().focus().toggleItalic().run()}
-        >
-          {t('administration.document.italic')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('heading', { level: 2 })}
-          onPress={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        >
-          {t('administration.document.heading2')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('heading', { level: 3 })}
-          onPress={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        >
-          {t('administration.document.heading3')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('bulletList')}
-          onPress={() => editor.chain().focus().toggleBulletList().run()}
-        >
-          {t('administration.document.bulletList')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={editor.isActive('orderedList')}
-          onPress={() => editor.chain().focus().toggleOrderedList().run()}
-        >
-          {t('administration.document.orderedList')}
-        </Button>
-        <Button
-          variant="secondary"
-          aria-pressed={addingLink}
-          onPress={() => setAddingLink((on) => !on)}
-        >
-          {t('administration.document.link')}
-        </Button>
+        <div className="lesson-editor-toolbar-group">
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('bold')}
+            onPress={() => editor.chain().focus().toggleBold().run()}
+          >
+            {t('administration.document.bold')}
+          </Button>
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('italic')}
+            onPress={() => editor.chain().focus().toggleItalic().run()}
+          >
+            {t('administration.document.italic')}
+          </Button>
+        </div>
+        <div className="lesson-editor-toolbar-group">
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('heading', { level: 2 })}
+            onPress={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          >
+            {t('administration.document.heading2')}
+          </Button>
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('heading', { level: 3 })}
+            onPress={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          >
+            {t('administration.document.heading3')}
+          </Button>
+        </div>
+        <div className="lesson-editor-toolbar-group">
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('bulletList')}
+            onPress={() => editor.chain().focus().toggleBulletList().run()}
+          >
+            {t('administration.document.bulletList')}
+          </Button>
+          <Button
+            variant="secondary"
+            aria-pressed={editor.isActive('orderedList')}
+            onPress={() => editor.chain().focus().toggleOrderedList().run()}
+          >
+            {t('administration.document.orderedList')}
+          </Button>
+        </div>
+        <div className="lesson-editor-toolbar-group">
+          <Button
+            variant="secondary"
+            aria-pressed={addingLink}
+            onPress={() => setAddingLink((on) => !on)}
+          >
+            {t('administration.document.link')}
+          </Button>
+        </div>
       </div>
       {addingLink && (
         <div className="lesson-editor-link">
@@ -128,7 +143,7 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
           </Button>
         </div>
       )}
-      <EditorContent editor={editor} />
+      <EditorContent editor={editor} className="lesson-editor-input" />
     </div>
   );
 }
