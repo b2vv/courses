@@ -1277,6 +1277,15 @@ Codex іще писав, і замів його роботу у свій док�
 
 ## B-20 — draft-ендпоінти відсутні в `openapi.yaml`; фронт на рукописних zod-схемах
 
+**ЗАКРИТО 2026-09-28 комітом `e8c238d`** («fix(transcript): B-20 — the three draft endpoints enter
+the OpenAPI contract, and the frontend reads them through Orval»). Три ендпоінти описано в
+`openapi.yaml` (схеми `LessonDraft`/`DraftSegment`/`RegenerateLessonDraftRequest`/`PublishLessonDraftRequest`),
+`draft-schema.ts` видалено, `draft-repository.ts` ходить Orval-генерацією, бекенд має контракт-тести
+(`draft_handler_test.go`). Доведено машинно 2026-10-13: `npm run generate` → git diff порожній (клієнт
+збігається з openapi.yaml). Запис лишається як слід; воскрешати в AGENDA/брифінгу **не можна**.
+⚠️ Урок: fix-коміт назвав «B-20», але цей запис не позначили закритим — тому AGENDA й брифінг два тижні
+несли його відкритим. Закривати запис боргу в тому ж коміті/PR, що й фікс.
+
 **Raised:** 2026-09-24, під час рев'ю кроку 2 A13 (дефекти C10/C14).
 **Shape:** розрив контракту, не дефект коду сам по собі.
 
