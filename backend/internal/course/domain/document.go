@@ -50,6 +50,16 @@ const (
 	MarkItalic Mark = "italic"
 )
 
+// Image content types an image section may carry. They mirror the image module's upload allowlist
+// (internal/image/domain) — a browser cannot import a Go constant, and a module never imports
+// another module's package, so the display contract repeats the three values here. The reader maps
+// each to a serve extension to build /media/i/<imageId>.<ext>.
+const (
+	ImageContentTypeJPEG = "image/jpeg"
+	ImageContentTypePNG  = "image/png"
+	ImageContentTypeWebP = "image/webp"
+)
+
 type LessonDocument struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	Locale        string    `json:"locale"`
@@ -57,12 +67,13 @@ type LessonDocument struct {
 }
 
 type Section struct {
-	ID      string      `json:"id"`
-	Type    SectionType `json:"type"`
-	Content *RichText   `json:"content,omitempty"`
-	ImageID string      `json:"imageId,omitempty"`
-	Alt     string      `json:"alt,omitempty"`
-	Columns []Section   `json:"columns,omitempty"`
+	ID          string      `json:"id"`
+	Type        SectionType `json:"type"`
+	Content     *RichText   `json:"content,omitempty"`
+	ImageID     string      `json:"imageId,omitempty"`
+	ContentType string      `json:"contentType,omitempty"`
+	Alt         string      `json:"alt,omitempty"`
+	Columns     []Section   `json:"columns,omitempty"`
 }
 
 type RichText struct {
@@ -113,21 +124,23 @@ func validateDocumentSection(section Section, inRow bool, textCount *int) error 
 	}
 	switch section.Type {
 	case SectionVideo:
-		if section.Content != nil || section.ImageID != "" || section.Alt != "" || section.Columns != nil {
+		if section.Content != nil || section.ImageID != "" || section.ContentType != "" || section.Alt != "" || section.Columns != nil {
 			return ErrInvalidLessonDocument
 		}
 	case SectionText, SectionTask:
-		if section.Content == nil || section.ImageID != "" || section.Alt != "" || section.Columns != nil {
+		if section.Content == nil || section.ImageID != "" || section.ContentType != "" || section.Alt != "" || section.Columns != nil {
 			return ErrInvalidLessonDocument
 		}
 		return validateRichText(*section.Content, textCount)
 	case SectionImage:
-		if !validText(section.ImageID, MaximumSectionID) || !validText(section.Alt, MaximumImageAlt) || section.Content != nil || section.Columns != nil {
+		// The reader derives the serve extension from contentType to build /media/i/<id>.<ext>,
+		// so an image section carries exactly one content type from the fixed allowlist.
+		if !validText(section.ImageID, MaximumSectionID) || !validImageContentType(section.ContentType) || !validText(section.Alt, MaximumImageAlt) || section.Content != nil || section.Columns != nil {
 			return ErrInvalidLessonDocument
 		}
 		*textCount += utf8.RuneCountInString(section.Alt)
 	case SectionRow:
-		if section.Content != nil || section.ImageID != "" || section.Alt != "" || len(section.Columns) < 1 || len(section.Columns) > MaximumRowColumns {
+		if section.Content != nil || section.ImageID != "" || section.ContentType != "" || section.Alt != "" || len(section.Columns) < 1 || len(section.Columns) > MaximumRowColumns {
 			return ErrInvalidLessonDocument
 		}
 		for i, column := range section.Columns {
@@ -208,4 +221,13 @@ func validDocumentHref(href string) bool {
 	}
 	parsed, err := url.Parse(href)
 	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != ""
+}
+
+func validImageContentType(contentType string) bool {
+	switch contentType {
+	case ImageContentTypeJPEG, ImageContentTypePNG, ImageContentTypeWebP:
+		return true
+	default:
+		return false
+	}
 }

@@ -121,6 +121,7 @@ export * from './lessonDraftState.ts';
 export * from './lessonNotFoundResponse.ts';
 export * from './lessonRichText.ts';
 export * from './lessonSection.ts';
+export * from './lessonSectionContentType.ts';
 export * from './lessonSectionType.ts';
 export * from './lessonSpan.ts';
 export * from './lessonSpanMarksItem.ts';
