@@ -579,3 +579,69 @@ published document and assert rendering there, alongside the full ordered `make 
 matches the plan's "full e2e at LB15". The reader's client-side logic is covered by the unit
 suite; what LB15 adds is the real `/media/i/<id>.<ext>` fetch and the gated document endpoint
 over the production path.
+
+### LB12 — lesson-document editor (2026-10-13, Courses 1, direct)
+
+Built in three slices, all committed green.
+
+**LB12a `cd1e937` — authoring data layer (Tiptap-free).** A request-scoped authoring
+repository (load draft, save under the optimistic-lock token, publish, upload image),
+a zod schema per response, typed error codes mirroring the admin handler, and a
+query/mutation factory wired into createAdminDependencies. Save re-reads the draft so
+the next save carries the fresh token; publish invalidates the admin draft and, by
+prefix, every learner reader of the lesson. Parsed↔domain and domain↔wire document maps
+extracted into one shared module so the reader and the authoring adapter cannot drift.
+
+**LB12b-1 `998e8b2` — Tiptap dependency + converter.** @tiptap/core, pm, react,
+starter-kit, extension-link (MIT). The pure converter between the model and ProseMirror
+JSON imports no Tiptap runtime and is tested without a browser; it drops unknown nodes
+and marks and a non-http(s) link, clamps a heading level to 2/3, and never emits an
+empty text node. Lockfile regenerated inside node:24-bookworm-slim and proven with
+`npm ci` exit 0 in a clean linux container, so `make build` is not broken by the macOS
+install.
+
+**LB12b-2 `c42d686` — editor component + route.** Section list (add video 0..1 / text /
+image / row / task, reorder, delete), a depth-1 row of 1–3 text/image columns, per-image
+upload, explicit Save draft and Publish (Publish saves first, then publishes the saved
+token). Rich text in Tiptap (bold, italic, h2/h3, bullet/ordered list, http(s) link).
+The draft is derived (an edited overlay over the query) rather than seeded in an effect,
+so a refetch never clobbers edits and there is no cascading render. **Reorder buttons
+never use isDisabled** — a native disabled button drops focus to <body>; a move past an
+edge is a no-op and the button keeps focus (unit asserts no `disabled` attribute). The
+route is loaded with React.lazy under the admin layout but, via a trailing-underscore
+non-nested segment, not under the course-editor route (which renders no Outlet).
+
+Verified: build exit 0, tsc 0, oxfmt + oxlint + architecture 0, frontend 720 tests.
+Dependency audit: no new runtime advisory from Tiptap; one pre-existing moderate
+(fast-uri, transitive, unrelated) remains, not addressed in this phase.
+
+**Limitation — e2e keyboard + axe at 200% carried to LB15.** Scenario 6 (reorder by
+keyboard with focus kept, and axe at 200% zoom) needs a real browser; it is an LB15 e2e
+row alongside the reader-render carry from LB11.
+
+### LB13 — bundle isolation verified (2026-10-13)
+
+Prod build (`npm run build`, exit 0), then grep over `dist/client/assets/js`:
+
+- `tiptap` and `prosemirror` appear in exactly one async chunk (`async/55.*.js`, the
+  editor vendor chunk) and in no `index.*.js` (main) or learn chunk.
+- the editor component code (class `lesson-editor-sections`, label "Пересунути вгору")
+  appears only in one async chunk (`async/50.*.js`), never in main or learn. The
+  `administration.document.*` i18n strings are in the main index, as expected — all
+  locale bundles are eager; those are strings, not editor modules.
+- no image is inlined: `data:image/(png|jpeg|webp);base64` matches nothing in the JS.
+
+Criterion met: no editor module in the learn path or the main chunk; Tiptap only in the
+admin editor async chunk.
+
+### LB14 — reader DOM flatness (2026-10-13, manual measurement)
+
+The reader rendering the reference esoterica lesson (video slot + text[h2 + italic
+paragraph + ordered list of 2] + row[image | text] + task) emits **15 element nodes at a
+maximum depth of 4** (measured with `container.querySelectorAll('*').length` and a depth
+walk). Each node is a meaningful unit — `figure`/`img`, `h2`/`p`/`ol`/`li`, and a mark
+element (`strong`/`em`) only where a mark is present — and sections sit as siblings under
+one `section` region. A naive nested renderer that wraps every model node in a container
+(`document > section > content > block > item > span > mark`) would add a wrapper at each
+of ~6 model levels, roughly doubling the node count and pushing depth to ~7–8 for the
+same content. The flat semantic tree is the one shipped.
