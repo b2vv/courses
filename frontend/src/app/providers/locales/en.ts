@@ -283,6 +283,7 @@ export const en = {
       },
       document: {
         region: 'Lesson content',
+        task: 'Task',
       },
       transcript: {
         heading: 'Transcript',
@@ -414,6 +415,8 @@ export const en = {
     administration: {
       document: {
         heading: 'Lesson editor',
+        empty: 'This lesson has no sections yet',
+        emptyHint: 'Choose a type in the “Add section” palette below to start building the lesson.',
         loading: 'Loading document…',
         loadError: 'Could not load the lesson document.',
         retry: 'Try again',

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { validEntityId } from '../domain/course/course';
+import { LessonDocumentEditorLoading } from '../presentation/admin/LessonDocumentEditorLoading';
 
 // The editor's Tiptap dependency must not reach the shared bundle, so the component is loaded
 // lazily here and is never imported by the composition root or the router context. The route sits
@@ -22,7 +23,7 @@ function LessonDocumentEditorRoute() {
   const { lessonId } = Route.useParams();
   if (!validEntityId(lessonId)) throw notFound();
   return (
-    <Suspense fallback={<p className="lesson-editor-loading" />}>
+    <Suspense fallback={<LessonDocumentEditorLoading />}>
       <LessonDocumentEditor lessonId={lessonId} documents={admin.documents} />
     </Suspense>
   );

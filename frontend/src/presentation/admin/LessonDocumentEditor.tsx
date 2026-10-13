@@ -14,7 +14,9 @@ import {
   ImageUploadError,
   type createAdminDocumentQueries,
 } from '../../app/composition/admin-document-queries';
-import { Button } from '../ui';
+import { Button, TextField } from '../ui';
+import { EmptyState, ErrorState } from '../ui/states';
+import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
 
 type AdminDocumentQueries = ReturnType<typeof createAdminDocumentQueries>;
@@ -84,20 +86,17 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   if (draftQuery.isError)
     return (
       <section className="lesson-editor" aria-labelledby="lesson-editor-heading">
-        <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
-        <p role="alert">{t('administration.document.loadError')}</p>
-        <Button variant="secondary" onPress={() => void draftQuery.refetch()}>
-          {t('administration.document.retry')}
-        </Button>
+        <header className="lesson-editor-header">
+          <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
+        </header>
+        <ErrorState
+          title={t('administration.document.loadError')}
+          onRetry={() => void draftQuery.refetch()}
+          retryLabel={t('administration.document.retry')}
+        />
       </section>
     );
-  if (draft === null)
-    return (
-      <section className="lesson-editor" aria-labelledby="lesson-editor-heading">
-        <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
-        <p>{t('administration.document.loading')}</p>
-      </section>
-    );
+  if (draft === null) return <LessonDocumentEditorLoading />;
 
   const setSections = (next: readonly LessonSection[]) => setEdited({ ...draft, sections: next });
 
@@ -197,7 +196,12 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           </Button>
         </div>
       </header>
-      {error !== null && <p role="alert">{error}</p>}
+      {error !== null && <ErrorState title={error} />}
+      {draft.sections.length === 0 && (
+        <EmptyState title={t('administration.document.empty')}>
+          <p>{t('administration.document.emptyHint')}</p>
+        </EmptyState>
+      )}
       <ol className="lesson-editor-sections">
         {draft.sections.map((section, index) => (
           <li key={section.id} className="lesson-editor-section" data-type={section.type}>
@@ -205,27 +209,29 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
               <span className="lesson-editor-section-type">
                 {t(`administration.document.section.${section.type}`)}
               </span>
-              <Button
-                variant="secondary"
-                aria-label={t('administration.document.moveUp')}
-                onPress={() => moveSection(index, -1)}
-              >
-                ↑
-              </Button>
-              <Button
-                variant="secondary"
-                aria-label={t('administration.document.moveDown')}
-                onPress={() => moveSection(index, 1)}
-              >
-                ↓
-              </Button>
-              <Button
-                variant="danger"
-                aria-label={t('administration.document.removeSection')}
-                onPress={() => removeSection(index)}
-              >
-                ✕
-              </Button>
+              <div className="lesson-editor-section-actions">
+                <Button
+                  variant="secondary"
+                  aria-label={t('administration.document.moveUp')}
+                  onPress={() => moveSection(index, -1)}
+                >
+                  ↑
+                </Button>
+                <Button
+                  variant="secondary"
+                  aria-label={t('administration.document.moveDown')}
+                  onPress={() => moveSection(index, 1)}
+                >
+                  ↓
+                </Button>
+                <Button
+                  variant="danger"
+                  aria-label={t('administration.document.removeSection')}
+                  onPress={() => removeSection(index)}
+                >
+                  ✕
+                </Button>
+              </div>
             </div>
             <SectionBody
               section={section}
@@ -237,23 +243,26 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
         ))}
       </ol>
       <fieldset className="lesson-editor-add" aria-label={t('administration.document.addSection')}>
-        {!hasVideo && (
-          <Button variant="secondary" onPress={() => addSection('video')}>
-            {t('administration.document.section.video')}
+        <legend>{t('administration.document.addSection')}</legend>
+        <div className="lesson-editor-palette">
+          {!hasVideo && (
+            <Button variant="secondary" onPress={() => addSection('video')}>
+              {t('administration.document.section.video')}
+            </Button>
+          )}
+          <Button variant="secondary" onPress={() => addSection('text')}>
+            {t('administration.document.section.text')}
           </Button>
-        )}
-        <Button variant="secondary" onPress={() => addSection('text')}>
-          {t('administration.document.section.text')}
-        </Button>
-        <Button variant="secondary" onPress={() => addSection('image')}>
-          {t('administration.document.section.image')}
-        </Button>
-        <Button variant="secondary" onPress={() => addSection('row')}>
-          {t('administration.document.section.row')}
-        </Button>
-        <Button variant="secondary" onPress={() => addSection('task')}>
-          {t('administration.document.section.task')}
-        </Button>
+          <Button variant="secondary" onPress={() => addSection('image')}>
+            {t('administration.document.section.image')}
+          </Button>
+          <Button variant="secondary" onPress={() => addSection('row')}>
+            {t('administration.document.section.row')}
+          </Button>
+          <Button variant="secondary" onPress={() => addSection('task')}>
+            {t('administration.document.section.task')}
+          </Button>
+        </div>
       </fieldset>
     </section>
   );
@@ -331,15 +340,20 @@ function RowBody({
       <div className="lesson-editor-columns" data-columns={section.columns.length}>
         {section.columns.map((column, index) => (
           <div key={column.id} className="lesson-editor-column">
-            {section.columns.length > 1 && (
-              <Button
-                variant="danger"
-                aria-label={t('administration.document.removeColumn')}
-                onPress={() => removeColumn(index)}
-              >
-                ✕
-              </Button>
-            )}
+            <div className="lesson-editor-column-bar">
+              <span className="lesson-editor-section-type">
+                {t(`administration.document.section.${column.type}`)}
+              </span>
+              {section.columns.length > 1 && (
+                <Button
+                  variant="danger"
+                  aria-label={t('administration.document.removeColumn')}
+                  onPress={() => removeColumn(index)}
+                >
+                  ✕
+                </Button>
+              )}
+            </div>
             {column.type === 'text' ? (
               <LessonDocumentRichText
                 value={column.content}
@@ -368,12 +382,15 @@ function RowBody({
           className="lesson-editor-add-column"
           aria-label={t('administration.document.addColumn')}
         >
-          <Button variant="secondary" onPress={() => addColumn('text')}>
-            {t('administration.document.section.text')}
-          </Button>
-          <Button variant="secondary" onPress={() => addColumn('image')}>
-            {t('administration.document.section.image')}
-          </Button>
+          <legend>{t('administration.document.addColumn')}</legend>
+          <div className="lesson-editor-palette">
+            <Button variant="secondary" onPress={() => addColumn('text')}>
+              {t('administration.document.section.text')}
+            </Button>
+            <Button variant="secondary" onPress={() => addColumn('image')}>
+              {t('administration.document.section.image')}
+            </Button>
+          </div>
         </fieldset>
       )}
     </div>
@@ -405,9 +422,10 @@ function ImageField({
           className="lesson-editor-image-preview"
         />
       )}
-      <label>
-        {t('administration.document.uploadImage')}
+      <label className="lesson-editor-upload">
+        <span>{t('administration.document.uploadImage')}</span>
         <input
+          className="ui-input"
           type="file"
           accept="image/jpeg,image/png,image/webp"
           onChange={(event) => {
@@ -418,10 +436,7 @@ function ImageField({
         />
       </label>
       {uploading && <span>{t('administration.document.uploading')}</span>}
-      <label>
-        {t('administration.document.alt')}
-        <input type="text" value={alt} onChange={(event) => onAlt(event.target.value)} />
-      </label>
+      <TextField label={t('administration.document.alt')} value={alt} onChange={onAlt} />
     </div>
   );
 }
