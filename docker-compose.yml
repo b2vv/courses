@@ -80,12 +80,20 @@ services:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       mailpit: { condition: service_healthy }
+      # The API now writes uploaded image bytes to /media/i. K13: the media-data volume is populated
+      # from the first container that mounts it, so the API starts after upload has populated the
+      # tree — otherwise it would create /media/i into an empty volume and the workers' baked tree
+      # would never copy in.
+      upload: { condition: service_started }
     healthcheck:
       test: ['CMD', 'curl', '-fsS', '--max-time', '3', 'http://127.0.0.1:8080/readyz']
       interval: 5s
       timeout: 4s
       retries: 15
     read_only: true
+    # /media holds uploaded image bytes (written 0640, dir 0750); nginx reads them read-only by its
+    # courses-group membership. read_only root still applies — only this volume and /tmp are writable.
+    volumes: [media-data:/media]
     tmpfs: [/tmp]
   media-worker:
     <<: *runtime

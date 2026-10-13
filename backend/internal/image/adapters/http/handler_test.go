@@ -172,7 +172,7 @@ func TestAuthorize(t *testing.T) {
 		{name: "allowed", authenticate: authenticated(actor), wantStatus: 204, wantCalls: 1},
 		{name: "email not verified", authenticate: authenticated(actor), failure: domain.ErrEmailNotVerified, wantStatus: 403, wantCode: "email_not_verified", wantCalls: 1},
 		{name: "forbidden", authenticate: authenticated(actor), failure: domain.ErrForbidden, wantStatus: 403, wantCode: "forbidden", wantCalls: 1},
-		{name: "image not found", authenticate: authenticated(actor), failure: domain.ErrImageNotFound, wantStatus: 404, wantCode: "image_not_found", wantCalls: 1},
+		{name: "image not found collapses to 403", authenticate: authenticated(actor), failure: domain.ErrImageNotFound, wantStatus: 403, wantCode: "forbidden", wantCalls: 1},
 		{name: "wrapped forbidden", authenticate: authenticated(actor), failure: fmt.Errorf("authorize: %w", domain.ErrForbidden), wantStatus: 403, wantCode: "forbidden", wantCalls: 1},
 		{name: "dependency failure", authenticate: authenticated(actor), failure: errors.New("unavailable"), wantStatus: 503, wantCode: "dependency_unavailable", wantCalls: 1},
 		{name: "authentication denied", authenticate: rejectedAuthentication(401), wantStatus: 403},
