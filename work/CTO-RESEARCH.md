@@ -282,8 +282,12 @@ Storybook (dev-only, `^10.6.1`). WayForPay-підпис — стандартна
 | MSW | 2.15.0 | |
 | faster-whisper / Silero VAD | — | без змін |
 
-Заборонене явно: Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit, Radix, shadcn, Tailwind
-(дизайн-прохід бере лише вигляд мокапу на shadcn/Tailwind, не залежність), Rust, ORM, service locator.
+Заборонене явно (AGENTS.md §TypeScript): Vite, Next, Vitest, Jest, ESLint, Axios, Redux Toolkit,
+Radix, shadcn, Rust, ORM, service locator. **Tailwind НЕ заборонений** і є реальною залежністю
+**з найпершого foundation-коміту** (`5608a03`): `tailwindcss 4.3.3` + `@rsbuild/plugin-tailwindcss`,
+`@import 'tailwindcss'` у `frontend/src/app/styles/main.css:1`. House-style компонентів — семантичні
+токени + scoped CSS + React Aria (не utility-класи), але Tailwind присутній і дозволений — попередня
+редакція брифінгу помилково числила його забороненим (виправлено 2026-10-13, звірено з AGENTS.md + git).
 
 ## 6. Ризики
 
