@@ -402,6 +402,11 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
         fullPath: '/admin/courses/$courseId',
       },
       {
+        id: '/admin/courses/$courseId_/lessons/$lessonId',
+        path: 'courses/$courseId/lessons/$lessonId',
+        fullPath: '/admin/courses/$courseId/lessons/$lessonId',
+      },
+      {
         id: '/admin/participant-reports',
         path: 'participant-reports',
         fullPath: '/admin/participant-reports',
