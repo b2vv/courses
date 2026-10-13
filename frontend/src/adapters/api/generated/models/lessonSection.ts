@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { LessonRichText } from './lessonRichText.ts';
+import type { LessonSectionContentType } from './lessonSectionContentType.ts';
 import type { LessonSectionType } from './lessonSectionType.ts';
 
 export interface LessonSection {
@@ -14,6 +15,7 @@ export interface LessonSection {
   /** @nullable */
   content?: LessonRichText | null;
   imageId?: string;
+  contentType?: LessonSectionContentType;
   alt?: string;
   columns?: LessonSection[];
 }

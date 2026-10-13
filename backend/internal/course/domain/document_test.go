@@ -19,7 +19,7 @@ func textSection() domain.Section {
 }
 
 func imageSection() domain.Section {
-	return domain.Section{ID: "image", Type: domain.SectionImage, ImageID: "lesson-image", Alt: "Зображення практики"}
+	return domain.Section{ID: "image", Type: domain.SectionImage, ImageID: "lesson-image", ContentType: domain.ImageContentTypePNG, Alt: "Зображення практики"}
 }
 
 func checkDocument(t *testing.T, document domain.LessonDocument, valid bool) {
@@ -51,6 +51,10 @@ func TestLessonDocumentStructure(t *testing.T) {
 		{"unknown section AC11", documentWith(domain.Section{ID: "x", Type: "iframe"}), false},
 		{"missing section type", documentWith(domain.Section{ID: "x"}), false},
 		{"text and image without video", documentWith(textSection(), imageSection()), true},
+		{"image jpeg", documentWith(domain.Section{ID: "i", Type: domain.SectionImage, ImageID: "x", ContentType: domain.ImageContentTypeJPEG, Alt: "a"}), true},
+		{"image webp", documentWith(domain.Section{ID: "i", Type: domain.SectionImage, ImageID: "x", ContentType: domain.ImageContentTypeWebP, Alt: "a"}), true},
+		{"image unknown content type", documentWith(domain.Section{ID: "i", Type: domain.SectionImage, ImageID: "x", ContentType: "image/gif", Alt: "a"}), false},
+		{"image missing content type", documentWith(domain.Section{ID: "i", Type: domain.SectionImage, ImageID: "x", Alt: "a"}), false},
 	} {
 		t.Run(test.name, func(t *testing.T) { checkDocument(t, test.document, test.valid) })
 	}
@@ -93,7 +97,7 @@ func TestLessonDocumentSectionFields(t *testing.T) {
 		case domain.SectionText, domain.SectionTask:
 			valid.Content = &domain.RichText{}
 		case domain.SectionImage:
-			valid.ImageID, valid.Alt = "image", "Alt"
+			valid.ImageID, valid.ContentType, valid.Alt = "image", domain.ImageContentTypePNG, "Alt"
 		case domain.SectionRow:
 			valid.Columns = []domain.Section{textSection()}
 		}
@@ -118,6 +122,13 @@ func TestLessonDocumentSectionFields(t *testing.T) {
 						s.ImageID = "image"
 					} else {
 						s.ImageID = ""
+					}
+				}},
+				{"content type", func(s *domain.Section) {
+					if s.ContentType == "" {
+						s.ContentType = domain.ImageContentTypePNG
+					} else {
+						s.ContentType = ""
 					}
 				}},
 				{"alt", func(s *domain.Section) {
@@ -290,7 +301,7 @@ func TestLessonDocumentBounds(t *testing.T) {
 			return documentWith(s)
 		}},
 		{"document text across rows and tasks", domain.MaximumDocumentText, func(n int) domain.LessonDocument {
-			d := documentWith(domain.Section{ID: "row", Type: domain.SectionRow, Columns: []domain.Section{{ID: "image", Type: domain.SectionImage, ImageID: "i", Alt: "ї"}}})
+			d := documentWith(domain.Section{ID: "row", Type: domain.SectionRow, Columns: []domain.Section{{ID: "image", Type: domain.SectionImage, ImageID: "i", ContentType: domain.ImageContentTypePNG, Alt: "ї"}}})
 			remaining := n - 1
 			for remaining > 0 {
 				size := min(remaining, domain.MaximumSpanText)

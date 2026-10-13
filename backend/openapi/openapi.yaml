@@ -2102,6 +2102,7 @@ components:
           allOf:
             - $ref: '#/components/schemas/LessonRichText'
         imageId: { type: string }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
         alt: { type: string }
         columns:
           type: array

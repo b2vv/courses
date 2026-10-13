@@ -456,7 +456,7 @@ func TestDocumentRecursiveSchemaRoundTrip(t *testing.T) {
 	}
 	schema := spec.Components.Schemas["LessonDocument"].Value
 	for _, body := range []string{
-		`{"schemaVersion":1,"locale":"en","sections":[{"id":"row","type":"row","columns":[{"id":"text","type":"text","content":{"blocks":[{"type":"heading","level":2,"spans":[{"text":"Title","marks":["bold","italic"],"href":"https://example.com"}]},{"type":"list","ordered":true,"items":[[{"text":"Item"}]]}]}},{"id":"image","type":"image","imageId":"image-1","alt":"Image"}]},{"id":"task","type":"task","content":{"blocks":[]}},{"id":"video","type":"video","content":null}]}`,
+		`{"schemaVersion":1,"locale":"en","sections":[{"id":"row","type":"row","columns":[{"id":"text","type":"text","content":{"blocks":[{"type":"heading","level":2,"spans":[{"text":"Title","marks":["bold","italic"],"href":"https://example.com"}]},{"type":"list","ordered":true,"items":[[{"text":"Item"}]]}]}},{"id":"image","type":"image","imageId":"image-1","contentType":"image/png","alt":"Image"}]},{"id":"task","type":"task","content":{"blocks":[]}},{"id":"video","type":"video","content":null}]}`,
 		`{"schemaVersion":1,"locale":"uk","sections":null}`,
 		`{"schemaVersion":1,"locale":"uk","sections":[{"id":"text","type":"text","content":{"blocks":null}}]}`,
 	} {
