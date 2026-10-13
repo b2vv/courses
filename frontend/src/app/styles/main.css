@@ -1349,6 +1349,35 @@ nav a {
 .course-learning-player {
   min-inline-size: 0;
 }
+.lesson-document {
+  display: grid;
+  gap: var(--space-4);
+  margin-block-start: var(--space-6);
+}
+.lesson-document > * {
+  margin: 0;
+}
+.lesson-document-image img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--radius-panel);
+}
+.lesson-document-row {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+/* The row stacks on narrow viewports and at 200% zoom; the columns appear only when there is width
+   for them, so an image column never forces a horizontal scroll. */
+@media (min-width: 40rem) {
+  .lesson-document-row[data-columns='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lesson-document-row[data-columns='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 .discussion-panel {
   display: grid;
   gap: var(--space-4);
