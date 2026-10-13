@@ -1,25 +1,8 @@
-import type {
-  DocumentErrorCode,
-  DocumentResult,
-  LessonBlock,
-  LessonColumn,
-  LessonDocument,
-  LessonRichText,
-  LessonSection,
-  LessonSpan,
-} from '../../domain/document/document';
+import type { DocumentErrorCode, DocumentResult } from '../../domain/document/document';
 import type { DocumentRepository } from '../../ports/DocumentRepository';
 import { getLearnLessonDocument } from './generated/courses';
-import {
-  documentErrorSchema,
-  lessonDocumentSchema,
-  type ParsedBlock,
-  type ParsedColumn,
-  type ParsedLessonDocument,
-  type ParsedRichText,
-  type ParsedSection,
-  type ParsedSpan,
-} from './document-schema';
+import { documentErrorSchema, lessonDocumentSchema } from './document-schema';
+import { mapDocument } from './document-mapping';
 import { createApiTransport, unnamedStatusCode } from './transport';
 import type { TransportOptions, WireResponse } from './transport';
 
@@ -39,74 +22,6 @@ function namedError(
     if (code !== undefined) return code;
   }
   return unnamedStatusCode(response.status) as DocumentErrorCode;
-}
-
-function mapSpan(span: ParsedSpan): LessonSpan {
-  return {
-    text: span.text,
-    ...(span.marks === undefined ? {} : { marks: span.marks }),
-    ...(span.href === undefined ? {} : { href: span.href }),
-  };
-}
-
-function mapBlock(block: ParsedBlock): LessonBlock {
-  switch (block.type) {
-    case 'paragraph':
-      return { type: 'paragraph', spans: (block.spans ?? []).map(mapSpan) };
-    case 'heading':
-      return { type: 'heading', level: block.level, spans: (block.spans ?? []).map(mapSpan) };
-    case 'list':
-      return {
-        type: 'list',
-        ordered: block.ordered,
-        items: block.items.map((item) => (item ?? []).map(mapSpan)),
-      };
-  }
-}
-
-function mapRichText(content: ParsedRichText): LessonRichText {
-  return { blocks: (content.blocks ?? []).map(mapBlock) };
-}
-
-function mapColumn(column: ParsedColumn): LessonColumn {
-  if (column.type === 'text')
-    return { type: 'text', id: column.id, content: mapRichText(column.content) };
-  return {
-    type: 'image',
-    id: column.id,
-    imageId: column.imageId,
-    contentType: column.contentType,
-    alt: column.alt,
-  };
-}
-
-function mapSection(section: ParsedSection): LessonSection {
-  switch (section.type) {
-    case 'video':
-      return { type: 'video', id: section.id };
-    case 'text':
-      return { type: 'text', id: section.id, content: mapRichText(section.content) };
-    case 'task':
-      return { type: 'task', id: section.id, content: mapRichText(section.content) };
-    case 'image':
-      return {
-        type: 'image',
-        id: section.id,
-        imageId: section.imageId,
-        contentType: section.contentType,
-        alt: section.alt,
-      };
-    case 'row':
-      return { type: 'row', id: section.id, columns: section.columns.map(mapColumn) };
-  }
-}
-
-function mapDocument(parsed: ParsedLessonDocument): LessonDocument {
-  return {
-    schemaVersion: parsed.schemaVersion,
-    locale: parsed.locale,
-    sections: (parsed.sections ?? []).map(mapSection),
-  };
 }
 
 /** One repository per browser/SSR request scope; generated transport never escapes this adapter. */

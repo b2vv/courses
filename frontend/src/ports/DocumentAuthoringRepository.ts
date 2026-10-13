@@ -1,0 +1,31 @@
+import type {
+  DocumentAuthoringResult,
+  ImageUploadResult,
+  LessonDocument,
+  LessonDocumentDraft,
+} from '../domain/document/document';
+
+export interface DocumentAuthoringRepository {
+  getDraft(
+    lessonId: string,
+    locale?: 'uk' | 'en',
+    signal?: AbortSignal,
+  ): Promise<DocumentAuthoringResult<LessonDocumentDraft>>;
+
+  saveDraft(
+    lessonId: string,
+    document: LessonDocument,
+    expectedUpdatedAt: string | null,
+    locale?: 'uk' | 'en',
+    signal?: AbortSignal,
+  ): Promise<DocumentAuthoringResult<{ readonly updatedAt: string }>>;
+
+  publish(
+    lessonId: string,
+    expectedUpdatedAt: string,
+    locale?: 'uk' | 'en',
+    signal?: AbortSignal,
+  ): Promise<DocumentAuthoringResult<{ readonly updatedAt: string }>>;
+
+  uploadImage(lessonId: string, file: File, signal?: AbortSignal): Promise<ImageUploadResult>;
+}
