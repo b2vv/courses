@@ -1,6 +1,6 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-13, оновлено після LB09b-2)
+## Handoff (2026-10-13, оновлено після LB09b-3 — LB09 ЗАКРИТО)
 
 - **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB09a ЗАКОМІЧЕНО**; HEAD `e0a4551` (LB09a) → +
   LB09b-1 комітиться цим кроком. НЕ запушено, PR ще нема. **Standing-авторизація власника (2026-10-12):
@@ -28,10 +28,20 @@
   підняв x/sync/sys/text). Гейти: gofmt/vet/build/http-тести + **повний backend unit 48pkg exit 0** + boundary
   зелені. **nginx-envelope tension:** LB10 upload-локація `client_max_body_size` МАЄ перевищувати 5 MiB на
   envelope, інакше справжнє 5-MiB зображення ріжеться на краю (прапор на LB10).
-- **ДАЛІ: LB09b-3** OpenAPI (admin upload endpoint + response схема id/contentType/width/height) + Orval
-  regen + composition wiring `cmd/api/main.go` (`imagehttp.NewHandler(NewUploader(repo,fsStorage,repo,
-  newUUID,time.Now), NewAuthorizer(repo))`, RegisterAdmin+RegisterInternal; fs-storage root із конфіга) +
-  слайс-гейт (contract+integration+check-generated). Тоді LB10 nginx.
+- **LB09b-3 ЗРОБЛЕНО (комітиться) — LB09 ЗАКРИТО.** Wiring `cmd/api/main.go`: аліаси imagefs/imagehttp/
+  imagepostgres/imageapp; `const imageRoot = "/media/i"` (рішення у Журналі); один `imagepostgres.Repository`
+  на всі 3 порти; `imagefs.New(imageRoot)` + Close-defer (дзеркало media-worker); `NewUploader(repo,storage,
+  repo,newUUID,time.Now)`, `NewAuthorizer(repo)`, `NewHandler`; RegisterAdmin+RegisterInternal у Register-
+  блоці. OpenAPI: `POST /api/v1/admin/lessons/{id}/images` — ПЕРШИЙ `multipart/form-data` у спеці (поле
+  `file` binary, 201→`ImageUploadResponse{id,contentType,width,height}`, 400/401/403/404/413/415/503 на
+  наявні компоненти); `/internal/image/authorize` НЕ в спеці (nginx-internal). Orval regen → новий
+  `uploadAdminLessonImage` + моделі. Гейти: `make check-generated` exit 0, `go build ./cmd/api` ok, frontend
+  `tsc --noEmit` 0 помилок, contract 24 + image-postgres integration зелені.
+- **ДАЛІ: LB10** nginx. Нова serve-локація `^~ /media/i/` з `auth_request /internal/image/authorize`
+  (X-Image-Id = сегмент шляху/ім'я файлу `<id>`), нова upload-локація з `client_max_body_size` **> 5 MiB**
+  (envelope slack — інакше справжнє 5-MiB зображення ріжеться; НЕ переюз /uploads tus, НЕ піднімати /api=1m);
+  дерево `/media/i` створити у compose з 0750/0640 group-readable (os.OpenRoot не MkdirAll); compose +
+  integration auth_request (403 без членства). Тоді LB11–13 фронт, LB14 DOM, LB15 gate+e2e+звіт.
 - **ГОТЧА підтверджена знову:** фоновий `make … | tail; echo EXIT=$pipestatus` маскує код — перший запуск
   integration показав «exit 0» (обгортка), а насправді make впав «No rule to make target» бо cd не спрацював
   для фонового шелла → гони `make -C <root>` і читай EXIT із лога. [[background-exit-code-is-last-pipe]].
@@ -216,6 +226,19 @@ frontend» СПРАЦЮВАВ (бек: таблиця документа+міг�
   підсилення пізніше; галерея посилається на альбом, не інлайнить сотні референсів.
 
 ## Журнал
+
+### LB09b-3 — корінь сховища зображень (2026-10-13, я — рішення, закриває альтернативу)
+
+- **image bytes на диску = `/media/i/<uuid>` (НЕ окремий том, НЕ config/env-поле).** Механізм/перевірка:
+  media-root `/media` захардкоджений у воркерах (`cmd/media-worker/main.go:26` тощо), API медіа-байтів НЕ
+  пише; `platform/config` будує лише DSN/mail — поля storage-root НЕ існує. Зображення вантажаться
+  **синхронно в API-процесі**, тож API потрібен власний корінь. Обрано `const imageRoot = "/media/i"` в
+  `cmd/api/main.go` (під той самий `/media`-дерево-том, 0750/0640, group-readable nginx), бо LB10 додає
+  serve-локацію `^~ /media/i/`→`/internal/image/authorize`: nginx віддає `/media/i/<id>`, тож API пише саме
+  туди. Альтернатива (окремий env `IMAGE_ROOT`) відкинута — немає прецеденту env для roots, а хардкод-const
+  дзеркалить наявний `mediaRoot`. Наслідок: дерево `/media/i` має існувати з правами (os.OpenRoot не робить
+  MkdirAll після LB08) — створення у compose/deploy (LB10). Перевірка: upload пише `/media/i/<id>`, nginx
+  під auth віддає його учневі (LB10 integration auth_request).
 
 ### LB09 — розвилки HTTP/application image (2026-10-12, я — рішення, закривають альтернативи)
 

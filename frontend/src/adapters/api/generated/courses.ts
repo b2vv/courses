@@ -44,6 +44,7 @@ import type {
   DraftConflictResponse,
   EmailRequest,
   EmailTakenResponse,
+  ErrorResponse,
   ForbiddenResponse,
   GetAdminLessonDocumentParams,
   GetAdminStatsTimeseriesParams,
@@ -51,6 +52,7 @@ import type {
   GetLearnLessonDocumentParams,
   GetLessonTranscriptParams,
   GrantForbiddenResponse,
+  ImageUploadResponse,
   Instructor,
   InternalErrorResponse,
   InvalidAccountTokenResponse,
@@ -138,6 +140,7 @@ import type {
   UnauthenticatedResponse,
   UnavailableResponse,
   UpdateCommentRequest,
+  UploadAdminLessonImageBody,
   UploadConflictResponse,
   UserNotFoundResponse,
   VideoNotFoundResponse,
@@ -3197,6 +3200,86 @@ const res = await fetch(getTransitionAdminCourseUrl(id),
 
   const data: transitionAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as transitionAdminCourseResponse
+}
+
+
+
+export type uploadAdminLessonImageResponse201 = {
+  data: ImageUploadResponse
+  status: 201
+}
+
+export type uploadAdminLessonImageResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type uploadAdminLessonImageResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type uploadAdminLessonImageResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type uploadAdminLessonImageResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type uploadAdminLessonImageResponse413 = {
+  data: ErrorResponse
+  status: 413
+}
+
+export type uploadAdminLessonImageResponse415 = {
+  data: ErrorResponse
+  status: 415
+}
+
+export type uploadAdminLessonImageResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type uploadAdminLessonImageResponseSuccess = (uploadAdminLessonImageResponse201) & {
+  headers: Headers;
+};
+export type uploadAdminLessonImageResponseError = (uploadAdminLessonImageResponse400 | uploadAdminLessonImageResponse401 | uploadAdminLessonImageResponse403 | uploadAdminLessonImageResponse404 | uploadAdminLessonImageResponse413 | uploadAdminLessonImageResponse415 | uploadAdminLessonImageResponse503) & {
+  headers: Headers;
+};
+
+export type uploadAdminLessonImageResponse = (uploadAdminLessonImageResponseSuccess | uploadAdminLessonImageResponseError)
+
+export const getUploadAdminLessonImageUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${id}/images`
+}
+
+export const uploadAdminLessonImage = async (id: string,
+    uploadAdminLessonImageBody: UploadAdminLessonImageBody, options?: RequestInit): Promise<uploadAdminLessonImageResponse> => {
+    const formData = new FormData();
+formData.append(`file`, uploadAdminLessonImageBody.file);
+
+  const res = await fetch(getUploadAdminLessonImageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: uploadAdminLessonImageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as uploadAdminLessonImageResponse
 }
 
 

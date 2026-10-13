@@ -27,6 +27,10 @@ import (
 	identitypostgres "courses/internal/identity/adapters/postgres"
 	identityredis "courses/internal/identity/adapters/redis"
 	identityapplication "courses/internal/identity/application"
+	imagefs "courses/internal/image/adapters/filesystem"
+	imagehttp "courses/internal/image/adapters/http"
+	imagepostgres "courses/internal/image/adapters/postgres"
+	imageapp "courses/internal/image/application"
 	mediaasynq "courses/internal/media/adapters/asynq"
 	mediahttp "courses/internal/media/adapters/http"
 	mediapostgres "courses/internal/media/adapters/postgres"
@@ -52,6 +56,11 @@ import (
 	"courses/platform/observability"
 	"courses/platform/runtime"
 )
+
+// imageRoot is the on-disk tree the API writes uploaded image bytes to; nginx serves it under
+// ^~ /media/i/ via the /internal/image/authorize auth_request (wired in LB10). It lives inside the
+// existing /media volume so the 0750/0640 group-readable serving model is unchanged.
+const imageRoot = "/media/i"
 
 func main() {
 	logger := observability.NewLogger("api")
@@ -143,6 +152,19 @@ func main() {
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
 		mediaHandler := mediahttp.NewHandler(mediaTickets)
+		imageRepository := imagepostgres.NewRepository(dependencies.Database)
+		imageStorage, err := imagefs.New(imageRoot)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := imageStorage.Close(); err != nil {
+				logger.Error("image storage shutdown failed")
+			}
+		}()
+		imageUploader := imageapp.NewUploader(imageRepository, imageStorage, imageRepository, newUUID, time.Now)
+		imageAuthorizer := imageapp.NewAuthorizer(imageRepository)
+		imageHandler := imagehttp.NewHandler(imageUploader, imageAuthorizer)
 		playbackOwnership := playbackredis.NewOwnershipReader(dependencies.Redis)
 		playbackOwnershipWriter := playbackredis.NewOwnershipWriter(dependencies.Redis)
 		playbackAccess := playbackpostgres.NewVideoAccessReader(dependencies.Database, dependencies.Metrics.PlaybackDatabaseChecks)
@@ -181,6 +203,8 @@ func main() {
 				draftHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				imageHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				imageHandler.RegisterInternal(mux, identityHandler.Authenticate)
 				playbackHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				adminStatsHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireAdministrator)
 			},
