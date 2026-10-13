@@ -30,6 +30,8 @@ import { createAdminStatsQueries } from '../app/composition/admin-stats-queries'
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
+import type { DocumentRepository } from '../ports/DocumentRepository';
+import { createDocumentQueries } from '../app/composition/document-queries';
 import type { DiscussionRepository } from '../ports/DiscussionRepository';
 import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
 import type { LessonTranscript } from '../domain/transcript/transcript';
@@ -42,6 +44,13 @@ const transcriptStub = new Proxy({} as TranscriptRepository, {
   get() {
     return () => {
       throw new Error('Transcripts are not used by route guard tests');
+    };
+  },
+});
+const documentStub = new Proxy({} as DocumentRepository, {
+  get() {
+    return () => {
+      throw new Error('Lesson documents are not used by route guard tests');
     };
   },
 });
@@ -261,6 +270,7 @@ function createTestRouter(
       learn: {
         ...createLearnQueries(playbackRepository, catalogRepository),
         ...createTranscriptQueries(transcriptRepository),
+        ...createDocumentQueries(documentStub),
         discussion: createDiscussionQueries(discussionRepository),
         purchase: createPurchaseQueries(purchaseRepository),
         primeAv1Probe: () => undefined,

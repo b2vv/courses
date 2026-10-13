@@ -287,6 +287,9 @@ export const uk = {
           checkoutAlreadyOpened: 'Ця спроба оплати вже відкрита. Створюємо нову спробу…',
         },
       },
+      document: {
+        region: 'Матеріали уроку',
+      },
       transcript: {
         heading: 'Транскрипт',
         none: 'У цього уроку ще немає транскрипту.',

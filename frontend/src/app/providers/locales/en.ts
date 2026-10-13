@@ -281,6 +281,9 @@ export const en = {
           checkoutAlreadyOpened: 'This payment attempt is already open. Starting a new attempt…',
         },
       },
+      document: {
+        region: 'Lesson content',
+      },
       transcript: {
         heading: 'Transcript',
         none: 'This lesson has no transcript yet.',
