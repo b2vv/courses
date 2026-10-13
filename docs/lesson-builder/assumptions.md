@@ -1,6 +1,6 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-13, оновлено після LB09b-1)
+## Handoff (2026-10-13, оновлено після LB09b-2)
 
 - **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB09a ЗАКОМІЧЕНО**; HEAD `e0a4551` (LB09a) → +
   LB09b-1 комітиться цим кроком. НЕ запушено, PR ще нема. **Standing-авторизація власника (2026-10-12):
@@ -15,11 +15,23 @@
   1.96s/3.18s (owner, missing lesson, owner/non-member/active-member CanConsumeBy, missing image→
   ErrImageNotFound); gofmt/vet/build + boundary зелені. Підтверджено: published+unpaid+non-preview → не-член
   CanConsume=false.
-- **ДАЛІ: LB09b-2** HTTP `POST /api/v1/admin/lessons/{id}/images` (multipart, MaxBytesReader 5m,
-  sniff→DecodeConfig→Upload) + internal `GET /internal/image/authorize` (`X-Image-Id`, actor з cookie,
-  normalizeAuthenticationDenial як playback) + contract-тести AC9 + `golang.org/x/image/webp` у go.mod.
-  Тоді **LB09b-3** OpenAPI(upload)+Orval+composition wiring `cmd/api/main.go`+слайс-гейт
-  (contract+integration+check-generated).
+- **LB09b-2 ЗРОБЛЕНО (комітиться):** `internal/image/adapters/http/handler.go` — upload
+  `POST /api/v1/admin/lessons/{id}/images` (multipart, `MaxBytesReader = 5 MiB + 512 KiB envelope slack`,
+  `FormFile("file")`, sniff→`DetectContentType`, `image.DecodeConfig` для розмірів без повного декоду,
+  делегат у `Uploader.Upload`; помилки 404 lesson_not_found/403 forbidden/415 unsupported_image/413
+  image_too_large/400 image_too_many_pixels/400 invalid_image/503) + authorize
+  `GET /internal/image/authorize` (`X-Image-Id`, actor з контексту, 204=allowed, email_not_verified/
+  forbidden/image_not_found→403/403/404, 503 default; `normalizeAuthenticationDenial` 401→403 скопійовано
+  з playback) + service-інтерфейси `uploadService`/`authorizeService`. Contract-тести 24 кейси (httptest,
+  реальний multipart 1×1 PNG, undecodable-PNG→invalid_image, MaxBytesReader→413, 401→403 wrapper). `x/image`
+  v0.47.0 direct у go.mod (`go mod tidy` промоутнув + прибрав передіснуючий moby/client_model indirect-дрейф,
+  підняв x/sync/sys/text). Гейти: gofmt/vet/build/http-тести + **повний backend unit 48pkg exit 0** + boundary
+  зелені. **nginx-envelope tension:** LB10 upload-локація `client_max_body_size` МАЄ перевищувати 5 MiB на
+  envelope, інакше справжнє 5-MiB зображення ріжеться на краю (прапор на LB10).
+- **ДАЛІ: LB09b-3** OpenAPI (admin upload endpoint + response схема id/contentType/width/height) + Orval
+  regen + composition wiring `cmd/api/main.go` (`imagehttp.NewHandler(NewUploader(repo,fsStorage,repo,
+  newUUID,time.Now), NewAuthorizer(repo))`, RegisterAdmin+RegisterInternal; fs-storage root із конфіга) +
+  слайс-гейт (contract+integration+check-generated). Тоді LB10 nginx.
 - **ГОТЧА підтверджена знову:** фоновий `make … | tail; echo EXIT=$pipestatus` маскує код — перший запуск
   integration показав «exit 0» (обгортка), а насправді make впав «No rule to make target» бо cd не спрацював
   для фонового шелла → гони `make -C <root>` і читай EXIT із лога. [[background-exit-code-is-last-pipe]].
