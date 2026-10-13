@@ -2,21 +2,22 @@
 
 | | |
 |---|---|
-| Дата | 2026-10-11 (повний rebuild під learning + admin-реконструкцію + admin-stats + CI K10–K13; попередній прогін — 2026-10-07 на `9c0e64f`) |
-| Базовий коміт | `25d520f` (merge PR #18 у `main`; admin-реконструкція + admin-stats + рев'ю-фікси закриті; learning PR #16, CI K10–K13) |
-| Всього комітів у репо | **736** на `25d520f` |
+| Дата | 2026-10-13 (re-sync під catalog-search + refund + lesson-builder; повний rebuild — 2026-10-11 на `25d520f`; попередній прогін — 2026-10-07 на `9c0e64f`) |
+| Базовий коміт | `63b26bf` (docs(agenda) після merge PR #20 lesson-builder у `main`) |
+| Всього комітів у репо | **779** на `63b26bf` (736 на `25d520f`) |
+| Гейт свіжості 2026-10-13 | **43 коміти** від `25d520f` (база 2026-10-11). Зачепили продукт, межі, інфру — три блоки: **catalog full-text search** (`9178c04` — міграція 00016, `search_vector` tsvector GENERATED + GIN, config `simple` бо PG не має укр-словника, замінив ILIKE), **refund** (PR #19: міграція 00017, домен `PaymentRefunded` + refund-гілка в `DecidePaymentEvent`, WayForPay `Refunded`/`Voided`→подія, order-scoped revoke гранту в `Apply`, адмін-черга рефандів `/admin/refunds`; `make check` exit 0, e2e 115), **lesson-builder** (PR #20 `ddd459f`, LB00–LB15: структурований документ уроку — reader + lazy Tiptap editor під `/admin`, **новий 9-й доменний модуль `image`** з filesystem+postgres адаптерами й nginx image-serve гейтом під `/media/i/`, міграції 00018 (lesson_documents) / 00019 (drop flat lesson.description); `make check` exit 0, frontend 720 unit, e2e 118). Дефект, спійманий лише повним e2e на LB15: LB06-хвіст — lesson-level `description` у playback-фікстурах → 400. Перезібрано: шапку, §1 (9 модулів, +image, catalog/refund/lesson-builder закриті, +архітектурні факти №9 два media-гейти / №10 документ у `course`), §2 (продукт += документи уроку/зображення/full-text пошук/refund-черга), §3 (9-й модуль `image` seam + nginx image gate + lesson-documents у `course` + Tiptap), §4 (міграції 00016–00019, nginx image serve), §5 (**Tiptap — нова runtime-залежність**), §6 (refund-ризик знято, +ліміти lesson-builder). Історія re-sync'ів нижче збережена. |
 | Гейт свіжості 2026-10-11 | **76 комітів** від `9c0e64f` (база 2026-10-07). Зачепили продукт, межі, інфру: фаза **learning** (LR0–LR6, огляд учнів інструктора/адміна + блок автора з черги, G8 «адмін — не учень»; merge PR #16 `066bef9`), **admin-реконструкція** (NorthWind shell S0 `98fc79f`, /admin/users Fleet-таблиця S2 `53a0476`), **admin-stats** (новий 8-й доменний модуль `adminstats`, T1–T11, /admin/analytics; merge PR #17 `f88cf96`), **рев'ю-фікси** (role+sort фільтр /admin/users end-to-end, hex→токени, formatLocale; PR #18 `25d520f`), **CI-перебудова K10→K12→K13** (CI знову гейт; легкий per-PR + e2e на тегах; Go-кеш; свіжа e2e-БД), nginx e2e-burst. Перезібрано: шапку, §1 (8 модулів, learning/admin закриті, P0 нема, +факти adminstats і G8), §2 (продукт += analytics/learner-overview/roster-filter), §3 (8-й модуль `adminstats` seam, roster role/sort, learner overview у `course`), §4 (CI K12/K13), §5 (Storybook dev-dep), §6 (CI-ризик знято, +ліміти admin-stats). Історія re-sync'ів нижче збережена. |
 | Гейт свіжості (архів) | **38 комітів** від `2c0d29f` (база оплати). Зачепили продукт, межі й ризики: уся фаза **оплати, зрізи O01–O06a** (`e8ecd56`…`aeff91c`), дизайн-прохід клієнта й адмінки до мокапу (`9031e2f`, `1c90bfc`, `311ceb5`, `32c8a1d`, `22eead4`, `5e4ddb4`, `016de03`, `1b54c10`), чернетка спеки рейтингів (`d5543fd`), інструмент `visual-compare` (`1fe6cef`, `24381b2`). Перезібрано: шапку, §1 (оплата O01–O06a закрита, O06b/O06c/O07 відкриті; живий P0 лишається оплата), §2 (продукт += ціна/гранти/замовлення), §3 (новий модуль `orders`, ADR 014, розширений контракт доступу, дизайн-токени), §4 (без змін у гейтах, крім нового покриття), §5 (дві нові фронт-залежності — шрифти), §6 (два нові відкриті ризики — тестові флейки R23 і identity-інтеграція; старі ризики перенесено). Історія — у git. **Re-sync 2026-10-03:** точково оновлено під закриття фази оплати (хвіст O06b/O06c/O07, B-25, Pay25-live; `aeff91c`→`df5b380`) — §1, шапка, таблиці статусу та ризик 4; не повний rebuild. **Re-sync 2026-10-04:** точково оновлено під закриття фази рейтингів (spec-flow GATE 1/2, Rt01–Rt30, PR #5 `14aeb3b`, e2e 98 passed; 4 дефекти знайдено й закрито) та хвостів B-28/B-23 (PR #6 `83c5142`); `df5b380`→`83c5142` — §1, шапка, ризики; не повний rebuild. **Re-sync 2026-10-06:** точково оновлено під закриття фази **accounts** (self-service identity: реєстрація/верифікація/reset/зміна пароля-email/TOTP 2FA/CSP; GATE 1 G1–G14, GATE 2, Acc01–Acc31, PR #7 `d263045`, e2e 101; email-інфра Mailpit, міграція 00014, крос-модульний гейт верифікації через `access.CanStream`); `83c5142`→`d263045` — §1, шапка; не повний rebuild. **Re-sync 2026-10-07:** точково оновлено під закриття фази **enrollment** (членство як авторитетний факт доступу: один рядок `course_grants` на (user,course), стан active/blocked/revoked, free-контент вимагає членства; self-enrol/block/unblock/revoke, ростер із прогресом, скарги на учасників з адмін-чергою, предикати `CanConsume`/`CanCommunicate`, media-bytes гейт на nginx, backfill 00015 доведений на populated-даних; L1–L9, En01–En15, PR #8 `9c0e64f`, ordered `make check` green, e2e 107); `d263045`→`9c0e64f` — §1, шапка, таблиці статусу; не повний rebuild. |
 | Тез із міткою `⚠️ неперевірено` | **2** (§2 — витримка `limit_req` під навантаженням, успадкована; §6 — механізм тестових флейків R23/identity невстановлений, хоч інструментовано K4/K5). CI-ризик (був ⚠️-подібний) знято K10/K12 — CI знову гейт. |
-| Рішення людини (історичне) | **Оплата — остання фаза** (`PRODUCT-BRIEF.md` §24 п.21), **закрита 2026-10-03** (merge PR #3). **Модель оплати ухвалена 2026-09-28** (§24 п.22). **Провайдер ухвалено 2026-10-01:** WayForPay зараз, IBAN+QR пізніше, Paddle для ЄС (`docs/payment/provider-research.md` → Decision). **Ключ (власник, 2026-10-03):** Pay25-live пройшов на наявному SecretKey; тест-магазин `site_ex` видаляється, тож ротація не потрібна — наступний живий прогін на новому магазині з новим ключем (`docs/payment/assumptions.md`). Рейтинги — **фаза закрита 2026-10-04** (PR #5 `14aeb3b`), пройдено повним spec-flow (GATE 1 з 11 рішеннями власника про те, хто може оцінювати, самогрант заборонено, текст обов'язковий 20–2000, модерація за скаргами, видалення адміном). **Accounts (self-service identity) — закрито 2026-10-06** (PR #7 `d263045`): власник обрав identity-кластер першим (G1–G14 на GATE 1 — гейт верифікації read-only на контенті, автологін, 2FA опційне код-щоразу, remember-me 3 дні, без власного OAuth2). **Enrollment (K1) — закрито 2026-10-07** (PR #8 `9c0e64f`): власник ухвалив членство як один авторитетний рядок зі станом, free-контент за членством, self-enrol з верифікованим email, `GET /learn/memberships` як джерело «Моє навчання», revoke лише адміном. **Learning — закрито 2026-10-09** (merge PR #16): огляд учнів інструктора/адміна, блок автора з черги; **G8 (власник): адмін ніколи не учень** (не записується й не купує; модерує в адмінці). **Admin-реконструкція + admin-stats — закрито й злито 2026-10-10…11** (owner-initiated **поза §24**; PR #17 `f88cf96`, рев'ю-фікси PR #18 `25d520f`): NorthWind admin shell, /admin/users Fleet-таблиця з role/sort-фільтром, /admin/analytics (снапшот 6 доменів + лідерборд + engagement). Пройшло spec-flow GATE 1/2 + незалежне рев'ю Courses 2 (на PR #18 — до мерджу). **Роадмап §24 пройдено повністю; admin — поза роадмапом.** Деплой — **відкладено власником 2026-10-03** (тест-режим, без прод-сервера); рішення людини, не черга. |
+| Рішення людини (історичне) | **Оплата — остання фаза** (`PRODUCT-BRIEF.md` §24 п.21), **закрита 2026-10-03** (merge PR #3). **Модель оплати ухвалена 2026-09-28** (§24 п.22). **Провайдер ухвалено 2026-10-01:** WayForPay зараз, IBAN+QR пізніше, Paddle для ЄС (`docs/payment/provider-research.md` → Decision). **Ключ (власник, 2026-10-03):** Pay25-live пройшов на наявному SecretKey; тест-магазин `site_ex` видаляється, тож ротація не потрібна — наступний живий прогін на новому магазині з новим ключем (`docs/payment/assumptions.md`). Рейтинги — **фаза закрита 2026-10-04** (PR #5 `14aeb3b`), пройдено повним spec-flow (GATE 1 з 11 рішеннями власника про те, хто може оцінювати, самогрант заборонено, текст обов'язковий 20–2000, модерація за скаргами, видалення адміном). **Accounts (self-service identity) — закрито 2026-10-06** (PR #7 `d263045`): власник обрав identity-кластер першим (G1–G14 на GATE 1 — гейт верифікації read-only на контенті, автологін, 2FA опційне код-щоразу, remember-me 3 дні, без власного OAuth2). **Enrollment (K1) — закрито 2026-10-07** (PR #8 `9c0e64f`): власник ухвалив членство як один авторитетний рядок зі станом, free-контент за членством, self-enrol з верифікованим email, `GET /learn/memberships` як джерело «Моє навчання», revoke лише адміном. **Learning — закрито 2026-10-09** (merge PR #16): огляд учнів інструктора/адміна, блок автора з черги; **G8 (власник): адмін ніколи не учень** (не записується й не купує; модерує в адмінці). **Admin-реконструкція + admin-stats — закрито й злито 2026-10-10…11** (owner-initiated **поза §24**; PR #17 `f88cf96`, рев'ю-фікси PR #18 `25d520f`): NorthWind admin shell, /admin/users Fleet-таблиця з role/sort-фільтром, /admin/analytics (снапшот 6 доменів + лідерборд + engagement). Пройшло spec-flow GATE 1/2 + незалежне рев'ю Courses 2 (на PR #18 — до мерджу). **Refund — закрито 2026-10-11** (PR #19): WayForPay-рефанд у кабінеті → подія → order-scoped revoke гранту + адмін-черга видимості; закрив ризик §6:333 (`refund_required` без екрана). **Lesson-builder — закрито й злито 2026-10-13** (owner-initiated **поза §24**; PR #20 `ddd459f`): структурований документ уроку (reader + Tiptap editor + модуль `image`), спек/plan/GATE 1/2 пройдено; **рішення власника:** `contentType` у image-секції, редактор admin-scoped (без `/teach`-поверхні — follow-up). **Роадмап §24 пройдено повністю; admin і lesson-builder — поза роадмапом.** Деплой — **відкладено власником 2026-10-03** (тест-режим, без прод-сервера); рішення людини, не черга. |
 
 Брифінг — кеш первинних джерел, не істина. Розходиться з джерелом — править джерело,
 а кеш переписується під нього.
 
 ## 1. Вердикт на один екран
 
-`courses` — навчальна платформа: модульний Go-моноліт (**вісім** доменних модулів:
-`adminstats`, `course`, `discussion`, `identity`, `media`, `orders`, `playback`, `transcript`; плюс
+`courses` — навчальна платформа: модульний Go-моноліт (**дев'ять** доменних модулів:
+`adminstats`, `course`, `discussion`, `identity`, **`image`**, `media`, `orders`, `playback`, `transcript`; плюс
 допоміжний `testsupport` і крос-модульний шар `contracts/`) і **п'ять** окремих виконуваних файлів (`api`,
 `media-worker`, `upload`, `asr-worker`, `migrate`), SSR-фронт на TanStack Start, усе в одному
 Compose-стеку за nginx.
@@ -34,10 +35,14 @@ O06c (e2e через стаб + тунель) → O07 (упорядковани�
 `make check` exit 0 (rstest 541, e2e 89); CI «verify» червоний суто environmental (`make up` не
 піднімає compose у раннері), не регресія.
 
-**Живого P0 немає — роадмап §24 пройдено повністю, enrollment закрито.** Оплата (остання фаза §24 п.21),
-рейтинги, self-service **accounts** і **enrollment** (членство як авторитетний факт доступу) — усі закриті.
-**Наступного продуктового ходу немає**; деплой — рішення власника (відкладено 2026-10-03). Залишки
-enrollment (блокування авторів, крос-курсовий learning-overview) — за потребою. Деталі — агенда.
+**Живого P0 немає — роадмап §24 пройдено повністю.** Оплата (остання фаза §24 п.21), рейтинги,
+self-service **accounts**, **enrollment** (членство як авторитетний факт доступу), **learning** (огляд
+учнів + блок автора), **admin** (shell + /admin/users + /admin/analytics, поза §24), **refund** (PR #19,
+2026-10-11) і **lesson-builder** (PR #20, 2026-10-13, поза §24: структурований документ уроку + reader +
+Tiptap editor + модуль `image`) — усі закриті; каталог отримав **full-text пошук** (міграція 00016,
+tsvector замість ILIKE). **Наступного продуктового ходу немає**; черга — рішення власника (у роботі:
+**lecturer-initiated revoke**) + код-хвости (B-20 ASR-контракт та ін.). Деплой — рішення власника
+(відкладено 2026-10-03). Деталі — `work/AGENDA.md` (ребілд 2026-10-13).
 
 **Фаза рейтингів і відгуків закрита 2026-10-04** (PR #5 `14aeb3b`). Пройдено повним spec-flow: GATE 1
 (R1–R6 + 11 рішень власника), GATE 2 (критика/захист свіжою 4.8-сесією), приймальна таблиця Rt01–Rt30,
@@ -152,6 +157,20 @@ range/metric/bucket; application: тонкий сервіс, що штампує
 (`backend/internal/course/domain/learning.go`, `docs/learning/report.md`). Це змінило попередній
 enrollment-інваріант (адміну грант не видається).
 
+**Архітектурний факт №9 — під `/media/` тепер ДВА gated-шляхи, не один.** AGENTS.md заявляє, що
+байти досяжні лише під `/media/p/<playbackId>/` через `auth_request`. Lesson-builder додав другий:
+`/media/i/<id>.<ext>` для зображень документів уроку, з **власним** authorize-гейтом у модулі `image`
+(nginx `auth_request` → image-handler, не playback). Зображення зберігаються як `<id>.<ext>`, щоб nginx
+віддавав коректний content-type (рішення LB10a). Будь-яка зміна media-гейта тепер стосується обох
+шляхів; читати інваріант як «лише playback» — помилка (`infrastructure/nginx/nginx.conf`,
+`backend/internal/image/**`, `infrastructure/tests/image-authorize.sh`).
+
+**Архітектурний факт №10 — документ уроку живе в модулі `course`, не в окремому модулі.** Lesson-builder
+додав структурований документ уроку (reader + Tiptap editor), але доменна логіка документа — всередині
+`course` (`lesson_documents`, PK `(lesson_id, locale)`), окремий доменний модуль додано **лише для
+зображень** (`image`). Шукати «модуль document» на бекенді — хибний слід (`backend/internal/course/**`,
+міграція 00018, `docs/lesson-builder/report.md` LB01–LB05).
+
 ## 2. Продукт
 
 | Питання | Відповідь | Джерело |
@@ -178,8 +197,9 @@ enrollment-інваріант (адміну грант не видається).
 
 ## 3. Кодова база й seams
 
-Модулі бекенду (`backend/internal/`): **вісім** доменних — **`adminstats`** (новий, read-only),
-`course`, `discussion`, `identity`, `media`, `orders`, `playback`, `transcript` — плюс `testsupport`
+Модулі бекенду (`backend/internal/`): **дев'ять** доменних — `adminstats` (read-only),
+`course`, `discussion`, `identity`, **`image`** (новий, lesson-builder), `media`, `orders`, `playback`,
+`transcript` — плюс `testsupport`
 і крос-модульний шар `contracts/` (ADR 013, доповнений 014). Кожен доменний тримає
 `domain`/`application`/`ports`/`adapters`, залежності дивляться всередину. П'ять виконуваних файлів
 без змін (`backend/cmd/`).
@@ -187,6 +207,10 @@ enrollment-інваріант (адміну грант не видається).
 | Межа | Що її перетинає | Джерело |
 |---|---|---|
 | **nginx ↔ playback** — несучий шов Phase 6 | Байти медіа віддає nginx, `auth_request` на кожен плейлист/сегмент; оплата не змінила цей шов, лише додала join на право в `loadVideoCourse` (найгарячіший з 6 запитів) | `infrastructure/nginx/nginx.conf:55-86`, `docs/payment/plan.md` §«Де ляже join» #2 |
+| **nginx ↔ image** — ДРУГИЙ media-гейт (lesson-builder, 2026-10-13) | Зображення документів уроку під `/media/i/<id>.<ext>` з власним `auth_request` → image-handler (не playback). Зберігаються як `<id>.<ext>` щоб nginx дав коректний content-type (LB10a). Інваріант «байти лише через auth_request» тепер стосується ДВОХ шляхів (див. §1 факт №9) | `infrastructure/nginx/nginx.conf`, `backend/internal/image/**`, `infrastructure/tests/image-authorize.sh` |
+| **Новий модуль `image` (lesson-builder, 2026-10-13)** | Повний доменний модуль: `domain`/`application` (upload + authorize use cases), `ports`, `adapters` (filesystem для байтів + postgres для рядків). Зберігає байти на диск і метадані в БД; гейт доступу до зображення — у самому модулі, не імпортує інші | `backend/internal/image/**`, `docs/lesson-builder/report.md` LB07–LB10 |
+| **Документ уроку живе в `course` (lesson-builder)** | Структурований документ уроку (reader + Tiptap editor) — доменна логіка в `course` (`lesson_documents`, PK `(lesson_id, locale)`), НЕ окремий модуль; editor admin-scoped під `/admin/courses/$courseId/lessons/$lessonId`; HTTP-контракт у OpenAPI/Orval | `backend/internal/course/**`, міграція 00018, `docs/lesson-builder/report.md` LB01–LB05, LB12 |
+| **Full-text пошук каталогу (2026-10-13)** | `courses.search_vector` tsvector GENERATED ALWAYS (`to_tsvector('simple', title‖summary)`) + GIN-індекс; читання через `websearch_to_tsquery`, замінив ILIKE substring-match. Config `simple` бо PG не має укр-словника (`simple` коректно токенізує кирилицю) | міграція 00016, `9178c04` |
 | **Новий модуль `adminstats` (read-only, 2026-10-11)** | Повний доменний модуль, що лише ЧИТАЄ: `domain` (value-типи снапшоту + `UserSort`/`Metric`/`Bucket` + валідація range), `application/service.go` (штампує `singleInstructor`, делегує), `ports/stats_repository.go` (2 методи), `adapters/{postgres,http}`. Raw read-only pgx над спільним пулом, **без sqlc**; агрегує 6 доменних таблиць власним SQL, **не імпортує** жоден модуль (ADR 013). Два admin-only ендпойнти за `RequireAdministrator` | `backend/internal/adminstats/**`, `docs/admin-stats/report.md` |
 | **Admin roster фільтр/сорт (end-to-end, PR #18)** | `/admin/users` (модуль `identity`): `ListAdminUsers`/`CountAdminUsers` дістали `role_filter` (whitelist student/instructor/admin) і CASE-сортування (`sort_by` email/name/recent); порт→application→handler парсять+валідують (OpenAPI enum + власний 400-guard); фронт — два `<Select>` + i18n. Дефолтна форма запиту незмінна | `backend/sql/queries/identity.sql`, `backend/internal/identity/adapters/http/admin_handler.go`, `frontend/src/presentation/admin/UserListView.tsx` |
 | **Огляд учнів (learning, модуль `course`)** | `GET /teach/learners`/`/admin/learners` — ростер учнів курсу з прогресом; backend у `course` (не новий модуль); блок автора з черги модерації через `transitionMembership` | `backend/internal/course/domain/learning.go`, `docs/learning/report.md` |
@@ -223,18 +247,21 @@ ADR, обов'язкові перед відповідними шарами: `00
 | Два відкриті тестові флейки (нові, O05) | **R23** (`playback.spec.ts`, heartbeat 403): раз упав, 9 залежних не побігли; ізольований пересів 84/84 зелений; наступний повний гейт 88/88 без повтору; механізм звужено до `loadViewablePlayback` або `sameOrigin`-перевірки, непідтверджено. **`TestAdministrationRepositoryAgainstPostgreSQL`** (identity, пакет не чіпано слайсом O05): раз упав під час integration O05 slice2, 2 пересіви зелені, текст помилки не збережено — підозра на спільний стан БД/порядок тестів | `work/archive/review-o05-grant-ui.md` (кінець), `work/archive/review-o05-purchase-ui.md` (кінець) |
 | Пастка `check-generated` | Без змін — порівнює з індексом | `Makefile:59-61` |
 | Пастка docker (гейт) | Без змін | пам'ять `docker-credential-helper-hang` |
+| Міграції з 2026-10-11 | `00016_catalog_search` (search_vector tsvector + GIN), `00017_refund` (refund_reason), `00018_lesson_document` (lesson_documents + backfill з flat description), `00019_drop_lesson_description` (дроп колонки — оголив LB06-хвіст у playback-фікстурах). goose, lock_timeout 5s | `backend/migrations/0001[6-9]_*.sql` |
+| nginx image serve (lesson-builder) | Новий `location /media/i/` з `auth_request` → image-handler; окремо від `/media/p/` (playback) | `infrastructure/nginx/nginx.conf`, `infrastructure/tests/image-authorize.sh` |
 | Розгортання | Немає, не заявлено | `AGENTS.md` §Scope |
 | Якорі боргу в коді | Без змін (0 TODO/FIXME/ponytail:, 1 умовний ffmpeg-skip) | `grep -rn 't\.Skip' backend` |
 | Брудне дерево після гейта | Без змін — B-18 | `work/backlog.md` §B-18 |
 
 ## 5. Залежності
 
-Перечитано проти `frontend/package.json` і `backend/go.mod` (`git diff 9c0e64f..HEAD`). Go-залежності
-без змін (learning/admin-stats використали наявні pgx, Orval, Query). Фронт раніше додав два шрифти
-(дизайн-прохід); **нове 2026-10-10 — Storybook (dev-only)** для `AdminKit.stories` (каталог admin-UI-
-примітивів): `storybook ^10.6.1` + `storybook-react-rsbuild ^3.6.0`. Це **dev-залежність**, у
-прод-бандл і SSR не входить; жодної нової runtime-залежності. WayForPay-підпис — стандартна
-бібліотека Go.
+Перечитано проти `frontend/package.json` і `backend/go.mod` (`git diff 25d520f..HEAD`). Go-залежності
+без змін (refund/catalog/lesson-builder використали наявні pgx, Orval, Query; full-text пошук — чистий
+PG, без бібліотеки; зображення — stdlib `os`/`io`). **Нове 2026-10-13 (lesson-builder) — Tiptap, перша
+нова RUNTIME-залежність фронту за кілька фаз:** `@tiptap/{core,react,pm,starter-kit,extension-link}`
+^3.31.4 (+транзитивний ProseMirror) для rich-text editor документа уроку. Editor завантажується **lazy**
+(тільки на admin-маршруті редактора), reader його не тягне. Раніше додані: два шрифти (дизайн-прохід),
+Storybook (dev-only, `^10.6.1`). WayForPay-підпис — стандартна бібліотека Go.
 
 | Що | Версія | Чому важлива |
 |---|---|---|
@@ -248,6 +275,7 @@ ADR, обов'язкові перед відповідними шарами: `00
 | Rsbuild / Rstest | 2.2.2 / 0.11.11 | |
 | Playwright | 1.62.1 | `workers: 1`, `fullyParallel: false`; також рушій `frontend/tools/visual-compare` |
 | **Storybook (dev)** | ^10.6.1 (+`storybook-react-rsbuild` ^3.6.0) | Каталог admin-UI-примітивів (`AdminKit.stories`); dev-only, не в прод-бандлі |
+| **Tiptap (нове, runtime)** | ^3.31.4 (`core`/`react`/`pm`/`starter-kit`/`extension-link`) | Rich-text editor документа уроку; **lazy** лише на admin-editor-маршруті, reader не тягне (`docs/lesson-builder/report.md` LB12b) |
 | axe-core | 4.13.0 | |
 | MSW | 2.15.0 | |
 | faster-whisper / Silero VAD | — | без змін |
@@ -257,7 +285,9 @@ ADR, обов'язкові перед відповідними шарами: `00
 
 ## 6. Ризики
 
-**Статус 2026-10-11 (після learning + admin):**
+**Статус 2026-10-13 (після refund + catalog-search + lesson-builder):**
+- **Refund-ризик ЗНЯТО (PR #19).** `refund_required` тепер має адмін-екран (`/admin/refunds`) + order-scoped revoke гранту на WayForPay-рефанд-подію; закрив §6:333. Залишковий борг refund (`docs/refund/report.md` §6): ми НЕ ініціюємо рефанд (лише реагуємо на зроблений у кабінеті WayForPay); черга показує сирі id, не назви; `{items}` без пагінації (магнітуда — O(десятки) за весь час, механізм росту названо); refund-before-paid reordering не реконсилюється.
+- **Нові відкладені ліміти (lesson-builder, `docs/lesson-builder/report.md` §Limitations):** (1) editor admin-scoped — нема `/teach`-поверхні для інструктора на власний урок (follow-up); (2) один locale в UI — схема/ендпоінти locale-aware (PK `(lesson_id, locale)`), але editor/reader single-locale без перемикача; (3) нема sweeper для orphaned-image (байти збережено, row-insert впав → байти лишаються на диску); (4) scenario 7 (migrated flat description → документ) доведено на integration/domain, не e2e (колонку вже дропнуто міграцією 00019); (5) Tiptap лишив один pre-existing moderate advisory (`fast-uri`, транзитивний, не від Tiptap), нова runtime-advisory не внесена.
 - **CI знову гейт (ризик 5 — ЗНЯТО, K10→K12).** CI був non-gate з 09-11; відновлено 2026-10-07 (ран 5 зелений) і перебудовано K12: легкий per-PR гейт + e2e на тегах. Повний виклад нижче лишаю як історію того, що зловили (три класи прихованих тест-дефектів).
 - **e2e config/profile-drift (ризик 6 — ЗАКРИТО, K11+K13).** Абсолютний `COMPOSE_FILE`, `--no-recreate` у recovery.spec, свіжі томи за замовчуванням (K13). Детектори drift — ID/`.Created`/hash.
 - **Нові відкладені ліміти (admin-stats, `docs/admin-stats/report.md` §5):** метрики watch-through/теги/популярність — чесний placeholder, не фабриковані числа; 9b (видимий лідерборд) доведено unit+repo, не live-e2e (один e2e-стек = одне значення `PLATFORM_SINGLE_INSTRUCTOR`); без engagement-індексу (fine at scale, revisit якщо `lesson_progress` виросте); тренд лише day/week (cap 366 бакетів). **#6 з рев'ю:** визначення timeseries-метрики розкидане по доменному enum + SQL + FE — єдина мапа-джерело лише за реального росту набору метрик (датоване рішення, не борг).
@@ -330,8 +360,9 @@ ADR, обов'язкові перед відповідними шарами: `00
    єдиний захист від зловживання до підпису (`docs/payment/plan.md` §Side-effects).
 4. **Фаза оплати закрита (2026-10-03).** Pay25-live доведено production-шляхом: жива Approved-оплата
    1 грн на власному тест-режим-магазині через ngrok, справжній callback `POST→200`, застосовано
-   рівно раз (`docs/payment/report.md` §6). Залишковий ризик: повернення (`Refunded`/`Voided` після
-   `Approved`) ігноруються — доступ лишається; `refund_required` без адмін-екрана (§6, SQL там же).
+   рівно раз (`docs/payment/report.md` §6). **Оновлено 2026-10-11 (PR #19):** повернення
+   (`Refunded`/`Voided` після `Approved`) тепер обробляються — order-scoped revoke гранту + адмін-черга
+   `/admin/refunds`; попередній «refund_required без екрана» знято (див. статус угорі §6).
    Тест-магазин `site_ex` видаляється власником — ключ, що світився в чаті, зникає разом із ним.
 
 Ризики, перенесені без змін (детальний виклад — попередня редакція, не дублюється тут):
