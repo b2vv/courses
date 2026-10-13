@@ -1,13 +1,25 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-12, оновлено після LB06)
+## Handoff (2026-10-13, оновлено після LB09b-1)
 
-- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB05 ЗАКОМІЧЕНО** (7 комітів, HEAD `5cdb1bf`:
-  …LB04 · cde20d3 handoff · 5cdb1bf LB05 HTTP). НЕ запушено, PR ще нема. **LB06 — ЗРОБЛЕНО й ПОВНІСТЮ
-  верифіковано в сесії, але ще НЕ закомічено** (staged; коміт — лише на прохання власника). Реалізація —
-  **через Codex** (`codex exec "$(cat prompt)" < /dev/null`; CODEX_EXIT з лога; пісочниця Codex НЕ гонить
-  Docker/listen — sqlc-generate/check-generated/integration/фронт-тести проганяю сам). Промпти — scratchpad
-  `codex-lb0X-prompt.md` (є й lb05, lb06).
+- **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB09a ЗАКОМІЧЕНО**; HEAD `e0a4551` (LB09a) → +
+  LB09b-1 комітиться цим кроком. НЕ запушено, PR ще нема. **Standing-авторизація власника (2026-10-12):
+  авто-коміт кожного зеленого слайсу до кінця фази.** Реалізація — **через Codex** (`codex exec
+  "$(cat prompt)" < /dev/null`; CODEX_EXIT з лога; пісочниця Codex НЕ гонить Docker/listen —
+  sqlc-generate/check-generated/integration/фронт-тести проганяю сам). Промпти — scratchpad
+  `codex-lb0X-prompt.md`.
+- **LB09b-1 ЗРОБЛЕНО (комітиться):** `internal/image/adapters/postgres/access.go` — `LoadImageAccess`
+  (JOIN lesson_images→lessons→modules→courses LEFT JOIN course_grants; price/currency-mismatch guard;
+  Published/Paid/Entitled/Membership/Preview) + `LoadLessonOwner` (instructor_id, not-found→("",false,nil))
+  + `membership` helper + compile-time assertions AccessReader/AuthoringReader. Integration під Docker PASS
+  1.96s/3.18s (owner, missing lesson, owner/non-member/active-member CanConsumeBy, missing image→
+  ErrImageNotFound); gofmt/vet/build + boundary зелені. Підтверджено: published+unpaid+non-preview → не-член
+  CanConsume=false.
+- **ДАЛІ: LB09b-2** HTTP `POST /api/v1/admin/lessons/{id}/images` (multipart, MaxBytesReader 5m,
+  sniff→DecodeConfig→Upload) + internal `GET /internal/image/authorize` (`X-Image-Id`, actor з cookie,
+  normalizeAuthenticationDenial як playback) + contract-тести AC9 + `golang.org/x/image/webp` у go.mod.
+  Тоді **LB09b-3** OpenAPI(upload)+Orval+composition wiring `cmd/api/main.go`+слайс-гейт
+  (contract+integration+check-generated).
 - **ГОТЧА підтверджена знову:** фоновий `make … | tail; echo EXIT=$pipestatus` маскує код — перший запуск
   integration показав «exit 0» (обгортка), а насправді make впав «No rule to make target» бо cd не спрацював
   для фонового шелла → гони `make -C <root>` і читай EXIT із лога. [[background-exit-code-is-last-pipe]].
@@ -47,8 +59,8 @@
     email_not_verified, `application/{upload,authorize}.go`, `ports/access.go` (AccessReader/
     AuthoringReader). Unit на фейках зелені (Put/Insert call-counts + порядок Put→Insert). gofmt/vet/
     test/boundary зелені. Orphan-bytes-on-insert-fail — named limitation (нема sweeper у v1).
-  - **ДАЛІ: LB09b** `internal/image` postgres+HTTP+wiring: postgres `LoadImageAccess` (JOIN lesson_images→
-    …→course_grants) + `LoadLessonOwner` (instructor_id) + integration; HTTP `POST /api/v1/admin/lessons/
+  - **LB09b-1 ЗРОБЛЕНО** Codex+сесія 2026-10-13: postgres `LoadImageAccess`+`LoadLessonOwner`+integration
+    (деталі у Handoff вище). **ДАЛІ: LB09b-2/b-3** `internal/image` HTTP+wiring: HTTP `POST /api/v1/admin/lessons/
     {id}/images` (multipart, MaxBytesReader 5m, sniff→DecodeConfig→Upload) + internal `GET /internal/image/
     authorize` (`X-Image-Id`, actor з cookie, normalizeAuthenticationDenial як playback); OpenAPI(upload)+
     Orval; composition `cmd/api/main.go` (NewUploader(repo,fsStorage,repo,newUUID,time.Now), NewAuthorizer,
