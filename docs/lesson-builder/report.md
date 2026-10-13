@@ -645,3 +645,67 @@ one `section` region. A naive nested renderer that wraps every model node in a c
 (`document > section > content > block > item > span > mark`) would add a wrapper at each
 of ~6 model levels, roughly doubling the node count and pushing depth to ~7–8 for the
 same content. The flat semantic tree is the one shipped.
+
+### LB15 — phase gate (2026-10-13, Courses 1)
+
+Full ordered `make check` from the manifest, **exit 0** (14.2m e2e): format-check,
+lint, typecheck, test, integration, check-generated, build, e2e-reset, up,
+drain-queue, seed-identities, seed, smoke, e2e. Counts: frontend **720** unit
+tests (0 failed), Go race + integration **0 failures** across all packages,
+**e2e 118 passed**.
+
+**New e2e — `frontend/e2e/lesson-builder.spec.ts`** (closes the carries from LB11/LB12):
+- An admin builds a document (text + image upload + task) in the lazy editor and
+  publishes it; a member then reads it rendered, and the uploaded image is served
+  from `/media/i/<id>.png` (status 200) and decodes in the browser
+  (`naturalWidth > 0`). This is the editor → multipart upload → gated `/media/i`
+  serve → reader chain end to end (scenarios 1/2/8 + the row/image of 5).
+- Reorder by keyboard activates the move control and focus stays on a button, not
+  `<body>` — the isDisabled focus trap is absent (scenario 6, AC3) — and the
+  editor passes axe (wcag2a/2aa/21aa) at 200% text zoom.
+- A saved but unpublished draft stays invisible to the member (scenario 17): only
+  `published_body` is ever read.
+
+**Defect found by the full e2e (behind LB06's green per-slice gates).** The
+playback fixtures still sent a lesson-level `description`, which the API now
+rejects with 400 after migration 00019 dropped the column. LB06 deferred e2e to
+this gate, so this first full run is what caught it — the phase lesson exactly:
+a change to shared/persisted state is only proven by the whole e2e set, not by a
+diff review or a per-slice gate. Fixed in `c44315f` (five lesson descriptions
+removed; course-level descriptions untouched).
+
+**image-authorize.sh not wired into the gate.** The handoff suggested mirroring
+`playback-authorize.sh` into the phase gate, but `playback-authorize.sh` is not
+in `make check` either (it is a standalone diagnostic, not a gated step). The new
+e2e now exercises the image serve through the real browser over the production
+path (upload → `/media/i/<id>.png` → member authorize → 200 → decode), which is a
+stronger, recurring proof than the standalone script; `image-authorize.sh` stays
+as a standalone diagnostic alongside `playback-authorize.sh`. Verified against the
+grep, not the handoff assumption.
+
+## Limitations (phase)
+
+1. **The document editor is admin-scoped.** The route lives under `/admin`
+   (`admin.courses.$courseId_/lessons/$lessonId`); an admin can edit any lesson's
+   document (backend `CanEditLesson` admits admin), and instructors with
+   administration access reach it too, but there is no `/teach` editor surface for
+   an instructor editing only their own lesson documents. The plan specified the
+   admin route; a `/teach` surface is a follow-up, not built here.
+2. **Single locale in the UI.** The schema and endpoints are locale-aware (PK
+   `(lesson_id, locale)`), but the editor and reader work in one locale (the
+   document's own); a second locale is a future INSERT, with no editor affordance
+   to switch yet.
+3. **No orphaned-image sweep.** An image whose upload stored bytes but whose row
+   insert then failed leaves bytes on disk (named in LB09a); there is no sweeper
+   in v1.
+4. **Scenario 7 (migrated flat description) render is proven at the integration/
+   domain layer, not e2e.** Migration 00018's backfill → a valid single-text
+   document that passes `ValidateLessonDocument` and renders was proven in LB02's
+   integration test; no running-stack e2e reproduces a pre-migration description
+   (the column is already dropped), so the e2e covers the reader via freshly
+   authored documents instead.
+5. **Dependency audit.** Adding Tiptap left one pre-existing moderate advisory
+   (`fast-uri`, transitive, unrelated to Tiptap) unaddressed; no new runtime
+   advisory was introduced. Dev-toolchain advisories are unchanged.
+
+**The lesson-builder phase is complete: LB00–LB15 closed, `make check` exit 0.**
