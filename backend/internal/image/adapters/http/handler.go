@@ -135,10 +135,12 @@ func (handler *Handler) authorize(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, domain.ErrEmailNotVerified):
 		httpserver.WriteError(w, r, http.StatusForbidden, "email_not_verified", "Email verification is required")
-	case errors.Is(err, domain.ErrForbidden):
+	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrImageNotFound):
+		// This endpoint only answers nginx auth_request, which reads 2xx as allow and 401/403 as
+		// deny; any other status becomes a 500 it turns into the serve location's 503. A missing
+		// image is a denial, and collapsing it into 403 (rather than 404) also keeps a denied
+		// request from revealing whether the image exists.
 		httpserver.WriteError(w, r, http.StatusForbidden, "forbidden", "Image access is not authorized")
-	case errors.Is(err, domain.ErrImageNotFound):
-		httpserver.WriteError(w, r, http.StatusNotFound, "image_not_found", "Image was not found")
 	default:
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Image authorization is temporarily unavailable")
 	}

@@ -153,6 +153,15 @@ func main() {
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
 		mediaHandler := mediahttp.NewHandler(mediaTickets)
 		imageRepository := imagepostgres.NewRepository(dependencies.Database)
+		// The storage adapter opens an existing root (os.OpenRoot does not create it); the API owns
+		// bootstrapping its own tree inside the shared /media volume. 0750 (re-asserted against the
+		// umask) keeps bytes off the world while nginx reads them by its courses-group membership.
+		if err := os.MkdirAll(imageRoot, 0o750); err != nil {
+			return err
+		}
+		if err := os.Chmod(imageRoot, 0o750); err != nil {
+			return err
+		}
 		imageStorage, err := imagefs.New(imageRoot)
 		if err != nil {
 			return err

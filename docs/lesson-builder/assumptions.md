@@ -1,6 +1,6 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-13, оновлено після LB10a)
+## Handoff (2026-10-13, оновлено після LB10b — LB10 ЗАКРИТО)
 
 - **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB09a ЗАКОМІЧЕНО**; HEAD `e0a4551` (LB09a) → +
   LB09b-1 комітиться цим кроком. НЕ запушено, PR ще нема. **Standing-авторизація власника (2026-10-12):
@@ -44,7 +44,25 @@
   (ext-арг + `TestPutInvalidExtension`: "","gif","jpeg","exe","png/../escape","PNG"), upload_test
   (fakeStorage ловить extension, асерт `ExtensionFor(contentType)`). Гейти: gofmt/vet/unit
   (filesystem+http+app+domain)+boundary+full-build зелені.
-- **ДАЛІ: LB10b** nginx+compose+Dockerfile+integration. nginx: `map $uri $image_id` вирізає uuid ДО крапки
+- **LB10b ЗРОБЛЕНО (комітиться) — LB10 ЗАКРИТО.** nginx: `map $uri $image_id` (uuid до крапки з
+  `/media/i/<uuid>.(jpg|png|webp)`), `location ^~ /media/i/` → `auth_request /_image_auth` → rewrite strip
+  → `root /media` (mime за ext → Content-Type), security-headers + Cache-Control private; `/_image_auth` →
+  `proxy_pass $api/internal/image/authorize` X-Image-Id $img; upload-size = **вкладена** regex-локація в
+  `^~ /api/` (`~ ^/api/v1/admin/lessons/<uuid>/images$`, `client_max_body_size 6m`) — лишає top-level
+  precedence недоторканим (R30-валідатор проходить). compose: api `volumes:[media-data:/media]` +
+  `depends_on upload:service_started`; `os.MkdirAll(imageRoot,0750)`+Chmod у main.go (bootstrap дерева).
+  **ФІКС, знайдений доказом:** authorize `image_not_found` 404→**403** (auth_request розуміє лише
+  2xx/401/403; 404→500→@unavailable=503; 403 ще й не тече існування). Dockerfile НЕ чіпав (api-стадія без
+  /media; runtime MkdirAll). Гейти: nginx -t ok, R30 exit 0, build/vet/unit(filesystem+http+app+domain)+
+  boundary зелені; **`infrastructure/tests/image-authorize.sh` PASS у Compose** (base+e2e, api/migrate/nginx
+  пересоздані, DB догнав 00018+00019): owner=200+image/png, anonymous=403, outsider(не-член)=403,
+  malformed=403, missing=403, no-ext=403.
+- **ДАЛІ: LB11** фронтенд reader `LessonDocumentView` + query (віддача зображень новим шляхом
+  `/media/i/<id>.<ext>`; документ зберігає id+contentType або повний відносний URL — уточнити в LB11). Тоді
+  LB12 editor (Tiptap lazy, move БЕЗ isDisabled — [[isdisabled-on-focused-button-drops-focus]]), LB13 bundle
+  grep (нема base64), LB14 DOM flatness, LB15 ordered `make check` + повний e2e + звіт. **Нотатка для LB15:**
+  `image-authorize.sh` варто зачепити у фазовий гейт (як playback-authorize.sh).
+- **(нижче — старий детальний план LB10b, залишено для історії):** nginx: `map $uri $image_id` вирізає uuid ДО крапки
   з `/media/i/<uuid>.(jpe?g|png|webp)`; `location ^~ /media/i/` → `auth_request /_image_auth` (помилки →
   наявні @denied/@unavailable) → rewrite strip prefix → `root /media` (types{} дають Content-Type за ext) +
   security-headers + `Cache-Control private,no-store`; `location = /_image_auth` internal →
