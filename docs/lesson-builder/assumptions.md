@@ -260,6 +260,29 @@ frontend» СПРАЦЮВАВ (бек: таблиця документа+міг�
 
 ## Журнал
 
+### LB11 — як документ посилається на зображення = `contentType` у image-секції (2026-10-13, ВЛАСНИК — рішення, закриває альтернативу)
+
+- **Зберігати `contentType` (image/jpeg|png|webp) у image-секції документа; reader виводить
+  розширення клієнтськи й будує `/media/i/<imageId>.<ext>`.** Механізм/чому: nginx (LB10b) матчить
+  `^~ /media/i/` лише з розширенням (`map $uri $image_id` вирізає uuid ДО крапки), тож reader мусить
+  знати ext. Збережена секція несла тільки `imageId`+`alt`; content_type живе в таблиці `lesson_images`,
+  якою володіє модуль `image`, а `course` туди лізти не може (межі модулів). Три альтернативи:
+  (A) `contentType` у секції — обрано; (B) повний URL у секції — відкинуто (бейкає serve-шлях у
+  persisted jsonb, зміна префіксу вимагає міграції документів); (C) backend резолвить при read —
+  відкинуто (course-модуль читав би чужу таблицю lesson_images, порушення меж; або важкий контракт-шов).
+  Денормалізація мінімальна: і `imageId`, і `contentType` приходять з однієї upload-відповіді
+  (`ImageUploadResponse{id,contentType}`), editor (LB12) кладе їх разом, тож розбіжності неможливі; якщо
+  ext не збігся б з файлом на диску — URL дав би 404, видимо. **Даних для міграції нема: жодної
+  image-секції ще не збережено** (backfill 00018 робить лише text-секції). Перевірка: reader будує
+  `/media/i/<id>.png` для `contentType:"image/png"`, `<img>` рендерить під nosniff; domain-валідація
+  відмовляє image-секцію з contentType поза allowlist jpeg/png/webp. Рішення власника через
+  AskUserQuestion 2026-10-13.
+- **Розбивка:** LB11a (бекенд: поле `ContentType` у `domain.Section` + валідація image-секції
+  [allowlist, обов'язкове для image, заборонене для не-image], OpenAPI `LessonSection.contentType`
+  enum, Orval regen; unit domain + check-generated), LB11b (фронт: `LessonDocumentView` чистий
+  компонент, порт+адаптер+zod дзеркало транскрипта, query `learn.lessonDocument` неса-suspending,
+  слот у `OpenLesson`, порожній стан, unit + e2e render).
+
 ### LB10 — content-type зображення під nosniff = розширення у файлі (2026-10-13, ВЛАСНИК — рішення, закриває альтернативу)
 
 - **Зберігати `<id>.<ext>` (jpg/png/webp), serve-URL `/media/i/<id>.<ext>`; nginx mime-types дають

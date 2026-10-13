@@ -532,3 +532,50 @@ Blast radius note: LB06 touched **every** e2e spec (lesson-creation payloads dro
 `description` field, now rejected by DisallowUnknownFields). e2e was NOT run here — it is
 the LB15 phase gate (full ordered `make check` + e2e under enforcing CSP), which must run
 the whole suite because this slice changes shared/persisted schema.
+
+### LB11 — learner lesson-document reader (2026-10-13, Courses 1, direct)
+
+Implemented directly in the main session (not via Codex): a contained, read-only
+frontend slice with full context already loaded. Committed as two slices.
+
+**Owner decision (AskUserQuestion, 2026-10-13).** A rendered image needs the serve
+extension (`/media/i/<id>.<ext>`; nginx matches that location only with an extension),
+but the stored section carried only `imageId`, and the content type lives in the image
+module's `lesson_images` table, which the course module may not read. Chosen: the
+document carries `contentType` on image sections. Rejected: a full URL baked into the
+persisted jsonb (prefix change would need a document migration) and a backend resolve at
+read time (course reading the image module's table breaks module boundaries). No data
+migration: no image section has been stored yet. Artefact: `assumptions.md` Журнал LB11.
+
+**LB11a `5b942fc` (backend).** `domain.Section.ContentType` with validation: an image
+section must carry exactly one content type from the fixed `image/jpeg|png|webp` allowlist,
+every other section type must not carry one. OpenAPI `LessonSection.contentType` (enum),
+Orval regenerated. Verified: `go test ./internal/course/domain/ ./internal/course/adapters/http/` ok,
+`make check-generated` CG_EXIT=0 (no sqlc/Orval drift), frontend `tsc --noEmit` 0.
+
+**LB11b `5136c5e` (frontend).** `LessonDocumentView` renders the published body as
+semantic HTML with no editor dependency: text/task rich text (paragraph, h2/h3 heading,
+ordered/unordered list, bold/italic, http(s) link), image `<figure><img>`, and a depth-1
+`row` of text/image columns with a responsive CSS preset (stacks at narrow width and 200%
+zoom). A `video` section is played by the existing lesson player, not the reader, so a
+document that is only a video slot — or an absent publication — renders nothing (scenario
+4). The reader builds `/media/i/<imageId>.<ext>` from the section content type (mirror of
+`internal/image/domain.ExtensionFor`). The zod schema is the outermost mirror of the
+contract and refuses what the server should never produce before it reaches the DOM —
+above all a non-http(s) href (`javascript:` refused) and a non-UUID image id (a URL-path
+injection). The port/adapter/query mirror the transcript: request-scoped repository,
+non-suspending in the lesson route (a reader failure never stops playback), slotted into
+`OpenLesson` right after the player.
+
+Verified: `tsc --noEmit` 0; `oxfmt` + `oxlint --deny-warnings` + architecture boundaries 0;
+frontend suite **702** tests pass (14 new: component render of every section type + URL
+extension + empty/video-only → null + migration parity; domain helpers; schema accept/reject).
+
+**Limitation — e2e render carried to LB15.** Scenarios 2/3/7 (a learner reading a published
+document, including the migrated flat description) are e2e-render rows. They are deferred to
+the LB15 phase gate: no editor (LB12) exists yet to author a document, and the e2e seed has
+no `lesson_documents` row, so the phase e2e (lesson-builder.spec) will seed or author a
+published document and assert rendering there, alongside the full ordered `make check`. This
+matches the plan's "full e2e at LB15". The reader's client-side logic is covered by the unit
+suite; what LB15 adds is the real `/media/i/<id>.<ext>` fetch and the gated document endpoint
+over the production path.
