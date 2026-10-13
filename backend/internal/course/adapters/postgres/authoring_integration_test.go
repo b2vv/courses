@@ -143,7 +143,7 @@ func (h *authoringHarness) testTreeSaveAndDeleteMissing(t *testing.T) {
 	trimmed := saved
 	trimmed.Modules = []domain.Module{{
 		ID: authoringModuleOne, Title: "Module one retained", Position: 0,
-		Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Lesson one retained", Description: "Kept", Position: 0}},
+		Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Lesson one retained", Position: 0}},
 	}}
 	clockReading := trimmed.UpdatedAt.Add(789 * time.Nanosecond)
 	saved = h.save(t, trimmed, clockReading)
@@ -188,12 +188,12 @@ func (h *authoringHarness) testLessonMove(t *testing.T) {
 	h.reset(t)
 	tree := h.createCourse(t, "lesson-move", authoringInstructorID)
 	tree.Modules = []domain.Module{
-		{ID: authoringModuleOne, Title: "Origin", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Moving lesson", Description: "Same row", Position: 0}}},
+		{ID: authoringModuleOne, Title: "Origin", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Moving lesson", Position: 0}}},
 		{ID: authoringModuleTwo, Title: "Destination", Position: 1, Lessons: []domain.Lesson{}},
 	}
 	saved := h.save(t, tree, tree.UpdatedAt.Add(time.Second))
 	saved.Modules[0].Lessons = []domain.Lesson{}
-	saved.Modules[1].Lessons = []domain.Lesson{{ID: authoringLessonOne, Title: "Moving lesson", Description: "Same row", Position: 0}}
+	saved.Modules[1].Lessons = []domain.Lesson{{ID: authoringLessonOne, Title: "Moving lesson", Position: 0}}
 	saved = h.save(t, saved, saved.UpdatedAt.Add(time.Second))
 	if len(saved.Modules[0].Lessons) != 0 || len(saved.Modules[1].Lessons) != 1 || saved.Modules[1].Lessons[0].ID != authoringLessonOne {
 		t.Fatalf("lesson did not move intact: %+v", saved.Modules)
@@ -389,7 +389,7 @@ func (h *authoringHarness) testForeignNodeIDs(t *testing.T) {
 	x.Modules = []domain.Module{{ID: authoringModuleOne, Title: "X module", Position: 0, Lessons: []domain.Lesson{}}}
 	x = h.save(t, x, x.UpdatedAt.Add(time.Second))
 	y := h.createCourse(t, "course-y", authoringOtherInstructorID)
-	y.Modules = []domain.Module{{ID: authoringModuleTwo, Title: "Y module", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Y lesson", Description: "Owned by Y", Position: 0}}}}
+	y.Modules = []domain.Module{{ID: authoringModuleTwo, Title: "Y module", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Y lesson", Position: 0}}}}
 	y = h.save(t, y, y.UpdatedAt.Add(time.Second))
 	xBefore, err := h.repository.Load(h.ctx, x.ID)
 	if err != nil {
@@ -406,7 +406,7 @@ func (h *authoringHarness) testForeignNodeIDs(t *testing.T) {
 		t.Fatalf("foreign module save=%v", err)
 	}
 	foreignLesson := cloneTree(xBefore)
-	foreignLesson.Modules[0].Lessons = []domain.Lesson{{ID: authoringLessonOne, Title: "Stolen lesson", Description: "Wrong course", Position: 0}}
+	foreignLesson.Modules[0].Lessons = []domain.Lesson{{ID: authoringLessonOne, Title: "Stolen lesson", Position: 0}}
 	if _, err := h.repository.Save(h.ctx, adminActor(), foreignLesson, xBefore.UpdatedAt, xBefore.UpdatedAt.Add(time.Second)); !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("foreign lesson save=%v", err)
 	}
@@ -433,7 +433,7 @@ func (h *authoringHarness) testForeignNodeIDs(t *testing.T) {
 func (h *authoringHarness) testCancelledSave(t *testing.T) {
 	h.reset(t)
 	tree := h.createCourse(t, "cancelled-save", authoringInstructorID)
-	tree.Modules = []domain.Module{{ID: authoringModuleOne, Title: "Original module", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Original lesson", Description: "Before", Position: 0}}}}
+	tree.Modules = []domain.Module{{ID: authoringModuleOne, Title: "Original module", Position: 0, Lessons: []domain.Lesson{{ID: authoringLessonOne, Title: "Original lesson", Position: 0}}}}
 	stored := h.save(t, tree, tree.UpdatedAt.Add(time.Second))
 	lock, err := h.pool.Begin(h.ctx)
 	if err != nil {
@@ -592,11 +592,11 @@ func draft(slug, ownerID string) domain.CourseDraft {
 func fullTree() []domain.Module {
 	return []domain.Module{
 		{ID: authoringModuleOne, Title: "Module one", Position: 0, Lessons: []domain.Lesson{
-			{ID: authoringLessonOne, Title: "Lesson one", Description: "First", Position: 0},
-			{ID: authoringLessonTwo, Title: "Lesson two", Description: "Second", Position: 1},
+			{ID: authoringLessonOne, Title: "Lesson one", Position: 0},
+			{ID: authoringLessonTwo, Title: "Lesson two", Position: 1},
 		}},
 		{ID: authoringModuleTwo, Title: "Module two", Position: 1, Lessons: []domain.Lesson{
-			{ID: authoringLessonTri, Title: "Lesson three", Description: "Third", Position: 0},
+			{ID: authoringLessonTri, Title: "Lesson three", Position: 0},
 		}},
 	}
 }

@@ -44,7 +44,6 @@ const tree: CourseTree = {
         {
           id: asBrandedId(lessonId, 'lesson'),
           title: 'First lesson',
-          description: '',
           isPreview: false,
         },
       ],

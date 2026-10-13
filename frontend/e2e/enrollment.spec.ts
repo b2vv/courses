@@ -119,7 +119,7 @@ async function createFreeCourse(request: APIRequestContext, baseURL: string, suf
         {
           id: randomUUID(),
           title: `Модуль ${suffix}`,
-          lessons: [{ id: lessonID, title: `Урок ${suffix}`, description: '' }],
+          lessons: [{ id: lessonID, title: `Урок ${suffix}` }],
         },
       ],
     },

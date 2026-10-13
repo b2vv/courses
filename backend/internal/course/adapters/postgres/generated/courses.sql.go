@@ -312,7 +312,7 @@ func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCou
 
 const listAuthoringLessons = `-- name: ListAuthoringLessons :many
 SELECT lessons.id::text AS id, lessons.module_id::text AS module_id,
-  lessons.title, lessons.description, lessons.position, lessons.is_preview
+  lessons.title, lessons.position, lessons.is_preview
 FROM course_lessons AS lessons
 JOIN course_modules AS modules ON modules.id = lessons.module_id
 WHERE modules.course_id = $1::text::uuid
@@ -320,12 +320,11 @@ ORDER BY modules.position, modules.id, lessons.position, lessons.id
 `
 
 type ListAuthoringLessonsRow struct {
-	ID          string
-	ModuleID    string
-	Title       string
-	Description string
-	Position    int32
-	IsPreview   bool
+	ID        string
+	ModuleID  string
+	Title     string
+	Position  int32
+	IsPreview bool
 }
 
 func (q *Queries) ListAuthoringLessons(ctx context.Context, courseID string) ([]ListAuthoringLessonsRow, error) {
@@ -341,7 +340,6 @@ func (q *Queries) ListAuthoringLessons(ctx context.Context, courseID string) ([]
 			&i.ID,
 			&i.ModuleID,
 			&i.Title,
-			&i.Description,
 			&i.Position,
 			&i.IsPreview,
 		); err != nil {

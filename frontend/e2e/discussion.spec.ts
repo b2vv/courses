@@ -64,7 +64,7 @@ async function createCourse(
         {
           id: moduleID,
           title: `Модуль ${runNamespace}`,
-          lessons: [{ id: lessonID, title: `Урок ${runNamespace}`, description: '' }],
+          lessons: [{ id: lessonID, title: `Урок ${runNamespace}` }],
         },
       ],
     },

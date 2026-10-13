@@ -558,10 +558,9 @@ func applicationTree() domain.CourseTree {
 			Title:    "Module",
 			Position: 0,
 			Lessons: []domain.Lesson{{
-				ID:          "30000000-0000-4000-8000-000000000001",
-				Title:       "Lesson",
-				Description: "Description",
-				Position:    0,
+				ID:       "30000000-0000-4000-8000-000000000001",
+				Title:    "Lesson",
+				Position: 0,
 			}},
 		}},
 	}

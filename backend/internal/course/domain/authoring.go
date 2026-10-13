@@ -21,8 +21,8 @@ const (
 )
 
 // The domain owns these ceilings; the contract derives from them and does not restate them as
-// a second truth (backlog B-3). MaximumModules and MaximumLessonDescription map onto a single
-// JSON Schema keyword each, so openapi.yaml can enforce them. MaximumLessons cannot: it counts
+// a second truth (backlog B-3). MaximumModules maps onto a single
+// JSON Schema keyword, so openapi.yaml can enforce it. MaximumLessons cannot: it counts
 // lessons cumulatively across every module, and JSON Schema has no way to bound a sum over
 // sibling arrays. A schema that declared it per module would read as a course ceiling of
 // 40*120 and enforce nothing, so the per-module maxItems stays at MaximumLessons - one module
@@ -30,9 +30,8 @@ const (
 // request that breaks it is refused by name through ErrLessonLimit rather than as a generic
 // invalid request.
 const (
-	MaximumModules           = 40
-	MaximumLessons           = 120
-	MaximumLessonDescription = 1000
+	MaximumModules = 40
+	MaximumLessons = 120
 )
 
 type ActorRole string
@@ -60,12 +59,11 @@ type CourseDraft struct {
 }
 
 type Lesson struct {
-	ID          string
-	Title       string
-	Description string
-	Position    int
-	IsPreview   bool
-	PreviewSet  bool
+	ID         string
+	Title      string
+	Position   int
+	IsPreview  bool
+	PreviewSet bool
 }
 
 type Module struct {
@@ -206,7 +204,7 @@ func validateModules(modules []Module) error {
 			return ErrLessonLimit
 		}
 		for lessonPosition, lesson := range module.Lessons {
-			if !validNode(lesson.ID, lesson.Title, lesson.Position, lessonPosition, seenIDs) || !validOptionalText(lesson.Description, MaximumLessonDescription) {
+			if !validNode(lesson.ID, lesson.Title, lesson.Position, lessonPosition, seenIDs) {
 				return ErrInvalidRequest
 			}
 		}

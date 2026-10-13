@@ -69,7 +69,7 @@ test('R11 names access denial for a student visiting another author’s draft', 
           {
             id: moduleID,
             title: `Модуль ${runNamespace}`,
-            lessons: [{ id: lessonID, title: 'Урок доступу', description: '' }],
+            lessons: [{ id: lessonID, title: 'Урок доступу' }],
           },
         ],
       },

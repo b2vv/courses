@@ -161,8 +161,8 @@ func (h *draftHarness) reset(t *testing.T) {
 			[]any{draftCourse, draftInstructor, draftNow}},
 		{`INSERT INTO course_modules(id,course_id,title,position,created_at,updated_at) VALUES($1,$2,'M',0,$3,$3)`,
 			[]any{draftModule, draftCourse, draftNow}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position,created_at,updated_at) VALUES
-		($1,$5,'L1','',0,$6,$6),($2,$5,'L2','',1,$6,$6),($3,$5,'L3','',2,$6,$6),($4,$5,'L4','',3,$6,$6)`,
+		{`INSERT INTO course_lessons(id,module_id,title,position,created_at,updated_at) VALUES
+		($1,$5,'L1',0,$6,$6),($2,$5,'L2',1,$6,$6),($3,$5,'L3',2,$6,$6),($4,$5,'L4',3,$6,$6)`,
 			[]any{recoverLesson1, recoverLesson2, recoverLesson3, recoverLesson4, draftModule, draftNow}},
 	}
 	for _, s := range statements {

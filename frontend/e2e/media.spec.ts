@@ -252,7 +252,6 @@ test.describe('the first real video through the whole chain', () => {
               lessons: Object.values(lessons).map((lesson) => ({
                 id: lesson.id,
                 title: lesson.title,
-                description: '',
               })),
             },
           ],

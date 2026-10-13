@@ -81,7 +81,6 @@ describe('admin authoring rules', () => {
       {
         id: asBrandedId('60000000-0000-4000-8000-000000000001', 'lesson'),
         title: 'Урок',
-        description: '',
         isPreview: false,
       },
     ],

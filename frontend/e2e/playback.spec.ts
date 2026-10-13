@@ -61,12 +61,10 @@ const primaryCourseModules = [
       {
         id: lessonID,
         title: `First lesson ${namespace}`,
-        description: 'HLS ownership and recovery.',
       },
       {
         id: secondLessonID,
         title: `Second lesson ${namespace}`,
-        description: 'The next curriculum step.',
       },
     ],
   },
@@ -77,12 +75,10 @@ const primaryCourseModules = [
       {
         id: thirdLessonID,
         title: `Third lesson ${namespace}`,
-        description: 'A later curriculum step.',
       },
       {
         id: fourthLessonID,
         title: `Fourth lesson ${namespace}`,
-        description: 'The final curriculum step.',
       },
     ],
   },
@@ -698,7 +694,6 @@ test.describe('T7 playback milestone', () => {
                   {
                     id: crossCourseLessonID,
                     title: `Cross-course lesson ${namespace}`,
-                    description: 'Proves ownership is not scoped to a course.',
                   },
                 ],
               },

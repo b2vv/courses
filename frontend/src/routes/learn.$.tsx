@@ -16,6 +16,7 @@ import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { LockedLessonPanel } from '../presentation/learn/LockedLessonPanel';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
+import { LessonDocumentView } from '../presentation/learn/LessonDocumentView';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
 import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
 import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';
@@ -177,6 +178,9 @@ function OpenLesson({
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
   const { data: transcript } = useQuery(learn.lesson(lessonId));
+  // The document body is additive and not suspended on either: a reader failure must not stop the
+  // lesson, and an absent publication returns an empty document that renders as nothing.
+  const { data: lessonDocument } = useQuery(learn.lessonDocument(lessonId));
   const discussionQuery = useInfiniteQuery(learn.discussion.lesson(lessonId));
   const ownReview = useQuery(
     learn.ownReview(course.id, identity.status === 'signed-in' ? identity.user.id : 'anonymous'),
@@ -275,6 +279,7 @@ function OpenLesson({
           onPlaybackChannel={onPlaybackChannel}
         />
       )}
+      {lessonDocument === undefined ? null : <LessonDocumentView document={lessonDocument} />}
       {transcript === undefined ? null : (
         <TranscriptPanel
           transcript={transcript}

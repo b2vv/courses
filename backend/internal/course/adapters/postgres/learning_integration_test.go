@@ -100,7 +100,7 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 			('41000000-0000-4000-8000-000000000012','rating-two@learning.test','Rating two','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
 			('41000000-0000-4000-8000-000000000013','rating-three@learning.test','Rating three','student','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')`, nil},
 			{`INSERT INTO course_modules(id,course_id,title,position) VALUES ('61000000-0000-4000-8000-000000000011',$1,'Second module',1)`, []any{learningCourseID}},
-			{`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('71000000-0000-4000-8000-000000000011','61000000-0000-4000-8000-000000000011','Second module lesson','',0)`, nil},
+			{`INSERT INTO course_lessons(id,module_id,title,position) VALUES ('71000000-0000-4000-8000-000000000011','61000000-0000-4000-8000-000000000011','Second module lesson',0)`, nil},
 			{`INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES
 			('81000000-0000-4000-8000-000000000011',$1,'41000000-0000-4000-8000-000000000011',4,'First learning rating is long enough.',0,5,now()),
 			('81000000-0000-4000-8000-000000000012',$1,'41000000-0000-4000-8000-000000000012',5,'Second learning rating is long enough.',0,5,now()),
@@ -161,7 +161,7 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 				if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 					t.Fatal(err)
 				}
-				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson','',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
+				if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES(gen_random_uuid(),$1,'Lesson',0,$2) RETURNING id::text`, moduleID, test.Preview).Scan(&lessonID); err != nil {
 					t.Fatal(err)
 				}
 
@@ -226,7 +226,7 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 			t.Fatal(err)
 		}
 		for position, preview := range []bool{false, true, false} {
-			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,$2,'',$3,$4)`, moduleID, fmt.Sprintf("Lesson %d", position+1), position, preview); err != nil {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES(gen_random_uuid(),$1,$2,$3,$4)`, moduleID, fmt.Sprintf("Lesson %d", position+1), position, preview); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -438,15 +438,15 @@ func learningFixtures() []string {
 			('` + learningModuleID + `','` + learningCourseID + `','Learning module',0),
 			('` + learningArchiveModule + `','` + learningArchiveCourse + `','Archived module',0),
 			('` + learningB07Module + `','` + learningB07Course + `','B07 module',0)`,
-		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES
-		('` + learningLessonOne + `','` + learningModuleID + `','Lesson one','',0),
-		('` + learningLessonTwo + `','` + learningModuleID + `','Lesson two','',1),
-			('` + learningLessonThree + `','` + learningModuleID + `','Lesson three','',2),
-			('` + learningLessonFour + `','` + learningModuleID + `','Lesson four','',3),
-			('` + learningArchivedLesson + `','` + learningArchiveModule + `','Archived lesson','',0),
-			('` + learningB07ShortLesson + `','` + learningB07Module + `','Short replacement','',0),
-			('` + learningB07ProcessingLesson + `','` + learningB07Module + `','Processing duration','',1),
-			('` + learningB07NullDurationLesson + `','` + learningB07Module + `','Null duration','',2)`,
+		`INSERT INTO course_lessons(id,module_id,title,position) VALUES
+		('` + learningLessonOne + `','` + learningModuleID + `','Lesson one',0),
+		('` + learningLessonTwo + `','` + learningModuleID + `','Lesson two',1),
+			('` + learningLessonThree + `','` + learningModuleID + `','Lesson three',2),
+			('` + learningLessonFour + `','` + learningModuleID + `','Lesson four',3),
+			('` + learningArchivedLesson + `','` + learningArchiveModule + `','Archived lesson',0),
+			('` + learningB07ShortLesson + `','` + learningB07Module + `','Short replacement',0),
+			('` + learningB07ProcessingLesson + `','` + learningB07Module + `','Processing duration',1),
+			('` + learningB07NullDurationLesson + `','` + learningB07Module + `','Null duration',2)`,
 		`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES
 			('` + learningViewerID + `','` + learningLessonOne + `',95,now(),3,now()),
 			('` + learningViewerID + `','` + learningLessonThree + `',100,now(),4,now()),
@@ -467,8 +467,8 @@ func learningFixtures() []string {
 			('` + learningB08Course + `','` + learningOwnerID + `','learning-b08','Learning B08','Learning B08 summary','Learning B08 description','published',now())`,
 		`INSERT INTO course_modules(id,course_id,title,position) VALUES
 			('` + learningB08Module + `','` + learningB08Course + `','B08 module',0)`,
-		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES
-			('` + learningB08Lesson + `','` + learningB08Module + `','Watched replacement','',0)`,
+		`INSERT INTO course_lessons(id,module_id,title,position) VALUES
+			('` + learningB08Lesson + `','` + learningB08Module + `','Watched replacement',0)`,
 		`INSERT INTO lesson_progress(user_id,lesson_id,position_seconds,completed_at,client_seq,updated_at) VALUES
 			('` + learningViewerID + `','` + learningB08Lesson + `',95,now()-interval '2 hours',8,now()-interval '2 hours')`,
 		`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,failure_reason,expires_at,evicted_at,created_at,updated_at,duration_seconds) VALUES

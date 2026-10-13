@@ -172,7 +172,7 @@ func TestDiscussionPostgres(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(), $1::uuid, 'Module', 0) RETURNING id::text`, l4bCourse).Scan(&l4bModule); err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(), $1::uuid, 'Lesson', '', 0) RETURNING id::text`, l4bModule).Scan(&l4bLesson); err != nil {
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(), $1::uuid, 'Lesson', 0) RETURNING id::text`, l4bModule).Scan(&l4bLesson); err != nil {
 			t.Fatal(err)
 		}
 		createMember := func(t *testing.T, state string) string {
@@ -232,7 +232,7 @@ func TestDiscussionPostgres(t *testing.T) {
 		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, membershipCourseID).Scan(&membershipModuleID); err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES(gen_random_uuid(),$1,'Lesson','',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
+		if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(),$1,'Lesson',0) RETURNING id::text`, membershipModuleID).Scan(&membershipLessonID); err != nil {
 			t.Fatal(err)
 		}
 		if err := pool.QueryRow(ctx, `INSERT INTO discussion_comments(lesson_id,author_id,body) VALUES($1,$2,'membership facts') RETURNING id::text`, membershipLessonID, discussionOwner).Scan(&membershipCommentID); err != nil {
@@ -311,7 +311,7 @@ func TestDiscussionPostgres(t *testing.T) {
 		})
 		t.Run("Rt12 frozen progress and Rt13 edit recaptures", func(t *testing.T) {
 			review := create(t, fx.reviewA, fx.buyer, 4)
-			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position) VALUES($1::uuid,$2::uuid,'five','',4),($3::uuid,$2::uuid,'six','',5)`, fx.lesson5, fx.module, fx.lesson6); err != nil {
+			if _, err := pool.Exec(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES($1::uuid,$2::uuid,'five',4),($3::uuid,$2::uuid,'six',5)`, fx.lesson5, fx.module, fx.lesson6); err != nil {
 				t.Fatal(err)
 			}
 			for _, lesson := range []string{fx.lesson3, fx.lesson4, fx.lesson5, fx.lesson6} {
@@ -827,7 +827,7 @@ func TestDiscussionPostgres(t *testing.T) {
 			if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'M',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
 				t.Fatal(err)
 			}
-			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES(gen_random_uuid(),$1,'L','',0,$2) RETURNING id::text`, moduleID, truth.Preview).Scan(&lessonID); err != nil {
+			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES(gen_random_uuid(),$1,'L',0,$2) RETURNING id::text`, moduleID, truth.Preview).Scan(&lessonID); err != nil {
 				t.Fatal(err)
 			}
 			actor := domain.Actor{UserID: discussionStudent, Administrator: truth.Role == accesstest.Administrator, EmailVerified: true}
@@ -1081,8 +1081,8 @@ func seedDiscussion(t *testing.T, pool *pgxpool.Pool) {
 		`INSERT INTO course_modules(id,course_id,title,position) VALUES ('20000000-0000-4000-8000-0000000000e1','10000000-0000-4000-8000-0000000000d1','M',0)`,
 		`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at) VALUES ('` + moderationCourse + `','moderation','Moderation','S','D','published','` + discussionOwner + `',now())`,
 		`INSERT INTO course_modules(id,course_id,title,position) VALUES ('` + moderationModule + `','` + moderationCourse + `','M',0)`,
-		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('` + discussionLesson + `','20000000-0000-4000-8000-0000000000e1','L','',0),('` + positiveLesson + `','20000000-0000-4000-8000-0000000000e1','Positive','',1),('` + cascadeLesson + `','20000000-0000-4000-8000-0000000000e1','Cascade','',2)`,
-		`INSERT INTO course_lessons(id,module_id,title,description,position) VALUES ('` + moderationLessonA + `','` + moderationModule + `','A','',0),('` + moderationLessonB + `','` + moderationModule + `','B','',1)`,
+		`INSERT INTO course_lessons(id,module_id,title,position) VALUES ('` + discussionLesson + `','20000000-0000-4000-8000-0000000000e1','L',0),('` + positiveLesson + `','20000000-0000-4000-8000-0000000000e1','Positive',1),('` + cascadeLesson + `','20000000-0000-4000-8000-0000000000e1','Cascade',2)`,
+		`INSERT INTO course_lessons(id,module_id,title,position) VALUES ('` + moderationLessonA + `','` + moderationModule + `','A',0),('` + moderationLessonB + `','` + moderationModule + `','B',1)`,
 		`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,original_name,renditions,expires_at,created_at,updated_at,duration_seconds) VALUES ('` + discussionAsset + `','` + discussionLesson + `',1,'ready',10,'a.mp4','{720p}',now()+interval '1 day',now(),now(),120),('50000000-0000-4000-8000-0000000000c2','` + discussionLesson + `',2,'processing',10,'b.mp4','{}',now()+interval '1 day',now(),now(),NULL),('` + positiveAsset + `','` + positiveLesson + `',1,'ready',10,'positive-a.mp4','{720p}',now()+interval '1 day',now(),now(),45),('50000000-0000-4000-8000-0000000000c4','` + positiveLesson + `',2,'ready',10,'positive-b.mp4','{720p}',now()+interval '1 day',now(),now(),90),('50000000-0000-4000-8000-0000000000c5','` + positiveLesson + `',3,'processing',10,'positive-c.mp4','{}',now()+interval '1 day',now(),now(),NULL)`,
 	}
 	for _, statement := range statements {
@@ -1122,7 +1122,7 @@ func seedRatings(t *testing.T, pool *pgxpool.Pool) ratingsFixture {
 	}{
 		{`INSERT INTO courses(id,slug,title,summary,description,status,instructor_id,published_at,price_minor,currency) VALUES($1::uuid,'ratings-fixture','ratings','s','d','published',$2::uuid,now(),100,'UAH')`, []any{fx.course, discussionOwner}},
 		{`INSERT INTO course_modules(id,course_id,title,position) VALUES($1::uuid,$2::uuid,'ratings',0)`, []any{fx.module, fx.course}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position,is_preview) VALUES('74000000-0000-4000-8000-000000000001',$1::uuid,'one','',0,false),('74000000-0000-4000-8000-000000000002',$1::uuid,'two','',1,true),($2::uuid,$1::uuid,'three','',2,false),($3::uuid,$1::uuid,'four','',3,false)`, []any{fx.module, fx.lesson3, fx.lesson4}},
+		{`INSERT INTO course_lessons(id,module_id,title,position,is_preview) VALUES('74000000-0000-4000-8000-000000000001',$1::uuid,'one',0,false),('74000000-0000-4000-8000-000000000002',$1::uuid,'two',1,true),($2::uuid,$1::uuid,'three',2,false),($3::uuid,$1::uuid,'four',3,false)`, []any{fx.module, fx.lesson3, fx.lesson4}},
 		{`INSERT INTO course_grants(user_id,course_id,source,state,granted_at) VALUES($1::uuid,$3::uuid,'admin','active',now()),($2::uuid,$3::uuid,'admin','active',now())`, []any{fx.buyer, fx.grantee, fx.course}},
 	}
 	for _, statement := range statements {

@@ -135,8 +135,8 @@ INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,publi
 VALUES ('$course_id','$admin_id','playback-$run_hex','Playback authorization','Playback authorization summary','Playback authorization description','published',now());
 INSERT INTO course_modules(id,course_id,title,position)
 VALUES ('$module_id','$course_id','Playback benchmark',0);
-INSERT INTO course_lessons(id,module_id,title,description,position)
-VALUES ('$lesson_id','$module_id','Authorize benchmark','',0);
+INSERT INTO course_lessons(id,module_id,title,position)
+VALUES ('$lesson_id','$module_id','Authorize benchmark',0);
 INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
 VALUES ('$video_id','$lesson_id',1,'ready',1,1,'benchmark.mp4',ARRAY['360p'],now()+interval '1 day',now(),now());
 SQL

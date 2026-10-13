@@ -613,8 +613,8 @@ func (h *tusHarness) reset(t *testing.T) {
 		($1,$2,'tus-course','Tus course','Tus summary','Tus description','draft',$3,$3)`, []any{tusCourseID, tusInstructorID, tusNow}},
 		{`INSERT INTO course_modules(id,course_id,title,position,created_at,updated_at) VALUES
 		($1,$2,'Tus module',0,$3,$3)`, []any{tusModuleID, tusCourseID, tusNow}},
-		{`INSERT INTO course_lessons(id,module_id,title,description,position,created_at,updated_at) VALUES
-		($1,$2,'Lesson one','',0,$3,$3)`, []any{tusLessonOne, tusModuleID, tusNow}},
+		{`INSERT INTO course_lessons(id,module_id,title,position,created_at,updated_at) VALUES
+		($1,$2,'Lesson one',0,$3,$3)`, []any{tusLessonOne, tusModuleID, tusNow}},
 	}
 	for _, statement := range statements {
 		if _, err := h.pool.Exec(h.ctx, statement.sql, statement.arguments...); err != nil {
