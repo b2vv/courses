@@ -20,6 +20,7 @@ import { createSessionQueries, sessionQueryKey } from '../app/composition/identi
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
 import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
+import { createAdminDocumentQueries } from '../app/composition/admin-document-queries';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
@@ -261,6 +262,12 @@ function createTestRouter(
         stats: createAdminStatsQueries({
           snapshot: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
           timeseries: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+        }),
+        documents: createAdminDocumentQueries({
+          getDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          saveDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          publish: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          uploadImage: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
         }),
       },
       // Route guards never open the editor, so the in-memory store is the whole truth here.

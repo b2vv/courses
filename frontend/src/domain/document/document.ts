@@ -91,3 +91,50 @@ export function imageServeUrl(imageId: string, contentType: LessonImageContentTy
 export function hasRenderableSections(document: LessonDocument): boolean {
   return document.sections.some((section) => section.type !== 'video');
 }
+
+// --- Authoring (admin editor side) ---------------------------------------------------------------
+// Loading a draft, saving it under an optimistic lock, publishing it, and uploading an image to
+// reference from an image section. Kept in this file because a domain file imports nothing.
+
+export type DocumentAuthoringErrorCode =
+  | 'invalid_lesson_document'
+  | 'invalid_request'
+  | 'forbidden'
+  | 'course_forbidden'
+  | 'lesson_not_found'
+  | 'document_conflict'
+  | 'authentication_required'
+  | 'dependency_unavailable'
+  | 'unavailable';
+
+export type ImageUploadErrorCode =
+  | 'invalid_image'
+  | 'unsupported_image'
+  | 'image_too_large'
+  | 'image_too_many_pixels'
+  | 'forbidden'
+  | 'lesson_not_found'
+  | 'authentication_required'
+  | 'dependency_unavailable'
+  | 'unavailable';
+
+export type LessonDocumentDraft = {
+  readonly document: LessonDocument;
+  /** The optimistic-lock token to send back when saving or publishing; null when no row exists. */
+  readonly updatedAt: string | null;
+};
+
+export type UploadedImage = {
+  readonly imageId: string;
+  readonly contentType: LessonImageContentType;
+  readonly width: number;
+  readonly height: number;
+};
+
+export type DocumentAuthoringResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: { readonly code: DocumentAuthoringErrorCode } };
+
+export type ImageUploadResult =
+  | { readonly ok: true; readonly value: UploadedImage }
+  | { readonly ok: false; readonly error: { readonly code: ImageUploadErrorCode } };
