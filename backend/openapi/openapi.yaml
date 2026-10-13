@@ -923,6 +923,47 @@ paths:
         '409': { $ref: '#/components/responses/TranscriptConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/lessons/{id}/images:
+    post:
+      operationId: uploadAdminLessonImage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The image file (JPEG, PNG or WebP; up to 5 MiB; max 40 megapixels).
+      responses:
+        '201':
+          description: Image stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageUploadResponse' }
+        '400': { $ref: '#/components/responses/MediaBadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/MediaForbidden' }
+        '404': { $ref: '#/components/responses/LessonNotFound' }
+        '413':
+          description: Image is too large.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '415':
+          description: Image format is not supported.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   /api/v1/admin/lessons/{lessonId}/video:
     post:
       operationId: mintAdminVideoTicket
@@ -3098,6 +3139,14 @@ components:
       required: [expectedUpdatedAt]
       properties:
         expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
+    ImageUploadResponse:
+      type: object
+      required: [id, contentType, width, height]
+      properties:
+        id: { type: string, format: uuid }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        width: { type: integer }
+        height: { type: integer }
     MediaTicketRequest:
       type: object
       additionalProperties: false
