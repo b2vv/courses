@@ -1,6 +1,6 @@
 # lesson-builder — жива нота (assumptions / розвилки)
 
-## Handoff (2026-10-13, оновлено після LB09b-3 — LB09 ЗАКРИТО)
+## Handoff (2026-10-13, оновлено після LB10a)
 
 - **Гілка** `feat/lesson-builder` off main@9e7759e. **LB00–LB09a ЗАКОМІЧЕНО**; HEAD `e0a4551` (LB09a) → +
   LB09b-1 комітиться цим кроком. НЕ запушено, PR ще нема. **Standing-авторизація власника (2026-10-12):
@@ -37,11 +37,26 @@
   наявні компоненти); `/internal/image/authorize` НЕ в спеці (nginx-internal). Orval regen → новий
   `uploadAdminLessonImage` + моделі. Гейти: `make check-generated` exit 0, `go build ./cmd/api` ok, frontend
   `tsc --noEmit` 0 помилок, contract 24 + image-postgres integration зелені.
-- **ДАЛІ: LB10** nginx. Нова serve-локація `^~ /media/i/` з `auth_request /internal/image/authorize`
-  (X-Image-Id = сегмент шляху/ім'я файлу `<id>`), нова upload-локація з `client_max_body_size` **> 5 MiB**
-  (envelope slack — інакше справжнє 5-MiB зображення ріжеться; НЕ переюз /uploads tus, НЕ піднімати /api=1m);
-  дерево `/media/i` створити у compose з 0750/0640 group-readable (os.OpenRoot не MkdirAll); compose +
-  integration auth_request (403 без членства). Тоді LB11–13 фронт, LB14 DOM, LB15 gate+e2e+звіт.
+- **LB10a ЗРОБЛЕНО (комітиться):** формат сховища з розширенням (рішення власника про content-type під
+  nosniff — Журнал). `ports.Storage.Put(ctx, id, extension, r)`; filesystem пише `<id>.<ext>` з
+  `validExtension` {jpg,png,webp} у traversal-guard; `domain.ExtensionFor(contentType)` (jpeg→jpg/png→png/
+  webp→webp); `application.Upload` мапить `image.ContentType`→ext і передає в Put. Тести: storage_test
+  (ext-арг + `TestPutInvalidExtension`: "","gif","jpeg","exe","png/../escape","PNG"), upload_test
+  (fakeStorage ловить extension, асерт `ExtensionFor(contentType)`). Гейти: gofmt/vet/unit
+  (filesystem+http+app+domain)+boundary+full-build зелені.
+- **ДАЛІ: LB10b** nginx+compose+Dockerfile+integration. nginx: `map $uri $image_id` вирізає uuid ДО крапки
+  з `/media/i/<uuid>.(jpe?g|png|webp)`; `location ^~ /media/i/` → `auth_request /_image_auth` (помилки →
+  наявні @denied/@unavailable) → rewrite strip prefix → `root /media` (types{} дають Content-Type за ext) +
+  security-headers + `Cache-Control private,no-store`; `location = /_image_auth` internal →
+  `proxy_pass $api/internal/image/authorize`, `proxy_set_header X-Image-Id $image_id`; upload-size: regex
+  `~ ^/api/v1/admin/lessons/<uuid>/images$` з `client_max_body_size 6m`+`proxy_request_buffering off`
+  (УВАГА precedence: `^~ /api/` короткозамикає regex → конвертувати `^~ /api/`→`/api/` plain-prefix, regex
+  перевіряється першим; наразі інших regex-локацій нема, тож безпечно). compose: api `volumes:
+  [media-data:/media]` (read_only root + volume rw ок), `depends_on upload: service_started` (K13 populate-
+  race), api створює `/media/i` на старті — `os.MkdirAll(imageRoot, 0750)` у `cmd/api/main.go` ПЕРЕД
+  `imagefs.New` (композиція бутстрапить середовище; LB08-Storage навмисно без MkdirAll). nginx вже
+  `group_add:['10001']`+ro — читає 0640/0750 gid-10001. integration: Compose up → upload через API → fetch
+  через nginx з членством (200 + Content-Type) і без (403). Тоді LB11–13 фронт, LB14 DOM, LB15 gate+e2e+звіт.
 - **ГОТЧА підтверджена знову:** фоновий `make … | tail; echo EXIT=$pipestatus` маскує код — перший запуск
   integration показав «exit 0» (обгортка), а насправді make впав «No rule to make target» бо cd не спрацював
   для фонового шелла → гони `make -C <root>` і читай EXIT із лога. [[background-exit-code-is-last-pipe]].
@@ -226,6 +241,23 @@ frontend» СПРАЦЮВАВ (бек: таблиця документа+міг�
   підсилення пізніше; галерея посилається на альбом, не інлайнить сотні референсів.
 
 ## Журнал
+
+### LB10 — content-type зображення під nosniff = розширення у файлі (2026-10-13, ВЛАСНИК — рішення, закриває альтернативу)
+
+- **Зберігати `<id>.<ext>` (jpg/png/webp), serve-URL `/media/i/<id>.<ext>`; nginx mime-types дають
+  Content-Type за розширенням.** Механізм/чому: глобальний `X-Content-Type-Options: nosniff`
+  (nginx.conf:49) + пласке `<id>` без розширення → nginx віддає `application/octet-stream`, а під nosniff
+  браузер ВІДМОВЛЯЄТЬСЯ рендерити це в `<img>` (серв зламаний). Stock-образ `nginxinc/nginx-unprivileged`
+  не має `headers-more`, `default_type` не бере змінну з auth-сабреквесту → content-type із заголовка
+  авторизації підставити НЕ можна. Розширення у файлі — стандартний stock-nginx патерн (types{} за ext).
+  Відкинуто: X-Accel-Redirect (інший патерн серва ніж playback auth_request, API у шляху серва) і
+  flat+custom-nginx (нестандартний образ, крихко). Рішення власника через AskUserQuestion 2026-10-13.
+  Наслідок (pre-launch, ріжу сміливо — [[pre-launch-cut-freely]]): ревізія закомічених LB08 (Storage.Put
+  +extension) і LB09 (Upload мапить content-type→ext). ext: image/jpeg→jpg, png→png, webp→webp. Перевірка:
+  upload пише `/media/i/<id>.jpg`, nginx віддає з `Content-Type: image/jpeg`, `<img>` рендерить під nosniff.
+- **Розбивка:** LB10a (бекенд: формат сховища з розширенням + domain ExtensionFor + Upload + тести,
+  unit+filesystem), LB10b (nginx serve `^~ /media/i/`+auth_request+upload-size-локація, compose api-монт
+  media-data rw + /media/i, Dockerfile за потреби, integration auth_request у Compose).
 
 ### LB09b-3 — корінь сховища зображень (2026-10-13, я — рішення, закриває альтернативу)
 

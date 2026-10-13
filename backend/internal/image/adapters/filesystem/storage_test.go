@@ -10,7 +10,11 @@ import (
 	"testing"
 )
 
-const imageID = "12345678-1234-4234-8234-123456789abc"
+const (
+	imageID  = "12345678-1234-4234-8234-123456789abc"
+	imageExt = "png"
+	imageKey = imageID + "." + imageExt
+)
 
 func newTestStorage(t *testing.T) (*Storage, string) {
 	t.Helper()
@@ -41,11 +45,11 @@ func assertEmpty(t *testing.T, directory string) {
 func TestPut(t *testing.T) {
 	storage, directory := newTestStorage(t)
 	payload := []byte("image bytes")
-	written, err := storage.Put(context.Background(), imageID, bytes.NewReader(payload))
+	written, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader(payload))
 	if err != nil || written != int64(len(payload)) {
 		t.Fatalf("Put = %d, %v; want %d, nil", written, err, len(payload))
 	}
-	name := filepath.Join(directory, imageID)
+	name := filepath.Join(directory, imageKey)
 	got, err := os.ReadFile(name)
 	if err != nil || !bytes.Equal(got, payload) {
 		t.Fatalf("stored bytes = %q, %v; want %q", got, err, payload)
@@ -63,7 +67,20 @@ func TestPutInvalidID(t *testing.T) {
 	for _, id := range []string{"../escape", "not-a-uuid", "00000000-0000-0000-0000-000000000000", "12345678-1234-4234-8234-123456789ABC", "12345678-1234-4234-8234-123456789abg", "12345678_1234-4234-8234-123456789abc"} {
 		t.Run(id, func(t *testing.T) {
 			storage, directory := newTestStorage(t)
-			written, err := storage.Put(context.Background(), id, bytes.NewReader([]byte("image")))
+			written, err := storage.Put(context.Background(), id, imageExt, bytes.NewReader([]byte("image")))
+			if written != 0 || !errors.Is(err, errInvalidImageKey) {
+				t.Fatalf("Put = %d, %v; want 0, invalid image key", written, err)
+			}
+			assertEmpty(t, directory)
+		})
+	}
+}
+
+func TestPutInvalidExtension(t *testing.T) {
+	for _, ext := range []string{"", "gif", "jpeg", "exe", "png/../escape", "PNG"} {
+		t.Run(ext, func(t *testing.T) {
+			storage, directory := newTestStorage(t)
+			written, err := storage.Put(context.Background(), imageID, ext, bytes.NewReader([]byte("image")))
 			if written != 0 || !errors.Is(err, errInvalidImageKey) {
 				t.Fatalf("Put = %d, %v; want 0, invalid image key", written, err)
 			}
@@ -75,13 +92,13 @@ func TestPutInvalidID(t *testing.T) {
 func TestPutDuplicatePreservesOriginal(t *testing.T) {
 	storage, directory := newTestStorage(t)
 	payload := []byte("original image")
-	if _, err := storage.Put(context.Background(), imageID, bytes.NewReader(payload)); err != nil {
+	if _, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader(payload)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := storage.Put(context.Background(), imageID, bytes.NewReader([]byte("replacement"))); err == nil {
+	if _, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader([]byte("replacement"))); err == nil {
 		t.Fatal("duplicate Put succeeded")
 	}
-	got, err := os.ReadFile(filepath.Join(directory, imageID))
+	got, err := os.ReadFile(filepath.Join(directory, imageKey))
 	if err != nil || !bytes.Equal(got, payload) {
 		t.Fatalf("original bytes = %q, %v; want %q", got, err, payload)
 	}
@@ -91,7 +108,7 @@ func TestPutCancelledContext(t *testing.T) {
 	storage, directory := newTestStorage(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	written, err := storage.Put(ctx, imageID, bytes.NewReader([]byte("image")))
+	written, err := storage.Put(ctx, imageID, imageExt, bytes.NewReader([]byte("image")))
 	if written != 0 || !errors.Is(err, context.Canceled) {
 		t.Fatalf("Put = %d, %v; want 0, context canceled", written, err)
 	}
@@ -121,7 +138,7 @@ func TestPutRemovesPartialFile(t *testing.T) {
 			if duringCopy {
 				wantErr = context.Canceled
 			}
-			written, err := storage.Put(ctx, imageID, reader)
+			written, err := storage.Put(ctx, imageID, imageExt, reader)
 			if written != int64(len("partial")) || !errors.Is(err, wantErr) {
 				t.Fatalf("Put = %d, %v; want %d, %v", written, err, len("partial"), wantErr)
 			}

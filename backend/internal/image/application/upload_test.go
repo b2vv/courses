@@ -88,8 +88,14 @@ func TestUpload(t *testing.T) {
 			} else if got != want {
 				t.Fatalf("Upload = %+v, want %+v", got, want)
 			}
-			if tt.wantPut == 1 && (storage.id != want.ID || !bytes.Equal(storage.data, data)) {
-				t.Fatal("storage did not receive the image ID and bytes")
+			if tt.wantPut == 1 {
+				wantExt, err := domain.ExtensionFor(contentType)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if storage.id != want.ID || storage.extension != wantExt || !bytes.Equal(storage.data, data) {
+					t.Fatalf("storage received id=%q ext=%q bytes=%d; want id=%q ext=%q", storage.id, storage.extension, len(storage.data), want.ID, wantExt)
+				}
 			}
 			if tt.wantInsert == 1 && repository.image != want {
 				t.Fatalf("inserted image = %+v, want %+v", repository.image, want)
@@ -112,15 +118,17 @@ func (f *fakeAuthoringReader) LoadLessonOwner(_ context.Context, lessonID string
 }
 
 type fakeStorage struct {
-	id    string
-	data  []byte
-	err   error
-	calls int
+	id        string
+	extension string
+	data      []byte
+	err       error
+	calls     int
 }
 
-func (f *fakeStorage) Put(_ context.Context, id string, r io.Reader) (int64, error) {
+func (f *fakeStorage) Put(_ context.Context, id, extension string, r io.Reader) (int64, error) {
 	f.calls++
 	f.id = id
+	f.extension = extension
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return 0, err

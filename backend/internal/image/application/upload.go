@@ -36,7 +36,11 @@ func (u *Uploader) Upload(ctx context.Context, actor domain.Actor, lessonID, con
 	if err != nil {
 		return domain.Image{}, err
 	}
-	if _, err := u.storage.Put(ctx, image.ID, bytes.NewReader(data)); err != nil {
+	extension, err := domain.ExtensionFor(image.ContentType)
+	if err != nil {
+		return domain.Image{}, err
+	}
+	if _, err := u.storage.Put(ctx, image.ID, extension, bytes.NewReader(data)); err != nil {
 		return domain.Image{}, err
 	}
 	// Insert failure orphans stored bytes in this tiny window after a successful write; v1 has no image sweeper.

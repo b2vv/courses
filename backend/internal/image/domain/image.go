@@ -39,6 +39,21 @@ func DetectContentType(head []byte) (string, error) {
 	return "", ErrUnsupportedImage
 }
 
+// ExtensionFor maps a validated content type to the file extension used on disk and in the serve
+// URL (/media/i/<id>.<ext>), so nginx derives the Content-Type by extension under nosniff.
+func ExtensionFor(contentType string) (string, error) {
+	switch contentType {
+	case ContentTypeJPEG:
+		return "jpg", nil
+	case ContentTypePNG:
+		return "png", nil
+	case ContentTypeWebP:
+		return "webp", nil
+	default:
+		return "", ErrUnsupportedImage
+	}
+}
+
 func AcceptDimensions(width, height int) error {
 	if width <= 0 || height <= 0 {
 		return ErrInvalidImage
