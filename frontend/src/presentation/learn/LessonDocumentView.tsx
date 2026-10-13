@@ -26,12 +26,12 @@ export function LessonDocumentView({ document }: LessonDocumentViewProps) {
   if (!hasRenderableSections(document)) return null;
   return (
     <section className="lesson-document" aria-label={t('learn.document.region')}>
-      {document.sections.map((section) => renderSection(section))}
+      {document.sections.map((section) => renderSection(section, t('learn.document.task')))}
     </section>
   );
 }
 
-function renderSection(section: LessonSection): ReactNode {
+function renderSection(section: LessonSection, taskLabel: string): ReactNode {
   switch (section.type) {
     case 'video':
       // Played by the lesson player, not the document reader.
@@ -45,6 +45,7 @@ function renderSection(section: LessonSection): ReactNode {
     case 'task':
       return (
         <section key={section.id} className="lesson-document-task" data-section="task">
+          <p className="lesson-document-task-label">{taskLabel}</p>
           <RichText content={section.content} />
         </section>
       );
@@ -79,11 +80,11 @@ function renderColumn(column: LessonColumn): ReactNode {
 
 function RichText({ content }: { readonly content: LessonRichText }) {
   return (
-    <>
+    <div className="lesson-prose">
       {content.blocks.map((block, index) => (
         <Block key={index} block={block} />
       ))}
-    </>
+    </div>
   );
 }
 
