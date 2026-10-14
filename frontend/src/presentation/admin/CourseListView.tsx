@@ -41,7 +41,7 @@ export function CourseListView({
         <Table
           label={t('administration.courseTable')}
           columns={[
-            { id: 'title', label: t('administration.courseTitle') },
+            { id: 'title', label: t('administration.courseTitle'), rowHeader: true },
             { id: 'slug', label: t('administration.slug') },
             { id: 'status', label: t('administration.status') },
             { id: 'owner', label: t('administration.owner') },

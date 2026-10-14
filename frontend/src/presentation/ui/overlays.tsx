@@ -5,6 +5,8 @@ import { Button } from './controls';
 
 type DialogProps = {
   triggerLabel: string;
+  /** Optional composed trigger, e.g. a tooltip around an icon button. */
+  trigger?: ReactElement;
   /** When set, the trigger keeps `triggerLabel` as its visible text but exposes this as its
    * accessible name — lets a dense table show a short verb while assistive tech and tests still
    * read the full, name-qualified action. */
@@ -16,6 +18,7 @@ type DialogProps = {
 
 export function Dialog({
   triggerLabel,
+  trigger,
   triggerAriaLabel,
   title,
   closeLabel,
@@ -23,9 +26,14 @@ export function Dialog({
 }: DialogProps) {
   return (
     <Aria.DialogTrigger>
-      <Button variant="secondary" {...(triggerAriaLabel ? { 'aria-label': triggerAriaLabel } : {})}>
-        {triggerLabel}
-      </Button>
+      {trigger ?? (
+        <Button
+          variant="secondary"
+          {...(triggerAriaLabel ? { 'aria-label': triggerAriaLabel } : {})}
+        >
+          {triggerLabel}
+        </Button>
+      )}
       <Aria.ModalOverlay className="ui-modal-overlay" isDismissable>
         <Aria.Modal className="ui-modal">
           <Aria.Dialog className="ui-dialog">

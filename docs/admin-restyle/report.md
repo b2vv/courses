@@ -80,4 +80,96 @@ passed (17.1m)**, 0 fail (лог `codex-s0-gate2.log`). Фікси верифі�
 гліфи 16px; drawer aria-label = toggle. Courses 2 звірила дерево — 0 blocker, approve.
 
 ### Наступне
-Merge PR #23 у main. Далі S1 (DataTable, спільний, повний e2e).
+S0 змержено в main (PR #23 squash `ca592c4`). Далі S1.
+
+---
+
+## S1 — DataTable (спільний примітив)
+
+**Статус:** реалізовано, повний гейт зелений, browser-verify зроблено; **на рев'ю Courses 2** перед комітом.
+
+### Рекон-корекція скоупу (Explore, `scratchpad/s1-recon.md`)
+Тикет злегка переобтяжив: **courses-таблиця read-only (без дій)** — compact-icon/sticky стосуються лише
+Users; **жодної числової колонки** в consumer'ах S1 → `align` відкладено на S4 (Analytics). E2e прибиває
+name-bearing aria-labels Users-дій + `role=row` → compact мусить зберегти РІВНО їх.
+
+### Зроблено (7 файлів)
+- `ui/data.tsx` (спільний Table): opt-in `TableColumn.pin?:'end'` / `rowHeader?:boolean` (default-вигляд
+  незмінний → Analytics не регресить); **явні ролі** `table/rowgroup/row/cell/columnheader/rowheader` +
+  `data-label`/`data-pin`. caption/emptyMessage/tabIndex/Pagination збережено.
+- `app/styles/main.css` + `tokens.css`: elevation (`--shadow-card`) на `.admin-list-results`; sticky
+  `[data-pin='end']` (непрозорий `--color-surface` + hairline); `th[scope='row']` reset (ідентифікатор не
+  uppercase); **narrow ≤52rem stacked-cards** (`display:block` + `[data-label]::before`), pin→static,
+  compact actions — усе **скоупнуто до `.admin-list-results`** → Analytics (S4) і report/refund-черги (S6)
+  не зачеплені.
+- `admin/UserListView.tsx`: account→rowHeader, actions→pin='end'; стековані текст-кнопки → compact
+  icon-`Button` у `Tooltip` (inline-SVG 16px), **aria-labels дослівні** (`adminUsers.block/restore/delete/
+  resetPassword` + name), tooltip=`*Short`; danger/handlers/`noActions` збережено.
+- `admin/CourseListView.tsx`: лише title→rowHeader.
+- `ui/overlays.tsx` + `admin/ResetPasswordDialog.tsx` (поза явним скоупом, обґрунтовано): opt-in
+  `trigger?:ReactElement` до спільного `Dialog` (default-гілка незмінна → інші споживачі безпечні), reset
+  передає icon-trigger. Conditional spread під `exactOptionalPropertyTypes`.
+
+### Дефект, зловлений до гейту
+Явні ролі валили oxlint `no-interactive-element-to-noninteractive-role` (false-positive — td/tr/th не
+інтерактивні). Розширив justified `oxlint-disable` на обидва правила з поясненням: ролі потрібні, бо
+narrow `display:block` **губить implicit table-ролі** (інакше SR і e2e `getByRole('row')` втрачають таблицю).
+
+### Верифікація
+- **Ordered `make check` (повний e2e)** зелений: `GATE_EXIT=0`, **e2e 118 passed (16.7m)**, 0 fail
+  (лог `codex-s1-gate.log`). Зокрема `admin-users.spec P08` (block/restore/**reset**/delete) ПРОЙШОВ —
+  доводить, що `DialogTrigger>Tooltip>Button` reset-trigger працює і name-bearing aria-labels цілі.
+- **Browser-verify на реальному prod-коді** (CDP, `localhost:8080`, admin):
+  - Desktop (1280): compact icon-дії 3×`44×44` з aria-labels «Block/Delete/Reset password for <name>»;
+    sticky `[data-pin=end]` (`position:sticky; inset-inline-end:0`, непрозорий `rgb(17,19,23)`); elevation-
+    тінь; `role=table`, 7×`role=row`, rowheader-ідентифікатор.
+  - **Narrow 390 (критично):** `tr display:block`, але **`role=row` ЗБЕРЕЖЕНО** (Users 7, Courses 20 —
+    явні ролі переживають reflow); обидві таблиці → stacked labeled cards (`::before`: Email/Role/Status/
+    Updated · Title/Slug/Status/Owner/Updated); дії на narrow видимі `44×44` з aria-labels, pin→static;
+    h-scroll 0.
+  - 200% zoom (в'юпорт 640 + text-zoom root 200%): h-scroll 0.
+
+### Обмеження / межі
+- Forced-colors live — та сама межа (тулінг не емулює); S1 НЕ вводить нової forced-colors-чутливої
+  поверхні (нема gradient/flat CTA), лише токен-адаптивні таблиці. OS-перемикач — власнику.
+- `align` (right-align чисел) відкладено на S4 (нема числового consumer'а в S1).
+- Narrow card-семантика тримається на явних ролях + `data-label::before` (стандартний responsive-table
+  патерн); SR-асоціацію header↔cell при схованому `thead` варто окремо оцінити рев'ю.
+
+### Рев'ю Courses 2: 0 S1-блокерів, 1 major (pre-existing, у hot-path), 2 minor
+Валідувала 3 мої питання: oxlint-disable навантажений (емпірично 5×), clip-path+явні ролі канонічні,
+SR header↔cell high-confidence (live-AT — власнику, не claim). Позитивно звірила: overlays default-гілка
+незмінна, hover на th[scope=row], sticky-оклюзія, icon aria-повний/tooltip-короткий, усе scoped.
+- **MAJOR (виправлено в S1):** block/restore/delete мали `isDisabled={isPending}` — натиснута кнопка
+  вимикалась через native `disabled` → фокус у `<body>` ([[isdisabled-on-focused-button-drops-focus]]).
+  ⚠️ Перша спроба `isDisabled`→`isPending` (конвенція `teach/ReviewModerationRow.tsx:47`) **провалила
+  gate2 на axe**: RAC `isPending` на ICON-ONLY кнопці рендерить `<div role="img" aria-labelledby=…>`
+  pending-scaffold без доступного тексту (svg `aria-hidden`) → `role-img-alt` serious ×6 у
+  `UserListView.test.tsx`. ReviewModerationRow проходить, бо там кнопка з ВИДИМИМ текстом — тому «2 символи»
+  тут не спрацювали. **Фінальний фікс:** кнопки лишаються enabled (focusable); при pending →
+  `aria-disabled` (conditional spread під exactOptionalPropertyTypes; не native disabled → фокус цілий;
+  не RAC isPending → без role=img) + `useRef(inFlight)`-guard у `runAction` проти даблкліку. Focus збережено
+  + axe чистий + подвійний сабміт неможливий.
+- **MINOR 1 (виправлено):** empty-state комірка мала `data-label={label}` → на narrow `::before` дублював
+  назву таблиці над emptyMessage. Прибрав `data-label` з colspan-порожньої комірки.
+- **MINOR 2 (watch-item, не фікс):** можливий подвійний SR-анонс на narrow (col-header зі схованого thead
+  + `::before` у NVDA browse-mode). SR-залежно; залишено на живу AT-перевірку (власнику).
+- **Re-review (aria-disabled+ref), 2 необов'язкові спостереження — прийнято як є (розсуд):**
+  (1) нема візуального busy-стану: `[data-disabled].ui-button` стилізовано, але підхід ставить
+  `aria-disabled` → кнопка під час in-flight виглядає активною; дія суб-секундна + toast, паритет —
+  опційний tiket. (2) один `inFlight` ref серіалізує дії всіх рядків (клік по іншому рядку під час
+  in-flight тихо no-op); вікно крихітне, результат безпечний (без подвійного запису), для нечастих
+  admin-дій прийнятно. Повний гейт заради цих косметик — непропорційно; залишено дрібними follow-up.
+
+### Відоме обмеження (pre-existing, окремий follow-up)
+Delete робить soft-delete → `UserActions` розмонтовується у `noActions`-span; `isPending` тримає фокус ЛИШЕ
+під час операції, але після розмонтування фокус із зниклої кнопки падає у `<body>`. Пересув фокуса після
+delete потребує ref+координації; infrequent destructive-дія, pre-existing — окремий дрібний tiket.
+
+**Повторний gate після рев'ю-фіксів:** перша спроба (gate2) ЧЕРВОНА — `isPending` на icon-only →
+axe `role-img-alt` (зловлено читанням реального `GATE_EXIT=2`, фон брехав exit 0). Після переходу на
+aria-disabled+ref: **gate3 зелений — `GATE_EXIT=0`, test 720 passed (0 fail, axe чистий), e2e 118
+passed (14.0m)** (лог `codex-s1-gate3.log`).
+
+### Наступне
+Merge PR #24 у main. Далі S2 (form/card, спільний, повний e2e).

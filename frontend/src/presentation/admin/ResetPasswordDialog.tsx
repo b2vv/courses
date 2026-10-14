@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactElement } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { AdminUserQueryError } from '../../app/composition/admin-user-queries';
@@ -7,6 +8,7 @@ import type { AdminUser } from '../../domain/identity/administration';
 import { Button, Dialog, TextField } from '../ui';
 
 type ResetPasswordDialogProps = {
+  trigger?: ReactElement;
   user: AdminUser;
   isSelf: boolean;
   onReset: (password: string) => Promise<void>;
@@ -16,6 +18,7 @@ type ResetPasswordDialogProps = {
 type PasswordForm = { password: string };
 
 export function ResetPasswordDialog({
+  trigger,
   user,
   isSelf,
   onReset,
@@ -51,6 +54,7 @@ export function ResetPasswordDialog({
 
   return (
     <Dialog
+      {...(trigger === undefined ? {} : { trigger })}
       triggerLabel={t('adminUsers.resetPasswordShort')}
       triggerAriaLabel={t('adminUsers.resetPassword', { name: user.displayName })}
       title={t('adminUsers.resetTitle', { name: user.displayName })}
