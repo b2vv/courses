@@ -2,7 +2,8 @@
 
 Виконавець — Codex (Courses 1 драйвить), рев'ю зрізів — Courses 2. Контекст: `docs/admin-restyle/plan.md`
 (розбивка сторінок + translation-дельти + прийняті рішення) і `docs/admin-restyle/README.md` (pain-список).
-Референс вигляду: `scratchpad/admin-proto/admin-restyle/` (НЕ копіювати код/плумбінг — лише правила вигляду).
+Референс вигляду: `docs/admin-restyle/proto/` (НЕ копіювати код/плумбінг — лише правила вигляду; див. `proto/_ORIGIN.md`
+— §Contrast еталона РОЗХОДИТЬСЯ з рішенням 1: у прод primary = поглиблена заливка `#4763d0`, не large-text).
 
 ## Спільні обмеження (кожен тикет)
 

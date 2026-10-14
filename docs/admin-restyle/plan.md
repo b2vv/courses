@@ -1,7 +1,7 @@
 # Admin restyle — план перекладу прототипу (зріз 1 → код)
 
-Прототип від плагіна: `admin-restyle` (React + React Aria + plain CSS). Локально:
-`scratchpad/admin-proto/admin-restyle/` (src.jsx, dist/styles.css, fixtures.js, README).
+Прототип від плагіна: `admin-restyle` (React + React Aria + plain CSS). У репо (довговічно):
+`docs/admin-restyle/proto/` (src.jsx, styles.css, fixtures.js, interactions.mjs, README.md, _ORIGIN.md).
 Це **референс цільового вигляду**; у прод іде перекладеним на наш код і токени.
 
 ## Вердикт придатності (статичний аналіз)
