@@ -244,9 +244,9 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
             label={t('adminAnalytics.leaderboardCaption')}
             columns={[
               { id: 'instructor', label: t('adminAnalytics.colInstructor') },
-              { id: 'courses', label: t('adminAnalytics.colCourses') },
-              { id: 'enrollments', label: t('adminAnalytics.colEnrollments') },
-              { id: 'revenue', label: t('adminAnalytics.colRevenue') },
+              { id: 'courses', label: t('adminAnalytics.colCourses'), align: 'end' },
+              { id: 'enrollments', label: t('adminAnalytics.colEnrollments'), align: 'end' },
+              { id: 'revenue', label: t('adminAnalytics.colRevenue'), align: 'end' },
             ]}
             rows={leaderboardRows}
             emptyMessage={t('adminAnalytics.leaderboardEmpty')}
