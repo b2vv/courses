@@ -1568,6 +1568,7 @@ nav a {
   background: var(--color-surface);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-panel);
+  box-shadow: var(--card-shadow);
 }
 .lesson-editor-section-bar {
   padding-block-end: var(--space-3);
@@ -1575,11 +1576,56 @@ nav a {
 }
 .lesson-editor-section-type {
   flex: 1;
+  font-size: 0.8125rem;
   font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 .lesson-editor-section-actions {
   margin-inline-start: auto;
+}
+.lesson-editor-icon-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--control-min-size);
+  block-size: var(--control-min-size);
+  color: var(--color-primary-hover);
+  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-background));
+  border-radius: var(--radius-control);
+}
+.lesson-editor-icon-tile svg {
+  inline-size: var(--space-icon);
+  block-size: var(--space-icon);
+}
+.lesson-editor-section-index {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.lesson-editor-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-tile-min)), 1fr));
+  align-items: stretch;
+}
+.lesson-editor-palette .ui-button {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  text-align: start;
+}
+.lesson-editor-palette-label {
+  font-weight: 650;
+}
+.lesson-editor-palette-description {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
 }
 .lesson-editor-richtext,
 .lesson-editor-image,
@@ -1606,11 +1652,9 @@ nav a {
 }
 .lesson-editor-toolbar .ui-button[aria-pressed='true'] {
   color: var(--color-text);
-  background: var(--color-background);
-  border-color: var(--color-text);
-  text-decoration: underline;
-  text-decoration-thickness: 0.15em;
-  text-underline-offset: 0.25em;
+  background: color-mix(in srgb, var(--color-primary) 24%, var(--color-background));
+  border-color: var(--color-primary-hover);
+  text-decoration: none;
 }
 .lesson-editor-input {
   min-inline-size: 0;

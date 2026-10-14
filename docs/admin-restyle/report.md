@@ -333,3 +333,52 @@ S2 розбито на S2a (cards+pills, merged PR #25) і S2b (форм-пов�
 ### Наступне
 Owner-authorized squash-merge S2b PR → main. **S2 повністю закрито (S2a+S2b).** Далі S3 (lesson
 editor) за планом.
+
+## S3 — lesson editor: візуальний редизайн (друга частина admin-restyle)
+
+Переклад візуальної мови прототипу lesson-studio на наявний `LessonDocumentEditor` за
+`docs/lesson-builder/decision-editor-redesign.md`. Нарізано Codex'ом (session `01a13abb`-лінія,
+окремий run). Рішення D4 (виключено live-preview) / D5 (editor-only, `.lesson-prose` не чіпати) —
+у session-ноті «## Рішення (S3)».
+
+### Зроблено (6 файлів: 1 TSX + 1 CSS + 2 locale + 1 test + report)
+- **Section card elevation:** `.lesson-editor-section` отримав `box-shadow: var(--card-shadow)`
+  (admin `--card-shadow`=`--shadow-card`, та сама card-мова, що S2a). Surface/border/radius збережено.
+- **Ідентичність секції:** у `.lesson-editor-section-bar` додано `SectionIcon` (декоративний inline
+  SVG за типом, `aria-hidden`), caps-лейбл типу (`text-transform:uppercase`, letter-spacing, 650) і
+  1-based `.lesson-editor-section-index` (muted, tabular-nums).
+- **Палітра-тайли:** add-section кнопки → grid-тайли (icon + label + 1-рядковий опис), адаптивна сітка
+  `minmax(min(100%, --space-tile-min), 1fr)` (guard проти 200%-overflow). **Accessible name кнопки =
+  рівно тип** ('Текст'/'Зображення'/'Завдання'/'Відео'): icon і опис `aria-hidden`, видимий лише label.
+- **Toolbar pressed → filled:** `.lesson-editor-toolbar .ui-button[aria-pressed='true']` з underline-
+  хака на `color-mix(--color-primary 24%, --color-background)` заливку (`.ui-segment[data-selected]`-
+  мова), underline прибрано. `aria-pressed`-семантика незмінна (суто візуально).
+- **i18n:** `administration.document.sectionDescription.{video,text,image,row,task}` у uk/en.
+- **MUST (верифіковано, не регресовано):** move/delete enabled + no-op за край (не isDisabled),
+  save/publish/upload через Query з конфлікт-token, ваги 650/700 (не прото-дрейф), нема паралельних
+  токенів / color-mix CTA / прото-shell / localStorage. E (reserved drag-slot) пропущено (дозволено).
+
+### Верифікація
+- Codex: format/lint/typecheck/`npm test` 726 passed (component-тести: точні імена всіх 5 palette-
+  кнопок; індекс+декоративний SVG+axe після reorder; toggle `aria-pressed` тулбара).
+- **Повний ordered `make check`: `GATE_EXIT=0`, e2e 120/120 (14.3m,
+  `api-nginx-20261014T163327Z.log`).** lesson-builder.spec (editor + reader-prose region + axe@200%)
+  зелений — редизайн не зламав ні editor-флоу, ні student-reader; R04 зелений.
+- Контраст (node-WCAG + real-browser computed, surface=admin, перебудований стек): toolbar pressed
+  `#e6e8ec` на `rgb(29,37,72)` = **12.10:1**; section-index muted `#8b95a3` на surface `#111317` =
+  **6.13**; palette-description muted на elevated `#17181d` = **5.85**; усі ≥4.5. Browser inject
+  підтвердив: section box-shadow присутній, icon-tile primary-16%-wash + primary-hover ink,
+  pressed `text-decoration:none`.
+
+### Обмеження / межі зрізу
+- **D4 — live-preview (segmented «Перегляд»→реальний reader) ВИКЛЮЧЕНО:** не існує сьогодні (net-new,
+  не рестайл), а reader `LessonDocumentView` навмисно не імпортований редактором (bundle-separation,
+  LessonDocumentView.tsx:18-23) — жива прев'ю затягла б reader у admin-бандл. Окремий майбутній зріз
+  (зважити code-split reader). S3-диф не імпортує reader, не додає segmented.
+- **D5 — editor-only:** reader-спільний `.lesson-prose` блок (main.css 1421-1478) НЕ чіпано →
+  student-reader не зачеплено (підтверджено grep diff + зеленим reader-асертом lesson-builder.spec).
+- Forced-colors live — та сама межа S0–S2 (тулінг не емулює); нові поверхні токен-керовані,
+  декор-SVG `aria-hidden`.
+
+### Наступне
+Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за планом row 2 / tickets S4.

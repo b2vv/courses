@@ -38,6 +38,34 @@ function localId(): string {
   return `s-${Date.now().toString(36)}-${localIdCounter}`;
 }
 
+const sectionTypes = ['video', 'text', 'image', 'row', 'task'] as const;
+
+function SectionIcon({ type }: { readonly type: LessonSection['type'] }) {
+  const paths: Record<LessonSection['type'], string> = {
+    video: 'M9 6l9 6-9 6Z',
+    text: 'M4 5h16M12 5v14M8 19h8',
+    image: 'M3 3h18v18H3ZM3 17l6-6 4 4 3-3 5 5M7 7h1',
+    row: 'M3 4h18v16H3ZM12 4v16',
+    task: 'M9 6h12M9 12h12M9 18h12M3 6l1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2',
+  };
+  return (
+    <span className="lesson-editor-icon-tile" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d={paths[type]} />
+      </svg>
+    </span>
+  );
+}
+
 function blankSection(type: LessonSection['type']): LessonSection {
   const id = localId();
   switch (type) {
@@ -206,9 +234,11 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
         {draft.sections.map((section, index) => (
           <li key={section.id} className="lesson-editor-section" data-type={section.type}>
             <div className="lesson-editor-section-bar">
+              <SectionIcon type={section.type} />
               <span className="lesson-editor-section-type">
                 {t(`administration.document.section.${section.type}`)}
               </span>
+              <span className="lesson-editor-section-index">{index + 1}</span>
               <div className="lesson-editor-section-actions">
                 <Button
                   variant="secondary"
@@ -245,23 +275,19 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
       <fieldset className="lesson-editor-add" aria-label={t('administration.document.addSection')}>
         <legend>{t('administration.document.addSection')}</legend>
         <div className="lesson-editor-palette">
-          {!hasVideo && (
-            <Button variant="secondary" onPress={() => addSection('video')}>
-              {t('administration.document.section.video')}
-            </Button>
-          )}
-          <Button variant="secondary" onPress={() => addSection('text')}>
-            {t('administration.document.section.text')}
-          </Button>
-          <Button variant="secondary" onPress={() => addSection('image')}>
-            {t('administration.document.section.image')}
-          </Button>
-          <Button variant="secondary" onPress={() => addSection('row')}>
-            {t('administration.document.section.row')}
-          </Button>
-          <Button variant="secondary" onPress={() => addSection('task')}>
-            {t('administration.document.section.task')}
-          </Button>
+          {sectionTypes
+            .filter((type) => type !== 'video' || !hasVideo)
+            .map((type) => (
+              <Button key={type} variant="secondary" onPress={() => addSection(type)}>
+                <SectionIcon type={type} />
+                <span className="lesson-editor-palette-label">
+                  {t(`administration.document.section.${type}`)}
+                </span>
+                <span className="lesson-editor-palette-description" aria-hidden="true">
+                  {t(`administration.document.sectionDescription.${type}`)}
+                </span>
+              </Button>
+            ))}
         </div>
       </fieldset>
     </section>
