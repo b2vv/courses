@@ -1,3 +1,4 @@
+import axe from 'axe-core';
 import { afterEach, expect, test } from '@rstest/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -118,4 +119,47 @@ test('publish saves the current edits first, then publishes the saved token', as
   expect(calls.saved).toHaveLength(1);
   expect(calls.published).toHaveLength(1);
   expect(calls.published[0]?.expectedUpdatedAt).toBe('2026-10-13T01:00:00Z');
+});
+
+test('palette tiles keep exact type names despite their descriptions', async () => {
+  setup([]);
+  const palette = await screen.findByRole('group', { name: 'Додати секцію' });
+  for (const name of ['Текст', 'Зображення', 'Завдання', 'Відео', 'Ряд']) {
+    expect(within(palette).getByRole('button', { name })).toBeTruthy();
+  }
+  expect(within(palette).getByText('Пояснення та списки').getAttribute('aria-hidden')).toBe('true');
+});
+
+test('section identity has ordered indices and decorative icons without axe violations', async () => {
+  setup([videoSection, imageSection]);
+  await screen.findByText('Тут грає відео уроку (додається окремо).');
+  const sections = Array.from(document.querySelectorAll('.lesson-editor-section'));
+  for (const [index, section] of sections.entries()) {
+    expect(section.querySelector('.lesson-editor-section-index')?.textContent).toBe(
+      String(index + 1),
+    );
+    expect(section.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(section.querySelector('svg')?.hasAttribute('role')).toBe(false);
+  }
+  const editor = screen.getByRole('region', { name: 'Редактор уроку' });
+  expect((await axe.run(editor)).violations).toEqual([]);
+  const move = screen.getAllByRole('button', { name: 'Пересунути вгору' }).at(1);
+  if (move === undefined) throw new Error('Missing second section move control');
+  fireEvent.click(move);
+  expect(sectionTypes()).toEqual(['image', 'video']);
+  expect(
+    Array.from(document.querySelectorAll('.lesson-editor-section-index')).map(
+      (node) => node.textContent,
+    ),
+  ).toEqual(['1', '2']);
+});
+
+test('toolbar retains aria-pressed when toggled', async () => {
+  setup([{ type: 'text', id: 'text', content: { blocks: [] } }]);
+  const toolbar = await screen.findByRole('toolbar', { name: 'Форматування тексту' });
+  const link = within(toolbar).getByRole('button', { name: 'Посилання', pressed: false });
+  fireEvent.click(link);
+  expect(within(toolbar).getByRole('button', { name: 'Посилання', pressed: true })).toBe(link);
+  fireEvent.click(link);
+  expect(link.getAttribute('aria-pressed')).toBe('false');
 });
