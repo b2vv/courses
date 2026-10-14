@@ -64,11 +64,22 @@
   /* Lightened purple ink for the instructor role tag text on its tinted chip. */
   --color-viz-purple-text: #b3a1ff;
 
+  --color-modal-backdrop: color-mix(in srgb, var(--color-background) 85%, transparent);
+
   --card-border-color: var(--color-hairline);
 
   /* Primary-button gloss (D3). Gradient + top highlight + blue glow. */
-  --btn-primary-bg: linear-gradient(180deg, #6986ff 0%, #4c6bf0 100%);
-  --btn-primary-bg-hover: linear-gradient(180deg, #7e99ff 0%, #5a78f6 100%);
+  /* White normal text clears AA at every stop (rest 4.75/5.31, hover 4.59/5.11). */
+  --btn-primary-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 92%, #000) 0%,
+    var(--color-primary-pressed) 100%
+  );
+  --btn-primary-bg-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 94%, #000) 0%,
+    color-mix(in srgb, var(--color-primary) 88%, #000) 100%
+  );
   --btn-primary-highlight: inset 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
   --btn-primary-glow: 0 2px 10px color-mix(in srgb, var(--color-primary) 45%, transparent);
 
@@ -170,4 +181,28 @@
    surface keeps its own --color-primary and is untouched. */
 [data-surface='admin'] .language-switcher button[aria-pressed='true'] {
   background: var(--color-primary-pressed);
+}
+
+[data-surface='admin'] .ui-modal {
+  inline-size: min(100%, var(--space-dialog));
+}
+[data-surface='admin'] .ui-modal-overlay {
+  background: var(--color-modal-backdrop);
+}
+
+@media (forced-colors: active) {
+  [data-surface='admin'] .ui-button--primary,
+  [data-surface='admin'] .ui-button--primary[data-hovered],
+  [data-surface='admin'] .ui-button--primary[data-pressed] {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+  [data-surface='admin'] .ui-segment[data-selected] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    box-shadow: none;
+  }
 }

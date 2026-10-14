@@ -117,6 +117,18 @@ function Layout() {
       ? 'admin'
       : 'client';
 
+  // React Aria portals mount under body, outside .app-shell. Keep admin dialogs
+  // and tooltips in the same token scope, and restore it when leaving the area.
+  useEffect(() => {
+    if (surface !== 'admin') return;
+    const previousSurface = document.body.getAttribute('data-surface');
+    document.body.setAttribute('data-surface', 'admin');
+    return () => {
+      if (previousSurface === null) document.body.removeAttribute('data-surface');
+      else document.body.setAttribute('data-surface', previousSurface);
+    };
+  }, [surface]);
+
   // Unsaved editor lines are kept locally so a reload cannot lose them, and they outlive the
   // session on disk. The author is in their key, so nobody is ever OFFERED another person's text
   // - but on a shared machine "not offered" is not "not there", so a change of viewer removes

@@ -1,4 +1,5 @@
 export type AdminNavIconKey =
+  | 'menu'
   | 'overview'
   | 'people'
   | 'accounts'
@@ -6,7 +7,7 @@ export type AdminNavIconKey =
   | 'analytics'
   | 'refunds';
 
-/** 16px stroke glyphs for the admin rail and sidebar links (NorthWind grammar). */
+/** Stroke glyphs for the admin drawer toggle and sidebar links (NorthWind grammar). */
 export function AdminNavIcon({ name }: { readonly name: AdminNavIconKey }) {
   return (
     <svg
@@ -21,6 +22,7 @@ export function AdminNavIcon({ name }: { readonly name: AdminNavIconKey }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
+      {name === 'menu' && <path d="M2 4h12M2 8h12M2 12h12" />}
       {name === 'overview' && (
         <>
           <rect x="2" y="2" width="5" height="5" rx="1" />
