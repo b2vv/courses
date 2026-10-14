@@ -194,6 +194,7 @@
 }
 
 [data-disabled].ui-button,
+[aria-disabled='true'].ui-button,
 [data-disabled].ui-choice,
 [data-disabled].ui-option,
 .ui-input:disabled {
