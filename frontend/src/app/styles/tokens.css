@@ -812,6 +812,10 @@
 .ui-table th {
   background: var(--color-surface);
 }
+.ui-table th[scope='row'] {
+  background: inherit;
+  font: inherit;
+}
 .ui-pagination {
   display: flex;
   align-items: center;

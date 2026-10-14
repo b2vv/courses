@@ -63,7 +63,7 @@ export function Delta({ label, value, direction, tone }: DeltaProps) {
   );
 }
 
-export type TableColumn = { id: string; label: string };
+export type TableColumn = { id: string; label: string; pin?: 'end'; rowHeader?: boolean };
 export type TableRow = { id: string; cells: readonly ReactNode[] };
 type TableProps = {
   label: string;
@@ -72,32 +72,49 @@ type TableProps = {
   emptyMessage: string;
 };
 
+/* oxlint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role -- Explicit table/row/cell/columnheader/rowheader roles are deliberate: the ≤52rem card layout sets `display:block` on these elements, which drops their implicit ARIA table roles in browsers — the explicit roles keep screen-reader table semantics and the e2e `getByRole('row')` contract intact. The lint heuristics do not model this responsive-table technique. */
 export function Table({ label, columns, rows, emptyMessage }: TableProps) {
   return (
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll wide tables.
     <section className="ui-table-scroll" aria-label={label} tabIndex={0}>
-      <table className="ui-table">
+      <table className="ui-table" role="table">
         <caption>{label}</caption>
-        <thead>
-          <tr>
+        <thead role="rowgroup">
+          <tr role="row">
             {columns.map((column) => (
-              <th key={column.id} scope="col">
+              <th key={column.id} scope="col" role="columnheader" data-pin={column.pin}>
                 {column.label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length}>{emptyMessage}</td>
+            <tr role="row">
+              <td role="cell" colSpan={columns.length}>
+                {emptyMessage}
+              </td>
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.id}>
-                {columns.map((column, index) => (
-                  <td key={column.id}>{row.cells[index]}</td>
-                ))}
+              <tr key={row.id} role="row">
+                {columns.map((column, index) =>
+                  column.rowHeader ? (
+                    <th
+                      key={column.id}
+                      scope="row"
+                      role="rowheader"
+                      data-label={column.label}
+                      data-pin={column.pin}
+                    >
+                      {row.cells[index]}
+                    </th>
+                  ) : (
+                    <td key={column.id} role="cell" data-label={column.label} data-pin={column.pin}>
+                      {row.cells[index]}
+                    </td>
+                  ),
+                )}
               </tr>
             ))
           )}
@@ -106,6 +123,8 @@ export function Table({ label, columns, rows, emptyMessage }: TableProps) {
     </section>
   );
 }
+
+/* oxlint-enable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */
 
 type PaginationProps = {
   label: string;
