@@ -543,16 +543,17 @@
   gap: var(--space-2);
   min-inline-size: 0;
   padding: var(--space-4);
-  background: var(--color-background);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
 }
 .ui-stat-value {
   font-family: var(--font-utility);
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 750;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.01em;
 }
 .ui-stat-label,
 .ui-stat-meta {
@@ -610,7 +611,9 @@
   gap: var(--space-4);
   min-inline-size: 0;
 }
-.admin-analytics-group h2 {
+.admin-analytics-group > h2 {
+  border-block-start: 1px solid var(--color-border);
+  padding-block-start: var(--space-6);
   font-family: var(--font-display);
   font-size: 1.25rem;
   margin: 0;
@@ -821,6 +824,9 @@
   padding: var(--space-3);
   border-block-end: 1px solid var(--color-border);
   overflow-wrap: anywhere;
+}
+.ui-table [data-align='end'] {
+  text-align: end;
 }
 .ui-table th {
   background: var(--color-surface);
