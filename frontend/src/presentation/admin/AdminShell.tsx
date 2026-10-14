@@ -113,7 +113,10 @@ export function AdminShell({
             </Tooltip>
             <Aria.ModalOverlay className="admin-drawer-overlay" isDismissable>
               <Aria.Modal className="admin-drawer">
-                <Aria.Dialog className="admin-sidebar admin-drawer-dialog" aria-label={navLabel}>
+                <Aria.Dialog
+                  className="admin-sidebar admin-drawer-dialog"
+                  aria-label={t('common.mainNavigation')}
+                >
                   {({ close }) => (
                     <>
                       <div className="admin-drawer-close">

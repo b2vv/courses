@@ -2116,8 +2116,6 @@ button.transcript-line-body:hover {
 }
 [data-surface='admin'] .admin-nav-icon {
   flex: none;
-  inline-size: var(--space-icon);
-  block-size: var(--space-icon);
   color: var(--color-muted);
 }
 [data-surface='admin'] .admin-nav-link[aria-current='page'] .admin-nav-icon {

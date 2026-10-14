@@ -11,9 +11,9 @@
 **на рев'ю Courses 2** перед комітом у main.
 
 ### Зроблено (6 файлів, усі у скоупі)
-- `tokens.css`: +7 контейнерних токенів (`--space-admin-sidebar/-canvas/-dialog/-prose-measure/
-  -prose-min/-tile-min/-icon`), суто additive. Sidebar/canvas/dialog/icon застосовано в shell;
-  prose/tile оголошено для наступних зрізів.
+- `tokens.css`: +6 контейнерних токенів (`--space-admin-sidebar/-canvas/-dialog/-prose-measure/
+  -prose-min/-tile-min`), суто additive — рівно затверджений планом набір (рішення 2). Sidebar/canvas/
+  dialog застосовано в shell; prose/tile оголошено для наступних зрізів.
 - `tokens.admin.css` — **рішення 1 (deepen GRADIENT, не flat):** `--btn-primary-bg` і
   `--btn-primary-bg-hover` виведено з `--color-primary` через `color-mix(…+#000)` (rest 92→86%,
   hover 94→88%), глянець D3 (highlight+glow) збережено, **без паралельних хардкоджених hex**. Той
@@ -61,6 +61,23 @@ Codex лишив `autoFocus` на close-кнопці drawer → oxlint `jsx-a11y
   (page h-scroll відсутній). Shell-частина S0 на вузькому коректна.
 - prose-measure/prose-min/tile-min токени оголошено, але споживачів у S0 нема (наступні зрізи).
 
+### Рев'ю Courses 2 (intake + anti-slop + ux-review): 1 major, 2 minor, 0 blocker
+Незалежно підтверджено: 4 стопи градієнта (rest 4.74/5.30, hover 4.60/5.13, min 4.60 ≥ 4.5 — збіг
+із probe), nav-контраст (muted 6.1:1, faint 5.4:1), відсутність FOUC (`data-surface=admin` стоїть на
+`.app-shell` у рендері `__root.tsx`, не лише в ефекті), skip-link → `<main id="main">`, один nav-landmark.
+- **MAJOR (виправлено):** `--space-icon:1.25rem` — поза затвердженим планом набором (рішення 2 називає
+  рівно 6), мисномер (геометрія гліфа ≠ spacing), і `inline-size:var(--space-icon)` тихо перебивав svg
+  `width/height="16"` → nav-гліфи виросли 16→20px. Прибрано токен + usage → гліфи повернулись до
+  intrinsic 16px (revert ненавмисної зміни, не нове рішення).
+- **MINOR 1 (виправлено):** drawer `Dialog aria-label` розходився з toggle → приведено до
+  `common.mainNavigation` (= лейбл toggle).
+- **MINOR 2 (прийнято як є, розсуд):** на відкритті drawer фокус на весь `Dialog` (3px рамка навколо
+  панелі) — доступно; RAC-default, без autoFocus (який валив lint). Фокус на перший лінк — опційний
+  майбутній tweak, у S0 не роблю (мінімальність зрізу).
+
+**Повторний gate після фіксів (gate2):** ordered `make check` зелений — `GATE_EXIT=0`, **e2e 118
+passed (17.1m)**, 0 fail (лог `codex-s0-gate2.log`). Фікси верифіковано: `--space-icon` grep порожній,
+гліфи 16px; drawer aria-label = toggle. Courses 2 звірила дерево — 0 blocker, approve.
+
 ### Наступне
-Рев'ю Courses 2 (intake + ux-review, зокрема ручна перевірка 4 стоп і forced-colors) → адресувати
-знахідки → PR у main. Далі S1 (DataTable, спільний, повний e2e).
+Merge PR #23 у main. Далі S1 (DataTable, спільний, повний e2e).

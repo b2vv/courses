@@ -56,7 +56,6 @@
   --space-prose-measure: 65ch;
   --space-prose-min: 12rem;
   --space-tile-min: 9rem;
-  --space-icon: 1.25rem;
   --control-min-size: 2.75rem;
   --shadow-card:
     0 1px 2px color-mix(in srgb, var(--color-media-frame) 5%, transparent),
