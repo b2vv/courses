@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import * as Aria from 'react-aria-components';
 
 type ButtonProps = Omit<Aria.ButtonProps, 'className'> & {
@@ -44,21 +44,39 @@ function FieldHelp({
   );
 }
 
-export function TextField({ label, description, errorMessage, placeholder, ...props }: FieldProps) {
+export function TextField({
+  label,
+  description,
+  errorMessage,
+  placeholder,
+  ref,
+  ...props
+}: FieldProps & { ref?: Ref<HTMLInputElement> }) {
   return (
     <Aria.TextField {...props} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
-      <Aria.Input {...(placeholder === undefined ? {} : { placeholder })} className="ui-input" />
+      <Aria.Input
+        ref={ref}
+        {...(placeholder === undefined ? {} : { placeholder })}
+        className="ui-input"
+      />
       <FieldHelp description={description} errorMessage={errorMessage} />
     </Aria.TextField>
   );
 }
 
-export function TextArea({ label, description, errorMessage, placeholder, ...props }: FieldProps) {
+export function TextArea({
+  label,
+  description,
+  errorMessage,
+  placeholder,
+  ref,
+  ...props
+}: FieldProps & { ref?: Ref<HTMLTextAreaElement> }) {
   return (
     <Aria.TextField {...props} className="ui-field">
       <Aria.Label>{label}</Aria.Label>
-      <Aria.TextArea placeholder={placeholder} className="ui-input ui-textarea" />
+      <Aria.TextArea ref={ref} placeholder={placeholder} className="ui-input ui-textarea" />
       <FieldHelp description={description} errorMessage={errorMessage} />
     </Aria.TextField>
   );

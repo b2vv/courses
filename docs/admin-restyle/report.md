@@ -268,3 +268,68 @@ neutral на перебудованому стеку; R04 знову зелен�
 ### Наступне
 Owner-authorized squash-merge PR #25 → main. Далі S2b (форм-поведінка: label-above, blur-валідація,
 error-summary з лінками, preserve-input, destructive-confirm, interaction-states).
+
+## S2b — форм-поведінка course-editor (друга половина ticket S2)
+
+S2 розбито на S2a (cards+pills, merged PR #25) і S2b (форм-поведінка). Нарізано Codex'ом
+(session `01a13abb`, split impl / e2e), рев'ю + гейти — Courses 1. Рішення перед кодом
+(D1–D3) — у session-ноті «## Рішення (S2b)».
+
+### Зроблено (8 файлів: 2 TSX + 1 shared control + 2 CSS + 2 locale + 1 e2e)
+- **blur-валідація:** `useForm` на editor (CourseEditorView.tsx:572) і CourseCreateDialog (:872)
+  отримали `mode: 'onBlur'` + `shouldFocusError: false` (фокусом керує error-summary, не дефолт RHF).
+- **error-summary (лише client-валідація):** `FormErrorSummary` (CourseEditorView.tsx:150) —
+  `role="alert"`, зʼявляється на submit-fail, перелічує інвалідні поля (top-level + вкладені
+  module/lesson, через `useWatch`) як лінки, що `form.setFocus(name)` фокусують поле; фокус
+  переходить у summary на fail (`tabIndex=-1`). Серверний банер (`message`/`messageKind`) незмінний (D2).
+- **ref-wiring (суть фокусу):** `controls.tsx` `TextField`/`TextArea` тепер форвардять input-ref
+  (React 19 ref-as-prop), `StringField` передає `field.ref` — раніше ref не був підключений, тож
+  `setFocus` був no-op. Оскільки ВСІ поля (включно вкладені) йдуть через `StringField`, одна правка
+  покрила всі уніформно.
+- **destructive-confirm — лише course delete (D1):** кнопка видалення (CourseEditorView.tsx:788)
+  обгорнута спільним `Dialog` (overlays render-prop, як Refund/Report queues); confirm викликає
+  `removeCourse()` + `close()`. Module/lesson remove і transitions — інлайн, без змін.
+- **interaction-states (D3):** `[data-surface=admin] .ui-button[data-pending]` (cursor wait +
+  dashed border) + `[data-pressed]` inset. CSS `.ui-error-summary` — shared у tokens.css
+  (прототип-грамота: 1px danger border, padding, danger ink). **Корекція (рев'ю Courses 2):**
+  `[data-pending]` — generic busy-візуал для RAC `isPending`-споживачів (RefundQueue:140/151,
+  LessonDocumentEditor:191), але **НЕ закриває S1-follow-up** — UserListView block/restore/delete
+  сидять на `aria-disabled` (283/296), не `data-pending`, тож структурно не матчаться. S1 busy-візуал
+  лишається OPEN (потребує окремого busy-сигналу на тих кнопках; глобальний `[aria-disabled]{wait}`
+  хибно позначив би й постійно-вимкнені кнопки). Не видаю skipped за done (AGENTS.md).
+- **i18n:** `administration.validationSummary` + `administration.confirmDeleteCourse` у uk/en;
+  summary-лінки й нові тексти reuse наявних label-ключів (moduleTitle/lessonTitle/courseTitle).
+- **e2e (E1/E2, admin.spec.ts):** E1 — очистити «Назва» → submit → `role=alert` + лінк фокусує
+  поле (real-browser proof `setFocus`); E2 — UI-create draft → «Видалити чернетку» → confirm-dialog,
+  Скасувати повертає фокус на тригер + зберігає draft, Підтвердити → DELETE 204 → список без курсу.
+  Обидва самоочисні (унікальний UUID-slug, delete у finally).
+- **label-above + preserve-input — вже були (верифіковано, не перебудовано):** controls.tsx
+  `.ui-field` label-above (tokens.css:204); save-catch без `reset` тримає вводи на серверній помилці.
+
+### Верифікація
+- Codex: format/lint/typecheck зелені; `npm test` 723 passed (component-тести доводять реальний
+  фокус input/textarea/вкладених, повторний submit, зняття застарілих summary-записів, create-форму,
+  confirm/cancel/Escape + повернення фокусу). (Codex-sandbox лог згадував `EPERM ::1:3000` на bind
+  порту rstest — артефакт його пісочниці, у нашому гейті тести зелені.)
+- **Повний ordered `make check` (impl, чекпоінт `d761211`): `GATE_EXIT=0`, test 723, e2e 118/118
+  (15.4m, `api-nginx-20261014T141826Z.log`).**
+- **Повний ordered `make check` (impl + E1/E2 e2e): `GATE_EXIT=0`, e2e 120/120 (15.1m,
+  `api-nginx-20261014T145522Z.log`)** — нові flow error-summary-фокус і delete-confirm (+ restore-focus
+  на cancel) зелені в реальному браузері. R04 зелений обидва рани.
+- Browser (CDP inject, surface=admin, перебудований стек): `.ui-error-summary` danger-border/ink,
+  padding 16px, radius 10px; `[data-pending]` cursor wait + dashed. Рендер admin-SPA у CDP не йде
+  (SSR-Suspense, артефакт тулінгу) — flow покрито зеленим e2e під Playwright.
+
+### Обмеження / межі зрізу
+- Спільна зміна `controls.tsx` (ref-forward у ВСІ форми застосунку) → свідомо гейтилась повним e2e
+  (регрес-гард поза admin); 120/120 зелено, регресій форм немає.
+- `closeLabel` confirm-діалогу (рев'ю Courses 2 MINOR 1): спочатку reuse `enrollment.report.cancel`
+  (крос-namespace). Courses 2 припустила наявний `common.cancel` — його НЕ було (звірив: `common`
+  мав лише `close`); тож **додав `common.cancel`** ('Скасувати'/'Cancel') у обидві локалі й перевів
+  `closeLabel` на `t('common.cancel')`. Текст 'Скасувати' незмінний (e2e E2 cancel зелений).
+- Forced-colors live — та сама межа S0/S1/S2a (тулінг не емулює); `.ui-error-summary`/`[data-pending]`
+  токен-керовані.
+
+### Наступне
+Owner-authorized squash-merge S2b PR → main. **S2 повністю закрито (S2a+S2b).** Далі S3 (lesson
+editor) за планом.

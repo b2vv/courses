@@ -74,6 +74,111 @@ async function deleteAdminDraft(context: BrowserContext, baseURL: string, course
 test.describe('with a stored admin session', () => {
   test.use({ storageState: authStatePath('admin') });
 
+  test('E1 client error summary focuses the invalid title without saving', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const unique = randomUUID();
+    const draft: Draft = {
+      slug: `e2e-summary-${unique}`,
+      title: `S2b summary ${unique}`,
+      summary: 'Перевірка фокусу клієнтської валідації.',
+      description: 'Тимчасова чернетка для перевірки переходу до помилкового поля.',
+    };
+    const adminContext = await openAdminContext(browser, baseURL);
+    let course: CreatedCourse | undefined;
+    try {
+      course = await createAdminDraft(adminContext, baseURL, draft);
+      await page.goto(`/admin/courses/${course.id}`);
+      await expect(page.getByRole('heading', { name: draft.title, exact: true })).toBeVisible();
+      const title = page.getByLabel('Назва', { exact: true });
+      await title.fill('');
+      await page.getByRole('button', { name: 'Зберегти зміни', exact: true }).click();
+      const summary = page.getByRole('alert').filter({ hasText: 'Виправте помилки у формі' });
+      await expect(summary).toBeVisible();
+      await expect(summary).toBeFocused();
+      const titleLink = summary.getByRole('link', { name: 'Назва', exact: true });
+      await expect(titleLink).toBeVisible();
+      await titleLink.click();
+      await expect(title).toBeFocused();
+
+      await page.reload();
+      await expect(page.getByLabel('Назва', { exact: true })).toHaveValue(draft.title);
+    } finally {
+      try {
+        if (course !== undefined) await deleteAdminDraft(adminContext, baseURL, course);
+      } finally {
+        await adminContext.close();
+      }
+    }
+  });
+
+  test('E2 course deletion requires confirmation and cancel preserves the draft', async ({
+    page,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const unique = randomUUID();
+    const draft: Draft = {
+      slug: `e2e-delete-me-${unique}`,
+      title: `S2b delete me ${unique}`,
+      summary: 'Перевірка підтвердження видалення.',
+      description: 'Тимчасова чернетка, яку цей тест створює і видаляє.',
+    };
+    let course: CreatedCourse | undefined;
+    let deleted = false;
+    try {
+      await page.goto('/admin');
+      await page.getByRole('button', { name: 'Створити курс', exact: true }).click();
+      const createDialog = page.getByRole('dialog', { name: 'Створити курс' });
+      await fillDraft(createDialog, draft);
+      const creation = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/admin/courses' &&
+          response.request().method() === 'POST',
+      );
+      await createDialog.getByRole('button', { name: 'Створити', exact: true }).click();
+      const created = await creation;
+      expect(created.status()).toBe(201);
+      course = createdCourse(await created.json());
+      const editorPath = `/admin/courses/${course.id}`;
+      await expect(page).toHaveURL((url) => url.pathname === editorPath);
+      await expect(page.getByRole('heading', { name: draft.title, exact: true })).toBeVisible();
+
+      const deleteButton = page.getByRole('button', { name: 'Видалити чернетку', exact: true });
+      await deleteButton.click();
+      const confirmDialog = page.getByRole('dialog', { name: 'Видалити чернетку', exact: true });
+      await expect(confirmDialog).toBeVisible();
+      await confirmDialog.getByRole('button', { name: 'Скасувати', exact: true }).click();
+      await expect(confirmDialog).toHaveCount(0);
+      await expect(deleteButton).toBeFocused();
+      await page.reload();
+      await expect(page).toHaveURL((url) => url.pathname === editorPath);
+      await expect(page.getByRole('heading', { name: draft.title, exact: true })).toBeVisible();
+
+      await deleteButton.click();
+      await expect(confirmDialog).toBeVisible();
+      const deletion = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === `/api/v1${editorPath}` &&
+          response.request().method() === 'DELETE',
+      );
+      await confirmDialog
+        .getByRole('button', { name: 'Підтвердити видалення курсу', exact: true })
+        .click();
+      const removed = await deletion;
+      deleted = removed.status() === 204;
+      expect(removed.status()).toBe(204);
+      await expect(page).toHaveURL((url) => url.pathname === '/admin');
+      await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+      await expect(page.getByRole('row').filter({ hasText: draft.title })).toHaveCount(0);
+    } finally {
+      if (course !== undefined && !deleted) await deleteAdminDraft(page.context(), baseURL, course);
+    }
+  });
+
   test('P20 creates, authors, publishes, and archives a course', async ({ page }) => {
     const draft: Draft = {
       slug: `${runNamespace}-admin`,

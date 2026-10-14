@@ -14,6 +14,7 @@ export const uk = {
       retry: 'Спробувати ще раз',
       loading: 'Завантаження',
       close: 'Закрити',
+      cancel: 'Скасувати',
       toClient: 'На клієнт',
       toAdmin: 'В адмінку',
       toTeach: 'Кабінет викладача',
@@ -622,6 +623,8 @@ export const uk = {
       publish: 'Опублікувати',
       archive: 'Архівувати',
       restore: 'Відновити',
+      validationSummary: 'Виправте помилки у формі',
+      confirmDeleteCourse: 'Підтвердити видалення курсу',
       deleteCourse: 'Видалити чернетку',
       statusChanged: 'Статус курсу оновлено.',
       transcriptsPending:

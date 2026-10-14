@@ -63,6 +63,92 @@ function savedTree(current: CourseTree, edit: CourseTreeEdit): CourseTree {
 }
 
 describe('course editor', () => {
+  it('S2b focuses the summary after each invalid submit and every mounted invalid field from its links', async () => {
+    const browser = userEvent.setup();
+    let saves = 0;
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => {
+            saves += 1;
+            return current;
+          }}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const title = screen.getByRole('textbox', { name: 'Title' });
+    await browser.clear(title);
+    expect(title.getAttribute('aria-invalid')).not.toBe('true');
+    await browser.tab();
+    await waitFor(() => expect(title.getAttribute('aria-invalid')).toBe('true'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    await browser.clear(screen.getByRole('textbox', { name: 'Summary' }));
+    await browser.click(screen.getByRole('button', { name: 'Add module' }));
+    await browser.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    await browser.click(save);
+    const summary = await screen.findByRole('alert');
+    expect(summary.classList.contains('ui-error-summary')).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(summary));
+    const labels = ['Title', 'Summary', 'Module 1 title', 'Lesson 1 title in module 1'];
+    expect(within(summary).getAllByRole('link')).toHaveLength(labels.length);
+    for (const label of labels) {
+      await browser.click(within(summary).getByRole('link', { name: label }));
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: label }));
+    }
+    await browser.click(save);
+    await waitFor(() => expect(document.activeElement).toBe(summary));
+    await browser.type(title, 'Fixed');
+    await waitFor(() => expect(title.getAttribute('aria-invalid')).not.toBe('true'));
+    expect(within(summary).queryByRole('link', { name: 'Title' })).toBeNull();
+    await browser.click(screen.getByRole('button', { name: 'Delete module 1' }));
+    expect(within(summary).getAllByRole('link')).toHaveLength(1);
+    expect(saves).toBe(0);
+  });
+
+  it('S2b deletes a course only after confirmation, with cancel and Escape preserving it', async () => {
+    const browser = userEvent.setup();
+    const deleted: CourseTree[] = [];
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async (current) => {
+            deleted.push(current);
+          }}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Delete draft' });
+    await browser.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Delete draft' })).toBeTruthy();
+    expect(deleted).toHaveLength(0);
+    await browser.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    await browser.click(trigger);
+    await browser.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(deleted).toHaveLength(0);
+    await browser.click(trigger);
+    await browser.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm course deletion' }),
+    );
+    expect(deleted).toEqual([tree]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('routes a loaded draft to only its lesson transcript editor', async () => {
     const browser = userEvent.setup();
     const firstLessonId = asBrandedId('20000000-0000-4000-8000-000000000101', 'lesson');
@@ -638,6 +724,42 @@ describe('course editor', () => {
 });
 
 describe('course create dialog', () => {
+  it('S2b summarizes create errors and focuses both inputs and textareas', async () => {
+    const browser = userEvent.setup();
+    let creates = 0;
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseCreateDialog
+          actor={admin}
+          ownerOptions={null}
+          onCreate={async () => {
+            creates += 1;
+            return tree;
+          }}
+          onSlugTaken={async () => undefined}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    await browser.click(screen.getByRole('button', { name: 'Create course' }));
+    const title = screen.getByRole('textbox', { name: 'Title' });
+    await browser.click(title);
+    await browser.tab();
+    await waitFor(() => expect(title.getAttribute('aria-invalid')).toBe('true'));
+    await browser.click(screen.getByRole('button', { name: 'Create' }));
+    const summary = await screen.findByRole('alert');
+    await waitFor(() => expect(document.activeElement).toBe(summary));
+    expect(summary.classList.contains('ui-error-summary')).toBe(true);
+    expect(within(summary).getAllByRole('link')).toHaveLength(4);
+    for (const label of ['Title', 'Slug', 'Summary', 'Description']) {
+      await browser.click(within(summary).getByRole('link', { name: label }));
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: label }));
+    }
+    await browser.type(title, 'New course');
+    await waitFor(() => expect(within(summary).queryByRole('link', { name: 'Title' })).toBeNull());
+    expect(creates).toBe(0);
+  });
+
   it('R30 disables Create while the mutation is pending and sends one request', async () => {
     const browser = userEvent.setup();
     let requests = 0;
