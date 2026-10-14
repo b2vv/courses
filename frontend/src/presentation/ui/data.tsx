@@ -91,7 +91,7 @@ export function Table({ label, columns, rows, emptyMessage }: TableProps) {
         <tbody role="rowgroup">
           {rows.length === 0 ? (
             <tr role="row">
-              <td role="cell" colSpan={columns.length} data-label={label}>
+              <td role="cell" colSpan={columns.length}>
                 {emptyMessage}
               </td>
             </tr>

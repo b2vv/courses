@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
@@ -60,6 +60,11 @@ export function UserListView({
 }: UserListViewProps) {
   const { t, i18n } = useTranslation();
   const [pendingUser, setPendingUser] = useState<string>();
+  // Guards against a double-press while an action is in flight. A ref (not the
+  // pendingUser state) so a second press within the same render is caught
+  // synchronously; the buttons stay enabled and focused (aria-disabled, never
+  // native disabled, which would drop focus to <body>).
+  const inFlight = useRef(false);
   const [message, setMessage] = useState<string>();
   const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
@@ -83,6 +88,8 @@ export function UserListView({
   }));
 
   async function runAction(user: AdminUser, action: () => Promise<void>, success: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setPendingUser(user.id);
     setMessage(undefined);
     try {
@@ -96,6 +103,7 @@ export function UserListView({
       if (code === 'authentication_required') onAuthenticationRequired();
     } finally {
       setPendingUser(undefined);
+      inFlight.current = false;
     }
   }
 
@@ -262,7 +270,7 @@ function UserActions({
         <Button
           type="button"
           variant="secondary"
-          isDisabled={isPending}
+          {...(isPending ? { 'aria-disabled': true } : {})}
           aria-label={t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
             name: user.displayName,
           })}
@@ -275,7 +283,7 @@ function UserActions({
         <Button
           type="button"
           variant="danger"
-          isDisabled={isPending}
+          {...(isPending ? { 'aria-disabled': true } : {})}
           aria-label={t('adminUsers.delete', { name: user.displayName })}
           onPress={() => void onDelete()}
         >

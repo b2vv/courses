@@ -136,5 +136,40 @@ narrow `display:block` **губить implicit table-ролі** (інакше SR
 - Narrow card-семантика тримається на явних ролях + `data-label::before` (стандартний responsive-table
   патерн); SR-асоціацію header↔cell при схованому `thead` варто окремо оцінити рев'ю.
 
+### Рев'ю Courses 2: 0 S1-блокерів, 1 major (pre-existing, у hot-path), 2 minor
+Валідувала 3 мої питання: oxlint-disable навантажений (емпірично 5×), clip-path+явні ролі канонічні,
+SR header↔cell high-confidence (live-AT — власнику, не claim). Позитивно звірила: overlays default-гілка
+незмінна, hover на th[scope=row], sticky-оклюзія, icon aria-повний/tooltip-короткий, усе scoped.
+- **MAJOR (виправлено в S1):** block/restore/delete мали `isDisabled={isPending}` — натиснута кнопка
+  вимикалась через native `disabled` → фокус у `<body>` ([[isdisabled-on-focused-button-drops-focus]]).
+  ⚠️ Перша спроба `isDisabled`→`isPending` (конвенція `teach/ReviewModerationRow.tsx:47`) **провалила
+  gate2 на axe**: RAC `isPending` на ICON-ONLY кнопці рендерить `<div role="img" aria-labelledby=…>`
+  pending-scaffold без доступного тексту (svg `aria-hidden`) → `role-img-alt` serious ×6 у
+  `UserListView.test.tsx`. ReviewModerationRow проходить, бо там кнопка з ВИДИМИМ текстом — тому «2 символи»
+  тут не спрацювали. **Фінальний фікс:** кнопки лишаються enabled (focusable); при pending →
+  `aria-disabled` (conditional spread під exactOptionalPropertyTypes; не native disabled → фокус цілий;
+  не RAC isPending → без role=img) + `useRef(inFlight)`-guard у `runAction` проти даблкліку. Focus збережено
+  + axe чистий + подвійний сабміт неможливий.
+- **MINOR 1 (виправлено):** empty-state комірка мала `data-label={label}` → на narrow `::before` дублював
+  назву таблиці над emptyMessage. Прибрав `data-label` з colspan-порожньої комірки.
+- **MINOR 2 (watch-item, не фікс):** можливий подвійний SR-анонс на narrow (col-header зі схованого thead
+  + `::before` у NVDA browse-mode). SR-залежно; залишено на живу AT-перевірку (власнику).
+- **Re-review (aria-disabled+ref), 2 необов'язкові спостереження — прийнято як є (розсуд):**
+  (1) нема візуального busy-стану: `[data-disabled].ui-button` стилізовано, але підхід ставить
+  `aria-disabled` → кнопка під час in-flight виглядає активною; дія суб-секундна + toast, паритет —
+  опційний tiket. (2) один `inFlight` ref серіалізує дії всіх рядків (клік по іншому рядку під час
+  in-flight тихо no-op); вікно крихітне, результат безпечний (без подвійного запису), для нечастих
+  admin-дій прийнятно. Повний гейт заради цих косметик — непропорційно; залишено дрібними follow-up.
+
+### Відоме обмеження (pre-existing, окремий follow-up)
+Delete робить soft-delete → `UserActions` розмонтовується у `noActions`-span; `isPending` тримає фокус ЛИШЕ
+під час операції, але після розмонтування фокус із зниклої кнопки падає у `<body>`. Пересув фокуса після
+delete потребує ref+координації; infrequent destructive-дія, pre-existing — окремий дрібний tiket.
+
+**Повторний gate після рев'ю-фіксів:** перша спроба (gate2) ЧЕРВОНА — `isPending` на icon-only →
+axe `role-img-alt` (зловлено читанням реального `GATE_EXIT=2`, фон брехав exit 0). Після переходу на
+aria-disabled+ref: **gate3 зелений — `GATE_EXIT=0`, test 720 passed (0 fail, axe чистий), e2e 118
+passed (14.0m)** (лог `codex-s1-gate3.log`).
+
 ### Наступне
-Рев'ю Courses 2 → адресувати → PR/merge. Далі S2 (form/card, спільний).
+Merge PR #24 у main. Далі S2 (form/card, спільний, повний e2e).
