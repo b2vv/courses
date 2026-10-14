@@ -398,3 +398,53 @@ editor) за планом.
 
 ### Наступне
 Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за планом row 2 / tickets S4.
+
+## S4 — analytics dashboard: візуальний рестайл
+
+Рестайл `/admin/analytics` (`AnalyticsView`) за tickets S4. Нарізано Codex'ом. Рішення D6/D7 —
+у session-ноті «## Рішення (S4)».
+
+### Зроблено (6 файлів: 1 TSX view + 1 shared Table + 1 CSS + 2 tests + report)
+- **A — elevation stat-тайлів (admin-scoped, виправлено по рев'ю):** `[data-surface='admin'] .ui-stat`
+  у **tokens.admin.css** → `background: var(--color-surface)` + `box-shadow: var(--card-shadow)` (admin
+  `--card-shadow`=`--shadow-card`, та сама граматика, що `[data-surface='admin'] .ui-card` у S2a).
+  Base `.ui-stat` у tokens.css ЛИШАЄТЬСЯ flat (`--color-background`, без тіні) — admin-look не тече в
+  базовий примітив. Тайли на admin-дашборді читаються як raised cards, не зливаються.
+- **B — money/numeric letter-spacing (глобальне уточнення примітива):** `.ui-stat-value` `-0.04em` →
+  `-0.01em` у tokens.css — нейтральне типографічне уточнення наявної глобальної декларації (не
+  admin-look, тема-незалежне; великі utility-числа/гроші читаються вільніше). Intl-форматер не чіпано.
+- **C — group-heading treatment (scoped):** `.admin-analytics-group > h2` отримав
+  `border-block-start: 1px` + `padding-block-start: space-6` → 7 груп читаються як окремі банди.
+  Тексти заголовків незмінні; `minmax(min(13rem,100%),1fr)` 200%-guard збережено.
+- **D — numeric right-align leaderboard (cross-cut, opt-in):** `TableColumn` (спільний `data.tsx`,
+  також User/CourseListView) отримав opt-in `align?: 'start'|'end'`; `data-align` додається
+  conditional-spread'ом на columnheader/rowheader/cell **лише за заданого align** (без opt-in
+  атрибут відсутній → інші консюмери DOM-ідентичні, патерн S1). CSS `.ui-table [data-align='end']
+  { text-align: end }`. AnalyticsView задає `end` для courses/enrollments/revenue; instructor —
+  default start. UserListView/CourseListView колонки НЕ змінено.
+- **НЕ чіпано (D7):** `.ui-segmented` (спільний з UserListView) і `.ui-chart` — обидва вже робочі.
+
+### Верифікація
+- Codex: format/lint/typecheck/`npm test` 727 passed (Table: end/default/explicit-start/rowheader
+  + axe; AnalyticsView: numeric headers/cells end, name default; StatTile класи/value/meta + axe).
+- **Повний ordered `make check` (D чіпає спільний Table → повний e2e обов'язковий): `GATE_EXIT=0`,
+  test 727, e2e 120/120 (14.5m, `api-nginx-20261014T180655Z.log`).** User/CourseListView e2e
+  (admin.spec P20/P21) зелені → opt-in зберіг default; admin-analytics.spec (тайли/chart/leaderboard/
+  axe wcag2a/2aa/21aa/overflow 390×844@200%) зелений.
+- Browser (CDP inject, surface=admin, перебудований стек): `.ui-stat` bg `#111317` + 2-шарова
+  card-тінь (елевація); `.ui-stat-value` letter-spacing -0.4px (пом'якшено з -1.6px); group `> h2`
+  border-top 1px + padding-top 24px; th/td `[data-align=end]` text-align end. Усе як задумано.
+
+### Обмеження / межі зрізу
+- **D6 — numeric-align на спільному Table** зроблено opt-in (не відкладено втретє з S1); гейтилось
+  повним e2e. Ticket-premise «analytics не спільний» хибний для leaderboard (він на спільному Table).
+- **Рев'ю Courses 2: 0 blocker, 1 minor (виправлено).** Elevation `.ui-stat` спершу поклали в
+  ГЛОБАЛЬНИЙ tokens.css (бага нема — StatTile лише в AnalyticsView; але неузгоджено з патерном фази
+  S2a, де admin-специфіку скоупили, і латентно клієнтський `.ui-stat` успадкував би admin-elevation).
+  Перенесено в `[data-surface='admin'] .ui-stat` (tokens.admin.css); base лишається flat. Admin-рендер
+  ідентичний (AnalyticsView під `[data-surface=admin]`) → e2e-результат той самий. letter-spacing
+  лишено глобальним як нейтральне уточнення примітива (не admin-look).
+- Forced-colors live — та сама межа S0–S3; нові поверхні токен-керовані.
+
+### Наступне
+Owner-authorized squash-merge S4 PR → main. Далі S5 (learners) за планом row 5 / tickets S5.

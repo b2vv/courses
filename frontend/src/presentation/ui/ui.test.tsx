@@ -28,6 +28,42 @@ import {
 afterEach(cleanup);
 
 describe('accessible UI primitives', () => {
+  it('opts columns into alignment on headers and cells, preserving the default, axe-clean', async () => {
+    const { container } = render(
+      <Table
+        label="Metrics"
+        columns={[
+          { id: 'name', label: 'Name', rowHeader: true },
+          { id: 'count', label: 'Count', align: 'end' },
+          { id: 'note', label: 'Note' },
+          { id: 'rank', label: 'Rank', rowHeader: true, align: 'end' },
+          { id: 'unit', label: 'Unit', align: 'start' },
+        ]}
+        rows={[{ id: 'ada', cells: ['Ada', '42', 'Active', '1', 'Courses'] }]}
+        emptyMessage="No metrics"
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Metrics' });
+    const headers = within(table).getAllByRole('columnheader');
+    expect(headers.map((cell) => cell.getAttribute('data-align'))).toEqual([
+      null,
+      'end',
+      null,
+      'end',
+      'start',
+    ]);
+    for (const [role, name, align] of [
+      ['rowheader', 'Ada', null],
+      ['cell', '42', 'end'],
+      ['cell', 'Active', null],
+      ['rowheader', '1', 'end'],
+      ['cell', 'Courses', 'start'],
+    ] as const) {
+      expect(within(table).getByRole(role, { name }).getAttribute('data-align')).toBe(align);
+    }
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
   it('labels a text field and reaches the action with the keyboard', async () => {
     const user = userEvent.setup();
     let submitted = false;
@@ -336,6 +372,7 @@ describe('accessible UI primitives', () => {
       </StatTile>,
     );
     expect(screen.getByText('4 820').textContent).toBe('4 820');
+    expect(container.querySelector('.ui-stat .ui-stat-value')).toBe(screen.getByText('4 820'));
     expect(screen.getByText('2 з 3 курсів').textContent).toBe('2 з 3 курсів');
     expect(screen.getByText('covered').textContent).toBe('covered');
     expect((await axe.run(container)).violations).toEqual([]);

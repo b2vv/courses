@@ -101,6 +101,13 @@
   background: var(--color-surface);
 }
 
+/* Stat tiles read as raised cards on the admin dashboard — surface fill + card shadow, same
+   grammar as .ui-card. Scoped to admin so the base .ui-stat primitive stays flat for any client use. */
+[data-surface='admin'] .ui-stat {
+  background: var(--color-surface);
+  box-shadow: var(--card-shadow);
+}
+
 /* Primary button: glossy blue gradient, not a flat fill. */
 [data-surface='admin'] .ui-button--primary {
   background: var(--btn-primary-bg);

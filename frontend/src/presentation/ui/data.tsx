@@ -63,7 +63,13 @@ export function Delta({ label, value, direction, tone }: DeltaProps) {
   );
 }
 
-export type TableColumn = { id: string; label: string; pin?: 'end'; rowHeader?: boolean };
+export type TableColumn = {
+  id: string;
+  label: string;
+  pin?: 'end';
+  rowHeader?: boolean;
+  align?: 'start' | 'end';
+};
 export type TableRow = { id: string; cells: readonly ReactNode[] };
 type TableProps = {
   label: string;
@@ -82,7 +88,13 @@ export function Table({ label, columns, rows, emptyMessage }: TableProps) {
         <thead role="rowgroup">
           <tr role="row">
             {columns.map((column) => (
-              <th key={column.id} scope="col" role="columnheader" data-pin={column.pin}>
+              <th
+                key={column.id}
+                scope="col"
+                role="columnheader"
+                data-pin={column.pin}
+                {...(column.align === undefined ? {} : { 'data-align': column.align })}
+              >
                 {column.label}
               </th>
             ))}
@@ -106,11 +118,18 @@ export function Table({ label, columns, rows, emptyMessage }: TableProps) {
                       role="rowheader"
                       data-label={column.label}
                       data-pin={column.pin}
+                      {...(column.align === undefined ? {} : { 'data-align': column.align })}
                     >
                       {row.cells[index]}
                     </th>
                   ) : (
-                    <td key={column.id} role="cell" data-label={column.label} data-pin={column.pin}>
+                    <td
+                      key={column.id}
+                      role="cell"
+                      data-label={column.label}
+                      data-pin={column.pin}
+                      {...(column.align === undefined ? {} : { 'data-align': column.align })}
+                    >
                       {row.cells[index]}
                     </td>
                   ),

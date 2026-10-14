@@ -78,6 +78,15 @@ describe('AnalyticsView', () => {
     const rows = within(table).getAllByRole('row');
     // Header row + two instructor rows, in the order supplied (revenue DESC).
     expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const cells = within(row).getAllByRole(row === rows[0] ? 'columnheader' : 'cell');
+      expect(cells.map((cell) => cell.getAttribute('data-align'))).toEqual([
+        null,
+        'end',
+        'end',
+        'end',
+      ]);
+    }
     expect(within(rows[1] as HTMLElement).getByText('Ada')).toBeTruthy();
     expect(within(rows[2] as HTMLElement).getByText('Bob')).toBeTruthy();
     // The instructor dimension is present in single-instructor OFF mode: the
