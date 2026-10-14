@@ -472,6 +472,11 @@
   background: color-mix(in srgb, var(--color-success) 12%, var(--color-background));
   border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
 }
+.ui-pill--warning {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
+}
 .ui-pill--danger {
   color: var(--color-danger);
   background: color-mix(in srgb, var(--color-danger) 12%, var(--color-background));

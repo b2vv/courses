@@ -61,7 +61,7 @@ export function CourseGrantPanel({
   }
 
   return (
-    <section className="admin-lifecycle admin-grant" aria-labelledby="course-grant-heading">
+    <section className="admin-lifecycle admin-grant ui-card" aria-labelledby="course-grant-heading">
       <div>
         <p className="eyebrow">{t('administration.grant.eyebrow')}</p>
         <h2 id="course-grant-heading">{t('administration.grant.heading')}</h2>
