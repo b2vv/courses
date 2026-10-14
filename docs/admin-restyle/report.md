@@ -80,4 +80,61 @@ passed (17.1m)**, 0 fail (лог `codex-s0-gate2.log`). Фікси верифі�
 гліфи 16px; drawer aria-label = toggle. Courses 2 звірила дерево — 0 blocker, approve.
 
 ### Наступне
-Merge PR #23 у main. Далі S1 (DataTable, спільний, повний e2e).
+S0 змержено в main (PR #23 squash `ca592c4`). Далі S1.
+
+---
+
+## S1 — DataTable (спільний примітив)
+
+**Статус:** реалізовано, повний гейт зелений, browser-verify зроблено; **на рев'ю Courses 2** перед комітом.
+
+### Рекон-корекція скоупу (Explore, `scratchpad/s1-recon.md`)
+Тикет злегка переобтяжив: **courses-таблиця read-only (без дій)** — compact-icon/sticky стосуються лише
+Users; **жодної числової колонки** в consumer'ах S1 → `align` відкладено на S4 (Analytics). E2e прибиває
+name-bearing aria-labels Users-дій + `role=row` → compact мусить зберегти РІВНО їх.
+
+### Зроблено (7 файлів)
+- `ui/data.tsx` (спільний Table): opt-in `TableColumn.pin?:'end'` / `rowHeader?:boolean` (default-вигляд
+  незмінний → Analytics не регресить); **явні ролі** `table/rowgroup/row/cell/columnheader/rowheader` +
+  `data-label`/`data-pin`. caption/emptyMessage/tabIndex/Pagination збережено.
+- `app/styles/main.css` + `tokens.css`: elevation (`--shadow-card`) на `.admin-list-results`; sticky
+  `[data-pin='end']` (непрозорий `--color-surface` + hairline); `th[scope='row']` reset (ідентифікатор не
+  uppercase); **narrow ≤52rem stacked-cards** (`display:block` + `[data-label]::before`), pin→static,
+  compact actions — усе **скоупнуто до `.admin-list-results`** → Analytics (S4) і report/refund-черги (S6)
+  не зачеплені.
+- `admin/UserListView.tsx`: account→rowHeader, actions→pin='end'; стековані текст-кнопки → compact
+  icon-`Button` у `Tooltip` (inline-SVG 16px), **aria-labels дослівні** (`adminUsers.block/restore/delete/
+  resetPassword` + name), tooltip=`*Short`; danger/handlers/`noActions` збережено.
+- `admin/CourseListView.tsx`: лише title→rowHeader.
+- `ui/overlays.tsx` + `admin/ResetPasswordDialog.tsx` (поза явним скоупом, обґрунтовано): opt-in
+  `trigger?:ReactElement` до спільного `Dialog` (default-гілка незмінна → інші споживачі безпечні), reset
+  передає icon-trigger. Conditional spread під `exactOptionalPropertyTypes`.
+
+### Дефект, зловлений до гейту
+Явні ролі валили oxlint `no-interactive-element-to-noninteractive-role` (false-positive — td/tr/th не
+інтерактивні). Розширив justified `oxlint-disable` на обидва правила з поясненням: ролі потрібні, бо
+narrow `display:block` **губить implicit table-ролі** (інакше SR і e2e `getByRole('row')` втрачають таблицю).
+
+### Верифікація
+- **Ordered `make check` (повний e2e)** зелений: `GATE_EXIT=0`, **e2e 118 passed (16.7m)**, 0 fail
+  (лог `codex-s1-gate.log`). Зокрема `admin-users.spec P08` (block/restore/**reset**/delete) ПРОЙШОВ —
+  доводить, що `DialogTrigger>Tooltip>Button` reset-trigger працює і name-bearing aria-labels цілі.
+- **Browser-verify на реальному prod-коді** (CDP, `localhost:8080`, admin):
+  - Desktop (1280): compact icon-дії 3×`44×44` з aria-labels «Block/Delete/Reset password for <name>»;
+    sticky `[data-pin=end]` (`position:sticky; inset-inline-end:0`, непрозорий `rgb(17,19,23)`); elevation-
+    тінь; `role=table`, 7×`role=row`, rowheader-ідентифікатор.
+  - **Narrow 390 (критично):** `tr display:block`, але **`role=row` ЗБЕРЕЖЕНО** (Users 7, Courses 20 —
+    явні ролі переживають reflow); обидві таблиці → stacked labeled cards (`::before`: Email/Role/Status/
+    Updated · Title/Slug/Status/Owner/Updated); дії на narrow видимі `44×44` з aria-labels, pin→static;
+    h-scroll 0.
+  - 200% zoom (в'юпорт 640 + text-zoom root 200%): h-scroll 0.
+
+### Обмеження / межі
+- Forced-colors live — та сама межа (тулінг не емулює); S1 НЕ вводить нової forced-colors-чутливої
+  поверхні (нема gradient/flat CTA), лише токен-адаптивні таблиці. OS-перемикач — власнику.
+- `align` (right-align чисел) відкладено на S4 (нема числового consumer'а в S1).
+- Narrow card-семантика тримається на явних ролях + `data-label::before` (стандартний responsive-table
+  патерн); SR-асоціацію header↔cell при схованому `thead` варто окремо оцінити рев'ю.
+
+### Наступне
+Рев'ю Courses 2 → адресувати → PR/merge. Далі S2 (form/card, спільний).

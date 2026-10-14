@@ -25,6 +25,7 @@ import {
   Skeleton,
   Table,
   TextField,
+  Tooltip,
 } from '../ui';
 import { administrationErrorMessage, ResetPasswordDialog } from './ResetPasswordDialog';
 
@@ -107,11 +108,11 @@ export function UserListView({
       <Table
         label={t('adminUsers.userTable')}
         columns={[
-          { id: 'account', label: t('adminUsers.email') },
+          { id: 'account', label: t('adminUsers.email'), rowHeader: true },
           { id: 'role', label: t('adminUsers.role') },
           { id: 'status', label: t('adminUsers.status') },
           { id: 'updated', label: t('adminUsers.updated') },
-          { id: 'actions', label: t('adminUsers.actions') },
+          { id: 'actions', label: t('adminUsers.actions'), pin: 'end' },
         ]}
         rows={page.items.map((user) => ({
           id: user.id,
@@ -255,33 +256,88 @@ function UserActions({
   if (user.status === 'deleted') return <span>{t('adminUsers.noActions')}</span>;
   return (
     <div className="admin-user-actions">
-      <Button
-        type="button"
-        variant="secondary"
-        isDisabled={isPending}
-        aria-label={t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
-          name: user.displayName,
-        })}
-        onPress={() => void onSetStatus(user.status === 'active' ? 'blocked' : 'active')}
+      <Tooltip
+        content={t(user.status === 'active' ? 'adminUsers.blockShort' : 'adminUsers.restoreShort')}
       >
-        {t(user.status === 'active' ? 'adminUsers.blockShort' : 'adminUsers.restoreShort')}
-      </Button>
-      <Button
-        type="button"
-        variant="danger"
-        isDisabled={isPending}
-        aria-label={t('adminUsers.delete', { name: user.displayName })}
-        onPress={() => void onDelete()}
-      >
-        {t('adminUsers.deleteShort')}
-      </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          isDisabled={isPending}
+          aria-label={t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
+            name: user.displayName,
+          })}
+          onPress={() => void onSetStatus(user.status === 'active' ? 'blocked' : 'active')}
+        >
+          <UserActionIcon name={user.status === 'active' ? 'block' : 'restore'} />
+        </Button>
+      </Tooltip>
+      <Tooltip content={t('adminUsers.deleteShort')}>
+        <Button
+          type="button"
+          variant="danger"
+          isDisabled={isPending}
+          aria-label={t('adminUsers.delete', { name: user.displayName })}
+          onPress={() => void onDelete()}
+        >
+          <UserActionIcon name="delete" />
+        </Button>
+      </Tooltip>
       <ResetPasswordDialog
+        trigger={
+          <Tooltip content={t('adminUsers.resetPasswordShort')}>
+            <Button
+              type="button"
+              variant="secondary"
+              aria-label={t('adminUsers.resetPassword', { name: user.displayName })}
+            >
+              <UserActionIcon name="resetPassword" />
+            </Button>
+          </Tooltip>
+        }
         user={user}
         isSelf={user.id === actor.id}
         onReset={onReset}
         onAuthenticationRequired={onAuthenticationRequired}
       />
     </div>
+  );
+}
+
+function UserActionIcon({ name }: { name: 'block' | 'restore' | 'delete' | 'resetPassword' }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {name === 'block' && (
+        <>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="m4 4 8 8" />
+        </>
+      )}
+      {name === 'restore' && (
+        <>
+          <path d="M2.5 6A5.5 5.5 0 1 1 3 11M2.5 2.5V6H6" />
+          <path d="m6 8 1.5 1.5L10 7" />
+        </>
+      )}
+      {name === 'delete' && (
+        <path d="M2.5 4.5h11M6 4.5V2.5h4v2M4 4.5l.5 9h7l.5-9M6.5 7v4M9.5 7v4" />
+      )}
+      {name === 'resetPassword' && (
+        <>
+          <circle cx="5" cy="6" r="3" />
+          <path d="m7.2 8.2 5.3 5.3 1.5-1.5-1.5-1.5L11 12" />
+        </>
+      )}
+    </svg>
   );
 }
 

@@ -792,18 +792,121 @@ nav a {
   background: var(--color-surface);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
   padding: 0 var(--space-6) var(--space-4);
 }
 [data-surface='admin'] .ui-table th,
 [data-surface='admin'] .ui-table td {
   border-block-end: 1px solid var(--color-hairline);
 }
-[data-surface='admin'] .ui-table th {
+[data-surface='admin'] .ui-table th[scope='col'] {
   background: transparent;
   color: var(--color-muted);
   text-transform: uppercase;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
+}
+[data-surface='admin'] .ui-table th[scope='row'] {
+  color: inherit;
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+[data-surface='admin'] .ui-table tbody tr[data-hovered] th[scope='row'],
+[data-surface='admin'] .ui-table tbody tr:hover th[scope='row'] {
+  background: var(--color-elevated);
+}
+[data-surface='admin'] .ui-table [data-pin='end'] {
+  position: sticky;
+  inset-inline-end: 0;
+  background: var(--color-surface);
+  border-inline-start: 1px solid var(--color-hairline);
+  text-align: end;
+}
+[data-surface='admin'] .ui-table th[data-pin='end'] {
+  background: var(--color-surface);
+}
+/* Compact actions belong to the roster; report/refund queues keep their layout. */
+[data-surface='admin'] .admin-list-results .admin-user-actions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  inline-size: max-content;
+}
+[data-surface='admin'] .admin-list-results .admin-user-actions > .ui-button {
+  flex: 0 0 auto;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-2);
+}
+
+/* Only the S1 list panels opt into cards; Analytics keeps its table layout. */
+@media (max-width: 52rem) {
+  [data-surface='admin'] .admin-list-results {
+    padding-inline: var(--space-3);
+  }
+  [data-surface='admin'] .admin-list-results .ui-table,
+  [data-surface='admin'] .admin-list-results .ui-table caption,
+  [data-surface='admin'] .admin-list-results .ui-table tbody {
+    display: block;
+  }
+  [data-surface='admin'] .admin-list-results .ui-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-surface='admin'] .admin-list-results .ui-table tbody tr {
+    display: block;
+    background: var(--color-surface);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-panel);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3);
+    margin-block-end: var(--space-3);
+  }
+  [data-surface='admin'] .admin-list-results .ui-table :is(td, th[scope='row']) {
+    display: block;
+    min-inline-size: 0;
+    padding-block: var(--space-2);
+    padding-inline: 0;
+    border-block-end: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-align: start;
+  }
+  [data-surface='admin'] .admin-list-results .ui-table [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-block-end: var(--space-1);
+    color: var(--color-muted);
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  [data-surface='admin'] .admin-list-results .ui-table [data-pin='end'] {
+    position: static;
+    inline-size: 100%;
+    border-inline-start: 0;
+  }
+  [data-surface='admin'] .admin-list-results .admin-user-identity {
+    display: flex;
+    min-inline-size: 0;
+  }
+  [data-surface='admin'] .admin-list-results :is(.admin-user-primary, .admin-user-updated) {
+    white-space: normal;
+  }
+  [data-surface='admin'] .admin-list-results .admin-user-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    inline-size: 100%;
+    margin-inline-start: 0;
+  }
 }
 [data-surface='admin'] :is(.admin-course-status, .admin-user-status) {
   border-color: transparent;
