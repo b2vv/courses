@@ -9,7 +9,8 @@
 
 - React Aria + plain CSS на НАШИХ семантичних токенах; no Tailwind/Radix/CSS-in-JS. Класи — наші `.admin-*`/`.ui-*`.
 - Токени: **без паралельного шару**; нові значення — названими токенами (див. рішення 2 плану). Бренд `#5273f2`
-  + лайм-акцент; ваги 650/700/750; `--btn-primary-*` наш (primary-fill поглиблено до `#4763d0`, рішення 1).
+  + лайм-акцент; ваги 650/700/750; `--btn-primary-*` наш (primary-ГРАДІЄНТ поглиблено — обидві стопи ≥4.5:1 білому
+  для normal-тексту, глянець D3 збережено; рішення 1 — НЕ плаский fill).
 - A11y (гейт): ≥44px, видимий focus, 200% text-zoom + reflow без h-скролу, forced-colors, WCAG AA. **Ніколи**
   native `disabled`/`isDisabled` на нав/reorder — `aria-disabled` + no-op. Icon-дія = `aria-label` + tooltip.
 - Логічні CSS-властивості. Плумбінг — реальний: TanStack Query / Router search-params / i18n / доменні типи
@@ -28,8 +29,12 @@
 1. Нові контейнерні токени в `tokens.css`/`tokens.admin.css`: `--space-admin-sidebar:15.5rem`, `--space-admin-canvas:76rem`,
    `--space-dialog:36rem`, `--space-prose-measure:65ch`, `--space-prose-min:12rem`, `--space-tile-min:9rem`,
    `--space-icon:1.25rem`. Мисномери НЕ заводити (`--space-border`→`1px` інлайн; focus-ring→наш `3px`; callout→accent-rule).
-2. Primary-fill: поглибити на admin до `color-mix(in srgb, var(--color-primary) 86%, #000)` (`#4763d0`, 5.30:1 normal-text).
-   НЕ роздувати primary-текст (лишаємо `.8125rem/650`). Білий-на-градієнті (`--btn-primary-bg`) верифікувати вручну (axe пропускає).
+2. Primary-ГРАДІЄНТ (рішення 1): поглибити `--btn-primary-bg` + `--btn-primary-bg-hover` так, щоб БІЛИЙ на КОЖНІЙ стопі
+   (верх і низ, rest+hover) давав ≥4.5:1 для normal-тексту. Зараз верх `#6986ff`=3.26:1 (fail), низ `#4c6bf0`=4.51:1.
+   Метод у системі: стопи з `--color-primary` через `color-mix(…+#000)` (напр. верх ~92%, низ = наявний
+   `--color-primary-pressed` 86% `#4763d0`/5.30:1) — НЕ вводити паралельні захардкоджені hex. НЕ сплющувати в пласку
+   заливку (глянець D3: highlight+glow зберегти). НЕ роздувати текст (лишаємо `.8125rem/650`). Той самий градієнт живить
+   `.ui-segment[data-selected]` — поправиться разом. ⚠️ axe НЕ міряє градієнти → кожну стопу верифікувати вручну в браузер-кроці.
 3. **Один нав:** прибрати декоративний `.admin-rail` (`aria-hidden` icon-дубль, main.css:2048) — лишити labeled `.admin-sidebar`.
 4. **Narrow (≤52rem): mobile drawer**, не повноширинний блок над контентом (зараз main.css:2236 тисне контент). Toggle-кнопка в topbar.
 5. Зберегти: eyebrow caps-лейбл + H1, правий хедер (Administration · user · UA/EN · Sign out).
