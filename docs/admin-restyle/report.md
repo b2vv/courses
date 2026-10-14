@@ -380,5 +380,21 @@ editor) за планом.
 - Forced-colors live — та сама межа S0–S2 (тулінг не емулює); нові поверхні токен-керовані,
   декор-SVG `aria-hidden`.
 
+### Рев'ю Courses 2: 1 MAJOR + 1 minor (обидва виправлено)
+- **MAJOR (виправлено):** `.lesson-editor-icon-tile svg { inline-size/block-size: var(--space-icon) }`
+  посилався на `--space-icon` — токен, **видалений у S0** (S0-MAJOR, §S0). У гілці він undefined →
+  обидві декларації дропнуті (CSS толерує unknown var), а SectionIcon svg мав лише `viewBox` без
+  width/height → svg дефолтився до **44×44px** (заповнював увесь тайл замість ~20px). Зелений гейт не
+  ловив (aria-hidden, e2e не асертить розмір, dropped-var тихий) — клас S0/LB15. Підтверджено
+  real-browser probe: svg `44px`, `--space-icon` порожній. **Фікс (не воскрешати токен):** svg дістав
+  власні `width="20" height="20"` (post-S0 патерн — svg сам несе розмір, один канал істини), зламане
+  CSS-правило прибрано. [[verify-peer-framing-before-mirroring]] — premise звірено перед фіксом.
+- **MINOR (виправлено):** `.lesson-editor-palette-description` був `aria-hidden` → SR чув лише тип.
+  Додано `aria-describedby` з кожної palette-кнопки на id опису (accessible NAME лишається рівно типом
+  — опис іде в accessible description, не в name) → SR-паритет без зламу `getByRole(name:'Текст')`.
+- Повторний повний `make check` із фіксами: **`GATE_EXIT=0`, e2e 120/120 (14.5m,
+  `api-nginx-20261014T170737Z.log`)**; real-browser probe підтвердив svg **20×20px** у 44px-тайлі
+  (було 44×44 до фіксу).
+
 ### Наступне
 Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за планом row 2 / tickets S4.

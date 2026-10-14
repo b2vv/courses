@@ -1595,10 +1595,6 @@ nav a {
   background: color-mix(in srgb, var(--color-primary) 16%, var(--color-background));
   border-radius: var(--radius-control);
 }
-.lesson-editor-icon-tile svg {
-  inline-size: var(--space-icon);
-  block-size: var(--space-icon);
-}
 .lesson-editor-section-index {
   color: var(--color-muted);
   font-size: 0.8125rem;

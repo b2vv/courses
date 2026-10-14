@@ -52,6 +52,8 @@ function SectionIcon({ type }: { readonly type: LessonSection['type'] }) {
     <span className="lesson-editor-icon-tile" aria-hidden="true">
       <svg
         viewBox="0 0 24 24"
+        width="20"
+        height="20"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
@@ -278,12 +280,21 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           {sectionTypes
             .filter((type) => type !== 'video' || !hasVideo)
             .map((type) => (
-              <Button key={type} variant="secondary" onPress={() => addSection(type)}>
+              <Button
+                key={type}
+                variant="secondary"
+                aria-describedby={`lesson-palette-desc-${type}`}
+                onPress={() => addSection(type)}
+              >
                 <SectionIcon type={type} />
                 <span className="lesson-editor-palette-label">
                   {t(`administration.document.section.${type}`)}
                 </span>
-                <span className="lesson-editor-palette-description" aria-hidden="true">
+                <span
+                  id={`lesson-palette-desc-${type}`}
+                  className="lesson-editor-palette-description"
+                  aria-hidden="true"
+                >
                   {t(`administration.document.sectionDescription.${type}`)}
                 </span>
               </Button>
