@@ -1,11 +1,12 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import * as Aria from 'react-aria-components';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import type { IdentityDependencies } from '../../app/composition/identity';
 import { useSignOut } from '../../app/composition/use-sign-out';
 import { LanguageSwitcher } from '../LanguageSwitcher';
-import { Button, Toast } from '../ui';
+import { Button, Toast, Tooltip } from '../ui';
 import { AdminNavIcon, type AdminNavIconKey } from './AdminNavIcon';
 
 export type { AdminNavIconKey } from './AdminNavIcon';
@@ -33,8 +34,8 @@ type AdminShellProps = {
 };
 
 /**
- * The admin-side shell: a narrow icon rail, a wide sectioned sidebar and a top
- * bar that replace the client chrome for /admin and /teach. It carries its own
+ * The admin-side shell: one sectioned sidebar (a modal drawer on narrow screens)
+ * and a top bar that replace the client chrome for /admin and /teach. It carries its own
  * navigation, a link back to the client, and sign-out — the two surfaces are
  * separate apps that share one design system (the NorthWind theme comes from the
  * data-surface="admin" scope set on the root .app-shell).
@@ -50,66 +51,86 @@ export function AdminShell({
   const { t } = useTranslation();
   const { signOut, isSigningOut, signOutFailed, dismissSignOutFailure } =
     useSignOut(identityDependencies);
-  const railItems = navSections.flatMap((section) => section.items);
+  const [isDrawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const narrow = window.matchMedia('(max-width: 52rem)');
+    const closeOnDesktop = () => {
+      if (!narrow.matches) setDrawerOpen(false);
+    };
+    narrow.addEventListener('change', closeOnDesktop);
+    return () => narrow.removeEventListener('change', closeOnDesktop);
+  }, []);
+
+  const navigation = (
+    <>
+      <div className="admin-workspace">
+        <span className="admin-workspace-name">CourseForge</span>
+        <span className="admin-workspace-area">{navLabel}</span>
+      </div>
+      <nav className="admin-nav" aria-label={navLabel}>
+        {navSections.map((section, index) => (
+          <div className="admin-nav-section" key={section.label ?? `primary-${index}`}>
+            {section.label != null && (
+              <span className="admin-nav-section-label">{section.label}</span>
+            )}
+            {section.items.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                activeOptions={{ exact: item.exact ?? false }}
+                className="admin-nav-link"
+                onClick={() => setDrawerOpen(false)}
+                activeProps={{ 'aria-current': 'page' }}
+              >
+                <AdminNavIcon name={item.icon} />
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        ))}
+      </nav>
+      <Link to="/" className="admin-to-client" onClick={() => setDrawerOpen(false)}>
+        <span aria-hidden="true">←</span> {t('common.toClient')}
+      </Link>
+    </>
+  );
 
   return (
     <div className="admin-shell">
-      {/* The rail mirrors the sidebar as a visual shortcut. The sidebar <nav> is the
-          canonical navigation; the rail is hidden from assistive tech and the tab
-          order (aria-hidden + tabIndex -1) so there are no duplicate landmarks or
-          duplicate-named links. Mouse users can still click it. */}
-      <div className="admin-rail" aria-hidden="true">
-        <Link to="/admin" className="admin-rail-brand" tabIndex={-1}>
-          <span aria-hidden="true">{'</>'}</span>
-        </Link>
-        <div className="admin-rail-items">
-          {railItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              activeOptions={{ exact: item.exact ?? false }}
-              className="admin-rail-item"
-              activeProps={{ 'aria-current': 'page' }}
-              tabIndex={-1}
-              title={item.label}
-            >
-              <AdminNavIcon name={item.icon} />
-            </Link>
-          ))}
-        </div>
-      </div>
-      <aside className="admin-sidebar">
-        <div className="admin-workspace">
-          <span className="admin-workspace-name">CourseForge</span>
-          <span className="admin-workspace-area">{navLabel}</span>
-        </div>
-        <nav className="admin-nav" aria-label={navLabel}>
-          {navSections.map((section, index) => (
-            <div className="admin-nav-section" key={section.label ?? `primary-${index}`}>
-              {section.label != null && (
-                <span className="admin-nav-section-label">{section.label}</span>
-              )}
-              {section.items.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  activeOptions={{ exact: item.exact ?? false }}
-                  className="admin-nav-link"
-                  activeProps={{ 'aria-current': 'page' }}
-                >
-                  <AdminNavIcon name={item.icon} />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <Link to="/" className="admin-to-client">
-          <span aria-hidden="true">←</span> {t('common.toClient')}
-        </Link>
-      </aside>
+      {!isDrawerOpen && <aside className="admin-sidebar">{navigation}</aside>}
       <div className="admin-canvas">
         <header className="admin-topbar">
+          <Aria.DialogTrigger isOpen={isDrawerOpen} onOpenChange={setDrawerOpen}>
+            <Tooltip content={t('common.mainNavigation')}>
+              <Aria.Button
+                className="ui-button ui-button--secondary admin-nav-toggle"
+                aria-label={t('common.mainNavigation')}
+                aria-expanded={isDrawerOpen}
+              >
+                <AdminNavIcon name="menu" />
+              </Aria.Button>
+            </Tooltip>
+            <Aria.ModalOverlay className="admin-drawer-overlay" isDismissable>
+              <Aria.Modal className="admin-drawer">
+                <Aria.Dialog
+                  className="admin-sidebar admin-drawer-dialog"
+                  aria-label={t('common.mainNavigation')}
+                >
+                  {({ close }) => (
+                    <>
+                      <div className="admin-drawer-close">
+                        <Button variant="secondary" onPress={close}>
+                          {t('common.close')}
+                        </Button>
+                      </div>
+                      {navigation}
+                    </>
+                  )}
+                </Aria.Dialog>
+              </Aria.Modal>
+            </Aria.ModalOverlay>
+          </Aria.DialogTrigger>
           <span className="admin-topbar-title">{title}</span>
           <div className="admin-topbar-actions">
             <span className="admin-topbar-user">{user.displayName}</span>
