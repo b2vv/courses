@@ -29,6 +29,12 @@ import {
 } from '../ui';
 import { administrationErrorMessage, ResetPasswordDialog } from './ResetPasswordDialog';
 
+const statusVariant: Record<AccountStatus, string> = {
+  active: 'success',
+  blocked: 'danger',
+  deleted: 'neutral',
+};
+
 type UserListViewProps = {
   page: AdminUserPage;
   state: AdminUserListState;
@@ -135,7 +141,11 @@ export function UserListView({
             <span key="role" className="admin-role-tag" data-role={user.role}>
               {t(`adminUsers.${user.role}`)}
             </span>,
-            <span key="status" className="admin-user-status" data-status={user.status}>
+            <span
+              key="status"
+              className={`ui-pill ui-pill--${statusVariant[user.status]}`}
+              data-status={user.status}
+            >
               {t(`adminUsers.${user.status}`)}
             </span>,
             <time key="updated" className="admin-user-updated" dateTime={user.updatedAt}>

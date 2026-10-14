@@ -52,7 +52,7 @@ export function CoursePriceField({
   }
 
   return (
-    <section className="admin-lifecycle admin-price" aria-labelledby="course-price-heading">
+    <section className="admin-lifecycle admin-price ui-card" aria-labelledby="course-price-heading">
       <div>
         <p className="eyebrow">{t('administration.price.eyebrow')}</p>
         <h2 id="course-price-heading">{t('administration.price.heading')}</h2>

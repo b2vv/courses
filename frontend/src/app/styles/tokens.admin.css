@@ -29,7 +29,7 @@
 [data-surface='admin'] {
   color-scheme: dark;
 
-  /* Grounds. Cards are NOT lighter than the page — set off by border + shadow. */
+  /* Grounds. Section cards use the surface fill with a hairline + shadow. */
   --color-background: #0c0d12;
   --color-surface: #111317; /* sidebar, table th, menus */
   --color-elevated: #17181d; /* row hover, popovers, secondary-button fill */
@@ -97,6 +97,10 @@
 
 /* ---- Admin-scoped component overrides (do not touch the client) ---------- */
 
+[data-surface='admin'] .ui-card {
+  background: var(--color-surface);
+}
+
 /* Primary button: glossy blue gradient, not a flat fill. */
 [data-surface='admin'] .ui-button--primary {
   background: var(--btn-primary-bg);
@@ -124,13 +128,26 @@
 
 /* Status pills: stronger tint, brighter text, no visible border (reference look). */
 [data-surface='admin'] .ui-pill--success,
+[data-surface='admin'] .ui-pill--warning,
 [data-surface='admin'] .ui-pill--danger,
-[data-surface='admin'] .ui-pill--info {
+[data-surface='admin'] .ui-pill--info,
+[data-surface='admin'] .ui-pill--neutral {
   border-color: transparent;
+}
+/* Neutral (archived / deleted) keeps the same borderless-tint grammar, muted ink so
+   it reads quieter than a status signal. Shared .ui-pill--neutral would otherwise show
+   a visible border and a surface fill that merges with the admin table ground. */
+[data-surface='admin'] .ui-pill--neutral {
+  color: var(--color-muted);
+  background: color-mix(in srgb, var(--color-muted) 14%, var(--color-background));
 }
 [data-surface='admin'] .ui-pill--success {
   color: var(--color-success);
   background: color-mix(in srgb, var(--color-success) 14%, var(--color-background));
+}
+[data-surface='admin'] .ui-pill--warning {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-background));
 }
 [data-surface='admin'] .ui-pill--danger {
   color: var(--color-danger);

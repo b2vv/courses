@@ -173,3 +173,98 @@ passed (14.0m)** (лог `codex-s1-gate3.log`).
 
 ### Наступне
 Merge PR #24 у main. Далі S2 (form/card, спільний, повний e2e).
+
+## S2a — картки + статус-пілюлі (no-behavior зріз S2)
+
+S2 розбито на **S2a** (cards + pills, лише вигляд, нуль логіки/стану) і **S2b** (форм-поведінка:
+label-above, blur-валідація, error-summary з лінками, preserve-input, destructive-confirm,
+interaction-states). Цей розділ — про S2a.
+
+### Зроблено (9 файлів: 3 CSS + 6 TSX, +53/-53)
+- **`tokens.css`** (+5): доданий відсутній `.ui-pill--warning` (semantic warning text, 12% wash,
+  45% mixed border) — у наборі shared-пілюль поруч із success/danger/info/neutral/accent.
+- **`tokens.admin.css`** (+10/-1): `[data-surface='admin'] .ui-card { background: surface }`
+  (section-картки сидять на surface-заливці, не на page-ground); `.ui-pill--warning` додано до
+  admin-групи «transparent border + 14% wash + яскравіший текст» (reference-look).
+- **`main.css`** (-43): прибрано мертві base/admin `.admin-course-status`/`.admin-user-status`
+  правила (0 читачів після свопу на `.ui-pill`), divider `border-block-start:2px` на
+  details/program/lifecycle, дубльоване padding/border/radius/background у `.admin-video-field`
+  (їх тепер дає `.ui-card`). Збережено layout grids/flex/gap, акценти, `admin-status-dot`,
+  `admin-role-tag`, `admin-video-state`.
+- **CourseListView / CourseEditorView / UserListView** (+11/+13/+11): локальні типізовані
+  `Record<Status, string>` → `.ui-pill ui-pill--<variant>` замість саморобних `.admin-*-status`
+  span. Мапінг: course `draft→warning`, `published→success`, `archived→neutral`;
+  user `active→success`, `blocked→danger`, `deleted→neutral`. **Точний i18n-текст статусів
+  (`statusLabel`/`t(...)`), `data-status` і DOM-порядок збережено** — свопнуто лише `className`.
+- **CoursePriceField / CourseGrantPanel / LessonVideoField** (+1 кожен): `.ui-card` у className
+  секції (program/details/lifecycle/price/grant/video), без зміни DOM чи handlers.
+
+### Верифікація
+- `npm run format`: 0 змін (Codex-файли вже відформатовані).
+- **Ordered `make check` run 1:** format-check / lint / typecheck / test / integration /
+  check-generated / build — **зелені**; e2e — **ЧЕРВОНИЙ** на 1 тесті (`GATE_EXIT=2`): R04
+  `archive preserves an enrolled member started view` — media-сегмент дав 403 замість 200.
+- **Детермінізм-перевірка (ререран e2e з reseed, run 2):** **118 passed (15.2m), `EXIT=0`**,
+  R04 пройшов (32.9s). → падіння run 1 — **флак**, не S2a (див. нижче).
+- **Контраст кожного pill-варіанта** (незалежний node-WCAG + звірка з **real-browser
+  computed styles** через CDP, surface=admin): warning **8.54:1**, success 8.35, danger 4.99,
+  neutral 15.16, info 4.93 — усі ≥4.5. Обчислені bg (color-mix 14% wash) збіглися з браузерними
+  computed до каналу (warning bg `rgb(46,37,25)`). `.ui-card` admin: bg `#111317` (surface),
+  border 1px, radius 12px, padding 16px, shadow — рендериться як задумано (divider→card).
+- **Клієнтський warning-pill** (real-browser, обидві теми): light `#865000` на `rgb(240,234,224)`
+  = **5.55:1**; dark `#f6c983` на `rgb(44,49,54)` = **8.5:1** — обидві ≥4.5.
+- Grep видалених класів `.admin-course-status`/`.admin-user-status` по src+e2e+go: **0 читачів**
+  перед видаленням.
+- **Рендер-скриншот admin-списку в CDP-сеансі не здобуто:** SSR-Suspense-boundary не
+  розрезолвлюється в цьому chrome-devtools-тулінгу (`<main>` лишається `<!--$-->…<!--/$-->`,
+  хоча `/api/v1/admin/courses` дає 200 з 20 курсами). Той самий prod-бандл рендериться чисто під
+  Playwright у зеленому повному e2e (118/118, axe на admin-сторінках) — тобто це артефакт тулінгу,
+  не дефект застосунку (пор. browser-quirks §S0). Перевірку CSS зроблено інжектом елементів у
+  живий admin/client-контекст + computed styles (виправдано: пряміше за data-render).
+
+### Знайдене під час верифікації
+- **Клієнтська зміна поза admin-скоупом (розкрито):** `MyLearningList.tsx:21` (enrollment UI, не
+  admin) вживає `ui-pill ui-pill--warning` для стану `blocked`. До цього зрізу `.ui-pill--warning`
+  **не існував** у `tokens.css` → blocked-пілюля падала на базовий `.ui-pill` (без варіанта).
+  Новий rule дає їй бурштинове оформлення в обох клієнтських темах. Це латентний фікс (автор явно
+  писав `ui-pill--warning`), контраст проходить (5.55 / 8.5), але це **не чисто-адмінська зміна** —
+  тому S2a гейтиться **повним** e2e, і клієнтський pill перевірено окремо.
+- **R04-флак (pre-existing, не S2a):** `playback.spec.ts:2011` залежить від активного
+  `course_grants` members-гранту, встановленого за `waitForTimeout(31_000)` публічного програвання
+  перед архівом (En09 ownership: архів не відкликає доступ enrolled-члена → 200). 403 у run 1 =
+  грант не був активним на момент `/internal/playback/authorize` — таймінг/стан під навантаженням
+  повного e2e, не CSS (diff нуль backend/routes/auth). Тест проходив у гейтах S0 і S1 (118 passed)
+  і на рерані. Кандидат на event-driven фікс замість `waitForTimeout` — окремий playback-follow-up.
+
+### Обмеження / межі зрізу
+- **No-behavior інваріант тримається:** diff = CSS + class-свопи + додавання `.ui-card` до
+  className. Нуль змін логіки/стану/handlers/валідації/DOM-порядку. Форм-поведінка — S2b.
+- Forced-colors live — та сама межа, що S0/S1 (тулінг не емулює); S2a вводить `.ui-card` і
+  `.ui-pill`, обидва вже покриті forced-colors-блоком (`CanvasText` border, `box-shadow:none`).
+- Admin `danger` (4.99) та `info` (4.93) проходять, але близькі до 4.5 — pre-existing пілюлі,
+  S2a лише додав `warning` до їхньої transparent-border-групи, їх не чіпав.
+
+### Рев'ю Courses 2: 0 blocker, 1 minor (виправлено в S2a)
+Courses 2 звірила всі 6 пунктів незалежно (не з опису) — збіг; перерахувала контраст сама
+(admin warning 8.54, danger 4.99). Знахідка:
+- **MINOR (виправлено):** `archived`/`deleted` → `.ui-pill--neutral`, але admin-група «transparent
+  border + tint» (tokens.admin.css) містила лише success/warning/danger/info — **neutral туди не
+  внесли**. Тож на admin neutral падав на shared-стиль: **видимий border + bg `--color-surface`
+  (#111317), що зливається з surface-тлом таблиці**, тоді як кольорові pills безбордюрні-тиновані.
+  До S2a archived/deleted були безбордюрні-тиновані (admin currentColor 14%) — консолідація під
+  reference «no-border» look саме для neutral цю граматику втратила (S2a-введена регресія вигляду,
+  не контраст: shared neutral = 15.16). **Фікс:** `.ui-pill--neutral` внесено в admin
+  transparent-border-групу + окреме правило `color: var(--color-muted)` + `color-mix(muted 14%,
+  background)` — muted ink навмисно (archived/deleted тихіші за статус-сигнал; text-ink 13.27
+  відкинуто як надто гучний). Контраст muted `#8b95a3` на `rgb(30,32,38)` = **5.37:1** (node-WCAG,
+  звірено з real-browser computed: border → transparent, bg muted-wash). `tokens.css` (клієнт)
+  neutral не чіпано → admin-scoped.
+
+**Повторний повний гейт із фіксом:** ordered `make check` — **`GATE_EXIT=0`, e2e 118 passed
+(15.3m)** (лог `s2a-gate2.log`, `api-nginx-20261014T131145Z.log`); axe на admin-сторінках звірив
+neutral на перебудованому стеку; R04 знову зелений (33.8s) — остаточно підтверджує флак run 1.
+Перший green e2e run (до neutral-фіксу) — `api-nginx-20261014T122803Z.log` (118 passed, 15.2m).
+
+### Наступне
+Owner-authorized squash-merge PR #25 → main. Далі S2b (форм-поведінка: label-above, blur-валідація,
+error-summary з лінками, preserve-input, destructive-confirm, interaction-states).

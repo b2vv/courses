@@ -7,6 +7,12 @@ import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/co
 import type { AdminListState } from '../../app/router/admin-search';
 import { EmptyState, ErrorState, Link, Pagination, Skeleton, Table, Tabs } from '../ui';
 
+const statusVariant: Record<CourseStatus, string> = {
+  draft: 'warning',
+  published: 'success',
+  archived: 'neutral',
+};
+
 type CourseListViewProps = {
   page: AdminCoursePage;
   state: AdminListState;
@@ -141,7 +147,11 @@ function courseRow(
         {course.title}
       </Link>,
       <code key="slug">{course.slug}</code>,
-      <span key="status" className="admin-course-status" data-status={course.status}>
+      <span
+        key="status"
+        className={`ui-pill ui-pill--${statusVariant[course.status]}`}
+        data-status={course.status}
+      >
         {statusLabel(course.status, t)}
       </span>,
       <code key="owner">{course.instructorId}</code>,

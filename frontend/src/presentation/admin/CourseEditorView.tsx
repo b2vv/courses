@@ -27,6 +27,12 @@ import type { CourseEditorTranscripts } from './LessonTranscriptField';
 import type { TranscriptDraftOffer } from './transcript-draft-offer';
 import type { CourseEditorVideo } from './LessonVideoField';
 
+const statusVariant: Record<CourseStatus, string> = {
+  draft: 'warning',
+  published: 'success',
+  archived: 'neutral',
+};
+
 type CourseFormValues = {
   slug: string;
   title: string;
@@ -428,7 +434,7 @@ function ModuleFields({
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
 
   return (
-    <section className="admin-program" aria-labelledby="course-program-heading">
+    <section className="admin-program ui-card" aria-labelledby="course-program-heading">
       <div className="admin-section-heading">
         <div>
           <p className="eyebrow">{t('administration.structure')}</p>
@@ -610,7 +616,10 @@ export function CourseEditorView({
           <p className="eyebrow">{t('administration.editor')}</p>
           <h1>{course.title}</h1>
         </div>
-        <span className="admin-course-status" data-status={course.status}>
+        <span
+          className={`ui-pill ui-pill--${statusVariant[course.status]}`}
+          data-status={course.status}
+        >
           {t(`administration.${course.status}`)}
         </span>
       </header>
@@ -625,7 +634,7 @@ export function CourseEditorView({
         noValidate
         aria-busy={form.formState.isSubmitting}
       >
-        <section className="admin-editor-details" aria-labelledby="course-details-heading">
+        <section className="admin-editor-details ui-card" aria-labelledby="course-details-heading">
           <div className="admin-section-heading">
             <div>
               <p className="eyebrow">{t('administration.details')}</p>
@@ -688,7 +697,7 @@ export function CourseEditorView({
           </Button>
         </div>
       </form>
-      <section className="admin-lifecycle" aria-labelledby="course-lifecycle-heading">
+      <section className="admin-lifecycle ui-card" aria-labelledby="course-lifecycle-heading">
         <div>
           <p className="eyebrow">{t('administration.lifecycle')}</p>
           <h2 id="course-lifecycle-heading">{t('administration.courseStatus')}</h2>
