@@ -2351,3 +2351,13 @@ button.transcript-line-body:hover {
     outline: 3px solid Highlight;
   }
 }
+
+[data-surface='admin'] .ui-button[data-pending] {
+  cursor: wait;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+[data-surface='admin'] .ui-button[data-pressed]:not([data-disabled]):not([data-pending]) {
+  box-shadow: inset 0 0 0 1px currentColor;
+}

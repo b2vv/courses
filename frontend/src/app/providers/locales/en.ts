@@ -612,6 +612,8 @@ export const en = {
       publish: 'Publish',
       archive: 'Archive',
       restore: 'Restore',
+      validationSummary: 'Fix the errors in the form',
+      confirmDeleteCourse: 'Confirm course deletion',
       deleteCourse: 'Delete draft',
       statusChanged: 'Course status updated.',
       transcriptsPending:

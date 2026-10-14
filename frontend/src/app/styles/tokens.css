@@ -229,6 +229,14 @@
   font-size: 0.875rem;
   color: var(--color-muted);
 }
+.ui-error-summary {
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-control);
+  padding: var(--space-4);
+  color: var(--color-danger);
+  margin-block-end: var(--space-4);
+}
+
 .ui-field-error {
   color: var(--color-danger);
 }

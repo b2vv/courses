@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useFieldArray, useForm, useController } from 'react-hook-form';
-import type { Control, FieldPathByValue, FieldValues, UseFormReturn } from 'react-hook-form';
+import { useFieldArray, useForm, useController, useWatch } from 'react-hook-form';
+import type {
+  Control,
+  FieldPath,
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { AuthoringQueryError } from '../../app/composition/admin-queries';
 import { newLessonId, newModuleId } from '../../domain/course/course';
@@ -123,6 +129,7 @@ function StringField<Values extends FieldValues>({
   });
   const props = {
     label,
+    ref: field.ref,
     value: String(field.value),
     name: field.name,
     onChange: field.onChange,
@@ -134,6 +141,45 @@ function StringField<Values extends FieldValues>({
     ...(description === undefined ? {} : { description }),
   };
   return multiline ? <TextArea {...props} /> : <TextField {...props} />;
+}
+
+const courseTextFields = ['title', 'slug', 'summary', 'description'] as const;
+const courseFieldLabels = {
+  title: 'administration.courseTitle',
+  slug: 'administration.slug',
+  summary: 'administration.summary',
+  description: 'administration.description',
+} as const;
+
+function FormErrorSummary<Values extends FieldValues>({
+  form,
+  fields,
+}: {
+  form: UseFormReturn<Values>;
+  fields: Array<{ name: FieldPath<Values>; label: string }>;
+}) {
+  const { t } = useTranslation();
+  const summary = useRef<HTMLDivElement>(null);
+  const { errors, submitCount } = form.formState;
+  const invalidFields = fields.filter(
+    ({ name }) => form.getFieldState(name, { ...form.formState, errors }).invalid,
+  );
+  useEffect(() => {
+    if (submitCount > 0) summary.current?.focus();
+  }, [submitCount]);
+  if (submitCount === 0 || invalidFields.length === 0) return null;
+  return (
+    <div ref={summary} className="ui-error-summary" role="alert" tabIndex={-1}>
+      <strong>{t('administration.validationSummary')}</strong>
+      <ul>
+        {invalidFields.map(({ name, label }) => (
+          <li key={name}>
+            <Link onPress={() => form.setFocus(name)}>{label}</Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function formValues(course: CourseTree): CourseFormValues {
@@ -526,7 +572,29 @@ export function CourseEditorView({
   const [lifecyclePending, setLifecyclePending] = useState(false);
   const [transcriptKnowledge, setTranscriptKnowledge] = useState<Record<string, boolean>>({});
   const [savedLessonIds, setSavedLessonIds] = useState(() => lessonIds(course));
-  const form = useForm<CourseFormValues>({ defaultValues: formValues(course) });
+  const form = useForm<CourseFormValues>({
+    defaultValues: formValues(course),
+    mode: 'onBlur',
+    shouldFocusError: false,
+  });
+  const summaryFields: Array<{ name: FieldPath<CourseFormValues>; label: string }> =
+    courseTextFields.map((name) => ({ name, label: t(courseFieldLabels[name]) }));
+  const currentModules = useWatch({ control: form.control, name: 'modules' });
+  currentModules.forEach((module, moduleIndex) => {
+    summaryFields.push({
+      name: `modules.${moduleIndex}.title`,
+      label: t('administration.moduleTitle', { number: moduleIndex + 1 }),
+    });
+    module.lessons.forEach((_lesson, lessonIndex) => {
+      summaryFields.push({
+        name: `modules.${moduleIndex}.lessons.${lessonIndex}.title`,
+        label: t('administration.lessonTitle', {
+          lesson: lessonIndex + 1,
+          module: moduleIndex + 1,
+        }),
+      });
+    });
+  });
   const resetVersion = useRef(course.updatedAt);
 
   useEffect(() => {
@@ -634,6 +702,7 @@ export function CourseEditorView({
         noValidate
         aria-busy={form.formState.isSubmitting}
       >
+        <FormErrorSummary form={form} fields={summaryFields} />
         <section className="admin-editor-details ui-card" aria-labelledby="course-details-heading">
           <div className="admin-section-heading">
             <div>
@@ -719,14 +788,32 @@ export function CourseEditorView({
                 : t('administration.publish')}
           </Button>
           {course.status === 'draft' && (
-            <Button
-              type="button"
-              variant="danger"
-              isDisabled={lifecyclePending || form.formState.isSubmitting}
-              onPress={() => void removeCourse()}
+            <Dialog
+              triggerLabel={t('administration.deleteCourse')}
+              trigger={
+                <Button
+                  type="button"
+                  variant="danger"
+                  isDisabled={lifecyclePending || form.formState.isSubmitting}
+                >
+                  {t('administration.deleteCourse')}
+                </Button>
+              }
+              title={t('administration.deleteCourse')}
+              closeLabel={t('enrollment.report.cancel')}
             >
-              {t('administration.deleteCourse')}
-            </Button>
+              {(close) => (
+                <Button
+                  variant="danger"
+                  onPress={() => {
+                    void removeCourse();
+                    close();
+                  }}
+                >
+                  {t('administration.confirmDeleteCourse')}
+                </Button>
+              )}
+            </Dialog>
           )}
         </div>
       </section>
@@ -785,6 +872,8 @@ export function CourseCreateDialog({
   const [message, setMessage] = useState<string>();
   const [existingCourseId, setExistingCourseId] = useState<CourseTree['id']>();
   const form = useForm<DraftFormValues>({
+    mode: 'onBlur',
+    shouldFocusError: false,
     defaultValues: {
       slug: '',
       title: '',
@@ -843,6 +932,10 @@ export function CourseCreateDialog({
         noValidate
         aria-busy={form.formState.isSubmitting}
       >
+        <FormErrorSummary
+          form={form}
+          fields={courseTextFields.map((name) => ({ name, label: t(courseFieldLabels[name]) }))}
+        />
         <StringField
           control={form.control}
           name="title"
