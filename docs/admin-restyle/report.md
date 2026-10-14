@@ -405,12 +405,14 @@ Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за пл�
 у session-ноті «## Рішення (S4)».
 
 ### Зроблено (6 файлів: 1 TSX view + 1 shared Table + 1 CSS + 2 tests + report)
-- **A — elevation stat-тайлів (scoped):** `.ui-stat` з плоского (`background:--color-background`,
-  без тіні) → `background: var(--color-surface)` + `box-shadow: var(--card-shadow)` (admin
-  `--card-shadow`=`--shadow-card`, S2a/S3-мова). Тайли більше не зливаються з page-ground. border/
-  radius/padding/grid збережено. `.ui-stat` — analytics-only (StatTile лише в AnalyticsView).
-- **B — money/numeric letter-spacing (scoped CSS):** `.ui-stat-value` `-0.04em` → `-0.01em`
-  (великі utility-числа/гроші читаються вільніше). Intl-форматер не чіпано.
+- **A — elevation stat-тайлів (admin-scoped, виправлено по рев'ю):** `[data-surface='admin'] .ui-stat`
+  у **tokens.admin.css** → `background: var(--color-surface)` + `box-shadow: var(--card-shadow)` (admin
+  `--card-shadow`=`--shadow-card`, та сама граматика, що `[data-surface='admin'] .ui-card` у S2a).
+  Base `.ui-stat` у tokens.css ЛИШАЄТЬСЯ flat (`--color-background`, без тіні) — admin-look не тече в
+  базовий примітив. Тайли на admin-дашборді читаються як raised cards, не зливаються.
+- **B — money/numeric letter-spacing (глобальне уточнення примітива):** `.ui-stat-value` `-0.04em` →
+  `-0.01em` у tokens.css — нейтральне типографічне уточнення наявної глобальної декларації (не
+  admin-look, тема-незалежне; великі utility-числа/гроші читаються вільніше). Intl-форматер не чіпано.
 - **C — group-heading treatment (scoped):** `.admin-analytics-group > h2` отримав
   `border-block-start: 1px` + `padding-block-start: space-6` → 7 груп читаються як окремі банди.
   Тексти заголовків незмінні; `minmax(min(13rem,100%),1fr)` 200%-guard збережено.
@@ -436,6 +438,12 @@ Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за пл�
 ### Обмеження / межі зрізу
 - **D6 — numeric-align на спільному Table** зроблено opt-in (не відкладено втретє з S1); гейтилось
   повним e2e. Ticket-premise «analytics не спільний» хибний для leaderboard (він на спільному Table).
+- **Рев'ю Courses 2: 0 blocker, 1 minor (виправлено).** Elevation `.ui-stat` спершу поклали в
+  ГЛОБАЛЬНИЙ tokens.css (бага нема — StatTile лише в AnalyticsView; але неузгоджено з патерном фази
+  S2a, де admin-специфіку скоупили, і латентно клієнтський `.ui-stat` успадкував би admin-elevation).
+  Перенесено в `[data-surface='admin'] .ui-stat` (tokens.admin.css); base лишається flat. Admin-рендер
+  ідентичний (AnalyticsView під `[data-surface=admin]`) → e2e-результат той самий. letter-spacing
+  лишено глобальним як нейтральне уточнення примітива (не admin-look).
 - Forced-colors live — та сама межа S0–S3; нові поверхні токен-керовані.
 
 ### Наступне
