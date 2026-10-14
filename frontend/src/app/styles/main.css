@@ -2039,210 +2039,257 @@ button.transcript-line-body:hover {
 /* Admin-side shell (D-e): a dedicated sidebar + top bar that replace the client
    chrome for /admin and /teach. Colours come from the data-surface="admin" scope
    on the root .app-shell, so this inherits the NorthWind editorial palette. */
-.admin-shell {
+[data-surface='admin'] .admin-shell {
   display: grid;
-  grid-template-columns: 3.5rem 15.5rem minmax(0, 1fr);
+  grid-template-columns: var(--space-admin-sidebar) minmax(0, 1fr);
   min-block-size: 100dvh;
 }
-/* Narrow icon rail: product mark + one glyph per destination (NorthWind grammar). */
-.admin-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: var(--space-2);
-  padding: var(--space-4) 0;
-  background: var(--color-background);
-  border-inline-end: 1px solid var(--color-hairline);
-  position: sticky;
-  inset-block-start: 0;
-  block-size: 100dvh;
-}
-.admin-rail-brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  border-radius: 0.55rem;
-  background: var(--btn-primary-bg);
-  color: var(--color-on-primary);
-  box-shadow: var(--btn-primary-highlight), var(--btn-primary-glow);
-  font: 700 0.7rem var(--font-utility);
-  text-decoration: none;
-  margin-block-end: var(--space-2);
-}
-.admin-rail-items {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.admin-rail-item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  border-radius: var(--radius-control);
-  color: var(--color-muted);
-  text-decoration: none;
-}
-.admin-rail-item:hover {
-  color: var(--color-text);
-  background: var(--color-elevated);
-}
-.admin-rail-item[aria-current='page'] {
-  color: var(--color-on-primary);
-  background: var(--nav-active-bg);
-  box-shadow: var(--nav-active-ring), var(--nav-active-highlight), var(--nav-active-glow);
-}
-.admin-sidebar {
+[data-surface='admin'] .admin-sidebar {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  padding: var(--space-6) var(--space-4);
+  padding-block: var(--space-6);
+  padding-inline: var(--space-4);
   background: var(--color-surface);
   border-inline-end: 1px solid var(--color-hairline);
   position: sticky;
   inset-block-start: 0;
   block-size: 100dvh;
+  min-inline-size: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 /* Workspace header: product wordmark + current area (not a tenant switcher). */
-.admin-workspace {
+[data-surface='admin'] .admin-workspace {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-inline: 0.75rem;
+  padding-inline: var(--space-3);
 }
-.admin-workspace-name {
+[data-surface='admin'] .admin-workspace-name {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.15rem;
   letter-spacing: -0.02em;
   color: var(--color-text);
 }
-.admin-workspace-area {
+[data-surface='admin'] .admin-workspace-area {
   font-size: 0.8rem;
   color: var(--color-muted);
 }
-.admin-nav {
+[data-surface='admin'] .admin-nav {
   display: flex;
   flex-direction: column;
   /* Override the generic `nav` rule (align-items: center; flex-wrap: wrap),
-     or sections shrink to content and float centred instead of filling the rail. */
+     or sections shrink to content and float centred instead of filling the sidebar. */
   align-items: stretch;
   flex-wrap: nowrap;
   gap: var(--space-4);
 }
-.admin-nav-section {
+[data-surface='admin'] .admin-nav-section {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.admin-nav-section-label {
+[data-surface='admin'] .admin-nav-section-label {
   font-family: var(--font-utility);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-faint);
-  padding-inline: 0.75rem;
+  padding-inline: var(--space-3);
   margin-block-end: var(--space-1);
 }
-.admin-nav-link {
+[data-surface='admin'] .admin-nav-link {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.6rem 0.75rem;
+  gap: var(--space-2);
+  min-block-size: var(--control-min-size);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
   border-radius: var(--radius-control);
   color: var(--color-muted);
   text-decoration: none;
   /* Inactive stays lighter so the active item reads as selected, not just tinted. */
-  font-weight: 500;
+  font-weight: 650;
 }
-.admin-nav-icon {
+[data-surface='admin'] .admin-nav-icon {
   flex: none;
+  inline-size: var(--space-icon);
+  block-size: var(--space-icon);
   color: var(--color-muted);
 }
-.admin-nav-link[aria-current='page'] .admin-nav-icon {
+[data-surface='admin'] .admin-nav-link[aria-current='page'] .admin-nav-icon {
   color: inherit;
 }
-.admin-nav-link:hover {
+[data-surface='admin'] .admin-nav-link:hover {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-text);
 }
 /* Active weight carries the hierarchy; its fill/gloss come from tokens.admin.css. */
-.admin-nav-link[aria-current='page'] {
+[data-surface='admin'] .admin-nav-link[aria-current='page'] {
   font-weight: 700;
 }
-.admin-to-client {
+[data-surface='admin'] .admin-to-client {
   margin-block-start: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.75rem;
+  gap: var(--space-2);
+  min-block-size: var(--control-min-size);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-control);
   color: var(--color-muted);
   text-decoration: none;
   font-size: 0.9rem;
 }
-.admin-to-client:hover {
+[data-surface='admin'] .admin-to-client:hover {
   color: var(--color-text);
   border-color: var(--color-border);
 }
-.admin-canvas {
+[data-surface='admin'] .admin-canvas {
   display: flex;
   flex-direction: column;
   min-inline-size: 0;
 }
-.admin-topbar {
+[data-surface='admin'] .admin-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: var(--space-4) var(--space-6);
+  padding-block: var(--space-4);
+  padding-inline: var(--space-6);
   border-block-end: 1px solid var(--color-hairline);
 }
-.admin-topbar-title {
+[data-surface='admin'] .admin-topbar-title {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.1rem;
   letter-spacing: -0.02em;
 }
-.admin-topbar-actions {
+[data-surface='admin'] .admin-topbar-actions {
+  min-inline-size: 0;
+  margin-inline-start: auto;
+  justify-content: flex-end;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
 }
-.admin-topbar-user {
+[data-surface='admin'] .admin-topbar-user {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   color: var(--color-muted);
   font-size: 0.9rem;
 }
-.admin-topbar-message {
-  padding: var(--space-2) var(--space-6) 0;
+[data-surface='admin'] .admin-topbar-message {
+  padding-block: var(--space-2) 0;
+  padding-inline: var(--space-6);
 }
-.admin-content {
+[data-surface='admin'] .admin-content {
   flex: 1 0 auto;
+  inline-size: 100%;
+  max-inline-size: var(--space-admin-canvas);
+  margin-inline: auto;
   min-inline-size: 0;
-  padding: var(--space-8) var(--space-6);
+  padding-block: var(--space-8);
+  padding-inline: var(--space-6);
 }
-/* Narrow screens: the rail folds away; the sidebar sits full-width above the
-   content but stays a VERTICAL grouped list (reference mobile = vertical nav with
-   its sections intact), never a horizontal wrap. */
+[data-surface='admin'] .admin-nav-toggle {
+  display: none;
+}
+[data-surface='admin'] .admin-drawer-overlay {
+  position: fixed;
+  inset-block: 0;
+  inset-inline: 0;
+  z-index: 100;
+  display: flex;
+  background: var(--color-modal-backdrop);
+}
+[data-surface='admin'] .admin-drawer {
+  inline-size: min(100%, var(--space-admin-sidebar));
+  block-size: 100%;
+  min-inline-size: 0;
+  overflow: auto;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-floating);
+}
+[data-surface='admin'] .admin-drawer-dialog {
+  position: static;
+  block-size: auto;
+  min-block-size: 100%;
+  overflow: visible;
+}
+[data-surface='admin'] .admin-drawer-close {
+  display: flex;
+  justify-content: flex-end;
+}
+[data-surface='admin'] :is(.admin-nav-link, .admin-to-client):focus-visible,
+[data-surface='admin'] .admin-drawer-dialog[data-focus-visible] {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+/* Keep the content in the first row; navigation opens in a modal drawer. */
 @media (max-width: 52rem) {
-  .admin-shell {
-    grid-template-columns: 1fr;
+  [data-surface='admin'] .admin-shell {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .admin-rail {
+  [data-surface='admin'] .admin-shell > .admin-sidebar {
     display: none;
   }
-  .admin-sidebar {
-    position: static;
-    block-size: auto;
-    border-inline-end: 0;
-    border-block-end: 1px solid var(--color-hairline);
+  [data-surface='admin'] .admin-nav-toggle {
+    display: inline-flex;
+  }
+  [data-surface='admin'] .admin-topbar {
+    padding-inline: var(--space-4);
+    gap: var(--space-2);
+  }
+  [data-surface='admin'] .admin-topbar-actions {
+    flex-basis: 100%;
+    gap: var(--space-2);
+  }
+  [data-surface='admin'] .admin-content {
+    padding-block: var(--space-4);
+    padding-inline: var(--space-4);
+  }
+}
+@media (prefers-contrast: more) {
+  [data-surface='admin'] .admin-sidebar,
+  [data-surface='admin'] .admin-topbar,
+  [data-surface='admin'] .admin-to-client {
+    border-color: var(--color-border);
+  }
+  [data-surface='admin'] .admin-nav-link[aria-current='page'] {
+    outline: 1px solid var(--color-focus);
+  }
+  [data-surface='admin'] .admin-nav-link[aria-current='page']:focus-visible {
+    outline-width: 3px;
+  }
+}
+@media (forced-colors: active) {
+  [data-surface='admin'] .admin-sidebar,
+  [data-surface='admin'] .admin-drawer,
+  [data-surface='admin'] .admin-topbar,
+  [data-surface='admin'] .admin-to-client {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+  [data-surface='admin'] .admin-nav-link[aria-current='page'] {
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
+    outline: 1px solid Highlight;
+  }
+  [data-surface='admin'] :is(.admin-nav-link, .admin-to-client):focus-visible,
+  [data-surface='admin'] .admin-drawer-dialog[data-focus-visible] {
+    outline: 3px solid Highlight;
   }
 }
