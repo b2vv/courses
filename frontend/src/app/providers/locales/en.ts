@@ -14,6 +14,7 @@ export const en = {
       retry: 'Try again',
       loading: 'Loading',
       close: 'Close',
+      cancel: 'Cancel',
       toClient: 'To client',
       toAdmin: 'Admin panel',
       toTeach: 'Teaching',

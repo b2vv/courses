@@ -290,8 +290,13 @@ S2 розбито на S2a (cards+pills, merged PR #25) і S2b (форм-пов�
   обгорнута спільним `Dialog` (overlays render-prop, як Refund/Report queues); confirm викликає
   `removeCourse()` + `close()`. Module/lesson remove і transitions — інлайн, без змін.
 - **interaction-states (D3):** `[data-surface=admin] .ui-button[data-pending]` (cursor wait +
-  dashed border, закриває S1-follow-up про відсутній busy-візуал) + `[data-pressed]` inset. CSS
-  `.ui-error-summary` — shared у tokens.css (прототип-грамота: 1px danger border, padding, danger ink).
+  dashed border) + `[data-pressed]` inset. CSS `.ui-error-summary` — shared у tokens.css
+  (прототип-грамота: 1px danger border, padding, danger ink). **Корекція (рев'ю Courses 2):**
+  `[data-pending]` — generic busy-візуал для RAC `isPending`-споживачів (RefundQueue:140/151,
+  LessonDocumentEditor:191), але **НЕ закриває S1-follow-up** — UserListView block/restore/delete
+  сидять на `aria-disabled` (283/296), не `data-pending`, тож структурно не матчаться. S1 busy-візуал
+  лишається OPEN (потребує окремого busy-сигналу на тих кнопках; глобальний `[aria-disabled]{wait}`
+  хибно позначив би й постійно-вимкнені кнопки). Не видаю skipped за done (AGENTS.md).
 - **i18n:** `administration.validationSummary` + `administration.confirmDeleteCourse` у uk/en;
   summary-лінки й нові тексти reuse наявних label-ключів (moduleTitle/lessonTitle/courseTitle).
 - **e2e (E1/E2, admin.spec.ts):** E1 — очистити «Назва» → submit → `role=alert` + лінк фокусує
@@ -318,8 +323,10 @@ S2 розбито на S2a (cards+pills, merged PR #25) і S2b (форм-пов�
 ### Обмеження / межі зрізу
 - Спільна зміна `controls.tsx` (ref-forward у ВСІ форми застосунку) → свідомо гейтилась повним e2e
   (регрес-гард поза admin); 120/120 зелено, регресій форм немає.
-- `closeLabel` confirm-діалогу reuse `enrollment.report.cancel` ('Скасувати') — крос-namespace, бо
-  в `administration` окремого cancel-ключа нема; текст коректний.
+- `closeLabel` confirm-діалогу (рев'ю Courses 2 MINOR 1): спочатку reuse `enrollment.report.cancel`
+  (крос-namespace). Courses 2 припустила наявний `common.cancel` — його НЕ було (звірив: `common`
+  мав лише `close`); тож **додав `common.cancel`** ('Скасувати'/'Cancel') у обидві локалі й перевів
+  `closeLabel` на `t('common.cancel')`. Текст 'Скасувати' незмінний (e2e E2 cancel зелений).
 - Forced-colors live — та сама межа S0/S1/S2a (тулінг не емулює); `.ui-error-summary`/`[data-pending]`
   токен-керовані.
 

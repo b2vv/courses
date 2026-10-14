@@ -800,7 +800,7 @@ export function CourseEditorView({
                 </Button>
               }
               title={t('administration.deleteCourse')}
-              closeLabel={t('enrollment.report.cancel')}
+              closeLabel={t('common.cancel')}
             >
               {(close) => (
                 <Button

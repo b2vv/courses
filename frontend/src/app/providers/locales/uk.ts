@@ -14,6 +14,7 @@ export const uk = {
       retry: 'Спробувати ще раз',
       loading: 'Завантаження',
       close: 'Закрити',
+      cancel: 'Скасувати',
       toClient: 'На клієнт',
       toAdmin: 'В адмінку',
       toTeach: 'Кабінет викладача',
