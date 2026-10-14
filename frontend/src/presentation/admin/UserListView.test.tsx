@@ -45,6 +45,14 @@ const listedUser: AdminUser = {
   status: 'active',
   updatedAt: '2026-09-01T00:00:00.000001Z',
 };
+const secondUser: AdminUser = {
+  id: '40000000-0000-4000-8000-000000000002',
+  email: 'teacher@courseforge.local',
+  displayName: 'Teacher',
+  role: 'instructor',
+  status: 'active',
+  updatedAt: '2026-09-01T00:00:00.000001Z',
+};
 const firstPage: AdminUserPage = {
   items: [listedUser],
   pagination: { limit: 20, offset: 0, total: 21 },
@@ -139,6 +147,41 @@ describe('admin user directory', () => {
     await browser.keyboard('{Escape}');
     await browser.click(screen.getByRole('button', { name: 'Видалити Student' }));
     expect(deletes).toEqual([listedUser.id]);
+  });
+
+  it('P07b locks every row action while one action is in flight and stays axe-clean', async () => {
+    const browser = userEvent.setup();
+    let release!: () => void;
+    const { container } = renderList({
+      page: { items: [listedUser, secondUser], pagination: { limit: 20, offset: 0, total: 2 } },
+      onSetStatus: () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    });
+
+    await browser.click(screen.getByRole('button', { name: 'Заблокувати Student' }));
+
+    // While the one action is in flight, every row's action buttons read
+    // aria-disabled: the ref serialization is visible rather than a silent
+    // no-op on the untouched row. aria-disabled (not native disabled) keeps
+    // the pressed button focusable, and the dimmed state is axe-clean.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Заблокувати Student' }).getAttribute('aria-disabled'),
+      ).toBe('true'),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Видалити Teacher' }).getAttribute('aria-disabled'),
+    ).toBe('true');
+    expect((await axe.run(container)).violations).toEqual([]);
+
+    release();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Заблокувати Student' }).hasAttribute('aria-disabled'),
+      ).toBe(false),
+    );
   });
 
   it('invokes the role and sort handlers from the filter controls', async () => {

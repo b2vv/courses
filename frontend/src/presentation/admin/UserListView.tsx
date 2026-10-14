@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
@@ -69,10 +69,26 @@ export function UserListView({
   // Guards against a double-press while an action is in flight. A ref (not the
   // pendingUser state) so a second press within the same render is caught
   // synchronously; the buttons stay enabled and focused (aria-disabled, never
-  // native disabled, which would drop focus to <body>).
+  // native disabled, which would drop focus to <body>). While any action is in
+  // flight every row's action buttons read aria-disabled, so the serialization
+  // the ref enforces is visible rather than a silent no-op on the other rows.
   const inFlight = useRef(false);
   const [message, setMessage] = useState<string>();
   const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
+  const messageRef = useRef<HTMLDivElement>(null);
+  // Delete soft-deletes the user, unmounting its action buttons; the browser
+  // then drops focus to <body>. When an action leaves focus stranded there,
+  // move it to the result message (a focusable live region) so keyboard and
+  // screen-reader users are not silently sent to the top of the page. The
+  // activeElement check means block/restore (trigger still mounted and focused)
+  // are left untouched — only a vanished trigger moves focus.
+  useEffect(() => {
+    if (!message) return;
+    const active = document.activeElement;
+    if (active === null || active === document.body) {
+      messageRef.current?.focus();
+    }
+  }, [message]);
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
   const selectedStatus = state.status ?? 'all';
@@ -155,7 +171,7 @@ export function UserListView({
               key="actions"
               user={user}
               actor={actor}
-              isPending={pendingUser === user.id}
+              isBusy={pendingUser !== undefined}
               onSetStatus={(status) =>
                 runAction(user, () => onSetStatus(user.id, status), t('adminUsers.actionComplete'))
               }
@@ -204,7 +220,7 @@ export function UserListView({
         </span>
       </div>
       {message && (
-        <div className="admin-editor-message" role={messageKind}>
+        <div className="admin-editor-message" role={messageKind} ref={messageRef} tabIndex={-1}>
           {message}
         </div>
       )}
@@ -256,7 +272,7 @@ function UserSearch({
 function UserActions({
   user,
   actor,
-  isPending,
+  isBusy,
   onSetStatus,
   onDelete,
   onReset,
@@ -264,7 +280,7 @@ function UserActions({
 }: {
   user: AdminUser;
   actor: AuthenticatedUser;
-  isPending: boolean;
+  isBusy: boolean;
   onSetStatus: (status: WritableAccountStatus) => Promise<void>;
   onDelete: () => Promise<void>;
   onReset: (password: string) => Promise<void>;
@@ -280,7 +296,7 @@ function UserActions({
         <Button
           type="button"
           variant="secondary"
-          {...(isPending ? { 'aria-disabled': true } : {})}
+          {...(isBusy ? { 'aria-disabled': true } : {})}
           aria-label={t(user.status === 'active' ? 'adminUsers.block' : 'adminUsers.restore', {
             name: user.displayName,
           })}
@@ -293,7 +309,7 @@ function UserActions({
         <Button
           type="button"
           variant="danger"
-          {...(isPending ? { 'aria-disabled': true } : {})}
+          {...(isBusy ? { 'aria-disabled': true } : {})}
           aria-label={t('adminUsers.delete', { name: user.displayName })}
           onPress={() => void onDelete()}
         >

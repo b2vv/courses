@@ -448,3 +448,56 @@ Owner-authorized squash-merge S3 PR → main. Далі S4 (analytics) за пл�
 
 ### Наступне
 Owner-authorized squash-merge S4 PR → main. Далі S5 (learners) за планом row 5 / tickets S5.
+
+## S1-follow-up — закриття трьох відкладених S1-хвостів
+
+За рішенням власника (2026-10-14, «спершу закрий follow-up») перед S5 закрито три дрібні хвости,
+залишені рев'ю S1 як необов'язкові (`report.md` S1 §«Re-review» + §«Відоме обмеження»). Усі три в
+одному компоненті (`UserListView.tsx`), закриті одним когерентним набором.
+
+### Зроблено (3 файли: 1 TSX view + 1 глобальний CSS primitive + 1 test)
+- **busy-візуал (S1 OPEN) + per-row serialization (S2a-reference) — один фікс.** In-flight guard
+  (`inFlight` ref) серіалізує дії всіх рядків, але `aria-disabled` вішався лише на рядок, що діє
+  (`pendingUser === user.id`) → інші рядки виглядали активними, а клік по них тихо no-op (обидва хвости —
+  симптом одного кореня). Фікс: `isPending` (per-row) → `isBusy={pendingUser !== undefined}` на
+  block/delete кнопках **усіх** рядків → під час будь-якого in-flight усі замикаються візуально, роблячи
+  серіалізацію видимою. Reset-trigger не чіпано (окремий dialog-флоу, не через `runAction`).
+- **busy-візуал — CSS.** Наявне inert-правило примітива в `tokens.css`
+  (`[data-disabled].ui-button{opacity:.55;cursor:not-allowed}`) розширено на
+  `[aria-disabled='true'].ui-button`. RAC не віддзеркалює `aria-disabled` у `data-disabled`, тому доти
+  кнопка під in-flight виглядала активною. **Класифікація — свідомо ГЛОБАЛЬНА редефініція примітива, не
+  admin-scoped:** програмний disabled-стан мусить бути візуально видимим для будь-якого `.ui-button`
+  (загальна a11y-коректність, не admin-look). Єдиний consumer `aria-disabled` сьогодні — UserListView
+  (grep по src), тож нуль регресій в інших поверхнях; правило коректне для майбутніх consumer'ів.
+  Фіксую явно, щоб не повторити пастку фази «admin-специфіку в глобальний примітив звуть scoped».
+- **delete-focus-after-unmount (pre-existing S1).** Delete → soft-delete → `UserActions`
+  розмонтовується в `noActions`-span → фокус падає в `<body>`. Додано `useEffect([message])`: коли після
+  дії `document.activeElement` === `body`/`null` (тригер зник), фокус переходить на focusable
+  live-region повідомлення (`role=status/alert` + `tabIndex=-1` + ref). `activeElement`-перевірка лишає
+  block/restore недоторканими (їх тригер лишається змонтований і сфокусований) — рухається лише зниклий.
+  Проміжний `setMessage(undefined)` на старті `runAction` гарантує ре-тригер ефекту навіть при двох
+  поспіль ідентичних success-повідомленнях.
+
+### Верифікація
+- **Повний ordered `make check` (зміна чіпає ГЛОБАЛЬНИЙ `tokens.css` + admin-users флоу → повний e2e
+  обов'язковий): `GATE_EXIT=0`, test 728 passed (727→728, +1 P07b), e2e 120/120 (15.0m)**, 0 fail/flaky
+  (лог `s1-followup-gate.log`, GATE_EXIT читано з лога, не з фонового exit).
+- Новий `P07b` доводить у jsdom: під in-flight (відкладений promise) block-кнопка рядка-актора ТА
+  delete-кнопка іншого рядка обидві `aria-disabled='true'`; axe(container) чистий під in-flight (закриває
+  вихідний занепокоєння S1 про `role-img-alt` від RAC isPending — тут простий `aria-disabled` атрибут);
+  після resolve — `aria-disabled` знято.
+- **Focus-restore недоказовий у jsdom** (відома пастка [[isdisabled-on-focused-button-drops-focus]]:
+  jsdom ховає focus-drop) → доведено real-browser probe'ом у складі e2e admin-users.spec (P08
+  block/restore/reset/delete зелений, 120/120).
+
+### Обмеження / межі
+- Reset-trigger не замикається під in-flight (окремий dialog-флоу поза `runAction`; його submit
+  обходить guard — pre-existing, поза скоупом хвоста).
+- Busy-lock серіалізує всі рядки видимо; свідомо НЕ введено справжню per-row конкурентність (Set
+  in-flight id) — admin-дії нечасті й суб-секундні, серіалізація безпечна, конкурентність додала б
+  ризик кількох одночасних записів без вигоди (найпростіше коректне рішення).
+- Forced-colors live — та сама межа S0–S4 (тулінг не емулює); правило токен-/opacity-кероване.
+
+### Наступне
+Owner-authorized merge S1-follow-up → main (код-фаза: гілка+PR). Далі S5 (learners) за планом row 5 /
+tickets S5 — чекає сигналу власника.
