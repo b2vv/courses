@@ -197,7 +197,7 @@ export function LessonVideoField({
     progress === undefined;
 
   return (
-    <section className="admin-video-field" aria-busy={isBusy}>
+    <section className="admin-video-field ui-card" aria-busy={isBusy}>
       <h3>{t('administration.video.title')}</h3>
       {!isSaved ? (
         <p className="admin-video-hint">{t('administration.video.unsavedHint')}</p>

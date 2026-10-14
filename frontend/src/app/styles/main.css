@@ -656,29 +656,6 @@ nav a {
   display: grid;
   gap: var(--space-6);
 }
-.admin-course-status,
-.admin-user-status {
-  display: inline-flex;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  font-weight: 650;
-}
-.admin-course-status[data-status='published'] {
-  color: var(--color-success);
-}
-.admin-course-status[data-status='archived'] {
-  color: var(--color-muted);
-}
-.admin-user-status[data-status='active'] {
-  color: var(--color-success);
-}
-.admin-user-status[data-status='blocked'] {
-  color: var(--color-danger);
-}
-.admin-user-status[data-status='deleted'] {
-  color: var(--color-muted);
-}
 
 /* Fleet-table grammar for the account roster (NorthWind §4.7/§4.8, slice S2).
    Structural rules are unscoped (the page is admin-only); colours resolve
@@ -908,16 +885,6 @@ nav a {
     margin-inline-start: 0;
   }
 }
-[data-surface='admin'] :is(.admin-course-status, .admin-user-status) {
-  border-color: transparent;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, currentColor 14%, transparent);
-  font-size: 0.75rem;
-  white-space: nowrap;
-}
-[data-surface='admin'] .admin-course-status[data-status='draft'] {
-  color: var(--color-warning);
-}
 /* Danger actions read as editorial: tinted, not a loud solid fill. The danger
    ink keeps >=4.5:1 on its own 14% wash in both admin themes. */
 [data-surface='admin'] .ui-button--danger {
@@ -987,12 +954,6 @@ nav a {
   display: grid;
   gap: var(--space-6);
 }
-.admin-editor-details,
-.admin-program,
-.admin-lifecycle {
-  padding-block-start: var(--space-6);
-  border-block-start: 2px solid var(--color-border);
-}
 .admin-editor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
@@ -1029,10 +990,6 @@ nav a {
   display: grid;
   justify-items: start;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
 }
 .admin-video-field h3,
 .admin-video-field p {
