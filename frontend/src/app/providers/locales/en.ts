@@ -450,6 +450,13 @@ export const en = {
           row: 'Row',
           task: 'Task',
         },
+        sectionDescription: {
+          video: 'Lesson video',
+          text: 'Explanations and lists',
+          image: 'Image with a caption',
+          row: 'Content in columns',
+          task: 'Practice for learners',
+        },
         errors: {
           invalid_lesson_document: 'The lesson document is invalid. Check the sections.',
           invalid_request: 'Could not save. Check the data.',
