@@ -244,7 +244,27 @@ interaction-states). Цей розділ — про S2a.
 - Admin `danger` (4.99) та `info` (4.93) проходять, але близькі до 4.5 — pre-existing пілюлі,
   S2a лише додав `warning` до їхньої transparent-border-групи, їх не чіпав.
 
+### Рев'ю Courses 2: 0 blocker, 1 minor (виправлено в S2a)
+Courses 2 звірила всі 6 пунктів незалежно (не з опису) — збіг; перерахувала контраст сама
+(admin warning 8.54, danger 4.99). Знахідка:
+- **MINOR (виправлено):** `archived`/`deleted` → `.ui-pill--neutral`, але admin-група «transparent
+  border + tint» (tokens.admin.css) містила лише success/warning/danger/info — **neutral туди не
+  внесли**. Тож на admin neutral падав на shared-стиль: **видимий border + bg `--color-surface`
+  (#111317), що зливається з surface-тлом таблиці**, тоді як кольорові pills безбордюрні-тиновані.
+  До S2a archived/deleted були безбордюрні-тиновані (admin currentColor 14%) — консолідація під
+  reference «no-border» look саме для neutral цю граматику втратила (S2a-введена регресія вигляду,
+  не контраст: shared neutral = 15.16). **Фікс:** `.ui-pill--neutral` внесено в admin
+  transparent-border-групу + окреме правило `color: var(--color-muted)` + `color-mix(muted 14%,
+  background)` — muted ink навмисно (archived/deleted тихіші за статус-сигнал; text-ink 13.27
+  відкинуто як надто гучний). Контраст muted `#8b95a3` на `rgb(30,32,38)` = **5.37:1** (node-WCAG,
+  звірено з real-browser computed: border → transparent, bg muted-wash). `tokens.css` (клієнт)
+  neutral не чіпано → admin-scoped.
+
+**Повторний повний гейт із фіксом:** ordered `make check` — **`GATE_EXIT=0`, e2e 118 passed
+(15.3m)** (лог `s2a-gate2.log`, `api-nginx-20261014T131145Z.log`); axe на admin-сторінках звірив
+neutral на перебудованому стеку; R04 знову зелений (33.8s) — остаточно підтверджує флак run 1.
+Перший green e2e run (до neutral-фіксу) — `api-nginx-20261014T122803Z.log` (118 passed, 15.2m).
+
 ### Наступне
-Коміт у `feat/admin-restyle-s2a` → PR (squash) → рев'ю Courses 2 за 6-пунктовим чеклистом
-(пункти 1/2/4/5/6 випереджено статично + computed-style; пункт 3 = розкрита MyLearningList-зміна).
-Далі S2b (форм-поведінка).
+Owner-authorized squash-merge PR #25 → main. Далі S2b (форм-поведінка: label-above, blur-валідація,
+error-summary з лінками, preserve-input, destructive-confirm, interaction-states).
