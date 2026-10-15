@@ -2616,3 +2616,12 @@ button.transcript-line-body:hover {
   outline: 3px solid var(--color-focus);
   outline-offset: 4px;
 }
+
+.lesson-editor-live {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

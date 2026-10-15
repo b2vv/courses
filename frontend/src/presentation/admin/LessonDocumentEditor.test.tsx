@@ -101,6 +101,147 @@ test('moving the second section up reorders the list', async () => {
   expect(sectionTypes()).toEqual(['image', 'video']);
 });
 
+function sectionById(id: string): HTMLElement {
+  const section = document.querySelector(`[data-section-id="${id}"]`);
+  if (!(section instanceof HTMLElement)) throw new Error(`Missing section: ${id}`);
+  return section;
+}
+
+for (const { type, name } of [
+  { type: 'text', name: 'Текст' },
+  { type: 'task', name: 'Завдання' },
+]) {
+  test(`adding ${type} focuses the new editable textbox, not its toolbar`, async () => {
+    setup([{ type: 'text', id: 'existing', content: { blocks: [] } }]);
+    const palette = await screen.findByRole('group', { name: 'Додати секцію' });
+    const add = within(palette).getByRole('button', { name });
+    act(() => add.focus());
+    expect(document.activeElement).toBe(add);
+    fireEvent.click(add);
+    await waitFor(() => expect(sectionTypes()).toEqual(['text', type]));
+    const section = document.querySelector('.lesson-editor-section:last-child');
+    if (!(section instanceof HTMLElement)) throw new Error('Missing added section');
+    const textbox = await within(section).findByRole('textbox', { name });
+    await waitFor(() => expect(document.activeElement).toBe(textbox));
+    expect(textbox.getAttribute('contenteditable')).toBe('true');
+    expect(sectionById('existing').contains(document.activeElement)).toBe(false);
+    expect(within(section).getByRole('toolbar').contains(document.activeElement)).toBe(false);
+  });
+}
+
+for (const { type, name, controlName } of [
+  { type: 'image', name: 'Зображення', controlName: 'Завантажити зображення' },
+  { type: 'video', name: 'Відео', controlName: 'Пересунути вгору' },
+  { type: 'row', name: 'Ряд', controlName: 'Пересунути вгору' },
+]) {
+  test(`adding ${type} focuses its designated button`, async () => {
+    setup([]);
+    const palette = await screen.findByRole('group', { name: 'Додати секцію' });
+    const add = within(palette).getByRole('button', { name });
+    act(() => add.focus());
+    fireEvent.click(add);
+    await waitFor(() => expect(sectionTypes()).toEqual([type]));
+    const section = document.querySelector('.lesson-editor-section');
+    if (!(section instanceof HTMLElement)) throw new Error('Missing added section');
+    const control = await within(section).findByRole('button', { name: controlName });
+    await waitFor(() => expect(document.activeElement).toBe(control));
+  });
+}
+
+test('deleting the middle section focuses the previous section action', async () => {
+  setup([videoSection, imageSection, { ...imageSection, id: 'last' }]);
+  await screen.findByText('Тут грає відео уроку (додається окремо).');
+  const previousAction = within(sectionById('v')).getByRole('button', {
+    name: 'Пересунути вгору',
+  });
+  const remove = within(sectionById('img')).getByRole('button', { name: 'Видалити секцію' });
+  act(() => remove.focus());
+  expect(document.activeElement).toBe(remove);
+  fireEvent.click(remove);
+  await waitFor(() => expect(document.activeElement).toBe(previousAction));
+  expect(document.activeElement).not.toBe(document.body);
+  expect(document.querySelector('[data-section-id="img"]')).toBeNull();
+  expect(sectionTypes()).toEqual(['video', 'image']);
+});
+
+test('deleting the first section focuses the following section action', async () => {
+  setup([videoSection, imageSection]);
+  await screen.findByText('Тут грає відео уроку (додається окремо).');
+  const nextAction = within(sectionById('img')).getByRole('button', {
+    name: 'Пересунути вгору',
+  });
+  const remove = within(sectionById('v')).getByRole('button', { name: 'Видалити секцію' });
+  act(() => remove.focus());
+  fireEvent.click(remove);
+  await waitFor(() => expect(document.activeElement).toBe(nextAction));
+  expect(document.querySelector('[data-section-id="v"]')).toBeNull();
+});
+
+test('deleting the only section focuses the Text palette button', async () => {
+  setup([videoSection]);
+  const palette = await screen.findByRole('group', { name: 'Додати секцію' });
+  const textButton = within(palette).getByRole('button', { name: 'Текст' });
+  expect(textButton.getAttribute('data-add-section')).toBe('text');
+  const remove = within(sectionById('v')).getByRole('button', { name: 'Видалити секцію' });
+  act(() => remove.focus());
+  expect(document.activeElement).toBe(remove);
+  fireEvent.click(remove);
+  await waitFor(() => expect(document.activeElement).toBe(textButton));
+  expect(document.activeElement).not.toBe(document.body);
+  expect(sectionTypes()).toEqual([]);
+});
+
+async function findMovementStatus(text: string): Promise<HTMLElement> {
+  const editor = screen.getByRole('region', { name: 'Редактор уроку' });
+  await within(editor).findByText(text);
+  const status = within(editor)
+    .getAllByRole('status')
+    .find((node) => node.textContent === text);
+  if (status === undefined) throw new Error(`Missing movement status: ${text}`);
+  return status;
+}
+
+test('moving a section announces the new position while preserving its control focus', async () => {
+  setup([videoSection, imageSection, { ...imageSection, id: 'last' }]);
+  await screen.findByText('Тут грає відео уроку (додається окремо).');
+  const moveUp = within(sectionById('last')).getByRole('button', { name: 'Пересунути вгору' });
+  act(() => moveUp.focus());
+  fireEvent.click(moveUp);
+  const status = await findMovementStatus('Секцію переміщено: позиція 2 з 3');
+  expect(status.getAttribute('aria-live')).toBe('polite');
+  expect(status.getAttribute('aria-atomic')).toBe('true');
+  expect(
+    Array.from(document.querySelectorAll('[data-section-id]'), (node) =>
+      node.getAttribute('data-section-id'),
+    ),
+  ).toEqual(['v', 'last', 'img']);
+  expect(document.activeElement).toBe(moveUp);
+  expect(screen.queryAllByRole('alert')).toEqual([]);
+});
+
+test('repeated move up at the first edge replaces the announcement content without moving', async () => {
+  setup([videoSection, imageSection]);
+  await screen.findByText('Тут грає відео уроку (додається окремо).');
+  const moveUp = within(sectionById('v')).getByRole('button', { name: 'Пересунути вгору' });
+  act(() => moveUp.focus());
+  fireEvent.click(moveUp);
+  const text = 'Секція вже перша';
+  const status = await findMovementStatus(text);
+  const firstAnnouncement = within(status).getByText(text);
+  expect(status.getAttribute('aria-live')).toBe('polite');
+  fireEvent.click(moveUp);
+  await waitFor(() => {
+    expect(within(status).getByText(text)).not.toBe(firstAnnouncement);
+    expect(firstAnnouncement.isConnected).toBe(false);
+  });
+  // DOM replacement proves ib3's re-announcement mechanism, not actual screen-reader speech.
+  expect(await findMovementStatus(text)).toBe(status);
+  expect(sectionTypes()).toEqual(['video', 'image']);
+  expect(moveUp.hasAttribute('disabled')).toBe(false);
+  expect(document.activeElement).toBe(moveUp);
+  expect(screen.queryAllByRole('alert')).toEqual([]);
+});
+
 test('save sends the built document under the loaded optimistic-lock token', async () => {
   const calls = setup([videoSection, imageSection], '2026-10-13T00:00:00Z');
   await screen.findByText('Тут грає відео уроку (додається окремо).');

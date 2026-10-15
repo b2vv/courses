@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -102,6 +102,11 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: 'saved' | 'published' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const editorRef = useRef<HTMLElement>(null);
+  const pendingFocus = useRef<{ sectionId: string; selector: string } | { palette: true } | null>(
+    null,
+  );
+  const [announcement, setAnnouncement] = useState({ text: '', sequence: 0 });
 
   const base: DraftState | null =
     draftQuery.data === undefined
@@ -112,6 +117,32 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           locale: draftQuery.data.document.locale,
         };
   const draft = edited ?? base;
+
+  const sections = draft?.sections;
+  useEffect(() => {
+    const target = pendingFocus.current;
+    const root = editorRef.current;
+    if (target === null || root === null) return;
+    const focusTarget = () => {
+      const control =
+        'palette' in target
+          ? root.querySelector<HTMLElement>('[data-add-section="text"]')
+          : root
+              .querySelector(`[data-section-id="${CSS.escape(target.sectionId)}"]`)
+              ?.querySelector<HTMLElement>(target.selector);
+      if (control == null) return false;
+      control.focus();
+      pendingFocus.current = null;
+      return true;
+    };
+    if (focusTarget()) return;
+    // Tiptap mounts its textbox after the section when immediatelyRender is false.
+    const observer = new MutationObserver(() => {
+      if (focusTarget()) observer.disconnect();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [sections]);
 
   const hasVideo = draft?.sections.some((section) => section.type === 'video') ?? false;
 
@@ -162,17 +193,48 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   const updateSection = (index: number, section: LessonSection) =>
     setSections(draft.sections.map((existing, i) => (i === index ? section : existing)));
 
-  const addSection = (type: LessonSection['type']) =>
-    setSections([...draft.sections, blankSection(type)]);
+  const addSection = (type: LessonSection['type']) => {
+    const section = blankSection(type);
+    pendingFocus.current = {
+      sectionId: section.id,
+      selector:
+        type === 'text' || type === 'task'
+          ? '[role="textbox"]'
+          : type === 'image'
+            ? // The visible upload button carries .ui-button; RAC's hidden DropZone button (first in
+              // DOM, aria-label="DropZone") does not, so target .ui-button to skip it.
+              '.lesson-editor-image .ui-button'
+            : '.lesson-editor-section-actions button',
+    };
+    setSections([...draft.sections, section]);
+  };
 
-  const removeSection = (index: number) =>
+  const removeSection = (index: number) => {
+    const neighbor = draft.sections[index - 1] ?? draft.sections[index + 1];
+    pendingFocus.current =
+      neighbor === undefined
+        ? { palette: true }
+        : { sectionId: neighbor.id, selector: '.lesson-editor-section-actions button' };
     setSections(draft.sections.filter((_, i) => i !== index));
+  };
+
+  const announce = (text: string) =>
+    setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
 
   // Move keeps the button enabled at the edges (no isDisabled, which would drop focus to the body);
   // a move past the edge is simply a no-op.
   const moveSection = (index: number, delta: -1 | 1) => {
     const target = index + delta;
-    if (target < 0 || target >= draft.sections.length) return;
+    if (target < 0 || target >= draft.sections.length) {
+      announce(
+        t('administration.document.moveBlocked', {
+          edge: t(
+            target < 0 ? 'administration.document.edgeFirst' : 'administration.document.edgeLast',
+          ),
+        }),
+      );
+      return;
+    }
     const next = [...draft.sections];
     const moved = next[index];
     const swapped = next[target];
@@ -180,6 +242,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     next[index] = swapped;
     next[target] = moved;
     setSections(next);
+    announce(t('administration.document.movedTo', { pos: target + 1, total: next.length }));
   };
 
   const uploadInto = (
@@ -250,7 +313,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   const busy = save.isPending || publish.isPending;
 
   return (
-    <section className="lesson-editor" aria-labelledby="lesson-editor-heading">
+    <section ref={editorRef} className="lesson-editor" aria-labelledby="lesson-editor-heading">
       <header className="lesson-editor-header">
         <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
         <div className="lesson-editor-actions">
@@ -278,9 +341,17 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           <p>{t('administration.document.emptyHint')}</p>
         </EmptyState>
       )}
+      <output className="lesson-editor-live" aria-live="polite" aria-atomic="true">
+        <span key={announcement.sequence}>{announcement.text}</span>
+      </output>
       <ol className="lesson-editor-sections">
         {draft.sections.map((section, index) => (
-          <li key={section.id} className="lesson-editor-section" data-type={section.type}>
+          <li
+            key={section.id}
+            className="lesson-editor-section"
+            data-type={section.type}
+            data-section-id={section.id}
+          >
             <div className="lesson-editor-section-bar">
               <SectionIcon type={section.type} />
               <span className="lesson-editor-section-type">
@@ -329,6 +400,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
             .map((type) => (
               <Button
                 key={type}
+                data-add-section={type}
                 variant="secondary"
                 aria-describedby={`lesson-palette-desc-${type}`}
                 onPress={() => addSection(type)}

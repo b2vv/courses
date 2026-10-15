@@ -204,6 +204,12 @@ test('reordering a section by keyboard keeps focus on its control, and the edito
   });
   expect(violations).toEqual([]);
 
+  await sections.first().getByRole('button', { name: 'Видалити секцію' }).click();
+  await expect(sections).toHaveCount(1);
+  await expect
+    .poll(() => admin.evaluate(() => document.activeElement === document.body))
+    .toBe(false);
+
   await adminContext.close();
 });
 
