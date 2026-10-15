@@ -3,10 +3,17 @@ import * as Aria from 'react-aria-components';
 
 type ButtonProps = Omit<Aria.ButtonProps, 'className'> & {
   variant?: 'primary' | 'secondary' | 'danger';
+  /** Optional modifier class appended to the base `ui-button ui-button--<variant>`. */
+  className?: string;
 };
 
-export function Button({ variant = 'primary', ...props }: ButtonProps) {
-  return <Aria.Button {...props} className={`ui-button ui-button--${variant}`} />;
+export function Button({ variant = 'primary', className, ...props }: ButtonProps) {
+  return (
+    <Aria.Button
+      {...props}
+      className={`ui-button ui-button--${variant}${className ? ` ${className}` : ''}`}
+    />
+  );
 }
 
 export function Link(props: Aria.LinkProps) {

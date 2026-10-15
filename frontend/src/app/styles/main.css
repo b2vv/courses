@@ -1548,10 +1548,82 @@ nav a {
 }
 .lesson-editor-header {
   justify-content: space-between;
+  align-items: flex-start;
   gap: var(--space-4);
+}
+.lesson-editor-headings {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
 }
 .lesson-editor-header h1 {
   margin: 0;
+}
+.lesson-editor-eyebrow {
+  font: 0.6875rem / 1.5 var(--font-utility);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.lesson-editor-intro {
+  margin: 0;
+  max-inline-size: var(--space-prose-measure);
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.lesson-editor-actions {
+  flex: none;
+}
+.lesson-editor-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+  border-block: 1px solid var(--color-hairline);
+}
+.lesson-save-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+}
+.lesson-status-dot {
+  flex: none;
+  inline-size: var(--space-1);
+  block-size: var(--space-1);
+  border-radius: var(--radius-pill);
+}
+.lesson-status-dot.is-saved {
+  background: var(--color-success);
+}
+.lesson-status-dot.is-unsaved {
+  background: var(--color-warning);
+}
+.lesson-title-block {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.lesson-title-display {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+.lesson-title-caption {
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  overflow-wrap: anywhere;
+}
+.lesson-editor-preview {
+  min-inline-size: 0;
 }
 .lesson-editor-sections {
   display: grid;
@@ -1571,18 +1643,30 @@ nav a {
   box-shadow: var(--card-shadow);
 }
 .lesson-editor-section-bar {
+  justify-content: space-between;
+  gap: var(--space-3);
   padding-block-end: var(--space-3);
   border-block-end: 1px solid var(--color-hairline);
 }
-.lesson-editor-section-type {
+.section-identity {
+  display: flex;
   flex: 1;
-  font-size: 0.8125rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+.lesson-editor-section-type {
+  min-inline-size: 0;
+  font: 0.6875rem / 1.5 var(--font-utility);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--color-muted);
   overflow-wrap: anywhere;
 }
 .lesson-editor-section-actions {
+  flex: none;
+  gap: var(--space-1);
   margin-inline-start: auto;
 }
 .lesson-editor-icon-tile {
@@ -1591,15 +1675,38 @@ nav a {
   flex: none;
   inline-size: var(--control-min-size);
   block-size: var(--control-min-size);
-  color: var(--color-primary-hover);
-  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-background));
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
   border-radius: var(--radius-control);
 }
 .lesson-editor-section-index {
+  flex: none;
   color: var(--color-muted);
-  font-size: 0.8125rem;
-  font-weight: 650;
+  font: 0.6875rem var(--font-utility);
   font-variant-numeric: tabular-nums;
+}
+.lesson-editor-action-button {
+  min-inline-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  padding: var(--space-2);
+  color: var(--color-muted);
+  background: none;
+  border-color: transparent;
+}
+.lesson-editor-action-button[data-hovered],
+.lesson-editor-action-button[data-focus-visible] {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-hairline);
+}
+.lesson-editor-action-button.is-destructive[data-hovered],
+.lesson-editor-action-button.is-destructive[data-focus-visible] {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+.lesson-editor-action-button[aria-disabled='true'] {
+  color: var(--color-hairline);
 }
 .lesson-editor-palette {
   display: grid;
@@ -1631,26 +1738,41 @@ nav a {
   min-inline-size: 0;
 }
 .lesson-editor-toolbar {
-  gap: var(--space-2) var(--space-4);
-  padding-block-end: var(--space-3);
-  border-block-end: 1px solid var(--color-hairline);
-}
-.lesson-editor-toolbar-group {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--space-1);
-  min-inline-size: 0;
-  max-inline-size: 100%;
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--color-hairline);
 }
 .lesson-editor-toolbar .ui-button {
   min-inline-size: var(--control-min-size);
   min-block-size: var(--control-min-size);
 }
+.toolbar-button {
+  padding: var(--space-2);
+  color: var(--color-muted);
+  font: 0.8125rem var(--font-utility);
+  font-weight: 700;
+}
+.toolbar-group-start {
+  margin-inline-start: var(--space-2);
+}
+.toolbar-button[aria-pressed='true'],
 .lesson-editor-toolbar .ui-button[aria-pressed='true'] {
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-primary) 24%, var(--color-background));
-  border-color: var(--color-primary-hover);
+  color: var(--color-focus);
+  background: var(--color-surface);
+  border-color: var(--color-focus);
   text-decoration: none;
+}
+.toolbar-button .italic {
+  font-style: italic;
+}
+.toolbar-caption {
+  margin-inline-start: auto;
+  padding-inline: var(--space-2);
+  color: var(--color-muted);
+  font: 0.6875rem var(--font-utility);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .lesson-editor-input {
   min-inline-size: 0;
@@ -1750,8 +1872,25 @@ nav a {
   overflow-wrap: anywhere;
 }
 .lesson-editor-video {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
   margin: 0;
+  padding: var(--space-8);
+  text-align: center;
   color: var(--color-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-control);
+}
+.lesson-editor-video .lesson-editor-icon-tile {
+  color: var(--color-focus);
+}
+.lesson-editor-video p {
+  margin: 0;
+  max-inline-size: var(--space-prose-measure);
+  font-size: 0.8125rem;
 }
 @container lesson-content (min-width: 40rem) {
   .lesson-document-row[data-columns='2'],
