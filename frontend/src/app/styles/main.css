@@ -2485,3 +2485,116 @@ button.transcript-line-body:hover {
 .learner-card .ui-progress-track {
   block-size: var(--space-3);
 }
+
+/* Admin report/refund queues: shared primitives are consumed, not overridden. */
+.admin-queue-list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-queue-list > li,
+.admin-queue-card {
+  min-inline-size: 0;
+}
+.admin-queue-card {
+  padding: var(--space-5);
+  overflow-wrap: anywhere;
+}
+.admin-queue-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+.admin-queue-title {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+}
+.admin-queue-title > .eyebrow {
+  margin: 0;
+}
+.admin-queue-title > h2 {
+  margin: var(--space-2) 0 0;
+  line-height: 1.5;
+}
+.admin-queue-heading > .ui-pill {
+  margin-inline-start: auto;
+  white-space: normal;
+}
+.admin-queue-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  border-block-start: 1px solid var(--color-hairline);
+  padding-block: var(--space-4);
+}
+.admin-queue-details > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.admin-queue-details > div > span,
+.admin-queue-reason > span {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.admin-queue-details strong {
+  font-weight: 650;
+}
+.admin-queue-reason {
+  margin-block-end: var(--space-4);
+}
+.admin-queue-reason > p {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+}
+.admin-refund-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.admin-refund-summary .admin-refund-amount {
+  font-size: 1.5rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+}
+.admin-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border-block-start: 1px solid var(--color-hairline);
+  padding-block-start: var(--space-4);
+}
+.admin-queue-actions > .ui-button {
+  flex: 1 1 12rem;
+  min-inline-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-queue-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.admin-queue-empty > h2,
+.admin-queue-empty > p {
+  margin: 0;
+}
+.admin-queue-empty > p {
+  color: var(--color-muted);
+}
+@media (width <= 40rem) {
+  .admin-queue-card {
+    padding: var(--space-4);
+  }
+  .admin-queue-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
