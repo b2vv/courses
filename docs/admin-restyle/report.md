@@ -550,5 +550,59 @@ S5 (learners) за планом row 5 / tickets S5.
 - Forced-colors live — та сама межа S0–S4; нові поверхні токен-/opacity-керовані.
 
 ### Наступне
-Owner-authorized merge S5 PR → main (код-фаза: гілка+PR). Далі S6 (reports+refunds) за планом row 7,8 /
-tickets S6 — останній зріз фази.
+Owner-authorized merge S5 PR → main (код-фаза: гілка+PR). Злито як PR #30 (`120a9a4`). Далі S6
+(reports+refunds) — останній зріз фази.
+
+## S6 — reports + refunds: візуальний рестайл (останній зріз)
+
+Рестайл двох адмін-черг — `ParticipantReportQueue` (`/admin/participant-reports`) і `RefundQueue`
+(`/admin/refunds`) — за tickets S6. Код нарізав Codex (бриф `docs/admin-restyle/_wip-S6-codex.md`); гейт
+і browser-verify — Courses 1.
+
+### Зроблено (4 файли: 2 TSX views + 1 page-scoped CSS + локалі)
+- **Вихідний стан:** обидві черги — `<article>` без класу, дамп `<p>` «Label: value», стан плоским `<p>`,
+  дії у фіксованій колонці 11.5rem, відкинутій праворуч (`.admin-user-actions`), `<ul className="teach-section">`.
+- **TSX (обидві черги, без зміни моделі/handlers/Dialog-gating/пагінації):** `<article class="ui-card
+  admin-queue-card">`; heading-зона `admin-queue-heading` = `.ui-icon-tile`(inline-svg, споживання) +
+  eyebrow(id·дата) + `<h2>` + **статус-pill**; структуровані `admin-queue-details` (grid label/strong замість
+  дампу); reports — окремий `admin-queue-reason`; refunds — `admin-refund-summary`+`admin-refund-amount`
+  (tabular-nums); дії в `admin-queue-actions` (прив'язані дільником знизу). Empty — `admin-queue-empty`
+  (`.ui-card` + icon-tile + h2 + hint) замість голого `<EmptyState>`.
+- **Pill-мапа (повнота типом, проти пастки S5-revoked):** reports `reportStateVariants` `satisfies
+  Record<ParticipantReportState,…>` (open→warning, resolved→success); refunds `membershipStates`
+  `satisfies Record<NonNullable<MembershipState>,…>` (active→success, blocked→warning, revoked→neutral),
+  `null`→БЕЗ pill (явно). Усі значення enum покрито.
+- **CSS — усе PAGE-SCOPED** (`admin-queue-*`/`admin-refund-*`): grid-картки, hairline-дільники (details/actions
+  border-block-start), 3-кол деталі → 1 кол на ≤40rem, 44px кнопки, центрований empty. **0 змін спільних
+  примітивів/токенів:** `.admin-user-actions` (база) НЕ чіпано (UserListView залежить від її flex+gap);
+  `.teach-section` НЕ стилізовано (замінено в розмітці на `admin-queue-list`); `.ui-card`/`.ui-pill`/
+  `.ui-icon-tile`/`.ui-state`/`EmptyState` споживаються; `.ui-pill` позиціоновано лише scoped-дескендантом
+  `.admin-queue-heading > .ui-pill`.
+- **Локалі:** додано `enrollment.reports.emptyHint`, `enrollment.refunds.emptyHint`, `enrollment.refunds.revoked`
+  (лейбл для revoked-pill; active/blocked беруть наявні `roster.state`) у uk+en.
+
+### Верифікація
+- **Повний ordered `make check`: `GATE_EXIT=0`, test 728 passed (0 нових — рестайл візуальний, i18n-тести
+  зелені), e2e 120/120 (15.5m)**, 0 fail/flaky (лог `s6-gate.log`). Включно з En07/En14 (reports) і Rf-e2e
+  (refunds) — доводить, що реструктуровані картки рендеряться й діють з реальними даними (e2e асертить
+  `locator('article')`+hasText+кнопки-за-назвою). CI на білінгу (план §86) — локальний run авторитетний.
+- Codex self-verify: format, tsc --noEmit, oxlint+architecture, i18n.test 4/4 — PASS; усі 8 CSS-токенів
+  звірено визначеними.
+- **Browser-verify на РЕАЛЬНОМУ коді** (host-Playwright + storage-state admin) — ОБИДВА стани природно
+  (1 відкрита скарга в черзі; refund-черга порожня), desktop 1280 І narrow 375:
+  - **Reports (POPULATED):** `ui-card`+shadow, details 3 кол→**1 на 375**, actions flex+border-top (прив'язані),
+    pill «Відкрита»=`ui-pill--warning`, icon-tile; скриншот 375 — структурована картка (shield, id·дата, kind,
+    pill, Автор/Курс/Учасник, Причина, Вирішити+Відкликати знизу), жодного дампу.
+  - **Refunds (EMPTY):** `admin-queue-empty` = `.ui-card`+icon-tile+h2+hint (структурована icon+рамка).
+  - **h-scroll НЕМАЄ** на 1280 І 375 в обох чергах.
+  - Refund-populated CSS (`admin-refund-summary/amount`) покрито passing Rf-e2e (реальний populated-рендер);
+    спільні queue-card-класи доведено populated reports.
+
+### Обмеження / межі
+- Refund populated-картку оком не знято (у post-гейт БД refund-черга порожня) → її CSS-класи спільні з
+  reports (доведено populated) + Rf-e2e рендерить її populated у реальному браузері (зелений).
+- Forced-colors live — та сама межа S0–S5; нові поверхні токен-/opacity-керовані.
+
+### Наступне
+Owner-authorized merge S6 PR → main (код-фаза: гілка+PR). **Це ОСТАННІЙ зріз фази admin-restyle — після
+merge роадмап рестайлу S0–S6 закрито 7/7.**

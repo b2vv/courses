@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
 import type { ParticipantReportQueueItem } from '../../domain/enrollment/enrollment';
-import { Button, Dialog, EmptyState } from '../ui';
+import { Button, Dialog } from '../ui';
+
+const reportStateVariants = {
+  open: 'warning',
+  resolved: 'success',
+} satisfies Record<ParticipantReportQueueItem['state'], string>;
 
 type ParticipantReportQueueProps = {
   readonly items: readonly ParticipantReportQueueItem[];
@@ -100,10 +105,26 @@ export function ParticipantReportQueue({
       ) : null}
       {actionError ? <p role="alert">{t(`enrollment.errors.${actionError}`)}</p> : null}
       {!isLoading && error === null && items.length === 0 ? (
-        <EmptyState title={t('enrollment.reports.empty')} />
+        <div className="ui-card admin-queue-empty">
+          <span className="ui-icon-tile" aria-hidden="true">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              focusable="false"
+            >
+              <path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7zM12 8v5m0 4h.01" />
+            </svg>
+          </span>
+          <h2>{t('enrollment.reports.empty')}</h2>
+          <p>{t('enrollment.reports.emptyHint')}</p>
+        </div>
       ) : null}
       {items.length > 0 ? (
-        <ul aria-label={t('enrollment.reports.title')} className="teach-section">
+        <ul aria-label={t('enrollment.reports.title')} className="admin-queue-list">
           {items.map((item, index) => {
             const isPending = actedReportId === item.id && (resolvePending || revokePending);
             return (
@@ -111,26 +132,53 @@ export function ParticipantReportQueue({
                 key={item.id}
                 {...(index === firstAddedIndex ? { ref: firstAdded, tabIndex: -1 } : {})}
               >
-                <article>
-                  <h2>{t(`enrollment.reports.kind.${item.kind}`)}</h2>
-                  <p>
-                    {t('enrollment.reports.reporter')}:{' '}
-                    {item.reporterName ?? t('ratings.formerAuthor')}
-                  </p>
-                  <p>
-                    {t('enrollment.reports.target')}: {item.targetName ?? t('ratings.formerAuthor')}
-                  </p>
-                  <p>
-                    {t('enrollment.reports.course')}: {item.courseTitle}
-                  </p>
-                  <p>
-                    {t('enrollment.reports.reason')}: {item.reason}
-                  </p>
-                  <p>{t(`enrollment.reports.state.${item.state}`)}</p>
-                  <time dateTime={item.createdAt}>
-                    {new Date(item.createdAt).toLocaleString(i18n.resolvedLanguage)}
-                  </time>
-                  <div className="admin-user-actions">
+                <article className="ui-card admin-queue-card">
+                  <div className="admin-queue-heading">
+                    <span className="ui-icon-tile" aria-hidden="true">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        focusable="false"
+                      >
+                        <path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7zM12 8v5m0 4h.01" />
+                      </svg>
+                    </span>
+                    <div className="admin-queue-title">
+                      <p className="eyebrow">
+                        {item.id} ·{' '}
+                        <time dateTime={item.createdAt}>
+                          {new Date(item.createdAt).toLocaleString(i18n.resolvedLanguage)}
+                        </time>
+                      </p>
+                      <h2>{t(`enrollment.reports.kind.${item.kind}`)}</h2>
+                    </div>
+                    <span className={`ui-pill ui-pill--${reportStateVariants[item.state]}`}>
+                      {t(`enrollment.reports.state.${item.state}`)}
+                    </span>
+                  </div>
+                  <div className="admin-queue-details">
+                    <div>
+                      <span>{t('enrollment.reports.reporter')}</span>
+                      <strong>{item.reporterName ?? t('ratings.formerAuthor')}</strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.reports.course')}</span>
+                      <strong>{item.courseTitle}</strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.reports.target')}</span>
+                      <strong>{item.targetName ?? t('ratings.formerAuthor')}</strong>
+                    </div>
+                  </div>
+                  <div className="admin-queue-reason">
+                    <span>{t('enrollment.reports.reason')}</span>
+                    <p>{item.reason}</p>
+                  </div>
+                  <div className="admin-queue-actions">
                     <Button isPending={isPending} onPress={() => void resolve(item)}>
                       {t('enrollment.reports.resolve')}
                     </Button>

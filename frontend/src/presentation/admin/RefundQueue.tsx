@@ -2,7 +2,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
 import type { RefundQueueItem } from '../../domain/enrollment/enrollment';
-import { Button, Dialog, EmptyState } from '../ui';
+import { Button, Dialog } from '../ui';
+
+const membershipStates = {
+  active: { variant: 'success', label: 'enrollment.roster.state.active' },
+  blocked: { variant: 'warning', label: 'enrollment.roster.state.blocked' },
+  revoked: { variant: 'neutral', label: 'enrollment.refunds.revoked' },
+} satisfies Record<
+  NonNullable<RefundQueueItem['membershipState']>,
+  { variant: string; label: string }
+>;
 
 type RefundQueueProps = {
   readonly items: readonly RefundQueueItem[];
@@ -89,40 +98,95 @@ export function RefundQueue({
       ) : null}
       {actionError ? <p role="alert">{t(`enrollment.errors.${actionError}`)}</p> : null}
       {!isLoading && error === null && items.length === 0 ? (
-        <EmptyState title={t('enrollment.refunds.empty')} />
+        <div className="ui-card admin-queue-empty">
+          <span className="ui-icon-tile" aria-hidden="true">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              focusable="false"
+            >
+              <path d="M4 6h16v14H4zM4 10h16M15 15h2M7 3l-3 3 3 3M4 6h10" />
+            </svg>
+          </span>
+          <h2>{t('enrollment.refunds.empty')}</h2>
+          <p>{t('enrollment.refunds.emptyHint')}</p>
+        </div>
       ) : null}
       {items.length > 0 ? (
-        <ul aria-label={t('enrollment.refunds.title')} className="teach-section">
+        <ul aria-label={t('enrollment.refunds.title')} className="admin-queue-list">
           {items.map((item) => {
             const acted = actedOrderId === item.orderId;
             const resolveIsPending = acted && resolvePending;
             const revokeIsPending = acted && revokePending;
             return (
               <li key={item.orderId}>
-                <article>
-                  <h2>{t(`enrollment.refunds.reason.${item.reason}`)}</h2>
-                  <p>
-                    {t('enrollment.refunds.course')}: {item.courseId}
-                  </p>
-                  <p>
-                    {t('enrollment.refunds.user')}: {item.userId}
-                  </p>
-                  <p>
-                    {t('enrollment.refunds.ordered')}:{' '}
-                    {hryvnia(item.orderAmountMinor, i18n.resolvedLanguage)}
-                  </p>
-                  <p>
-                    {t('enrollment.refunds.charged')}:{' '}
-                    {item.chargedAmountMinor === null
-                      ? t('enrollment.refunds.unknownAmount')
-                      : hryvnia(item.chargedAmountMinor, i18n.resolvedLanguage)}
-                  </p>
-                  {item.receivedAt !== null ? (
-                    <time dateTime={item.receivedAt}>
-                      {new Date(item.receivedAt).toLocaleString(i18n.resolvedLanguage)}
-                    </time>
-                  ) : null}
-                  <div className="admin-user-actions">
+                <article className="ui-card admin-queue-card">
+                  <div className="admin-queue-heading">
+                    <span className="ui-icon-tile" aria-hidden="true">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        focusable="false"
+                      >
+                        <path d="M4 6h16v14H4zM4 10h16M15 15h2M7 3l-3 3 3 3M4 6h10" />
+                      </svg>
+                    </span>
+                    <div className="admin-queue-title">
+                      <p className="eyebrow">
+                        {item.orderId}
+                        {item.receivedAt !== null ? (
+                          <>
+                            {' '}
+                            ·{' '}
+                            <time dateTime={item.receivedAt}>
+                              {new Date(item.receivedAt).toLocaleString(i18n.resolvedLanguage)}
+                            </time>
+                          </>
+                        ) : null}
+                      </p>
+                      <h2>{t(`enrollment.refunds.reason.${item.reason}`)}</h2>
+                    </div>
+                    {item.membershipState !== null ? (
+                      <span
+                        className={`ui-pill ui-pill--${membershipStates[item.membershipState].variant}`}
+                      >
+                        {t(membershipStates[item.membershipState].label)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="admin-queue-details admin-refund-summary">
+                    <div>
+                      <span>{t('enrollment.refunds.course')}</span>
+                      <strong>{item.courseId}</strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.refunds.user')}</span>
+                      <strong>{item.userId}</strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.refunds.ordered')}</span>
+                      <strong className="admin-refund-amount">
+                        {hryvnia(item.orderAmountMinor, i18n.resolvedLanguage)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.refunds.charged')}</span>
+                      <strong className="admin-refund-amount">
+                        {item.chargedAmountMinor === null
+                          ? t('enrollment.refunds.unknownAmount')
+                          : hryvnia(item.chargedAmountMinor, i18n.resolvedLanguage)}
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="admin-queue-actions">
                     {/* Revoke only for a live grant (active/blocked). When the grant is gone or
                         already revoked, the backend would refuse — so the control is hidden and
                         only resolve remains (A14). */}
