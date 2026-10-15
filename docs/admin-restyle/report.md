@@ -603,6 +603,21 @@ Owner-authorized merge S5 PR → main (код-фаза: гілка+PR). Злит
   reports (доведено populated) + Rf-e2e рендерить її populated у реальному браузері (зелений).
 - Forced-colors live — та сама межа S0–S5; нові поверхні токен-/opacity-керовані.
 
+### Рев'ю Courses 2: 0 blocker, 0 major, 1 minor (виправлено)
+Незалежно звірено: tokens.css/admin не зачеплені, усе page-scoped, `.admin-user-actions` поза дифом
+(UserListView цілий), `.teach-section`→`.admin-queue-list`, примітиви споживаються, pill-мапи повні
+by-construction (`satisfies Record`), 8 токенів визначені, a11y (empty-state, текстові кнопки — не
+icon-only, тож без axe role-img пастки).
+- **MINOR (виправлено):** той самий ключ `enrollment.roster.state.blocked` рендерився `danger` у
+  LearnerOverview (S5, learners) і `warning` у RefundQueue (S6) — один стан, два кольори на сусідніх
+  admin-поверхнях. Вирівняно за усталеною admin-конвенцією (UserListView `statusVariant`, S2a, S5:
+  `blocked→danger`): refund `membershipStates.blocked` warning→**danger**; `revoked` лишається `neutral`
+  («terminal quieter», як `deleted→neutral` у UserListView). Alternative «залишити warning + датоване
+  рішення» відхилено як слабше — вирівнювання прибирає неузгодженість і тримає admin-конвенцію.
+- **Повторний повний `make check` після фіксу: `GATE_EXIT=0`, test 728, e2e 120/120 (15.6m)**, 0 fail
+  (лог `s6-gate2.log`). Зміна — лише pill-variant string у RefundQueue (обидва класи вже існують;
+  e2e асертить за text/role, не кольором), тому поведінка незмінна.
+
 ### Наступне
 Owner-authorized merge S6 PR → main (код-фаза: гілка+PR). **Це ОСТАННІЙ зріз фази admin-restyle — після
 merge роадмап рестайлу S0–S6 закрито 7/7.**

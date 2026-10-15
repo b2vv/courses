@@ -4,9 +4,13 @@ import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
 import type { RefundQueueItem } from '../../domain/enrollment/enrollment';
 import { Button, Dialog } from '../ui';
 
+// `blocked` reads danger across admin (UserListView statusVariant, S5 learners, S2a pills); keep it
+// danger here too so the same roster.state.blocked label is never two colours on adjacent admin
+// surfaces. `revoked` is terminal (access already gone) so it stays the quieter neutral, matching
+// the "terminal quieter" grammar (deleted → neutral in UserListView).
 const membershipStates = {
   active: { variant: 'success', label: 'enrollment.roster.state.active' },
-  blocked: { variant: 'warning', label: 'enrollment.roster.state.blocked' },
+  blocked: { variant: 'danger', label: 'enrollment.roster.state.blocked' },
   revoked: { variant: 'neutral', label: 'enrollment.refunds.revoked' },
 } satisfies Record<
   NonNullable<RefundQueueItem['membershipState']>,
