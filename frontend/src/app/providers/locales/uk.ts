@@ -456,6 +456,8 @@ export const uk = {
         orderedList: 'Нумерований список',
         link: 'Посилання',
         linkUrl: 'Адреса посилання',
+        linkInvalid: 'Адреса має починатися з http:// або https://',
+        removeLink: 'Видалити посилання',
         apply: 'Застосувати',
         section: {
           video: 'Відео',

@@ -1,6 +1,7 @@
 import axe from 'axe-core';
 import { afterEach, expect, test } from '@rstest/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Editor } from '@tiptap/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { createAdminDocumentQueries } from '../../app/composition/admin-document-queries';
@@ -164,6 +165,113 @@ test('toolbar retains aria-pressed when toggled', async () => {
   expect(within(toolbar).getByRole('button', { name: 'Посилання', pressed: true })).toBe(link);
   fireEvent.click(link);
   expect(link.getAttribute('aria-pressed')).toBe('false');
+});
+
+const linkInvalidMessage = 'Адреса має починатися з http:// або https://';
+
+async function setupSelectedLinkText(href?: string) {
+  const section: LessonDocument['sections'][number] = {
+    type: 'text',
+    id: 'text',
+    content: {
+      blocks: [
+        { type: 'paragraph', spans: [{ text: 'Лінк', ...(href === undefined ? {} : { href }) }] },
+      ],
+    },
+  };
+  const calls = setup([section]);
+  const textbox = await screen.findByRole('textbox', { name: 'Текст' });
+  // Tiptap attaches its real instance to the editable DOM element. Only selection setup uses
+  // the command API; link changes go through the rendered controls and the normal save path.
+  if (!('editor' in textbox) || !(textbox.editor instanceof Editor)) {
+    throw new Error('Missing real Tiptap editor');
+  }
+  const editor = textbox.editor;
+  act(() => {
+    editor.commands.setTextSelection({ from: 1, to: 5 });
+  });
+  return { calls, editor, textbox, section };
+}
+
+function openLinkField() {
+  fireEvent.click(screen.getByRole('button', { name: 'Посилання' }));
+  const input = screen.getByRole('textbox', { name: 'Адреса посилання' });
+  if (!(input instanceof HTMLInputElement)) throw new Error('Missing link input');
+  return input;
+}
+
+test('invalid link URL preserves the existing link, input and focus with an error', async () => {
+  const { calls, editor, textbox, section } = await setupSelectedLinkText('https://old.example');
+  expect(editor.isActive('link')).toBe(true);
+  const before = editor.getJSON();
+  const input = openLinkField();
+  fireEvent.change(input, { target: { value: 'notaurl' } });
+  const apply = screen.getByRole('button', { name: 'Застосувати' });
+  act(() => apply.focus());
+  expect(document.activeElement).toBe(apply);
+  fireEvent.click(apply);
+  expect(await screen.findByText(linkInvalidMessage)).toBeTruthy();
+  expect(screen.getByRole('textbox', { name: 'Адреса посилання' })).toBe(input);
+  expect(input.value).toBe('notaurl');
+  expect(input.getAttribute('aria-invalid')).toBe('true');
+  expect(document.activeElement).toBe(input);
+  expect(editor.isActive('link')).toBe(true);
+  expect(editor.getJSON()).toEqual(before);
+  expect(within(textbox).getByRole('link', { name: 'Лінк' }).getAttribute('href')).toBe(
+    'https://old.example',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти чернетку' }));
+  await waitFor(() => expect(calls.saved).toHaveLength(1));
+  expect(calls.saved[0]?.document.sections).toEqual([section]);
+});
+
+test('correcting an invalid URL clears the error and applying saves a real link', async () => {
+  const { calls, editor, textbox } = await setupSelectedLinkText();
+  expect(editor.isActive('link')).toBe(false);
+  const input = openLinkField();
+  fireEvent.change(input, { target: { value: 'notaurl' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Застосувати' }));
+  await screen.findByText(linkInvalidMessage);
+  fireEvent.change(input, { target: { value: 'https://example.com' } });
+  expect(screen.queryByText(linkInvalidMessage)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Застосувати' }));
+  expect(screen.queryByRole('textbox', { name: 'Адреса посилання' })).toBeNull();
+  expect(screen.queryByText(linkInvalidMessage)).toBeNull();
+  expect(editor.isActive('link')).toBe(true);
+  expect(within(textbox).getByRole('link', { name: 'Лінк' }).getAttribute('href')).toBe(
+    'https://example.com',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти чернетку' }));
+  await waitFor(() => expect(calls.saved).toHaveLength(1));
+  expect(calls.saved[0]?.document.sections).toEqual([
+    {
+      type: 'text',
+      id: 'text',
+      content: {
+        blocks: [{ type: 'paragraph', spans: [{ text: 'Лінк', href: 'https://example.com' }] }],
+      },
+    },
+  ]);
+  expect(openLinkField().value).toBe('');
+});
+
+test('remove link is available on linked text and removes its mark while keeping the text', async () => {
+  const { calls, editor, textbox } = await setupSelectedLinkText('https://example.com');
+  expect(editor.isActive('link')).toBe(true);
+  fireEvent.click(await screen.findByRole('button', { name: 'Видалити посилання' }));
+  expect(editor.isActive('link')).toBe(false);
+  expect(within(textbox).queryByRole('link')).toBeNull();
+  expect(textbox.textContent).toBe('Лінк');
+  expect(screen.queryByRole('button', { name: 'Видалити посилання' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти чернетку' }));
+  await waitFor(() => expect(calls.saved).toHaveLength(1));
+  expect(calls.saved[0]?.document.sections).toEqual([
+    {
+      type: 'text',
+      id: 'text',
+      content: { blocks: [{ type: 'paragraph', spans: [{ text: 'Лінк' }] }] },
+    },
+  ]);
 });
 
 function deferred<T>() {

@@ -448,6 +448,8 @@ export const en = {
         orderedList: 'Numbered list',
         link: 'Link',
         linkUrl: 'Link address',
+        linkInvalid: 'The address must start with http:// or https://',
+        removeLink: 'Remove link',
         apply: 'Apply',
         section: {
           video: 'Video',
