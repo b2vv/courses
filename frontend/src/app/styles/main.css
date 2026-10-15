@@ -2598,3 +2598,30 @@ button.transcript-line-body:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.ui-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--control-min-size);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-panel);
+}
+.ui-dropzone[data-drop-target] {
+  border-color: var(--color-focus);
+}
+.ui-dropzone[data-focus-visible] {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.lesson-editor-live {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
