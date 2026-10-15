@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -14,7 +14,7 @@ import {
   ImageUploadError,
   type createAdminDocumentQueries,
 } from '../../app/composition/admin-document-queries';
-import { Button, TextField } from '../ui';
+import { Button, FileUpload, TextField, Toast } from '../ui';
 import { EmptyState, ErrorState } from '../ui/states';
 import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
@@ -99,7 +99,14 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   // from the query. Deriving the draft (rather than seeding state in an effect) avoids a cascading
   // render, and a later refetch cannot clobber in-progress edits.
   const [edited, setEdited] = useState<DraftState | null>(null);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ kind: 'saved' | 'published' } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const editorRef = useRef<HTMLElement>(null);
+  const pendingFocus = useRef<{ sectionId: string; selector: string } | { palette: true } | null>(
+    null,
+  );
+  const [announcement, setAnnouncement] = useState({ text: '', sequence: 0 });
 
   const base: DraftState | null =
     draftQuery.data === undefined
@@ -110,6 +117,32 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           locale: draftQuery.data.document.locale,
         };
   const draft = edited ?? base;
+
+  const sections = draft?.sections;
+  useEffect(() => {
+    const target = pendingFocus.current;
+    const root = editorRef.current;
+    if (target === null || root === null) return;
+    const focusTarget = () => {
+      const control =
+        'palette' in target
+          ? root.querySelector<HTMLElement>('[data-add-section="text"]')
+          : root
+              .querySelector(`[data-section-id="${CSS.escape(target.sectionId)}"]`)
+              ?.querySelector<HTMLElement>(target.selector);
+      if (control == null) return false;
+      control.focus();
+      pendingFocus.current = null;
+      return true;
+    };
+    if (focusTarget()) return;
+    // Tiptap mounts its textbox after the section when immediatelyRender is false.
+    const observer = new MutationObserver(() => {
+      if (focusTarget()) observer.disconnect();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [sections]);
 
   const hasVideo = draft?.sections.some((section) => section.type === 'video') ?? false;
 
@@ -128,22 +161,80 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     );
   if (draft === null) return <LessonDocumentEditorLoading />;
 
-  const setSections = (next: readonly LessonSection[]) => setEdited({ ...draft, sections: next });
+  const setSections = (
+    next:
+      | readonly LessonSection[]
+      | ((sections: readonly LessonSection[]) => readonly LessonSection[]),
+  ) =>
+    setEdited((cur) => {
+      const b = cur ?? draft;
+      return { ...b, sections: typeof next === 'function' ? next(b.sections) : next };
+    });
+
+  const applyImage: SectionBodyProps['applyImage'] = (sectionId, columnId, imageId, contentType) =>
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.id !== sectionId) return section;
+        if (section.type === 'image' && columnId === null)
+          return { ...section, imageId, contentType };
+        if (section.type === 'row')
+          return {
+            ...section,
+            columns: section.columns.map((column) =>
+              column.id === columnId && column.type === 'image'
+                ? { ...column, imageId, contentType }
+                : column,
+            ),
+          };
+        return section;
+      }),
+    );
 
   const updateSection = (index: number, section: LessonSection) =>
     setSections(draft.sections.map((existing, i) => (i === index ? section : existing)));
 
-  const addSection = (type: LessonSection['type']) =>
-    setSections([...draft.sections, blankSection(type)]);
+  const addSection = (type: LessonSection['type']) => {
+    const section = blankSection(type);
+    pendingFocus.current = {
+      sectionId: section.id,
+      selector:
+        type === 'text' || type === 'task'
+          ? '[role="textbox"]'
+          : type === 'image'
+            ? // The visible upload button carries .ui-button; RAC's hidden DropZone button (first in
+              // DOM, aria-label="DropZone") does not, so target .ui-button to skip it.
+              '.lesson-editor-image .ui-button'
+            : '.lesson-editor-section-actions button',
+    };
+    setSections([...draft.sections, section]);
+  };
 
-  const removeSection = (index: number) =>
+  const removeSection = (index: number) => {
+    const neighbor = draft.sections[index - 1] ?? draft.sections[index + 1];
+    pendingFocus.current =
+      neighbor === undefined
+        ? { palette: true }
+        : { sectionId: neighbor.id, selector: '.lesson-editor-section-actions button' };
     setSections(draft.sections.filter((_, i) => i !== index));
+  };
+
+  const announce = (text: string) =>
+    setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
 
   // Move keeps the button enabled at the edges (no isDisabled, which would drop focus to the body);
   // a move past the edge is simply a no-op.
   const moveSection = (index: number, delta: -1 | 1) => {
     const target = index + delta;
-    if (target < 0 || target >= draft.sections.length) return;
+    if (target < 0 || target >= draft.sections.length) {
+      announce(
+        t('administration.document.moveBlocked', {
+          edge: t(
+            target < 0 ? 'administration.document.edgeFirst' : 'administration.document.edgeLast',
+          ),
+        }),
+      );
+      return;
+    }
     const next = [...draft.sections];
     const moved = next[index];
     const swapped = next[target];
@@ -151,17 +242,21 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     next[index] = swapped;
     next[target] = moved;
     setSections(next);
+    announce(t('administration.document.movedTo', { pos: target + 1, total: next.length }));
   };
 
   const uploadInto = (
+    key: string,
     file: File,
     apply: (imageId: string, contentType: LessonImageContentType) => void,
   ) => {
     setError(null);
+    setUploadingKey(key);
     upload.mutate(
       { lessonId, file },
       {
         onSuccess: (image) => apply(image.imageId, image.contentType),
+        onSettled: () => setUploadingKey((k) => (k === key ? null : k)),
         onError: (failure) =>
           setError(
             t(
@@ -183,7 +278,10 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     save.mutate(
       { lessonId, document, expectedUpdatedAt: draft.token },
       {
-        onSuccess: (result) => setEdited({ ...draft, token: result.updatedAt }),
+        onSuccess: (result) => {
+          setEdited((cur) => ({ ...(cur ?? draft), token: result.updatedAt }));
+          setStatus({ kind: 'saved' });
+        },
         onError: (failure) =>
           setError(
             t(
@@ -199,9 +297,10 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     try {
       // Save the current edits first, then publish exactly what was saved.
       const saved = await save.mutateAsync({ lessonId, document, expectedUpdatedAt: draft.token });
-      setEdited({ ...draft, token: saved.updatedAt });
+      setEdited((cur) => ({ ...(cur ?? draft), token: saved.updatedAt }));
       const published = await publish.mutateAsync({ lessonId, expectedUpdatedAt: saved.updatedAt });
-      setEdited({ ...draft, token: published.updatedAt });
+      setEdited((cur) => ({ ...(cur ?? draft), token: published.updatedAt }));
+      setStatus({ kind: 'published' });
     } catch (failure) {
       setError(
         t(
@@ -214,7 +313,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   const busy = save.isPending || publish.isPending;
 
   return (
-    <section className="lesson-editor" aria-labelledby="lesson-editor-heading">
+    <section ref={editorRef} className="lesson-editor" aria-labelledby="lesson-editor-heading">
       <header className="lesson-editor-header">
         <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
         <div className="lesson-editor-actions">
@@ -226,15 +325,33 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           </Button>
         </div>
       </header>
+      {status !== null && (
+        <Toast
+          message={t(
+            status.kind === 'saved'
+              ? 'administration.document.savedToast'
+              : 'administration.document.publishedToast',
+          )}
+          onDismiss={() => setStatus(null)}
+        />
+      )}
       {error !== null && <ErrorState title={error} />}
       {draft.sections.length === 0 && (
         <EmptyState title={t('administration.document.empty')}>
           <p>{t('administration.document.emptyHint')}</p>
         </EmptyState>
       )}
+      <output className="lesson-editor-live" aria-live="polite" aria-atomic="true">
+        <span key={announcement.sequence}>{announcement.text}</span>
+      </output>
       <ol className="lesson-editor-sections">
         {draft.sections.map((section, index) => (
-          <li key={section.id} className="lesson-editor-section" data-type={section.type}>
+          <li
+            key={section.id}
+            className="lesson-editor-section"
+            data-type={section.type}
+            data-section-id={section.id}
+          >
             <div className="lesson-editor-section-bar">
               <SectionIcon type={section.type} />
               <span className="lesson-editor-section-type">
@@ -269,7 +386,8 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
               section={section}
               onChange={(next) => updateSection(index, next)}
               onUpload={uploadInto}
-              uploading={upload.isPending}
+              uploadingKey={uploadingKey}
+              applyImage={applyImage}
             />
           </li>
         ))}
@@ -282,6 +400,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
             .map((type) => (
               <Button
                 key={type}
+                data-add-section={type}
                 variant="secondary"
                 aria-describedby={`lesson-palette-desc-${type}`}
                 onPress={() => addSection(type)}
@@ -309,13 +428,20 @@ type SectionBodyProps = {
   readonly section: LessonSection;
   readonly onChange: (section: LessonSection) => void;
   readonly onUpload: (
+    key: string,
     file: File,
     apply: (imageId: string, contentType: LessonImageContentType) => void,
   ) => void;
-  readonly uploading: boolean;
+  readonly uploadingKey: string | null;
+  readonly applyImage: (
+    sectionId: string,
+    columnId: string | null,
+    imageId: string,
+    contentType: LessonImageContentType,
+  ) => void;
 };
 
-function SectionBody({ section, onChange, onUpload, uploading }: SectionBodyProps) {
+function SectionBody({ section, onChange, onUpload, uploadingKey, applyImage }: SectionBodyProps) {
   const { t } = useTranslation();
   switch (section.type) {
     case 'video':
@@ -335,16 +461,24 @@ function SectionBody({ section, onChange, onUpload, uploading }: SectionBodyProp
           imageId={section.imageId}
           contentType={section.contentType}
           alt={section.alt}
-          uploading={uploading}
+          uploading={uploadingKey === section.id}
           onUpload={(file) =>
-            onUpload(file, (imageId, contentType) => onChange({ ...section, imageId, contentType }))
+            onUpload(section.id, file, (imageId, contentType) =>
+              applyImage(section.id, null, imageId, contentType),
+            )
           }
           onAlt={(alt) => onChange({ ...section, alt })}
         />
       );
     case 'row':
       return (
-        <RowBody section={section} onChange={onChange} onUpload={onUpload} uploading={uploading} />
+        <RowBody
+          section={section}
+          onChange={onChange}
+          onUpload={onUpload}
+          uploadingKey={uploadingKey}
+          applyImage={applyImage}
+        />
       );
   }
 }
@@ -353,12 +487,14 @@ function RowBody({
   section,
   onChange,
   onUpload,
-  uploading,
+  uploadingKey,
+  applyImage,
 }: {
   readonly section: Extract<LessonSection, { type: 'row' }>;
   readonly onChange: (section: LessonSection) => void;
   readonly onUpload: SectionBodyProps['onUpload'];
-  readonly uploading: boolean;
+  readonly uploadingKey: string | null;
+  readonly applyImage: SectionBodyProps['applyImage'];
 }) {
   const { t } = useTranslation();
   const setColumns = (columns: readonly LessonColumn[]) => onChange({ ...section, columns });
@@ -402,10 +538,10 @@ function RowBody({
                 imageId={column.imageId}
                 contentType={column.contentType}
                 alt={column.alt}
-                uploading={uploading}
+                uploading={uploadingKey === column.id}
                 onUpload={(file) =>
-                  onUpload(file, (imageId, contentType) =>
-                    updateColumn(index, { ...column, imageId, contentType }),
+                  onUpload(column.id, file, (imageId, contentType) =>
+                    applyImage(section.id, column.id, imageId, contentType),
                   )
                 }
                 onAlt={(alt) => updateColumn(index, { ...column, alt })}
@@ -459,19 +595,16 @@ function ImageField({
           className="lesson-editor-image-preview"
         />
       )}
-      <label className="lesson-editor-upload">
-        <span>{t('administration.document.uploadImage')}</span>
-        <input
-          className="ui-input"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file !== undefined) onUpload(file);
-            event.target.value = '';
-          }}
-        />
-      </label>
+      <FileUpload
+        label={t('administration.document.uploadImage')}
+        acceptedFileTypes={['image/jpeg', 'image/png', 'image/webp']}
+        onSelect={(files) => {
+          const file = files?.[0];
+          if (file !== undefined) onUpload(file);
+        }}
+        dropLabel={t('administration.document.dropHint')}
+        onDrop={onUpload}
+      />
       {uploading && <span>{t('administration.document.uploading')}</span>}
       <TextField label={t('administration.document.alt')} value={alt} onChange={onAlt} />
     </div>

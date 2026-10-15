@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from '@rstest/core';
 import axe from 'axe-core';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   Dialog,
   Delta,
   ErrorState,
+  FileUpload,
   LoadMeter,
   Menu,
   Pagination,
@@ -28,6 +29,82 @@ import {
 afterEach(cleanup);
 
 describe('accessible UI primitives', () => {
+  it('renders a labelled image drop zone and uploads the dropped PNG', async () => {
+    const uploaded: File[] = [];
+    const file = new File(['image'], 'image.png', { type: 'image/png' });
+    const { container } = render(
+      <FileUpload
+        label="Завантажити зображення"
+        dropLabel="Перетягніть зображення сюди або оберіть файл"
+        onDrop={(file) => uploaded.push(file)}
+      />,
+    );
+    const zone = container.querySelector<HTMLElement>('.ui-dropzone');
+    if (zone === null) throw new Error('Missing image drop zone');
+    expect(within(zone).getByText('Перетягніть зображення сюди або оберіть файл')).toBeTruthy();
+    const input = zone.querySelector('input[type="file"]');
+    expect(input).toBeInstanceOf(HTMLInputElement);
+    if (!(input instanceof HTMLInputElement)) throw new Error('Missing file input');
+    expect(input.style.display).toBe('none');
+
+    await act(async () => {
+      fireEvent.drop(zone, {
+        dataTransfer: {
+          types: ['Files'],
+          items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+        },
+      });
+    });
+    expect(uploaded).toHaveLength(1);
+    expect(uploaded[0]).toBe(file);
+  });
+
+  it('keeps video upload as a single button without a drop zone', () => {
+    const { container } = render(
+      <FileUpload label="Завантажити відео" acceptedFileTypes={['video/mp4']} />,
+    );
+    expect(container.querySelector('.ui-dropzone')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Завантажити відео' })).toBeTruthy();
+    expect(container.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('video/mp4');
+  });
+
+  it('names the visible upload button with its label', () => {
+    render(
+      <FileUpload
+        label="Завантажити зображення"
+        dropLabel="Перетягніть зображення сюди або оберіть файл"
+        onDrop={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Завантажити зображення' }).textContent).toBe(
+      'Завантажити зображення',
+    );
+  });
+
+  it('ignores a dropped PDF in the image drop zone', async () => {
+    const uploaded: File[] = [];
+    const file = new File(['document'], 'document.pdf', { type: 'application/pdf' });
+    const { container } = render(
+      <FileUpload
+        label="Upload image"
+        dropLabel="Drop image here"
+        onDrop={(file) => uploaded.push(file)}
+      />,
+    );
+    const zone = container.querySelector<HTMLElement>('.ui-dropzone');
+    if (zone === null) throw new Error('Missing image drop zone');
+    await act(async () => {
+      fireEvent.drop(zone, {
+        dataTransfer: {
+          types: ['Files'],
+          items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+        },
+      });
+    });
+    expect(uploaded).toEqual([]);
+  });
+
   it('opts columns into alignment on headers and cells, preserving the default, axe-clean', async () => {
     const { container } = render(
       <Table

@@ -120,7 +120,9 @@ test('an admin builds a document, publishes it, and a member sees it rendered wi
     .getByRole('group', { name: 'Додати секцію' })
     .getByRole('button', { name: 'Зображення' })
     .click();
-  await admin.getByLabel('Завантажити зображення').setInputFiles({
+  // The accessible name lives on the upload button; the RAC FileTrigger input is hidden and
+  // unlabelled by design, so drive setInputFiles through the file input inside the image section.
+  await admin.locator('.lesson-editor-image input[type="file"]').setInputFiles({
     name: 'practice.png',
     mimeType: 'image/png',
     buffer: onePixelPng,
@@ -201,6 +203,12 @@ test('reordering a section by keyboard keeps focus on its control, and the edito
     return result.violations.map((violation) => violation.id);
   });
   expect(violations).toEqual([]);
+
+  await sections.first().getByRole('button', { name: 'Видалити секцію' }).click();
+  await expect(sections).toHaveCount(1);
+  await expect
+    .poll(() => admin.evaluate(() => document.activeElement === document.body))
+    .toBe(false);
 
   await adminContext.close();
 });

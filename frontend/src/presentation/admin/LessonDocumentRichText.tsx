@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import type { LessonRichText } from '../../domain/document/document';
-import { Button } from '../ui';
+import { Button, TextField } from '../ui';
 import { pmDocToRichText, richTextToPmDoc, type PmDoc } from './tiptap-document';
 
 type LessonDocumentRichTextProps = {
@@ -30,8 +30,15 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
   const { t } = useTranslation();
   const [linkUrl, setLinkUrl] = useState('');
   const [addingLink, setAddingLink] = useState(false);
+  const [linkError, setLinkError] = useState(false);
+  const linkInputRef = useRef<HTMLInputElement>(null);
   const editor = useEditor({
     immediatelyRender: false,
+    // Re-render the toolbar on every transaction (incl. selection-only moves) so active-state
+    // (aria-pressed) and the "remove link" control reflect the caret's current marks. Without this
+    // @tiptap/react only re-renders on doc changes, so clicking into an existing link left the
+    // remove-link button hidden. Lesson rich-text is short, so the per-transaction render is cheap.
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit.configure({
         heading: { levels: [2, 3] },
@@ -57,8 +64,12 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
   });
   if (editor === null) return null;
   const applyLink = () => {
-    if (httpUrl(linkUrl)) editor.chain().focus().setLink({ href: linkUrl }).run();
-    else editor.chain().focus().unsetLink().run();
+    if (!httpUrl(linkUrl)) {
+      setLinkError(true);
+      linkInputRef.current?.focus();
+      return;
+    }
+    editor.chain().focus().setLink({ href: linkUrl }).run();
     setLinkUrl('');
     setAddingLink(false);
   };
@@ -125,19 +136,28 @@ export function LessonDocumentRichText({ value, label, onChange }: LessonDocumen
           >
             {t('administration.document.link')}
           </Button>
+          {editor.isActive('link') && (
+            <Button variant="secondary" onPress={() => editor.chain().focus().unsetLink().run()}>
+              {t('administration.document.removeLink')}
+            </Button>
+          )}
         </div>
       </div>
       {addingLink && (
         <div className="lesson-editor-link">
-          <label>
-            {t('administration.document.linkUrl')}
-            <input
-              type="url"
-              value={linkUrl}
-              onChange={(event) => setLinkUrl(event.target.value)}
-              placeholder="https://"
-            />
-          </label>
+          <TextField
+            ref={linkInputRef}
+            label={t('administration.document.linkUrl')}
+            type="url"
+            value={linkUrl}
+            onChange={(value) => {
+              setLinkUrl(value);
+              setLinkError(false);
+            }}
+            isInvalid={linkError}
+            {...(linkError ? { errorMessage: t('administration.document.linkInvalid') } : {})}
+            placeholder="https://"
+          />
           <Button variant="secondary" onPress={applyLink}>
             {t('administration.document.apply')}
           </Button>

@@ -273,14 +273,33 @@ export function Switch({ children, ...props }: SwitchProps) {
 type FileUploadProps = Omit<Aria.FileTriggerProps, 'children'> & {
   label: string;
   isDisabled?: boolean;
+  onDrop?: (file: File) => void;
+  dropLabel?: string;
 };
 
-export function FileUpload({ label, isDisabled, ...props }: FileUploadProps) {
-  return (
+export function FileUpload({ label, isDisabled, onDrop, dropLabel, ...props }: FileUploadProps) {
+  const trigger = (
     <Aria.FileTrigger {...props}>
       <Button type="button" variant="secondary" isDisabled={isDisabled ?? false}>
         {label}
       </Button>
     </Aria.FileTrigger>
+  );
+  if (onDrop === undefined) return trigger;
+
+  return (
+    <Aria.DropZone
+      className="ui-dropzone"
+      isDisabled={isDisabled ?? false}
+      onDrop={async (event) => {
+        const item = event.items
+          .filter(Aria.isFileDropItem)
+          .find((item) => ['image/jpeg', 'image/png', 'image/webp'].includes(item.type));
+        if (item !== undefined) onDrop(await item.getFile());
+      }}
+    >
+      <Aria.Text slot="label">{dropLabel}</Aria.Text>
+      {trigger}
+    </Aria.DropZone>
   );
 }
