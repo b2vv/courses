@@ -154,6 +154,7 @@ export const en = {
         revokeConfirm:
           'This will remove the participant’s access. Only an administrator can restore it.',
         empty: 'No reports',
+        emptyHint: 'New participant reports will appear here for review.',
         more: 'Show more',
       },
       refunds: {
@@ -174,6 +175,8 @@ export const en = {
         revokeConfirm:
           'This will remove the learner’s access to the course. Only an administrator can restore it.',
         empty: 'No orders need attention',
+        emptyHint: 'Orders requiring a refund review will appear here.',
+        revoked: 'Access revoked',
       },
       errors: {
         membership_conflict: 'Your membership changed. Check its status and try again.',
