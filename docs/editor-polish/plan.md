@@ -58,12 +58,13 @@ admin-restyle S3 `639c7ca`). Фронт-онлі: лише `presentation/` + sco
    aria-label={t('…uploadImage')} onSelect={…} onDrop={onUpload} dropLabel={t('…dropHint')}
    acceptedFileTypes={['image/jpeg','image/png','image/webp']} />`. `onSelect` бере `FileList[0]`, як
    робив `onChange`.
-3. **Ризик-контракт (ОБОВ'ЯЗКОВО, не «за потреби»):** верифіковано по RAC `FileTrigger.mjs` — RAC
-   **НЕ** проставляє текст кнопки на прихований `input[type=file]`; зараз e2e `getByLabel('Завантажити
-   зображення').setInputFiles` (e2e:123) працює лише завдяки сирому `<label>`, що обгортає і текст, і
-   input. Тому `FileUpload` **мусить форвардити `aria-label` на сам input** (filterDOMProps global:true
-   пропускає `aria-*`), і usage у кроці 2 передає `aria-label` явно — інакше e2e червоний. Доводиться
-   зеленим існуючим e2e, не припущенням.
+3. **Ризик-контракт — РОЗВ'ЯЗАНО емпірично (2026-10-15, T1 гейт):** гіпотеза «aria-label на input»
+   СПРОСТОВАНА probe-тестом: RAC `FileTrigger` викликає `filterDOMProps(rest,{global:true})`, а `global`
+   пропускає лише `id`/`data-*`, **НЕ `aria-*`** (для них потрібен `labelable:true`, якого FileTrigger не
+   вмикає) → input лишається без accessible name, хоч aria-label передано. **Рішення (датоване, §7):**
+   accessible name несе видима **Button** (текст «Завантажити зображення») — це коректніша a11y, ніж
+   прихований лейблений input; e2e таргетить прихований input директивно
+   (`.lesson-editor-image input[type="file"]`). Мертвий `aria-label` з usage прибрано.
 4. **Невалідний тип при drop** (клієнтський фільтр у кроці 1) ігнорується тихо; якщо попри фільтр
    невалідний файл дійде (клік-шлях), серверна валідація дає `unsupported_image`/`invalid_image`
    → наявний `ErrorState` (role=alert). Жодної нової error-поверхні.
@@ -257,6 +258,10 @@ B1 підтвердили ОБИДВА незалежно → не поділе�
 **Рішення GATE 2 (датовані артефакти, AGENTS §Decisions):**
 - 2026-10-15, Courses 1: **reorder на краю (no-op) оголошується** (`moveBlocked`), не замовчується —
   бо тиша на межі для скрінрідера нечитабельна; закриває A-BH3 «межа оголошується» без звуження.
+- 2026-10-15, Courses 1 (T1 гейт): **RAC FileTrigger не лейблить прихований input** (filterDOMProps
+  `global` не пропускає aria-*, доведено probe-тестом + e2e-timeout). Accessible name несе видима Button;
+  e2e `lesson-builder.spec.ts:123` оновлено з `getByLabel(...)` на
+  `.lesson-editor-image input[type="file"]` — RAC-семантика, не обхід. A-ED2 «підписи» виконує Button.
 - 2026-10-15, Courses 1: **drop-зона лишається в QW2** (N3) — це owner-стер 2026-10-15 («в RAC є
   DropZone»), зафіксований у `_wip-spec-flow.md` §переузгодження; spec.md A-ED2/QW2 оновлено, щоб
   відбити це (spec↔plan узгоджено), drop на СПІЛЬНОМУ `FileUpload` — опційний prop (відео не зачеплено).

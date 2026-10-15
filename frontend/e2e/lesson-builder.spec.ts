@@ -120,7 +120,9 @@ test('an admin builds a document, publishes it, and a member sees it rendered wi
     .getByRole('group', { name: 'Додати секцію' })
     .getByRole('button', { name: 'Зображення' })
     .click();
-  await admin.getByLabel('Завантажити зображення').setInputFiles({
+  // The accessible name lives on the upload button; the RAC FileTrigger input is hidden and
+  // unlabelled by design, so drive setInputFiles through the file input inside the image section.
+  await admin.locator('.lesson-editor-image input[type="file"]').setInputFiles({
     name: 'practice.png',
     mimeType: 'image/png',
     buffer: onePixelPng,

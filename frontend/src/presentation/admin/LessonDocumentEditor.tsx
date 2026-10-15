@@ -14,7 +14,7 @@ import {
   ImageUploadError,
   type createAdminDocumentQueries,
 } from '../../app/composition/admin-document-queries';
-import { Button, TextField } from '../ui';
+import { Button, FileUpload, TextField } from '../ui';
 import { EmptyState, ErrorState } from '../ui/states';
 import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
@@ -459,19 +459,16 @@ function ImageField({
           className="lesson-editor-image-preview"
         />
       )}
-      <label className="lesson-editor-upload">
-        <span>{t('administration.document.uploadImage')}</span>
-        <input
-          className="ui-input"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file !== undefined) onUpload(file);
-            event.target.value = '';
-          }}
-        />
-      </label>
+      <FileUpload
+        label={t('administration.document.uploadImage')}
+        acceptedFileTypes={['image/jpeg', 'image/png', 'image/webp']}
+        onSelect={(files) => {
+          const file = files?.[0];
+          if (file !== undefined) onUpload(file);
+        }}
+        dropLabel={t('administration.document.dropHint')}
+        onDrop={onUpload}
+      />
       {uploading && <span>{t('administration.document.uploading')}</span>}
       <TextField label={t('administration.document.alt')} value={alt} onChange={onAlt} />
     </div>

@@ -434,6 +434,7 @@ export const en = {
         removeColumn: 'Remove column',
         videoSlot: 'The lesson video plays here (added separately).',
         uploadImage: 'Upload image',
+        dropHint: 'Drag an image here or choose a file',
         uploading: 'Uploading…',
         alt: 'Image description',
         toolbar: 'Text formatting',
