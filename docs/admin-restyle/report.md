@@ -499,5 +499,56 @@ Owner-authorized squash-merge S4 PR → main. Далі S5 (learners) за пла
 - Forced-colors live — та сама межа S0–S4 (тулінг не емулює); правило токен-/opacity-кероване.
 
 ### Наступне
-Owner-authorized merge S1-follow-up → main (код-фаза: гілка+PR). Далі S5 (learners) за планом row 5 /
-tickets S5 — чекає сигналу власника.
+Owner-authorized merge S1-follow-up → main (код-фаза: гілка+PR). Злито як PR #29 (`1f723aa`). Далі
+S5 (learners) за планом row 5 / tickets S5.
+
+## S5 — learners: візуальний рестайл
+
+Рестайл екрана learners (LEARNING EXPERIENCE, спільний компонент `presentation/teach/LearnerOverview.tsx`
+для `/admin/learners` і `/teach/learners`) за tickets S5. Код нарізано Codex'ом (бриф
+`docs/admin-restyle/_wip-S5-codex.md`); гейт і browser-verify — Courses 1.
+
+### Зроблено (2 файли: 1 TSX view + 1 page-scoped CSS)
+- **Вихідний стан:** класи `learners-list`/`learners-courses`/`learners-filters`/`teach-section` не мали
+  ЖОДНОГО CSS → сирі `<ul>`/`<article>`: рядки злипались, статус-бейдж впритул до назви курсу, прогрес
+  губився в тісному контексті.
+- **TSX (зонні обгортки, без зміни моделі/handlers/селекторів):** `<section>` отримав клас-гак
+  `learners-overview`; кожен учень — `<article class="ui-card learner-card">` (СПОЖИВАННЯ `.ui-card`, не
+  редефініція); header учня (ім'я + остання активність) у `<header class="learner-header">`; кожен курс —
+  `<div class="learner-enrollment">` з назвою-лінком і статус-бейджем `ui-pill ui-pill--{success|danger}`
+  (`active`→success, `blocked`→danger), текст стану незмінний (не схований). Рольові/текстові селектори
+  тестів недоторкані (8/8 LearnerOverview.test зелені).
+- **CSS (усе PAGE-SCOPED під learners, main.css кінець):** картка `grid`+`--shadow-card`; `learner-header`
+  grid; `learners-courses > li + li` → `border-block-start: 1px --color-hairline` + padding (дільники);
+  `learner-enrollment` flex `space-between`+wrap (розділені зони, фікс «…Active»); курс-лінк
+  `min-block-size: --control-min-size` (44px tap-таргет) + `overflow-wrap:anywhere`; трек прогресу
+  `.learner-card .ui-progress-track { block-size: --space-3 }` (12px, видимий — scoped override, базовий
+  `.ui-progress-track` у tokens.css НЕ чіпано). Жодної редефініції спільного примітива/токена (S5 не S0–S2).
+
+### Верифікація
+- **Повний ordered `make check`: `GATE_EXIT=0`, test 728 passed (0 нових unit — рестайл чисто
+  візуальний, 8 наявних LearnerOverview-тестів зелені), e2e 120/120 (14.7m)**, 0 fail/flaky (лог
+  `s5-gate.log`, GATE_EXIT читано з лога). CI на білінгу (план §86) — локальний run авторитетний.
+- Codex self-verify: `npm run format`, `tsc --noEmit`, `oxlint --deny-warnings`+architecture,
+  таргетний rstest LearnerOverview 8/8 — усі PASS (журнал у брифі).
+- **Browser-verify на РЕАЛЬНОМУ коді** (Playwright на хості, storage-state admin, `/admin/learners`,
+  2 учні / 35 курс-рядків) — desktop 1280 І narrow 375:
+  - learner-card: box-shadow присутній, display grid (elevated card);
+  - learner-enrollment: display flex, justify `space-between`, flex-wrap wrap (зони розділені, на 375 wrap);
+  - дільник `li + li`: border-top `1px solid`; трек прогресу `block-size: 12px`;
+  - статус: `ui-pill ui-pill--success` «Активний» (read-only споживання);
+  - **горизонтальний скрол: НЕМАЄ на 1280 І на 375** (`scrollWidth==clientWidth`).
+  - Скриншот 375px оком: картки, зони, дільники, pill (active green / blocked інший колір) читаються чисто.
+  - Контраст/light-dark/focus/44px — покрито Lo11 e2e (axe light+dark зелений, 44px, focus ≥2px).
+
+### Обмеження / межі
+- 375px НЕ покрито e2e Lo11 (той гонить дефолтний viewport) → доведено окремим host-Playwright
+  browser-verify (desktop+375), як вимагає acceptance S5.
+- Browser-verify через host-Playwright + storage-state, бо PUBLIC_ORIGIN=`http://localhost:8080`, а
+  CSRF (`RequireSameOrigin`) приймає рівно цей origin — контейнерний MCP-браузер (`host.docker.internal`)
+  логін-POST відкидає `origin_forbidden`. GET-сторінки під storage-state працюють.
+- Forced-colors live — та сама межа S0–S4; нові поверхні токен-/opacity-керовані.
+
+### Наступне
+Owner-authorized merge S5 PR → main (код-фаза: гілка+PR). Далі S6 (reports+refunds) за планом row 7,8 /
+tickets S6 — останній зріз фази.
