@@ -433,6 +433,8 @@ export const uk = {
         loadError: 'Не вдалося завантажити документ уроку.',
         retry: 'Спробувати ще раз',
         saveDraft: 'Зберегти чернетку',
+        savedToast: 'Чернетку збережено',
+        publishedToast: 'Урок опубліковано',
         publish: 'Опублікувати',
         addSection: 'Додати секцію',
         addColumn: 'Додати колонку',

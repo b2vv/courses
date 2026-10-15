@@ -14,7 +14,7 @@ import {
   ImageUploadError,
   type createAdminDocumentQueries,
 } from '../../app/composition/admin-document-queries';
-import { Button, FileUpload, TextField } from '../ui';
+import { Button, FileUpload, TextField, Toast } from '../ui';
 import { EmptyState, ErrorState } from '../ui/states';
 import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
@@ -99,6 +99,8 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   // from the query. Deriving the draft (rather than seeding state in an effect) avoids a cascading
   // render, and a later refetch cannot clobber in-progress edits.
   const [edited, setEdited] = useState<DraftState | null>(null);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ kind: 'saved' | 'published' } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const base: DraftState | null =
@@ -128,7 +130,34 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     );
   if (draft === null) return <LessonDocumentEditorLoading />;
 
-  const setSections = (next: readonly LessonSection[]) => setEdited({ ...draft, sections: next });
+  const setSections = (
+    next:
+      | readonly LessonSection[]
+      | ((sections: readonly LessonSection[]) => readonly LessonSection[]),
+  ) =>
+    setEdited((cur) => {
+      const b = cur ?? draft;
+      return { ...b, sections: typeof next === 'function' ? next(b.sections) : next };
+    });
+
+  const applyImage: SectionBodyProps['applyImage'] = (sectionId, columnId, imageId, contentType) =>
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.id !== sectionId) return section;
+        if (section.type === 'image' && columnId === null)
+          return { ...section, imageId, contentType };
+        if (section.type === 'row')
+          return {
+            ...section,
+            columns: section.columns.map((column) =>
+              column.id === columnId && column.type === 'image'
+                ? { ...column, imageId, contentType }
+                : column,
+            ),
+          };
+        return section;
+      }),
+    );
 
   const updateSection = (index: number, section: LessonSection) =>
     setSections(draft.sections.map((existing, i) => (i === index ? section : existing)));
@@ -154,14 +183,17 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   };
 
   const uploadInto = (
+    key: string,
     file: File,
     apply: (imageId: string, contentType: LessonImageContentType) => void,
   ) => {
     setError(null);
+    setUploadingKey(key);
     upload.mutate(
       { lessonId, file },
       {
         onSuccess: (image) => apply(image.imageId, image.contentType),
+        onSettled: () => setUploadingKey((k) => (k === key ? null : k)),
         onError: (failure) =>
           setError(
             t(
@@ -183,7 +215,10 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     save.mutate(
       { lessonId, document, expectedUpdatedAt: draft.token },
       {
-        onSuccess: (result) => setEdited({ ...draft, token: result.updatedAt }),
+        onSuccess: (result) => {
+          setEdited((cur) => ({ ...(cur ?? draft), token: result.updatedAt }));
+          setStatus({ kind: 'saved' });
+        },
         onError: (failure) =>
           setError(
             t(
@@ -199,9 +234,10 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     try {
       // Save the current edits first, then publish exactly what was saved.
       const saved = await save.mutateAsync({ lessonId, document, expectedUpdatedAt: draft.token });
-      setEdited({ ...draft, token: saved.updatedAt });
+      setEdited((cur) => ({ ...(cur ?? draft), token: saved.updatedAt }));
       const published = await publish.mutateAsync({ lessonId, expectedUpdatedAt: saved.updatedAt });
-      setEdited({ ...draft, token: published.updatedAt });
+      setEdited((cur) => ({ ...(cur ?? draft), token: published.updatedAt }));
+      setStatus({ kind: 'published' });
     } catch (failure) {
       setError(
         t(
@@ -226,6 +262,16 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
           </Button>
         </div>
       </header>
+      {status !== null && (
+        <Toast
+          message={t(
+            status.kind === 'saved'
+              ? 'administration.document.savedToast'
+              : 'administration.document.publishedToast',
+          )}
+          onDismiss={() => setStatus(null)}
+        />
+      )}
       {error !== null && <ErrorState title={error} />}
       {draft.sections.length === 0 && (
         <EmptyState title={t('administration.document.empty')}>
@@ -269,7 +315,8 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
               section={section}
               onChange={(next) => updateSection(index, next)}
               onUpload={uploadInto}
-              uploading={upload.isPending}
+              uploadingKey={uploadingKey}
+              applyImage={applyImage}
             />
           </li>
         ))}
@@ -309,13 +356,20 @@ type SectionBodyProps = {
   readonly section: LessonSection;
   readonly onChange: (section: LessonSection) => void;
   readonly onUpload: (
+    key: string,
     file: File,
     apply: (imageId: string, contentType: LessonImageContentType) => void,
   ) => void;
-  readonly uploading: boolean;
+  readonly uploadingKey: string | null;
+  readonly applyImage: (
+    sectionId: string,
+    columnId: string | null,
+    imageId: string,
+    contentType: LessonImageContentType,
+  ) => void;
 };
 
-function SectionBody({ section, onChange, onUpload, uploading }: SectionBodyProps) {
+function SectionBody({ section, onChange, onUpload, uploadingKey, applyImage }: SectionBodyProps) {
   const { t } = useTranslation();
   switch (section.type) {
     case 'video':
@@ -335,16 +389,24 @@ function SectionBody({ section, onChange, onUpload, uploading }: SectionBodyProp
           imageId={section.imageId}
           contentType={section.contentType}
           alt={section.alt}
-          uploading={uploading}
+          uploading={uploadingKey === section.id}
           onUpload={(file) =>
-            onUpload(file, (imageId, contentType) => onChange({ ...section, imageId, contentType }))
+            onUpload(section.id, file, (imageId, contentType) =>
+              applyImage(section.id, null, imageId, contentType),
+            )
           }
           onAlt={(alt) => onChange({ ...section, alt })}
         />
       );
     case 'row':
       return (
-        <RowBody section={section} onChange={onChange} onUpload={onUpload} uploading={uploading} />
+        <RowBody
+          section={section}
+          onChange={onChange}
+          onUpload={onUpload}
+          uploadingKey={uploadingKey}
+          applyImage={applyImage}
+        />
       );
   }
 }
@@ -353,12 +415,14 @@ function RowBody({
   section,
   onChange,
   onUpload,
-  uploading,
+  uploadingKey,
+  applyImage,
 }: {
   readonly section: Extract<LessonSection, { type: 'row' }>;
   readonly onChange: (section: LessonSection) => void;
   readonly onUpload: SectionBodyProps['onUpload'];
-  readonly uploading: boolean;
+  readonly uploadingKey: string | null;
+  readonly applyImage: SectionBodyProps['applyImage'];
 }) {
   const { t } = useTranslation();
   const setColumns = (columns: readonly LessonColumn[]) => onChange({ ...section, columns });
@@ -402,10 +466,10 @@ function RowBody({
                 imageId={column.imageId}
                 contentType={column.contentType}
                 alt={column.alt}
-                uploading={uploading}
+                uploading={uploadingKey === column.id}
                 onUpload={(file) =>
-                  onUpload(file, (imageId, contentType) =>
-                    updateColumn(index, { ...column, imageId, contentType }),
+                  onUpload(column.id, file, (imageId, contentType) =>
+                    applyImage(section.id, column.id, imageId, contentType),
                   )
                 }
                 onAlt={(alt) => updateColumn(index, { ...column, alt })}

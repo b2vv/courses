@@ -425,6 +425,8 @@ export const en = {
         loadError: 'Could not load the lesson document.',
         retry: 'Try again',
         saveDraft: 'Save draft',
+        savedToast: 'Draft saved',
+        publishedToast: 'Lesson published',
         publish: 'Publish',
         addSection: 'Add section',
         addColumn: 'Add column',
