@@ -49,8 +49,9 @@ test('SSR API failure is visible and retry preserves search after recovery', asy
     await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toHaveCount(0);
     const retry = page.getByRole('link', { name: 'Спробувати ще раз' });
     await expect(retry).toHaveAttribute('href', url);
+    // B-18: git-ignored artifacts dir, not the tracked docs tree (see accessibility.spec.ts).
     await page.screenshot({
-      path: '../docs/foundation/screenshots/catalog-error.png',
+      path: 'playwright/.artifacts/catalog-error.png',
       fullPage: true,
     });
     await compose('up', '-d', '--no-recreate', '--wait', 'api');

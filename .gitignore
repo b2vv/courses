@@ -12,6 +12,7 @@ test-results/
 playwright-report/
 /frontend/playwright/.auth/
 /frontend/playwright/.fixtures/
+/frontend/playwright/.artifacts/
 /media/
 *.log
 .DS_Store
