@@ -160,8 +160,12 @@ test('catalog remains usable on mobile, dark theme and 200% text zoom', async ({
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await page.goto('/courses');
   await expect(page.getByRole('heading', { name: 'Каталог курсів' })).toBeVisible();
+  // B-18: capture into a git-ignored dir, never into the tracked docs tree. Every gate run
+  // re-encodes these PNGs (device-scale/encoder differ by machine), so writing them back into
+  // docs/foundation/screenshots/ left the tree dirty after a green gate. The committed evidence
+  // under docs/ (linked from docs/foundation/report.md) is now refreshed deliberately, not by the gate.
   await page.screenshot({
-    path: '../docs/foundation/screenshots/catalog-mobile-dark.png',
+    path: 'playwright/.artifacts/catalog-mobile-dark.png',
     fullPage: true,
   });
   await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
@@ -400,12 +404,12 @@ test.describe('with a stored student session', () => {
 test('capture desktop catalog and course', async ({ page }) => {
   await page.goto('/courses');
   await page.screenshot({
-    path: '../docs/foundation/screenshots/catalog-desktop.png',
+    path: 'playwright/.artifacts/catalog-desktop.png',
     fullPage: true,
   });
   await page.goto('/courses/go-backend-foundations');
   await page.screenshot({
-    path: '../docs/foundation/screenshots/course-desktop.png',
+    path: 'playwright/.artifacts/course-desktop.png',
     fullPage: true,
   });
 });
