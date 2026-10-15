@@ -90,7 +90,7 @@ export function LearnerOverview({
   ];
 
   return (
-    <section aria-labelledby="teach-learners-heading" className="teach-section">
+    <section aria-labelledby="teach-learners-heading" className="teach-section learners-overview">
       <h1 id="teach-learners-heading">{t('teach.learners.title')}</h1>
 
       <search className="learners-filters">
@@ -148,25 +148,33 @@ export function LearnerOverview({
               key={entry.userId}
               {...(index === firstAddedIndex ? { ref: addedRow, tabIndex: -1 } : {})}
             >
-              <article>
-                <h2>{entry.displayName || t('ratings.formerAuthor')}</h2>
-                <p>
-                  {t('teach.learners.lastActivity')}{' '}
-                  {entry.lastActivityAt === null ? (
-                    <span>{t('teach.learners.neverActive')}</span>
-                  ) : (
-                    <time dateTime={entry.lastActivityAt}>
-                      {new Date(entry.lastActivityAt).toLocaleString(i18n.resolvedLanguage)}
-                    </time>
-                  )}
-                </p>
+              <article className="ui-card learner-card">
+                <header className="learner-header">
+                  <h2>{entry.displayName || t('ratings.formerAuthor')}</h2>
+                  <p>
+                    {t('teach.learners.lastActivity')}{' '}
+                    {entry.lastActivityAt === null ? (
+                      <span>{t('teach.learners.neverActive')}</span>
+                    ) : (
+                      <time dateTime={entry.lastActivityAt}>
+                        {new Date(entry.lastActivityAt).toLocaleString(i18n.resolvedLanguage)}
+                      </time>
+                    )}
+                  </p>
+                </header>
                 <ul aria-label={t('teach.learners.coursesLabel')} className="learners-courses">
                   {entry.courses.map((course) => (
                     <li key={course.courseId}>
-                      <Link to="/teach/courses/$courseId" params={{ courseId: course.courseId }}>
-                        {course.title}
-                      </Link>
-                      <span>{t(`enrollment.roster.state.${course.state}`)}</span>
+                      <div className="learner-enrollment">
+                        <Link to="/teach/courses/$courseId" params={{ courseId: course.courseId }}>
+                          {course.title}
+                        </Link>
+                        <span
+                          className={`ui-pill ui-pill--${course.state === 'active' ? 'success' : 'danger'}`}
+                        >
+                          {t(`enrollment.roster.state.${course.state}`)}
+                        </span>
+                      </div>
                       <ProgressBar
                         label={t('enrollment.progress', { percent: course.progressPercent })}
                         value={course.progressPercent}
