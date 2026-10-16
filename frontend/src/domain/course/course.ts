@@ -181,6 +181,8 @@ export type CourseTree = CourseTreeEdit & {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly publishedAt: string | null;
+  /** Active enrolments, derived server-side; read-only, not part of an edit. */
+  readonly studentCount: number;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

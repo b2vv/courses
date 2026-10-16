@@ -127,6 +127,7 @@ describe('admin authoring rules', () => {
       updatedAt: '2026-09-01T00:00:00.000001Z',
       publishedAt: null,
       price: null,
+      studentCount: 0,
     } as const;
     expect(validCourseTree(stored)).toBe(true);
     expect(validCourseTree({ ...stored, status: 'published' })).toBe(false);

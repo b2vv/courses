@@ -36,6 +36,7 @@ const tree: CourseTree = {
   updatedAt: '2026-09-01T00:00:00.000001Z',
   publishedAt: null,
   price: null,
+  studentCount: 0,
   modules: [
     {
       id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
