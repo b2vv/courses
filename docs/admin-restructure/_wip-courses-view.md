@@ -94,7 +94,38 @@ course.category/cover (міграція + це вже не «показати н
 Generic icon-tile без category; НОВЕ продуктове поняття course.category/cover НЕ заводимо (нема в домені —
 нема чого показувати; інакше = вигадана фіча). Закриває альтернативу (b) міграції.
 
-## Статус: S2 ЗДАНО (коміт 459c469), далі S3 (спільні примітиви)
+## Статус: S3 ЗДАНО (коміт 003891f), далі S4 (CourseListView проти proto)
+**S3 done (спільні примітиви в `presentation/ui`, жодна в'юха ще не дротована — S4):**
+- `ui/layout.tsx`: **PageHeader** (eyebrow+title+lede+actions) + **SummaryStrip** (labelled `role=group`
+  глобальних чисел, decorative dot). Eyebrow = наявний `.eyebrow` (admin→`--color-primary`, контраст ок),
+  НЕ proto-`admin-eyebrow` з `--color-faint` (пастка faint→muted).
+- `ui/data.tsx`: **DataTable** — in-card editorial таблиця: sortable-хедери, sticky identifier+actions,
+  numeric-вирівнювання, ≤52rem card/stack, mobile-sort. **Sort = controlled + OPTIONAL**: передаєш
+  `sort`+`onSortChange` → хедери інтерактивні; ні — plain labels (без фейк-афордансу). Таблиця САМА НЕ
+  сортує рядки (бек admin-list НЕ має sort-параметра — лише limit/offset/status/search, `admin_handler.go:320`).
+- CSS → admin-токени, table-стилі scoped до `.admin-table-card` (плаский `.ui-table` і його 3 споживачі
+  недоторкані); кожен label/caption = `--color-muted`, не `--color-faint`.
+- **IconTile НЕ заводив окремим компонентом** (рішення нижче). Stories (PageHeader/Summary/CourseTable) — showcase для S4-design-pass.
+- Гейт frontend: format-check/lint(210)/typecheck/test(764)/build зелений.
+
+### Рішення S3 (2026-10-16, Courses 1)
+- **IconTile згорнуто в наявний `.ui-icon-tile`** (не новий компонент): обгортка в один елемент над уже
+  стилізованим класом = bloat (ponytail/YAGNI). Generic tile (owner варіант a) = просто `.ui-icon-tile`.
+  Закриває пункт плану «IconTile примітив». Якщо в'юхам знадобляться cover-варіанти — повернутись.
+- **Новий `DataTable`, а не розширення `Table`**: proto-DataTable додає sort-хедери+mobile-sort+in-card
+  pagination-footer+identifier/actions/numeric; впхати це в `Table` змінило б контракт 3 наявних споживачів
+  (Analytics/Users/Courses). `Table` лишається для простих. Закриває «extend Table».
+- **DataTable sort = controlled+optional** (не client-side всередині примітиву): бек не має sort-param;
+  client-sort однієї server-сторінки з 20 рядків вводив би в оману (сортує 20 зі 100). Примітив чесний і
+  reusable; рішення server-sort-vs-none — S4/owner. Закриває «примітив володіє client-sort».
+
+### ВІДКРИТЕ ДЛЯ ВЛАСНИКА (вирішити на S4)
+- **Сортування таблиці курсів:** (1) server-side — додати `sort`-param у admin-list (новий бек-зріз, як S1
+  додав search; чесно по всіх сторінках) АБО (2) без функц. сортування — рендерити дефолтний порядок,
+  хедери як plain labels (без фейк-афордансу). Client-sort однієї сторінки відкинуто (вводить в оману).
+  Рекомендація: (1) — узгоджується з «повна fidelity з беком». DataTable готовий до обох.
+
+## Архів: S2 ЗДАНО (коміт 459c469), S3 (спільні примітиви)
 **S2 done (frontend data, no view wiring — S4):** domain `AdminCourse`+lessonCount/studentCount/price,
 `AdminCoursePage`+statusCounts, `AdminCourseQuery`+search (trim/bound у `makeAdminCourseQuery`); zod
 `admin-course-schema` парсить три enrichment-поля (price required-nullable) + strict status-snapshot;
