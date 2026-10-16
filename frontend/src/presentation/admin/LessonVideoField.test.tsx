@@ -154,6 +154,7 @@ describe('lesson video field', () => {
       </I18nProvider>,
     );
 
+    await user.click(screen.getByRole('radio', { name: 'Lessons' }));
     expect(screen.getAllByRole('button', { name: 'Upload video' })).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
     expect(screen.getAllByRole('button', { name: 'Upload video' })).toHaveLength(1);
