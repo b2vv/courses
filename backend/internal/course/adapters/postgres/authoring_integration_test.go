@@ -95,6 +95,7 @@ func TestAuthoringRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("P10 lesson moves across modules without changing identity", harness.testLessonMove)
 	t.Run("B03 concurrent creates map the slug conflict", harness.testConcurrentSlug)
 	t.Run("B10 pagination and owner scoping", harness.testPaginationAndScope)
+	t.Run("Cv05 list enrichment: lessons, students, price, status counts, search", harness.testListEnrichment)
 	t.Run("B11 transition timestamps round trip to the microsecond", harness.testTimestampRoundTrip)
 	t.Run("R16 delete cannot race a publish", harness.testDeletePublishRace)
 	t.Run("R17 deleting a draft cascades its tree", harness.testDeleteCascade)
@@ -275,6 +276,101 @@ SELECT gen_random_uuid(), $1, 'owned-' || n, 'Owned ' || n, 'Summary', 'Descript
 	}
 	if adminPage.Total != 52 || len(adminPage.Items) != 2 {
 		t.Fatalf("admin page=%+v", adminPage)
+	}
+}
+
+func (h *authoringHarness) testListEnrichment(t *testing.T) {
+	h.reset(t)
+	if _, err := h.pool.Exec(h.ctx, `
+INSERT INTO users (id,email,display_name,role,password_hash)
+SELECT ('43000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'enrich-'||n||'@courseforge.local','Enrich '||n,
+  CASE WHEN n=1 THEN 'instructor' ELSE 'student' END,
+  '$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+FROM generate_series(1,3) AS n;
+INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,price_minor,currency,created_at,updated_at,published_at) VALUES
+  ('53000000-0000-4000-8000-000000000001','43000000-0000-4000-8000-000000000001','enrich-paid','PostgreSQL deep dive','Advanced queries','Body','draft',149900,'UAH',now(),now(),NULL),
+  ('53000000-0000-4000-8000-000000000002','43000000-0000-4000-8000-000000000001','enrich-free','React basics','Components','Body','published',NULL,NULL,now(),now(),now()),
+  ('53000000-0000-4000-8000-000000000003','43000000-0000-4000-8000-000000000001','enrich-arch','Legacy topic','Retired','Body','archived',NULL,NULL,now(),now(),NULL);
+INSERT INTO course_modules (id,course_id,title,position) VALUES
+  ('63000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001','Module one',0);
+INSERT INTO course_lessons (id,module_id,title,position) VALUES
+  ('73000000-0000-4000-8000-000000000001','63000000-0000-4000-8000-000000000001','Lesson one',0),
+  ('73000000-0000-4000-8000-000000000002','63000000-0000-4000-8000-000000000001','Lesson two',1),
+  ('73000000-0000-4000-8000-000000000003','63000000-0000-4000-8000-000000000001','Lesson three',2);
+INSERT INTO course_grants (user_id,course_id,source,state) VALUES
+  ('43000000-0000-4000-8000-000000000002','53000000-0000-4000-8000-000000000001','admin','active'),
+  ('43000000-0000-4000-8000-000000000003','53000000-0000-4000-8000-000000000001','admin','active'),
+  ('43000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001','admin','revoked');`); err != nil {
+		t.Fatal(err)
+	}
+
+	query, err := domain.NewQuery(50, 0, "", string(domain.SortRecent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := h.repository.List(h.ctx, adminActor(), query, domain.Status(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bySlug := make(map[string]domain.AuthoringCourse, len(page.Items))
+	for _, course := range page.Items {
+		bySlug[course.Slug] = course
+	}
+	paid, free := bySlug["enrich-paid"], bySlug["enrich-free"]
+	if paid.LessonCount != 3 || paid.StudentCount != 2 {
+		t.Fatalf("paid counts: lessons=%d students=%d (want 3/2, active grants only)", paid.LessonCount, paid.StudentCount)
+	}
+	if paid.Price == nil || paid.Price.Minor != 149900 || paid.Price.Currency != "UAH" {
+		t.Fatalf("paid price=%+v", paid.Price)
+	}
+	if free.LessonCount != 0 || free.StudentCount != 0 || free.Price != nil {
+		t.Fatalf("free row should be empty/unpriced: lessons=%d students=%d price=%+v", free.LessonCount, free.StudentCount, free.Price)
+	}
+	if page.StatusCounts != (domain.AuthoringStatusCounts{Total: 3, Draft: 1, Published: 1, Archived: 1}) {
+		t.Fatalf("status counts=%+v (want 3/1/1/1)", page.StatusCounts)
+	}
+
+	searched, err := domain.NewQuery(50, 0, "postgresql", string(domain.SortRecent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	filtered, err := h.repository.List(h.ctx, adminActor(), searched, domain.Status(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Items) != 1 || filtered.Items[0].Slug != "enrich-paid" {
+		t.Fatalf("search did not isolate the matching title: %+v", filtered.Items)
+	}
+	// The status snapshot ignores the search term so the summary strip keeps the full picture.
+	if filtered.StatusCounts.Total != 3 {
+		t.Fatalf("search leaked into status snapshot: %+v", filtered.StatusCounts)
+	}
+
+	// Each admin sort orders the full page by its natural direction.
+	for _, tc := range []struct {
+		sort  domain.Sort
+		first string // slug expected at the top
+		last  string // slug expected at the bottom (NULLS/ties last)
+	}{
+		{domain.SortStudents, "enrich-paid", ""},         // 2 active grants first; the two zeros trail
+		{domain.SortPrice, "enrich-paid", ""},            // priced first, the two free (NULL) last
+		{domain.SortTitle, "enrich-arch", "enrich-free"}, // Legacy < PostgreSQL < React under C collation
+	} {
+		sorted, err := domain.NewAuthoringQuery(50, 0, "", string(tc.sort))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := h.repository.List(h.ctx, adminActor(), sorted, domain.Status(""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Items) != 3 || result.Items[0].Slug != tc.first {
+			t.Fatalf("sort %q: first=%+v (want %s)", tc.sort, result.Items, tc.first)
+		}
+		if tc.last != "" && result.Items[len(result.Items)-1].Slug != tc.last {
+			t.Fatalf("sort %q: last=%s (want %s)", tc.sort, result.Items[len(result.Items)-1].Slug, tc.last)
+		}
 	}
 }
 

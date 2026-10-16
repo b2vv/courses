@@ -86,17 +86,59 @@ describe('admin response schemas', () => {
       status: tree.status,
       instructorId: tree.instructorId,
       updatedAt: tree.updatedAt,
+      lessonCount: 3,
+      studentCount: 2,
+      price: { minor: 49900, currency: 'UAH' },
     };
+    const statusCounts = { total: 1, draft: 1, published: 0, archived: 0 };
     expect(
       adminCoursePageSchema.safeParse({
         items: [item],
         pagination: { limit: 20, offset: 0, total: 1 },
+        statusCounts,
+      }).success,
+    ).toBe(true);
+    // A free course states a null price, not an absent one.
+    expect(
+      adminCoursePageSchema.safeParse({
+        items: [{ ...item, price: null }],
+        pagination: { limit: 20, offset: 0, total: 1 },
+        statusCounts,
       }).success,
     ).toBe(true);
     expect(
       adminCoursePageSchema.safeParse({
         items: [{ ...item, instructorId: 'not-a-uuid' }],
         pagination: { limit: 20, offset: 0, total: 1 },
+        statusCounts,
+      }).success,
+    ).toBe(false);
+    // Every list enrichment field is required and must be well formed.
+    for (const broken of [
+      { ...item, lessonCount: -1 },
+      { ...item, studentCount: 1.5 },
+      (({ price: _price, ...rest }) => rest)(item),
+      (({ lessonCount: _lessonCount, ...rest }) => rest)(item),
+    ])
+      expect(
+        adminCoursePageSchema.safeParse({
+          items: [broken],
+          pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts,
+        }).success,
+      ).toBe(false);
+    // The status snapshot is a required, strict member of the page.
+    expect(
+      adminCoursePageSchema.safeParse({
+        items: [item],
+        pagination: { limit: 20, offset: 0, total: 1 },
+      }).success,
+    ).toBe(false);
+    expect(
+      adminCoursePageSchema.safeParse({
+        items: [item],
+        pagination: { limit: 20, offset: 0, total: 1 },
+        statusCounts: { ...statusCounts, archived: -1 },
       }).success,
     ).toBe(false);
   });

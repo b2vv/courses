@@ -7,6 +7,7 @@
  */
 import type { AdminCourseStatus } from './adminCourseStatus.ts';
 import type { AdminTimestamp } from './adminTimestamp.ts';
+import type { NullablePrice } from './nullablePrice.ts';
 
 export interface AdminCourse {
   id: string;
@@ -24,4 +25,9 @@ export interface AdminCourse {
   status: AdminCourseStatus;
   instructorId: string;
   updatedAt: AdminTimestamp;
+  /** @minimum 0 */
+  lessonCount: number;
+  /** @minimum 0 */
+  studentCount: number;
+  price: NullablePrice | null;
 }

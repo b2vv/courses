@@ -36,6 +36,7 @@ const (
 )
 
 type adminRepository struct {
+	listPage             *domain.AuthoringPage
 	listCalls, loadCalls int
 	createCalls          int
 	saveCalls            int
@@ -61,6 +62,9 @@ func (repository *adminRepository) List(_ context.Context, actor domain.Actor, q
 	repository.lastStatus = status
 	if repository.failure != nil {
 		return domain.AuthoringPage{}, repository.failure
+	}
+	if repository.listPage != nil {
+		return *repository.listPage, nil
 	}
 	if repository.courses != nil {
 		items := make([]domain.AuthoringCourse, 0, len(repository.courses))
@@ -447,6 +451,145 @@ func TestAdminCreateContract(t *testing.T) {
 		decodeJSON(t, list, &page)
 		if list.Code != http.StatusOK || len(page.Items) != 1 || page.Items[0].Slug != "owned-course" {
 			t.Fatalf("owner list=%s", list.Body.String())
+		}
+	})
+}
+
+func TestAdminCourseListEnrichmentContracts(t *testing.T) {
+	enrichedPage := func() *domain.AuthoringPage {
+		return &domain.AuthoringPage{
+			Items: []domain.AuthoringCourse{{
+				ID: adminCourseID, Slug: "go-foundations", Title: "Go foundations", Status: domain.Published,
+				InstructorID: adminUserID, UpdatedAt: time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC),
+				LessonCount: 12, StudentCount: 47, Price: &domain.Price{Minor: 149900, Currency: "UAH"},
+			}},
+			Limit: 20, Offset: 0, Total: 1,
+			StatusCounts: domain.AuthoringStatusCounts{Total: 5, Draft: 2, Published: 2, Archived: 1},
+		}
+	}
+
+	t.Run("Cv01 list row carries lessonCount, studentCount, price and the status snapshot", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		repository.listPage = enrichedPage()
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, request := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses")
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var page struct {
+			Items []struct {
+				LessonCount  int64 `json:"lessonCount"`
+				StudentCount int64 `json:"studentCount"`
+				Price        *struct {
+					Minor    int64  `json:"minor"`
+					Currency string `json:"currency"`
+				} `json:"price"`
+			} `json:"items"`
+			StatusCounts struct {
+				Total, Draft, Published, Archived int64
+			} `json:"statusCounts"`
+		}
+		decodeJSON(t, response, &page)
+		if len(page.Items) != 1 {
+			t.Fatalf("items=%d body=%s", len(page.Items), response.Body.String())
+		}
+		row := page.Items[0]
+		if row.LessonCount != 12 || row.StudentCount != 47 || row.Price == nil || row.Price.Minor != 149900 || row.Price.Currency != "UAH" {
+			t.Fatalf("row=%+v", row)
+		}
+		if page.StatusCounts.Total != 5 || page.StatusCounts.Draft != 2 || page.StatusCounts.Published != 2 || page.StatusCounts.Archived != 1 {
+			t.Fatalf("statusCounts=%+v", page.StatusCounts)
+		}
+	})
+
+	t.Run("Cv02 a free course serialises price as null", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		free := enrichedPage()
+		free.Items[0].Price = nil
+		repository.listPage = free
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, request := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses")
+		assertAdminHTTPContract(t, request, response, true)
+		var page struct {
+			Items []map[string]json.RawMessage `json:"items"`
+		}
+		decodeJSON(t, response, &page)
+		if len(page.Items) != 1 {
+			t.Fatalf("items=%d body=%s", len(page.Items), response.Body.String())
+		}
+		if price, ok := page.Items[0]["price"]; !ok || string(price) != "null" {
+			t.Fatalf("price not present-and-null: ok=%v value=%s", ok, string(price))
+		}
+	})
+
+	t.Run("Cv03 search is forwarded to the query", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		repository.listPage = enrichedPage()
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, request := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses?search=postgres")
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK || repository.lastQuery.Search != "postgres" {
+			t.Fatalf("status=%d search=%q", response.Code, repository.lastQuery.Search)
+		}
+	})
+
+	t.Run("Cv04 an empty search parameter is rejected", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		repository.listPage = enrichedPage()
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, _ := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses?search=")
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertAdminError(t, response, "invalid_request")
+		if repository.listCalls != 0 {
+			t.Fatalf("rejected search still called repository: %d", repository.listCalls)
+		}
+	})
+
+	t.Run("Cv06 sort is forwarded and defaults to recent", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		repository.listPage = enrichedPage()
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, request := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses?sort=students")
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK || repository.lastQuery.Sort != domain.SortStudents {
+			t.Fatalf("status=%d sort=%q", response.Code, repository.lastQuery.Sort)
+		}
+
+		repository.lastQuery = domain.Query{}
+		response, _ = serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses")
+		if response.Code != http.StatusOK || repository.lastQuery.Sort != domain.SortRecent {
+			t.Fatalf("absent sort did not default to recent: status=%d sort=%q", response.Code, repository.lastQuery.Sort)
+		}
+	})
+
+	t.Run("Cv07 an empty or unknown sort is rejected before the repository", func(t *testing.T) {
+		for _, raw := range []string{"/api/v1/admin/courses?sort=", "/api/v1/admin/courses?sort=popular"} {
+			repository := newAdminWriteRepository()
+			repository.listPage = enrichedPage()
+			identity := &adminIdentity{}
+			handler := adminReadHandler(t, repository, identity)
+
+			response, _ := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), raw)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("%s: status=%d body=%s", raw, response.Code, response.Body.String())
+			}
+			assertAdminError(t, response, "invalid_request")
+			if repository.listCalls != 0 {
+				t.Fatalf("%s: rejected sort still called repository: %d", raw, repository.listCalls)
+			}
 		}
 	})
 }
@@ -1341,6 +1484,16 @@ func serveAdminRead(handler http.Handler, identity *adminIdentity, user identity
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func serveAdminGet(t *testing.T, handler http.Handler, identity *adminIdentity, user identitydomain.User, path string) (*httptest.ResponseRecorder, *http.Request) {
+	t.Helper()
+	identity.user = user
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	request.AddCookie(&http.Cookie{Name: identityhttp.SessionCookieName, Value: strings.Repeat("A", 43)})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response, request
 }
 
 func decodeAdminTree(t *testing.T, response *httptest.ResponseRecorder) adminTreeResponse {

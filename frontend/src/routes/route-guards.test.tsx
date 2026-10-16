@@ -175,15 +175,22 @@ function createTestRouter(
   const adminRepository: AdminCourseRepository = {
     list: async (query) => {
       observedAdminQueries.push(query);
-      const filtered =
-        query.status === undefined
-          ? adminCourses
-          : adminCourses.filter((course) => course.status === query.status);
+      const filtered = adminCourses.filter(
+        (course) =>
+          (query.status === undefined || course.status === query.status) &&
+          (query.search === '' || course.title.toLowerCase().includes(query.search.toLowerCase())),
+      );
       return {
         ok: true,
         value: {
           items: filtered.slice(query.offset, query.offset + query.limit),
           pagination: { limit: query.limit, offset: query.offset, total: filtered.length },
+          statusCounts: {
+            total: adminCourses.length,
+            draft: adminCourses.filter((course) => course.status === 'draft').length,
+            published: adminCourses.filter((course) => course.status === 'published').length,
+            archived: adminCourses.filter((course) => course.status === 'archived').length,
+          },
         },
       };
     },
@@ -592,7 +599,7 @@ test.each(['instructor', 'admin'] satisfies Role[])(
     renderRouter(router);
 
     expect(router.state.location.href).toBe('/admin');
-    expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Курси' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Створити курс' })).toBeTruthy();
     expect(screen.queryByText('Сторінку не знайдено')).toBeNull();
   },
@@ -608,6 +615,9 @@ test('P16 renders an owner-scoped course row through the guarded memory route', 
     status: 'published',
     instructorId: instructor.id,
     updatedAt: '2026-09-05T10:15:30.000000Z',
+    lessonCount: 6,
+    studentCount: 4,
+    price: null,
   };
   const router = createTestRouter('/admin?status=published', instructor, 'uk', [course]);
 
@@ -616,11 +626,15 @@ test('P16 renders an owner-scoped course row through the guarded memory route', 
 
   const table = screen.getByRole('table', { name: 'Курси' });
   expect(table).toBeTruthy();
-  expect(within(table).getByRole('link', { name: 'Власний курс' }).getAttribute('href')).toBe(
-    '/admin/courses/10000000-0000-4000-8000-000000000001',
-  );
+  expect(
+    within(table)
+      .getByRole('link', { name: /^Власний курс/ })
+      .getAttribute('href'),
+  ).toBe('/admin/courses/10000000-0000-4000-8000-000000000001');
   expect(within(table).getByText('Опубліковано')).toBeTruthy();
-  expect(observedAdminQueries).toEqual([{ status: 'published', limit: 20, offset: 0 }]);
+  expect(observedAdminQueries).toEqual([
+    { status: 'published', limit: 20, offset: 0, search: '', sort: 'recent' },
+  ]);
 });
 
 test('B02 renders the admin list empty state without weakening the shell guard', async () => {
@@ -631,11 +645,12 @@ test('B02 renders the admin list empty state without weakening the shell guard',
   await router.load();
   renderRouter(router);
 
-  expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Курси' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Курсів ще немає' })).toBeTruthy();
   expect(screen.queryByRole('table')).toBeNull();
-  expect(screen.getByRole('navigation', { name: 'Сторінки курсів' })).toBeTruthy();
-  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+  // The empty slot replaces the table and its pager (proto's editorial empty state).
+  expect(screen.queryByRole('navigation', { name: 'Сторінки курсів' })).toBeNull();
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '', sort: 'recent' }]);
 });
 
 test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
@@ -647,10 +662,10 @@ test('R34 keeps unusable admin search text in the URL and queries with independe
   await router.load();
   renderRouter(router);
 
-  expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Курси' })).toBeTruthy();
   expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
   expect(router.state.location.href).toBe(href);
-  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '', sort: 'recent' }]);
 });
 
 test('R21 keeps unusable user search text in the URL and loads default directory filters', async () => {
@@ -866,7 +881,7 @@ test('G08 shows the route pending state while protected navigation revalidates',
   release();
   await navigation;
 
-  expect(await screen.findByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Курси' })).toBeTruthy();
 });
 
 test('G09 renders a localized retryable route error when identity is unavailable', async () => {
@@ -888,7 +903,7 @@ test('G09 renders a localized retryable route error when identity is unavailable
   answerWith(admin);
   await router.invalidate({ sync: true });
 
-  expect(await screen.findByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Курси' })).toBeTruthy();
 });
 
 test('G11 revalidates a cached identity and redirects when the session has ended', async () => {
@@ -915,7 +930,7 @@ test('G12 leaves a mounted protected route when focus revalidation ends the sess
   const router = createTestRouter('/admin', admin);
   await router.load();
   renderRouter(router);
-  expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Курси' })).toBeTruthy();
 
   current = null;
   focusManager.setFocused(false);

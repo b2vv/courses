@@ -913,6 +913,7 @@ export function CourseCreateDialog({
   return (
     <Dialog
       triggerLabel={t('administration.createCourse')}
+      triggerVariant="primary"
       title={t('administration.createCourse')}
       closeLabel={t('common.close')}
     >

@@ -43,6 +43,26 @@ func TestCatalogQueryBoundaries(t *testing.T) {
 	}
 }
 
+func TestAuthoringQuerySorts(t *testing.T) {
+	// Admin offers two sorts the catalog does not; they must pass NewAuthoringQuery...
+	for _, sort := range []string{"recent", "title", "students", "price"} {
+		if _, err := domain.NewAuthoringQuery(20, 0, "", sort); err != nil {
+			t.Fatalf("admin sort %q rejected: %v", sort, err)
+		}
+	}
+	for _, sort := range []string{"popular", ""} {
+		if _, err := domain.NewAuthoringQuery(20, 0, "", sort); !errors.Is(err, domain.ErrInvalidQuery) {
+			t.Fatalf("admin sort %q should be invalid, got %v", sort, err)
+		}
+	}
+	// ...and the catalog's NewQuery must still refuse them, so they do not leak to /courses.
+	for _, sort := range []string{"students", "price"} {
+		if _, err := domain.NewQuery(20, 0, "", sort); !errors.Is(err, domain.ErrInvalidQuery) {
+			t.Fatalf("catalog accepted admin-only sort %q", sort)
+		}
+	}
+}
+
 func TestCanonicalSlugBoundaries(t *testing.T) {
 	for _, tc := range []struct {
 		slug  string

@@ -6,18 +6,21 @@ import {
   Button,
   Checkbox,
   ComboBox,
+  DataTable,
   Dialog,
   Delta,
   ErrorState,
   FileUpload,
   LoadMeter,
   Menu,
+  PageHeader,
   Pagination,
   ProgressBar,
   Select,
   SegmentedControl,
   Skeleton,
   StatTile,
+  SummaryStrip,
   Switch,
   Table,
   Tabs,
@@ -25,6 +28,7 @@ import {
   Toast,
   TrendChart,
 } from './index';
+import type { DataColumn, DataTableSort } from './index';
 
 afterEach(cleanup);
 
@@ -499,5 +503,209 @@ describe('accessible UI primitives', () => {
     expect(screen.getByRole('status').textContent).toBe('Немає даних у вікні');
     expect(container.querySelector('svg')).toBeNull();
     expect((await axe.run(container)).violations).toEqual([]);
+  });
+});
+
+type CourseRow = { id: string; title: string; students: number };
+const courseRows: readonly CourseRow[] = [
+  { id: 'c1', title: 'Go', students: 12 },
+  { id: 'c2', title: 'Rust', students: 4 },
+];
+const courseColumns: readonly DataColumn<CourseRow>[] = [
+  { key: 'title', label: 'Course', identifier: true, render: (row) => row.title },
+  { key: 'students', label: 'Students', numeric: true, render: (row) => String(row.students) },
+];
+
+describe('view-fidelity primitives', () => {
+  it('renders the shared page header with eyebrow, title, lede and actions, axe-clean', async () => {
+    const { container } = render(
+      <div data-surface="admin">
+        <PageHeader
+          eyebrow="CONTENT MANAGEMENT"
+          title="Курси"
+          description="Керуйте курсами в одному місці."
+          actions={<Button>Створити курс</Button>}
+        />
+      </div>,
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Курси' })).toBeTruthy();
+    expect(screen.getByText('CONTENT MANAGEMENT')).toBeTruthy();
+    expect(screen.getByText('Керуйте курсами в одному місці.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Створити курс' })).toBeTruthy();
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('omits the lede and action cluster when not given', () => {
+    render(
+      <div data-surface="admin">
+        <PageHeader eyebrow="PLATFORM STATISTICS" title="Аналітика" />
+      </div>,
+    );
+    expect(document.querySelector('.admin-page-description')).toBeNull();
+    expect(document.querySelector('.admin-page-actions')).toBeNull();
+  });
+
+  it('labels the summary strip as a group and marks the dot decorative, axe-clean', async () => {
+    const { container } = render(
+      <div data-surface="admin">
+        <SummaryStrip
+          label="Підсумок курсів"
+          items={[
+            { id: 'total', value: '21', label: 'Курсів' },
+            { id: 'published', value: '10', label: 'Опубліковано', dot: true },
+          ]}
+        />
+      </div>,
+    );
+    const group = screen.getByRole('group', { name: 'Підсумок курсів' });
+    expect(within(group).getByText('21')).toBeTruthy();
+    expect(within(group).getByText('Опубліковано')).toBeTruthy();
+    const dot = container.querySelector('.summary-dot');
+    expect(dot?.getAttribute('aria-hidden')).toBe('true');
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('renders a data table with identifier, numeric and action columns, axe-clean', async () => {
+    const { container } = render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          actions={(row) => <Button aria-label={`Редагувати ${row.title}`}>✎</Button>}
+        />
+      </div>,
+    );
+    const table = screen.getByRole('table', { name: 'Курси' });
+    const identifier = within(table).getByRole('rowheader', { name: 'Go' });
+    expect(identifier.classList.contains('admin-table-identifier')).toBe(true);
+    // Rows render in the given order — the primitive does not reorder.
+    const rowHeaders = within(table).getAllByRole('rowheader');
+    expect(rowHeaders.map((cell) => cell.textContent)).toEqual(['Go', 'Rust']);
+    expect(screen.getByRole('button', { name: 'Редагувати Rust' })).toBeTruthy();
+    // No sort config → headers are plain labels, no sort buttons, no mobile sort.
+    expect(screen.queryByRole('button', { name: 'Students' })).toBeNull();
+    expect(document.querySelector('.table-mobile-sort')).toBeNull();
+    expect((await axe.run(container)).violations).toEqual([]);
+  });
+
+  it('exposes controlled, optional sort through headers and the mobile control', async () => {
+    const user = userEvent.setup();
+    const changes: DataTableSort[] = [];
+    const sort: DataTableSort = { key: 'title', dir: 'asc' };
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          sort={sort}
+          onSortChange={(next) => changes.push(next)}
+          mobileSortLabel="Сортувати"
+          reverseSortLabel="Змінити напрям"
+        />
+      </div>,
+    );
+    const titleHeader = screen.getByRole('columnheader', { name: /Course/ });
+    expect(titleHeader.getAttribute('aria-sort')).toBe('ascending');
+    const studentsHeader = screen.getByRole('columnheader', { name: /Students/ });
+    expect(studentsHeader.getAttribute('aria-sort')).toBe('none');
+
+    // A new column sorts ascending; the active column toggles direction.
+    await user.click(within(studentsHeader).getByRole('button'));
+    await user.click(within(titleHeader).getByRole('button'));
+    expect(changes).toEqual([
+      { key: 'students', dir: 'asc' },
+      { key: 'title', dir: 'desc' },
+    ]);
+
+    // The mobile direction toggle flips the current sort.
+    await user.click(screen.getByRole('button', { name: 'Змінити напрям' }));
+    expect(changes.at(-1)).toEqual({ key: 'title', dir: 'desc' });
+  });
+
+  it('omits the mobile reverse control for a fixed-direction (key-only) table', () => {
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          sort={{ key: 'students', dir: 'desc' }}
+          onSortChange={() => {}}
+          mobileSortLabel="Сортувати"
+        />
+      </div>,
+    );
+    // Headers stay interactive, but no reverse affordance is rendered.
+    expect(screen.getByLabelText('Сортувати')).toBeTruthy();
+    expect(document.querySelector('.table-mobile-sort .admin-icon-button')).toBeNull();
+  });
+
+  it('leaves a sortable:false column as a plain header and out of the mobile options', () => {
+    const columns: readonly DataColumn<CourseRow>[] = [
+      { key: 'title', label: 'Course', identifier: true, render: (row) => row.title },
+      { key: 'badge', label: 'Badge', sortable: false, render: () => 'x' },
+    ];
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={columns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          sort={{ key: 'title', dir: 'asc' }}
+          onSortChange={() => {}}
+          mobileSortLabel="Сортувати"
+        />
+      </div>,
+    );
+    // The sortable column is a button; the non-sortable one is plain text with no aria-sort.
+    expect(screen.getByRole('button', { name: /Course/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Badge' })).toBeNull();
+    const badge = screen.getByRole('columnheader', { name: 'Badge' });
+    expect(badge.getAttribute('aria-sort')).toBeNull();
+    // The mobile sort select offers only the sortable column.
+    const options = within(screen.getByLabelText('Сортувати')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual(['Course']);
+  });
+
+  it('shows the empty slot instead of a table and renders a footer slot', () => {
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={[]}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          empty={<p>Немає курсів</p>}
+          footer={<nav aria-label="Сторінки">стор</nav>}
+        />
+      </div>,
+    );
+    expect(screen.getByText('Немає курсів')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          footer={<nav aria-label="Сторінки">стор</nav>}
+        />
+      </div>,
+    );
+    expect(screen.getByRole('navigation', { name: 'Сторінки' })).toBeTruthy();
   });
 });

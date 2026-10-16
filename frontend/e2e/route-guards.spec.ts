@@ -81,7 +81,7 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   expect(loginResponse.status()).toBe(200);
   expect((await loginResponse.allHeaders())['set-cookie']).toContain('courseforge_session=');
   await expect(page).toHaveURL((url) => url.pathname === '/admin');
-  await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
 
   const rawAdminResponse = await page.request.get('/admin');
   expect(rawAdminResponse.status()).toBe(200);
@@ -122,7 +122,7 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   });
   await page.goto('/admin', { waitUntil: 'networkidle' });
   await expect(page.getByText(fixtures.admin.name)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
   expect(currentUserRequests).toBe(1);
 
   currentUserRequests = 0;
@@ -137,7 +137,7 @@ test('admin identity survives SSR and hydration with one protected-boundary reva
   await expect(page.getByRole('heading', { name: 'Ви вже увійшли' })).toBeVisible();
   await page.getByRole('button', { name: 'Продовжити' }).click();
   await expect(page).toHaveURL((url) => url.pathname === '/admin');
-  await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
 
   await page.goto('/learn');
   await expect(page).toHaveURL((url) => url.pathname === '/learn');
