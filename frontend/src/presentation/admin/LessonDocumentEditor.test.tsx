@@ -280,7 +280,7 @@ test('section identity has ordered indices and decorative icons without axe viol
   const sections = Array.from(document.querySelectorAll('.lesson-editor-section'));
   for (const [index, section] of sections.entries()) {
     expect(section.querySelector('.lesson-editor-section-index')?.textContent).toBe(
-      String(index + 1),
+      String(index + 1).padStart(2, '0'),
     );
     expect(section.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
     expect(section.querySelector('svg')?.hasAttribute('role')).toBe(false);
@@ -295,17 +295,17 @@ test('section identity has ordered indices and decorative icons without axe viol
     Array.from(document.querySelectorAll('.lesson-editor-section-index')).map(
       (node) => node.textContent,
     ),
-  ).toEqual(['1', '2']);
+  ).toEqual(['01', '02']);
 });
 
-test('toolbar retains aria-pressed when toggled', async () => {
+test('toolbar reflects active formatting via aria-pressed', async () => {
   setup([{ type: 'text', id: 'text', content: { blocks: [] } }]);
   const toolbar = await screen.findByRole('toolbar', { name: 'Форматування тексту' });
-  const link = within(toolbar).getByRole('button', { name: 'Посилання', pressed: false });
-  fireEvent.click(link);
-  expect(within(toolbar).getByRole('button', { name: 'Посилання', pressed: true })).toBe(link);
-  fireEvent.click(link);
-  expect(link.getAttribute('aria-pressed')).toBe('false');
+  const bold = within(toolbar).getByRole('button', { name: 'Жирний', pressed: false });
+  fireEvent.click(bold);
+  expect(within(toolbar).getByRole('button', { name: 'Жирний', pressed: true })).toBe(bold);
+  fireEvent.click(bold);
+  expect(bold.getAttribute('aria-pressed')).toBe('false');
 });
 
 const linkInvalidMessage = 'Адреса має починатися з http:// або https://';
@@ -334,11 +334,25 @@ async function setupSelectedLinkText(href?: string) {
   return { calls, editor, textbox, section };
 }
 
+const linkConfirmName = 'Додати посилання';
+
+// Opening the link control now raises a modal: the address lives in a dialog, not inline under the
+// toolbar. While the modal is open React Aria hides the rest of the editor from the a11y tree, so
+// background assertions (the link in the text, Save) run only after the dialog is confirmed or
+// cancelled.
 function openLinkField() {
   fireEvent.click(screen.getByRole('button', { name: 'Посилання' }));
   const input = screen.getByRole('textbox', { name: 'Адреса посилання' });
   if (!(input instanceof HTMLInputElement)) throw new Error('Missing link input');
   return input;
+}
+
+function confirmLink() {
+  fireEvent.click(screen.getByRole('button', { name: linkConfirmName }));
+}
+
+function cancelLink() {
+  fireEvent.click(screen.getByRole('button', { name: 'Скасувати' }));
 }
 
 test('invalid link URL preserves the existing link, input and focus with an error', async () => {
@@ -347,17 +361,19 @@ test('invalid link URL preserves the existing link, input and focus with an erro
   const before = editor.getJSON();
   const input = openLinkField();
   fireEvent.change(input, { target: { value: 'notaurl' } });
-  const apply = screen.getByRole('button', { name: 'Застосувати' });
+  const apply = screen.getByRole('button', { name: linkConfirmName });
   act(() => apply.focus());
   expect(document.activeElement).toBe(apply);
   fireEvent.click(apply);
   expect(await screen.findByText(linkInvalidMessage)).toBeTruthy();
+  // The dialog stays open on an invalid address, keeps the typed value and returns focus to it.
   expect(screen.getByRole('textbox', { name: 'Адреса посилання' })).toBe(input);
   expect(input.value).toBe('notaurl');
   expect(input.getAttribute('aria-invalid')).toBe('true');
   expect(document.activeElement).toBe(input);
   expect(editor.isActive('link')).toBe(true);
   expect(editor.getJSON()).toEqual(before);
+  cancelLink();
   expect(within(textbox).getByRole('link', { name: 'Лінк' }).getAttribute('href')).toBe(
     'https://old.example',
   );
@@ -371,11 +387,11 @@ test('correcting an invalid URL clears the error and applying saves a real link'
   expect(editor.isActive('link')).toBe(false);
   const input = openLinkField();
   fireEvent.change(input, { target: { value: 'notaurl' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Застосувати' }));
+  confirmLink();
   await screen.findByText(linkInvalidMessage);
   fireEvent.change(input, { target: { value: 'https://example.com' } });
   expect(screen.queryByText(linkInvalidMessage)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Застосувати' }));
+  confirmLink();
   expect(screen.queryByRole('textbox', { name: 'Адреса посилання' })).toBeNull();
   expect(screen.queryByText(linkInvalidMessage)).toBeNull();
   expect(editor.isActive('link')).toBe(true);
