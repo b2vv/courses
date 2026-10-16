@@ -733,19 +733,21 @@ export function CourseEditorView({
           </>
         }
       />
-      <SegmentedControl
-        label={t('administration.tabsLabel')}
-        options={[
-          { id: 'overview', label: t('administration.tabOverview') },
-          { id: 'lessons', label: t('administration.tabLessons') },
-          { id: 'access', label: t('administration.tabAccess') },
-        ]}
-        selectedKeys={new Set([tab])}
-        onSelectionChange={(keys) => {
-          const next = String([...keys][0] ?? 'overview');
-          if (next === 'overview' || next === 'lessons' || next === 'access') setTab(next);
-        }}
-      />
+      <div className="course-tabs">
+        <SegmentedControl
+          label={t('administration.tabsLabel')}
+          options={[
+            { id: 'overview', label: t('administration.tabOverview') },
+            { id: 'lessons', label: t('administration.tabLessons') },
+            { id: 'access', label: t('administration.tabAccess') },
+          ]}
+          selectedKeys={new Set([tab])}
+          onSelectionChange={(keys) => {
+            const next = String([...keys][0] ?? 'overview');
+            if (next === 'overview' || next === 'lessons' || next === 'access') setTab(next);
+          }}
+        />
+      </div>
       {message && (
         <div className="admin-editor-message" role={messageKind}>
           {message}
