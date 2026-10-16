@@ -810,7 +810,6 @@ export function CourseEditorView({
             <section className="ui-card" aria-labelledby="course-lifecycle-heading">
               <div className="card-heading">
                 <h2 id="course-lifecycle-heading">{t('administration.courseStatus')}</h2>
-                {statusPill}
               </div>
               <p>{t('administration.statusHint')}</p>
               {hasTranscriptNotice && (
