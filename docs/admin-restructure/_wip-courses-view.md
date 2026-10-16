@@ -94,6 +94,15 @@ course.category/cover (міграція + це вже не «показати н
 Generic icon-tile без category; НОВЕ продуктове поняття course.category/cover НЕ заводимо (нема в домені —
 нема чого показувати; інакше = вигадана фіча). Закриває альтернативу (b) міграції.
 
-## Статус: виконую S1 (бекенд).
+## Статус: S1 ЗДАНО (коміт 9c8debc), далі S2 (фронт-дані)
+**S1 done:** admin-list віддає lessonCount/studentCount/price + status-snapshot + full-text search;
+жодної міграції. Доведено: unit (domain/application), HTTP-contract, **repository-integration проти
+Postgres зелений** (lessonCount=3, active-only studentCount=2, price, 3/1/1/1, search ізолює title).
+openapi + regenerated sqlc & Orval; frontend tsc чистий.
+**Контракт для S2 (фронт):** `AdminCourse` +`lessonCount:int64`,`studentCount:int64`,`price:NullablePrice`;
+`AdminCoursePage` +`statusCounts:{total,draft,published,archived}`; query-param `search` (minLen1,maxLen100,
+empty→400). Orval-моделі вже згенеровано (`adminCourse.ts`, `adminCourseStatusCounts.ts`, `listAdminCoursesParams.ts`).
+**S2 TODO:** frontend domain `AdminCourse`/`AdminCoursePage` типи + zod `admin-course-schema.ts` + мапінг
+адаптера; прокинути `search` у `admin-search` router state + ключ `admin.list`; тести (schema/mapping/repo).
 
 
