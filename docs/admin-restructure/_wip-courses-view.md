@@ -94,7 +94,30 @@ course.category/cover (міграція + це вже не «показати н
 Generic icon-tile без category; НОВЕ продуктове поняття course.category/cover НЕ заводимо (нема в домені —
 нема чого показувати; інакше = вигадана фіча). Закриває альтернативу (b) міграції.
 
-## Статус: S3 ЗДАНО (коміт 003891f), далі S4 (CourseListView проти proto)
+## Статус: S5 ЗДАНО (коміт 3af3280) — view 2 `#courses` готовий, PR відкрито
+
+**S5 done (design-pass + повний гейт + e2e):** browser design-pass proto↔prod (MCP_DOCKER,
+host.docker.internal; логін оминає origin-гард інжекцією session-cookie — POST-логін із host.docker.internal
+дає `origin_forbidden`, GET-и ні) на desktop 1440 + mobile 390 + @200% zoom.
+- **Збіг зі proto:** PageHeader, summary-strip, таблиця Назва/Статус/Студенти/Ціна/Оновлено/Дії з
+  icon-tile+підрядком, numeric, пагінація; ≤52rem row-cards з data-label; mobile-sort select.
+- **Свідомі (owner-схвалені) відхилення:** generic icon-tile без category; row-actions лише де працюють
+  (edit завжди / preview published / delete draft); segmented-фільтр; submit-пошук; Статус не sortable.
+- **Поза скоупом (не в owner-переліку full-fidelity):** «Експорт CSV» з proto — демо-only, не дротовано.
+- **2 fidelity-фікси (цей коміт):** (1) CTA «Створити курс» була secondary → тепер primary (новий
+  опційний `Dialog.triggerVariant`, дефолт secondary; AdminKit-story вже показувала primary). (2) Empty-стан
+  не розрізняв «нема курсів зовсім» vs «пошук/фільтр без матчів» → додано filtered-варіант
+  (`administration.emptyFiltered`/`emptyFilteredHint`/`clearFilters`) + дія «Очистити фільтри» (один
+  `go({status:undefined,search:'',page:1})`), як proto emptyAction.
+- **axe /admin:** 0 wcag-порушень, 0 contrast-порушень; 4 incomplete — admin-shell (активний nav 4.12:1,
+  декор-стрілка), не таблиця. 200% zoom: без H-скролу, контроли ≥44px.
+- **Новий e2e** (`admin.spec.ts` S5): submit-пошук знаходить створену чернетку → sort-хедер несе ключ у URL
+  → row-action delete (confirm, DELETE 204, status «Курс видалено.») → filtered-empty «Курсів не знайдено» →
+  «Очистити фільтри» повертає повний список. `search_vector` = GENERATED STORED → миттєвий індекс (не флакне).
+- **Гейт:** повний `make check` ЗЕЛЕНИЙ (GATE_EXIT=0): format-check/lint/typecheck/test(frontend 772)/
+  integration/check-generated/build/**e2e 121 passed (14.4m)**.
+
+## Архів: S3 ЗДАНО (коміт 003891f), далі S4 (CourseListView проти proto)
 **S3 done (спільні примітиви в `presentation/ui`, жодна в'юха ще не дротована — S4):**
 - `ui/layout.tsx`: **PageHeader** (eyebrow+title+lede+actions) + **SummaryStrip** (labelled `role=group`
   глобальних чисел, decorative dot). Eyebrow = наявний `.eyebrow` (admin→`--color-primary`, контраст ок),
