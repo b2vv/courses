@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Skeleton } from '../ui/states';
+import { Skeleton } from '../../../presentation/ui/states';
 
 // Keep the route fallback independent of the lazy editor and its Tiptap imports.
 export function LessonDocumentEditorLoading() {

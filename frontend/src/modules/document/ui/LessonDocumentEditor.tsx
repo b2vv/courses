@@ -7,17 +7,17 @@ import type {
   LessonImageContentType,
   LessonRichText,
   LessonSection,
-} from '../../domain/document/document';
-import { imageServeUrl } from '../../domain/document/document';
-import { hasRenderableSections } from '../../domain/document/document';
+} from '../domain/document';
+import { imageServeUrl } from '../domain/document';
+import { hasRenderableSections } from '../domain/document';
 import {
   DocumentAuthoringError,
   ImageUploadError,
   type createAdminDocumentQueries,
-} from '../../app/composition/admin-document-queries';
-import { Button, FileUpload, SegmentedControl, TextField, Toast } from '../ui';
-import { EmptyState, ErrorState } from '../ui/states';
-import { LessonDocumentView } from '../learn/LessonDocumentView';
+} from '../application/admin-document-queries';
+import { Button, FileUpload, SegmentedControl, TextField, Toast } from '../../../presentation/ui';
+import { EmptyState, ErrorState } from '../../../presentation/ui/states';
+import { LessonDocumentView } from './LessonDocumentView';
 import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
 

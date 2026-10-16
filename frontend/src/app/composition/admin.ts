@@ -17,8 +17,10 @@ import { createApiCourseGrantRepository } from '../../adapters/api/course-grant-
 import { createAdminGrantQueries } from './admin-grant-queries';
 import { createApiAdminStatsRepository } from '../../adapters/api/admin-stats-repository';
 import { createAdminStatsQueries } from './admin-stats-queries';
-import { createApiDocumentAuthoringRepository } from '../../adapters/api/admin-document-repository';
-import { createAdminDocumentQueries } from './admin-document-queries';
+import {
+  createAdminDocumentQueries,
+  createApiDocumentAuthoringRepository,
+} from '../../modules/document';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))

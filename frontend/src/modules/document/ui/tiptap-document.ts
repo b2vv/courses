@@ -1,9 +1,4 @@
-import type {
-  LessonBlock,
-  LessonMark,
-  LessonRichText,
-  LessonSpan,
-} from '../../domain/document/document';
+import type { LessonBlock, LessonMark, LessonRichText, LessonSpan } from '../domain/document';
 
 // Pure conversion between our validated rich-text model and the ProseMirror/Tiptap JSON the editor
 // works in. It imports no Tiptap runtime, so it is testable without a browser. Serialising out of

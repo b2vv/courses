@@ -20,7 +20,11 @@ import { createSessionQueries, sessionQueryKey } from '../app/composition/identi
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
 import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
-import { createAdminDocumentQueries } from '../app/composition/admin-document-queries';
+import {
+  createAdminDocumentQueries,
+  createDocumentQueries,
+  type DocumentRepository,
+} from '../modules/document';
 import { createTranscriptQueries } from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
@@ -31,8 +35,6 @@ import { createAdminStatsQueries } from '../app/composition/admin-stats-queries'
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
-import type { DocumentRepository } from '../ports/DocumentRepository';
-import { createDocumentQueries } from '../app/composition/document-queries';
 import type { DiscussionRepository } from '../ports/DiscussionRepository';
 import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
 import type { LessonTranscript } from '../domain/transcript/transcript';

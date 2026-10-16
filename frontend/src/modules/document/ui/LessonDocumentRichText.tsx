@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
-import type { LessonRichText } from '../../domain/document/document';
-import { Button, TextField, Tooltip } from '../ui';
+import type { LessonRichText } from '../domain/document';
+import { Button, TextField, Tooltip } from '../../../presentation/ui';
 import { pmDocToRichText, richTextToPmDoc, type PmDoc } from './tiptap-document';
 
 type LessonDocumentRichTextProps = {

@@ -3,15 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { asBrandedId, validEntityId } from '../domain/course/course';
 import type { CourseTree } from '../domain/course/course';
-import { LessonDocumentEditorLoading } from '../presentation/admin/LessonDocumentEditorLoading';
-import type { LessonMeta } from '../presentation/admin/LessonDocumentEditor';
+import { LessonDocumentEditorLoading, type LessonMeta } from '../modules/document';
 
 // The editor's Tiptap dependency must not reach the shared bundle, so the component is loaded
-// lazily here and is never imported by the composition root or the router context. The route sits
-// under the admin layout (its role guard and session handling) but not under the course-editor
-// route, which renders no Outlet — hence the trailing-underscore, non-nested segment.
+// lazily here through a dynamic import of the module's editor file (not the barrel, which the
+// composition roots import eagerly for the queries). The route sits under the admin layout (its
+// role guard and session handling) but not under the course-editor route, which renders no Outlet —
+// hence the trailing-underscore, non-nested segment.
 const LessonDocumentEditor = lazy(() =>
-  import('../presentation/admin/LessonDocumentEditor').then((module) => ({
+  import('../modules/document/ui/LessonDocumentEditor').then((module) => ({
     default: module.LessonDocumentEditor,
   })),
 );

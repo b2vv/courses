@@ -3,7 +3,7 @@ import type {
   ImageUploadResult,
   LessonDocument,
   LessonDocumentDraft,
-} from '../domain/document/document';
+} from '../domain/document';
 
 export interface DocumentAuthoringRepository {
   getDraft(

@@ -1,5 +1,5 @@
 import { expect, test } from '@rstest/core';
-import type { LessonRichText } from '../../domain/document/document';
+import type { LessonRichText } from '../domain/document';
 import { pmDocToRichText, richTextToPmDoc, type PmDoc } from './tiptap-document';
 
 test('a rich text survives model → ProseMirror → model unchanged', () => {

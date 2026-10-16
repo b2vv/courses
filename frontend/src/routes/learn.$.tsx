@@ -16,7 +16,7 @@ import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { LockedLessonPanel } from '../presentation/learn/LockedLessonPanel';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
-import { LessonDocumentView } from '../presentation/learn/LessonDocumentView';
+import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
 import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
 import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';

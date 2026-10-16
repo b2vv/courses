@@ -9,7 +9,7 @@ import {
   type LessonRichText,
   type LessonSection,
   type LessonSpan,
-} from '../../domain/document/document';
+} from '../domain/document';
 
 type LessonDocumentViewProps = {
   readonly document: LessonDocument;

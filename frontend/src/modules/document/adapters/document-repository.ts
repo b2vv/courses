@@ -1,10 +1,10 @@
-import type { DocumentErrorCode, DocumentResult } from '../../domain/document/document';
-import type { DocumentRepository } from '../../ports/DocumentRepository';
-import { getLearnLessonDocument } from './generated/courses';
+import type { DocumentErrorCode, DocumentResult } from '../domain/document';
+import type { DocumentRepository } from '../ports/DocumentRepository';
+import { getLearnLessonDocument } from '../../../adapters/api/generated/courses';
 import { documentErrorSchema, lessonDocumentSchema } from './document-schema';
 import { mapDocument } from './document-mapping';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function failure(code: DocumentErrorCode): DocumentResult<never> {
   return { ok: false, error: { code } };
