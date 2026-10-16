@@ -154,9 +154,20 @@ Generic icon-tile без category; НОВЕ продуктове поняття 
   application-seam (наявний `authoring.delete` вимагає повного CourseTree; список має лише AdminCourse з
   id+updatedAt+status). Preview-ціль теж під питанням (public page лише для published vs editor-preview).
 
-**S4c (row-actions) — НАСТУПНЕ:** легкий delete-шлях (AdminCourse id+updatedAt+status, draft-only як сервер)
-+ confirm-dialog + edit(→editor) + preview; actions-колонка DataTable; тести. Delete лише на draft-рядках
-(сервер draft-only — показувати на published = фейк-афорданс). **S5:** design-pass proto↔prod + ПОВНИЙ make check (e2e) + PR.
+**S4c (row-actions) ЗДАНО — коміт 7528424.** Actions-колонка DataTable, кожна дія лише там, де працює:
+- Edit (кожен рядок)→editor; Preview (лише published)→публічна `/courses/{slug}` (у draft її нема);
+  Delete (лише draft — сервер draft-only, показувати на published = фейк-афорданс).
+- Delete без повного дерева: нова application-функція `deleteListed(AdminCourse)` видаляє за id+updatedAt
+  (draft-only); мутація `admin.deleteListed` інвалідовує список; confirm-dialog; на успіх фокус → live-region
+  (патерн users-ростера); помилки мапляться в іменовані повідомлення.
+- Route дротує onDelete+onAuthenticationRequired; i18n uk/en; CSS — edit/preview-лінки + delete-кнопка як
+  однакові компактні icon-контроли.
+- Гейт frontend: format-check/lint(210)/typecheck/test(771). Бек/e2e не чіпав (delete юзає наявний ендпойнт).
+
+**S5 (фінал) — НАСТУПНЕ:** design-pass proto↔prod у браузері (desktop+mobile side-by-side, @200% zoom, axe,
+клавіатура, стани) — закрити візуальні розбіжності; ПОВНИЙ `make check` (format-check/lint/typecheck/test/
+integration/build/**e2e**); PR, owner merge. Браузер: MCP_DOCKER(host.docker.internal)+eval (claude-in-chrome
+viewport застрягає); proto-бандл у scratchpad. Можливі e2e-доповнення на list-delete/sort/search.
 
 ## Архів: S2 ЗДАНО (коміт 459c469), S3 (спільні примітиви)
 **S2 done (frontend data, no view wiring — S4):** domain `AdminCourse`+lessonCount/studentCount/price,
