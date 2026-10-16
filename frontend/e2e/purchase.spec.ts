@@ -225,6 +225,8 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
   try {
     const editor = await grantor.newPage();
     await editor.goto(`/admin/courses/${courseId}`);
+    // The grant tool lives on the Access tab of the course editor (view-3 layout).
+    await editor.getByRole('radio', { name: /Access|Доступ/ }).click();
     const grant = editor.getByRole('region', { name: 'Видати доступ до курсу' });
     await grant
       .getByRole('combobox', { name: 'Користувач' })
