@@ -172,10 +172,79 @@ test.describe('with a stored admin session', () => {
       deleted = removed.status() === 204;
       expect(removed.status()).toBe(204);
       await expect(page).toHaveURL((url) => url.pathname === '/admin');
-      await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
       await expect(page.getByRole('row').filter({ hasText: draft.title })).toHaveCount(0);
     } finally {
       if (course !== undefined && !deleted) await deleteAdminDraft(page.context(), baseURL, course);
+    }
+  });
+
+  test('S5 list view searches, sorts, deletes a draft row and clears a filtered-empty state', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    // A hyphen-free token so the simple full-text search matches it as one lexeme.
+    const token = randomUUID().replace(/-/g, '').slice(0, 10);
+    const draft: Draft = {
+      slug: `e2e-admin-list-${token}`,
+      title: `S5 список ${token}`,
+      summary: 'Перевірка пошуку, сортування й видалення рядка у списку адміна.',
+      description: 'Тимчасова чернетка браузерної подорожі списку курсів.',
+    };
+    const adminContext = await openAdminContext(browser, baseURL);
+    let course: CreatedCourse | undefined;
+    let deleted = false;
+    try {
+      course = await createAdminDraft(adminContext, baseURL, draft);
+
+      await page.goto('/admin');
+      await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
+
+      // Submit search finds exactly the created draft and narrows the count.
+      await page.getByRole('textbox', { name: 'Пошук курсів' }).fill(token);
+      await page.getByRole('button', { name: 'Знайти', exact: true }).click();
+      await expect(page).toHaveURL((url) => url.searchParams.get('search') === token);
+      const row = page.getByRole('row').filter({ hasText: draft.title });
+      await expect(row).toHaveCount(1);
+
+      // A sortable header carries its key into the URL while keeping the search.
+      await page.getByRole('button', { name: /Студенти/ }).click();
+      await expect(page).toHaveURL(
+        (url) =>
+          url.searchParams.get('sort') === 'students' && url.searchParams.get('search') === token,
+      );
+
+      // Row-action delete: confirm, then the row is gone and a status is announced.
+      await row.getByRole('button', { name: `Видалити чернетку «${draft.title}»` }).click();
+      const dialog = page.getByRole('dialog', { name: 'Видалити чернетку' });
+      await expect(dialog).toBeVisible();
+      const deletion = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === `/api/v1/admin/courses/${course?.id ?? ''}` &&
+          response.request().method() === 'DELETE',
+      );
+      await dialog
+        .getByRole('button', { name: 'Підтвердити видалення курсу', exact: true })
+        .click();
+      const removed = await deletion;
+      deleted = removed.status() === 204;
+      expect(removed.status()).toBe(204);
+      await expect(page.getByRole('status').filter({ hasText: 'Курс видалено.' })).toBeVisible();
+      await expect(page.getByRole('row').filter({ hasText: draft.title })).toHaveCount(0);
+
+      // The now-empty filtered list reads as "no matches" and clears back to the full list.
+      await expect(page.getByRole('heading', { name: 'Курсів не знайдено' })).toBeVisible();
+      await page.getByRole('button', { name: 'Очистити фільтри', exact: true }).click();
+      await expect(page).toHaveURL((url) => url.searchParams.get('search') === null);
+      await expect(page.getByRole('table', { name: 'Курси' })).toBeVisible();
+    } finally {
+      try {
+        if (course !== undefined && !deleted) await deleteAdminDraft(adminContext, baseURL, course);
+      } finally {
+        await adminContext.close();
+      }
     }
   });
 
@@ -190,7 +259,7 @@ test.describe('with a stored admin session', () => {
     const lessonTitle = `Урок ${runNamespace}`;
 
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Створити курс', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Створити курс' });

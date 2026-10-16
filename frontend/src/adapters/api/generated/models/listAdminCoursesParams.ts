@@ -5,6 +5,7 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { ListAdminCoursesSort } from './listAdminCoursesSort.ts';
 import type { ListAdminCoursesStatus } from './listAdminCoursesStatus.ts';
 
 export type ListAdminCoursesParams = {
@@ -19,4 +20,14 @@ limit?: number;
  */
 offset?: number;
 status?: ListAdminCoursesStatus;
+/**
+ * Full-text filter over course title and summary. Rejected when empty.
+ * @minLength 1
+ * @maxLength 100
+ */
+search?: string;
+/**
+ * Ordering of the page. Each key has one natural direction: title A→Z, students and price highest first, recent (the default) newest first. Rejected when empty.
+ */
+sort?: ListAdminCoursesSort;
 };

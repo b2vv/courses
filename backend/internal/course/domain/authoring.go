@@ -96,13 +96,27 @@ type AuthoringCourse struct {
 	Status       Status
 	InstructorID string
 	UpdatedAt    time.Time
+	LessonCount  int64
+	StudentCount int64
+	Price        *Price
+}
+
+// AuthoringStatusCounts is an actor-scoped snapshot of how many courses sit in each status,
+// independent of the list's own status filter and search term, so the course-list summary strip
+// can show the full picture while the table shows the filtered rows.
+type AuthoringStatusCounts struct {
+	Total     int64
+	Draft     int64
+	Published int64
+	Archived  int64
 }
 
 type AuthoringPage struct {
-	Items  []AuthoringCourse
-	Limit  int
-	Offset int
-	Total  int64
+	Items        []AuthoringCourse
+	Limit        int
+	Offset       int
+	Total        int64
+	StatusCounts AuthoringStatusCounts
 }
 
 func (role ActorRole) Valid() bool {

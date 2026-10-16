@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -8,8 +9,10 @@ import (
 type Sort string
 
 const (
-	SortRecent Sort = "recent"
-	SortTitle  Sort = "title"
+	SortRecent   Sort = "recent"
+	SortTitle    Sort = "title"
+	SortStudents Sort = "students"
+	SortPrice    Sort = "price"
 )
 
 type Query struct {
@@ -25,9 +28,21 @@ type Page struct {
 	Total  int64
 }
 
+// NewQuery validates a public catalog list query. The catalog offers two sorts.
 func NewQuery(limit, offset int, search, sort string) (Query, error) {
+	return newQuery(limit, offset, search, sort, SortRecent, SortTitle)
+}
+
+// NewAuthoringQuery validates an admin list query. Admin offers two sorts the public
+// catalog does not — by active-student count and by price — so they live here, not in
+// NewQuery, and a catalog request for them stays an invalid_query.
+func NewAuthoringQuery(limit, offset int, search, sort string) (Query, error) {
+	return newQuery(limit, offset, search, sort, SortRecent, SortTitle, SortStudents, SortPrice)
+}
+
+func newQuery(limit, offset int, search, sort string, allowed ...Sort) (Query, error) {
 	search = strings.TrimSpace(search)
-	if limit < 1 || limit > 50 || offset < 0 || offset > 10000 || !utf8.ValidString(search) || strings.ContainsRune(search, 0) || utf8.RuneCountInString(search) > 100 || sort != string(SortRecent) && sort != string(SortTitle) {
+	if limit < 1 || limit > 50 || offset < 0 || offset > 10000 || !utf8.ValidString(search) || strings.ContainsRune(search, 0) || utf8.RuneCountInString(search) > 100 || !slices.Contains(allowed, Sort(sort)) {
 		return Query{}, ErrInvalidQuery
 	}
 	return Query{Limit: limit, Offset: offset, Search: search, Sort: Sort(sort)}, nil

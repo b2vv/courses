@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,28 @@ func TestAuthoringListBoundsTheCall(t *testing.T) {
 	}
 }
 
+func TestAuthoringListForwardsSearchAndReturnsCounts(t *testing.T) {
+	t.Parallel()
+
+	repository := &authoringRepository{list: func(_ context.Context, _ domain.Actor, query domain.Query, _ domain.Status) (domain.AuthoringPage, error) {
+		if query.Search != "postgres" {
+			t.Fatalf("search not forwarded: %q", query.Search)
+		}
+		return domain.AuthoringPage{
+			Items: []domain.AuthoringCourse{}, Limit: query.Limit, Offset: query.Offset, Total: 0,
+			StatusCounts: domain.AuthoringStatusCounts{Total: 7, Draft: 3, Published: 3, Archived: 1},
+		}, nil
+	}}
+
+	page, err := newAuthoring(repository).List(context.Background(), adminActor(), application.AuthoringListInput{Limit: 20, Search: "  postgres  "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.StatusCounts != (domain.AuthoringStatusCounts{Total: 7, Draft: 3, Published: 3, Archived: 1}) {
+		t.Fatalf("counts not propagated: %+v", page.StatusCounts)
+	}
+}
+
 func TestAuthoringRejectsRoleAndMalformedInputBeforeRepository(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +123,10 @@ func TestAuthoringRejectsRoleAndMalformedInputBeforeRepository(t *testing.T) {
 		}, want: domain.ErrForbidden},
 		{name: "invalid list status", act: func(authoring *application.Authoring) error {
 			_, err := authoring.List(context.Background(), adminActor(), application.AuthoringListInput{Limit: 20, Status: "unknown"})
+			return err
+		}, want: domain.ErrInvalidRequest},
+		{name: "over-long list search", act: func(authoring *application.Authoring) error {
+			_, err := authoring.List(context.Background(), adminActor(), application.AuthoringListInput{Limit: 20, Search: strings.Repeat("x", 101)})
 			return err
 		}, want: domain.ErrInvalidRequest},
 		{name: "malformed load id", act: func(authoring *application.Authoring) error {

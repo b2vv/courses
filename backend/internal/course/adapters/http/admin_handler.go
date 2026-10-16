@@ -21,17 +21,28 @@ const (
 )
 
 type adminCourseDTO struct {
-	ID           string `json:"id"`
-	Slug         string `json:"slug"`
-	Title        string `json:"title"`
-	Status       string `json:"status"`
-	InstructorID string `json:"instructorId"`
-	UpdatedAt    string `json:"updatedAt"`
+	ID           string    `json:"id"`
+	Slug         string    `json:"slug"`
+	Title        string    `json:"title"`
+	Status       string    `json:"status"`
+	InstructorID string    `json:"instructorId"`
+	UpdatedAt    string    `json:"updatedAt"`
+	LessonCount  int64     `json:"lessonCount"`
+	StudentCount int64     `json:"studentCount"`
+	Price        *priceDTO `json:"price"`
+}
+
+type adminCourseStatusCountsDTO struct {
+	Total     int64 `json:"total"`
+	Draft     int64 `json:"draft"`
+	Published int64 `json:"published"`
+	Archived  int64 `json:"archived"`
 }
 
 type adminCoursePageDTO struct {
-	Items      []adminCourseDTO `json:"items"`
-	Pagination paginationDTO    `json:"pagination"`
+	Items        []adminCourseDTO           `json:"items"`
+	Pagination   paginationDTO              `json:"pagination"`
+	StatusCounts adminCourseStatusCountsDTO `json:"statusCounts"`
 }
 
 type adminLessonDTO struct {
@@ -152,11 +163,18 @@ func (h *Handler) listAdminCourses(w http.ResponseWriter, r *http.Request) {
 		items = append(items, adminCourseDTO{
 			ID: course.ID, Slug: course.Slug, Title: course.Title, Status: string(course.Status),
 			InstructorID: course.InstructorID, UpdatedAt: formatAdminTime(course.UpdatedAt),
+			LessonCount: course.LessonCount, StudentCount: course.StudentCount, Price: mapPrice(course.Price),
 		})
 	}
 	httpserver.WriteJSON(w, http.StatusOK, adminCoursePageDTO{
 		Items:      items,
 		Pagination: paginationDTO{Limit: page.Limit, Offset: page.Offset, Total: page.Total},
+		StatusCounts: adminCourseStatusCountsDTO{
+			Total:     page.StatusCounts.Total,
+			Draft:     page.StatusCounts.Draft,
+			Published: page.StatusCounts.Published,
+			Archived:  page.StatusCounts.Archived,
+		},
 	})
 }
 
@@ -299,7 +317,7 @@ func parseAdminCourseQuery(raw string) (application.AuthoringListInput, error) {
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
 		switch key {
-		case "limit", "offset", "status":
+		case "limit", "offset", "status", "search", "sort":
 		default:
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
@@ -322,6 +340,22 @@ func parseAdminCourseQuery(raw string) (application.AuthoringListInput, error) {
 		if err := domain.ValidateStatusFilter(input.Status); err != nil || input.Status == "" {
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
+	}
+	if value, exists := values["search"]; exists {
+		// The term's length, encoding and null-byte rules are enforced by domain.NewQuery in the
+		// application; here we only reject an empty key, matching the strictness of status.
+		if value[0] == "" {
+			return application.AuthoringListInput{}, domain.ErrInvalidRequest
+		}
+		input.Search = value[0]
+	}
+	if value, exists := values["sort"]; exists {
+		// The allowed set is enforced by domain.NewAuthoringQuery; here we only reject an
+		// empty key so `?sort=` is a 400 rather than a silent default, matching the catalog.
+		if value[0] == "" {
+			return application.AuthoringListInput{}, domain.ErrInvalidRequest
+		}
+		input.Sort = domain.Sort(value[0])
 	}
 	return input, nil
 }

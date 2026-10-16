@@ -23,6 +23,8 @@ type AuthoringListInput struct {
 	Limit  int
 	Offset int
 	Status domain.Status
+	Search string
+	Sort   domain.Sort
 }
 
 func NewAuthoring(repository ports.AuthoringRepository, now AuthoringClock, grandfatherer ...ports.Grandfatherer) *Authoring {
@@ -37,7 +39,12 @@ func (authoring *Authoring) List(ctx context.Context, actor domain.Actor, input 
 	if err := actor.CanCreate(); err != nil {
 		return domain.AuthoringPage{}, err
 	}
-	query, err := domain.NewQuery(input.Limit, input.Offset, "", string(domain.SortRecent))
+	// An unset sort means the default order; a caller never has to name it.
+	sort := input.Sort
+	if sort == "" {
+		sort = domain.SortRecent
+	}
+	query, err := domain.NewAuthoringQuery(input.Limit, input.Offset, input.Search, string(sort))
 	if err != nil {
 		return domain.AuthoringPage{}, domain.ErrInvalidRequest
 	}

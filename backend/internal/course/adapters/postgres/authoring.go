@@ -80,21 +80,32 @@ func (r *Repository) List(ctx context.Context, actor domain.Actor, query domain.
 	defer rollback(tx)
 
 	queries := generated.New(tx)
+	isAdmin := actor.Role == domain.ActorAdmin
 	params := generated.ListAuthoringCoursesParams{
-		IsAdmin:    actor.Role == domain.ActorAdmin,
-		ActorID:    actor.UserID,
-		Status:     string(status),
-		PageLimit:  int32(query.Limit),
-		PageOffset: int32(query.Offset),
+		IsAdmin:       isAdmin,
+		ActorID:       actor.UserID,
+		Status:        string(status),
+		SearchPattern: query.Search,
+		SortBy:        string(query.Sort),
+		PageLimit:     int32(query.Limit),
+		PageOffset:    int32(query.Offset),
 	}
 	rows, err := queries.ListAuthoringCourses(ctx, params)
 	if err != nil {
 		return domain.AuthoringPage{}, persistenceError(err)
 	}
 	total, err := queries.CountAuthoringCourses(ctx, generated.CountAuthoringCoursesParams{
-		IsAdmin: actor.Role == domain.ActorAdmin,
+		IsAdmin:       isAdmin,
+		ActorID:       actor.UserID,
+		Status:        string(status),
+		SearchPattern: query.Search,
+	})
+	if err != nil {
+		return domain.AuthoringPage{}, persistenceError(err)
+	}
+	statusRows, err := queries.CountAuthoringCoursesByStatus(ctx, generated.CountAuthoringCoursesByStatusParams{
+		IsAdmin: isAdmin,
 		ActorID: actor.UserID,
-		Status:  string(status),
 	})
 	if err != nil {
 		return domain.AuthoringPage{}, persistenceError(err)
@@ -105,6 +116,10 @@ func (r *Repository) List(ctx context.Context, actor domain.Actor, query domain.
 		if !row.UpdatedAt.Valid {
 			return domain.AuthoringPage{}, domain.ErrDependencyUnavailable
 		}
+		price, err := authoringPrice(row.PriceMinor, row.Currency)
+		if err != nil {
+			return domain.AuthoringPage{}, err
+		}
 		items = append(items, domain.AuthoringCourse{
 			ID:           row.ID,
 			Slug:         row.Slug,
@@ -112,12 +127,51 @@ func (r *Repository) List(ctx context.Context, actor domain.Actor, query domain.
 			Status:       domain.Status(row.Status),
 			InstructorID: row.InstructorID,
 			UpdatedAt:    row.UpdatedAt.Time,
+			LessonCount:  row.LessonCount,
+			StudentCount: row.StudentCount,
+			Price:        price,
 		})
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.AuthoringPage{}, persistenceError(err)
 	}
-	return domain.AuthoringPage{Items: items, Limit: query.Limit, Offset: query.Offset, Total: total}, nil
+	return domain.AuthoringPage{
+		Items:        items,
+		Limit:        query.Limit,
+		Offset:       query.Offset,
+		Total:        total,
+		StatusCounts: authoringStatusCounts(statusRows),
+	}, nil
+}
+
+// authoringPrice maps the nullable price columns, enforcing the DB invariant that price_minor and
+// currency are both NULL (free) or both set; a half-set row is a corrupt dependency.
+func authoringPrice(priceMinor pgtype.Int8, currency pgtype.Text) (*domain.Price, error) {
+	if priceMinor.Valid && currency.Valid {
+		return &domain.Price{Minor: priceMinor.Int64, Currency: currency.String}, nil
+	}
+	if priceMinor.Valid != currency.Valid {
+		return nil, domain.ErrDependencyUnavailable
+	}
+	return nil, nil
+}
+
+// authoringStatusCounts folds the per-status GROUP BY rows into the fixed snapshot; unknown status
+// values are ignored for the named buckets but still add to the total.
+func authoringStatusCounts(rows []generated.CountAuthoringCoursesByStatusRow) domain.AuthoringStatusCounts {
+	var counts domain.AuthoringStatusCounts
+	for _, row := range rows {
+		counts.Total += row.Count
+		switch domain.Status(row.Status) {
+		case domain.Draft:
+			counts.Draft = row.Count
+		case domain.Published:
+			counts.Published = row.Count
+		case domain.Archived:
+			counts.Archived = row.Count
+		}
+	}
+	return counts
 }
 
 func (r *Repository) Load(ctx context.Context, id string) (domain.CourseTree, error) {

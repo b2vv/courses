@@ -2,6 +2,21 @@ import type { ReactNode } from 'react';
 import * as Aria from 'react-aria-components';
 import { Button } from './controls';
 
+function SortGlyph({ direction }: { direction: 'asc' | 'desc' }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" className="table-sort-glyph">
+      <path
+        d={direction === 'asc' ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 type ProgressBarProps = Omit<Aria.ProgressBarProps, 'children' | 'className'> & { label: string };
 
 export function ProgressBar({ label, ...props }: ProgressBarProps) {
@@ -143,6 +158,203 @@ export function Table({ label, columns, rows, emptyMessage }: TableProps) {
   );
 }
 
+/* oxlint-enable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */
+
+export type DataColumn<Row> = {
+  key: string;
+  label: string;
+  /** Right-aligned, tabular figures (students, price). */
+  numeric?: boolean;
+  /** The sticky first column that names the row (icon tile + title). */
+  identifier?: boolean;
+  /**
+   * Whether this column's header sorts the table. Defaults to true when the table is
+   * sortable; set false for a column the owner cannot sort by (so its `key` is never sent
+   * as a sort the server would reject).
+   */
+  sortable?: boolean;
+  render: (row: Row) => ReactNode;
+};
+export type DataTableSort = { key: string; dir: 'asc' | 'desc' };
+
+type DataTableProps<Row> = {
+  /** Screen-reader caption and the figure the footer counts. */
+  caption: string;
+  columns: readonly DataColumn<Row>[];
+  rows: readonly Row[];
+  rowId: (row: Row) => string;
+  /** Row actions; when omitted the actions column is not rendered. */
+  actions?: (row: Row) => ReactNode;
+  actionsLabel: string;
+  /**
+   * Sort is controlled and optional: pass both `sort` and `onSortChange` to make the
+   * headers interactive, or neither to render plain labels — never a header that looks
+   * sortable but does nothing. The table does not reorder rows; the owner (server or a
+   * client sort) does, so a single page is never silently sorted out of its global order.
+   */
+  sort?: DataTableSort;
+  onSortChange?: (sort: DataTableSort) => void;
+  mobileSortLabel?: string;
+  reverseSortLabel?: string;
+  /** Shown inside the card instead of the table when there are no rows. */
+  empty?: ReactNode;
+  /** Pagination or other controls under the table, inside the card. */
+  footer?: ReactNode;
+};
+
+function nextSort(sort: DataTableSort, key: string): DataTableSort {
+  if (sort.key !== key) return { key, dir: 'asc' };
+  return { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' };
+}
+
+/* oxlint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role -- The ≤52rem card layout sets `display:block` on table/row/cell elements, which drops their implicit ARIA table roles; the explicit roles keep screen-reader table semantics and the `getByRole` contract intact. The lint heuristics do not model this responsive-table technique. */
+/**
+ * The proto's editorial data table: an in-card table with sortable headers, a sticky
+ * identifier and actions column, numeric alignment, a ≤52rem card/stack fallback and a
+ * mobile sort control. Richer than `Table`, and scoped to `.admin-table-card` so the
+ * simpler primitive stays untouched.
+ */
+export function DataTable<Row>({
+  caption,
+  columns,
+  rows,
+  rowId,
+  actions,
+  actionsLabel,
+  sort,
+  onSortChange,
+  mobileSortLabel,
+  reverseSortLabel,
+  empty,
+  footer,
+}: DataTableProps<Row>) {
+  const sortable = sort !== undefined && onSortChange !== undefined;
+  const columnSortable = (column: DataColumn<Row>) => sortable && column.sortable !== false;
+  const ariaSort = (key: string): 'ascending' | 'descending' | 'none' =>
+    sortable && sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const sortColumns = columns.filter(columnSortable);
+
+  return (
+    <section className="ui-card admin-table-card">
+      {rows.length === 0 && empty !== undefined ? (
+        empty
+      ) : (
+        <>
+          {sortable ? (
+            <div className="table-mobile-sort">
+              <label>
+                {mobileSortLabel}
+                <select
+                  className="ui-input"
+                  aria-label={mobileSortLabel}
+                  value={sort.key}
+                  onChange={(event) => onSortChange({ key: event.target.value, dir: sort.dir })}
+                >
+                  {sortColumns.map((column) => (
+                    <option key={column.key} value={column.key}>
+                      {column.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {/* The reverse control appears only when the consumer sorts both ways; a
+                  key-only (fixed-direction) table omits it rather than show a dead toggle. */}
+              {reverseSortLabel === undefined ? null : (
+                <Button
+                  variant="secondary"
+                  className="admin-icon-button"
+                  aria-label={reverseSortLabel}
+                  onPress={() =>
+                    onSortChange({ key: sort.key, dir: sort.dir === 'asc' ? 'desc' : 'asc' })
+                  }
+                >
+                  <SortGlyph direction={sort.dir} />
+                </Button>
+              )}
+            </div>
+          ) : null}
+          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll wide tables. */}
+          <div className="ui-table-scroll" tabIndex={0}>
+            <table className="ui-table" role="table">
+              <caption className="sr-only">{caption}</caption>
+              <thead role="rowgroup">
+                <tr role="row">
+                  {columns.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      role="columnheader"
+                      className={column.numeric ? 'is-numeric' : undefined}
+                      aria-sort={columnSortable(column) ? ariaSort(column.key) : undefined}
+                    >
+                      {sortable && onSortChange !== undefined && column.sortable !== false ? (
+                        <Button
+                          variant="secondary"
+                          className="table-sort"
+                          onPress={() => onSortChange(nextSort(sort, column.key))}
+                        >
+                          {column.label}
+                          <span className={sort.key === column.key ? 'sort-current' : 'sort-idle'}>
+                            <SortGlyph
+                              direction={
+                                sort.key === column.key && sort.dir === 'desc' ? 'desc' : 'asc'
+                              }
+                            />
+                          </span>
+                        </Button>
+                      ) : (
+                        column.label
+                      )}
+                    </th>
+                  ))}
+                  {actions === undefined ? null : (
+                    <th scope="col" role="columnheader" className="admin-table-actions">
+                      {actionsLabel}
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody role="rowgroup">
+                {rows.map((row) => (
+                  <tr key={rowId(row)} role="row">
+                    {columns.map((column) =>
+                      column.identifier ? (
+                        <th
+                          key={column.key}
+                          scope="row"
+                          role="rowheader"
+                          data-label={column.label}
+                          className="admin-table-identifier"
+                        >
+                          {column.render(row)}
+                        </th>
+                      ) : (
+                        <td
+                          key={column.key}
+                          role="cell"
+                          data-label={column.label}
+                          className={column.numeric ? 'is-numeric' : undefined}
+                        >
+                          {column.render(row)}
+                        </td>
+                      ),
+                    )}
+                    {actions === undefined ? null : (
+                      <td role="cell" className="admin-table-actions" data-label={actionsLabel}>
+                        <div className="table-action-group">{actions(row)}</div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {footer === undefined ? null : footer}
+        </>
+      )}
+    </section>
+  );
+}
 /* oxlint-enable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */
 
 type PaginationProps = {
