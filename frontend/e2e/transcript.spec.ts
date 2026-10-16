@@ -283,6 +283,8 @@ test.describe('with a real two-second video', () => {
     // Uploaded through the editor, the way an author does it — the upload contract belongs to
     // Phase 5 and this journey must not invent a second way into it.
     await page.goto(`/admin/courses/${course.id}`);
+    // Per-lesson video upload lives on the Lessons tab (view-3 layout).
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     const minted = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/admin/lessons/${videoLessonID}/video` &&
