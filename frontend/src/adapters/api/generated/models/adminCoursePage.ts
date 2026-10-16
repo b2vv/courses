@@ -6,10 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminCourse } from './adminCourse.ts';
+import type { AdminCourseStatusCounts } from './adminCourseStatusCounts.ts';
 import type { Pagination } from './pagination.ts';
 
 export interface AdminCoursePage {
   /** @maxItems 50 */
   items: AdminCourse[];
   pagination: Pagination;
+  statusCounts: AdminCourseStatusCounts;
 }

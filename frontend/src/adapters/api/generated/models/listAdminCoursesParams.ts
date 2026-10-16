@@ -19,4 +19,10 @@ limit?: number;
  */
 offset?: number;
 status?: ListAdminCoursesStatus;
+/**
+ * Full-text filter over course title and summary. Rejected when empty.
+ * @minLength 1
+ * @maxLength 100
+ */
+search?: string;
 };

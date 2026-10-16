@@ -16,19 +16,64 @@ SELECT count(*)
 FROM courses
 WHERE ($1::boolean OR instructor_id = $2::text::uuid)
   AND ($3::text = '' OR status = $3::text)
+  AND ($4::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', $4::text))
 `
 
 type CountAuthoringCoursesParams struct {
-	IsAdmin bool
-	ActorID string
-	Status  string
+	IsAdmin       bool
+	ActorID       string
+	Status        string
+	SearchPattern string
 }
 
 func (q *Queries) CountAuthoringCourses(ctx context.Context, arg CountAuthoringCoursesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAuthoringCourses, arg.IsAdmin, arg.ActorID, arg.Status)
+	row := q.db.QueryRow(ctx, countAuthoringCourses,
+		arg.IsAdmin,
+		arg.ActorID,
+		arg.Status,
+		arg.SearchPattern,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countAuthoringCoursesByStatus = `-- name: CountAuthoringCoursesByStatus :many
+SELECT status, count(*)::bigint AS count
+FROM courses
+WHERE ($1::boolean OR instructor_id = $2::text::uuid)
+GROUP BY status
+`
+
+type CountAuthoringCoursesByStatusParams struct {
+	IsAdmin bool
+	ActorID string
+}
+
+type CountAuthoringCoursesByStatusRow struct {
+	Status string
+	Count  int64
+}
+
+func (q *Queries) CountAuthoringCoursesByStatus(ctx context.Context, arg CountAuthoringCoursesByStatusParams) ([]CountAuthoringCoursesByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countAuthoringCoursesByStatus, arg.IsAdmin, arg.ActorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountAuthoringCoursesByStatusRow{}
+	for rows.Next() {
+		var i CountAuthoringCoursesByStatusRow
+		if err := rows.Scan(&i.Status, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countPublishedCourses = `-- name: CountPublishedCourses :one
@@ -247,25 +292,43 @@ func (q *Queries) GetPublishedCourse(ctx context.Context, slug string) ([]GetPub
 
 const listAuthoringCourses = `-- name: ListAuthoringCourses :many
 SELECT
-  id::text AS id,
-  slug,
-  title,
-  status,
-  instructor_id::text AS instructor_id,
-  updated_at
+  courses.id::text AS id,
+  courses.slug,
+  courses.title,
+  courses.status,
+  courses.instructor_id::text AS instructor_id,
+  courses.updated_at,
+  courses.price_minor,
+  courses.currency,
+  COALESCE(lessons.lesson_count, 0)::bigint AS lesson_count,
+  COALESCE(enrollments.student_count, 0)::bigint AS student_count
 FROM courses
-WHERE ($1::boolean OR instructor_id = $2::text::uuid)
-  AND ($3::text = '' OR status = $3::text)
-ORDER BY updated_at DESC, id ASC
-LIMIT $5::integer OFFSET $4::integer
+LEFT JOIN LATERAL (
+  SELECT count(*) AS lesson_count
+  FROM course_lessons
+  JOIN course_modules ON course_modules.id = course_lessons.module_id
+  WHERE course_modules.course_id = courses.id
+) AS lessons ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS student_count
+  FROM course_grants
+  WHERE course_grants.course_id = courses.id AND course_grants.state = 'active'
+) AS enrollments ON true
+WHERE ($1::boolean OR courses.instructor_id = $2::text::uuid)
+  AND ($3::text = '' OR courses.status = $3::text)
+  AND ($4::text = ''
+       OR courses.search_vector @@ websearch_to_tsquery('simple', $4::text))
+ORDER BY courses.updated_at DESC, courses.id ASC
+LIMIT $6::integer OFFSET $5::integer
 `
 
 type ListAuthoringCoursesParams struct {
-	IsAdmin    bool
-	ActorID    string
-	Status     string
-	PageOffset int32
-	PageLimit  int32
+	IsAdmin       bool
+	ActorID       string
+	Status        string
+	SearchPattern string
+	PageOffset    int32
+	PageLimit     int32
 }
 
 type ListAuthoringCoursesRow struct {
@@ -275,6 +338,10 @@ type ListAuthoringCoursesRow struct {
 	Status       string
 	InstructorID string
 	UpdatedAt    pgtype.Timestamptz
+	PriceMinor   pgtype.Int8
+	Currency     pgtype.Text
+	LessonCount  int64
+	StudentCount int64
 }
 
 func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCoursesParams) ([]ListAuthoringCoursesRow, error) {
@@ -282,6 +349,7 @@ func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCou
 		arg.IsAdmin,
 		arg.ActorID,
 		arg.Status,
+		arg.SearchPattern,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -299,6 +367,10 @@ func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCou
 			&i.Status,
 			&i.InstructorID,
 			&i.UpdatedAt,
+			&i.PriceMinor,
+			&i.Currency,
+			&i.LessonCount,
+			&i.StudentCount,
 		); err != nil {
 			return nil, err
 		}

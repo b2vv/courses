@@ -12,6 +12,7 @@ export * from './adminCourseDeleteRequest.ts';
 export * from './adminCoursePage.ts';
 export * from './adminCourseSaveRequest.ts';
 export * from './adminCourseStatus.ts';
+export * from './adminCourseStatusCounts.ts';
 export * from './adminCourseStatusRequest.ts';
 export * from './adminCourseStatusRequestStatus.ts';
 export * from './adminCourseTree.ts';

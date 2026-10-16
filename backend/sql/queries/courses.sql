@@ -70,23 +70,48 @@ ORDER BY modules.position, modules.id, lessons.position, lessons.id;
 
 -- name: ListAuthoringCourses :many
 SELECT
-  id::text AS id,
-  slug,
-  title,
-  status,
-  instructor_id::text AS instructor_id,
-  updated_at
+  courses.id::text AS id,
+  courses.slug,
+  courses.title,
+  courses.status,
+  courses.instructor_id::text AS instructor_id,
+  courses.updated_at,
+  courses.price_minor,
+  courses.currency,
+  COALESCE(lessons.lesson_count, 0)::bigint AS lesson_count,
+  COALESCE(enrollments.student_count, 0)::bigint AS student_count
 FROM courses
-WHERE (sqlc.arg(is_admin)::boolean OR instructor_id = sqlc.arg(actor_id)::text::uuid)
-  AND (sqlc.arg(status)::text = '' OR status = sqlc.arg(status)::text)
-ORDER BY updated_at DESC, id ASC
+LEFT JOIN LATERAL (
+  SELECT count(*) AS lesson_count
+  FROM course_lessons
+  JOIN course_modules ON course_modules.id = course_lessons.module_id
+  WHERE course_modules.course_id = courses.id
+) AS lessons ON true
+LEFT JOIN LATERAL (
+  SELECT count(*) AS student_count
+  FROM course_grants
+  WHERE course_grants.course_id = courses.id AND course_grants.state = 'active'
+) AS enrollments ON true
+WHERE (sqlc.arg(is_admin)::boolean OR courses.instructor_id = sqlc.arg(actor_id)::text::uuid)
+  AND (sqlc.arg(status)::text = '' OR courses.status = sqlc.arg(status)::text)
+  AND (sqlc.arg(search_pattern)::text = ''
+       OR courses.search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text))
+ORDER BY courses.updated_at DESC, courses.id ASC
 LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
 
 -- name: CountAuthoringCourses :one
 SELECT count(*)
 FROM courses
 WHERE (sqlc.arg(is_admin)::boolean OR instructor_id = sqlc.arg(actor_id)::text::uuid)
-  AND (sqlc.arg(status)::text = '' OR status = sqlc.arg(status)::text);
+  AND (sqlc.arg(status)::text = '' OR status = sqlc.arg(status)::text)
+  AND (sqlc.arg(search_pattern)::text = ''
+       OR search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text));
+
+-- name: CountAuthoringCoursesByStatus :many
+SELECT status, count(*)::bigint AS count
+FROM courses
+WHERE (sqlc.arg(is_admin)::boolean OR instructor_id = sqlc.arg(actor_id)::text::uuid)
+GROUP BY status;
 
 -- name: GetAuthoringCourse :one
 SELECT

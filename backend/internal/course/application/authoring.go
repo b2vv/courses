@@ -23,6 +23,7 @@ type AuthoringListInput struct {
 	Limit  int
 	Offset int
 	Status domain.Status
+	Search string
 }
 
 func NewAuthoring(repository ports.AuthoringRepository, now AuthoringClock, grandfatherer ...ports.Grandfatherer) *Authoring {
@@ -37,7 +38,7 @@ func (authoring *Authoring) List(ctx context.Context, actor domain.Actor, input 
 	if err := actor.CanCreate(); err != nil {
 		return domain.AuthoringPage{}, err
 	}
-	query, err := domain.NewQuery(input.Limit, input.Offset, "", string(domain.SortRecent))
+	query, err := domain.NewQuery(input.Limit, input.Offset, input.Search, string(domain.SortRecent))
 	if err != nil {
 		return domain.AuthoringPage{}, domain.ErrInvalidRequest
 	}
