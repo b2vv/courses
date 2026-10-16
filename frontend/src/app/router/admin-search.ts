@@ -14,7 +14,7 @@ const statusSchema = z.enum(['draft', 'published', 'archived']);
 const userStatusSchema = z.enum(['active', 'blocked', 'deleted']);
 const userRoleSchema = z.enum(['student', 'instructor', 'admin']);
 const userSortSchema = z.enum(['email', 'name', 'recent']);
-const userQuerySchema = z
+const searchTermSchema = z
   .string()
   .refine((value) => [...value].length <= 100 && !value.includes('\u0000'))
   .transform((value) => value.trim());
@@ -31,11 +31,13 @@ const pageSchema = z
 /** Raw known URL fields. They remain unknown until each field is parsed independently. */
 export type AdminSearch = {
   readonly status?: unknown;
+  readonly search?: unknown;
   readonly page?: unknown;
 };
 
 export type AdminListState = {
   readonly status?: CourseStatus;
+  readonly search: string;
   readonly page: number;
 };
 
@@ -67,6 +69,7 @@ export function validateAdminSearch(search: unknown): AdminSearch {
   if (typeof search !== 'object' || search === null) return {};
   return {
     ...(Object.hasOwn(search, 'status') ? { status: Reflect.get(search, 'status') } : {}),
+    ...(Object.hasOwn(search, 'search') ? { search: Reflect.get(search, 'search') } : {}),
     ...(Object.hasOwn(search, 'page') ? { page: Reflect.get(search, 'page') } : {}),
   };
 }
@@ -91,9 +94,11 @@ export function validateAdminUserSearch(search: unknown): AdminUserSearch {
 /** Applies defaults once and drops each unusable field without affecting the others. */
 export function adminListState(search: AdminSearch): AdminListState {
   const status = statusSchema.safeParse(search.status);
+  const term = searchTermSchema.safeParse(search.search ?? '');
   const page = pageSchema.safeParse(search.page);
   return {
     ...(status.success ? { status: status.data } : {}),
+    search: term.success ? term.data : '',
     page: page.success ? page.data : 1,
   };
 }
@@ -102,6 +107,7 @@ export function adminCourseQuery(state: AdminListState): AdminCourseQuery {
   return {
     limit: pageSize,
     offset: (state.page - 1) * pageSize,
+    search: state.search,
     ...(state.status === undefined ? {} : { status: state.status }),
   };
 }
@@ -110,7 +116,7 @@ export function adminUserListState(search: AdminUserSearch): AdminUserListState 
   const status = userStatusSchema.safeParse(search.status);
   const role = userRoleSchema.safeParse(search.role);
   const sort = userSortSchema.safeParse(search.sort);
-  const q = userQuerySchema.safeParse(search.q ?? '');
+  const q = searchTermSchema.safeParse(search.q ?? '');
   const page = pageSchema.safeParse(search.page);
   return {
     ...(status.success ? { status: status.data } : {}),

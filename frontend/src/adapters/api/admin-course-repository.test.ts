@@ -142,30 +142,120 @@ describe('admin API repository', () => {
     if (!result.ok) expect(result.error.code).toBe(failure.expected);
   });
 
+  const listItem = {
+    id: tree.id,
+    slug: tree.slug,
+    title: tree.title,
+    status: tree.status,
+    instructorId: tree.instructorId,
+    updatedAt: tree.updatedAt,
+    lessonCount: 3,
+    studentCount: 2,
+    price: { minor: 49900, currency: 'UAH' },
+  };
+
   test('maps a generated list response explicitly into branded domain courses', async () => {
     server.use(
       http.get(`${apiOrigin()}/api/v1/admin/courses`, ({ request }) => {
         const url = new URL(request.url);
         expect(url.searchParams.get('limit')).toBe('20');
         expect(url.searchParams.get('offset')).toBe('0');
+        // An empty search term is a no-op filter, never sent on the wire.
+        expect(url.searchParams.has('search')).toBe(false);
         return HttpResponse.json({
-          items: [
-            {
-              id: tree.id,
-              slug: tree.slug,
-              title: tree.title,
-              status: tree.status,
-              instructorId: tree.instructorId,
-              updatedAt: tree.updatedAt,
-            },
-          ],
+          items: [listItem],
           pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts: { total: 1, draft: 1, published: 0, archived: 0 },
         });
       }),
     );
     const result = await createAuthoring(createApiAdminCourseRepository()).list({});
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.items[0]?.id).toBe(tree.id);
+    if (result.ok) {
+      expect(result.value.items[0]?.id).toBe(tree.id);
+      expect(result.value.items[0]?.lessonCount).toBe(3);
+      expect(result.value.items[0]?.studentCount).toBe(2);
+      expect(result.value.items[0]?.price).toEqual({ minor: 49900, currency: 'UAH' });
+      expect(result.value.statusCounts).toEqual({
+        total: 1,
+        draft: 1,
+        published: 0,
+        archived: 0,
+      });
+    }
+  });
+
+  test('sends a typed search term and keeps the snapshot while a status filter narrows the page', async () => {
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/admin/courses`, ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get('search')).toBe('Go');
+        expect(url.searchParams.get('status')).toBe('draft');
+        return HttpResponse.json({
+          items: [listItem],
+          // The page total reflects the draft filter; the snapshot still counts every status.
+          pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts: { total: 5, draft: 1, published: 3, archived: 1 },
+        });
+      }),
+    );
+    const result = await createAuthoring(createApiAdminCourseRepository()).list({
+      search: 'Go',
+      status: 'draft',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.statusCounts.total).toBe(5);
+  });
+
+  test('accepts a search-narrowed page whose global snapshot still counts every course', async () => {
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/admin/courses`, ({ request }) => {
+        expect(new URL(request.url).searchParams.get('search')).toBe('postgresql');
+        return HttpResponse.json({
+          // Search isolates one course; the snapshot deliberately keeps the full picture.
+          items: [listItem],
+          pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts: { total: 3, draft: 1, published: 1, archived: 1 },
+        });
+      }),
+    );
+    const result = await createAuthoring(createApiAdminCourseRepository()).list({
+      search: 'postgresql',
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.statusCounts.total).toBe(3);
+  });
+
+  test('refuses a snapshot whose parts do not sum to its total', async () => {
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/admin/courses`, () =>
+        HttpResponse.json({
+          items: [listItem],
+          pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts: { total: 9, draft: 1, published: 0, archived: 0 },
+        }),
+      ),
+    );
+    expect(await createAuthoring(createApiAdminCourseRepository()).list({})).toEqual({
+      ok: false,
+      error: { code: 'invalid_response' },
+    });
+  });
+
+  test('refuses an unfiltered page whose total disagrees with the snapshot total', async () => {
+    server.use(
+      http.get(`${apiOrigin()}/api/v1/admin/courses`, () =>
+        HttpResponse.json({
+          items: [listItem],
+          pagination: { limit: 20, offset: 0, total: 1 },
+          statusCounts: { total: 4, draft: 2, published: 1, archived: 1 },
+        }),
+      ),
+    );
+    expect(await createAuthoring(createApiAdminCourseRepository()).list({})).toEqual({
+      ok: false,
+      error: { code: 'invalid_response' },
+    });
   });
 
   test('refuses a malformed successful tree instead of leaking wire data', async () => {

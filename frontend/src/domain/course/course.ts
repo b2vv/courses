@@ -113,15 +113,27 @@ export type AdminCourse = {
   readonly status: CourseStatus;
   readonly instructorId: string;
   readonly updatedAt: string;
+  readonly lessonCount: number;
+  readonly studentCount: number;
+  readonly price: CoursePrice | null;
 };
 export type AdminCourseQuery = {
   readonly limit: number;
   readonly offset: number;
   readonly status?: CourseStatus;
+  /** Full-text filter over title and summary; '' means no filter (the param is then omitted). */
+  readonly search: string;
+};
+export type AdminCourseStatusCounts = {
+  readonly total: number;
+  readonly draft: number;
+  readonly published: number;
+  readonly archived: number;
 };
 export type AdminCoursePage = {
   readonly items: readonly AdminCourse[];
   readonly pagination: { readonly limit: number; readonly offset: number; readonly total: number };
+  readonly statusCounts: AdminCourseStatusCounts;
 };
 export type InstructorOption = {
   readonly id: string;
@@ -314,6 +326,7 @@ export function makeAdminCourseQuery(
 ): AuthoringResult<AdminCourseQuery> {
   const limit = input.limit ?? 20;
   const offset = input.offset ?? 0;
+  const search = (input.search ?? '').trim();
   if (
     !Number.isInteger(limit) ||
     limit < 1 ||
@@ -321,12 +334,19 @@ export function makeAdminCourseQuery(
     !Number.isInteger(offset) ||
     offset < 0 ||
     offset > 10000 ||
+    [...search].length > 100 ||
+    search.includes('\u0000') ||
     (input.status !== undefined && !['draft', 'published', 'archived'].includes(input.status))
   )
     return { ok: false, error: { code: 'invalid_request' } };
   return {
     ok: true,
-    value: { limit, offset, ...(input.status === undefined ? {} : { status: input.status }) },
+    value: {
+      limit,
+      offset,
+      search,
+      ...(input.status === undefined ? {} : { status: input.status }),
+    },
   };
 }
 

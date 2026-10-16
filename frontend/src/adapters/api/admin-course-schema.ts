@@ -16,6 +16,8 @@ const requiredText = (maximum: number) =>
 
 export const adminTimestampSchema = z.iso.datetime({ offset: true, precision: 6 });
 
+const courseCountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
 export const adminCourseSchema = z
   .object({
     id: courseIdSchema,
@@ -28,6 +30,10 @@ export const adminCourseSchema = z
     status: statusSchema,
     instructorId: entityIdSchema,
     updatedAt: adminTimestampSchema,
+    lessonCount: courseCountSchema,
+    studentCount: courseCountSchema,
+    // Required and nullable in the contract (null = free course).
+    price: priceSchema.nullable(),
   })
   .strict();
 
@@ -39,10 +45,20 @@ const paginationSchema = z
   })
   .strict();
 
+const statusCountsSchema = z
+  .object({
+    total: courseCountSchema,
+    draft: courseCountSchema,
+    published: courseCountSchema,
+    archived: courseCountSchema,
+  })
+  .strict();
+
 export const adminCoursePageSchema = z
   .object({
     items: z.array(adminCourseSchema).max(50),
     pagination: paginationSchema,
+    statusCounts: statusCountsSchema,
   })
   .strict();
 

@@ -32,9 +32,13 @@ const firstPage: AdminCoursePage = {
       status: 'draft',
       instructorId: '20000000-0000-4000-8000-000000000002',
       updatedAt: '2026-09-05T10:15:30.000000Z',
+      lessonCount: 12,
+      studentCount: 0,
+      price: null,
     },
   ],
   pagination: { limit: 20, offset: 0, total: 21 },
+  statusCounts: { total: 21, draft: 8, published: 10, archived: 3 },
 };
 
 const server = setupServer();
@@ -47,7 +51,7 @@ describe('admin course list', () => {
     render(
       <CourseListView
         page={firstPage}
-        state={{ page: 1 }}
+        state={{ page: 1, search: '' }}
         onStatusChange={() => {}}
         onPageChange={() => {}}
       />,
@@ -73,7 +77,7 @@ describe('admin course list', () => {
     render(
       <CourseListView
         page={firstPage}
-        state={{ page: 1 }}
+        state={{ page: 1, search: '' }}
         onStatusChange={(nextStatus) => {
           status = nextStatus;
         }}
@@ -93,8 +97,12 @@ describe('admin course list', () => {
     render(
       <I18nProvider instance={createI18n('en')}>
         <CourseListView
-          page={{ items: [], pagination: { limit: 20, offset: 0, total: 0 } }}
-          state={{ page: 1 }}
+          page={{
+            items: [],
+            pagination: { limit: 20, offset: 0, total: 0 },
+            statusCounts: { total: 0, draft: 0, published: 0, archived: 0 },
+          }}
+          state={{ page: 1, search: '' }}
           onStatusChange={() => {}}
           onPageChange={() => {}}
         />
@@ -112,7 +120,7 @@ describe('admin course list', () => {
   it('R37 retries an unavailable primary list read and renders the recovered route', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const admin = createAdminQueries(createAuthoring(createApiAdminCourseRepository()));
-    const query = adminCourseQuery({ page: 1 });
+    const query = adminCourseQuery({ page: 1, search: '' });
     let reads = 0;
     server.use(
       http.get(`${apiOrigin()}/api/v1/admin/courses`, () => {

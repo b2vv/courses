@@ -80,13 +80,19 @@ function courseTree(raw: unknown, expectedId?: CourseId): AuthoringResult<Course
 
 function coursePage(raw: unknown, query: AdminCourseQuery): AuthoringResult<AdminCoursePage> {
   const parsed = adminCoursePageSchema.safeParse(raw);
+  if (!parsed.success) return invalid;
+  const { pagination, items, statusCounts } = parsed.data;
   if (
-    !parsed.success ||
-    parsed.data.pagination.limit !== query.limit ||
-    parsed.data.pagination.offset !== query.offset ||
-    parsed.data.items.length > query.limit ||
-    parsed.data.items.length > Math.max(0, parsed.data.pagination.total - query.offset) ||
-    (query.status !== undefined && parsed.data.items.some((item) => item.status !== query.status))
+    pagination.limit !== query.limit ||
+    pagination.offset !== query.offset ||
+    items.length > query.limit ||
+    items.length > Math.max(0, pagination.total - query.offset) ||
+    (query.status !== undefined && items.some((item) => item.status !== query.status)) ||
+    // The snapshot counts every course, so its parts always sum to its total. It stays global
+    // on purpose — a status or search filter narrows the page, not the snapshot — so the page
+    // total equals the snapshot total only when nothing is filtering.
+    statusCounts.total !== statusCounts.draft + statusCounts.published + statusCounts.archived ||
+    (query.status === undefined && query.search === '' && pagination.total !== statusCounts.total)
   )
     return invalid;
   return { ok: true, value: parsed.data };
@@ -152,6 +158,8 @@ export function createApiAdminCourseRepository(
         limit: query.limit,
         offset: query.offset,
         ...(query.status === undefined ? {} : { status: query.status }),
+        // The server rejects an empty search term, so it is sent only when the user typed one.
+        ...(query.search === '' ? {} : { search: query.search }),
       };
       return request<AdminCoursePage>(
         'admin.courses.list',

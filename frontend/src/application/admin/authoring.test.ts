@@ -34,6 +34,7 @@ function repository(overrides: Partial<AdminCourseRepository> = {}): AdminCourse
       value: {
         items: [],
         pagination: { limit: query.limit, offset: query.offset, total: 0 },
+        statusCounts: { total: 0, draft: 0, published: 0, archived: 0 },
       },
     }),
     load: async () => ({ ok: true, value: tree }),

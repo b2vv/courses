@@ -175,15 +175,22 @@ function createTestRouter(
   const adminRepository: AdminCourseRepository = {
     list: async (query) => {
       observedAdminQueries.push(query);
-      const filtered =
-        query.status === undefined
-          ? adminCourses
-          : adminCourses.filter((course) => course.status === query.status);
+      const filtered = adminCourses.filter(
+        (course) =>
+          (query.status === undefined || course.status === query.status) &&
+          (query.search === '' || course.title.toLowerCase().includes(query.search.toLowerCase())),
+      );
       return {
         ok: true,
         value: {
           items: filtered.slice(query.offset, query.offset + query.limit),
           pagination: { limit: query.limit, offset: query.offset, total: filtered.length },
+          statusCounts: {
+            total: adminCourses.length,
+            draft: adminCourses.filter((course) => course.status === 'draft').length,
+            published: adminCourses.filter((course) => course.status === 'published').length,
+            archived: adminCourses.filter((course) => course.status === 'archived').length,
+          },
         },
       };
     },
@@ -608,6 +615,9 @@ test('P16 renders an owner-scoped course row through the guarded memory route', 
     status: 'published',
     instructorId: instructor.id,
     updatedAt: '2026-09-05T10:15:30.000000Z',
+    lessonCount: 6,
+    studentCount: 4,
+    price: null,
   };
   const router = createTestRouter('/admin?status=published', instructor, 'uk', [course]);
 
@@ -620,7 +630,7 @@ test('P16 renders an owner-scoped course row through the guarded memory route', 
     '/admin/courses/10000000-0000-4000-8000-000000000001',
   );
   expect(within(table).getByText('Опубліковано')).toBeTruthy();
-  expect(observedAdminQueries).toEqual([{ status: 'published', limit: 20, offset: 0 }]);
+  expect(observedAdminQueries).toEqual([{ status: 'published', limit: 20, offset: 0, search: '' }]);
 });
 
 test('B02 renders the admin list empty state without weakening the shell guard', async () => {
@@ -635,7 +645,7 @@ test('B02 renders the admin list empty state without weakening the shell guard',
   expect(screen.getByRole('heading', { name: 'Курсів ще немає' })).toBeTruthy();
   expect(screen.queryByRole('table')).toBeNull();
   expect(screen.getByRole('navigation', { name: 'Сторінки курсів' })).toBeTruthy();
-  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '' }]);
 });
 
 test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
@@ -650,7 +660,7 @@ test('R34 keeps unusable admin search text in the URL and queries with independe
   expect(screen.getByRole('heading', { name: 'Адміністрування' })).toBeTruthy();
   expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
   expect(router.state.location.href).toBe(href);
-  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0 }]);
+  expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '' }]);
 });
 
 test('R21 keeps unusable user search text in the URL and loads default directory filters', async () => {

@@ -33,7 +33,13 @@ function unwrap<T>(result: AuthoringResult<T>): T {
 }
 
 export function adminCourseListQueryKey(query: AdminCourseQuery) {
-  return [...adminCourseListKey, query.status ?? 'all', query.limit, query.offset] as const;
+  return [
+    ...adminCourseListKey,
+    query.status ?? 'all',
+    query.search,
+    query.limit,
+    query.offset,
+  ] as const;
 }
 
 export function adminCourseTreeQueryKey(id: CourseId) {

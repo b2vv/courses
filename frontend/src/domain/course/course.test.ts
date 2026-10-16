@@ -143,10 +143,24 @@ describe('admin authoring rules', () => {
   test('normalizes bounded admin pagination without inventing a status', () => {
     expect(makeAdminCourseQuery({})).toEqual({
       ok: true,
-      value: { limit: 20, offset: 0 },
+      value: { limit: 20, offset: 0, search: '' },
     });
     expect(makeAdminCourseQuery({ status: 'archived', limit: 50, offset: 10000 }).ok).toBe(true);
     expect(makeAdminCourseQuery({ limit: 51 }).ok).toBe(false);
+  });
+
+  test('trims the search term, refuses an over-long or null-byte one', () => {
+    expect(makeAdminCourseQuery({ search: '  Go  ' })).toEqual({
+      ok: true,
+      value: { limit: 20, offset: 0, search: 'Go' },
+    });
+    // A term that is only whitespace collapses to no filter rather than a 400.
+    expect(makeAdminCourseQuery({ search: '   ' })).toEqual({
+      ok: true,
+      value: { limit: 20, offset: 0, search: '' },
+    });
+    expect(makeAdminCourseQuery({ search: 'a'.repeat(101) }).ok).toBe(false);
+    expect(makeAdminCourseQuery({ search: 'go\u0000' }).ok).toBe(false);
   });
 });
 
