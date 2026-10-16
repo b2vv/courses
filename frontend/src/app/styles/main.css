@@ -1655,6 +1655,17 @@ nav a {
   gap: var(--space-3);
   min-inline-size: 0;
 }
+/* Decorative only: signals a future drag-to-reorder affordance. Reorder today is the up/down
+   controls, so the handle is aria-hidden and not focusable — it never implies a control to AT. */
+.lesson-editor-future-handle {
+  display: flex;
+  flex: none;
+  color: var(--color-faint);
+}
+.lesson-editor-future-handle svg {
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+}
 .lesson-editor-section-type {
   min-inline-size: 0;
   font: 0.6875rem / 1.5 var(--font-utility);

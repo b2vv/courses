@@ -41,6 +41,9 @@ const actionIcons = {
   down: 'm6 14 6 6 6-6M12 4v16',
   trash: 'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7m4-7v7',
   chevron: 'm9 5 7 7-7 7',
+  editor: 'M4 5h16M12 5v15M8 20h8',
+  preview: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  drag: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01',
 } as const;
 
 function ActionIcon({ path }: { readonly path: string }) {
@@ -378,8 +381,16 @@ export function LessonDocumentEditor({ lessonId, documents, meta }: LessonDocume
         <SegmentedControl
           label={t('administration.document.modeLabel')}
           options={[
-            { id: 'edit', label: t('administration.document.modeEditor') },
-            { id: 'preview', label: t('administration.document.modePreview') },
+            {
+              id: 'edit',
+              label: t('administration.document.modeEditor'),
+              icon: <ActionIcon path={actionIcons.editor} />,
+            },
+            {
+              id: 'preview',
+              label: t('administration.document.modePreview'),
+              icon: <ActionIcon path={actionIcons.preview} />,
+            },
           ]}
           selectedKeys={[mode]}
           onSelectionChange={(keys) => {
@@ -444,6 +455,9 @@ export function LessonDocumentEditor({ lessonId, documents, meta }: LessonDocume
               >
                 <div className="lesson-editor-section-bar">
                   <div className="section-identity">
+                    <span className="lesson-editor-future-handle" aria-hidden="true">
+                      <ActionIcon path={actionIcons.drag} />
+                    </span>
                     <SectionIcon type={section.type} />
                     <span className="lesson-editor-section-type">
                       {t(`administration.document.section.${section.type}`)}

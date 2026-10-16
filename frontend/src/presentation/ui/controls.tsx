@@ -121,7 +121,7 @@ export function RadioGroup({
 
 export type ChoiceOption = { id: string; label: string };
 
-export type SegmentedOption = ChoiceOption & { isDisabled?: boolean };
+export type SegmentedOption = ChoiceOption & { isDisabled?: boolean; icon?: ReactNode };
 
 type SegmentedControlProps = Omit<
   Aria.ToggleButtonGroupProps,
@@ -152,6 +152,7 @@ export function SegmentedControl({
           isDisabled={option.isDisabled ?? false}
           className="ui-segment"
         >
+          {option.icon}
           {option.label}
         </Aria.ToggleButton>
       ))}
