@@ -1,5 +1,19 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Button, Delta, LoadMeter, SegmentedControl, StatTile, Table, TrendChart } from './index';
+import {
+  Button,
+  DataTable,
+  Delta,
+  LoadMeter,
+  PageHeader,
+  Pagination,
+  SegmentedControl,
+  StatTile,
+  SummaryStrip,
+  Table,
+  TrendChart,
+} from './index';
+import type { DataColumn, DataTableSort } from './index';
 import { AdminNavIcon } from '../admin/AdminNavIcon';
 
 /**
@@ -183,6 +197,165 @@ export const Roster: Story = {
       emptyMessage="Ще немає учнів"
     />
   ),
+};
+
+export const PageHeaders: Story = {
+  render: () => (
+    <PageHeader
+      eyebrow="CONTENT MANAGEMENT"
+      title="Курси"
+      description="Керуйте курсами, доступами й публікаціями в одному місці."
+      actions={<Button variant="primary">Створити курс</Button>}
+    />
+  ),
+};
+
+export const Summary: Story = {
+  render: () => (
+    <SummaryStrip
+      label="Підсумок курсів"
+      items={[
+        { id: 'total', value: '21', label: 'Курсів' },
+        { id: 'published', value: '10', label: 'Опубліковано', dot: true },
+        { id: 'drafts', value: '8', label: 'Чернеток' },
+      ]}
+    />
+  ),
+};
+
+type CourseRow = {
+  id: string;
+  name: string;
+  lessons: number;
+  status: 'published' | 'draft' | 'archived';
+  students: number;
+  price: string;
+  updated: string;
+};
+
+const courses: readonly CourseRow[] = [
+  {
+    id: '1',
+    name: 'Архітектура Go',
+    lessons: 18,
+    status: 'published',
+    students: 184,
+    price: '1 890',
+    updated: '05.09.2026',
+  },
+  {
+    id: '2',
+    name: 'Основи Rust',
+    lessons: 12,
+    status: 'draft',
+    students: 0,
+    price: '0',
+    updated: '28.09.2026',
+  },
+  {
+    id: '3',
+    name: 'Проєктування систем',
+    lessons: 24,
+    status: 'archived',
+    students: 96,
+    price: '2 490',
+    updated: '14.10.2026',
+  },
+];
+
+const statusTone: Record<CourseRow['status'], string> = {
+  published: 'success',
+  draft: 'info',
+  archived: 'neutral',
+};
+const statusText: Record<CourseRow['status'], string> = {
+  published: 'Опубліковано',
+  draft: 'Чернетка',
+  archived: 'В архіві',
+};
+
+function CourseTablePreview() {
+  const [sort, setSort] = useState<DataTableSort>({ key: 'updated', dir: 'desc' });
+  const columns: readonly DataColumn<CourseRow>[] = [
+    {
+      key: 'name',
+      label: 'Курс',
+      identifier: true,
+      render: (course) => (
+        <span className="table-course-link">
+          <span className="ui-icon-tile">
+            <AdminNavIcon name="overview" />
+          </span>
+          <span>
+            <strong>{course.name}</strong>
+            <small>{course.lessons} уроків · загальний курс</small>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Статус',
+      render: (course) => (
+        <span className={`ui-pill ui-pill--${statusTone[course.status]}`}>
+          {statusText[course.status]}
+        </span>
+      ),
+    },
+    { key: 'students', label: 'Студенти', numeric: true, render: (course) => course.students },
+    {
+      key: 'price',
+      label: 'Ціна',
+      numeric: true,
+      render: (course) => (
+        <>
+          {course.price} <small>UAH</small>
+        </>
+      ),
+    },
+    { key: 'updated', label: 'Оновлено', render: (course) => course.updated },
+  ];
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
+      <DataTable<CourseRow>
+        caption="Курси"
+        columns={columns}
+        rows={courses}
+        rowId={(course) => course.id}
+        sort={sort}
+        onSortChange={setSort}
+        mobileSortLabel="Сортувати"
+        reverseSortLabel="Змінити напрям сортування"
+        actionsLabel="Дії"
+        actions={(course) => (
+          <>
+            <Button variant="secondary" aria-label={`Редагувати · ${course.name}`}>
+              Ред.
+            </Button>
+            <Button variant="danger" aria-label={`Видалити · ${course.name}`}>
+              Вид.
+            </Button>
+          </>
+        )}
+        footer={
+          <Pagination
+            label="Сторінки курсів"
+            previousLabel="Назад"
+            nextLabel="Далі"
+            pageLabel="1 / 1"
+            emptyLabel="Немає сторінок"
+            page={1}
+            totalPages={1}
+            onPageChange={() => {}}
+          />
+        }
+      />
+    </div>
+  );
+}
+
+export const CourseTable: Story = {
+  render: () => <CourseTablePreview />,
 };
 
 export const Segmented: Story = {

@@ -885,6 +885,259 @@ nav a {
     margin-inline-start: 0;
   }
 }
+
+/* View-fidelity primitives (V-track S3): the shared PageHeader, SummaryStrip and
+   editorial DataTable, ported from the proto and mapped to admin tokens. Table styling
+   is scoped to .admin-table-card so the plain .ui-table primitive stays untouched. Any
+   label/caption ink is --color-muted, never --color-faint, to clear text contrast. */
+[data-surface='admin'] .admin-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding-block: var(--space-2) var(--space-4);
+}
+[data-surface='admin'] .admin-page-heading {
+  min-inline-size: 0;
+}
+[data-surface='admin'] .admin-page-description {
+  margin-block: var(--space-2) 0;
+  max-inline-size: var(--space-prose-measure);
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+[data-surface='admin'] .admin-page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+[data-surface='admin'] .admin-summary-strip {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  border-block: 1px solid var(--color-hairline);
+  padding-block: var(--space-4);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+[data-surface='admin'] .admin-summary-strip > span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+[data-surface='admin'] .admin-summary-strip strong {
+  font-family: var(--font-utility);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+[data-surface='admin'] .summary-dot {
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  flex: none;
+}
+
+[data-surface='admin'] .admin-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+/* Striped rows give the sticky identifier/actions columns an opaque backdrop to
+   slide over; the plain .ui-table elsewhere keeps its flat rows. */
+[data-surface='admin'] .admin-table-card .ui-table :is(td, th[scope='row']) {
+  background: var(--color-background);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+[data-surface='admin']
+  .admin-table-card
+  .ui-table
+  tbody
+  tr:nth-child(even)
+  :is(td, th[scope='row']) {
+  background: var(--color-surface);
+}
+[data-surface='admin'] .admin-table-card .ui-table tbody tr[data-hovered] :is(td, th[scope='row']),
+[data-surface='admin'] .admin-table-card .ui-table tbody tr:hover :is(td, th[scope='row']) {
+  background: var(--color-elevated);
+}
+[data-surface='admin'] .admin-table-card .admin-table-identifier {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  color: var(--color-text);
+}
+[data-surface='admin'] .admin-table-card .admin-table-actions {
+  position: sticky;
+  inset-inline-end: 0;
+  z-index: 2;
+  text-align: end;
+  border-inline-start: 1px solid var(--color-hairline);
+  background: var(--color-surface);
+}
+[data-surface='admin'] .admin-table-card th.admin-table-actions {
+  z-index: 3;
+}
+[data-surface='admin'] .admin-table-card .is-numeric {
+  text-align: end;
+  font-family: var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+[data-surface='admin'] .admin-table-card th.is-numeric .table-sort {
+  justify-content: flex-end;
+}
+/* The header sort control is a bare, full-contrast button, not a filled secondary. */
+[data-surface='admin'] .admin-table-card .table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-min-size);
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+}
+[data-surface='admin'] .admin-table-card :is(.sort-current, .sort-idle) {
+  display: inline-flex;
+}
+[data-surface='admin'] .admin-table-card .sort-idle {
+  color: var(--color-faint);
+  opacity: 0.4;
+}
+[data-surface='admin'] .admin-table-card .sort-current {
+  color: var(--color-focus);
+}
+[data-surface='admin'] .table-sort-glyph {
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+  flex: none;
+}
+[data-surface='admin'] .admin-table-card .table-action-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+/* The identifier cell: a generic icon tile, the title and a quiet sub-line. */
+[data-surface='admin'] .table-course-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--control-min-size);
+  min-inline-size: 0;
+}
+[data-surface='admin'] .table-course-link > span {
+  min-inline-size: 0;
+}
+[data-surface='admin'] .table-course-link strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+[data-surface='admin'] .table-course-link small {
+  display: block;
+  margin-block-start: var(--space-1);
+  font-size: 0.6875rem;
+  color: var(--color-muted);
+}
+[data-surface='admin'] .table-mobile-sort {
+  display: none;
+}
+
+@media (max-width: 52rem) {
+  [data-surface='admin'] .admin-table-card .ui-table,
+  [data-surface='admin'] .admin-table-card .ui-table tbody {
+    display: block;
+  }
+  [data-surface='admin'] .admin-table-card .ui-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-surface='admin'] .admin-table-card .ui-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-block-end: 1px solid var(--color-hairline);
+  }
+  [data-surface='admin'] .admin-table-card .ui-table tbody tr:last-child {
+    border-block-end: 0;
+  }
+  [data-surface='admin'] .admin-table-card .ui-table :is(td, th[scope='row']),
+  [data-surface='admin']
+    .admin-table-card
+    .ui-table
+    tbody
+    tr:nth-child(even)
+    :is(td, th[scope='row']) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: none;
+    white-space: normal;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  [data-surface='admin'] .admin-table-card .ui-table [data-label]::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    font: 700 0.625rem var(--font-utility);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  [data-surface='admin'] .admin-table-card .admin-table-identifier {
+    position: static;
+    grid-column: 1 / -1;
+    padding-block-end: var(--space-2);
+    border-block-end: 1px solid var(--color-hairline);
+  }
+  [data-surface='admin'] .admin-table-card .admin-table-identifier::before {
+    display: none;
+  }
+  [data-surface='admin'] .admin-table-card .admin-table-actions {
+    position: static;
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--color-hairline);
+    padding-block-start: var(--space-2);
+    background: none;
+  }
+  [data-surface='admin'] .admin-table-card .table-mobile-sort {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-block-end: 1px solid var(--color-hairline);
+  }
+  [data-surface='admin'] .admin-table-card .table-mobile-sort label {
+    display: grid;
+    gap: var(--space-2);
+    flex: 1;
+    font: 0.6875rem var(--font-utility);
+    color: var(--color-muted);
+  }
+}
 /* Danger actions read as editorial: tinted, not a loud solid fill. The danger
    ink keeps >=4.5:1 on its own 14% wash in both admin themes. */
 [data-surface='admin'] .ui-button--danger {
