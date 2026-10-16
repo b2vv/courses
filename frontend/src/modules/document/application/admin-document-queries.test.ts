@@ -6,8 +6,8 @@ import {
   adminLessonDocumentQueryKey,
   createAdminDocumentQueries,
 } from './admin-document-queries';
-import type { LessonDocument } from '../../domain/document/document';
-import type { DocumentAuthoringRepository } from '../../ports/DocumentAuthoringRepository';
+import type { LessonDocument } from '../domain/document';
+import type { DocumentAuthoringRepository } from '../ports/DocumentAuthoringRepository';
 
 const lessonId = '20000000-0000-4000-8000-000000000001';
 const emptyDocument: LessonDocument = { schemaVersion: 1, locale: 'uk', sections: [] };

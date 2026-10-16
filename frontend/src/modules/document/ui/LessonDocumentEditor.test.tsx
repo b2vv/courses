@@ -3,10 +3,10 @@ import { afterEach, expect, test } from '@rstest/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Editor } from '@tiptap/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import { createAdminDocumentQueries } from '../../app/composition/admin-document-queries';
-import type { LessonDocument } from '../../domain/document/document';
-import type { DocumentAuthoringRepository } from '../../ports/DocumentAuthoringRepository';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+import { createAdminDocumentQueries } from '../application/admin-document-queries';
+import type { LessonDocument } from '../domain/document';
+import type { DocumentAuthoringRepository } from '../ports/DocumentAuthoringRepository';
 import { LessonDocumentEditor } from './LessonDocumentEditor';
 
 afterEach(cleanup);

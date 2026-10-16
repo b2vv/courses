@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
-import type { LessonDocument } from '../../domain/document/document';
+import type { LessonDocument } from '../domain/document';
 import { LessonDocumentView } from './LessonDocumentView';
 
 const imageId = '60000000-0000-4000-8000-000000000001';

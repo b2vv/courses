@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
-import type { DocumentErrorCode } from '../../domain/document/document';
-import type { DocumentRepository } from '../../ports/DocumentRepository';
+import type { DocumentErrorCode } from '../domain/document';
+import type { DocumentRepository } from '../ports/DocumentRepository';
 
 export class DocumentQueryError extends Error {
   readonly code: DocumentErrorCode;

@@ -1,4 +1,4 @@
-import type { DocumentResult, LessonDocument } from '../domain/document/document';
+import type { DocumentResult, LessonDocument } from '../domain/document';
 
 export interface DocumentRepository {
   /**
