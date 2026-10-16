@@ -49,6 +49,7 @@ type CourseListViewProps = {
   onSearch: (query: string) => void;
   onSortChange: (sort: AdminCourseSort) => void;
   onPageChange: (page: number) => void;
+  onClearFilters: () => void;
   onDelete: (course: AdminCourse) => Promise<void>;
   onAuthenticationRequired: () => void;
   createAction?: ReactNode;
@@ -61,6 +62,7 @@ export function CourseListView({
   onSearch,
   onSortChange,
   onPageChange,
+  onClearFilters,
   onDelete,
   onAuthenticationRequired,
   createAction,
@@ -107,6 +109,9 @@ export function CourseListView({
   });
   const priceFormatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
   const selectedStatus = state.status ?? 'all';
+  // An empty list under an active search or status means "no matches, adjust the filters",
+  // not "no courses exist yet" — the two states read differently and offer a different way out.
+  const isFiltered = state.search !== '' || state.status !== undefined;
 
   const statusOptions = (['all', 'draft', 'published', 'archived'] as const).map((status) => ({
     id: status,
@@ -229,8 +234,15 @@ export function CourseListView({
         onSortChange={(next) => onSortChange(sortFromKey(next.key))}
         mobileSortLabel={t('administration.sortMobile')}
         empty={
-          <EmptyState title={t('administration.empty')}>
-            <p>{t('administration.emptyHint')}</p>
+          <EmptyState
+            title={t(isFiltered ? 'administration.emptyFiltered' : 'administration.empty')}
+          >
+            <p>{t(isFiltered ? 'administration.emptyFilteredHint' : 'administration.emptyHint')}</p>
+            {isFiltered && (
+              <Button variant="secondary" onPress={onClearFilters}>
+                {t('administration.clearFilters')}
+              </Button>
+            )}
           </EmptyState>
         }
         footer={

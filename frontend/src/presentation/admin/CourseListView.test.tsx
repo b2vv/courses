@@ -51,6 +51,7 @@ const noop = {
   onSearch: () => {},
   onSortChange: () => {},
   onPageChange: () => {},
+  onClearFilters: () => {},
   onDelete: async () => {},
   onAuthenticationRequired: () => {},
 };
@@ -105,6 +106,7 @@ describe('admin course list', () => {
         onPageChange={(next) => {
           page = next;
         }}
+        onClearFilters={() => {}}
         onDelete={async () => {}}
         onAuthenticationRequired={() => {}}
       />,
@@ -147,6 +149,33 @@ describe('admin course list', () => {
     // the filter bar above still lets the admin clear a search or change the status.
     expect(screen.queryByRole('navigation', { name: 'Course pages' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Search courses' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('offers a distinct filtered-empty state that clears the active filters', async () => {
+    const user = userEvent.setup();
+    let cleared = 0;
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseListView
+          page={{
+            items: [],
+            pagination: { limit: 20, offset: 0, total: 0 },
+            statusCounts: { total: 21, draft: 8, published: 10, archived: 3 },
+          }}
+          state={{ page: 1, search: 'nothing-matches', sort: 'recent' }}
+          {...noop}
+          onClearFilters={() => {
+            cleared += 1;
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'No courses found' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'No courses yet' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(cleared).toBe(1);
   });
 
   it('scopes row actions to status and confirms a draft delete', async () => {

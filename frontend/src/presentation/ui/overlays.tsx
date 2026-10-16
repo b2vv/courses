@@ -5,6 +5,9 @@ import { Button } from './controls';
 
 type DialogProps = {
   triggerLabel: string;
+  /** Styles the default trigger button; a primary trigger marks the page's main call to action.
+   * Ignored when a composed `trigger` is supplied. Defaults to `secondary`. */
+  triggerVariant?: 'primary' | 'secondary';
   /** Optional composed trigger, e.g. a tooltip around an icon button. */
   trigger?: ReactElement;
   /** When set, the trigger keeps `triggerLabel` as its visible text but exposes this as its
@@ -18,6 +21,7 @@ type DialogProps = {
 
 export function Dialog({
   triggerLabel,
+  triggerVariant = 'secondary',
   trigger,
   triggerAriaLabel,
   title,
@@ -28,7 +32,7 @@ export function Dialog({
     <Aria.DialogTrigger>
       {trigger ?? (
         <Button
-          variant="secondary"
+          variant={triggerVariant}
           {...(triggerAriaLabel ? { 'aria-label': triggerAriaLabel } : {})}
         >
           {triggerLabel}

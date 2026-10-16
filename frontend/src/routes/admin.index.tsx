@@ -67,6 +67,8 @@ function AdminCourseListRoute() {
   const changeSearch = (search: string) => go({ search, page: 1 });
   const changeSort = (sort: AdminCourseSort) => go({ sort, page: 1 });
   const changePage = (page: number) => go({ page });
+  // Drop search and status in one navigation so a filtered-empty list clears to the full list.
+  const clearFilters = () => go({ status: undefined, search: '', page: 1 });
 
   return (
     <CourseListView
@@ -76,6 +78,7 @@ function AdminCourseListRoute() {
       onSearch={changeSearch}
       onSortChange={changeSort}
       onPageChange={changePage}
+      onClearFilters={clearFilters}
       onDelete={async (course) => {
         await deleteCourse.mutateAsync(course);
       }}
