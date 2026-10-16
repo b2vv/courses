@@ -94,7 +94,24 @@ course.category/cover (міграція + це вже не «показати н
 Generic icon-tile без category; НОВЕ продуктове поняття course.category/cover НЕ заводимо (нема в домені —
 нема чого показувати; інакше = вигадана фіча). Закриває альтернативу (b) міграції.
 
-## Статус: S1 ЗДАНО (коміт 9c8debc), далі S2 (фронт-дані)
+## Статус: S2 ЗДАНО (коміт 459c469), далі S3 (спільні примітиви)
+**S2 done (frontend data, no view wiring — S4):** domain `AdminCourse`+lessonCount/studentCount/price,
+`AdminCoursePage`+statusCounts, `AdminCourseQuery`+search (trim/bound у `makeAdminCourseQuery`); zod
+`admin-course-schema` парсить три enrichment-поля (price required-nullable) + strict status-snapshot;
+repository шле `search` лише коли непорожній (сервер reject ''), і відкидає відповідь, де частини
+snapshot не сумуються в total АБО нефільтрований page.total ≠ snapshot.total; `admin-search` router
+несе `search` через URL-контракт/state/query, list-ключ split-иться за терміном. Гейт frontend:
+format-check/lint/typecheck/test (758) зелений.
+**ПАСТКА (зловлено до релізу, звірено з беком):** `statusCounts` — ГЛОБАЛЬНИЙ знімок; `search`
+звужує `pagination.total`, але НЕ snapshot (бек навмисно тримає повну картину —
+`authoring_integration_test.go:345-348` «search did not leak into status snapshot»). Тому інваріант
+`pagination.total === statusCounts.total` у repository застосовний ЛИШЕ коли `status===undefined &&
+search===''`. Перша версія перевіряла лише `status===undefined` → відкинула б валідну пошукову
+відповідь. Сума частин (`total === draft+published+archived`) — універсальна, лишається завжди.
+**S4 застереження:** summary-strip бере total/draft/published з ГЛОБАЛЬНОГО snapshot (не з page) —
+під пошуком/статус-фільтром strip тримає повну картину, це за дизайном беку.
+
+## Архів: S1 ЗДАНО (коміт 9c8debc), S2 (фронт-дані)
 **S1 done:** admin-list віддає lessonCount/studentCount/price + status-snapshot + full-text search;
 жодної міграції. Доведено: unit (domain/application), HTTP-contract, **repository-integration проти
 Postgres зелений** (lessonCount=3, active-only studentCount=2, price, 3/1/1/1, search ізолює title).
