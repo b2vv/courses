@@ -137,9 +137,26 @@ Generic icon-tile без category; НОВЕ продуктове поняття 
 - Гейт: backend format-check/lint/typecheck/test/build/check-generated/**integration** (sort proven проти
   Postgres); frontend format-check/lint/typecheck/test(768). e2e — на S5 (sort ще не досяжний з UI).
 
-**S4b (в'юха) — НАСТУПНЕ:** переписати `CourseListView` проти proto через PageHeader+SummaryStrip+DataTable,
-sort через controlled sort-state → `adminCourseQuery` (natural dir per key, без reverseSortLabel); search-input,
-status-фільтр; виправити route navigate (changeStatus/changePage ГУБЛЯТЬ search/sort); delete-дротування; i18n; тести view.
+**S4b (в'юха) ЗДАНО — коміт 3648c4b.** CourseListView переписано проти proto:
+- PageHeader (eyebrow «Керування вмістом», title «Курси» — НЕ «Адміністрування»; h1=курси за proto) +
+  SummaryStrip (глобальний snapshot total/published·dot/drafts).
+- Filter-bar: submit-форма пошуку (як users-ростер) + status SegmentedControl + лічильник.
+- DataTable з реальними колонками: course (generic icon-tile + title-Link + «уроків: N»), status-pill,
+  students/price (UAH, «Безкоштовно» для null) numeric, updated; sortable-хедери → server sort; **status
+  колонка `sortable:false`** (її ключ не шлеться). Pagination у footer; empty-state замінює таблицю (без pager).
+- `DataColumn`+`sortable?`; naturalDirection тримає key-only sort чесним (без reverse-контролу).
+- Route navigate через один `go()` — зміна status/search/sort НЕ губить інші; зміна фільтра → page 1.
+- i18n uk/en; ключ колонки ціни = `priceColumn` (в admin-блоці вже є `price`-об'єкт). CSS: course-link без
+  underline, muted «free».
+- e2e+route-guard специ оновлено під «Курси» + pager-less empty (повний make check з e2e — на S5).
+- Гейт frontend: format-check/lint(210)/typecheck/test(769) зелений.
+- **НЕ зроблено в S4b (→ S4c):** row-actions edit/preview/**delete**. Delete потребує НОВОГО легкого
+  application-seam (наявний `authoring.delete` вимагає повного CourseTree; список має лише AdminCourse з
+  id+updatedAt+status). Preview-ціль теж під питанням (public page лише для published vs editor-preview).
+
+**S4c (row-actions) — НАСТУПНЕ:** легкий delete-шлях (AdminCourse id+updatedAt+status, draft-only як сервер)
++ confirm-dialog + edit(→editor) + preview; actions-колонка DataTable; тести. Delete лише на draft-рядках
+(сервер draft-only — показувати на published = фейк-афорданс). **S5:** design-pass proto↔prod + ПОВНИЙ make check (e2e) + PR.
 
 ## Архів: S2 ЗДАНО (коміт 459c469), S3 (спільні примітиви)
 **S2 done (frontend data, no view wiring — S4):** domain `AdminCourse`+lessonCount/studentCount/price,
