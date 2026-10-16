@@ -103,6 +103,37 @@ describe('admin authoring use cases', () => {
       error: { code: 'course_not_deletable' },
     });
   });
+
+  test('deletes a draft list row by id and token, and refuses a non-draft one', async () => {
+    const calls: Array<{ id: string; updatedAt: string }> = [];
+    const authoring = createAuthoring(
+      repository({
+        delete: async (id, expectedUpdatedAt) => {
+          calls.push({ id, updatedAt: expectedUpdatedAt });
+          return { ok: true, value: null };
+        },
+      }),
+    );
+    const draftRow = {
+      id: tree.id,
+      slug: tree.slug,
+      title: tree.title,
+      status: 'draft',
+      instructorId: tree.instructorId,
+      updatedAt: tree.updatedAt,
+      lessonCount: 0,
+      studentCount: 0,
+      price: null,
+    } as const;
+    expect(await authoring.deleteListed(draftRow)).toEqual({ ok: true, value: null });
+    expect(calls).toEqual([{ id: tree.id, updatedAt: tree.updatedAt }]);
+    // A non-draft row is refused locally — the seam is never opened.
+    expect(await authoring.deleteListed({ ...draftRow, status: 'published' })).toEqual({
+      ok: false,
+      error: { code: 'course_not_deletable' },
+    });
+    expect(calls).toHaveLength(1);
+  });
 });
 
 describe('course price', () => {

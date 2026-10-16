@@ -1041,6 +1041,34 @@ nav a {
 [data-surface='admin'] .course-price-free {
   color: var(--color-muted);
 }
+/* Row actions: uniform compact icon controls for the edit/preview links and the delete
+   button, so a link and a button in the group read as one set. */
+[data-surface='admin'] .table-action-group :is(a, button) {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--control-min-size);
+  block-size: var(--control-min-size);
+  padding: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  text-decoration: none;
+  box-shadow: none;
+}
+[data-surface='admin'] .table-action-group :is(a, button):hover {
+  color: var(--color-text);
+  background: var(--color-elevated);
+}
+[data-surface='admin'] .table-action-group .ui-button--danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+[data-surface='admin'] .table-action-group svg {
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+}
 [data-surface='admin'] .table-course-link > span {
   min-inline-size: 0;
 }

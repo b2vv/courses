@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { formatLocale } from '../../app/providers/format-locale';
+import { AuthoringQueryError } from '../../app/composition/admin-queries';
 import type {
   AdminCourse,
   AdminCoursePage,
@@ -14,6 +15,7 @@ import type { AdminListState } from '../../app/router/admin-search';
 import {
   Button,
   DataTable,
+  Dialog,
   EmptyState,
   ErrorState,
   Link,
@@ -47,6 +49,8 @@ type CourseListViewProps = {
   onSearch: (query: string) => void;
   onSortChange: (sort: AdminCourseSort) => void;
   onPageChange: (page: number) => void;
+  onDelete: (course: AdminCourse) => Promise<void>;
+  onAuthenticationRequired: () => void;
   createAction?: ReactNode;
 };
 
@@ -57,10 +61,44 @@ export function CourseListView({
   onSearch,
   onSortChange,
   onPageChange,
+  onDelete,
+  onAuthenticationRequired,
   createAction,
 }: CourseListViewProps) {
   const { t, i18n } = useTranslation();
   const locale = formatLocale(i18n.resolvedLanguage);
+  // One destructive action at a time; a ref catches a second press within a render
+  // synchronously (the buttons stay enabled, never native-disabled which drops focus).
+  const inFlight = useRef(false);
+  const [message, setMessage] = useState<string>();
+  const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status');
+  const messageRef = useRef<HTMLDivElement>(null);
+  // Deleting a row unmounts its action buttons, so the browser drops focus to <body>;
+  // move it to the result message (a focusable live region) rather than the page top.
+  useEffect(() => {
+    if (!message) return;
+    const active = document.activeElement;
+    if (active === null || active === document.body) messageRef.current?.focus();
+  }, [message]);
+
+  async function runDelete(course: AdminCourse) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setMessage(undefined);
+    try {
+      await onDelete(course);
+      setMessageKind('status');
+      setMessage(t('administration.deletedComplete'));
+    } catch (error) {
+      const code = error instanceof AuthoringQueryError ? error.code : undefined;
+      setMessageKind('alert');
+      setMessage(deleteErrorMessage(code, t));
+      if (code === 'authentication_required') onAuthenticationRequired();
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
   const dateFormatter = new Intl.DateTimeFormat(locale, {
@@ -175,12 +213,18 @@ export function CourseListView({
           {t('administration.courseCount', { count: page.pagination.total })}
         </span>
       </div>
+      {message && (
+        <div className="admin-editor-message" role={messageKind} ref={messageRef} tabIndex={-1}>
+          {message}
+        </div>
+      )}
       <DataTable<AdminCourse>
         caption={t('administration.courseTable')}
         columns={columns}
         rows={page.items}
         rowId={(course) => course.id}
         actionsLabel={t('administration.actions')}
+        actions={(course) => <CourseRowActions course={course} onConfirmDelete={runDelete} />}
         sort={{ key: state.sort, dir: naturalDirection[state.sort] }}
         onSortChange={(next) => onSortChange(sortFromKey(next.key))}
         mobileSortLabel={t('administration.sortMobile')}
@@ -203,6 +247,94 @@ export function CourseListView({
         }
       />
     </section>
+  );
+}
+
+function CourseRowActions({
+  course,
+  onConfirmDelete,
+}: {
+  course: AdminCourse;
+  onConfirmDelete: (course: AdminCourse) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Link
+        href={`/admin/courses/${course.id}`}
+        className="admin-row-action"
+        aria-label={t('administration.editAction', { name: course.title })}
+      >
+        <ActionIcon name="edit" />
+      </Link>
+      {course.status === 'published' && (
+        <Link
+          href={`/courses/${course.slug}`}
+          className="admin-row-action"
+          aria-label={t('administration.previewAction', { name: course.title })}
+        >
+          <ActionIcon name="preview" />
+        </Link>
+      )}
+      {course.status === 'draft' && (
+        <Dialog
+          triggerLabel={t('administration.deleteCourse')}
+          trigger={
+            <Button
+              type="button"
+              variant="danger"
+              aria-label={t('administration.deleteAction', { name: course.title })}
+            >
+              <ActionIcon name="delete" />
+            </Button>
+          }
+          title={t('administration.deleteCourse')}
+          closeLabel={t('common.cancel')}
+        >
+          {(close) => (
+            <>
+              <p>{t('administration.confirmDeleteBody', { name: course.title })}</p>
+              <Button
+                variant="danger"
+                onPress={() => {
+                  void onConfirmDelete(course);
+                  close();
+                }}
+              >
+                {t('administration.confirmDeleteCourse')}
+              </Button>
+            </>
+          )}
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function ActionIcon({ name }: { name: 'edit' | 'preview' | 'delete' }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {name === 'edit' && <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10z" />}
+      {name === 'preview' && (
+        <>
+          <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" />
+          <circle cx="8" cy="8" r="1.75" />
+        </>
+      )}
+      {name === 'delete' && (
+        <path d="M2.5 4.5h11M6 4.5V2.5h4v2M4 4.5l.5 9h7l.5-9M6.5 7v4M9.5 7v4" />
+      )}
+    </svg>
   );
 }
 
@@ -291,5 +423,23 @@ function sortFromKey(key: string): AdminCourseSort {
       return key;
     default:
       return 'recent';
+  }
+}
+
+function deleteErrorMessage(
+  code: string | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  switch (code) {
+    case 'course_not_deletable':
+      return t('administration.deleteErrors.not_deletable');
+    case 'course_modified':
+      return t('administration.deleteErrors.modified');
+    case 'course_not_found':
+      return t('administration.deleteErrors.not_found');
+    case 'authentication_required':
+      return t('administration.deleteErrors.authentication_required');
+    default:
+      return t('administration.deleteErrors.default');
   }
 }

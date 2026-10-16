@@ -628,7 +628,7 @@ test('P16 renders an owner-scoped course row through the guarded memory route', 
   expect(table).toBeTruthy();
   expect(
     within(table)
-      .getByRole('link', { name: /Власний курс/ })
+      .getByRole('link', { name: /^Власний курс/ })
       .getAttribute('href'),
   ).toBe('/admin/courses/10000000-0000-4000-8000-000000000001');
   expect(within(table).getByText('Опубліковано')).toBeTruthy();

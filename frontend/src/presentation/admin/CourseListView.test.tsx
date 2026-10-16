@@ -20,23 +20,23 @@ import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { adminCourseQuery } from '../../app/router/admin-search';
 import { asBrandedId } from '../../domain/course/course';
-import type { AdminCoursePage, CourseStatus } from '../../domain/course/course';
+import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
 import { CourseListFailure, CourseListView } from './CourseListView';
 
+const draftCourse: AdminCourse = {
+  id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
+  slug: 'go-architecture',
+  title: 'Архітектура Go',
+  status: 'draft',
+  instructorId: '20000000-0000-4000-8000-000000000002',
+  updatedAt: '2026-09-05T10:15:30.000000Z',
+  lessonCount: 12,
+  studentCount: 0,
+  price: null,
+};
+
 const firstPage: AdminCoursePage = {
-  items: [
-    {
-      id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
-      slug: 'go-architecture',
-      title: 'Архітектура Go',
-      status: 'draft',
-      instructorId: '20000000-0000-4000-8000-000000000002',
-      updatedAt: '2026-09-05T10:15:30.000000Z',
-      lessonCount: 12,
-      studentCount: 0,
-      price: null,
-    },
-  ],
+  items: [draftCourse],
   pagination: { limit: 20, offset: 0, total: 21 },
   statusCounts: { total: 21, draft: 8, published: 10, archived: 3 },
 };
@@ -51,6 +51,8 @@ const noop = {
   onSearch: () => {},
   onSortChange: () => {},
   onPageChange: () => {},
+  onDelete: async () => {},
+  onAuthenticationRequired: () => {},
 };
 
 describe('admin course list', () => {
@@ -65,7 +67,7 @@ describe('admin course list', () => {
     }
     expect(
       within(table)
-        .getByRole('link', { name: /Архітектура Go/ })
+        .getByRole('link', { name: /^Архітектура Go/ })
         .getAttribute('href'),
     ).toBe('/admin/courses/10000000-0000-4000-8000-000000000001');
     expect(within(table).getByText('уроків: 12')).toBeTruthy();
@@ -103,6 +105,8 @@ describe('admin course list', () => {
         onPageChange={(next) => {
           page = next;
         }}
+        onDelete={async () => {}}
+        onAuthenticationRequired={() => {}}
       />,
     );
 
@@ -143,6 +147,55 @@ describe('admin course list', () => {
     // the filter bar above still lets the admin clear a search or change the status.
     expect(screen.queryByRole('navigation', { name: 'Course pages' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Search courses' })).toBeTruthy();
+  });
+
+  it('scopes row actions to status and confirms a draft delete', async () => {
+    const user = userEvent.setup();
+    const publishedCourse: AdminCourse = {
+      id: asBrandedId('10000000-0000-4000-8000-000000000002', 'course'),
+      slug: 'systems-design',
+      title: 'Проєктування систем',
+      status: 'published',
+      instructorId: '20000000-0000-4000-8000-000000000002',
+      updatedAt: '2026-10-01T09:00:00.000000Z',
+      lessonCount: 24,
+      studentCount: 96,
+      price: { minor: 149900, currency: 'UAH' },
+    };
+    const page: AdminCoursePage = {
+      items: [draftCourse, publishedCourse],
+      pagination: { limit: 20, offset: 0, total: 2 },
+      statusCounts: { total: 2, draft: 1, published: 1, archived: 0 },
+    };
+    let deleted: AdminCourse | undefined;
+    render(
+      <CourseListView
+        page={page}
+        state={{ page: 1, search: '', sort: 'recent' }}
+        {...noop}
+        onDelete={async (course) => {
+          deleted = course;
+        }}
+      />,
+    );
+
+    const draftRow = screen.getByRole('row', { name: /Архітектура Go/ });
+    expect(within(draftRow).getByRole('link', { name: /Редагувати курс/ })).toBeTruthy();
+    expect(within(draftRow).queryByRole('link', { name: /Переглянути курс/ })).toBeNull();
+    const publishedRow = screen.getByRole('row', { name: /Проєктування систем/ });
+    // Preview links to the public page; delete is absent on a published course.
+    expect(
+      within(publishedRow)
+        .getByRole('link', { name: /Переглянути курс/ })
+        .getAttribute('href'),
+    ).toBe('/courses/systems-design');
+    expect(within(publishedRow).queryByRole('button', { name: /Видалити/ })).toBeNull();
+
+    // Deleting a draft asks for confirmation, then forwards the row and reports success.
+    await user.click(within(draftRow).getByRole('button', { name: /Видалити чернетку/ }));
+    await user.click(screen.getByRole('button', { name: 'Підтвердити видалення курсу' }));
+    expect(deleted?.slug).toBe('go-architecture');
+    expect(await screen.findByText('Курс видалено.')).toBeTruthy();
   });
 
   it('R37 retries an unavailable primary list read and renders the recovered route', async () => {

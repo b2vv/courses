@@ -40,6 +40,8 @@ function AdminCourseListRoute() {
   const { admin, adminActor } = Route.useRouteContext();
   const { data } = useSuspenseQuery(admin.list(adminCourseQuery(state)));
   const navigate = Route.useNavigate();
+  const queryClient = useQueryClient();
+  const deleteCourse = useMutation(admin.deleteListed(queryClient));
 
   // One place to merge a change over the current state, dropping every field at its default
   // so the URL stays clean and no filter is silently lost when another changes.
@@ -74,6 +76,10 @@ function AdminCourseListRoute() {
       onSearch={changeSearch}
       onSortChange={changeSort}
       onPageChange={changePage}
+      onDelete={async (course) => {
+        await deleteCourse.mutateAsync(course);
+      }}
+      onAuthenticationRequired={() => queryClient.setQueryData(sessionQueryKey, null)}
       createAction={<CourseCreateAction actor={adminActor} />}
     />
   );

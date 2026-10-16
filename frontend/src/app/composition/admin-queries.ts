@@ -2,6 +2,7 @@ import { mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import type { createAuthoring } from '../../application/admin/authoring';
 import type {
+  AdminCourse,
   AdminCourseDraft,
   AdminCourseQuery,
   AuthoringError,
@@ -130,6 +131,12 @@ export function createAdminQueries(authoring: ReturnType<typeof createAuthoring>
     delete: (client: QueryClient) =>
       mutationOptions({
         mutationFn: async (course: CourseTree) => unwrap(await authoring.delete(course)),
+        onSuccess: (_value, course) => invalidateAfterCourseDelete(client, course.id),
+        onError: (error, course) => refreshConflict(client, error, course.id),
+      }),
+    deleteListed: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: async (course: AdminCourse) => unwrap(await authoring.deleteListed(course)),
         onSuccess: (_value, course) => invalidateAfterCourseDelete(client, course.id),
         onError: (error, course) => refreshConflict(client, error, course.id),
       }),

@@ -9,6 +9,7 @@ import {
   validCoursePrice,
 } from '../../domain/course/course';
 import type {
+  AdminCourse,
   AdminCourseDraft,
   AdminCourseQuery,
   AuthoringResult,
@@ -81,6 +82,16 @@ export function createAuthoring(repository: AdminCourseRepository) {
       if (current.status !== 'draft')
         return Promise.resolve({ ok: false, error: { code: 'course_not_deletable' } });
       return repository.delete(current.id, current.updatedAt, signal);
+    },
+    /**
+     * Delete straight from a list row, without first loading the whole tree. The row carries
+     * the id and the optimistic-concurrency token (updatedAt); only a draft is deletable, the
+     * same rule the editor and the server enforce, so a non-draft never reaches the seam.
+     */
+    deleteListed(course: AdminCourse, signal?: AbortSignal): Promise<AuthoringResult<null>> {
+      if (course.status !== 'draft')
+        return Promise.resolve({ ok: false, error: { code: 'course_not_deletable' } });
+      return repository.delete(course.id, course.updatedAt, signal);
     },
   };
 }
