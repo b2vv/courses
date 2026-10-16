@@ -9,22 +9,61 @@ import type {
   LessonSection,
 } from '../../domain/document/document';
 import { imageServeUrl } from '../../domain/document/document';
+import { hasRenderableSections } from '../../domain/document/document';
 import {
   DocumentAuthoringError,
   ImageUploadError,
   type createAdminDocumentQueries,
 } from '../../app/composition/admin-document-queries';
-import { Button, FileUpload, TextField, Toast } from '../ui';
+import { Button, FileUpload, SegmentedControl, TextField, Toast } from '../ui';
 import { EmptyState, ErrorState } from '../ui/states';
+import { LessonDocumentView } from '../learn/LessonDocumentView';
 import { LessonDocumentEditorLoading } from './LessonDocumentEditorLoading';
 import { LessonDocumentRichText } from './LessonDocumentRichText';
+
+/** Lesson identity resolved from the course tree, shown in the title block. */
+export type LessonMeta = {
+  readonly lessonTitle: string;
+  readonly courseTitle: string;
+  readonly moduleLabel: string;
+};
 
 type AdminDocumentQueries = ReturnType<typeof createAdminDocumentQueries>;
 
 type LessonDocumentEditorProps = {
   readonly lessonId: string;
   readonly documents: AdminDocumentQueries;
+  readonly meta?: LessonMeta | null;
 };
+
+const actionIcons = {
+  up: 'm6 10 6-6 6 6M12 4v16',
+  down: 'm6 14 6 6 6-6M12 4v16',
+  trash: 'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7m4-7v7',
+  chevron: 'm9 5 7 7-7 7',
+  editor: 'M4 5h16M12 5v15M8 20h8',
+  preview: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  drag: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01',
+} as const;
+
+function ActionIcon({ path }: { readonly path: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
 
 type DraftState = {
   readonly sections: readonly LessonSection[];
@@ -88,13 +127,16 @@ function blankSection(type: LessonSection['type']): LessonSection {
   }
 }
 
-export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEditorProps) {
+export function LessonDocumentEditor({ lessonId, documents, meta }: LessonDocumentEditorProps) {
   const { t } = useTranslation();
   const client = useQueryClient();
   const draftQuery = useQuery(documents.document(lessonId));
   const save = useMutation(documents.save(client));
   const publish = useMutation(documents.publish(client));
   const upload = useMutation(documents.uploadImage());
+  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
+  // Tracks whether the draft holds edits not yet written back, driving the save-status indicator.
+  const [dirty, setDirty] = useState(false);
   // `edited` overlays the loaded draft once the author touches it; until then the editor renders
   // from the query. Deriving the draft (rather than seeding state in an effect) avoids a cascading
   // render, and a later refetch cannot clobber in-progress edits.
@@ -165,11 +207,13 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
     next:
       | readonly LessonSection[]
       | ((sections: readonly LessonSection[]) => readonly LessonSection[]),
-  ) =>
+  ) => {
+    setDirty(true);
     setEdited((cur) => {
       const b = cur ?? draft;
       return { ...b, sections: typeof next === 'function' ? next(b.sections) : next };
     });
+  };
 
   const applyImage: SectionBodyProps['applyImage'] = (sectionId, columnId, imageId, contentType) =>
     setSections((prev) =>
@@ -280,6 +324,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
       {
         onSuccess: (result) => {
           setEdited((cur) => ({ ...(cur ?? draft), token: result.updatedAt }));
+          setDirty(false);
           setStatus({ kind: 'saved' });
         },
         onError: (failure) =>
@@ -300,6 +345,7 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
       setEdited((cur) => ({ ...(cur ?? draft), token: saved.updatedAt }));
       const published = await publish.mutateAsync({ lessonId, expectedUpdatedAt: saved.updatedAt });
       setEdited((cur) => ({ ...(cur ?? draft), token: published.updatedAt }));
+      setDirty(false);
       setStatus({ kind: 'published' });
     } catch (failure) {
       setError(
@@ -311,20 +357,65 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
   };
 
   const busy = save.isPending || publish.isPending;
+  const lastIndex = draft.sections.length - 1;
 
   return (
     <section ref={editorRef} className="lesson-editor" aria-labelledby="lesson-editor-heading">
       <header className="lesson-editor-header">
-        <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
+        <div className="lesson-editor-headings">
+          <span className="lesson-editor-eyebrow">{t('administration.document.eyebrow')}</span>
+          <h1 id="lesson-editor-heading">{t('administration.document.heading')}</h1>
+          <p className="lesson-editor-intro">{t('administration.document.intro')}</p>
+        </div>
         <div className="lesson-editor-actions">
           <Button variant="secondary" onPress={onSave} isPending={busy}>
             {t('administration.document.saveDraft')}
           </Button>
           <Button onPress={() => void onPublish()} isPending={busy}>
             {t('administration.document.publish')}
+            <ActionIcon path={actionIcons.chevron} />
           </Button>
         </div>
       </header>
+      <div className="lesson-editor-meta">
+        <SegmentedControl
+          label={t('administration.document.modeLabel')}
+          options={[
+            {
+              id: 'edit',
+              label: t('administration.document.modeEditor'),
+              icon: <ActionIcon path={actionIcons.editor} />,
+            },
+            {
+              id: 'preview',
+              label: t('administration.document.modePreview'),
+              icon: <ActionIcon path={actionIcons.preview} />,
+            },
+          ]}
+          selectedKeys={[mode]}
+          onSelectionChange={(keys) => {
+            const next = [...keys][0];
+            if (next === 'edit' || next === 'preview') setMode(next);
+          }}
+        />
+        <span className="lesson-save-status">
+          <span
+            className={dirty ? 'lesson-status-dot is-unsaved' : 'lesson-status-dot is-saved'}
+            aria-hidden="true"
+          />
+          {t(
+            dirty ? 'administration.document.unsavedStatus' : 'administration.document.savedStatus',
+          )}
+          {` · ${draft.sections.length}`}
+        </span>
+      </div>
+      {meta != null && (
+        <div className="lesson-title-block">
+          <span className="lesson-editor-eyebrow">{t('administration.document.titleLabel')}</span>
+          <h2 className="lesson-title-display">{meta.lessonTitle}</h2>
+          <span className="lesson-title-caption">{`${meta.courseTitle} · ${meta.moduleLabel}`}</span>
+        </div>
+      )}
       {status !== null && (
         <Toast
           message={t(
@@ -336,90 +427,118 @@ export function LessonDocumentEditor({ lessonId, documents }: LessonDocumentEdit
         />
       )}
       {error !== null && <ErrorState title={error} />}
-      {draft.sections.length === 0 && (
-        <EmptyState title={t('administration.document.empty')}>
-          <p>{t('administration.document.emptyHint')}</p>
-        </EmptyState>
-      )}
       <output className="lesson-editor-live" aria-live="polite" aria-atomic="true">
         <span key={announcement.sequence}>{announcement.text}</span>
       </output>
-      <ol className="lesson-editor-sections">
-        {draft.sections.map((section, index) => (
-          <li
-            key={section.id}
-            className="lesson-editor-section"
-            data-type={section.type}
-            data-section-id={section.id}
-          >
-            <div className="lesson-editor-section-bar">
-              <SectionIcon type={section.type} />
-              <span className="lesson-editor-section-type">
-                {t(`administration.document.section.${section.type}`)}
-              </span>
-              <span className="lesson-editor-section-index">{index + 1}</span>
-              <div className="lesson-editor-section-actions">
-                <Button
-                  variant="secondary"
-                  aria-label={t('administration.document.moveUp')}
-                  onPress={() => moveSection(index, -1)}
-                >
-                  ↑
-                </Button>
-                <Button
-                  variant="secondary"
-                  aria-label={t('administration.document.moveDown')}
-                  onPress={() => moveSection(index, 1)}
-                >
-                  ↓
-                </Button>
-                <Button
-                  variant="danger"
-                  aria-label={t('administration.document.removeSection')}
-                  onPress={() => removeSection(index)}
-                >
-                  ✕
-                </Button>
-              </div>
-            </div>
-            <SectionBody
-              section={section}
-              onChange={(next) => updateSection(index, next)}
-              onUpload={uploadInto}
-              uploadingKey={uploadingKey}
-              applyImage={applyImage}
-            />
-          </li>
-        ))}
-      </ol>
-      <fieldset className="lesson-editor-add" aria-label={t('administration.document.addSection')}>
-        <legend>{t('administration.document.addSection')}</legend>
-        <div className="lesson-editor-palette">
-          {sectionTypes
-            .filter((type) => type !== 'video' || !hasVideo)
-            .map((type) => (
-              <Button
-                key={type}
-                data-add-section={type}
-                variant="secondary"
-                aria-describedby={`lesson-palette-desc-${type}`}
-                onPress={() => addSection(type)}
-              >
-                <SectionIcon type={type} />
-                <span className="lesson-editor-palette-label">
-                  {t(`administration.document.section.${type}`)}
-                </span>
-                <span
-                  id={`lesson-palette-desc-${type}`}
-                  className="lesson-editor-palette-description"
-                  aria-hidden="true"
-                >
-                  {t(`administration.document.sectionDescription.${type}`)}
-                </span>
-              </Button>
-            ))}
+      {mode === 'preview' ? (
+        <div className="lesson-editor-preview lesson-document-column">
+          {hasRenderableSections(document) ? (
+            <LessonDocumentView document={document} />
+          ) : (
+            <EmptyState title={t('administration.document.previewEmpty')} />
+          )}
         </div>
-      </fieldset>
+      ) : (
+        <>
+          {draft.sections.length === 0 && (
+            <EmptyState title={t('administration.document.empty')}>
+              <p>{t('administration.document.emptyHint')}</p>
+            </EmptyState>
+          )}
+          <ol className="lesson-editor-sections">
+            {draft.sections.map((section, index) => (
+              <li
+                key={section.id}
+                className="lesson-editor-section"
+                data-type={section.type}
+                data-section-id={section.id}
+              >
+                <div className="lesson-editor-section-bar">
+                  <div className="section-identity">
+                    <span className="lesson-editor-future-handle" aria-hidden="true">
+                      <ActionIcon path={actionIcons.drag} />
+                    </span>
+                    <SectionIcon type={section.type} />
+                    <span className="lesson-editor-section-type">
+                      {t(`administration.document.section.${section.type}`)}
+                    </span>
+                    <small className="lesson-editor-section-index">
+                      {String(index + 1).padStart(2, '0')}
+                    </small>
+                  </div>
+                  <div className="lesson-editor-section-actions">
+                    <Button
+                      variant="secondary"
+                      className="lesson-editor-action-button"
+                      aria-label={t('administration.document.moveUp')}
+                      {...(index === 0 ? { 'aria-disabled': true } : {})}
+                      onPress={() => moveSection(index, -1)}
+                    >
+                      <ActionIcon path={actionIcons.up} />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="lesson-editor-action-button"
+                      aria-label={t('administration.document.moveDown')}
+                      {...(index === lastIndex ? { 'aria-disabled': true } : {})}
+                      onPress={() => moveSection(index, 1)}
+                    >
+                      <ActionIcon path={actionIcons.down} />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="lesson-editor-action-button is-destructive"
+                      aria-label={t('administration.document.removeSection')}
+                      onPress={() => removeSection(index)}
+                    >
+                      <ActionIcon path={actionIcons.trash} />
+                    </Button>
+                  </div>
+                </div>
+                <SectionBody
+                  section={section}
+                  onChange={(next) => updateSection(index, next)}
+                  onUpload={uploadInto}
+                  uploadingKey={uploadingKey}
+                  applyImage={applyImage}
+                />
+              </li>
+            ))}
+          </ol>
+          <fieldset
+            className="lesson-editor-add"
+            aria-label={t('administration.document.addSection')}
+          >
+            <legend>{t('administration.document.addSection')}</legend>
+            <div className="lesson-editor-palette">
+              {sectionTypes
+                .filter((type) => type !== 'video' || !hasVideo)
+                .map((type) => (
+                  <Button
+                    key={type}
+                    data-add-section={type}
+                    variant="secondary"
+                    className="lesson-editor-palette-tile"
+                    aria-describedby={`lesson-palette-desc-${type}`}
+                    onPress={() => addSection(type)}
+                  >
+                    <SectionIcon type={type} />
+                    <span className="lesson-editor-palette-label">
+                      {t(`administration.document.section.${type}`)}
+                    </span>
+                    <span
+                      id={`lesson-palette-desc-${type}`}
+                      className="lesson-editor-palette-description"
+                      aria-hidden="true"
+                    >
+                      {t(`administration.document.sectionDescription.${type}`)}
+                    </span>
+                  </Button>
+                ))}
+            </div>
+          </fieldset>
+        </>
+      )}
     </section>
   );
 }
@@ -445,7 +564,15 @@ function SectionBody({ section, onChange, onUpload, uploadingKey, applyImage }: 
   const { t } = useTranslation();
   switch (section.type) {
     case 'video':
-      return <p className="lesson-editor-video">{t('administration.document.videoSlot')}</p>;
+      return (
+        <div className="lesson-editor-video">
+          <SectionIcon type="video" />
+          <span className="lesson-editor-eyebrow">
+            {t('administration.document.section.video')}
+          </span>
+          <p>{t('administration.document.videoSlot')}</p>
+        </div>
+      );
     case 'text':
     case 'task':
       return (
