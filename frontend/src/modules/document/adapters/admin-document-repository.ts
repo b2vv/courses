@@ -5,14 +5,14 @@ import type {
   ImageUploadResult,
   LessonDocument,
   LessonDocumentDraft,
-} from '../../domain/document/document';
-import type { DocumentAuthoringRepository } from '../../ports/DocumentAuthoringRepository';
+} from '../domain/document';
+import type { DocumentAuthoringRepository } from '../ports/DocumentAuthoringRepository';
 import {
   getAdminLessonDocument,
   publishAdminLessonDocument,
   saveAdminLessonDocument,
   uploadAdminLessonImage,
-} from './generated/courses';
+} from '../../../adapters/api/generated/courses';
 import { documentErrorSchema } from './document-schema';
 import {
   imageUploadSchema,
@@ -20,8 +20,8 @@ import {
   lessonDocumentUpdatedSchema,
 } from './admin-document-schema';
 import { mapDocument, toWireDocument } from './document-mapping';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function authoringFailure(code: DocumentAuthoringErrorCode): DocumentAuthoringResult<never> {
   return { ok: false, error: { code } };

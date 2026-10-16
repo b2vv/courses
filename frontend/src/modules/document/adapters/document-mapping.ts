@@ -5,7 +5,7 @@ import type {
   LessonRichText,
   LessonSection,
   LessonSpan,
-} from '../../domain/document/document';
+} from '../domain/document';
 import type {
   ParsedBlock,
   ParsedColumn,
@@ -19,7 +19,7 @@ import type {
   LessonDocument as WireDocument,
   LessonSection as WireSection,
   LessonSpan as WireSpan,
-} from './generated/models';
+} from '../../../adapters/api/generated/models';
 
 // The lesson document crosses the wire as the generated, all-optional OpenAPI shape; the reader and
 // the editor work with the domain discriminated union. These two pure maps are the only place that

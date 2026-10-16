@@ -5,8 +5,8 @@ import type {
   ImageUploadErrorCode,
   LessonDocument,
   UploadedImage,
-} from '../../domain/document/document';
-import type { DocumentAuthoringRepository } from '../../ports/DocumentAuthoringRepository';
+} from '../domain/document';
+import type { DocumentAuthoringRepository } from '../ports/DocumentAuthoringRepository';
 
 export class DocumentAuthoringError extends Error {
   readonly code: DocumentAuthoringErrorCode;
