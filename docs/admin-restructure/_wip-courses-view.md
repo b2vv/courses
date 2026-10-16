@@ -119,11 +119,27 @@ Generic icon-tile без category; НОВЕ продуктове поняття 
   client-sort однієї server-сторінки з 20 рядків вводив би в оману (сортує 20 зі 100). Примітив чесний і
   reusable; рішення server-sort-vs-none — S4/owner. Закриває «примітив володіє client-sort».
 
-### ВІДКРИТЕ ДЛЯ ВЛАСНИКА (вирішити на S4)
-- **Сортування таблиці курсів:** (1) server-side — додати `sort`-param у admin-list (новий бек-зріз, як S1
-  додав search; чесно по всіх сторінках) АБО (2) без функц. сортування — рендерити дефолтний порядок,
-  хедери як plain labels (без фейк-афордансу). Client-sort однієї сторінки відкинуто (вводить в оману).
-  Рекомендація: (1) — узгоджується з «повна fidelity з беком». DataTable готовий до обох.
+### РІШЕННЯ ВЛАСНИКА 2026-10-16 (сортування): SERVER-SIDE → S4a ЗДАНО (коміт 5ab01f2)
+Обрано варіант (1): server-side sort. **S4a (бекенд sort) ЗДАНО:**
+- Домен: `SortStudents`/`SortPrice` + `NewAuthoringQuery` (admin-набір: recent/title/students/price);
+  `NewQuery` (catalog) лишається {recent,title} — **admin-only сорти НЕ течуть у /courses** (students/price
+  → 400 для каталогу). Спільний `newQuery` з allow-set.
+- SQL `ListAuthoringCourses`: `sort_by` CASE — title A→Z (C collation), students/price highest-first
+  (price NULLS LAST), tie-break до `updated_at DESC, id ASC` (колишній фікс-порядок = 'recent').
+- handler читає `sort` (allow-list, empty→400 як search); application дефолтить порожній sort у recent
+  (direct-callers не мусять його називати). openapi + regenerate sqlc&Orval.
+- Фронт query-path: `AdminCourseQuery`/`AdminCourseSort`+`makeAdminCourseQuery`-валідація, `admin-search`
+  router (URL/state/query)+ключ split за sort, repository шле sort лише коли non-default. DataTable reverse-
+  кнопка тепер лише з `reverseSortLabel` (key-only таблиця без мертвого toggle). **В'юха ще не дротована.**
+- **Напрям fixed per-column (key-only), НЕ bidirectional** (уникнути 8-гілкового ORDER BY + `Dir` у спільному
+  Query). Header = «сортувати за колонкою», індикатор = натуральний напрям, без reverse-афордансу. Якщо власник
+  захоче двонапрямний toggle — окремий follow-up.
+- Гейт: backend format-check/lint/typecheck/test/build/check-generated/**integration** (sort proven проти
+  Postgres); frontend format-check/lint/typecheck/test(768). e2e — на S5 (sort ще не досяжний з UI).
+
+**S4b (в'юха) — НАСТУПНЕ:** переписати `CourseListView` проти proto через PageHeader+SummaryStrip+DataTable,
+sort через controlled sort-state → `adminCourseQuery` (natural dir per key, без reverseSortLabel); search-input,
+status-фільтр; виправити route navigate (changeStatus/changePage ГУБЛЯТЬ search/sort); delete-дротування; i18n; тести view.
 
 ## Архів: S2 ЗДАНО (коміт 459c469), S3 (спільні примітиви)
 **S2 done (frontend data, no view wiring — S4):** domain `AdminCourse`+lessonCount/studentCount/price,
