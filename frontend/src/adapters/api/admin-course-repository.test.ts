@@ -160,8 +160,9 @@ describe('admin API repository', () => {
         const url = new URL(request.url);
         expect(url.searchParams.get('limit')).toBe('20');
         expect(url.searchParams.get('offset')).toBe('0');
-        // An empty search term is a no-op filter, never sent on the wire.
+        // An empty search term and the default 'recent' sort are no-ops, never sent.
         expect(url.searchParams.has('search')).toBe(false);
+        expect(url.searchParams.has('sort')).toBe(false);
         return HttpResponse.json({
           items: [listItem],
           pagination: { limit: 20, offset: 0, total: 1 },
@@ -191,6 +192,7 @@ describe('admin API repository', () => {
         const url = new URL(request.url);
         expect(url.searchParams.get('search')).toBe('Go');
         expect(url.searchParams.get('status')).toBe('draft');
+        expect(url.searchParams.get('sort')).toBe('students');
         return HttpResponse.json({
           items: [listItem],
           // The page total reflects the draft filter; the snapshot still counts every status.
@@ -202,6 +204,7 @@ describe('admin API repository', () => {
     const result = await createAuthoring(createApiAdminCourseRepository()).list({
       search: 'Go',
       status: 'draft',
+      sort: 'students',
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.statusCounts.total).toBe(5);

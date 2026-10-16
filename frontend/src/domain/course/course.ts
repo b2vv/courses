@@ -117,12 +117,15 @@ export type AdminCourse = {
   readonly studentCount: number;
   readonly price: CoursePrice | null;
 };
+/** Each key sorts one natural way: title A→Z, students/price highest first, recent newest. */
+export type AdminCourseSort = 'recent' | 'title' | 'students' | 'price';
 export type AdminCourseQuery = {
   readonly limit: number;
   readonly offset: number;
   readonly status?: CourseStatus;
   /** Full-text filter over title and summary; '' means no filter (the param is then omitted). */
   readonly search: string;
+  readonly sort: AdminCourseSort;
 };
 export type AdminCourseStatusCounts = {
   readonly total: number;
@@ -327,6 +330,7 @@ export function makeAdminCourseQuery(
   const limit = input.limit ?? 20;
   const offset = input.offset ?? 0;
   const search = (input.search ?? '').trim();
+  const sort = input.sort ?? 'recent';
   if (
     !Number.isInteger(limit) ||
     limit < 1 ||
@@ -336,6 +340,7 @@ export function makeAdminCourseQuery(
     offset > 10000 ||
     [...search].length > 100 ||
     search.includes('\u0000') ||
+    !['recent', 'title', 'students', 'price'].includes(sort) ||
     (input.status !== undefined && !['draft', 'published', 'archived'].includes(input.status))
   )
     return { ok: false, error: { code: 'invalid_request' } };
@@ -345,6 +350,7 @@ export function makeAdminCourseQuery(
       limit,
       offset,
       search,
+      sort,
       ...(input.status === undefined ? {} : { status: input.status }),
     },
   };

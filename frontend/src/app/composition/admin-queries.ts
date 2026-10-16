@@ -37,6 +37,7 @@ export function adminCourseListQueryKey(query: AdminCourseQuery) {
     ...adminCourseListKey,
     query.status ?? 'all',
     query.search,
+    query.sort,
     query.limit,
     query.offset,
   ] as const;

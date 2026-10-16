@@ -128,6 +128,7 @@ export * from './lessonSpan.ts';
 export * from './lessonSpanMarksItem.ts';
 export * from './lessonTranscript.ts';
 export * from './listAdminCoursesParams.ts';
+export * from './listAdminCoursesSort.ts';
 export * from './listAdminCoursesStatus.ts';
 export * from './listAdminLearnersParams.ts';
 export * from './listAdminLearnersState.ts';

@@ -555,6 +555,43 @@ func TestAdminCourseListEnrichmentContracts(t *testing.T) {
 			t.Fatalf("rejected search still called repository: %d", repository.listCalls)
 		}
 	})
+
+	t.Run("Cv06 sort is forwarded and defaults to recent", func(t *testing.T) {
+		repository := newAdminWriteRepository()
+		repository.listPage = enrichedPage()
+		identity := &adminIdentity{}
+		handler := adminReadHandler(t, repository, identity)
+
+		response, request := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses?sort=students")
+		assertAdminHTTPContract(t, request, response, true)
+		if response.Code != http.StatusOK || repository.lastQuery.Sort != domain.SortStudents {
+			t.Fatalf("status=%d sort=%q", response.Code, repository.lastQuery.Sort)
+		}
+
+		repository.lastQuery = domain.Query{}
+		response, _ = serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), "/api/v1/admin/courses")
+		if response.Code != http.StatusOK || repository.lastQuery.Sort != domain.SortRecent {
+			t.Fatalf("absent sort did not default to recent: status=%d sort=%q", response.Code, repository.lastQuery.Sort)
+		}
+	})
+
+	t.Run("Cv07 an empty or unknown sort is rejected before the repository", func(t *testing.T) {
+		for _, raw := range []string{"/api/v1/admin/courses?sort=", "/api/v1/admin/courses?sort=popular"} {
+			repository := newAdminWriteRepository()
+			repository.listPage = enrichedPage()
+			identity := &adminIdentity{}
+			handler := adminReadHandler(t, repository, identity)
+
+			response, _ := serveAdminGet(t, handler, identity, identityUser(identitydomain.Admin), raw)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("%s: status=%d body=%s", raw, response.Code, response.Body.String())
+			}
+			assertAdminError(t, response, "invalid_request")
+			if repository.listCalls != 0 {
+				t.Fatalf("%s: rejected sort still called repository: %d", raw, repository.listCalls)
+			}
+		}
+	})
 }
 
 func TestAdminSaveHappyAndBoundaryContracts(t *testing.T) {

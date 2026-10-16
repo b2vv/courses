@@ -749,6 +749,12 @@ paths:
           in: query
           description: Full-text filter over course title and summary. Rejected when empty.
           schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: sort
+          in: query
+          description: >-
+            Ordering of the page. Each key has one natural direction: title A→Z, students
+            and price highest first, recent (the default) newest first. Rejected when empty.
+          schema: { type: string, enum: [recent, title, students, price], default: recent }
       responses:
         '200':
           description: Owner-scoped course rows and pagination.

@@ -51,7 +51,7 @@ describe('admin course list', () => {
     render(
       <CourseListView
         page={firstPage}
-        state={{ page: 1, search: '' }}
+        state={{ page: 1, search: '', sort: 'recent' }}
         onStatusChange={() => {}}
         onPageChange={() => {}}
       />,
@@ -77,7 +77,7 @@ describe('admin course list', () => {
     render(
       <CourseListView
         page={firstPage}
-        state={{ page: 1, search: '' }}
+        state={{ page: 1, search: '', sort: 'recent' }}
         onStatusChange={(nextStatus) => {
           status = nextStatus;
         }}
@@ -102,7 +102,7 @@ describe('admin course list', () => {
             pagination: { limit: 20, offset: 0, total: 0 },
             statusCounts: { total: 0, draft: 0, published: 0, archived: 0 },
           }}
-          state={{ page: 1, search: '' }}
+          state={{ page: 1, search: '', sort: 'recent' }}
           onStatusChange={() => {}}
           onPageChange={() => {}}
         />
@@ -120,7 +120,7 @@ describe('admin course list', () => {
   it('R37 retries an unavailable primary list read and renders the recovered route', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const admin = createAdminQueries(createAuthoring(createApiAdminCourseRepository()));
-    const query = adminCourseQuery({ page: 1, search: '' });
+    const query = adminCourseQuery({ page: 1, search: '', sort: 'recent' });
     let reads = 0;
     server.use(
       http.get(`${apiOrigin()}/api/v1/admin/courses`, () => {

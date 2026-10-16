@@ -346,6 +346,32 @@ INSERT INTO course_grants (user_id,course_id,source,state) VALUES
 	if filtered.StatusCounts.Total != 3 {
 		t.Fatalf("search leaked into status snapshot: %+v", filtered.StatusCounts)
 	}
+
+	// Each admin sort orders the full page by its natural direction.
+	for _, tc := range []struct {
+		sort  domain.Sort
+		first string // slug expected at the top
+		last  string // slug expected at the bottom (NULLS/ties last)
+	}{
+		{domain.SortStudents, "enrich-paid", ""},         // 2 active grants first; the two zeros trail
+		{domain.SortPrice, "enrich-paid", ""},            // priced first, the two free (NULL) last
+		{domain.SortTitle, "enrich-arch", "enrich-free"}, // Legacy < PostgreSQL < React under C collation
+	} {
+		sorted, err := domain.NewAuthoringQuery(50, 0, "", string(tc.sort))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := h.repository.List(h.ctx, adminActor(), sorted, domain.Status(""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Items) != 3 || result.Items[0].Slug != tc.first {
+			t.Fatalf("sort %q: first=%+v (want %s)", tc.sort, result.Items, tc.first)
+		}
+		if tc.last != "" && result.Items[len(result.Items)-1].Slug != tc.last {
+			t.Fatalf("sort %q: last=%s (want %s)", tc.sort, result.Items[len(result.Items)-1].Slug, tc.last)
+		}
+	}
 }
 
 func (h *authoringHarness) testTimestampRoundTrip(t *testing.T) {

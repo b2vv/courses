@@ -140,10 +140,10 @@ describe('admin authoring rules', () => {
     ).toBe(false);
   });
 
-  test('normalizes bounded admin pagination without inventing a status', () => {
+  test('normalizes bounded admin pagination without inventing a status, defaulting to recent', () => {
     expect(makeAdminCourseQuery({})).toEqual({
       ok: true,
-      value: { limit: 20, offset: 0, search: '' },
+      value: { limit: 20, offset: 0, search: '', sort: 'recent' },
     });
     expect(makeAdminCourseQuery({ status: 'archived', limit: 50, offset: 10000 }).ok).toBe(true);
     expect(makeAdminCourseQuery({ limit: 51 }).ok).toBe(false);
@@ -152,15 +152,24 @@ describe('admin authoring rules', () => {
   test('trims the search term, refuses an over-long or null-byte one', () => {
     expect(makeAdminCourseQuery({ search: '  Go  ' })).toEqual({
       ok: true,
-      value: { limit: 20, offset: 0, search: 'Go' },
+      value: { limit: 20, offset: 0, search: 'Go', sort: 'recent' },
     });
     // A term that is only whitespace collapses to no filter rather than a 400.
     expect(makeAdminCourseQuery({ search: '   ' })).toEqual({
       ok: true,
-      value: { limit: 20, offset: 0, search: '' },
+      value: { limit: 20, offset: 0, search: '', sort: 'recent' },
     });
     expect(makeAdminCourseQuery({ search: 'a'.repeat(101) }).ok).toBe(false);
     expect(makeAdminCourseQuery({ search: 'go\u0000' }).ok).toBe(false);
+  });
+
+  test('accepts the four admin sorts and refuses any other', () => {
+    for (const sort of ['recent', 'title', 'students', 'price'] as const) {
+      const result = makeAdminCourseQuery({ sort });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.sort).toBe(sort);
+    }
+    expect(makeAdminCourseQuery({ sort: 'popular' as never }).ok).toBe(false);
   });
 });
 

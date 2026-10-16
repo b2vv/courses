@@ -38,7 +38,13 @@ const edit: CourseTreeEdit = {
   instructorId: tree.instructorId,
   modules: [],
 };
-const query: AdminCourseQuery = { limit: 20, offset: 0, status: 'draft', search: '' };
+const query: AdminCourseQuery = {
+  limit: 20,
+  offset: 0,
+  status: 'draft',
+  search: '',
+  sort: 'recent',
+};
 
 function repository(overrides: Partial<AdminCourseRepository> = {}): AdminCourseRepository {
   const base: AdminCourseRepository = {
@@ -67,7 +73,16 @@ function clientForTest() {
 describe('admin query boundary', () => {
   test('keeps list and reference-data staleness explicit in query option shapes', () => {
     const queries = createAdminQueries(createAuthoring(repository()));
-    expect(queries.list(query).queryKey).toEqual(['admin', 'courses', 'list', 'draft', '', 20, 0]);
+    expect(queries.list(query).queryKey).toEqual([
+      'admin',
+      'courses',
+      'list',
+      'draft',
+      '',
+      'recent',
+      20,
+      0,
+    ]);
     expect(queries.list(query).staleTime).toBe(adminListStaleMs);
     expect(queries.instructors().queryKey).toEqual(instructorListKey);
     expect(queries.instructors().staleTime).toBe(instructorListStaleMs);

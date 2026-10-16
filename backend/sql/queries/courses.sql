@@ -96,7 +96,11 @@ WHERE (sqlc.arg(is_admin)::boolean OR courses.instructor_id = sqlc.arg(actor_id)
   AND (sqlc.arg(status)::text = '' OR courses.status = sqlc.arg(status)::text)
   AND (sqlc.arg(search_pattern)::text = ''
        OR courses.search_vector @@ websearch_to_tsquery('simple', sqlc.arg(search_pattern)::text))
-ORDER BY courses.updated_at DESC, courses.id ASC
+ORDER BY
+  CASE WHEN sqlc.arg(sort_by)::text = 'title' THEN courses.title COLLATE "C" END ASC,
+  CASE WHEN sqlc.arg(sort_by)::text = 'students' THEN enrollments.student_count END DESC,
+  CASE WHEN sqlc.arg(sort_by)::text = 'price' THEN courses.price_minor END DESC NULLS LAST,
+  courses.updated_at DESC, courses.id ASC
 LIMIT sqlc.arg(page_limit)::integer OFFSET sqlc.arg(page_offset)::integer;
 
 -- name: CountAuthoringCourses :one

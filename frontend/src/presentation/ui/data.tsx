@@ -249,16 +249,20 @@ export function DataTable<Row>({
                   ))}
                 </select>
               </label>
-              <Button
-                variant="secondary"
-                className="admin-icon-button"
-                aria-label={reverseSortLabel ?? ''}
-                onPress={() =>
-                  onSortChange({ key: sort.key, dir: sort.dir === 'asc' ? 'desc' : 'asc' })
-                }
-              >
-                <SortGlyph direction={sort.dir} />
-              </Button>
+              {/* The reverse control appears only when the consumer sorts both ways; a
+                  key-only (fixed-direction) table omits it rather than show a dead toggle. */}
+              {reverseSortLabel === undefined ? null : (
+                <Button
+                  variant="secondary"
+                  className="admin-icon-button"
+                  aria-label={reverseSortLabel}
+                  onPress={() =>
+                    onSortChange({ key: sort.key, dir: sort.dir === 'asc' ? 'desc' : 'asc' })
+                  }
+                >
+                  <SortGlyph direction={sort.dir} />
+                </Button>
+              )}
             </div>
           ) : null}
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll wide tables. */}

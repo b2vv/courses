@@ -317,7 +317,7 @@ func parseAdminCourseQuery(raw string) (application.AuthoringListInput, error) {
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
 		switch key {
-		case "limit", "offset", "status", "search":
+		case "limit", "offset", "status", "search", "sort":
 		default:
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
@@ -348,6 +348,14 @@ func parseAdminCourseQuery(raw string) (application.AuthoringListInput, error) {
 			return application.AuthoringListInput{}, domain.ErrInvalidRequest
 		}
 		input.Search = value[0]
+	}
+	if value, exists := values["sort"]; exists {
+		// The allowed set is enforced by domain.NewAuthoringQuery; here we only reject an
+		// empty key so `?sort=` is a 400 rather than a silent default, matching the catalog.
+		if value[0] == "" {
+			return application.AuthoringListInput{}, domain.ErrInvalidRequest
+		}
+		input.Sort = domain.Sort(value[0])
 	}
 	return input, nil
 }

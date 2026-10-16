@@ -318,8 +318,12 @@ WHERE ($1::boolean OR courses.instructor_id = $2::text::uuid)
   AND ($3::text = '' OR courses.status = $3::text)
   AND ($4::text = ''
        OR courses.search_vector @@ websearch_to_tsquery('simple', $4::text))
-ORDER BY courses.updated_at DESC, courses.id ASC
-LIMIT $6::integer OFFSET $5::integer
+ORDER BY
+  CASE WHEN $5::text = 'title' THEN courses.title COLLATE "C" END ASC,
+  CASE WHEN $5::text = 'students' THEN enrollments.student_count END DESC,
+  CASE WHEN $5::text = 'price' THEN courses.price_minor END DESC NULLS LAST,
+  courses.updated_at DESC, courses.id ASC
+LIMIT $7::integer OFFSET $6::integer
 `
 
 type ListAuthoringCoursesParams struct {
@@ -327,6 +331,7 @@ type ListAuthoringCoursesParams struct {
 	ActorID       string
 	Status        string
 	SearchPattern string
+	SortBy        string
 	PageOffset    int32
 	PageLimit     int32
 }
@@ -350,6 +355,7 @@ func (q *Queries) ListAuthoringCourses(ctx context.Context, arg ListAuthoringCou
 		arg.ActorID,
 		arg.Status,
 		arg.SearchPattern,
+		arg.SortBy,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

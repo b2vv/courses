@@ -160,6 +160,8 @@ export function createApiAdminCourseRepository(
         ...(query.status === undefined ? {} : { status: query.status }),
         // The server rejects an empty search term, so it is sent only when the user typed one.
         ...(query.search === '' ? {} : { search: query.search }),
+        // 'recent' is the server default; send only a non-default sort to keep URLs clean.
+        ...(query.sort === 'recent' ? {} : { sort: query.sort }),
       };
       return request<AdminCoursePage>(
         'admin.courses.list',

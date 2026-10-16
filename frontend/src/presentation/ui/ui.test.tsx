@@ -628,6 +628,26 @@ describe('view-fidelity primitives', () => {
     expect(changes.at(-1)).toEqual({ key: 'title', dir: 'desc' });
   });
 
+  it('omits the mobile reverse control for a fixed-direction (key-only) table', () => {
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={courseColumns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          sort={{ key: 'students', dir: 'desc' }}
+          onSortChange={() => {}}
+          mobileSortLabel="Сортувати"
+        />
+      </div>,
+    );
+    // Headers stay interactive, but no reverse affordance is rendered.
+    expect(screen.getByLabelText('Сортувати')).toBeTruthy();
+    expect(document.querySelector('.table-mobile-sort .admin-icon-button')).toBeNull();
+  });
+
   it('shows the empty slot instead of a table and renders a footer slot', () => {
     render(
       <div data-surface="admin">

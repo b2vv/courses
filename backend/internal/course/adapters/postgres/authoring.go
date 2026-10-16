@@ -86,6 +86,7 @@ func (r *Repository) List(ctx context.Context, actor domain.Actor, query domain.
 		ActorID:       actor.UserID,
 		Status:        string(status),
 		SearchPattern: query.Search,
+		SortBy:        string(query.Sort),
 		PageLimit:     int32(query.Limit),
 		PageOffset:    int32(query.Offset),
 	}

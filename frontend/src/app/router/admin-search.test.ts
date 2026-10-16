@@ -12,45 +12,68 @@ import { parseUrlSearch } from './url-search';
 describe('admin list URL search contract', () => {
   it('emits no defaults for a plain /admin address', () => {
     expect(validateAdminSearch({})).toEqual({});
-    expect(adminListState({})).toEqual({ search: '', page: 1 });
-    expect(adminCourseQuery(adminListState({}))).toEqual({ limit: 20, offset: 0, search: '' });
+    expect(adminListState({})).toEqual({ search: '', sort: 'recent', page: 1 });
+    expect(adminCourseQuery(adminListState({}))).toEqual({
+      limit: 20,
+      offset: 0,
+      search: '',
+      sort: 'recent',
+    });
   });
 
   it('echoes known parameters verbatim and drops unknown parameters', () => {
-    expect(validateAdminSearch({ status: 'draft', search: 'Go', page: '3', x: '1' })).toEqual({
+    expect(
+      validateAdminSearch({ status: 'draft', search: 'Go', sort: 'price', page: '3', x: '1' }),
+    ).toEqual({
       status: 'draft',
       search: 'Go',
+      sort: 'price',
       page: '3',
     });
   });
 
   it.each([
-    ['?status=published&page=2', { search: '', status: 'published', page: 2 }],
-    ['?status=nonsense&page=3', { search: '', page: 3 }],
-    ['?status=archived&page=abc', { search: '', status: 'archived', page: 1 }],
-    ['?status=draft&page=0', { search: '', status: 'draft', page: 1 }],
-    ['?status=draft&page=502', { search: '', status: 'draft', page: 1 }],
-    ['?status=draft&status=published&page=2&page=3', { search: '', page: 1 }],
-    ['?search=%20Go%20&page=2', { search: 'Go', page: 2 }],
-    [`?search=${'a'.repeat(101)}&page=2`, { search: '', page: 2 }],
-    ['?search=%00&page=2', { search: '', page: 2 }],
-    ['?search=Go&search=Rust&page=2', { search: '', page: 2 }],
+    ['?status=published&page=2', { search: '', sort: 'recent', status: 'published', page: 2 }],
+    ['?status=nonsense&page=3', { search: '', sort: 'recent', page: 3 }],
+    ['?status=archived&page=abc', { search: '', sort: 'recent', status: 'archived', page: 1 }],
+    ['?status=draft&page=0', { search: '', sort: 'recent', status: 'draft', page: 1 }],
+    ['?status=draft&page=502', { search: '', sort: 'recent', status: 'draft', page: 1 }],
+    ['?status=draft&status=published&page=2&page=3', { search: '', sort: 'recent', page: 1 }],
+    ['?search=%20Go%20&page=2', { search: 'Go', sort: 'recent', page: 2 }],
+    [`?search=${'a'.repeat(101)}&page=2`, { search: '', sort: 'recent', page: 2 }],
+    ['?search=%00&page=2', { search: '', sort: 'recent', page: 2 }],
+    ['?search=Go&search=Rust&page=2', { search: '', sort: 'recent', page: 2 }],
+    ['?sort=students&page=2', { search: '', sort: 'students', page: 2 }],
+    ['?sort=bogus&page=2', { search: '', sort: 'recent', page: 2 }],
   ])('parses each field independently for %s', (url, expected) => {
     expect(adminListState(validateAdminSearch(parseUrlSearch(url)))).toEqual(expected);
   });
 
   it('never throws for malformed or non-object input', () => {
-    expect(adminListState(validateAdminSearch(null))).toEqual({ search: '', page: 1 });
-    expect(adminListState(validateAdminSearch(['draft']))).toEqual({ search: '', page: 1 });
+    expect(adminListState(validateAdminSearch(null))).toEqual({
+      search: '',
+      sort: 'recent',
+      page: 1,
+    });
+    expect(adminListState(validateAdminSearch(['draft']))).toEqual({
+      search: '',
+      sort: 'recent',
+      page: 1,
+    });
     expect(() =>
-      adminListState(validateAdminSearch({ status: Symbol('draft'), search: {}, page: {} })),
+      adminListState(
+        validateAdminSearch({ status: Symbol('draft'), search: {}, sort: [], page: {} }),
+      ),
     ).not.toThrow();
   });
 
   it('turns a usable page into the bounded backend pagination contract', () => {
-    expect(adminCourseQuery({ status: 'archived', search: 'Go', page: 501 })).toEqual({
+    expect(
+      adminCourseQuery({ status: 'archived', search: 'Go', sort: 'title', page: 501 }),
+    ).toEqual({
       status: 'archived',
       search: 'Go',
+      sort: 'title',
       limit: 20,
       offset: 10000,
     });
