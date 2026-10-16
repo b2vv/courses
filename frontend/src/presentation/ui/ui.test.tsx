@@ -648,6 +648,35 @@ describe('view-fidelity primitives', () => {
     expect(document.querySelector('.table-mobile-sort .admin-icon-button')).toBeNull();
   });
 
+  it('leaves a sortable:false column as a plain header and out of the mobile options', () => {
+    const columns: readonly DataColumn<CourseRow>[] = [
+      { key: 'title', label: 'Course', identifier: true, render: (row) => row.title },
+      { key: 'badge', label: 'Badge', sortable: false, render: () => 'x' },
+    ];
+    render(
+      <div data-surface="admin">
+        <DataTable<CourseRow>
+          caption="Курси"
+          columns={columns}
+          rows={courseRows}
+          rowId={(row) => row.id}
+          actionsLabel="Дії"
+          sort={{ key: 'title', dir: 'asc' }}
+          onSortChange={() => {}}
+          mobileSortLabel="Сортувати"
+        />
+      </div>,
+    );
+    // The sortable column is a button; the non-sortable one is plain text with no aria-sort.
+    expect(screen.getByRole('button', { name: /Course/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Badge' })).toBeNull();
+    const badge = screen.getByRole('columnheader', { name: 'Badge' });
+    expect(badge.getAttribute('aria-sort')).toBeNull();
+    // The mobile sort select offers only the sortable column.
+    const options = within(screen.getByLabelText('Сортувати')).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual(['Course']);
+  });
+
   it('shows the empty slot instead of a table and renders a footer slot', () => {
     render(
       <div data-surface="admin">

@@ -167,6 +167,12 @@ export type DataColumn<Row> = {
   numeric?: boolean;
   /** The sticky first column that names the row (icon tile + title). */
   identifier?: boolean;
+  /**
+   * Whether this column's header sorts the table. Defaults to true when the table is
+   * sortable; set false for a column the owner cannot sort by (so its `key` is never sent
+   * as a sort the server would reject).
+   */
+  sortable?: boolean;
   render: (row: Row) => ReactNode;
 };
 export type DataTableSort = { key: string; dir: 'asc' | 'desc' };
@@ -223,8 +229,10 @@ export function DataTable<Row>({
   footer,
 }: DataTableProps<Row>) {
   const sortable = sort !== undefined && onSortChange !== undefined;
+  const columnSortable = (column: DataColumn<Row>) => sortable && column.sortable !== false;
   const ariaSort = (key: string): 'ascending' | 'descending' | 'none' =>
     sortable && sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const sortColumns = columns.filter(columnSortable);
 
   return (
     <section className="ui-card admin-table-card">
@@ -242,7 +250,7 @@ export function DataTable<Row>({
                   value={sort.key}
                   onChange={(event) => onSortChange({ key: event.target.value, dir: sort.dir })}
                 >
-                  {columns.map((column) => (
+                  {sortColumns.map((column) => (
                     <option key={column.key} value={column.key}>
                       {column.label}
                     </option>
@@ -277,9 +285,9 @@ export function DataTable<Row>({
                       scope="col"
                       role="columnheader"
                       className={column.numeric ? 'is-numeric' : undefined}
-                      aria-sort={sortable ? ariaSort(column.key) : undefined}
+                      aria-sort={columnSortable(column) ? ariaSort(column.key) : undefined}
                     >
-                      {sortable ? (
+                      {sortable && onSortChange !== undefined && column.sortable !== false ? (
                         <Button
                           variant="secondary"
                           className="table-sort"

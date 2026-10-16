@@ -1027,13 +1027,19 @@ nav a {
   justify-content: flex-end;
   gap: var(--space-1);
 }
-/* The identifier cell: a generic icon tile, the title and a quiet sub-line. */
+/* The identifier cell: a generic icon tile, the title and a quiet sub-line. It is a link
+   (ui-link composes in), so the underline is cleared — the title carries the affordance. */
 [data-surface='admin'] .table-course-link {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-block-size: var(--control-min-size);
   min-inline-size: 0;
+  text-decoration: none;
+  color: var(--color-text);
+}
+[data-surface='admin'] .course-price-free {
+  color: var(--color-muted);
 }
 [data-surface='admin'] .table-course-link > span {
   min-inline-size: 0;

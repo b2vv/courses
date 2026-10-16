@@ -1,11 +1,30 @@
+import { useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { formatLocale } from '../../app/providers/format-locale';
-import type { ReactNode } from 'react';
-import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
+import type {
+  AdminCourse,
+  AdminCoursePage,
+  AdminCourseSort,
+  CourseStatus,
+} from '../../domain/course/course';
 import type { AdminListState } from '../../app/router/admin-search';
-import { EmptyState, ErrorState, Link, Pagination, Skeleton, Table, Tabs } from '../ui';
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Link,
+  PageHeader,
+  Pagination,
+  SegmentedControl,
+  Skeleton,
+  SummaryStrip,
+  TextField,
+} from '../ui';
+import type { DataColumn, DataTableSort } from '../ui';
 
 const statusVariant: Record<CourseStatus, string> = {
   draft: 'warning',
@@ -13,10 +32,20 @@ const statusVariant: Record<CourseStatus, string> = {
   archived: 'neutral',
 };
 
+// Each admin sort has one natural direction; the header reflects it and never fakes a toggle.
+const naturalDirection: Record<AdminCourseSort, DataTableSort['dir']> = {
+  recent: 'desc',
+  title: 'asc',
+  students: 'desc',
+  price: 'desc',
+};
+
 type CourseListViewProps = {
   page: AdminCoursePage;
   state: AdminListState;
   onStatusChange: (status: CourseStatus | undefined) => void;
+  onSearch: (query: string) => void;
+  onSortChange: (sort: AdminCourseSort) => void;
   onPageChange: (page: number) => void;
   createAction?: ReactNode;
 };
@@ -25,94 +54,202 @@ export function CourseListView({
   page,
   state,
   onStatusChange,
+  onSearch,
+  onSortChange,
   onPageChange,
   createAction,
 }: CourseListViewProps) {
   const { t, i18n } = useTranslation();
+  const locale = formatLocale(i18n.resolvedLanguage);
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
-  const dateFormatter = new Intl.DateTimeFormat(formatLocale(i18n.resolvedLanguage), {
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
-  const rows = page.items.map((course) => courseRow(course, dateFormatter, t));
+  const priceFormatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
   const selectedStatus = state.status ?? 'all';
-  const results = (
-    <div className="admin-list-results">
-      {page.items.length === 0 ? (
-        <EmptyState title={t('administration.empty')}>
-          <p>{t('administration.emptyHint')}</p>
-        </EmptyState>
-      ) : (
-        <Table
-          label={t('administration.courseTable')}
-          columns={[
-            { id: 'title', label: t('administration.courseTitle'), rowHeader: true },
-            { id: 'slug', label: t('administration.slug') },
-            { id: 'status', label: t('administration.status') },
-            { id: 'owner', label: t('administration.owner') },
-            { id: 'updated', label: t('administration.updated') },
-          ]}
-          rows={rows}
-          emptyMessage={t('ui.noRecords')}
-        />
-      )}
-      <Pagination
-        label={t('administration.pages')}
-        previousLabel={t('ui.back')}
-        nextLabel={t('ui.forward')}
-        pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
-        emptyLabel={t('ui.noPages')}
-        page={currentPage}
-        totalPages={totalPages}
-        onPageChange={onPageChange}
-      />
-    </div>
-  );
-  const tabs = [
+
+  const statusOptions = (['all', 'draft', 'published', 'archived'] as const).map((status) => ({
+    id: status,
+    label: t(status === 'all' ? 'administration.allStatuses' : `administration.${status}`),
+  }));
+
+  const columns: readonly DataColumn<AdminCourse>[] = [
     {
-      id: 'all',
-      label: t('administration.allStatuses'),
-      content: selectedStatus === 'all' ? results : null,
+      key: 'title',
+      label: t('administration.courseTitle'),
+      identifier: true,
+      render: (course) => (
+        <Link href={`/admin/courses/${course.id}`} className="table-course-link">
+          <span className="ui-icon-tile">
+            <CourseGlyph />
+          </span>
+          <span>
+            <strong>{course.title}</strong>
+            <small>{t('administration.lessonsSub', { count: course.lessonCount })}</small>
+          </span>
+        </Link>
+      ),
     },
     {
-      id: 'draft',
-      label: t('administration.draft'),
-      content: selectedStatus === 'draft' ? results : null,
+      key: 'status',
+      label: t('administration.status'),
+      sortable: false,
+      render: (course) => (
+        <span
+          className={`ui-pill ui-pill--${statusVariant[course.status]}`}
+          data-status={course.status}
+        >
+          {t(`administration.${course.status}`)}
+        </span>
+      ),
     },
     {
-      id: 'published',
-      label: t('administration.published'),
-      content: selectedStatus === 'published' ? results : null,
+      key: 'students',
+      label: t('administration.students'),
+      numeric: true,
+      render: (course) => course.studentCount,
     },
     {
-      id: 'archived',
-      label: t('administration.archived'),
-      content: selectedStatus === 'archived' ? results : null,
+      key: 'price',
+      label: t('administration.priceColumn'),
+      numeric: true,
+      render: (course) =>
+        course.price === null ? (
+          <span className="course-price-free">{t('administration.free')}</span>
+        ) : (
+          <>
+            {priceFormatter.format(course.price.minor / 100)}{' '}
+            <small>{t('administration.priceUnit')}</small>
+          </>
+        ),
+    },
+    {
+      key: 'recent',
+      label: t('administration.updated'),
+      render: (course) => (
+        <time dateTime={course.updatedAt}>{dateFormatter.format(new Date(course.updatedAt))}</time>
+      ),
     },
   ];
 
   return (
-    <section className="admin-course-list">
-      <div className="admin-list-heading">
-        <div>
-          <p className="eyebrow">{t('administration.courses')}</p>
-          <h1>{t('administration.title')}</h1>
-        </div>
-        <div className="admin-list-actions">
-          <span className="admin-list-count">
-            {t('administration.courseCount', { count: page.pagination.total })}
-          </span>
-          {createAction}
-        </div>
+    <section className="admin-course-list" data-surface="admin">
+      <PageHeader
+        eyebrow={t('administration.eyebrow')}
+        title={t('administration.courses')}
+        description={t('administration.lede')}
+        actions={createAction}
+      />
+      <SummaryStrip
+        label={t('administration.summaryLabel')}
+        items={[
+          {
+            id: 'total',
+            value: String(page.statusCounts.total),
+            label: t('administration.courses'),
+          },
+          {
+            id: 'published',
+            value: String(page.statusCounts.published),
+            label: t('administration.published'),
+            dot: true,
+          },
+          {
+            id: 'drafts',
+            value: String(page.statusCounts.draft),
+            label: t('administration.summaryDrafts'),
+          },
+        ]}
+      />
+      <div className="admin-filter-bar">
+        <CourseSearch key={state.search} initialQuery={state.search} onSearch={onSearch} />
+        <SegmentedControl
+          label={t('administration.statusTabs')}
+          options={statusOptions}
+          selectedKeys={new Set([selectedStatus])}
+          onSelectionChange={(keys) => onStatusChange(statusFromKey(String([...keys][0] ?? 'all')))}
+        />
+        <span className="admin-filter-count">
+          {t('administration.courseCount', { count: page.pagination.total })}
+        </span>
       </div>
-      <Tabs
-        label={t('administration.statusTabs')}
-        selectedKey={selectedStatus}
-        onSelectionChange={(key) => onStatusChange(statusFromKey(String(key)))}
-        items={tabs}
+      <DataTable<AdminCourse>
+        caption={t('administration.courseTable')}
+        columns={columns}
+        rows={page.items}
+        rowId={(course) => course.id}
+        actionsLabel={t('administration.actions')}
+        sort={{ key: state.sort, dir: naturalDirection[state.sort] }}
+        onSortChange={(next) => onSortChange(sortFromKey(next.key))}
+        mobileSortLabel={t('administration.sortMobile')}
+        empty={
+          <EmptyState title={t('administration.empty')}>
+            <p>{t('administration.emptyHint')}</p>
+          </EmptyState>
+        }
+        footer={
+          <Pagination
+            label={t('administration.pages')}
+            previousLabel={t('ui.back')}
+            nextLabel={t('ui.forward')}
+            pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
+            emptyLabel={t('ui.noPages')}
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+          />
+        }
       />
     </section>
+  );
+}
+
+function CourseSearch({
+  initialQuery,
+  onSearch,
+}: {
+  initialQuery: string;
+  onSearch: (query: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState(initialQuery);
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSearch(query);
+  }
+  return (
+    <search>
+      <form className="admin-user-search" onSubmit={submit}>
+        <TextField
+          label={t('administration.searchLabel')}
+          placeholder={t('administration.searchPlaceholder')}
+          value={query}
+          onChange={setQuery}
+        />
+        <Button type="submit">{t('administration.searchAction')}</Button>
+      </form>
+    </search>
+  );
+}
+
+function CourseGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 3.5h6.5a2 2 0 0 1 2 2V13H5a2 2 0 0 0-2 2z" />
+      <path d="M13 3.5h-1.5a2 2 0 0 0-2 2V13" />
+    </svg>
   );
 }
 
@@ -135,33 +272,6 @@ export function CourseListFailure({ reset }: ErrorComponentProps) {
   );
 }
 
-function courseRow(
-  course: AdminCourse,
-  dateFormatter: Intl.DateTimeFormat,
-  t: ReturnType<typeof useTranslation>['t'],
-) {
-  return {
-    id: course.id,
-    cells: [
-      <Link key="title" href={`/admin/courses/${course.id}`}>
-        {course.title}
-      </Link>,
-      <code key="slug">{course.slug}</code>,
-      <span
-        key="status"
-        className={`ui-pill ui-pill--${statusVariant[course.status]}`}
-        data-status={course.status}
-      >
-        {statusLabel(course.status, t)}
-      </span>,
-      <code key="owner">{course.instructorId}</code>,
-      <time key="updated" dateTime={course.updatedAt}>
-        {dateFormatter.format(new Date(course.updatedAt))}
-      </time>,
-    ],
-  };
-}
-
 function statusFromKey(key: string): CourseStatus | undefined {
   switch (key) {
     case 'draft':
@@ -173,13 +283,13 @@ function statusFromKey(key: string): CourseStatus | undefined {
   }
 }
 
-function statusLabel(status: CourseStatus, t: ReturnType<typeof useTranslation>['t']) {
-  switch (status) {
-    case 'draft':
-      return t('administration.draft');
-    case 'published':
-      return t('administration.published');
-    case 'archived':
-      return t('administration.archived');
+function sortFromKey(key: string): AdminCourseSort {
+  switch (key) {
+    case 'title':
+    case 'students':
+    case 'price':
+      return key;
+    default:
+      return 'recent';
   }
 }

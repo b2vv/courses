@@ -172,7 +172,7 @@ test.describe('with a stored admin session', () => {
       deleted = removed.status() === 204;
       expect(removed.status()).toBe(204);
       await expect(page).toHaveURL((url) => url.pathname === '/admin');
-      await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
       await expect(page.getByRole('row').filter({ hasText: draft.title })).toHaveCount(0);
     } finally {
       if (course !== undefined && !deleted) await deleteAdminDraft(page.context(), baseURL, course);
@@ -190,7 +190,7 @@ test.describe('with a stored admin session', () => {
     const lessonTitle = `Урок ${runNamespace}`;
 
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { name: 'Адміністрування' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Курси' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Створити курс', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Створити курс' });

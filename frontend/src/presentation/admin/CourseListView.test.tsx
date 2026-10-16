@@ -46,54 +46,83 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
+const noop = {
+  onStatusChange: () => {},
+  onSearch: () => {},
+  onSortChange: () => {},
+  onPageChange: () => {},
+};
+
 describe('admin course list', () => {
-  it('renders title, slug, localized status, owner and updated time with an editor link', () => {
+  it('renders the real columns, the editor link, the global summary and a free price', () => {
     render(
-      <CourseListView
-        page={firstPage}
-        state={{ page: 1, search: '', sort: 'recent' }}
-        onStatusChange={() => {}}
-        onPageChange={() => {}}
-      />,
+      <CourseListView page={firstPage} state={{ page: 1, search: '', sort: 'recent' }} {...noop} />,
     );
 
     const table = screen.getByRole('table', { name: 'Курси' });
-    expect(within(table).getByRole('columnheader', { name: 'Власник' })).toBeTruthy();
-    expect(within(table).getByText('go-architecture')).toBeTruthy();
+    for (const header of ['Назва', 'Статус', 'Студенти', 'Ціна', 'Оновлено']) {
+      expect(within(table).getByRole('columnheader', { name: new RegExp(header) })).toBeTruthy();
+    }
+    expect(
+      within(table)
+        .getByRole('link', { name: /Архітектура Go/ })
+        .getAttribute('href'),
+    ).toBe('/admin/courses/10000000-0000-4000-8000-000000000001');
+    expect(within(table).getByText('уроків: 12')).toBeTruthy();
     expect(within(table).getByText('Чернетка')).toBeTruthy();
-    expect(within(table).getByText('20000000-0000-4000-8000-000000000002')).toBeTruthy();
-    expect(within(table).getByRole('link', { name: 'Архітектура Go' }).getAttribute('href')).toBe(
-      '/admin/courses/10000000-0000-4000-8000-000000000001',
-    );
+    expect(within(table).getByText('Безкоштовно')).toBeTruthy();
     expect(within(table).getByText(/2026/).closest('time')?.getAttribute('datetime')).toBe(
       '2026-09-05T10:15:30.000000Z',
     );
+    // The summary strip reads the global snapshot, not the (filtered) page.
+    const summary = screen.getByRole('group', { name: 'Підсумок курсів' });
+    expect(within(summary).getByText('21')).toBeTruthy();
+    expect(within(summary).getByText('10')).toBeTruthy();
+    expect(within(summary).getByText('8')).toBeTruthy();
   });
 
-  it('changes the status filter and moves to the next page through accessible controls', async () => {
+  it('filters, searches, sorts and pages through accessible controls', async () => {
     const user = userEvent.setup();
-    let status: CourseStatus | undefined;
+    let status: CourseStatus | undefined = undefined;
+    let query = '';
+    let sort = '';
     let page = 1;
     render(
       <CourseListView
         page={firstPage}
         state={{ page: 1, search: '', sort: 'recent' }}
-        onStatusChange={(nextStatus) => {
-          status = nextStatus;
+        onStatusChange={(next) => {
+          status = next;
         }}
-        onPageChange={(nextPage) => {
-          page = nextPage;
+        onSearch={(next) => {
+          query = next;
+        }}
+        onSortChange={(next) => {
+          sort = next;
+        }}
+        onPageChange={(next) => {
+          page = next;
         }}
       />,
     );
 
-    await user.click(screen.getByRole('tab', { name: 'Опубліковано' }));
+    await user.click(screen.getByRole('radio', { name: 'Опубліковано' }));
     expect(status).toBe('published');
+
+    await user.type(screen.getByLabelText('Пошук курсів'), 'postgres');
+    await user.click(screen.getByRole('button', { name: 'Знайти' }));
+    expect(query).toBe('postgres');
+
+    // A sortable header sets its key; the status column is not sortable (no button).
+    await user.click(screen.getByRole('button', { name: /Студенти/ }));
+    expect(sort).toBe('students');
+    expect(screen.queryByRole('button', { name: /^Статус/ })).toBeNull();
+
     await user.click(screen.getByRole('button', { name: 'Далі' }));
     expect(page).toBe(2);
   });
 
-  it('renders the localized empty state and both pagination buttons in English', () => {
+  it('shows the localized empty state inside the card, without a table or pager, in English', () => {
     render(
       <I18nProvider instance={createI18n('en')}>
         <CourseListView
@@ -103,18 +132,17 @@ describe('admin course list', () => {
             statusCounts: { total: 0, draft: 0, published: 0, archived: 0 },
           }}
           state={{ page: 1, search: '', sort: 'recent' }}
-          onStatusChange={() => {}}
-          onPageChange={() => {}}
+          {...noop}
         />
       </I18nProvider>,
     );
 
     expect(screen.getByRole('heading', { name: 'No courses yet' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
-    const pages = screen.getByRole('navigation', { name: 'Course pages' });
-    expect(within(pages).getByRole('button', { name: 'Back' })).toBeTruthy();
-    expect(within(pages).getByRole('button', { name: 'Next' })).toBeTruthy();
-    expect(pages.textContent).toContain('No pages');
+    // The empty slot replaces the table and its pager (the proto's editorial empty state);
+    // the filter bar above still lets the admin clear a search or change the status.
+    expect(screen.queryByRole('navigation', { name: 'Course pages' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Search courses' })).toBeTruthy();
   });
 
   it('R37 retries an unavailable primary list read and renders the recovered route', async () => {

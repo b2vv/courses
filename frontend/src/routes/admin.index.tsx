@@ -7,6 +7,7 @@ import { adminCourseQuery, adminListState, parseAdminSearch } from '../app/route
 import type {
   AdminCourseDraft,
   AdminCoursePage,
+  AdminCourseSort,
   CourseStatus,
   CourseTree,
 } from '../domain/course/course';
@@ -40,26 +41,38 @@ function AdminCourseListRoute() {
   const { data } = useSuspenseQuery(admin.list(adminCourseQuery(state)));
   const navigate = Route.useNavigate();
 
-  function changeStatus(status: CourseStatus | undefined) {
-    void navigate({
-      search: status === undefined ? {} : { status },
-    });
-  }
-
-  function changePage(page: number) {
+  // One place to merge a change over the current state, dropping every field at its default
+  // so the URL stays clean and no filter is silently lost when another changes.
+  function go(next: {
+    status?: CourseStatus | undefined;
+    search?: string;
+    sort?: AdminCourseSort;
+    page?: number;
+  }) {
+    const merged = { ...state, ...next };
     void navigate({
       search: {
-        ...(state.status === undefined ? {} : { status: state.status }),
-        ...(page === 1 ? {} : { page }),
+        ...(merged.status === undefined ? {} : { status: merged.status }),
+        ...(merged.search === '' ? {} : { search: merged.search }),
+        ...(merged.sort === 'recent' ? {} : { sort: merged.sort }),
+        ...(merged.page === 1 ? {} : { page: merged.page }),
       },
     });
   }
+
+  // Changing a filter returns to page 1; paging keeps the filters.
+  const changeStatus = (status: CourseStatus | undefined) => go({ status, page: 1 });
+  const changeSearch = (search: string) => go({ search, page: 1 });
+  const changeSort = (sort: AdminCourseSort) => go({ sort, page: 1 });
+  const changePage = (page: number) => go({ page });
 
   return (
     <CourseListView
       page={data}
       state={state}
       onStatusChange={changeStatus}
+      onSearch={changeSearch}
+      onSortChange={changeSort}
       onPageChange={changePage}
       createAction={<CourseCreateAction actor={adminActor} />}
     />
