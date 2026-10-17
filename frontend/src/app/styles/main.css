@@ -629,6 +629,10 @@ nav a {
 .admin-course-list,
 .admin-user-list {
   display: grid;
+  /* Cap the single column at the container width (min 0) so a wide child — the
+     status SegmentedControl's non-wrapping pill row — scrolls within its own
+     `overflow-x:auto` box instead of growing the column past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
 }
 .admin-list-heading {
@@ -677,28 +681,8 @@ nav a {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* First column: status dot + mono email over a muted display-name subtitle. */
-.admin-user-identity {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.admin-status-dot {
-  flex: none;
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-radius: 50%;
-  background: var(--color-muted);
-}
-.admin-status-dot[data-status='active'] {
-  background: var(--color-success);
-}
-.admin-status-dot[data-status='blocked'] {
-  background: var(--color-danger);
-}
-.admin-status-dot[data-status='deleted'] {
-  background: var(--color-muted);
-}
+/* Account column text: the person's name over a muted mono email subtitle, set
+   beside the avatar monogram (.person-cell / .admin-avatar, shared primitives). */
 .admin-user-ident-text {
   display: flex;
   flex-direction: column;
@@ -706,15 +690,16 @@ nav a {
   min-inline-size: 0;
 }
 .admin-user-primary {
-  font-family: var(--font-utility);
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .admin-user-secondary {
+  font-family: var(--font-utility);
   font-size: 0.8125rem;
   color: var(--color-muted);
+  overflow-wrap: anywhere;
 }
 .admin-user-updated {
   font-family: var(--font-utility);
@@ -803,21 +788,6 @@ nav a {
 [data-surface='admin'] .ui-table th[data-pin='end'] {
   background: var(--color-surface);
 }
-/* Compact actions belong to the roster; report/refund queues keep their layout. */
-[data-surface='admin'] .admin-list-results .admin-user-actions {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  inline-size: max-content;
-}
-[data-surface='admin'] .admin-list-results .admin-user-actions > .ui-button {
-  flex: 0 0 auto;
-  min-inline-size: 44px;
-  min-block-size: 44px;
-  padding-block: var(--space-2);
-  padding-inline: var(--space-2);
-}
-
 /* Only the S1 list panels opt into cards; Analytics keeps its table layout. */
 @media (max-width: 52rem) {
   [data-surface='admin'] .admin-list-results {
@@ -870,19 +840,6 @@ nav a {
     position: static;
     inline-size: 100%;
     border-inline-start: 0;
-  }
-  [data-surface='admin'] .admin-list-results .admin-user-identity {
-    display: flex;
-    min-inline-size: 0;
-  }
-  [data-surface='admin'] .admin-list-results :is(.admin-user-primary, .admin-user-updated) {
-    white-space: normal;
-  }
-  [data-surface='admin'] .admin-list-results .admin-user-actions {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    inline-size: 100%;
-    margin-inline-start: 0;
   }
 }
 
@@ -1194,14 +1151,6 @@ nav a {
 }
 .admin-user-search .ui-field {
   flex: 1 1 18rem;
-}
-.admin-user-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-  inline-size: 11.5rem;
-  margin-inline-start: auto;
 }
 .admin-editor {
   display: grid;

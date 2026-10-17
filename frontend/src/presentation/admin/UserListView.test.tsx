@@ -69,13 +69,14 @@ afterAll(() => server.close());
 function renderList(overrides: Partial<React.ComponentProps<typeof UserListView>> = {}) {
   const props: React.ComponentProps<typeof UserListView> = {
     page: firstPage,
-    state: { q: '', page: 1, sort: 'email' },
+    state: { q: '', page: 1, sort: 'name' },
     actor,
     onStatusChange: () => {},
     onRoleChange: () => {},
     onSortChange: () => {},
     onSearch: () => {},
     onPageChange: () => {},
+    onClearFilters: () => {},
     onSetStatus: async () => {},
     onDelete: async () => {},
     onResetPassword: async () => {},
@@ -104,7 +105,7 @@ describe('admin user directory', () => {
     });
 
     const table = screen.getByRole('table', { name: 'Користувачі' });
-    expect(within(table).getByRole('columnheader', { name: 'Електронна пошта' })).toBeTruthy();
+    expect(within(table).getByRole('columnheader', { name: 'Користувач' })).toBeTruthy();
     expect(within(table).getByText('Student')).toBeTruthy();
     expect(within(table).getByText('Студент')).toBeTruthy();
     expect(within(table).getByText('Активний')).toBeTruthy();
@@ -115,13 +116,14 @@ describe('admin user directory', () => {
     rerender(
       <UserListView
         page={{ ...firstPage, items: [{ ...listedUser, status: 'blocked' }] }}
-        state={{ q: '', page: 1, sort: 'email' }}
+        state={{ q: '', page: 1, sort: 'name' }}
         actor={actor}
         onStatusChange={() => {}}
         onRoleChange={() => {}}
         onSortChange={() => {}}
         onSearch={() => {}}
         onPageChange={() => {}}
+        onClearFilters={() => {}}
         onSetStatus={async (id, status) => {
           statuses.push(`${id}:${status}`);
         }}
@@ -184,7 +186,7 @@ describe('admin user directory', () => {
     );
   });
 
-  it('invokes the role and sort handlers from the filter controls', async () => {
+  it('invokes the role filter and the column-header sort handlers', async () => {
     const browser = userEvent.setup();
     const roles: Array<string | undefined> = [];
     const sorts: string[] = [];
@@ -197,28 +199,38 @@ describe('admin user directory', () => {
     await browser.click(await screen.findByRole('option', { name: 'Викладач' }));
     expect(roles).toEqual(['instructor']);
 
-    await browser.click(screen.getByRole('button', { name: /Сортувати за/ }));
-    await browser.click(await screen.findByRole('option', { name: 'Найновіші' }));
+    // Sort moved from a filter-bar select to interactive column headers: the
+    // "Updated" header sorts by the backend `recent` key, "Account" by `name`.
+    await browser.click(screen.getByRole('button', { name: 'Оновлено' }));
     expect(sorts).toEqual(['recent']);
+    await browser.click(screen.getByRole('button', { name: 'Користувач' }));
+    expect(sorts).toEqual(['recent', 'name']);
   });
 
-  it('B02 renders a localized empty state and preserves the pagination boundary', async () => {
-    let page = 2;
+  it('B02 renders the filtered empty state with a working clear-filters action', async () => {
+    const browser = userEvent.setup();
+    let cleared = 0;
     renderList({
       page: { items: [], pagination: { limit: 20, offset: 0, total: 0 } },
-      onPageChange: (next) => {
-        page = next;
+      state: { q: 'nobody', page: 1, sort: 'name' },
+      onClearFilters: () => {
+        cleared += 1;
       },
     });
 
-    expect(screen.getByRole('heading', { name: 'Користувачів не знайдено' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Нічого не знайдено' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
-    const pages = screen.getByRole('navigation', { name: 'Сторінки користувачів' });
-    expect(within(pages).getByRole('button', { name: 'Назад' }).hasAttribute('disabled')).toBe(
-      true,
-    );
-    expect(within(pages).getByRole('button', { name: 'Далі' }).hasAttribute('disabled')).toBe(true);
-    expect(page).toBe(2);
+    // The shared DataTable replaces its footer (pagination) with the empty slot,
+    // so an empty page shows no pagination; clear-filters is the way back.
+    expect(screen.queryByRole('navigation', { name: 'Сторінки користувачів' })).toBeNull();
+    await browser.click(screen.getByRole('button', { name: 'Скинути фільтри' }));
+    expect(cleared).toBe(1);
+  });
+
+  it('renders the unfiltered empty state without a clear-filters action', () => {
+    renderList({ page: { items: [], pagination: { limit: 20, offset: 0, total: 0 } } });
+    expect(screen.getByRole('heading', { name: 'Користувачів не знайдено' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Скинути фільтри' })).toBeNull();
   });
 
   it('resets the caller password and then requests local sign-out', async () => {
