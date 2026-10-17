@@ -402,6 +402,9 @@ export const uk = {
       },
       learners: {
         title: 'Учні',
+        eyebrow: 'Досвід навчання',
+        lede: 'Допомагайте учням рухатися від першого уроку до результату.',
+        progressLabel: 'Прогрес',
         empty: 'Учнів поки немає',
         more: 'Показати ще',
         coursesLabel: 'Курси',

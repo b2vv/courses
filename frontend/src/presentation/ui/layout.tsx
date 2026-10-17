@@ -4,6 +4,8 @@ type PageHeaderProps = {
   /** Small uppercase label above the title (e.g. "CONTENT MANAGEMENT"). */
   eyebrow: string;
   title: string;
+  /** Optional id on the <h1>, so a surrounding region can be `aria-labelledby` it. */
+  titleId?: string;
   description?: string;
   /** Primary actions rendered at the end of the header (e.g. "Create course"). */
   actions?: ReactNode;
@@ -13,12 +15,12 @@ type PageHeaderProps = {
  * The shared heading for every admin view: eyebrow, title, optional lede and a
  * trailing action cluster. One composition so all eight views read as one product.
  */
-export function PageHeader({ eyebrow, title, description, actions }: PageHeaderProps) {
+export function PageHeader({ eyebrow, title, titleId, description, actions }: PageHeaderProps) {
   return (
     <header className="admin-page-header">
       <div className="admin-page-heading">
         <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
+        <h1 {...(titleId === undefined ? {} : { id: titleId })}>{title}</h1>
         {description === undefined ? null : <p className="admin-page-description">{description}</p>}
       </div>
       {actions === undefined ? null : <div className="admin-page-actions">{actions}</div>}
