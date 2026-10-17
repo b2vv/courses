@@ -83,8 +83,13 @@ describe('admin list URL search contract', () => {
 describe('admin user list URL search contract', () => {
   it('emits no defaults and creates the default directory query', () => {
     expect(validateAdminUserSearch({})).toEqual({});
-    expect(adminUserListState({})).toEqual({ q: '', page: 1, sort: 'email' });
-    expect(adminUserQuery(adminUserListState({}))).toEqual({ q: '', limit: 20, offset: 0 });
+    expect(adminUserListState({})).toEqual({ q: '', page: 1, sort: 'name' });
+    expect(adminUserQuery(adminUserListState({}))).toEqual({
+      q: '',
+      limit: 20,
+      offset: 0,
+      sort: 'name',
+    });
   });
 
   it('echoes the known user fields verbatim and drops unknown fields', () => {
@@ -107,13 +112,13 @@ describe('admin user list URL search contract', () => {
   });
 
   it.each([
-    ['?status=deleted&q=Ada&page=2', { status: 'deleted', q: 'Ada', page: 2, sort: 'email' }],
-    ['?status=nonsense&q=Ada&page=abc', { q: 'Ada', page: 1, sort: 'email' }],
-    ['?status=active&q=%00&page=3', { status: 'active', q: '', page: 3, sort: 'email' }],
-    [`?q=${'a'.repeat(101)}&page=2`, { q: '', page: 2, sort: 'email' }],
-    ['?status=blocked&q=Ada&q=Grace&page=2', { status: 'blocked', q: '', page: 2, sort: 'email' }],
+    ['?status=deleted&q=Ada&page=2', { status: 'deleted', q: 'Ada', page: 2, sort: 'name' }],
+    ['?status=nonsense&q=Ada&page=abc', { q: 'Ada', page: 1, sort: 'name' }],
+    ['?status=active&q=%00&page=3', { status: 'active', q: '', page: 3, sort: 'name' }],
+    [`?q=${'a'.repeat(101)}&page=2`, { q: '', page: 2, sort: 'name' }],
+    ['?status=blocked&q=Ada&q=Grace&page=2', { status: 'blocked', q: '', page: 2, sort: 'name' }],
     ['?role=instructor&sort=recent&page=2', { role: 'instructor', sort: 'recent', q: '', page: 2 }],
-    ['?role=nonsense&sort=nonsense&page=1', { q: '', page: 1, sort: 'email' }],
+    ['?role=nonsense&sort=nonsense&page=1', { q: '', page: 1, sort: 'name' }],
   ])('parses each user field independently for %s', (url, expected) => {
     expect(adminUserListState(validateAdminUserSearch(parseUrlSearch(url)))).toEqual(expected);
   });

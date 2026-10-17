@@ -681,7 +681,7 @@ test('R21 keeps unusable user search text in the URL and loads default directory
   expect(screen.getByRole('heading', { name: 'Користувачі' })).toBeTruthy();
   expect(screen.queryByText('Не вдалося відкрити сторінку')).toBeNull();
   expect(router.state.location.href).toBe(href);
-  expect(observedAdminUserQueries).toEqual([{ q: '', limit: 20, offset: 0 }]);
+  expect(observedAdminUserQueries).toEqual([{ q: '', limit: 20, offset: 0, sort: 'name' }]);
 });
 
 test('R24 gives an instructor not-found at /admin/users before loading the directory', async () => {

@@ -61,7 +61,7 @@ function AdminUserListRoute() {
       search: {
         ...(status === undefined ? {} : { status }),
         ...(role === undefined ? {} : { role }),
-        ...(sort === 'email' ? {} : { sort }),
+        ...(sort === 'name' ? {} : { sort }),
         ...(q === '' ? {} : { q }),
         ...(page === 1 ? {} : { page }),
       },
@@ -78,6 +78,7 @@ function AdminUserListRoute() {
       onSortChange={(sort) => go({ sort })}
       onSearch={(q) => go({ q: q.trim() })}
       onPageChange={(page) => go({ page })}
+      onClearFilters={() => go({ status: undefined, role: undefined, q: '' })}
       onSetStatus={async (id: string, status: WritableAccountStatus) => {
         await setStatus.mutateAsync({ id, status });
       }}

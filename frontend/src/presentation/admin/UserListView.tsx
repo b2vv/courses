@@ -17,16 +17,18 @@ import type {
 import type { AuthenticatedUser } from '../../domain/identity/identity';
 import {
   Button,
+  DataTable,
   EmptyState,
   ErrorState,
+  PageHeader,
   Pagination,
   SegmentedControl,
   Select,
   Skeleton,
-  Table,
   TextField,
   Tooltip,
 } from '../ui';
+import type { DataColumn } from '../ui';
 import { administrationErrorMessage, ResetPasswordDialog } from './ResetPasswordDialog';
 
 const statusVariant: Record<AccountStatus, string> = {
@@ -34,6 +36,24 @@ const statusVariant: Record<AccountStatus, string> = {
   blocked: 'danger',
   deleted: 'neutral',
 };
+
+// Each sort has one natural direction; a header reflects it and never fakes a toggle.
+// `email` stays mapped (a hand-typed `?sort=email` URL still resolves) although the UI
+// no longer offers it — the account header sorts by the person's name, the prominent text.
+const naturalDirection: Record<AdminUserSort, 'asc' | 'desc'> = {
+  email: 'asc',
+  name: 'asc',
+  recent: 'desc',
+};
+
+/** One or two uppercase letters for the avatar monogram, from the resolved display name. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '—';
+  const first = parts[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
+  return ((first.charAt(0) ?? '') + (last.charAt(0) ?? '')).toUpperCase() || '—';
+}
 
 type UserListViewProps = {
   page: AdminUserPage;
@@ -44,6 +64,7 @@ type UserListViewProps = {
   onSortChange: (sort: AdminUserSort) => void;
   onSearch: (query: string) => void;
   onPageChange: (page: number) => void;
+  onClearFilters: () => void;
   onSetStatus: (id: string, status: WritableAccountStatus) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onResetPassword: (id: string, password: string) => Promise<void>;
@@ -59,6 +80,7 @@ export function UserListView({
   onSortChange,
   onSearch,
   onPageChange,
+  onClearFilters,
   onSetStatus,
   onDelete,
   onResetPassword,
@@ -92,6 +114,9 @@ export function UserListView({
   const currentPage = Math.floor(page.pagination.offset / page.pagination.limit) + 1;
   const totalPages = Math.ceil(page.pagination.total / page.pagination.limit);
   const selectedStatus = state.status ?? 'all';
+  // An empty list under an active search, status or role filter reads as "no matches,
+  // adjust the filters", not "no accounts exist" — the two states offer a different way out.
+  const isFiltered = state.q !== '' || state.status !== undefined || state.role !== undefined;
   const dateFormatter = new Intl.DateTimeFormat(formatLocale(i18n.resolvedLanguage), {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -103,10 +128,6 @@ export function UserListView({
   const roleOptions = (['all', 'student', 'instructor', 'admin'] as const).map((role) => ({
     id: role,
     label: t(role === 'all' ? 'adminUsers.allRoles' : `adminUsers.${role}`),
-  }));
-  const sortOptions = (['email', 'name', 'recent'] as const).map((sort) => ({
-    id: sort,
-    label: t(`adminUsers.sort_${sort}`),
   }));
 
   async function runAction(user: AdminUser, action: () => Promise<void>, success: string) {
@@ -129,72 +150,67 @@ export function UserListView({
     }
   }
 
-  const results =
-    page.items.length === 0 ? (
-      <EmptyState title={t('adminUsers.empty')}>
-        <p>{t('adminUsers.emptyHint')}</p>
-      </EmptyState>
-    ) : (
-      <Table
-        label={t('adminUsers.userTable')}
-        columns={[
-          { id: 'account', label: t('adminUsers.email'), rowHeader: true },
-          { id: 'role', label: t('adminUsers.role') },
-          { id: 'status', label: t('adminUsers.status') },
-          { id: 'updated', label: t('adminUsers.updated') },
-          { id: 'actions', label: t('adminUsers.actions'), pin: 'end' },
-        ]}
-        rows={page.items.map((user) => ({
-          id: user.id,
-          cells: [
-            <span key="account" className="admin-user-identity">
-              <span className="admin-status-dot" data-status={user.status} aria-hidden="true" />
-              <span className="admin-user-ident-text">
-                <span className="admin-user-primary">{user.email}</span>
-                <span className="admin-user-secondary">{user.displayName}</span>
-              </span>
-            </span>,
-            <span key="role" className="admin-role-tag" data-role={user.role}>
-              {t(`adminUsers.${user.role}`)}
-            </span>,
-            <span
-              key="status"
-              className={`ui-pill ui-pill--${statusVariant[user.status]}`}
-              data-status={user.status}
-            >
-              {t(`adminUsers.${user.status}`)}
-            </span>,
-            <time key="updated" className="admin-user-updated" dateTime={user.updatedAt}>
-              {dateFormatter.format(new Date(user.updatedAt))}
-            </time>,
-            <UserActions
-              key="actions"
-              user={user}
-              actor={actor}
-              isBusy={pendingUser !== undefined}
-              onSetStatus={(status) =>
-                runAction(user, () => onSetStatus(user.id, status), t('adminUsers.actionComplete'))
-              }
-              onDelete={() =>
-                runAction(user, () => onDelete(user.id), t('adminUsers.deletedComplete'))
-              }
-              onReset={(password) => onResetPassword(user.id, password)}
-              onAuthenticationRequired={onAuthenticationRequired}
-            />,
-          ],
-        }))}
-        emptyMessage={t('ui.noRecords')}
-      />
-    );
+  const columns: readonly DataColumn<AdminUser>[] = [
+    {
+      key: 'name',
+      label: t('adminUsers.account'),
+      identifier: true,
+      render: (user) => {
+        const name = user.displayName || t('ratings.formerAuthor');
+        return (
+          <span className="person-cell">
+            <span className="admin-avatar" aria-hidden="true">
+              {initialsOf(name)}
+            </span>
+            <span className="admin-user-ident-text">
+              <span className="admin-user-primary">{name}</span>
+              <span className="admin-user-secondary">{user.email}</span>
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: 'role',
+      label: t('adminUsers.role'),
+      sortable: false,
+      render: (user) => (
+        <span className="admin-role-tag" data-role={user.role}>
+          {t(`adminUsers.${user.role}`)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: t('adminUsers.status'),
+      sortable: false,
+      render: (user) => (
+        <span
+          className={`ui-pill ui-pill--${statusVariant[user.status]}`}
+          data-status={user.status}
+        >
+          {t(`adminUsers.${user.status}`)}
+        </span>
+      ),
+    },
+    {
+      key: 'recent',
+      label: t('adminUsers.updated'),
+      render: (user) => (
+        <time className="admin-user-updated" dateTime={user.updatedAt}>
+          {dateFormatter.format(new Date(user.updatedAt))}
+        </time>
+      ),
+    },
+  ];
 
   return (
-    <section className="admin-user-list">
-      <div className="admin-list-heading">
-        <div>
-          <p className="eyebrow">{t('adminUsers.eyebrow')}</p>
-          <h1>{t('adminUsers.title')}</h1>
-        </div>
-      </div>
+    <section className="admin-user-list" data-surface="admin">
+      <PageHeader
+        eyebrow={t('adminUsers.eyebrow')}
+        title={t('adminUsers.title')}
+        description={t('adminUsers.lede')}
+      />
       <div className="admin-filter-bar">
         <UserSearch key={state.q} initialQuery={state.q} onSearch={onSearch} />
         <SegmentedControl
@@ -209,12 +225,6 @@ export function UserListView({
           selectedKey={state.role ?? 'all'}
           onSelectionChange={(key) => onRoleChange(roleFromKey(String(key)))}
         />
-        <Select
-          label={t('adminUsers.sortBy')}
-          options={sortOptions}
-          selectedKey={state.sort}
-          onSelectionChange={(key) => onSortChange(sortFromKey(String(key)))}
-        />
         <span className="admin-filter-count">
           {t('adminUsers.userCount', { count: page.pagination.total })}
         </span>
@@ -224,19 +234,53 @@ export function UserListView({
           {message}
         </div>
       )}
-      <div className="admin-list-results">
-        {results}
-        <Pagination
-          label={t('adminUsers.pages')}
-          previousLabel={t('ui.back')}
-          nextLabel={t('ui.forward')}
-          pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
-          emptyLabel={t('ui.noPages')}
-          page={currentPage}
-          totalPages={totalPages}
-          onPageChange={onPageChange}
-        />
-      </div>
+      <DataTable<AdminUser>
+        caption={t('adminUsers.userTable')}
+        columns={columns}
+        rows={page.items}
+        rowId={(user) => user.id}
+        actionsLabel={t('adminUsers.actions')}
+        actions={(user) => (
+          <UserActions
+            user={user}
+            actor={actor}
+            isBusy={pendingUser !== undefined}
+            onSetStatus={(status) =>
+              runAction(user, () => onSetStatus(user.id, status), t('adminUsers.actionComplete'))
+            }
+            onDelete={() =>
+              runAction(user, () => onDelete(user.id), t('adminUsers.deletedComplete'))
+            }
+            onReset={(password) => onResetPassword(user.id, password)}
+            onAuthenticationRequired={onAuthenticationRequired}
+          />
+        )}
+        sort={{ key: state.sort, dir: naturalDirection[state.sort] }}
+        onSortChange={(next) => onSortChange(sortFromKey(next.key))}
+        mobileSortLabel={t('adminUsers.sortMobile')}
+        empty={
+          <EmptyState title={t(isFiltered ? 'adminUsers.emptyFiltered' : 'adminUsers.empty')}>
+            <p>{t(isFiltered ? 'adminUsers.emptyFilteredHint' : 'adminUsers.emptyHint')}</p>
+            {isFiltered && (
+              <Button variant="secondary" onPress={onClearFilters}>
+                {t('adminUsers.clearFilters')}
+              </Button>
+            )}
+          </EmptyState>
+        }
+        footer={
+          <Pagination
+            label={t('adminUsers.pages')}
+            previousLabel={t('ui.back')}
+            nextLabel={t('ui.forward')}
+            pageLabel={t('ui.pageOf', { page: currentPage, total: totalPages })}
+            emptyLabel={t('ui.noPages')}
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+          />
+        }
+      />
     </section>
   );
 }
@@ -289,7 +333,7 @@ function UserActions({
   const { t } = useTranslation();
   if (user.status === 'deleted') return <span>{t('adminUsers.noActions')}</span>;
   return (
-    <div className="admin-user-actions">
+    <>
       <Tooltip
         content={t(user.status === 'active' ? 'adminUsers.blockShort' : 'adminUsers.restoreShort')}
       >
@@ -333,7 +377,7 @@ function UserActions({
         onReset={onReset}
         onAuthenticationRequired={onAuthenticationRequired}
       />
-    </div>
+    </>
   );
 }
 
@@ -419,10 +463,11 @@ function roleFromKey(key: string): AdminUserRole | undefined {
 
 function sortFromKey(key: string): AdminUserSort {
   switch (key) {
-    case 'name':
     case 'recent':
-      return key;
-    default:
+      return 'recent';
+    case 'email':
       return 'email';
+    default:
+      return 'name';
   }
 }

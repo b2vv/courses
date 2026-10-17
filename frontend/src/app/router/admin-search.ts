@@ -128,7 +128,10 @@ export function adminUserListState(search: AdminUserSearch): AdminUserListState 
   return {
     ...(status.success ? { status: status.data } : {}),
     ...(role.success ? { role: role.data } : {}),
-    sort: sort.success ? sort.data : 'email',
+    // Default sort is `name`: the account column header (the person's name) is the one
+    // the UI offers and shows active on load. `email` stays a valid hand-typed value and
+    // the backend's own default, so adminUserQuery still omits it to mean "server default".
+    sort: sort.success ? sort.data : 'name',
     q: q.success ? q.data : '',
     page: page.success ? page.data : 1,
   };
