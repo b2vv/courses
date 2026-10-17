@@ -394,6 +394,9 @@ export const en = {
       },
       learners: {
         title: 'Learners',
+        eyebrow: 'Learning experience',
+        lede: 'Help students move from their first lesson to a real outcome.',
+        progressLabel: 'Progress',
         empty: 'No learners yet',
         more: 'Show more',
         coursesLabel: 'Courses',
