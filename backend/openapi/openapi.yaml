@@ -2916,7 +2916,7 @@ components:
     AdminCourseTree:
       type: object
       additionalProperties: false
-      required: [id, slug, title, summary, description, status, instructorId, createdAt, updatedAt, publishedAt, price, modules]
+      required: [id, slug, title, summary, description, status, instructorId, createdAt, updatedAt, publishedAt, price, studentCount, modules]
       properties:
         id: { type: string, format: uuid }
         slug: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
@@ -2929,6 +2929,7 @@ components:
         updatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
         publishedAt: { $ref: '#/components/schemas/NullableAdminTimestamp' }
         price: { $ref: '#/components/schemas/NullablePrice' }
+        studentCount: { type: integer, format: int64, minimum: 0 }
         modules:
           type: array
           maxItems: 40

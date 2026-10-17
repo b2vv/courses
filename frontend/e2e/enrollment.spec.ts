@@ -184,6 +184,7 @@ test('En04 En10 nginx media bytes require membership except for a published prev
     const course = await createFreeCourse(admin.request, baseURL, 'media-preview');
     const editor = await admin.newPage();
     await editor.goto(`/admin/courses/${course.id}`);
+    await editor.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     const lesson = editor
       .getByRole('group', { name: 'Модуль 1', exact: true })
       .getByRole('group', { name: 'Урок 1', exact: true });
@@ -240,6 +241,7 @@ test('En04 En10 nginx media bytes require membership except for a published prev
     expect((await student.request.get(memberSegment)).status()).toBe(403);
 
     await editor.reload();
+    await editor.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     const previewLabel = 'Відкритий до покупки — урок 1, модуль 1';
     await expect(editor.getByRole('checkbox', { name: previewLabel })).not.toBeChecked();
     await editor.getByText(previewLabel, { exact: true }).click();

@@ -86,6 +86,7 @@ type CourseTree struct {
 	PublishedAt  *time.Time
 	Price        *Price
 	PriceSet     bool
+	StudentCount int64
 	Modules      []Module
 }
 

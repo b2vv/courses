@@ -270,12 +270,16 @@ test.describe('with a stored admin session', () => {
     const editorPath = new URL(page.url()).pathname;
     await expect(page.getByRole('heading', { name: draft.title })).toBeVisible();
 
+    // Modules and lessons are authored on the Lessons tab (view-3 layout).
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     await page.getByRole('button', { name: 'Додати модуль', exact: true }).click();
     await page.getByLabel('Назва модуля 1').fill(moduleTitle);
     await page.getByRole('button', { name: 'Додати урок до модуля 1', exact: true }).click();
     await page.getByLabel('Назва уроку 1 у модулі 1').fill(lessonTitle);
     await page.getByRole('button', { name: 'Зберегти зміни', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Зміни збережено.' })).toBeVisible();
+    // The transcript notice and the publish control live in the Overview Status panel.
+    await page.getByRole('radio', { name: /Overview|Огляд/ }).click();
     await expect(
       page.getByRole('status').filter({ hasText: /Відсутні транскрипти/ }),
     ).toBeVisible();

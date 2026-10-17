@@ -283,6 +283,8 @@ test.describe('with a real two-second video', () => {
     // Uploaded through the editor, the way an author does it — the upload contract belongs to
     // Phase 5 and this journey must not invent a second way into it.
     await page.goto(`/admin/courses/${course.id}`);
+    // Per-lesson video upload lives on the Lessons tab (view-3 layout).
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     const minted = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/admin/lessons/${videoLessonID}/video` &&
@@ -502,6 +504,8 @@ test.describe('the transcript editor, with a stored admin session', () => {
     const course = await seedDraftCourse(page.request, baseURL);
 
     await page.goto(`/admin/courses/${course.id}`);
+    // The per-lesson transcript editor lives on the Lessons tab (view-3 layout).
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     const text = page.getByRole('textbox', { name: 'Текст репліки 1' });
     await expect(text).toHaveValue('Серверний текст');
 
@@ -519,6 +523,8 @@ test.describe('the transcript editor, with a stored admin session', () => {
 
     // The reload that used to lose the work without a word.
     await page.reload();
+    // The editor tab is local view state, so a reload lands back on Overview — reopen Lessons.
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
 
     // The server's text is what the editor shows: recovery OFFERS, it never restores by itself.
     await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
@@ -537,6 +543,7 @@ test.describe('the transcript editor, with a stored admin session', () => {
     await expect.poll(() => storedSnapshotKeys(page)).toEqual([]);
 
     await page.reload();
+    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
     await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
       'Правка, яку ніхто не зберіг',
     );

@@ -98,6 +98,8 @@ export const adminCourseTreeSchema = z
     // Required and nullable in the contract (null = free). The course form omits it
     // ("unchanged"); only `setPrice` sends it.
     price: priceSchema.nullable(),
+    // Active enrolments, derived server-side; read-only, shown in the editor mini-stats.
+    studentCount: z.number().int().min(0),
     modules: z.array(adminModuleSchema).max(40),
   })
   .strict()

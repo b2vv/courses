@@ -331,6 +331,23 @@ INSERT INTO course_grants (user_id,course_id,source,state) VALUES
 		t.Fatalf("status counts=%+v (want 3/1/1/1)", page.StatusCounts)
 	}
 
+	// The editor read (GetAuthoringCourse) carries the same active-grant count as the list row,
+	// counting active grants only — the one revoked grant on enrich-paid must not inflate it.
+	paidTree, err := h.repository.Load(h.ctx, paid.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paidTree.StudentCount != 2 {
+		t.Fatalf("editor tree students=%d (want 2, active grants only)", paidTree.StudentCount)
+	}
+	freeTree, err := h.repository.Load(h.ctx, free.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if freeTree.StudentCount != 0 {
+		t.Fatalf("free editor tree students=%d (want 0)", freeTree.StudentCount)
+	}
+
 	searched, err := domain.NewQuery(50, 0, "postgresql", string(domain.SortRecent))
 	if err != nil {
 		t.Fatal(err)

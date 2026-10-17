@@ -1346,6 +1346,84 @@ nav a {
 .admin-lifecycle p {
   margin-block-end: 0;
 }
+/* View-3 #course layout fidelity: 2-column Overview with a form and a stack of side panels. */
+/* The segmented tab control hugs its content on the left instead of stretching the grid column. */
+.course-tabs {
+  display: flex;
+}
+.course-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.card-heading h2 {
+  margin: 0;
+}
+.course-side-panels {
+  display: grid;
+  gap: var(--space-4);
+}
+.course-side-panels > .ui-card {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+.course-side-panels p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  line-height: 1.65;
+}
+.course-mini-stats {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: 100%;
+}
+.course-mini-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+.course-mini-stats strong {
+  color: var(--color-text);
+  font-family: var(--font-utility);
+}
+.danger-panel .eyebrow {
+  color: var(--color-danger);
+}
+.danger-panel h2 {
+  margin-block: var(--space-2);
+}
+.course-lessons-panel {
+  display: grid;
+  gap: var(--space-6);
+}
+@media (max-width: 76rem) {
+  .course-form-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .course-side-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .course-side-panels .danger-panel {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 52rem) {
+  .course-side-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 40rem) {
   .admin-list-actions,
   .admin-editor-save {
