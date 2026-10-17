@@ -10,6 +10,7 @@ import type {
   UseFormReturn,
 } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import * as Aria from 'react-aria-components';
 import { AuthoringQueryError } from '../../app/composition/admin-queries';
 import { newLessonId, newModuleId } from '../../domain/course/course';
 import type {
@@ -29,7 +30,6 @@ import {
   Dialog,
   Link,
   PageHeader,
-  SegmentedControl,
   Select,
   Skeleton,
   TextArea,
@@ -733,186 +733,197 @@ export function CourseEditorView({
           </>
         }
       />
-      <div className="course-tabs">
-        <SegmentedControl
-          label={t('administration.tabsLabel')}
-          options={[
-            { id: 'overview', label: t('administration.tabOverview') },
-            { id: 'lessons', label: t('administration.tabLessons') },
-            { id: 'access', label: t('administration.tabAccess') },
-          ]}
-          selectedKeys={new Set([tab])}
-          onSelectionChange={(keys) => {
-            const next = String([...keys][0] ?? 'overview');
-            if (next === 'overview' || next === 'lessons' || next === 'access') setTab(next);
-          }}
-        />
-      </div>
-      {message && (
-        <div className="admin-editor-message" role={messageKind}>
-          {message}
-        </div>
-      )}
-      <form
-        className="admin-editor-form"
-        onSubmit={form.handleSubmit(save)}
-        noValidate
-        aria-busy={form.formState.isSubmitting}
-        hidden={tab === 'access'}
+      <Aria.Tabs
+        className="course-tabs"
+        selectedKey={tab}
+        onSelectionChange={(key) => {
+          const next = String(key);
+          if (next === 'overview' || next === 'lessons' || next === 'access') setTab(next);
+        }}
       >
-        <FormErrorSummary form={form} fields={summaryFields} onSelect={focusField} />
-        <div className="course-form-layout" hidden={tab !== 'overview'}>
-          <section
-            className="admin-editor-details ui-card course-details-form"
-            aria-labelledby="course-details-heading"
-          >
-            <div className="card-heading">
-              <h2 id="course-details-heading">{t('administration.courseDetails')}</h2>
-            </div>
-            <div className="admin-editor-grid">
-              <StringField
-                control={form.control}
-                name="title"
-                label={t('administration.courseTitle')}
-                maximum={200}
-                required
-              />
-              <StringField
-                control={form.control}
-                name="slug"
-                label={t('administration.slug')}
-                maximum={120}
-                required
-                slug
-                isDisabled={course.publishedAt !== null}
-                {...(course.publishedAt === null
-                  ? {}
-                  : { description: t('administration.slugLocked') })}
-              />
-              <StringField
-                control={form.control}
-                name="summary"
-                label={t('administration.summary')}
-                maximum={500}
-                required
-                multiline
-              />
-              <StringField
-                control={form.control}
-                name="description"
-                label={t('administration.description')}
-                maximum={20000}
-                required
-                multiline
-              />
-              <OwnerField form={form} actor={actor} options={ownerOptions} />
-            </div>
-          </section>
-          <div className="course-side-panels">
-            <section className="ui-card" aria-labelledby="course-lifecycle-heading">
-              <div className="card-heading">
-                <h2 id="course-lifecycle-heading">{t('administration.courseStatus')}</h2>
-              </div>
-              <p>{t('administration.statusHint')}</p>
-              {hasTranscriptNotice && (
-                <output className="admin-editor-message">
-                  {t('administration.transcriptsPending')}
-                </output>
-              )}
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={lifecyclePending || form.formState.isSubmitting}
-                onPress={() => void transition()}
-              >
-                {transitionLabel}
-              </Button>
-            </section>
-            <section className="ui-card" aria-labelledby="course-stats-heading">
-              <div className="card-heading">
-                <h2 id="course-stats-heading">{t('administration.miniStatsLabel')}</h2>
-              </div>
-              <div className="course-mini-stats">
-                <div>
-                  <span>{t('administration.statLessons')}</span>
-                  <strong>{lessonCount}</strong>
-                </div>
-                <div>
-                  <span>{t('administration.students')}</span>
-                  <strong>{course.studentCount}</strong>
-                </div>
-                <div>
-                  <span>{t('administration.updated')}</span>
-                  <strong>{course.updatedAt.slice(0, 10)}</strong>
-                </div>
-              </div>
-            </section>
-            {course.status === 'draft' && (
-              <section className="ui-card danger-panel" aria-labelledby="course-danger-heading">
-                <p className="eyebrow">{t('administration.dangerZone')}</p>
-                <h2 id="course-danger-heading">{t('administration.deleteCourse')}</h2>
-                <p>{t('administration.dangerHint')}</p>
-                <Dialog
-                  triggerLabel={t('administration.deleteCourse')}
-                  trigger={
-                    <Button
-                      type="button"
-                      variant="danger"
-                      isDisabled={lifecyclePending || form.formState.isSubmitting}
-                    >
-                      {t('administration.deleteCourse')}
-                    </Button>
-                  }
-                  title={t('administration.deleteCourse')}
-                  closeLabel={t('common.cancel')}
-                >
-                  {(close) => (
-                    <Button
-                      variant="danger"
-                      onPress={() => {
-                        void removeCourse();
-                        close();
-                      }}
-                    >
-                      {t('administration.confirmDeleteCourse')}
-                    </Button>
-                  )}
-                </Dialog>
-              </section>
-            )}
+        <Aria.TabList aria-label={t('administration.tabsLabel')} className="ui-segmented">
+          <Aria.Tab id="overview" className="ui-segment">
+            {t('administration.tabOverview')}
+          </Aria.Tab>
+          <Aria.Tab id="lessons" className="ui-segment">
+            {t('administration.tabLessons')}
+          </Aria.Tab>
+          <Aria.Tab id="access" className="ui-segment">
+            {t('administration.tabAccess')}
+          </Aria.Tab>
+        </Aria.TabList>
+        {message && (
+          <div className="admin-editor-message" role={messageKind}>
+            {message}
           </div>
-        </div>
-        <div className="course-lessons-panel" hidden={tab !== 'lessons'}>
-          {transcripts !== undefined && (
-            <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
-          )}
-          <ModuleFields
-            form={form}
-            savedLessonIds={savedLessonIds}
-            video={video}
-            drafts={drafts}
-            transcripts={transcripts}
-            onTranscriptKnown={onTranscriptKnown}
-          />
-        </div>
-        <div className="admin-editor-save">
-          <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
-            {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}
-          </Button>
-        </div>
-      </form>
-      {onSetPrice !== undefined && (
-        <div hidden={tab !== 'overview'}>
-          <CoursePriceField
-            key={course.price?.minor ?? 'free'}
-            course={course}
-            hasUnsavedChanges={form.formState.isDirty}
-            isBusy={lifecyclePending || form.formState.isSubmitting}
-            onSetPrice={setPrice}
-          />
-        </div>
-      )}
-      <div hidden={tab !== 'access'}>{adminTools}</div>
+        )}
+        <form
+          className="admin-editor-form"
+          onSubmit={form.handleSubmit(save)}
+          noValidate
+          aria-busy={form.formState.isSubmitting}
+          hidden={tab === 'access'}
+        >
+          <FormErrorSummary form={form} fields={summaryFields} onSelect={focusField} />
+          <Aria.TabPanel id="overview" shouldForceMount className="ui-tab-panel">
+            <div className="course-form-layout">
+              <section
+                className="admin-editor-details ui-card course-details-form"
+                aria-labelledby="course-details-heading"
+              >
+                <div className="card-heading">
+                  <h2 id="course-details-heading">{t('administration.courseDetails')}</h2>
+                </div>
+                <div className="admin-editor-grid">
+                  <StringField
+                    control={form.control}
+                    name="title"
+                    label={t('administration.courseTitle')}
+                    maximum={200}
+                    required
+                  />
+                  <StringField
+                    control={form.control}
+                    name="slug"
+                    label={t('administration.slug')}
+                    maximum={120}
+                    required
+                    slug
+                    isDisabled={course.publishedAt !== null}
+                    {...(course.publishedAt === null
+                      ? {}
+                      : { description: t('administration.slugLocked') })}
+                  />
+                  <StringField
+                    control={form.control}
+                    name="summary"
+                    label={t('administration.summary')}
+                    maximum={500}
+                    required
+                    multiline
+                  />
+                  <StringField
+                    control={form.control}
+                    name="description"
+                    label={t('administration.description')}
+                    maximum={20000}
+                    required
+                    multiline
+                  />
+                  <OwnerField form={form} actor={actor} options={ownerOptions} />
+                </div>
+              </section>
+              <div className="course-side-panels">
+                <section className="ui-card" aria-labelledby="course-lifecycle-heading">
+                  <div className="card-heading">
+                    <h2 id="course-lifecycle-heading">{t('administration.courseStatus')}</h2>
+                  </div>
+                  <p>{t('administration.statusHint')}</p>
+                  {hasTranscriptNotice && (
+                    <output className="admin-editor-message">
+                      {t('administration.transcriptsPending')}
+                    </output>
+                  )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    isDisabled={lifecyclePending || form.formState.isSubmitting}
+                    onPress={() => void transition()}
+                  >
+                    {transitionLabel}
+                  </Button>
+                </section>
+                <section className="ui-card" aria-labelledby="course-stats-heading">
+                  <div className="card-heading">
+                    <h2 id="course-stats-heading">{t('administration.miniStatsLabel')}</h2>
+                  </div>
+                  <div className="course-mini-stats">
+                    <div>
+                      <span>{t('administration.statLessons')}</span>
+                      <strong>{lessonCount}</strong>
+                    </div>
+                    <div>
+                      <span>{t('administration.students')}</span>
+                      <strong>{course.studentCount}</strong>
+                    </div>
+                    <div>
+                      <span>{t('administration.updated')}</span>
+                      <strong>{course.updatedAt.slice(0, 10)}</strong>
+                    </div>
+                  </div>
+                </section>
+                {course.status === 'draft' && (
+                  <section className="ui-card danger-panel" aria-labelledby="course-danger-heading">
+                    <p className="eyebrow">{t('administration.dangerZone')}</p>
+                    <h2 id="course-danger-heading">{t('administration.deleteCourse')}</h2>
+                    <p>{t('administration.dangerHint')}</p>
+                    <Dialog
+                      triggerLabel={t('administration.deleteCourse')}
+                      trigger={
+                        <Button
+                          type="button"
+                          variant="danger"
+                          isDisabled={lifecyclePending || form.formState.isSubmitting}
+                        >
+                          {t('administration.deleteCourse')}
+                        </Button>
+                      }
+                      title={t('administration.deleteCourse')}
+                      closeLabel={t('common.cancel')}
+                    >
+                      {(close) => (
+                        <Button
+                          variant="danger"
+                          onPress={() => {
+                            void removeCourse();
+                            close();
+                          }}
+                        >
+                          {t('administration.confirmDeleteCourse')}
+                        </Button>
+                      )}
+                    </Dialog>
+                  </section>
+                )}
+              </div>
+            </div>
+          </Aria.TabPanel>
+          <Aria.TabPanel id="lessons" shouldForceMount className="ui-tab-panel">
+            <div className="course-lessons-panel">
+              {transcripts !== undefined && (
+                <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
+              )}
+              <ModuleFields
+                form={form}
+                savedLessonIds={savedLessonIds}
+                video={video}
+                drafts={drafts}
+                transcripts={transcripts}
+                onTranscriptKnown={onTranscriptKnown}
+              />
+            </div>
+          </Aria.TabPanel>
+          <div className="admin-editor-save">
+            <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
+              {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}
+            </Button>
+          </div>
+        </form>
+        {onSetPrice !== undefined && (
+          <div hidden={tab !== 'overview'}>
+            <CoursePriceField
+              key={course.price?.minor ?? 'free'}
+              course={course}
+              hasUnsavedChanges={form.formState.isDirty}
+              isBusy={lifecyclePending || form.formState.isSubmitting}
+              onSetPrice={setPrice}
+            />
+          </div>
+        )}
+        <Aria.TabPanel id="access" shouldForceMount className="ui-tab-panel">
+          {adminTools}
+        </Aria.TabPanel>
+      </Aria.Tabs>
     </article>
   );
 }

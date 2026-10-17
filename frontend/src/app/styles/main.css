@@ -1362,7 +1362,8 @@ nav a {
 /* View-3 #course layout fidelity: 2-column Overview with a form and a stack of side panels. */
 /* The segmented tab control hugs its content on the left instead of stretching the grid column. */
 .course-tabs {
-  display: flex;
+  display: grid;
+  gap: var(--space-8);
 }
 .course-form-layout {
   display: grid;
