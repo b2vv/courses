@@ -300,7 +300,7 @@ test.describe('the first real video through the whole chain', () => {
     if (course === undefined || baseURL === undefined)
       throw new Error('Media course was not created');
     await page.goto(`/admin/courses/${course.id}`);
-    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     const field = lessonField(page, lessons.main.index);
     await installProgressRecorder(field);
     const uploaded = await upload(page, lessons.main, fixture('640x360'));
@@ -338,7 +338,7 @@ test.describe('the first real video through the whole chain', () => {
     await expectPrivateMedia(page.request, browser, baseURL, uploaded.videoId);
 
     await page.reload();
-    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     await expect(
       lessonField(page, lessons.main.index).locator('[data-video-state]'),
     ).toHaveAttribute('data-video-state', 'ready');
@@ -349,7 +349,7 @@ test.describe('the first real video through the whole chain', () => {
   }) => {
     if (course === undefined) throw new Error('Media course was not created');
     await page.goto(`/admin/courses/${course.id}`);
-    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     const twoRung = await upload(page, lessons.twoRung, fixture('1280x720'));
     await expect(twoRung.field.locator('[data-video-state]')).toHaveAttribute(
       'data-video-state',
@@ -419,7 +419,7 @@ test.describe('the first real video through the whole chain', () => {
   }) => {
     if (course === undefined) throw new Error('Media course was not created');
     await page.goto(`/admin/courses/${course.id}`);
-    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     const uploaded = await upload(page, lessons.restart, fixture('1280x720-5min'));
     const state = uploaded.field.locator('[data-video-state]');
     await expect(state).toHaveAttribute('data-video-state', 'processing', { timeout: 60_000 });

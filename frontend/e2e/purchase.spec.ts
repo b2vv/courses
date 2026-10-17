@@ -115,13 +115,13 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
     const editor = await admin.newPage();
     await editor.goto(`/admin/courses/${course.id}`);
     // The per-lesson preview toggle lives on the Lessons tab; the price lives on Overview (view-3).
-    await editor.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await editor.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     // React Aria hides the native input; the label is what a person clicks.
     await editor.getByText('Відкритий до покупки — урок 2, модуль 1').click();
     await expect(
       editor.getByRole('checkbox', { name: 'Відкритий до покупки — урок 2, модуль 1' }),
     ).toBeChecked();
-    await editor.getByRole('radio', { name: /Overview|Огляд/ }).click();
+    await editor.getByRole('tab', { name: /Overview|Огляд/ }).click();
     const amount = editor.getByRole('textbox', { name: 'Ціна, грн' });
     await expect(amount).toBeDisabled();
     await editor.getByRole('button', { name: 'Зберегти зміни' }).click();
@@ -226,7 +226,7 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
     const editor = await grantor.newPage();
     await editor.goto(`/admin/courses/${courseId}`);
     // The grant tool lives on the Access tab of the course editor (view-3 layout).
-    await editor.getByRole('radio', { name: /Access|Доступ/ }).click();
+    await editor.getByRole('tab', { name: /Access|Доступ/ }).click();
     const grant = editor.getByRole('region', { name: 'Видати доступ до курсу' });
     await grant
       .getByRole('combobox', { name: 'Користувач' })

@@ -128,7 +128,7 @@ async function seed(
 async function openEditor(page: Page, courseID: string) {
   await page.goto(`/admin/courses/${courseID}`);
   // Modules/lessons live on the Lessons tab of the course editor (view-3 layout); reveal it first.
-  await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+  await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
   await expect(page.getByRole('group', { name: 'Модуль 1' })).toBeVisible();
 }
 
@@ -357,7 +357,7 @@ test.describe('ASR acceptance with a stored admin session', () => {
     await waitForRegeneratedDraft(page);
     await page.reload();
     // A reload resets the editor tab to Overview; reopen Lessons to reach the draft notice.
-    await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
     await expect(
       page.getByText(
         /Незбережені зміни поверх застарілого тексту|Unsaved changes over text that has moved on/,

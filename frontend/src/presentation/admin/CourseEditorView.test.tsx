@@ -90,7 +90,7 @@ describe('course editor', () => {
     await waitFor(() => expect(title.getAttribute('aria-invalid')).toBe('true'));
     expect(screen.queryByRole('alert')).toBeNull();
     await browser.clear(screen.getByRole('textbox', { name: 'Summary' }));
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Add module' }));
     await browser.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
     const save = screen.getByRole('button', { name: 'Save changes' });
@@ -106,11 +106,11 @@ describe('course editor', () => {
     }
     await browser.click(save);
     await waitFor(() => expect(document.activeElement).toBe(summary));
-    await browser.click(screen.getByRole('radio', { name: 'Overview' }));
+    await browser.click(screen.getByRole('tab', { name: 'Overview' }));
     await browser.type(title, 'Fixed');
     await waitFor(() => expect(title.getAttribute('aria-invalid')).not.toBe('true'));
     expect(within(summary).queryByRole('link', { name: 'Title' })).toBeNull();
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Delete module 1' }));
     expect(within(summary).getAllByRole('link')).toHaveLength(1);
     expect(saves).toBe(0);
@@ -241,7 +241,7 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Load draft into editor' }));
     const editors = screen.getAllByRole('heading', { name: 'Lesson transcript' }).map((heading) => {
       const section = heading.closest('section');
@@ -366,7 +366,7 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Add module' }));
     await browser.type(screen.getByRole('textbox', { name: 'Module 1 title' }), 'Foundations');
     await browser.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
@@ -433,7 +433,7 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Move module 2 up' }));
     await browser.click(screen.getByRole('button', { name: 'Move lesson 2 in module 2 up' }));
     await browser.click(screen.getByRole('button', { name: 'Delete lesson 2 in module 2' }));
@@ -537,7 +537,7 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     const moduleTitles = screen.getAllByRole('textbox', { name: /^Module \d+ title$/ });
     const lessonTitles = screen.getAllByRole('textbox', {
       name: /^Lesson \d+ title in module \d+$/,
@@ -888,7 +888,7 @@ describe('course price and previews', () => {
       },
       async (current) => current,
     );
-    await browser.click(screen.getByRole('radio', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(
       screen.getByRole('checkbox', { name: 'Open before purchase — lesson 1, module 1' }),
     );
