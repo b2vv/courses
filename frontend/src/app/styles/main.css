@@ -2942,25 +2942,15 @@ button.transcript-line-body:hover {
   max-inline-size: 100%;
   white-space: normal;
 }
-.learners-filters form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+.learner-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
-}
-.learners-filters .ui-field {
-  flex: 1 1 var(--space-prose-min);
   min-inline-size: 0;
 }
-.learners-filters .ui-input {
-  inline-size: 100%;
-  min-inline-size: 0;
-}
-.learners-filters .ui-button {
-  max-inline-size: 100%;
-  white-space: normal;
-}
-.learners-list,
 .learners-courses {
   list-style: none;
   margin: 0;
@@ -2973,18 +2963,44 @@ button.transcript-line-body:hover {
   display: grid;
   gap: var(--space-5);
   min-inline-size: 0;
+  padding: var(--space-5);
   box-shadow: var(--shadow-card);
 }
 .learner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.learner-header h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+.person-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+.admin-avatar {
+  display: grid;
+  place-items: center;
+  inline-size: var(--control-min-size);
+  block-size: var(--control-min-size);
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-elevated);
+  color: var(--color-muted);
+  font: 0.6875rem var(--font-utility);
+}
+.learner-enrollment-zone {
   display: grid;
   gap: var(--space-2);
 }
-.learner-header h2,
-.learner-header p {
+.learner-enrollment-zone > .eyebrow {
   margin: 0;
-}
-.learner-header p {
-  color: var(--color-muted);
 }
 .learners-courses > li {
   display: grid;
@@ -3005,14 +3021,44 @@ button.transcript-line-body:hover {
 .learner-enrollment > a {
   display: flex;
   align-items: center;
+  gap: var(--space-3);
   min-block-size: var(--control-min-size);
   min-inline-size: 0;
   max-inline-size: 100%;
   overflow-wrap: anywhere;
   font-weight: 650;
 }
+.learner-enrollment-arrow {
+  flex-shrink: 0;
+  color: var(--color-muted);
+}
 .learner-card .ui-progress-track {
   block-size: var(--space-3);
+}
+.learner-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-hairline);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+.learner-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.learner-meta strong {
+  font-weight: 650;
+  color: var(--color-text);
+}
+@media (max-width: 76rem) {
+  .learner-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Admin report/refund queues: shared primitives are consumed, not overridden. */

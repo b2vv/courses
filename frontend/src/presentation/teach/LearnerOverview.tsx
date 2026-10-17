@@ -3,7 +3,7 @@ import type { Key } from 'react-aria-components';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import type { LearnerFilters, LearnerRow } from '../../domain/teach/teach';
-import { Button, ProgressBar, Select } from '../ui';
+import { Button, PageHeader, ProgressBar, Select } from '../ui';
 
 type LearnerOverviewProps = {
   readonly entries: readonly LearnerRow[];
@@ -31,6 +31,54 @@ function learnerErrorKey(error: unknown): string {
     default:
       return 'generic';
   }
+}
+
+/** One or two uppercase letters for the avatar monogram, from the resolved display name. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '—';
+  const first = parts[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
+  return ((first.charAt(0) ?? '') + (last.charAt(0) ?? '')).toUpperCase() || '—';
+}
+
+/** Decorative glyphs — the project ships no icon component, so views inline their SVGs. */
+function ArrowGlyph() {
+  return (
+    <svg
+      className="learner-enrollment-arrow"
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
+function ClockGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 4.75V8l2.25 1.5" />
+    </svg>
+  );
 }
 
 export function LearnerOverview({
@@ -91,10 +139,16 @@ export function LearnerOverview({
 
   return (
     <section aria-labelledby="teach-learners-heading" className="teach-section learners-overview">
-      <h1 id="teach-learners-heading">{t('teach.learners.title')}</h1>
+      <PageHeader
+        eyebrow={t('teach.learners.eyebrow')}
+        title={t('teach.learners.title')}
+        titleId="teach-learners-heading"
+        description={t('teach.learners.lede')}
+      />
 
-      <search className="learners-filters">
+      <search className="admin-filter-bar">
         <form
+          className="admin-user-search"
           onSubmit={(event) => {
             event.preventDefault();
             commitQuery(String(new FormData(event.currentTarget).get('q') ?? ''));
@@ -113,21 +167,21 @@ export function LearnerOverview({
               placeholder={t('teach.learners.searchPlaceholder')}
             />
           </label>
-          <Select
-            label={t('teach.learners.stateLabel')}
-            options={stateOptions}
-            selectedKey={filters.state ?? 'all'}
-            onSelectionChange={changeState}
-          />
           <Button type="submit" variant="secondary">
             {t('teach.learners.searchSubmit')}
           </Button>
-          {filters.courseId === undefined ? null : (
-            <Button variant="secondary" onPress={clearCourse}>
-              {t('teach.learners.clearCourse')}
-            </Button>
-          )}
         </form>
+        <Select
+          label={t('teach.learners.stateLabel')}
+          options={stateOptions}
+          selectedKey={filters.state ?? 'all'}
+          onSelectionChange={changeState}
+        />
+        {filters.courseId === undefined ? null : (
+          <Button variant="secondary" onPress={clearCourse}>
+            {t('teach.learners.clearCourse')}
+          </Button>
+        )}
       </search>
 
       {isLoading ? <output>{t('common.loading')}</output> : null}
@@ -142,7 +196,7 @@ export function LearnerOverview({
       ) : null}
 
       {entries.length > 0 ? (
-        <ul aria-label={t('teach.learners.title')} className="learners-list">
+        <ul aria-label={t('teach.learners.title')} className="learner-grid">
           {entries.map((entry, index) => (
             <li
               key={entry.userId}
@@ -150,40 +204,59 @@ export function LearnerOverview({
             >
               <article className="ui-card learner-card">
                 <header className="learner-header">
-                  <h2>{entry.displayName || t('ratings.formerAuthor')}</h2>
-                  <p>
-                    {t('teach.learners.lastActivity')}{' '}
-                    {entry.lastActivityAt === null ? (
-                      <span>{t('teach.learners.neverActive')}</span>
-                    ) : (
+                  <div className="person-cell">
+                    <span className="admin-avatar" aria-hidden="true">
+                      {initialsOf(entry.displayName || t('ratings.formerAuthor'))}
+                    </span>
+                    <h2>{entry.displayName || t('ratings.formerAuthor')}</h2>
+                  </div>
+                </header>
+
+                <div className="learner-enrollment-zone">
+                  <p className="eyebrow">{t('teach.learners.coursesLabel')}</p>
+                  <ul aria-label={t('teach.learners.coursesLabel')} className="learners-courses">
+                    {entry.courses.map((course) => (
+                      <li key={course.courseId}>
+                        <div className="learner-enrollment">
+                          <Link
+                            to="/teach/courses/$courseId"
+                            params={{ courseId: course.courseId }}
+                          >
+                            <span>{course.title}</span>
+                            <ArrowGlyph />
+                          </Link>
+                          <span
+                            className={`ui-pill ui-pill--${course.state === 'active' ? 'success' : 'danger'}`}
+                          >
+                            {t(`enrollment.roster.state.${course.state}`)}
+                          </span>
+                        </div>
+                        <ProgressBar
+                          label={t('teach.learners.progressLabel')}
+                          value={course.progressPercent}
+                          minValue={0}
+                          maxValue={100}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="learner-meta">
+                  <span>
+                    <ClockGlyph />
+                    {t('teach.learners.lastActivity')}
+                  </span>
+                  {entry.lastActivityAt === null ? (
+                    <strong>{t('teach.learners.neverActive')}</strong>
+                  ) : (
+                    <strong>
                       <time dateTime={entry.lastActivityAt}>
                         {new Date(entry.lastActivityAt).toLocaleString(i18n.resolvedLanguage)}
                       </time>
-                    )}
-                  </p>
-                </header>
-                <ul aria-label={t('teach.learners.coursesLabel')} className="learners-courses">
-                  {entry.courses.map((course) => (
-                    <li key={course.courseId}>
-                      <div className="learner-enrollment">
-                        <Link to="/teach/courses/$courseId" params={{ courseId: course.courseId }}>
-                          {course.title}
-                        </Link>
-                        <span
-                          className={`ui-pill ui-pill--${course.state === 'active' ? 'success' : 'danger'}`}
-                        >
-                          {t(`enrollment.roster.state.${course.state}`)}
-                        </span>
-                      </div>
-                      <ProgressBar
-                        label={t('enrollment.progress', { percent: course.progressPercent })}
-                        value={course.progressPercent}
-                        minValue={0}
-                        maxValue={100}
-                      />
-                    </li>
-                  ))}
-                </ul>
+                    </strong>
+                  )}
+                </div>
               </article>
             </li>
           ))}

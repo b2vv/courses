@@ -74,7 +74,8 @@ describe('LearnerOverview', () => {
     expect(screen.getByRole('heading', { name: 'Марія' })).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Інтро курс' });
     expect(link.getAttribute('href')).toBe(`/teach/courses/${courseId}`);
-    expect(screen.getByRole('progressbar', { name: '42% пройдено' })).toBeTruthy();
+    const progress = screen.getByRole('progressbar', { name: 'Прогрес' });
+    expect(progress.getAttribute('aria-valuenow')).toBe('42');
   });
 
   it('anonymises a deleted account and marks a learner with no activity', async () => {
