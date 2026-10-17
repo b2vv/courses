@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
-import type { ParticipantReportQueueItem } from '../../domain/enrollment/enrollment';
-import { Button, Dialog } from '../ui';
+import type {
+  ParticipantReportQueueItem,
+  ParticipantReportStateFilter,
+} from '../../domain/enrollment/enrollment';
+import { Button, Dialog, PageHeader, SegmentedControl } from '../ui';
+
+const stateFilters: readonly ParticipantReportStateFilter[] = ['all', 'open', 'resolved'];
 
 const reportStateVariants = {
   open: 'warning',
@@ -11,12 +16,14 @@ const reportStateVariants = {
 
 type ParticipantReportQueueProps = {
   readonly items: readonly ParticipantReportQueueItem[];
+  readonly state: ParticipantReportStateFilter;
   readonly isLoading: boolean;
   readonly error: unknown;
   readonly hasNextPage: boolean;
   readonly isFetchingNextPage: boolean;
   readonly resolvePending: boolean;
   readonly revokePending: boolean;
+  readonly onFilterChange: (state: ParticipantReportStateFilter) => void;
   readonly onRetry: () => void;
   readonly onLoadMore: () => void;
   readonly onResolve: (reportId: string) => Promise<void>;
@@ -42,12 +49,14 @@ function errorKey(error: unknown): string {
 
 export function ParticipantReportQueue({
   items,
+  state,
   isLoading,
   error,
   hasNextPage,
   isFetchingNextPage,
   resolvePending,
   revokePending,
+  onFilterChange,
   onRetry,
   onLoadMore,
   onResolve,
@@ -89,12 +98,24 @@ export function ParticipantReportQueue({
   }
 
   return (
-    <section aria-labelledby="participant-reports-heading" className="admin-user-list">
-      <div className="admin-list-heading">
-        <div>
-          <p className="eyebrow">{t('enrollment.reports.eyebrow')}</p>
-          <h1 id="participant-reports-heading">{t('enrollment.reports.title')}</h1>
-        </div>
+    <section className="admin-user-list" data-surface="admin">
+      <PageHeader
+        eyebrow={t('enrollment.reports.eyebrow')}
+        title={t('enrollment.reports.title')}
+        description={t('enrollment.reports.lede')}
+      />
+      <div className="admin-queue-filter">
+        <SegmentedControl
+          label={t('enrollment.reports.filterLabel')}
+          options={stateFilters.map((value) => ({
+            id: value,
+            label: t(`enrollment.reports.filter.${value}`),
+          }))}
+          selectedKeys={new Set([state])}
+          onSelectionChange={(keys) =>
+            onFilterChange(filterFromKey(String([...keys][0] ?? 'open')))
+          }
+        />
       </div>
       {isLoading ? <output>{t('common.loading')}</output> : null}
       {error ? (
@@ -119,8 +140,21 @@ export function ParticipantReportQueue({
               <path d="M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7zM12 8v5m0 4h.01" />
             </svg>
           </span>
-          <h2>{t('enrollment.reports.empty')}</h2>
-          <p>{t('enrollment.reports.emptyHint')}</p>
+          <h2>
+            {t(state === 'open' ? 'enrollment.reports.empty' : 'enrollment.reports.emptyFiltered')}
+          </h2>
+          <p>
+            {t(
+              state === 'open'
+                ? 'enrollment.reports.emptyHint'
+                : 'enrollment.reports.emptyFilteredHint',
+            )}
+          </p>
+          {state === 'open' ? null : (
+            <Button variant="secondary" onPress={() => onFilterChange('open')}>
+              {t('enrollment.reports.showOpen')}
+            </Button>
+          )}
         </div>
       ) : null}
       {items.length > 0 ? (
@@ -178,34 +212,39 @@ export function ParticipantReportQueue({
                     <span>{t('enrollment.reports.reason')}</span>
                     <p>{item.reason}</p>
                   </div>
-                  <div className="admin-queue-actions">
-                    <Button isPending={isPending} onPress={() => void resolve(item)}>
-                      {t('enrollment.reports.resolve')}
-                    </Button>
-                    {/* Revoke only applies to a reported student; on a lecturer report the target is
-                        the course owner, who has no membership — revoke would just fail grant_invalid,
-                        a dead action. So the control is gated to on_student reports. */}
-                    {item.kind === 'on_student' ? (
-                      <Dialog
-                        triggerLabel={t('enrollment.reports.revoke')}
-                        title={t('enrollment.reports.revoke')}
-                        closeLabel={t('common.close')}
-                      >
-                        {(close) => (
-                          <>
-                            <p>{t('enrollment.reports.revokeConfirm')}</p>
-                            <Button
-                              variant="danger"
-                              isPending={isPending}
-                              onPress={() => void revoke(item, close)}
-                            >
-                              {t('enrollment.reports.revoke')}
-                            </Button>
-                          </>
-                        )}
-                      </Dialog>
-                    ) : null}
-                  </div>
+                  {/* A resolved report (visible under the Resolved/All filters) carries no
+                      live action — the status pill is the whole story. Only open reports
+                      can be resolved, and only an open on_student report can be revoked. */}
+                  {item.state === 'open' ? (
+                    <div className="admin-queue-actions">
+                      <Button isPending={isPending} onPress={() => void resolve(item)}>
+                        {t('enrollment.reports.resolve')}
+                      </Button>
+                      {/* Revoke only applies to a reported student; on a lecturer report the target is
+                          the course owner, who has no membership — revoke would just fail grant_invalid,
+                          a dead action. So the control is gated to on_student reports. */}
+                      {item.kind === 'on_student' ? (
+                        <Dialog
+                          triggerLabel={t('enrollment.reports.revoke')}
+                          title={t('enrollment.reports.revoke')}
+                          closeLabel={t('common.close')}
+                        >
+                          {(close) => (
+                            <>
+                              <p>{t('enrollment.reports.revokeConfirm')}</p>
+                              <Button
+                                variant="danger"
+                                isPending={isPending}
+                                onPress={() => void revoke(item, close)}
+                              >
+                                {t('enrollment.reports.revoke')}
+                              </Button>
+                            </>
+                          )}
+                        </Dialog>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </article>
               </li>
             );
@@ -219,4 +258,15 @@ export function ParticipantReportQueue({
       ) : null}
     </section>
   );
+}
+
+function filterFromKey(key: string): ParticipantReportStateFilter {
+  switch (key) {
+    case 'resolved':
+      return 'resolved';
+    case 'all':
+      return 'all';
+    default:
+      return 'open';
+  }
 }

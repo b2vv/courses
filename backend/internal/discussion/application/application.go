@@ -185,11 +185,11 @@ func (service *Service) ReportStudent(ctx context.Context, actor Actor, courseID
 	return report, nil
 }
 
-func (service *Service) ReportQueue(ctx context.Context, actor Actor, cursor string) (ParticipantReportQueuePage, error) {
+func (service *Service) ReportQueue(ctx context.Context, actor Actor, cursor, stateFilter string) (ParticipantReportQueuePage, error) {
 	if !actor.Administrator {
 		return ParticipantReportQueuePage{}, domain.ErrReportForbidden
 	}
-	page, err := service.repository.ParticipantReportQueue(ctx, cursor, 20)
+	page, err := service.repository.ParticipantReportQueue(ctx, cursor, stateFilter, 20)
 	if err != nil {
 		return ParticipantReportQueuePage{}, err
 	}

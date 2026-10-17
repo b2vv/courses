@@ -149,7 +149,7 @@ func (f *reviewFake) ReportSubject(context.Context, string, string) (string, acc
 func (f *reviewFake) InsertParticipantReport(context.Context, domain.ParticipantReport) (string, error) {
 	return "70000000-0000-4000-8000-0000000000dd", nil
 }
-func (f *reviewFake) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
+func (f *reviewFake) ParticipantReportQueue(context.Context, string, string, int) (ports.ParticipantReportQueuePage, error) {
 	return ports.ParticipantReportQueuePage{}, nil
 }
 func (f *reviewFake) ResolveParticipantReport(context.Context, string) error { return nil }

@@ -366,10 +366,14 @@ export function createApiEnrollmentRepository(
       if (outcome.status !== 201) return failure(namedError(outcome, reportErrors));
       return record(outcome.data) ? { ok: true, value: undefined } : failure('invalid_response');
     },
-    async participantReports(cursor, signal) {
+    async participantReports(cursor, state, signal) {
+      const params =
+        cursor === undefined && state === undefined
+          ? undefined
+          : { ...(cursor ? { cursor } : {}), ...(state ? { state } : {}) };
       const outcome = await send(
         'enrollment.participant-reports',
-        (init) => listParticipantReports(cursor === undefined ? undefined : { cursor }, init),
+        (init) => listParticipantReports(params, init),
         200,
         signal,
       );

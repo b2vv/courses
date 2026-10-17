@@ -37,31 +37,32 @@ const (
 )
 
 type fakeRepository struct {
-	facts           ports.LessonFacts
-	page            ports.CommentPage
-	comments        map[string]ports.CommentRecord
-	factsErr        error
-	listErr         error
-	insertErr       error
-	updated         string
-	queue           ports.QueuePage
-	reports         []domain.Report
-	dismissed       []string
-	moderationLogs  []ports.ModerationLogEntry
-	reviewFacts     ports.ReviewFactsRecord
-	reviews         map[string]ports.ReviewRecord
-	publicCourse    string
-	publicErr       error
-	reviewPage      ports.ReviewPage
-	reviewCount     int
-	reviewSum       int
-	reviewReports   map[string]bool
-	reportOwner     string
-	reportMember    access.Membership
-	reportFound     bool
-	reportInsert    error
-	participantPage ports.ParticipantReportQueuePage
-	resolvedReport  string
+	facts                  ports.LessonFacts
+	page                   ports.CommentPage
+	comments               map[string]ports.CommentRecord
+	factsErr               error
+	listErr                error
+	insertErr              error
+	updated                string
+	queue                  ports.QueuePage
+	reports                []domain.Report
+	dismissed              []string
+	moderationLogs         []ports.ModerationLogEntry
+	reviewFacts            ports.ReviewFactsRecord
+	reviews                map[string]ports.ReviewRecord
+	publicCourse           string
+	publicErr              error
+	reviewPage             ports.ReviewPage
+	reviewCount            int
+	reviewSum              int
+	reviewReports          map[string]bool
+	reportOwner            string
+	reportMember           access.Membership
+	reportFound            bool
+	reportInsert           error
+	participantPage        ports.ParticipantReportQueuePage
+	participantStateFilter string
+	resolvedReport         string
 }
 
 // ReviewRepository is embedded in the production repository contract. The HTTP
@@ -179,7 +180,8 @@ func (fake *fakeRepository) InsertParticipantReport(context.Context, domain.Part
 	}
 	return "70000000-0000-4000-8000-0000000000dd", nil
 }
-func (fake *fakeRepository) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
+func (fake *fakeRepository) ParticipantReportQueue(_ context.Context, _, stateFilter string, _ int) (ports.ParticipantReportQueuePage, error) {
+	fake.participantStateFilter = stateFilter
 	return fake.participantPage, nil
 }
 func (fake *fakeRepository) ResolveParticipantReport(_ context.Context, id string) error {
@@ -373,6 +375,31 @@ func TestL6bParticipantReportRoutes(t *testing.T) {
 		response := serve(t, f, http.MethodGet, "/api/v1/admin/participant-reports", "", actor(discussionAdmin, "admin"), true)
 		if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "email") {
 			t.Fatalf("response=%d %s", response.Code, response.Body.String())
+		}
+	})
+	t.Run("state query maps to the repository filter and rejects unknown values", func(t *testing.T) {
+		for _, tc := range []struct {
+			query string
+			want  string
+		}{
+			{"", "open"},
+			{"?state=open", "open"},
+			{"?state=resolved", "resolved"},
+			{"?state=all", ""},
+		} {
+			f := newFake()
+			response := serve(t, f, http.MethodGet, "/api/v1/admin/participant-reports"+tc.query, "", actor(discussionAdmin, "admin"), true)
+			if response.Code != http.StatusOK {
+				t.Fatalf("query %q: response=%d %s", tc.query, response.Code, response.Body.String())
+			}
+			if f.participantStateFilter != tc.want {
+				t.Fatalf("query %q: stateFilter=%q want %q", tc.query, f.participantStateFilter, tc.want)
+			}
+		}
+		// The OpenAPI enum rejects an unknown state before the handler; the handler's
+		// own default branch is the same refusal when request validation is disabled.
+		if bogus := serve(t, newFake(), http.MethodGet, "/api/v1/admin/participant-reports?state=bogus", "", actor(discussionAdmin, "admin"), false); bogus.Code != http.StatusBadRequest {
+			t.Fatalf("state=bogus: response=%d %s", bogus.Code, bogus.Body.String())
 		}
 	})
 	t.Run("resolve is admin-only and idempotent", func(t *testing.T) {

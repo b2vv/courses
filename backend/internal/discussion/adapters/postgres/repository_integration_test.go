@@ -127,13 +127,13 @@ func TestDiscussionPostgres(t *testing.T) {
 		if _, err := service.ReportStudent(ctx, application.Actor{UserID: owner, EmailVerified: true}, course, none, "not participant"); !errors.Is(err, domain.ErrReportForbidden) {
 			t.Fatalf("non-member target=%v", err)
 		}
-		if _, err := service.ReportQueue(ctx, application.Actor{UserID: admin}, ""); !errors.Is(err, domain.ErrReportForbidden) {
+		if _, err := service.ReportQueue(ctx, application.Actor{UserID: admin}, "", "open"); !errors.Is(err, domain.ErrReportForbidden) {
 			t.Fatalf("non-admin queue=%v", err)
 		}
 		if err := service.ResolveReport(ctx, application.Actor{UserID: admin}, "00000000-0000-4000-8000-000000000001"); !errors.Is(err, domain.ErrReportForbidden) {
 			t.Fatalf("non-admin resolve=%v", err)
 		}
-		queue, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		queue, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "", "open")
 		if err != nil || len(queue.Items) != 3 {
 			t.Fatalf("queue=%+v err=%v", queue, err)
 		}
@@ -155,9 +155,19 @@ func TestDiscussionPostgres(t *testing.T) {
 		if err := service.ResolveReport(ctx, application.Actor{UserID: admin, Administrator: true}, lecturerID); err != nil {
 			t.Fatalf("idempotent resolve=%v", err)
 		}
-		queue, err = service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "")
+		queue, err = service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "", "open")
 		if err != nil || len(queue.Items) != 2 {
 			t.Fatalf("resolved queue=%+v err=%v", queue, err)
+		}
+		// The resolved filter surfaces exactly the one just resolved; "all" (empty filter)
+		// spans both states, so the resolved report rejoins the two still-open ones.
+		resolved, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "", "resolved")
+		if err != nil || len(resolved.Items) != 1 || resolved.Items[0].Report.ID != lecturerID {
+			t.Fatalf("resolved-only queue=%+v err=%v", resolved, err)
+		}
+		all, err := service.ReportQueue(ctx, application.Actor{UserID: admin, Administrator: true}, "", "")
+		if err != nil || len(all.Items) != 3 {
+			t.Fatalf("all-states queue=%+v err=%v", all, err)
 		}
 	})
 
