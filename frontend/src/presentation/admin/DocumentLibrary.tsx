@@ -28,8 +28,10 @@ export function DocumentLibrary({ documents, actions }: DocumentLibraryProps) {
     });
 
   return (
-    <section className="document-library" aria-labelledby="document-library-heading">
-      <h3 id="document-library-heading">{t('administration.documentLibrary.heading')}</h3>
+    <section className="document-library ui-card" aria-labelledby="document-library-heading">
+      <div className="card-heading">
+        <h2 id="document-library-heading">{t('administration.documentLibrary.heading')}</h2>
+      </div>
 
       {documents.length === 0 ? <p>{t('administration.documentLibrary.empty')}</p> : null}
 
