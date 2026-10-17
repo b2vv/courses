@@ -568,31 +568,94 @@
 }
 .ui-chart {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-4);
   margin: 0;
   min-inline-size: 0;
 }
+.ui-chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
 .ui-chart-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  color: var(--color-text);
+}
+.ui-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-utility);
+  font-size: 0.6875rem;
   color: var(--color-muted);
-  font-size: 0.875rem;
+}
+.ui-chart-dot {
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+.ui-chart-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.ui-chart-y {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-block-end: var(--space-5);
+  font-family: var(--font-utility);
+  font-size: 0.625rem;
+  color: var(--color-muted);
+  text-align: end;
+}
+.ui-chart-plot-wrap {
+  min-inline-size: 0;
 }
 .ui-chart-plot {
+  display: block;
   inline-size: 100%;
-  block-size: 7.5rem;
+  block-size: auto;
+  aspect-ratio: 800 / 170;
   overflow: visible;
 }
-.ui-chart-axis {
-  stroke: var(--color-border);
+.ui-chart-x {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  font-family: var(--font-utility);
+  font-size: 0.625rem;
+  color: var(--color-muted);
+  /* Fixed-width date labels must never widen the page at 200% text zoom; clip as a backstop. */
+  overflow: hidden;
+}
+.ui-chart-x > span {
+  white-space: nowrap;
+}
+.ui-chart-grid {
+  stroke: var(--color-hairline);
   stroke-width: 1;
+  fill: none;
   vector-effect: non-scaling-stroke;
 }
 .ui-chart-line {
   fill: none;
   stroke: var(--color-primary);
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
+}
+.ui-chart-area {
+  fill: var(--color-primary);
+  fill-opacity: 0.1;
+  stroke: none;
 }
 .ui-chart-bar {
   fill: var(--color-primary);
@@ -600,6 +663,20 @@
 .ui-chart-empty {
   color: var(--color-muted);
   padding-block: var(--space-4);
+}
+/* Narrow viewports (and 200% text zoom): tighten the chart so the plot keeps room and the
+   axis labels do not crowd — mirrors the proto's small-screen chart treatment. */
+@media (max-width: 52rem) {
+  .ui-chart-layout {
+    gap: var(--space-2);
+  }
+  .ui-chart-y {
+    font-size: 0.5625rem;
+  }
+  .ui-chart-x {
+    gap: var(--space-1);
+    font-size: 0.5625rem;
+  }
 }
 .admin-analytics {
   display: grid;
@@ -617,6 +694,24 @@
   font-family: var(--font-display);
   font-size: 1.25rem;
   margin: 0;
+}
+/* Group heading: title and a muted descriptor share a baseline row (the proto pattern),
+   separating the stat groups by heading rather than a rule above each h2. */
+.group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.group-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+.group-heading > span {
+  font-size: 0.75rem;
+  color: var(--color-muted);
 }
 .admin-analytics-grid {
   display: grid;
