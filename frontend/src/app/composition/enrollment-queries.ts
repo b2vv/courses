@@ -1,6 +1,10 @@
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { EnrollmentErrorCode, EnrollmentResult } from '../../domain/enrollment/enrollment';
+import type {
+  EnrollmentErrorCode,
+  EnrollmentResult,
+  ParticipantReportStateFilter,
+} from '../../domain/enrollment/enrollment';
 import type { EnrollmentRepository } from '../../ports/EnrollmentRepository';
 
 export class EnrollmentQueryError extends Error {
@@ -45,12 +49,12 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
           enrollment.roster(courseId, pageParam, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
-    participantReports: () =>
+    participantReports: (state: ParticipantReportStateFilter = 'open') =>
       infiniteQueryOptions({
-        queryKey: enrollmentParticipantReportsQueryKey,
+        queryKey: [...enrollmentParticipantReportsQueryKey, state],
         initialPageParam: undefined as string | undefined,
         queryFn: ({ signal, pageParam }) =>
-          enrollment.participantReports(pageParam, signal).then(unwrap),
+          enrollment.participantReports(pageParam, state, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
     refundQueue: () =>

@@ -172,7 +172,9 @@ test('resolve refreshes the report queue, while revoke also refreshes only its c
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
   const otherCourseId = '20000000-0000-4000-8000-000000000002';
-  const reportKey = enrollmentParticipantReportsQueryKey;
+  // The live cache keys each state variant; resolve/revoke invalidate the whole family
+  // by the shared prefix, so prove it reaches a concrete 'open' entry.
+  const reportKey = [...enrollmentParticipantReportsQueryKey, 'open'];
   const rosterKey = enrollmentRosterQueryKey(courseId);
   const otherRosterKey = enrollmentRosterQueryKey(otherCourseId);
   const context = { client, meta: undefined };

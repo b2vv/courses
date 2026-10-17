@@ -351,9 +351,11 @@ paths:
   /api/v1/admin/participant-reports:
     get:
       operationId: listParticipantReports
-      parameters: [ { name: cursor, in: query, required: false, schema: { type: string, minLength: 1 } } ]
+      parameters:
+        - { name: cursor, in: query, required: false, schema: { type: string, minLength: 1 } }
+        - { name: state, in: query, required: false, description: 'Filter by report state; absent means open.', schema: { type: string, enum: [open, resolved, all] } }
       responses:
-        '200': { description: Open participant reports, content: { application/json: { schema: { $ref: '#/components/schemas/ParticipantReportQueuePage' } } } }
+        '200': { description: Participant reports for the requested state, content: { application/json: { schema: { $ref: '#/components/schemas/ParticipantReportQueuePage' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }

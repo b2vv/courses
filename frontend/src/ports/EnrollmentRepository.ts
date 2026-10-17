@@ -3,6 +3,7 @@ import type {
   Membership,
   MembershipCard,
   ParticipantReportQueuePage,
+  ParticipantReportStateFilter,
   RefundQueuePage,
   RosterPage,
 } from '../domain/enrollment/enrollment';
@@ -31,6 +32,7 @@ export interface EnrollmentRepository {
   ): Promise<EnrollmentResult<void>>;
   participantReports(
     cursor?: string,
+    state?: ParticipantReportStateFilter,
     signal?: AbortSignal,
   ): Promise<EnrollmentResult<ParticipantReportQueuePage>>;
   resolveReport(reportId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;

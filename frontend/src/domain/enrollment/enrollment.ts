@@ -32,6 +32,10 @@ export type RosterPage = {
 export type ParticipantReportKind = 'on_lecturer' | 'on_student';
 export type ParticipantReportState = 'open' | 'resolved';
 
+// The queue can be narrowed to one state or span every state ('all'). 'open' is the
+// default the admin screen loads; the backend reads an absent filter as 'open' too.
+export type ParticipantReportStateFilter = ParticipantReportState | 'all';
+
 export type ParticipantReportQueueItem = {
   readonly id: string;
   readonly courseId: string;
