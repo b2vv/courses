@@ -475,7 +475,20 @@ func (handler *Handler) reportStudent(w http.ResponseWriter, r *http.Request) {
 func (handler *Handler) participantReportQueue(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
 	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil || hasUnexpectedQuery(query, "cursor") || len(query["cursor"]) > 1 {
+	if err != nil || hasUnexpectedQuery(query, "cursor", "state") || len(query["cursor"]) > 1 || len(query["state"]) > 1 {
+		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
+		return
+	}
+	// Absent state defaults to the open queue; "all" clears the repository filter.
+	stateFilter := "open"
+	switch query.Get("state") {
+	case "", "open":
+		stateFilter = "open"
+	case "resolved":
+		stateFilter = "resolved"
+	case "all":
+		stateFilter = ""
+	default:
 		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
 		return
 	}
@@ -483,7 +496,7 @@ func (handler *Handler) participantReportQueue(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	page, err := handler.service.ReportQueue(r.Context(), actor, query.Get("cursor"))
+	page, err := handler.service.ReportQueue(r.Context(), actor, query.Get("cursor"), stateFilter)
 	if err != nil {
 		writeParticipantReportError(w, r, err)
 		return

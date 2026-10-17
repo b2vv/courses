@@ -47,7 +47,7 @@ RETURNING id::text`, report.ID, report.CourseID, report.ReporterID, report.Targe
 	return id, nil
 }
 
-func (repository *Repository) ParticipantReportQueue(ctx context.Context, cursor string, limit int) (ports.ParticipantReportQueuePage, error) {
+func (repository *Repository) ParticipantReportQueue(ctx context.Context, cursor, stateFilter string, limit int) (ports.ParticipantReportQueuePage, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -55,13 +55,16 @@ func (repository *Repository) ParticipantReportQueue(ctx context.Context, cursor
 	if err != nil {
 		return ports.ParticipantReportQueuePage{}, err
 	}
+	// An empty stateFilter selects every state; "open"/"resolved" narrows to one. The
+	// comparison is parameterised, never interpolated, so an unexpected value simply
+	// matches nothing rather than reaching the query text.
 	rows, err := repository.pool.Query(ctx, `SELECT r.id::text,r.course_id::text,r.reporter_id::text,r.target_id::text,r.kind,r.reason,r.state,r.created_at,
  reporter.display_name,target.display_name,c.title
 FROM participant_reports AS r JOIN courses AS c ON c.id=r.course_id
 LEFT JOIN users AS reporter ON reporter.id=r.reporter_id AND reporter.deleted_at IS NULL
 LEFT JOIN users AS target ON target.id=r.target_id AND target.deleted_at IS NULL
-WHERE r.state='open' AND ($1::timestamptz IS NULL OR (r.created_at,r.id)<($1,$2::text::uuid))
-ORDER BY r.created_at DESC,r.id DESC LIMIT $3`, stamp, id, limit+1)
+WHERE ($4::text='' OR r.state=$4) AND ($1::timestamptz IS NULL OR (r.created_at,r.id)<($1,$2::text::uuid))
+ORDER BY r.created_at DESC,r.id DESC LIMIT $3`, stamp, id, limit+1, stateFilter)
 	if err != nil {
 		return ports.ParticipantReportQueuePage{}, persistenceError(err)
 	}

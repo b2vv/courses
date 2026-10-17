@@ -3011,6 +3011,14 @@ button.transcript-line-body:hover {
 }
 
 /* Admin report/refund queues: shared primitives are consumed, not overridden. */
+.admin-queue-filter {
+  /* The state filter hugs its content instead of stretching across the grid column. */
+  justify-self: start;
+  max-inline-size: 100%;
+}
+.admin-queue-heading > .ui-icon-tile {
+  color: var(--color-info);
+}
 .admin-queue-list {
   display: grid;
   gap: var(--space-4);

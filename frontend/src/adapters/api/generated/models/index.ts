@@ -141,6 +141,7 @@ export * from './listCourseReviewsParams.ts';
 export * from './listLearningCourseReviewsParams.ts';
 export * from './listLessonCommentsParams.ts';
 export * from './listParticipantReportsParams.ts';
+export * from './listParticipantReportsState.ts';
 export * from './listPublishedCoursesParams.ts';
 export * from './listPublishedCoursesSort.ts';
 export * from './listTeachCourseCommentsParams.ts';

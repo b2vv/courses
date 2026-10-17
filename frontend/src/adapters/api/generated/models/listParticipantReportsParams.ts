@@ -5,10 +5,15 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { ListParticipantReportsState } from './listParticipantReportsState.ts';
 
 export type ListParticipantReportsParams = {
 /**
  * @minLength 1
  */
 cursor?: string;
+/**
+ * Filter by report state; absent means open.
+ */
+state?: ListParticipantReportsState;
 };

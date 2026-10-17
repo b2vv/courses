@@ -462,6 +462,13 @@ test('En07 En14 participant reports resolve in the admin queue and an instructor
     expect(await wcagViolations(queue)).toEqual([]);
     await report.getByRole('button', { name: 'Вирішити' }).click();
     await expect(report).toHaveCount(0);
+    // The resolved report leaves the default (open) view but is retrievable under the
+    // Resolved filter, where it carries the resolved pill and no live Resolve control.
+    await queue.getByRole('radio', { name: 'Вирішені' }).click();
+    const resolvedReport = queue.locator('article').filter({ hasText: `report ${runNamespace}` });
+    await expect(resolvedReport).toBeVisible();
+    await expect(resolvedReport).toContainText('Вирішена');
+    await expect(resolvedReport.getByRole('button', { name: 'Вирішити' })).toHaveCount(0);
     const teach = await instructor.newPage();
     await teach.goto(`/teach/courses/${course.id}`);
     const studentRow = teach.locator('article').filter({ hasText: authFixtures.student.name });

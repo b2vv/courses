@@ -13,13 +13,14 @@ import (
 
 type participantReportFake struct {
 	reviewFake
-	ownerID     string
-	membership  access.Membership
-	courseFound bool
-	insertErr   error
-	inserted    domain.ParticipantReport
-	queued      ports.ParticipantReportQueuePage
-	resolved    string
+	ownerID           string
+	membership        access.Membership
+	courseFound       bool
+	insertErr         error
+	inserted          domain.ParticipantReport
+	queued            ports.ParticipantReportQueuePage
+	queuedStateFilter string
+	resolved          string
 }
 
 func (f *participantReportFake) ReportSubject(context.Context, string, string) (string, access.Membership, bool, error) {
@@ -32,7 +33,8 @@ func (f *participantReportFake) InsertParticipantReport(_ context.Context, repor
 	}
 	return "70000000-0000-4000-8000-0000000000dd", nil
 }
-func (f *participantReportFake) ParticipantReportQueue(context.Context, string, int) (ports.ParticipantReportQueuePage, error) {
+func (f *participantReportFake) ParticipantReportQueue(_ context.Context, _, stateFilter string, _ int) (ports.ParticipantReportQueuePage, error) {
+	f.queuedStateFilter = stateFilter
 	return f.queued, nil
 }
 func (f *participantReportFake) ResolveParticipantReport(_ context.Context, id string) error {
@@ -98,16 +100,19 @@ func TestReportStudent(t *testing.T) {
 
 func TestReportQueueAndResolveAdminOnly(t *testing.T) {
 	s, f := newParticipantReportService()
-	if _, err := s.ReportQueue(context.Background(), Actor{}, ""); !errors.Is(err, domain.ErrReportForbidden) {
+	if _, err := s.ReportQueue(context.Background(), Actor{}, "", "open"); !errors.Is(err, domain.ErrReportForbidden) {
 		t.Fatalf("queue err=%v", err)
 	}
 	if err := s.ResolveReport(context.Background(), Actor{}, "report"); !errors.Is(err, domain.ErrReportForbidden) {
 		t.Fatalf("resolve err=%v", err)
 	}
 	f.queued = ports.ParticipantReportQueuePage{Items: []ports.ParticipantReportQueueItem{{Report: domain.ParticipantReport{ID: "report"}, ReporterName: stringPointer("Reporter"), TargetName: stringPointer("Target"), CourseTitle: "Course"}}}
-	page, err := s.ReportQueue(context.Background(), Actor{Administrator: true}, "")
+	page, err := s.ReportQueue(context.Background(), Actor{Administrator: true}, "", "resolved")
 	if err != nil || len(page.Items) != 1 || page.Items[0].ReporterName == nil || *page.Items[0].ReporterName != "Reporter" {
 		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	if f.queuedStateFilter != "resolved" {
+		t.Fatalf("stateFilter threaded=%q want resolved", f.queuedStateFilter)
 	}
 	if err := s.ResolveReport(context.Background(), Actor{Administrator: true}, "report"); err != nil || f.resolved != "report" {
 		t.Fatalf("err=%v resolved=%q", err, f.resolved)

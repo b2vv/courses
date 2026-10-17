@@ -135,8 +135,15 @@ export const en = {
         },
       },
       reports: {
-        eyebrow: 'Safety',
+        eyebrow: 'Safety & trust',
         title: 'Participant reports',
+        lede: 'Review each report carefully. Safe learning starts here.',
+        filterLabel: 'Filter by state',
+        filter: {
+          all: 'All',
+          open: 'Open',
+          resolved: 'Resolved',
+        },
         kind: {
           on_lecturer: 'Report about an instructor',
           on_student: 'Report about a student',
@@ -155,6 +162,9 @@ export const en = {
           'This will remove the participant’s access. Only an administrator can restore it.',
         empty: 'No reports',
         emptyHint: 'New participant reports will appear here for review.',
+        emptyFiltered: 'Nothing found',
+        emptyFilteredHint: 'There are no reports in this state.',
+        showOpen: 'Show open',
         more: 'Show more',
       },
       refunds: {
