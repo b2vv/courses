@@ -108,6 +108,25 @@
   box-shadow: var(--card-shadow);
 }
 
+/* KPI value in the reference display face (Space Grotesk), not the utility mono — the proto's
+   analytics tiles. Tabular figures keep columns of numbers aligned. Admin-scoped so the base
+   .ui-stat-value stays mono for any client use. */
+[data-surface='admin'] .ui-stat-value {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 1rem + 1vw, 2rem);
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trend chart reads as a raised card on the admin dashboard, like the proto's .ui-card.ui-chart.
+   Scoped to admin so the base .ui-chart primitive stays a flat figure for any client use. */
+[data-surface='admin'] .ui-chart {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+
 /* Primary button: glossy blue gradient, not a flat fill. */
 [data-surface='admin'] .ui-button--primary {
   background: var(--btn-primary-bg);

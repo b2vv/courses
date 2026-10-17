@@ -10,6 +10,7 @@ import type { Metric, Snapshot } from '../../domain/admin/stats';
 import {
   EmptyState,
   ErrorState,
+  PageHeader,
   SegmentedControl,
   Skeleton,
   StatTile,
@@ -73,34 +74,42 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
 
   return (
     <section className="admin-analytics">
-      <div className="admin-list-heading">
-        <div>
-          <p className="eyebrow">{t('adminAnalytics.eyebrow')}</p>
-          <h1>{t('adminAnalytics.title')}</h1>
-        </div>
-      </div>
-
-      <div className="admin-analytics-grid">
-        <StatTile
-          label={t('adminAnalytics.totalAccounts')}
-          value={num.format(snapshot.users.active + snapshot.users.blocked)}
-        />
-        <StatTile
-          label={t('adminAnalytics.published')}
-          value={num.format(snapshot.courses.published)}
-        />
-        <StatTile
-          label={t('adminAnalytics.revenue')}
-          value={uah(snapshot.orders.revenueMinorUAH)}
-        />
-        <StatTile
-          label={t('adminAnalytics.openReports')}
-          value={num.format(snapshot.reports.open)}
-        />
-      </div>
+      <PageHeader
+        eyebrow={t('adminAnalytics.eyebrow')}
+        title={t('adminAnalytics.title')}
+        description={t('adminAnalytics.lede')}
+      />
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionPeople')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionPlatform')}</h2>
+          <span>{t('adminAnalytics.subPlatform')}</span>
+        </div>
+        <div className="admin-analytics-grid">
+          <StatTile
+            label={t('adminAnalytics.totalAccounts')}
+            value={num.format(snapshot.users.active + snapshot.users.blocked)}
+          />
+          <StatTile
+            label={t('adminAnalytics.published')}
+            value={num.format(snapshot.courses.published)}
+          />
+          <StatTile
+            label={t('adminAnalytics.revenue')}
+            value={uah(snapshot.orders.revenueMinorUAH)}
+          />
+          <StatTile
+            label={t('adminAnalytics.openReports')}
+            value={num.format(snapshot.reports.open)}
+          />
+        </div>
+      </section>
+
+      <section className="admin-analytics-group">
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionPeople')}</h2>
+          <span>{t('adminAnalytics.subPeople')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile label={t('adminAnalytics.active')} value={num.format(snapshot.users.active)} />
           <StatTile
@@ -137,7 +146,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
       </section>
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionContent')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionContent')}</h2>
+          <span>{t('adminAnalytics.subContent')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile label={t('adminAnalytics.draft')} value={num.format(snapshot.courses.draft)} />
           <StatTile
@@ -152,7 +164,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
       </section>
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionAccess')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionAccess')}</h2>
+          <span>{t('adminAnalytics.subAccess')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile
             label={t('adminAnalytics.grantsActive')}
@@ -182,7 +197,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
       </section>
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionEngagement')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionEngagement')}</h2>
+          <span>{t('adminAnalytics.subEngagement')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile
             label={t('adminAnalytics.activeLearners')}
@@ -197,7 +215,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
       </section>
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionOperations')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionOperations')}</h2>
+          <span>{t('adminAnalytics.subOperations')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile
             label={t('adminAnalytics.mediaInProgress')}
@@ -224,7 +245,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
       </section>
 
       <section className="admin-analytics-group">
-        <h2>{t('adminAnalytics.sectionModeration')}</h2>
+        <div className="group-heading">
+          <h2>{t('adminAnalytics.sectionModeration')}</h2>
+          <span>{t('adminAnalytics.subModeration')}</span>
+        </div>
         <div className="admin-analytics-grid">
           <StatTile
             label={t('adminAnalytics.openReports')}
@@ -239,7 +263,10 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
 
       {showInstructors ? (
         <section className="admin-analytics-group">
-          <h2>{t('adminAnalytics.sectionInstructors')}</h2>
+          <div className="group-heading">
+            <h2>{t('adminAnalytics.sectionInstructors')}</h2>
+            <span>{t('adminAnalytics.subInstructors')}</span>
+          </div>
           <Table
             label={t('adminAnalytics.leaderboardCaption')}
             columns={[
@@ -267,7 +294,14 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
 }
 
 function TrendSection({ stats }: { readonly stats: StatsQueries }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = formatLocale(i18n.resolvedLanguage);
+  const num = new Intl.NumberFormat(lang);
+  const money = new Intl.NumberFormat(lang, {
+    style: 'currency',
+    currency: 'UAH',
+    maximumFractionDigits: 0,
+  });
   const [metric, setMetric] = useState<Metric>('signups');
   const query = useQuery(stats.timeseries({ metric, bucket: 'day' }));
   const points: readonly TrendPoint[] = (query.data ?? []).map((point) => ({
@@ -275,10 +309,18 @@ function TrendSection({ stats }: { readonly stats: StatsQueries }) {
     value: point.value,
   }));
   const options = metricOrder.map((value) => ({ id: value, label: t(metricKey[value]) }));
+  // Revenue arrives in minor units (kopiyky); every other metric is a whole count.
+  const isRevenue = metric === 'revenue';
+  const formatValue = isRevenue
+    ? (value: number) => money.format(value / 100)
+    : (value: number) => num.format(value);
 
   return (
     <section className="admin-analytics-group">
-      <h2>{t('adminAnalytics.sectionTrend')}</h2>
+      <div className="group-heading">
+        <h2>{t('adminAnalytics.sectionTrend')}</h2>
+        <span>{t('adminAnalytics.subTrend')}</span>
+      </div>
       <SegmentedControl
         label={t('adminAnalytics.trendMetricLabel')}
         options={options}
@@ -293,9 +335,11 @@ function TrendSection({ stats }: { readonly stats: StatsQueries }) {
       ) : (
         <TrendChart
           title={t(metricKey[metric])}
-          mode={metric === 'revenue' ? 'bar' : 'line'}
+          mode={isRevenue ? 'bar' : 'line'}
           points={points}
           emptyLabel={t('adminAnalytics.trendEmpty')}
+          formatValue={formatValue}
+          {...(isRevenue ? { unit: t('adminAnalytics.currencyUAH') } : {})}
         />
       )}
     </section>
