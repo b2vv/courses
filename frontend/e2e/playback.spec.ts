@@ -284,6 +284,8 @@ async function uploadReady(
 ): Promise<string> {
   const targetCourseID = target.courseID ?? course?.id ?? 'missing';
   await page.goto(`/admin/courses/${targetCourseID}`);
+  // Modules/lessons sit on the Lessons tab of the course editor (view-3 layout).
+  await page.getByRole('radio', { name: /Lessons|Уроки/ }).click();
   const module = page.getByRole('group', {
     name: `Модуль ${target.moduleNumber}`,
   });

@@ -430,6 +430,7 @@ func loadAuthoringTree(ctx context.Context, queries *generated.Queries, id strin
 	if err != nil {
 		return domain.CourseTree{}, err
 	}
+	tree.StudentCount = row.StudentCount
 
 	modules, err := queries.ListAuthoringModules(ctx, id)
 	if err != nil {

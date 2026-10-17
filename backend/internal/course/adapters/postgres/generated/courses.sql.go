@@ -141,20 +141,26 @@ func (q *Queries) CreateAuthoringCourse(ctx context.Context, arg CreateAuthoring
 
 const getAuthoringCourse = `-- name: GetAuthoringCourse :one
 SELECT
-  id::text AS id,
-  slug,
-  title,
-  summary,
-  description,
-  status,
-  instructor_id::text AS instructor_id,
-  created_at,
-  updated_at,
-  published_at
-  , price_minor
-  , currency
+  courses.id::text AS id,
+  courses.slug,
+  courses.title,
+  courses.summary,
+  courses.description,
+  courses.status,
+  courses.instructor_id::text AS instructor_id,
+  courses.created_at,
+  courses.updated_at,
+  courses.published_at
+  , courses.price_minor
+  , courses.currency
+  , COALESCE(enrollments.student_count, 0)::bigint AS student_count
 FROM courses
-WHERE id = $1::text::uuid
+LEFT JOIN LATERAL (
+  SELECT count(*) AS student_count
+  FROM course_grants
+  WHERE course_grants.course_id = courses.id AND course_grants.state = 'active'
+) AS enrollments ON true
+WHERE courses.id = $1::text::uuid
 `
 
 type GetAuthoringCourseRow struct {
@@ -170,6 +176,7 @@ type GetAuthoringCourseRow struct {
 	PublishedAt  pgtype.Timestamptz
 	PriceMinor   pgtype.Int8
 	Currency     pgtype.Text
+	StudentCount int64
 }
 
 func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetAuthoringCourseRow, error) {
@@ -188,6 +195,7 @@ func (q *Queries) GetAuthoringCourse(ctx context.Context, courseID string) (GetA
 		&i.PublishedAt,
 		&i.PriceMinor,
 		&i.Currency,
+		&i.StudentCount,
 	)
 	return i, err
 }

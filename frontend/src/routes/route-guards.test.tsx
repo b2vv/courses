@@ -339,6 +339,7 @@ function adminTree(owner: AuthenticatedUser): CourseTree {
     updatedAt: '2026-09-05T10:15:30.000001Z',
     publishedAt: null,
     price: null,
+    studentCount: 0,
     modules: [],
   };
 }

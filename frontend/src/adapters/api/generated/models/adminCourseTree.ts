@@ -40,6 +40,8 @@ export interface AdminCourseTree {
   updatedAt: AdminTimestamp;
   publishedAt: NullableAdminTimestamp | null;
   price: NullablePrice | null;
+  /** @minimum 0 */
+  studentCount: number;
   /** @maxItems 40 */
   modules: AdminModule[];
 }

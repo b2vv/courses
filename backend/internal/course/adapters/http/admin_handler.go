@@ -69,6 +69,7 @@ type adminCourseTreeDTO struct {
 	UpdatedAt    string           `json:"updatedAt"`
 	PublishedAt  *string          `json:"publishedAt"`
 	Price        *priceDTO        `json:"price"`
+	StudentCount int64            `json:"studentCount"`
 	Modules      []adminModuleDTO `json:"modules"`
 }
 
@@ -398,7 +399,8 @@ func mapAdminCourseTree(tree domain.CourseTree) adminCourseTreeDTO {
 		ID: tree.ID, Slug: tree.Slug, Title: tree.Title, Summary: tree.Summary,
 		Description: tree.Description, Status: string(tree.Status), InstructorID: tree.InstructorID,
 		CreatedAt: formatAdminTime(tree.CreatedAt), UpdatedAt: formatAdminTime(tree.UpdatedAt),
-		PublishedAt: formatOptionalAdminTime(tree.PublishedAt), Price: mapPrice(tree.Price), Modules: modules,
+		PublishedAt: formatOptionalAdminTime(tree.PublishedAt), Price: mapPrice(tree.Price),
+		StudentCount: tree.StudentCount, Modules: modules,
 	}
 }
 
