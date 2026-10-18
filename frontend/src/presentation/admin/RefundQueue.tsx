@@ -1,30 +1,41 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
-import type { RefundQueueItem } from '../../domain/enrollment/enrollment';
-import { Button, Dialog } from '../ui';
+import type {
+  RefundOutcome,
+  RefundQueueItem,
+  RefundStateFilter,
+} from '../../domain/enrollment/enrollment';
+import { Button, Dialog, PageHeader, SegmentedControl } from '../ui';
 
-// `blocked` reads danger across admin (UserListView statusVariant, S5 learners, S2a pills); keep it
-// danger here too so the same roster.state.blocked label is never two colours on adjacent admin
-// surfaces. `revoked` is terminal (access already gone) so it stays the quieter neutral, matching
-// the "terminal quieter" grammar (deleted → neutral in UserListView).
-const membershipStates = {
-  active: { variant: 'success', label: 'enrollment.roster.state.active' },
-  blocked: { variant: 'danger', label: 'enrollment.roster.state.blocked' },
-  revoked: { variant: 'neutral', label: 'enrollment.refunds.revoked' },
-} satisfies Record<
-  NonNullable<RefundQueueItem['membershipState']>,
-  { variant: string; label: string }
->;
+const stateFilters: readonly RefundStateFilter[] = ['all', 'pending', 'refunded', 'declined'];
+
+const outcomeVariants = {
+  refunded: 'success',
+  declined: 'neutral',
+} satisfies Record<RefundOutcome, string>;
+
+// Label for the membership-state context line. `blocked` reads danger across admin, but here the
+// grant state is shown as plain context (it gates the revoke control, not a status pill), so only
+// the label matters. `revoked` reuses the refund-specific "access revoked" wording.
+const membershipLabels = {
+  active: 'enrollment.roster.state.active',
+  blocked: 'enrollment.roster.state.blocked',
+  revoked: 'enrollment.refunds.revoked',
+} satisfies Record<NonNullable<RefundQueueItem['membershipState']>, string>;
 
 type RefundQueueProps = {
   readonly items: readonly RefundQueueItem[];
+  readonly state: RefundStateFilter;
   readonly isLoading: boolean;
   readonly error: unknown;
-  readonly resolvePending: boolean;
+  readonly refundPending: boolean;
+  readonly declinePending: boolean;
   readonly revokePending: boolean;
+  readonly onFilterChange: (state: RefundStateFilter) => void;
   readonly onRetry: () => void;
-  readonly onResolve: (orderId: string) => Promise<void>;
+  readonly onRefund: (orderId: string) => Promise<void>;
+  readonly onDecline: (orderId: string) => Promise<void>;
   readonly onRevoke: (orderId: string) => Promise<void>;
 };
 
@@ -51,25 +62,31 @@ function hryvnia(minor: number, language: string | undefined): string {
   );
 }
 
+const refundIcon = <path d="M4 6h16v14H4zM4 10h16M15 15h2M7 3l-3 3 3 3M4 6h10" />;
+
 export function RefundQueue({
   items,
+  state,
   isLoading,
   error,
-  resolvePending,
+  refundPending,
+  declinePending,
   revokePending,
+  onFilterChange,
   onRetry,
-  onResolve,
+  onRefund,
+  onDecline,
   onRevoke,
 }: RefundQueueProps) {
   const { t, i18n } = useTranslation();
   const [actedOrderId, setActedOrderId] = useState<string>();
   const [actionError, setActionError] = useState<string>();
 
-  async function resolve(item: RefundQueueItem) {
+  async function settle(item: RefundQueueItem, action: (orderId: string) => Promise<void>) {
     setActedOrderId(item.orderId);
     setActionError(undefined);
     try {
-      await onResolve(item.orderId);
+      await action(item.orderId);
     } catch (actionFailure) {
       setActionError(errorKey(actionFailure));
     }
@@ -85,13 +102,35 @@ export function RefundQueue({
     }
   }
 
+  const pendingCount = items.length;
+
   return (
-    <section aria-labelledby="refunds-heading" className="admin-user-list">
-      <div className="admin-list-heading">
-        <div>
-          <p className="eyebrow">{t('enrollment.refunds.eyebrow')}</p>
-          <h1 id="refunds-heading">{t('enrollment.refunds.title')}</h1>
-        </div>
+    <section aria-labelledby="refunds-heading" className="admin-user-list" data-surface="admin">
+      <PageHeader
+        eyebrow={t('enrollment.refunds.eyebrow')}
+        title={t('enrollment.refunds.title')}
+        titleId="refunds-heading"
+        description={t('enrollment.refunds.lede')}
+        actions={
+          state === 'pending' && pendingCount > 0 ? (
+            <span className="ui-pill ui-pill--info">
+              {t('enrollment.refunds.pending', { count: pendingCount })}
+            </span>
+          ) : undefined
+        }
+      />
+      <div className="admin-queue-filter">
+        <SegmentedControl
+          label={t('enrollment.refunds.filterLabel')}
+          options={stateFilters.map((value) => ({
+            id: value,
+            label: t(`enrollment.refunds.filter.${value}`),
+          }))}
+          selectedKeys={new Set([state])}
+          onSelectionChange={(keys) =>
+            onFilterChange(filterFromKey(String([...keys][0] ?? 'pending')))
+          }
+        />
       </div>
       {isLoading ? <output>{t('common.loading')}</output> : null}
       {error ? (
@@ -113,19 +152,32 @@ export function RefundQueue({
               strokeWidth="1.5"
               focusable="false"
             >
-              <path d="M4 6h16v14H4zM4 10h16M15 15h2M7 3l-3 3 3 3M4 6h10" />
+              {refundIcon}
             </svg>
           </span>
-          <h2>{t('enrollment.refunds.empty')}</h2>
-          <p>{t('enrollment.refunds.emptyHint')}</p>
+          <h2>
+            {t(
+              state === 'pending' ? 'enrollment.refunds.empty' : 'enrollment.refunds.emptyFiltered',
+            )}
+          </h2>
+          <p>
+            {t(
+              state === 'pending'
+                ? 'enrollment.refunds.emptyHint'
+                : 'enrollment.refunds.emptyFilteredHint',
+            )}
+          </p>
+          {state === 'pending' ? null : (
+            <Button variant="secondary" onPress={() => onFilterChange('pending')}>
+              {t('enrollment.refunds.showPending')}
+            </Button>
+          )}
         </div>
       ) : null}
       {items.length > 0 ? (
         <ul aria-label={t('enrollment.refunds.title')} className="admin-queue-list">
           {items.map((item) => {
             const acted = actedOrderId === item.orderId;
-            const resolveIsPending = acted && resolvePending;
-            const revokeIsPending = acted && revokePending;
             return (
               <li key={item.orderId}>
                 <article className="ui-card admin-queue-card">
@@ -140,7 +192,7 @@ export function RefundQueue({
                         strokeWidth="1.5"
                         focusable="false"
                       >
-                        <path d="M4 6h16v14H4zM4 10h16M15 15h2M7 3l-3 3 3 3M4 6h10" />
+                        {refundIcon}
                       </svg>
                     </span>
                     <div className="admin-queue-title">
@@ -158,13 +210,15 @@ export function RefundQueue({
                       </p>
                       <h2>{t(`enrollment.refunds.reason.${item.reason}`)}</h2>
                     </div>
-                    {item.membershipState !== null ? (
-                      <span
-                        className={`ui-pill ui-pill--${membershipStates[item.membershipState].variant}`}
-                      >
-                        {t(membershipStates[item.membershipState].label)}
+                    {item.outcome === null ? (
+                      <span className="ui-pill ui-pill--warning">
+                        {t('enrollment.refunds.state.pending')}
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className={`ui-pill ui-pill--${outcomeVariants[item.outcome]}`}>
+                        {t(`enrollment.refunds.state.${item.outcome}`)}
+                      </span>
+                    )}
                   </div>
                   <div className="admin-queue-details admin-refund-summary">
                     <div>
@@ -174,6 +228,14 @@ export function RefundQueue({
                     <div>
                       <span>{t('enrollment.refunds.user')}</span>
                       <strong>{item.userId}</strong>
+                    </div>
+                    <div>
+                      <span>{t('enrollment.refunds.access')}</span>
+                      <strong>
+                        {item.membershipState === null
+                          ? t('enrollment.refunds.noGrant')
+                          : t(membershipLabels[item.membershipState])}
+                      </strong>
                     </div>
                     <div>
                       <span>{t('enrollment.refunds.ordered')}</span>
@@ -190,38 +252,49 @@ export function RefundQueue({
                       </strong>
                     </div>
                   </div>
-                  <div className="admin-queue-actions">
-                    {/* Revoke only for a live grant (active/blocked). When the grant is gone or
-                        already revoked, the backend would refuse — so the control is hidden and
-                        only resolve remains (A14). */}
-                    {item.membershipState === 'active' || item.membershipState === 'blocked' ? (
-                      <Dialog
-                        triggerLabel={t('enrollment.refunds.revoke')}
-                        title={t('enrollment.refunds.revoke')}
-                        closeLabel={t('common.close')}
+                  {/* A settled order (visible under the Refunded/Declined/All filters) carries no
+                      live action — the outcome pill is the whole story. Only a pending order can be
+                      refunded, declined, or have its grant revoked. The three are independent:
+                      revoking access does not settle the refund, and settling leaves the grant. */}
+                  {item.outcome === null ? (
+                    <div className="admin-queue-actions">
+                      <Button
+                        isPending={acted && refundPending}
+                        onPress={() => void settle(item, onRefund)}
                       >
-                        {(close) => (
-                          <>
-                            <p>{t('enrollment.refunds.revokeConfirm')}</p>
-                            <Button
-                              variant="danger"
-                              isPending={revokeIsPending}
-                              onPress={() => void revoke(item, close)}
-                            >
-                              {t('enrollment.refunds.revoke')}
-                            </Button>
-                          </>
-                        )}
-                      </Dialog>
-                    ) : null}
-                    <Button
-                      variant="secondary"
-                      isPending={resolveIsPending}
-                      onPress={() => void resolve(item)}
-                    >
-                      {t('enrollment.refunds.resolve')}
-                    </Button>
-                  </div>
+                        {t('enrollment.refunds.refund')}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        isPending={acted && declinePending}
+                        onPress={() => void settle(item, onDecline)}
+                      >
+                        {t('enrollment.refunds.decline')}
+                      </Button>
+                      {/* Revoke only for a live grant (active/blocked). When access is gone or
+                          already revoked, the backend would refuse — so the control is hidden. */}
+                      {item.membershipState === 'active' || item.membershipState === 'blocked' ? (
+                        <Dialog
+                          triggerLabel={t('enrollment.refunds.revoke')}
+                          title={t('enrollment.refunds.revoke')}
+                          closeLabel={t('common.close')}
+                        >
+                          {(close) => (
+                            <>
+                              <p>{t('enrollment.refunds.revokeConfirm')}</p>
+                              <Button
+                                variant="danger"
+                                isPending={acted && revokePending}
+                                onPress={() => void revoke(item, close)}
+                              >
+                                {t('enrollment.refunds.revoke')}
+                              </Button>
+                            </>
+                          )}
+                        </Dialog>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </article>
               </li>
             );
@@ -230,4 +303,17 @@ export function RefundQueue({
       ) : null}
     </section>
   );
+}
+
+function filterFromKey(key: string): RefundStateFilter {
+  switch (key) {
+    case 'refunded':
+      return 'refunded';
+    case 'declined':
+      return 'declined';
+    case 'all':
+      return 'all';
+    default:
+      return 'pending';
+  }
 }

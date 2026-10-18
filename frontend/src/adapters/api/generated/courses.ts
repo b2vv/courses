@@ -76,6 +76,7 @@ import type {
   ListLessonCommentsParams,
   ListParticipantReportsParams,
   ListPublishedCoursesParams,
+  ListRefundQueueParams,
   ListTeachCourseCommentsParams,
   ListTeachLearnersParams,
   ListTeachModerationQueueParams,
@@ -1683,20 +1684,27 @@ export type listRefundQueueResponseError = (listRefundQueueResponse400 | listRef
 
 export type listRefundQueueResponse = (listRefundQueueResponseSuccess | listRefundQueueResponseError)
 
-export const getListRefundQueueUrl = () => {
+export const getListRefundQueueUrl = (params?: ListRefundQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/admin/refunds`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/refunds?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/refunds`
 }
 
 /**
  * @summary List orders flagged for refund attention
  */
-export const listRefundQueue = async ( options?: RequestInit): Promise<listRefundQueueResponse> => {
+export const listRefundQueue = async (params?: ListRefundQueueParams, options?: RequestInit): Promise<listRefundQueueResponse> => {
 
-  const res = await fetch(getListRefundQueueUrl(),
+  const res = await fetch(getListRefundQueueUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1714,59 +1722,59 @@ export const listRefundQueue = async ( options?: RequestInit): Promise<listRefun
 
 
 
-export type resolveRefundResponse204 = {
+export type refundOrderResponse204 = {
   data: void
   status: 204
 }
 
-export type resolveRefundResponse400 = {
+export type refundOrderResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type resolveRefundResponse401 = {
+export type refundOrderResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type resolveRefundResponse403 = {
+export type refundOrderResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type resolveRefundResponse500 = {
+export type refundOrderResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type resolveRefundResponse503 = {
+export type refundOrderResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type resolveRefundResponseSuccess = (resolveRefundResponse204) & {
+export type refundOrderResponseSuccess = (refundOrderResponse204) & {
   headers: Headers;
 };
-export type resolveRefundResponseError = (resolveRefundResponse400 | resolveRefundResponse401 | resolveRefundResponse403 | resolveRefundResponse500 | resolveRefundResponse503) & {
+export type refundOrderResponseError = (refundOrderResponse400 | refundOrderResponse401 | refundOrderResponse403 | refundOrderResponse500 | refundOrderResponse503) & {
   headers: Headers;
 };
 
-export type resolveRefundResponse = (resolveRefundResponseSuccess | resolveRefundResponseError)
+export type refundOrderResponse = (refundOrderResponseSuccess | refundOrderResponseError)
 
-export const getResolveRefundUrl = (orderId: string,) => {
-
-
+export const getRefundOrderUrl = (orderId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/admin/refunds/${orderId}/resolve`
+
+
+  return `${apiOrigin()}/api/v1/admin/refunds/${orderId}/refund`
 }
 
 /**
- * @summary Mark a refund-queue order handled
+ * @summary Record a refund-queue order as refunded
  */
-export const resolveRefund = async (orderId: string, options?: RequestInit): Promise<resolveRefundResponse> => {
+export const refundOrder = async (orderId: string, options?: RequestInit): Promise<refundOrderResponse> => {
 
-  const res = await fetch(getResolveRefundUrl(orderId),
+  const res = await fetch(getRefundOrderUrl(orderId),
   {
     ...options,
     method: 'POST'
@@ -1778,8 +1786,78 @@ export const resolveRefund = async (orderId: string, options?: RequestInit): Pro
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: resolveRefundResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as resolveRefundResponse
+  const data: refundOrderResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as refundOrderResponse
+}
+
+
+
+export type declineRefundResponse204 = {
+  data: void
+  status: 204
+}
+
+export type declineRefundResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type declineRefundResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type declineRefundResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type declineRefundResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type declineRefundResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type declineRefundResponseSuccess = (declineRefundResponse204) & {
+  headers: Headers;
+};
+export type declineRefundResponseError = (declineRefundResponse400 | declineRefundResponse401 | declineRefundResponse403 | declineRefundResponse500 | declineRefundResponse503) & {
+  headers: Headers;
+};
+
+export type declineRefundResponse = (declineRefundResponseSuccess | declineRefundResponseError)
+
+export const getDeclineRefundUrl = (orderId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/refunds/${orderId}/decline`
+}
+
+/**
+ * @summary Record a refund-queue order as declined
+ */
+export const declineRefund = async (orderId: string, options?: RequestInit): Promise<declineRefundResponse> => {
+
+  const res = await fetch(getDeclineRefundUrl(orderId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: declineRefundResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as declineRefundResponse
 }
 
 

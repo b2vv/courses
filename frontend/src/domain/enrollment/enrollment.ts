@@ -59,6 +59,14 @@ export type ParticipantReportQueuePage = {
 // as such rather than hiding the discrepancy.
 export type RefundReason = 'settlement_rejected' | 'grant_conflict' | 'unknown';
 
+// The administrator's recorded decision on a refund-queue order. Decoupled from the membership
+// revoke: an order can be refunded or declined with the grant left untouched, and access can be
+// revoked without settling the refund.
+export type RefundOutcome = 'refunded' | 'declined';
+
+// Narrows the refund queue. 'pending' is the default (not yet settled); 'all' clears the filter.
+export type RefundStateFilter = 'pending' | 'refunded' | 'declined' | 'all';
+
 export type RefundQueueItem = {
   readonly orderId: string;
   readonly courseId: string;
@@ -70,6 +78,8 @@ export type RefundQueueItem = {
   // Current (user, course) grant state, null when no grant exists; revoke is offered only for a
   // live grant (active/blocked) — A14.
   readonly membershipState: MembershipState | null;
+  // The settled decision, or null while the order is still pending in the queue.
+  readonly outcome: RefundOutcome | null;
 };
 
 export type RefundQueuePage = {

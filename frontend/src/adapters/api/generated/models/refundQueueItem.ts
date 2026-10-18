@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { RefundQueueItemMembershipState } from './refundQueueItemMembershipState.ts';
+import type { RefundQueueItemOutcome } from './refundQueueItemOutcome.ts';
 import type { RefundQueueItemReason } from './refundQueueItemReason.ts';
 
 export interface RefundQueueItem {
@@ -21,4 +22,6 @@ export interface RefundQueueItem {
   reason: RefundQueueItemReason;
   /** @nullable */
   membershipState: RefundQueueItemMembershipState;
+  /** @nullable */
+  outcome: RefundQueueItemOutcome;
 }

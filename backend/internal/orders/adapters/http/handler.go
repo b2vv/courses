@@ -53,7 +53,8 @@ func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, sameOrig
 	mux.Handle("POST /api/v1/admin/courses/{courseId}/participants/{userId}/revoke", sameOrigin(authenticate(http.HandlerFunc(handler.revoke))))
 	mux.Handle("GET /api/v1/admin/learners", authenticate(administrator(http.HandlerFunc(handler.adminLearners))))
 	mux.Handle("GET /api/v1/admin/refunds", authenticate(administrator(http.HandlerFunc(handler.refundQueue))))
-	mux.Handle("POST /api/v1/admin/refunds/{orderId}/resolve", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.resolveRefund)))))
+	mux.Handle("POST /api/v1/admin/refunds/{orderId}/refund", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.refundOrder)))))
+	mux.Handle("POST /api/v1/admin/refunds/{orderId}/decline", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.declineRefund)))))
 	mux.Handle("POST /api/v1/admin/refunds/{orderId}/revoke", sameOrigin(authenticate(administrator(http.HandlerFunc(handler.revokeForRefund)))))
 }
 
@@ -96,6 +97,7 @@ type refundQueueItemDTO struct {
 	ReceivedAt         *string `json:"receivedAt"`
 	Reason             string  `json:"reason"`
 	MembershipState    *string `json:"membershipState"`
+	Outcome            *string `json:"outcome"`
 }
 
 type refundQueueDTO struct {
@@ -444,11 +446,25 @@ func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !emptyQuery(r.URL.RawQuery) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || hasUnexpectedQuery(query, "state") || len(query["state"]) > 1 {
 		writeError(w, r, domain.ErrGrantInvalid)
 		return
 	}
-	items, err := handler.service.RefundQueue(r.Context(), actor)
+	// Absent state defaults to the pending queue; "all" clears the repository filter.
+	stateFilter := "pending"
+	switch query.Get("state") {
+	case "", "pending":
+		stateFilter = "pending"
+	case "refunded", "declined":
+		stateFilter = query.Get("state")
+	case "all":
+		stateFilter = ""
+	default:
+		writeError(w, r, domain.ErrGrantInvalid)
+		return
+	}
+	items, err := handler.service.RefundQueue(r.Context(), actor, stateFilter)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -468,12 +484,24 @@ func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
 			state := string(*item.MembershipState)
 			dto.MembershipState = &state
 		}
+		if item.Outcome != "" {
+			outcome := item.Outcome
+			dto.Outcome = &outcome
+		}
 		dtos = append(dtos, dto)
 	}
 	httpserver.WriteJSON(w, http.StatusOK, refundQueueDTO{Items: dtos})
 }
 
-func (handler *Handler) resolveRefund(w http.ResponseWriter, r *http.Request) {
+func (handler *Handler) refundOrder(w http.ResponseWriter, r *http.Request) {
+	handler.settleRefund(w, r, handler.service.RefundOrder)
+}
+
+func (handler *Handler) declineRefund(w http.ResponseWriter, r *http.Request) {
+	handler.settleRefund(w, r, handler.service.DeclineRefund)
+}
+
+func (handler *Handler) settleRefund(w http.ResponseWriter, r *http.Request, settle func(context.Context, application.Actor, string) error) {
 	noStore(w)
 	actor, ok := actorFromRequest(w, r)
 	if !ok {
@@ -483,7 +511,7 @@ func (handler *Handler) resolveRefund(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, domain.ErrGrantInvalid)
 		return
 	}
-	if err := handler.service.ResolveRefund(r.Context(), actor, r.PathValue("orderId")); err != nil {
+	if err := settle(r.Context(), actor, r.PathValue("orderId")); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -770,6 +798,22 @@ func validateUniqueValue(decoder *json.Decoder) error {
 func emptyQuery(raw string) bool {
 	query, err := url.ParseQuery(raw)
 	return err == nil && len(query) == 0
+}
+
+func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
+	for key := range query {
+		found := false
+		for _, candidate := range allowed {
+			if key == candidate {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return true
+		}
+	}
+	return false
 }
 
 func validID(value string) bool {
