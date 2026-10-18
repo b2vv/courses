@@ -10,7 +10,7 @@ import {
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { CatalogQuery, CourseDetail, CoursePage } from '../../domain/course/course';
+import type { CatalogQuery, CourseDetail, CoursePage } from '../../contracts/course';
 import { CatalogFailure, CatalogLoading, CourseNotFound } from './CatalogStates';
 import { CatalogView } from './CatalogView';
 import { CourseView } from './CourseView';

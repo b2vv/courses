@@ -12,7 +12,7 @@ import type {
 import { useTranslation } from 'react-i18next';
 import * as Aria from 'react-aria-components';
 import { AuthoringQueryError } from '../../app/composition/admin-queries';
-import { newLessonId, newModuleId } from '../../domain/course/course';
+import { newLessonId, newModuleId } from '../../contracts/course';
 import type {
   AdminCourseDraft,
   AuthoringErrorCode,
@@ -21,7 +21,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
   InstructorOption,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { DraftSegment } from '../../domain/transcript/draft';
 import type { AuthenticatedUser } from '../../modules/identity';
 import {

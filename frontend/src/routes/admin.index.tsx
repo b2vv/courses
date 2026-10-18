@@ -10,7 +10,7 @@ import type {
   AdminCourseSort,
   CourseStatus,
   CourseTree,
-} from '../domain/course/course';
+} from '../contracts/course';
 import type { AuthenticatedUser } from '../modules/identity';
 import { CourseCreateDialog } from '../presentation/admin/CourseEditorView';
 import {

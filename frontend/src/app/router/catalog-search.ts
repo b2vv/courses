@@ -1,8 +1,8 @@
 import { notFound } from '@tanstack/react-router';
 import type { SearchSchemaInput } from '@tanstack/react-router';
-import type { CatalogQuery } from '../../domain/course/course';
+import type { CatalogQuery } from '../../contracts/course';
 import { z } from 'zod';
-import { makeCatalogQuery } from '../../domain/course/course';
+import { makeCatalogQuery } from '../../contracts/course';
 
 const searchSchema = z.object({
   q: z.string().optional(),

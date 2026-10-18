@@ -2,13 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from '@rstest/
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { createAuthoring } from '../../application/admin/authoring';
-import { asBrandedId } from '../../domain/course/course';
+import { asBrandedId } from '../../contracts/course';
 import type {
   AdminCourseDraft,
   AuthoringErrorCode,
   CourseTree,
   CourseTreeEdit,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import { apiOrigin } from './api-origin';
 import { createApiAdminCourseRepository } from './admin-course-repository';
 
