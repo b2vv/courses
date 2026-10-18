@@ -1,6 +1,6 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
-import { createApiTeachRepository } from '../../adapters/api/teach-repository';
+import { createApiTeachRepository } from '../../modules/teach';
 import { createTeachQueries } from './teach-queries';
 
 const requestOptions = createIsomorphicFn()

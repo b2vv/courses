@@ -1,0 +1,97 @@
+{
+  "instructions": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/standards.md"
+  ],
+  "workflow": [
+    "work/tasks.md",
+    "work/archive/ledger.md",
+    "docs/development/ai-factory.md",
+    "docs/development/testing.md",
+    "docs/development/ai-factory-package.json"
+  ],
+  "dependency_files": [
+    "backend/go.mod",
+    "frontend/package.json"
+  ],
+  "command_files": [
+    "Makefile",
+    "frontend/package.json"
+  ],
+  "skills": [
+    {
+      "name": "repo-bootstrap",
+      "source": "shared",
+      "path": "utils/repo-bootstrap/SKILL.md"
+    },
+    {
+      "name": "code-review",
+      "source": "shared",
+      "path": "arch/code-review/SKILL.md"
+    }
+  ],
+  "integrations": [
+    {
+      "name": "CRG",
+      "config_paths": [
+        ".mcp.json"
+      ],
+      "declared_availability": "unknown",
+      "declared_freshness": "unknown"
+    }
+  ],
+  "conflicts": [],
+  "scope": {
+    "mode": "small"
+  },
+  "hosts": [
+    {
+      "host": "codex-cli",
+      "session": "onboarding-static-inventory-2026-10-17",
+      "review": {
+        "source": "shared",
+        "path": "arch/code-review/SKILL.md"
+      }
+    },
+    {
+      "host": "claude-code",
+      "session": "onboarding-static-inventory-2026-10-17",
+      "review": {
+        "source": "shared",
+        "path": "arch/code-review/SKILL.md"
+      }
+    }
+  ],
+  "models": [],
+  "adapter_files": [
+    {
+      "path": "docs/development/ai-factory.md",
+      "sha256": "ffe16ec3f0924a70713426a95bad3f3f6db4e830b279da2082bfe3a83bf5bd38"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "89876864bce9a175f2ee5accb0bdc3fc1b2664af5457df017e54170168651deb"
+    },
+    {
+      "path": ".claude/standards.md",
+      "sha256": "80b9f39315474ec8ec69dfb68f8669910a0f2378602c8951df64ac6dd979f8ef"
+    },
+    {
+      "path": "docs/development/ai-factory-package.json",
+      "sha256": "931565b4c278a8e57310eb45a6a0f9a73039f01ac7829ef2a1e026cfb0b20c1f"
+    },
+    {
+      "path": "docs/development/ai-factory-readiness.md",
+      "sha256": "6021da8126f396cfc18f20cb7f3ca67a0f2ff26e29b7b7044ef0336473251ee7"
+    },
+    {
+      "path": "work/tasks.md",
+      "sha256": "4a5b113540c6e741f96fa463daa4f6643b6e89625ddb39c22cb94e7be44998d1"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "77c73ca4a4d9b7eda2585cb2325eb45802f4dd99da775a531010a3e72268c037"
+    }
+  ]
+}

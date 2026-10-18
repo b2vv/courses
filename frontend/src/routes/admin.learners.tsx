@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import type { LearnerFilters } from '../domain/teach/teach';
+import type { LearnerFilters } from '../modules/teach';
 import { learnerFilters, parseLearnerSearch } from '../app/router/learner-search';
-import { LearnerOverview } from '../presentation/teach/LearnerOverview';
+import { LearnerOverview } from '../modules/teach';
 
 function toSearch(filters: LearnerFilters) {
   return {

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { ModerationQueueItem } from '../../domain/teach/teach';
-import { Button } from '../ui';
+import type { ModerationQueueItem } from '../domain/teach';
+import { Button } from '../../../presentation/ui';
 
 // A reported review in the instructor queue. Only an admin can remove it (G9); the course owner can only
 // dismiss the reports.
