@@ -13,8 +13,8 @@ import type {
   AdminUserRole,
   AdminUserSort,
   WritableAccountStatus,
-} from '../../domain/identity/administration';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+} from '../../domain/admin/administration';
+import type { AuthenticatedUser } from '../../modules/identity';
 import {
   Button,
   DataTable,

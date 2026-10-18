@@ -1,9 +1,9 @@
 import { expect, test } from '@rstest/core';
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
-import { createSession } from '../../application/identity/session';
+import { createSession } from '../../modules/identity';
 import { createSessionQueries, SessionQueryError, sessionQueryKey } from './identity-queries';
-import type { AuthenticatedUser, SessionResult } from '../../domain/identity/identity';
-import type { SessionRepository } from '../../ports/SessionRepository';
+import type { AuthenticatedUser, SessionResult } from '../../modules/identity';
+import type { SessionRepository } from '../../modules/identity';
 
 const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',

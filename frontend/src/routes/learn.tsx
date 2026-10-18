@@ -3,10 +3,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
-import {
-  ProtectedRouteFailure,
-  ProtectedRoutePending,
-} from '../presentation/identity/ProtectedRouteStates';
+import { ProtectedRouteFailure, ProtectedRoutePending } from '../modules/identity';
 import { MyLearningList } from '../presentation/learn/MyLearningList';
 import { EmptyState, Link } from '../presentation/ui';
 

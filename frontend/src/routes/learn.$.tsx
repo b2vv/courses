@@ -19,7 +19,7 @@ import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
 import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
-import { LearnRouteFailure } from '../presentation/identity/ProtectedRouteStates';
+import { LearnRouteFailure } from '../modules/identity';
 import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';

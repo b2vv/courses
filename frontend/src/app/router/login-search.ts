@@ -1,6 +1,6 @@
 import type { SearchSchemaInput } from '@tanstack/react-router';
 import { z } from 'zod';
-import { safeReturnTo } from '../../domain/identity/identity';
+import { safeReturnTo } from '../../modules/identity';
 
 const searchSchema = z.object({
   returnTo: z.string().optional(),

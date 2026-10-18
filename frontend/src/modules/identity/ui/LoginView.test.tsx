@@ -1,9 +1,9 @@
 import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { I18nProvider, createI18n } from '../../app/providers/i18n';
+import { I18nProvider, createI18n } from '../../../app/providers/i18n';
 import { LoginView } from './LoginView';
-import type { AuthenticatedUser, CredentialsInput } from '../../domain/identity/identity';
+import type { AuthenticatedUser, CredentialsInput } from '../domain/identity';
 
 const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',

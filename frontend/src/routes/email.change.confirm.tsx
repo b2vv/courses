@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
-import { ConfirmEmailChangeView } from '../presentation/identity/ConfirmEmailChangeView';
+import { ConfirmEmailChangeView } from '../modules/identity';
 
 export const Route = createFileRoute('/email/change/confirm')({
   validateSearch: parseTokenSearch,

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
-import { PasswordResetView } from '../presentation/identity/PasswordResetView';
+import { PasswordResetView } from '../modules/identity';
 export const Route = createFileRoute('/password/reset')({
   validateSearch: parseTokenSearch,
   component: PasswordResetRoute,

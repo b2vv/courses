@@ -3,7 +3,7 @@ import type {
   AdministrationResult,
   AdminUserPage,
   AdminUserQuery,
-} from '../../domain/identity/administration';
+} from '../../domain/admin/administration';
 import type { AdminUserRepository } from '../../ports/AdminUserRepository';
 import {
   deleteAdminUser,

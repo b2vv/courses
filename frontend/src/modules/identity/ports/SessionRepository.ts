@@ -11,7 +11,7 @@ import type {
   TwoFactorEnrollment,
   RecoveryCodes,
   TokenInput,
-} from '../domain/identity/identity';
+} from '../domain/identity';
 
 export interface SessionRepository {
   /** Browser-only: the server requires an Origin header a server-side call cannot send. */
