@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { HomeView } from '../presentation/storefront/HomeView';
+import { HomeView } from '../modules/catalog';
 import { parseHomeSearch } from '../app/router/home-search';
 export const Route = createFileRoute('/')({
   validateSearch: parseHomeSearch,

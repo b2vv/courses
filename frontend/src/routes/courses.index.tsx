@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { catalogQuery, parseCatalogSearch } from '../app/router/catalog-search';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
-import { CatalogView } from '../presentation/storefront/CatalogView';
-import { CatalogFailure, CatalogLoading } from '../presentation/storefront/CatalogStates';
+import { CatalogView } from '../modules/catalog';
+import { CatalogFailure, CatalogLoading } from '../modules/catalog';
 
 export const Route = createFileRoute('/courses/')({
   validateSearch: parseCatalogSearch,

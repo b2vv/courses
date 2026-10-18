@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
 import { http, HttpResponse, delay } from 'msw';
 import { setupServer } from 'msw/node';
 import { createApiCourseRepository } from './course-repository';
-import { apiOrigin } from './api-origin';
+import { apiOrigin } from '../../../adapters/api/api-origin';
 
 const course = {
   id: '10000000-0000-4000-8000-000000000001',

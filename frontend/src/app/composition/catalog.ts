@@ -1,7 +1,7 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
-import { createCatalog } from '../../application/catalog/catalog';
-import { createApiCourseRepository } from '../../adapters/api/course-repository';
+import { createCatalog } from '../../modules/catalog';
+import { createApiCourseRepository } from '../../modules/catalog';
 import { createCatalogQueries } from './catalog-queries';
 
 const requestOptions = createIsomorphicFn()

@@ -10,7 +10,7 @@ import { createApiSessionRepository } from '../modules/identity';
 import { createAuthoring } from '../application/admin/authoring';
 import { createLessonVideos } from '../modules/media';
 import { createUserAdministration } from '../application/admin/users';
-import { createCatalog } from '../application/catalog/catalog';
+import { createCatalog } from '../modules/catalog';
 import { createSession } from '../modules/identity';
 import { createAdminQueries } from '../app/composition/admin-queries';
 import { createAdminUserQueries } from '../app/composition/admin-user-queries';
@@ -83,7 +83,7 @@ import type {
 import type { AdminUser, AdminUserQuery } from '../domain/admin/administration';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
-import type { CourseRepository } from '../ports/CourseRepository';
+import type { CourseRepository } from '../modules/catalog';
 import type { LessonVideoRepository } from '../modules/media';
 import type { PlaybackRepository } from '../modules/playback';
 import type { AuthenticatedUser, Role } from '../modules/identity';

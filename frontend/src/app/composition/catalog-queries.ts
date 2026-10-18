@@ -5,7 +5,7 @@ import {
   queryOptions,
 } from '@tanstack/react-query';
 import type { FetchQueryOptions, QueryClient, QueryKey } from '@tanstack/react-query';
-import type { createCatalog } from '../../application/catalog/catalog';
+import type { createCatalog } from '../../modules/catalog';
 import type { CatalogError, CatalogQuery, Result } from '../../contracts/course';
 
 export class CatalogQueryError extends Error {
