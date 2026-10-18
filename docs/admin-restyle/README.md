@@ -4,7 +4,7 @@
 - **Ініційовано власником:** 2026-10-14.
 - **Ролі:** Courses 1 — план / код / brief; Courses 2 — рев'ю / acceptance-осі / gate.
 - **Пов'язані артефакти:** `docs/lesson-builder/decision-editor-redesign.md` (editor-зріз, merged `180b788`),
-  `docs/admin-restyle/_wip-acceptance-review-axes.md` (Courses 2), скіл `~/.agents/skills/ux-review/`.
+  `work/archive/_wip-acceptance-review-axes.md` (Courses 2), скіл `~/.agents/skills/ux-review/`.
 
 ## Проблема
 

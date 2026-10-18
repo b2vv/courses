@@ -4,8 +4,8 @@
 admin-restyle S3 `639c7ca`). Фронт-онлі: лише `presentation/` + scoped CSS у `main.css` + i18n обох
 локалей. Бекенд / контракти / домен / схема / Tiptap round-trip НЕ чіпаються.
 
-Специфікація (ЩО/ЧОМУ): [spec.md](spec.md). Факти коду: [_wip-facts-codex.md](_wip-facts-codex.md).
-Жива нота: [_wip-spec-flow.md](_wip-spec-flow.md). Гілка: `feat/editor-polish` → один фінальний PR у
+Специфікація (ЩО/ЧОМУ): [spec.md](spec.md). Факти коду: [_wip-facts-codex.md](../../work/archive/_wip-facts-codex.md).
+Жива нота: [_wip-spec-flow.md](../../work/archive/_wip-spec-flow.md). Гілка: `feat/editor-polish` → один фінальний PR у
 `main` (owner merge). Імплементація — Codex (роль Courses 1); рев'ю зрізів — Courses 2.
 
 ---

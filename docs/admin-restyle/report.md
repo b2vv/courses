@@ -506,7 +506,7 @@ S5 (learners) за планом row 5 / tickets S5.
 
 Рестайл екрана learners (LEARNING EXPERIENCE, спільний компонент `presentation/teach/LearnerOverview.tsx`
 для `/admin/learners` і `/teach/learners`) за tickets S5. Код нарізано Codex'ом (бриф
-`docs/admin-restyle/_wip-S5-codex.md`); гейт і browser-verify — Courses 1.
+`work/archive/_wip-S5-codex.md`); гейт і browser-verify — Courses 1.
 
 ### Зроблено (2 файли: 1 TSX view + 1 page-scoped CSS)
 - **Вихідний стан:** класи `learners-list`/`learners-courses`/`learners-filters`/`teach-section` не мали
@@ -556,7 +556,7 @@ Owner-authorized merge S5 PR → main (код-фаза: гілка+PR). Злит
 ## S6 — reports + refunds: візуальний рестайл (останній зріз)
 
 Рестайл двох адмін-черг — `ParticipantReportQueue` (`/admin/participant-reports`) і `RefundQueue`
-(`/admin/refunds`) — за tickets S6. Код нарізав Codex (бриф `docs/admin-restyle/_wip-S6-codex.md`); гейт
+(`/admin/refunds`) — за tickets S6. Код нарізав Codex (бриф `work/archive/_wip-S6-codex.md`); гейт
 і browser-verify — Courses 1.
 
 ### Зроблено (4 файли: 2 TSX views + 1 page-scoped CSS + локалі)
