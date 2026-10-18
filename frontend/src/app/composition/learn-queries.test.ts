@@ -1,8 +1,8 @@
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 import { expect, test } from '@rstest/core';
-import type { LearningCourse, PlaybackResult } from '../../domain/playback/playback';
+import type { LearningCourse, PlaybackResult } from '../../modules/playback';
 import type { CourseRepository } from '../../ports/CourseRepository';
-import type { PlaybackRepository } from '../../ports/PlaybackRepository';
+import type { PlaybackRepository } from '../../modules/playback';
 import { createLearnQueries, learningCourseQueryKey } from './learn-queries';
 
 // This test reads only the learning course; the review side of the course repository is unused here.

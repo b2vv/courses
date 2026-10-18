@@ -10,12 +10,12 @@ import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/reac
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
-import { lessonInCourse } from '../domain/playback/playback';
-import type { LearningCourse, LearningLesson } from '../domain/playback/playback';
+import { lessonInCourse } from '../modules/playback';
+import type { LearningCourse, LearningLesson } from '../modules/playback';
 import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { LockedLessonPanel } from '../presentation/learn/LockedLessonPanel';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
-import { LessonPlayer } from '../presentation/learn/LessonPlayer';
+import { LessonPlayer } from '../modules/playback';
 import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
 import { DiscussionPanel } from '../modules/discussion';

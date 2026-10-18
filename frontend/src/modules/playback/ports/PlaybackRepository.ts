@@ -3,7 +3,7 @@ import type {
   PlaybackHeartbeat,
   PlaybackResult,
   PlaybackSession,
-} from '../domain/playback/playback';
+} from '../domain/playback';
 
 export interface PlaybackRepository {
   getCourse(slug: string, signal?: AbortSignal): Promise<PlaybackResult<LearningCourse>>;

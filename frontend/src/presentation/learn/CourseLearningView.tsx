@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { LearningCourse } from '../../domain/playback/playback';
+import type { LearningCourse } from '../../modules/playback';
 import type { PurchaseErrorCode } from '../../domain/purchase/purchase';
 import { Button, Link } from '../ui';
 import { purchaseErrorKey } from './LockedLessonPanel';

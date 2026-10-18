@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
-import type { LearningCourse } from '../../domain/playback/playback';
+import type { LearningCourse } from '../../modules/playback';
 import { CourseLearningView } from './CourseLearningView';
 
 const lessonIds = [

@@ -36,9 +36,9 @@ import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import type { DiscussionRepository } from '../modules/discussion';
-import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
+import type { CreatePlaybackMedia } from '../modules/playback';
 import type { LessonTranscript } from '../domain/transcript/transcript';
-import type { LearningCourse } from '../domain/playback/playback';
+import type { LearningCourse } from '../modules/playback';
 import type { PurchaseOrder } from '../domain/purchase/purchase';
 
 // Route guards never touch transcripts; a proxy keeps this stub from drifting every time the port
@@ -85,7 +85,7 @@ import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { LessonVideoRepository } from '../modules/media';
-import type { PlaybackRepository } from '../ports/PlaybackRepository';
+import type { PlaybackRepository } from '../modules/playback';
 import type { AuthenticatedUser, Role } from '../modules/identity';
 import { routeTree } from '../routeTree.gen';
 

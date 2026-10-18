@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { Av1ProbeResult } from '../../domain/playback/playback';
+import type { Av1ProbeResult } from '../../modules/playback';
 
 const av1ProbeKey = ['playback', 'av1-probe'] as const;
 const av1ContentType = 'video/mp4; codecs="av01.0.05M.08"';

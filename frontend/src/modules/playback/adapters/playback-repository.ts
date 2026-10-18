@@ -5,16 +5,20 @@ import type {
   PlaybackHeartbeat,
   PlaybackResult,
   PlaybackSession,
-} from '../../domain/playback/playback';
-import type { PlaybackRepository } from '../../ports/PlaybackRepository';
-import { createPlaybackSession, getLearningCourse, heartbeatPlayback } from './generated/courses';
+} from '../domain/playback';
+import type { PlaybackRepository } from '../ports/PlaybackRepository';
+import {
+  createPlaybackSession,
+  getLearningCourse,
+  heartbeatPlayback,
+} from '../../../adapters/api/generated/courses';
 import {
   learningCourseSchema,
   playbackErrorSchema,
   playbackSessionSchema,
 } from './playback-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function failure(code: PlaybackErrorCode): PlaybackResult<never> {
   return { ok: false, error: { code } };

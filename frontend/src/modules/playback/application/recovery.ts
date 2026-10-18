@@ -1,4 +1,4 @@
-import type { PlaybackErrorCode } from '../../domain/playback/playback';
+import type { PlaybackErrorCode } from '../domain/playback';
 
 export const initialHeartbeatBackoffMs = 1_000;
 export const maximumPlaybackRetries = 3;

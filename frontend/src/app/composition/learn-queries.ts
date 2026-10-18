@@ -1,8 +1,8 @@
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import type { CourseRepository } from '../../ports/CourseRepository';
-import type { PlaybackErrorCode } from '../../domain/playback/playback';
-import type { PlaybackRepository } from '../../ports/PlaybackRepository';
+import type { PlaybackErrorCode } from '../../modules/playback';
+import type { PlaybackRepository } from '../../modules/playback';
 
 export class LearnQueryError extends Error {
   readonly code: PlaybackErrorCode;
