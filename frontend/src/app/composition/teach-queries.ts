@@ -1,13 +1,13 @@
 import { infiniteQueryOptions, mutationOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { TeachRepository } from '../../ports/TeachRepository';
 import type {
   DismissReportsInput,
   LearnerFilters,
   LearnerScope,
   TeachErrorCode,
+  TeachRepository,
   TeachResult,
-} from '../../domain/teach/teach';
+} from '../../modules/teach';
 
 export function teachCourseCommentsQueryKey(courseId: string) {
   return ['teach', 'comments', courseId] as const;

@@ -33,7 +33,7 @@ import { createEnrollmentQueries } from '../app/composition/enrollment-queries';
 import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
 import { createAdminStatsQueries } from '../app/composition/admin-stats-queries';
 import type { PurchaseRepository } from '../modules/purchase';
-import type { TeachRepository } from '../ports/TeachRepository';
+import type { TeachRepository } from '../modules/teach';
 import type { TranscriptRepository } from '../modules/transcript';
 import type { DiscussionRepository } from '../modules/discussion';
 import type { CreatePlaybackMedia } from '../modules/playback';

@@ -10,8 +10,8 @@ import {
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { LearnerRow } from '../../domain/teach/teach';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+import type { LearnerRow } from '../domain/teach';
 import { LearnerOverview } from './LearnerOverview';
 
 const courseId = '10000000-0000-4000-8000-000000000001';

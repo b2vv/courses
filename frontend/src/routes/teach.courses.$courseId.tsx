@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { validEntityId } from '../contracts/course';
-import type { ModerationQueueItem, TeachComment } from '../domain/teach/teach';
+import type { ModerationQueueItem, TeachComment } from '../modules/teach';
 import { formatTimestamp } from '../presentation/format-timestamp';
-import { ReviewModerationRow } from '../presentation/teach/ReviewModerationRow';
-import { CourseRoster } from '../presentation/teach/CourseRoster';
+import { ReviewModerationRow } from '../modules/teach';
+import { CourseRoster } from '../modules/teach';
 import { Button } from '../presentation/ui';
 
 const moderationReason = 'moderation_reviewed';

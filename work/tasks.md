@@ -1,5 +1,7 @@
 # Foundation task tracker
 
+Для нової/відновленої задачі чинний phase/task plan є джерелом [pre-code checkpoint](../docs/development/ai-factory.md#pre-code-checkpoint): acceptance, рішення/grilling, залежності, scoped impact і READY/BLOCKED. Схвалення фази/пакета не дає READY усім рядкам. Цей tracker лишається індексом фаз, без нового sprint registry; історичні результати не переписуються.
+
 Джерело scope: [spec](../docs/foundation/spec.md). Детальні файли, gates і acceptance links: [plan](../docs/foundation/plan.md). Стани: `planned` → `in_progress` → `done` або `blocked`. При завершенні рядок зберігається як archive pointer з посиланням на результат/commit і evidence в ledger; задачі не видаляються.
 
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
