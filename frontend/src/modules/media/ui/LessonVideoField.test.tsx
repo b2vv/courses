@@ -7,7 +7,7 @@ import { asBrandedId } from '../../../contracts/course';
 import type { CourseTree } from '../../../contracts/course';
 import type { AuthenticatedUser } from '../../identity';
 import type { LessonVideo } from '../domain/video';
-import { CourseEditorView } from '../../../presentation/admin/CourseEditorView';
+import { CourseEditorView } from '../../admin';
 import {
   LessonVideoField,
   type LessonVideoFieldActions,

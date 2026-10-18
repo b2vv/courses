@@ -23,14 +23,14 @@ import type {
 import type { DraftErrorCode } from '../modules/transcript';
 import type { AuthenticatedUser } from '../modules/identity';
 import type { VideoErrorCode, VideoTransferProgress, VideoTransferTarget } from '../modules/media';
-import { CourseEditorPending, CourseEditorView } from '../presentation/admin/CourseEditorView';
+import { CourseEditorPending, CourseEditorView } from '../modules/admin';
 import type {
   CourseEditorVideo,
   LessonVideoFieldActions,
   LessonVideoFieldActionResult,
 } from '../modules/media';
-import { CourseListFailure } from '../presentation/admin/CourseListView';
-import { CourseGrantPanel } from '../presentation/admin/CourseGrantPanel';
+import { CourseListFailure } from '../modules/admin';
+import { CourseGrantPanel } from '../modules/admin';
 import { GrantQueryError } from '../app/composition/admin-grant-queries';
 import type { GrantErrorCode } from '../modules/purchase';
 

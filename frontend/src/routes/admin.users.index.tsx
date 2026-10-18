@@ -12,9 +12,9 @@ import type {
   AdminUserRole,
   AdminUserSort,
   WritableAccountStatus,
-} from '../domain/admin/administration';
+} from '../modules/admin';
 import { canAdministerAccounts } from '../modules/identity';
-import { UserListFailure, UserListPending, UserListView } from '../presentation/admin/UserListView';
+import { UserListFailure, UserListPending, UserListView } from '../modules/admin';
 
 export const Route = createFileRoute('/admin/users/')({
   ssr: false,
