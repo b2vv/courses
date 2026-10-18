@@ -5,7 +5,7 @@ const prefix = 'transcript-recovery-dismissed:';
  * author who waves the prompt away today should still be offered work recovered from a crash
  * tomorrow, and a dismissal persisted on disk would silently disarm the mechanism for good.
  *
- * Guarded exactly like `adapters/api/tus-client.ts`: absent during SSR, and able to throw in a
+ * Guarded exactly like `modules/media/adapters/tus-client.ts`: absent during SSR, and able to throw in a
  * private window, so both are treated as "no memory of a dismissal".
  */
 function storage(): Storage | undefined {

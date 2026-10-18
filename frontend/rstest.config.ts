@@ -23,7 +23,10 @@ export default defineConfig({
     {
       name: 'adapter-node',
       testEnvironment: 'node',
-      include: ['src/adapters/api/**/*.test.{ts,tsx}'],
+      // Adapter tests run under node for real fetch/Headers wire semantics. Feature modules keep
+      // their adapters under src/modules/<m>/adapters, so match those too — not only the flat
+      // src/adapters/api left from the pre-module layout.
+      include: ['src/adapters/api/**/*.test.{ts,tsx}', 'src/modules/*/adapters/**/*.test.{ts,tsx}'],
       setupFiles: ['./src/test-setup.ts'],
       env: { API_BASE_URL: 'http://api.test' },
       tools: {
@@ -42,7 +45,7 @@ export default defineConfig({
       name: 'dom',
       testEnvironment: 'happy-dom',
       include: ['src/**/*.test.{ts,tsx}'],
-      exclude: ['src/adapters/api/**'],
+      exclude: ['src/adapters/api/**', 'src/modules/*/adapters/**'],
       setupFiles: ['./src/test-setup.ts'],
       tools: sharedTools,
     },

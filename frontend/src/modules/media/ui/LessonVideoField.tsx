@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { acceptedVideoFileTypes } from '../../domain/media/video';
+import { acceptedVideoFileTypes } from '../domain/video';
 import type {
   LessonVideo,
   VideoErrorCode,
   VideoFailureReason,
   VideoTransferProgress,
-} from '../../domain/media/video';
-import { Button, FileUpload, ProgressBar } from '../ui';
+} from '../domain/video';
+import { Button, FileUpload, ProgressBar } from '../../../presentation/ui';
 
 const queuedRetryMs = 10 * 60_000;
 const processingRetryMs = 40 * 60_000;

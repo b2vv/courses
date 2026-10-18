@@ -1,19 +1,18 @@
-import type {
-  LessonVideo,
-  VideoError,
-  VideoResult,
-  VideoUploadTicket,
-} from '../../domain/media/video';
-import type { LessonVideoRepository } from '../../ports/LessonVideoRepository';
-import { listAdminCourseVideos, mintAdminVideoTicket, retryAdminVideo } from './generated/courses';
-import { errorSchema } from './course-schema';
+import type { LessonVideo, VideoError, VideoResult, VideoUploadTicket } from '../domain/video';
+import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
+import {
+  listAdminCourseVideos,
+  mintAdminVideoTicket,
+  retryAdminVideo,
+} from '../../../adapters/api/generated/courses';
+import { errorSchema } from '../../../adapters/api/course-schema';
 import {
   courseVideosSchema,
   lessonVideoSchema,
   videoUploadTicketSchema,
 } from './lesson-video-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 import { createTusClient } from './tus-client';
 
 const invalid = {

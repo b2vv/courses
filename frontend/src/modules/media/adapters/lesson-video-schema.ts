@@ -5,8 +5,8 @@ import {
   videoChunkBytes,
   videoFailureReasons,
   videoStates,
-} from '../../domain/media/video';
-import { adminTimestampSchema } from './admin-course-schema';
+} from '../domain/video';
+import { adminTimestampSchema } from '../../../adapters/api/admin-course-schema';
 
 const videoIdSchema = z.uuid().refine(validMediaId);
 const byteCountSchema = z.number().int().min(0).max(maximumVideoBytes);

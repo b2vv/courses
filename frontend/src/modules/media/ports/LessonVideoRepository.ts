@@ -4,7 +4,7 @@ import type {
   VideoTransferTarget,
   VideoTransferProgress,
   VideoUploadTicket,
-} from '../domain/media/video';
+} from '../domain/video';
 
 export interface LessonVideoRepository {
   mint(

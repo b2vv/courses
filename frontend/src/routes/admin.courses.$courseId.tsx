@@ -22,17 +22,13 @@ import type {
 } from '../contracts/course';
 import type { DraftErrorCode } from '../domain/transcript/draft';
 import type { AuthenticatedUser } from '../modules/identity';
-import type {
-  VideoErrorCode,
-  VideoTransferProgress,
-  VideoTransferTarget,
-} from '../domain/media/video';
+import type { VideoErrorCode, VideoTransferProgress, VideoTransferTarget } from '../modules/media';
 import { CourseEditorPending, CourseEditorView } from '../presentation/admin/CourseEditorView';
 import type {
   CourseEditorVideo,
   LessonVideoFieldActions,
   LessonVideoFieldActionResult,
-} from '../presentation/admin/LessonVideoField';
+} from '../modules/media';
 import { CourseListFailure } from '../presentation/admin/CourseListView';
 import { CourseGrantPanel } from '../presentation/admin/CourseGrantPanel';
 import { GrantQueryError } from '../app/composition/admin-grant-queries';

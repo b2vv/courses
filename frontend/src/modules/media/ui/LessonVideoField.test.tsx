@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it } from '@rstest/core';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import { asBrandedId } from '../../contracts/course';
-import type { CourseTree } from '../../contracts/course';
-import type { AuthenticatedUser } from '../../modules/identity';
-import type { LessonVideo } from '../../domain/media/video';
-import { CourseEditorView } from './CourseEditorView';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+import { asBrandedId } from '../../../contracts/course';
+import type { CourseTree } from '../../../contracts/course';
+import type { AuthenticatedUser } from '../../identity';
+import type { LessonVideo } from '../domain/video';
+import { CourseEditorView } from '../../../presentation/admin/CourseEditorView';
 import {
   LessonVideoField,
   type LessonVideoFieldActions,

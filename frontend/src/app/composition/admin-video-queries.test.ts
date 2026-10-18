@@ -2,11 +2,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, rstest, test } from '
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { createApiLessonVideoRepository } from '../../adapters/api/lesson-video-repository';
+import { createApiLessonVideoRepository } from '../../modules/media';
 import { apiOrigin } from '../../adapters/api/api-origin';
-import { createLessonVideos } from '../../application/admin/lesson-video';
-import type { LessonVideo } from '../../domain/media/video';
-import type { LessonVideoRepository } from '../../ports/LessonVideoRepository';
+import { createLessonVideos } from '../../modules/media';
+import type { LessonVideo } from '../../modules/media';
+import type { LessonVideoRepository } from '../../modules/media';
 import {
   adminCourseVideosQueryKey,
   createAdminVideoQueries,
