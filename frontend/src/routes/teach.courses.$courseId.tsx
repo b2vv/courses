@@ -4,7 +4,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
-import { validEntityId } from '../domain/course/course';
+import { validEntityId } from '../contracts/course';
 import type { ModerationQueueItem, TeachComment } from '../domain/teach/teach';
 import { formatTimestamp } from '../presentation/format-timestamp';
 import { ReviewModerationRow } from '../presentation/teach/ReviewModerationRow';

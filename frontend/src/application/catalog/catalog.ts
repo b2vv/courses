@@ -1,4 +1,4 @@
-import { makeCatalogQuery, validSlug } from '../../domain/course/course';
+import { makeCatalogQuery, validSlug } from '../../contracts/course';
 import type {
   CatalogQuery,
   CourseDetail,
@@ -6,7 +6,7 @@ import type {
   OwnReview,
   PublicReviewPage,
   Result,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 
 export function createCatalog(repository: CourseRepository) {

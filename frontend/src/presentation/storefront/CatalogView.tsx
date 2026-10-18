@@ -1,4 +1,4 @@
-import type { CatalogQuery, CoursePage, PublishedCourse } from '../../domain/course/course';
+import type { CatalogQuery, CoursePage, PublishedCourse } from '../../contracts/course';
 import { ValueStrip } from './ValueStrip';
 import { Button, EmptyState, Link, TextField } from '../ui';
 import { useTranslation } from 'react-i18next';

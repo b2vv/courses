@@ -9,7 +9,7 @@ import {
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCatalog } from '../../application/catalog/catalog';
-import type { CatalogQuery, CoursePage, Result } from '../../domain/course/course';
+import type { CatalogQuery, CoursePage, Result } from '../../contracts/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 import { createCatalogQueries, ensureRouteQuery } from './catalog-queries';
 

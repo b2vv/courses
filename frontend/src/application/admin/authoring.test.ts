@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@rstest/core';
-import { asBrandedId } from '../../domain/course/course';
-import type { CourseTree, CourseTreeEdit } from '../../domain/course/course';
+import { asBrandedId } from '../../contracts/course';
+import type { CourseTree, CourseTreeEdit } from '../../contracts/course';
 import type { AdminCourseRepository } from '../../ports/AdminCourseRepository';
 import { createAuthoring } from './authoring';
 

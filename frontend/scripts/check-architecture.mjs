@@ -54,9 +54,10 @@ for (const file of files) {
       if (fileLayer === 'domain' && !(resolvedRel && resolvedRel.startsWith('contracts/')))
         failures.push(`${relative}: module domain import ${specifier}`);
 
-      // Application and ports point inward only. Legacy flat layout:
+      // Application and ports point inward only. Legacy flat layout — the shared contracts zone is
+      // domain-safe and reaches inward like domain does, so it is allowed alongside it.
       if (relative.startsWith('application/') || relative.startsWith('ports/')) {
-        const allowed = resolvedRel && /^(domain|ports|application)\//.test(resolvedRel);
+        const allowed = resolvedRel && /^(domain|ports|application|contracts)\//.test(resolvedRel);
         if (!allowed) failures.push(`${relative}: inward dependency violated by ${specifier}`);
       }
       // Module layout: the same module's domain/ports/application, or contracts; packages are fine.

@@ -12,7 +12,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
   CoursePrice,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 
 export const adminListStaleMs = 30_000;
 export const instructorListStaleMs = 300_000;

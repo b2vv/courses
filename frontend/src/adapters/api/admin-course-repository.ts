@@ -8,7 +8,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
   InstructorOption,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { AdminCourseRepository } from '../../ports/AdminCourseRepository';
 import {
   createAdminCourse,

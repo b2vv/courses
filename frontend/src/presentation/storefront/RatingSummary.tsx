@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { Rating } from '../../domain/course/course';
+import type { Rating } from '../../contracts/course';
 import { formatRating } from '../format-rating';
 
 // The visible «★ 4,7 (3)» is hidden from assistive tech and paired with a full sentence: aria-label on a

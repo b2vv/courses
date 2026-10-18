@@ -1,5 +1,5 @@
-import type { CourseDetail } from '../../domain/course/course';
-import type { PublicReviewPage } from '../../domain/course/course';
+import type { CourseDetail } from '../../contracts/course';
+import type { PublicReviewPage } from '../../contracts/course';
 import type { EnrollmentErrorCode, Membership } from '../../domain/enrollment/enrollment';
 import { Button, Link } from '../ui';
 import { useTranslation } from 'react-i18next';
