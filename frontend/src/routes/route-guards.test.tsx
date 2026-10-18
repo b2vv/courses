@@ -35,7 +35,7 @@ import { createAdminStatsQueries } from '../app/composition/admin-stats-queries'
 import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
-import type { DiscussionRepository } from '../ports/DiscussionRepository';
+import type { DiscussionRepository } from '../modules/discussion';
 import type { CreatePlaybackMedia } from '../ports/PlaybackMedia';
 import type { LessonTranscript } from '../domain/transcript/transcript';
 import type { LearningCourse } from '../domain/playback/playback';

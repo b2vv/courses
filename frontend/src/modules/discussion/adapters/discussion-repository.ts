@@ -3,21 +3,18 @@ import type {
   DiscussionErrorCode,
   DiscussionPage,
   DiscussionResult,
-} from '../../domain/discussion/discussion';
-import type { DiscussionRepository } from '../../ports/DiscussionRepository';
-import type {
-  PublishDiscussionInput,
-  UpdateDiscussionInput,
-} from '../../domain/discussion/discussion';
+} from '../domain/discussion';
+import type { DiscussionRepository } from '../ports/DiscussionRepository';
+import type { PublishDiscussionInput, UpdateDiscussionInput } from '../domain/discussion';
 import {
   listLessonComments,
   publishLessonComment,
   removeLessonComment,
   reportLessonComment,
   updateLessonComment,
-} from './generated/courses';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+} from '../../../adapters/api/generated/courses';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function failure(code: DiscussionErrorCode): DiscussionResult<never> {
   return { ok: false, error: { code } };

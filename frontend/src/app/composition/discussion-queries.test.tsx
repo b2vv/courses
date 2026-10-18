@@ -7,8 +7,8 @@ import {
 } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { DiscussionComment } from '../../domain/discussion/discussion';
-import type { DiscussionRepository } from '../../ports/DiscussionRepository';
+import type { DiscussionComment } from '../../modules/discussion';
+import type { DiscussionRepository } from '../../modules/discussion';
 import { createDiscussionQueries } from './discussion-queries';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
