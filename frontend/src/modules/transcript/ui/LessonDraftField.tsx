@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DraftErrorCode, DraftSegment, LessonDraft } from '../../domain/transcript/draft';
-import { Button, ProgressBar, Select } from '../ui';
-import type { ChoiceOption } from '../ui';
+import type { DraftErrorCode, DraftSegment, LessonDraft } from '../domain/draft';
+import { Button, ProgressBar, Select } from '../../../presentation/ui';
+import type { ChoiceOption } from '../../../presentation/ui';
 
 export type LessonDraftFieldActions = {
   regenerate(lessonId: string, language: string | undefined): Promise<DraftErrorCode | null>;

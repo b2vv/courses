@@ -1,4 +1,4 @@
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 
 /**
  * Local recovery for the transcript editor. The editor holds its lines in component state, so a

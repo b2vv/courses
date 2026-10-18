@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TranscriptDraftLine } from '../../application/transcript/recovery';
+import type { TranscriptDraftLine } from '../application/recovery';
 import type {
   TranscriptDocument,
   TranscriptErrorCode,
   TranscriptSegment,
-} from '../../domain/transcript/transcript';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
-import { Button, TextArea, TextField } from '../ui';
+} from '../domain/transcript';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
+import { Button, TextArea, TextField } from '../../../presentation/ui';
 import { useTranscriptRecovery } from './use-transcript-recovery';
 import type { TranscriptDraftOffer } from './transcript-draft-offer';
 

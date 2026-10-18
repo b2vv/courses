@@ -1,5 +1,5 @@
-import type { TranscriptSnapshot } from '../../application/transcript/recovery';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+import type { TranscriptSnapshot } from '../application/recovery';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 
 /**
  * The store used on the server, in tests, and in any browser that refuses IndexedDB. It is not a

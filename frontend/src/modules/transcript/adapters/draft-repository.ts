@@ -1,17 +1,12 @@
-import type {
-  DraftErrorCode,
-  DraftResult,
-  DraftState,
-  LessonDraft,
-} from '../../domain/transcript/draft';
-import type { DraftRepository } from '../../ports/DraftRepository';
-import { getLessonDraft, regenerateLessonDraft } from './generated/courses';
+import type { DraftErrorCode, DraftResult, DraftState, LessonDraft } from '../domain/draft';
+import type { DraftRepository } from '../ports/DraftRepository';
+import { getLessonDraft, regenerateLessonDraft } from '../../../adapters/api/generated/courses';
 import type {
   DraftSegment as GeneratedDraftSegment,
   LessonDraft as GeneratedLessonDraft,
-} from './generated/models';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+} from '../../../adapters/api/generated/models';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function failure(code: DraftErrorCode): DraftResult<never> {
   return { ok: false, error: { code } };

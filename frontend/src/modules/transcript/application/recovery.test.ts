@@ -1,5 +1,5 @@
 import { expect, test } from '@rstest/core';
-import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
+import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
 import {
   captureDirective,
   forgetOtherAuthors,

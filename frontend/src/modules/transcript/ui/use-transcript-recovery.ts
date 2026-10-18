@@ -3,15 +3,15 @@ import {
   forgetDismissal,
   rememberDismissal,
   wasDismissed,
-} from '../../adapters/storage/recovery-dismissal';
+} from '../../../adapters/storage/recovery-dismissal';
 import {
   captureDirective,
   recoveryOffer,
   type RecoveryOffer,
   type TranscriptBaseline,
   type TranscriptDraftLine,
-} from '../../application/transcript/recovery';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+} from '../application/recovery';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 
 /**
  * Idle delay before an unprompted capture, matching the interval the mechanism this is modelled

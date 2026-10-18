@@ -1,24 +1,20 @@
-import type {
-  LessonTranscript,
-  TranscriptErrorCode,
-  TranscriptResult,
-} from '../../domain/transcript/transcript';
-import type { TranscriptRepository } from '../../ports/TranscriptRepository';
+import type { LessonTranscript, TranscriptErrorCode, TranscriptResult } from '../domain/transcript';
+import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import {
   addCourseDocument,
   getLessonTranscript,
   listCourseDocuments,
   removeCourseDocument,
   saveLessonTranscript,
-} from './generated/courses';
+} from '../../../adapters/api/generated/courses';
 import {
   courseDocumentsSchema,
   lessonTranscriptSchema,
   savedTranscriptSchema,
   transcriptErrorSchema,
 } from './transcript-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 function failure(code: TranscriptErrorCode): TranscriptResult<never> {
   return { ok: false, error: { code } };

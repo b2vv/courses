@@ -3,7 +3,7 @@ import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiPlaybackRepository } from '../../modules/playback';
 import { createApiDiscussionRepository } from '../../modules/discussion';
-import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
+import { createApiTranscriptRepository } from '../../modules/transcript';
 import { createPlaybackMedia } from '../../modules/playback';
 import { primeAv1Probe, takeAv1ProbeResult } from './av1-probe';
 import { createLearnQueries } from './learn-queries';
