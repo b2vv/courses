@@ -1,6 +1,6 @@
 import { mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { createAuthoring } from '../../application/admin/authoring';
+import type { createAuthoring } from '../../modules/admin';
 import type {
   AdminCourse,
   AdminCourseDraft,

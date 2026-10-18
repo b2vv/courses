@@ -14,7 +14,7 @@ import {
   TrendChart,
 } from './index';
 import type { DataColumn, DataTableSort } from './index';
-import { AdminNavIcon } from '../admin/AdminNavIcon';
+import { AdminNavIcon } from '../../modules/admin';
 
 /**
  * The admin UI kit rendered on the NorthWind dark surface (the preview wraps every

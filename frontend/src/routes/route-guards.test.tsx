@@ -7,9 +7,9 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../modules/identity';
-import { createAuthoring } from '../application/admin/authoring';
+import { createAuthoring } from '../modules/admin';
 import { createLessonVideos } from '../modules/media';
-import { createUserAdministration } from '../application/admin/users';
+import { createUserAdministration } from '../modules/admin';
 import { createCatalog } from '../modules/catalog';
 import { createSession } from '../modules/identity';
 import { createAdminQueries } from '../app/composition/admin-queries';
@@ -80,9 +80,9 @@ import type {
   CourseTree,
   CourseTreeEdit,
 } from '../contracts/course';
-import type { AdminUser, AdminUserQuery } from '../domain/admin/administration';
-import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
-import type { AdminUserRepository } from '../ports/AdminUserRepository';
+import type { AdminUser, AdminUserQuery } from '../modules/admin';
+import type { AdminCourseRepository } from '../modules/admin';
+import type { AdminUserRepository } from '../modules/admin';
 import type { CourseRepository } from '../modules/catalog';
 import type { LessonVideoRepository } from '../modules/media';
 import type { PlaybackRepository } from '../modules/playback';
