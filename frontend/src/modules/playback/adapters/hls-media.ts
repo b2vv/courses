@@ -3,7 +3,7 @@ import type {
   CreatePlaybackMedia,
   PlaybackMedia,
   PlaybackMediaCallbacks,
-} from '../../ports/PlaybackMedia';
+} from '../ports/PlaybackMedia';
 
 const hlsMimeType = 'application/vnd.apple.mpegurl';
 

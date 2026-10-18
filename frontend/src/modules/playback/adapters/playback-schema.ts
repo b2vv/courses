@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { priceSchema } from './price-schema';
+import { priceSchema } from '../../../adapters/api/price-schema';
 
 const id = z.uuid();
 const title = z

@@ -2,8 +2,8 @@ import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
 import { QueryClient } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { primeAv1Probe, takeAv1ProbeResult } from '../../app/composition/av1-probe';
-import { apiOrigin } from './api-origin';
+import { primeAv1Probe, takeAv1ProbeResult } from '../../../app/composition/av1-probe';
+import { apiOrigin } from '../../../adapters/api/api-origin';
 import { createApiPlaybackRepository } from './playback-repository';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
