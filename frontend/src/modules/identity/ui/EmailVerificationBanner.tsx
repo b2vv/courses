@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '../ui';
+import { Button } from '../../../presentation/ui';
 
 export function EmailVerificationBanner({
   isPending,

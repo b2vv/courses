@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { createSession } from './session';
-import type { AuthenticatedUser, Credentials, SessionResult } from '../../domain/identity/identity';
-import type { SessionRepository } from '../../ports/SessionRepository';
+import type { AuthenticatedUser, Credentials, SessionResult } from '../domain/identity';
+import type { SessionRepository } from '../ports/SessionRepository';
 
 const signedIn: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000001',

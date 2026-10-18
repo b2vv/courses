@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
-import { Button, Link } from '../ui';
+import type { AuthenticatedUser } from '../domain/identity';
+import { Button, Link } from '../../../presentation/ui';
 
 type IdentityHeaderProps = {
   readonly user: AuthenticatedUser | null;

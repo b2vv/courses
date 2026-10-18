@@ -11,7 +11,7 @@ import type {
   CourseStatus,
   CourseTree,
 } from '../domain/course/course';
-import type { AuthenticatedUser } from '../domain/identity/identity';
+import type { AuthenticatedUser } from '../modules/identity';
 import { CourseCreateDialog } from '../presentation/admin/CourseEditorView';
 import {
   CourseListFailure,

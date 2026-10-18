@@ -1,7 +1,7 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getCookie, getRequest, getRequestHeader } from '@tanstack/react-start/server';
-import { createSession } from '../../application/identity/session';
-import { createApiSessionRepository } from '../../adapters/api/session-repository';
+import { createSession } from '../../modules/identity';
+import { createApiSessionRepository } from '../../modules/identity';
 import { createSessionQueries } from './identity-queries';
 
 const sessionCookieName = 'courseforge_session';

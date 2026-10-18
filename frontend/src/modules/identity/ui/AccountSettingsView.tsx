@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
-import type { SessionErrorCode } from '../../domain/identity/identity';
-import type { RecoveryCodes, TwoFactorEnrollment } from '../../domain/identity/identity';
-import { Button, TextField } from '../ui';
+import type { SessionErrorCode } from '../domain/identity';
+import type { RecoveryCodes, TwoFactorEnrollment } from '../domain/identity';
+import { Button, TextField } from '../../../presentation/ui';
 
 type Props = {
   readonly passwordPending: boolean;

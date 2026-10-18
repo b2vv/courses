@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { SessionErrorCode } from '../../domain/identity/identity';
-import { Button } from '../ui';
+import type { SessionErrorCode } from '../domain/identity';
+import { Button } from '../../../presentation/ui';
 
 type Props = {
   readonly isPending: boolean;

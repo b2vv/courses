@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
-import { canAdministerAccounts } from '../domain/identity/identity';
+import { canAdministerAccounts } from '../modules/identity';
 import {
   AnalyticsFailure,
   AnalyticsPending,

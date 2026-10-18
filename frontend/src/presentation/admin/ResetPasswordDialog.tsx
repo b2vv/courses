@@ -3,8 +3,8 @@ import type { ReactElement } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { AdminUserQueryError } from '../../app/composition/admin-user-queries';
-import { validAdministrationPassword } from '../../domain/identity/administration';
-import type { AdminUser } from '../../domain/identity/administration';
+import { validAdministrationPassword } from '../../domain/admin/administration';
+import type { AdminUser } from '../../domain/admin/administration';
 import { Button, Dialog, TextField } from '../ui';
 
 type ResetPasswordDialogProps = {

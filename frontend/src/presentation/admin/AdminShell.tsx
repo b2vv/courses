@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import * as Aria from 'react-aria-components';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import type { IdentityDependencies } from '../../app/composition/identity';
 import { useSignOut } from '../../app/composition/use-sign-out';
 import { LanguageSwitcher } from '../LanguageSwitcher';
