@@ -32,14 +32,14 @@ import { createPurchaseQueries } from '../app/composition/purchase-queries';
 import { createEnrollmentQueries } from '../app/composition/enrollment-queries';
 import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
 import { createAdminStatsQueries } from '../app/composition/admin-stats-queries';
-import type { PurchaseRepository } from '../ports/PurchaseRepository';
+import type { PurchaseRepository } from '../modules/purchase';
 import type { TeachRepository } from '../ports/TeachRepository';
 import type { TranscriptRepository } from '../ports/TranscriptRepository';
 import type { DiscussionRepository } from '../modules/discussion';
 import type { CreatePlaybackMedia } from '../modules/playback';
 import type { LessonTranscript } from '../domain/transcript/transcript';
 import type { LearningCourse } from '../modules/playback';
-import type { PurchaseOrder } from '../domain/purchase/purchase';
+import type { PurchaseOrder } from '../modules/purchase';
 
 // Route guards never touch transcripts; a proxy keeps this stub from drifting every time the port
 // grows a method.

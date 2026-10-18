@@ -1,8 +1,8 @@
 import { expect, test } from '@rstest/core';
 import { QueryClient } from '@tanstack/react-query';
-import type { PurchaseOrder, PurchaseResult } from '../../domain/purchase/purchase';
-import type { CheckoutForm } from '../../domain/purchase/purchase';
-import type { PurchaseRepository } from '../../ports/PurchaseRepository';
+import type { PurchaseOrder, PurchaseResult } from '../../modules/purchase';
+import type { CheckoutForm } from '../../modules/purchase';
+import type { PurchaseRepository } from '../../modules/purchase';
 import { createPurchaseQueries, purchaseQueryKey } from './purchase-queries';
 
 const pending: PurchaseOrder = {

@@ -13,7 +13,7 @@ import { createApiDraftRepository } from '../../adapters/api/draft-repository';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
 import { createDraftQueries } from './admin-draft-queries';
 import { createTranscriptQueries } from './transcript-queries';
-import { createApiCourseGrantRepository } from '../../adapters/api/course-grant-repository';
+import { createApiCourseGrantRepository } from '../../modules/purchase';
 import { createAdminGrantQueries } from './admin-grant-queries';
 import { createApiAdminStatsRepository } from '../../adapters/api/admin-stats-repository';
 import { createAdminStatsQueries } from './admin-stats-queries';

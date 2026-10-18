@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Key } from 'react-aria-components';
 import { useTranslation } from 'react-i18next';
-import { grantReason, grantReasonMaximum, type GrantErrorCode } from '../../domain/purchase/grant';
+import { grantReason, grantReasonMaximum, type GrantErrorCode } from '../../modules/purchase';
 import { Button, ComboBox, TextArea } from '../ui';
 import type { ChoiceOption } from '../ui';
 

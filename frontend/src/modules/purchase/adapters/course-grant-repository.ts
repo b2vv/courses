@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import type { CourseGrant, GrantErrorCode, GrantResult } from '../../domain/purchase/grant';
-import type { CourseGrantRepository } from '../../ports/CourseGrantRepository';
-import { grantCourseAccess } from './generated/courses';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import type { CourseGrant, GrantErrorCode, GrantResult } from '../domain/grant';
+import type { CourseGrantRepository } from '../ports/CourseGrantRepository';
+import { grantCourseAccess } from '../../../adapters/api/generated/courses';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 const grantSchema = z
   .object({

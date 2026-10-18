@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { I18nProvider, createI18n } from '../../app/providers/i18n';
-import type { PurchaseOrder } from '../../domain/purchase/purchase';
+import { I18nProvider, createI18n } from '../../../app/providers/i18n';
+import type { PurchaseOrder } from '../domain/purchase';
 import { OrderStatusView, submitCheckoutForm } from './OrderStatusView';
 
 const pending: PurchaseOrder = {

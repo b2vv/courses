@@ -6,8 +6,8 @@ import {
   type CheckoutForm,
   type PurchaseOrder,
   type PurchaseResult,
-} from '../../domain/purchase/purchase';
-import type { PurchaseRepository } from '../../ports/PurchaseRepository';
+} from '../../modules/purchase';
+import type { PurchaseRepository } from '../../modules/purchase';
 
 /** How often a pending order is re-read while the buyer waits for the provider's answer. */
 export const purchasePollMs = 2_000;

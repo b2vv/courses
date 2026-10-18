@@ -1,11 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import type {
-  CheckoutForm,
-  PurchaseErrorCode,
-  PurchaseOrder,
-} from '../../domain/purchase/purchase';
-import { formatPrice } from '../format-price';
-import { Button, Link } from '../ui';
+import type { CheckoutForm, PurchaseErrorCode, PurchaseOrder } from '../domain/purchase';
+import { formatPrice } from '../../../presentation/format-price';
+import { Button, Link } from '../../../presentation/ui';
 import { purchaseErrorKey } from './LockedLessonPanel';
 
 type OrderStatusViewProps = {
