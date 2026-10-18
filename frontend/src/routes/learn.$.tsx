@@ -18,12 +18,12 @@ import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../presentation/learn/LessonPlayer';
 import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../presentation/learn/TranscriptPanel';
-import { DiscussionPanel } from '../presentation/learn/DiscussionPanel';
+import { DiscussionPanel } from '../modules/discussion';
 import { LearnRouteFailure } from '../modules/identity';
 import { toWebVTT } from '../domain/transcript/transcript';
 import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';
-import type { DiscussionErrorCode, DiscussionPage } from '../domain/discussion/discussion';
+import type { DiscussionErrorCode, DiscussionPage } from '../modules/discussion';
 import { ReviewBlock } from '../presentation/learn/ReviewBlock';
 import {
   EmailVerificationGate,

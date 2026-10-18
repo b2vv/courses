@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiPlaybackRepository } from '../../adapters/api/playback-repository';
-import { createApiDiscussionRepository } from '../../adapters/api/discussion-repository';
+import { createApiDiscussionRepository } from '../../modules/discussion';
 import { createApiTranscriptRepository } from '../../adapters/api/transcript-repository';
 import { createPlaybackMedia } from '../../adapters/playback/hls-media';
 import { primeAv1Probe, takeAv1ProbeResult } from './av1-probe';

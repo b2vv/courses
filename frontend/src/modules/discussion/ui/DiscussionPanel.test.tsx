@@ -1,8 +1,8 @@
 import { expect, test } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { DiscussionPage } from '../../domain/discussion/discussion';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+import type { DiscussionPage } from '../domain/discussion';
 import { DiscussionPanel } from './DiscussionPanel';
 
 const page: DiscussionPage = {
