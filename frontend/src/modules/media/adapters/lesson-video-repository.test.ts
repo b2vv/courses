@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from '@rstest/core';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { createLessonVideos } from '../../application/admin/lesson-video';
-import type { VideoErrorCode } from '../../domain/media/video';
-import { apiOrigin } from './api-origin';
+import { createLessonVideos } from '../application/lesson-video';
+import type { VideoErrorCode } from '../domain/video';
+import { apiOrigin } from '../../../adapters/api/api-origin';
 import { createApiLessonVideoRepository } from './lesson-video-repository';
 
 const courseId = '10000000-0000-4000-8000-000000000001';

@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@rstest/core';
-import type { LessonVideoRepository } from '../../ports/LessonVideoRepository';
-import { maximumVideoBytes, videoChunkBytes } from '../../domain/media/video';
+import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
+import { maximumVideoBytes, videoChunkBytes } from '../domain/video';
 import { createLessonVideos } from './lesson-video';
 
 const id = '10000000-0000-4000-8000-000000000001';

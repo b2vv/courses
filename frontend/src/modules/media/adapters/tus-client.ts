@@ -1,13 +1,13 @@
-import { maximumVideoBytes, videoChunkBytes } from '../../domain/media/video';
+import { maximumVideoBytes, videoChunkBytes } from '../domain/video';
 import type {
   VideoErrorCode,
   VideoResult,
   VideoTransferProgress,
   VideoTransferTarget,
-} from '../../domain/media/video';
-import { apiOrigin } from './api-origin';
-import { createRequestControl, unnamedStatusCode } from './transport';
-import type { TransportOptions } from './transport';
+} from '../domain/video';
+import { apiOrigin } from '../../../adapters/api/api-origin';
+import { createRequestControl, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions } from '../../../adapters/api/transport';
 
 const tusVersion = '1.0.0';
 const chunkTimeoutMs = 120_000;

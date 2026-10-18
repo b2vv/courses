@@ -1,13 +1,13 @@
 import { mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { createLessonVideos } from '../../application/admin/lesson-video';
+import type { createLessonVideos } from '../../modules/media';
 import type {
   LessonVideo,
   VideoError,
   VideoResult,
   VideoTransferTarget,
   VideoTransferProgress,
-} from '../../domain/media/video';
+} from '../../modules/media';
 import { lessonDraftQueryKey } from './admin-draft-queries';
 
 export const videoPollMs = 3_000;
