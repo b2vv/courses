@@ -4,7 +4,7 @@ import type {
   DiscussionComment,
   PublishDiscussionInput,
   UpdateDiscussionInput,
-} from '../domain/discussion/discussion';
+} from '../domain/discussion';
 
 export interface DiscussionRepository {
   list(

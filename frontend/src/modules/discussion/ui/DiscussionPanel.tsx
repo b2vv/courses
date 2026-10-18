@@ -5,9 +5,9 @@ import type {
   DiscussionErrorCode,
   DiscussionPage,
   PublishDiscussionInput,
-} from '../../domain/discussion/discussion';
-import { Button, TextArea } from '../ui';
-import { formatTimestamp } from '../format-timestamp';
+} from '../domain/discussion';
+import { Button, TextArea } from '../../../presentation/ui';
+import { formatTimestamp } from '../../../presentation/format-timestamp';
 
 type DiscussionPanelProps = {
   readonly page: DiscussionPage | undefined;

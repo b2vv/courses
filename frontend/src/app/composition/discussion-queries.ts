@@ -5,8 +5,8 @@ import type {
   DiscussionResult,
   PublishDiscussionInput,
   UpdateDiscussionInput,
-} from '../../domain/discussion/discussion';
-import type { DiscussionRepository } from '../../ports/DiscussionRepository';
+} from '../../modules/discussion';
+import type { DiscussionRepository } from '../../modules/discussion';
 
 export function lessonDiscussionQueryKey(lessonId: string) {
   return ['learn', 'discussion', lessonId] as const;
