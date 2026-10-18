@@ -13,7 +13,7 @@ import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import { lessonInCourse } from '../modules/playback';
 import type { LearningCourse, LearningLesson } from '../modules/playback';
 import { PurchaseQueryError } from '../app/composition/purchase-queries';
-import { LockedLessonPanel } from '../presentation/learn/LockedLessonPanel';
+import { LockedLessonPanel } from '../modules/purchase';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
 import { LessonPlayer } from '../modules/playback';
 import { LessonDocumentView } from '../modules/document';

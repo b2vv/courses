@@ -1,6 +1,6 @@
 import { mutationOptions } from '@tanstack/react-query';
-import { grantReason, type GrantErrorCode, type GrantResult } from '../../domain/purchase/grant';
-import type { CourseGrantRepository } from '../../ports/CourseGrantRepository';
+import { grantReason, type GrantErrorCode, type GrantResult } from '../../modules/purchase';
+import type { CourseGrantRepository } from '../../modules/purchase';
 
 export class GrantQueryError extends Error {
   readonly code: GrantErrorCode;

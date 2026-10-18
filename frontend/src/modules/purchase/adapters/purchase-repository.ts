@@ -4,16 +4,16 @@ import type {
   PurchaseErrorCode,
   PurchaseOrder,
   PurchaseResult,
-} from '../../domain/purchase/purchase';
-import type { PurchaseRepository } from '../../ports/PurchaseRepository';
+} from '../domain/purchase';
+import type { PurchaseRepository } from '../ports/PurchaseRepository';
 import {
   createPurchaseCheckout,
   getPurchaseStatus,
   startCoursePurchase,
-} from './generated/courses';
-import { priceSchema } from './price-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+} from '../../../adapters/api/generated/courses';
+import { priceSchema } from '../../../adapters/api/price-schema';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 const orderSchema = z
   .object({

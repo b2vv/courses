@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import type { PurchaseErrorCode } from '../../domain/purchase/purchase';
-import { formatPrice, type DisplayPrice } from '../format-price';
-import { Button } from '../ui';
+import type { PurchaseErrorCode } from '../domain/purchase';
+import { formatPrice, type DisplayPrice } from '../../../presentation/format-price';
+import { Button } from '../../../presentation/ui';
 
 type LockedLessonPanelProps = {
   readonly courseTitle: string;

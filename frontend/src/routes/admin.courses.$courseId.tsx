@@ -32,7 +32,7 @@ import type {
 import { CourseListFailure } from '../presentation/admin/CourseListView';
 import { CourseGrantPanel } from '../presentation/admin/CourseGrantPanel';
 import { GrantQueryError } from '../app/composition/admin-grant-queries';
-import type { GrantErrorCode } from '../domain/purchase/grant';
+import type { GrantErrorCode } from '../modules/purchase';
 
 function courseId(value: string): CourseId {
   if (!validEntityId(value)) throw notFound();

@@ -10,7 +10,7 @@ import { createLearnQueries } from './learn-queries';
 import { createTranscriptQueries } from './transcript-queries';
 import { createApiDocumentRepository, createDocumentQueries } from '../../modules/document';
 import { createDiscussionQueries } from './discussion-queries';
-import { createApiPurchaseRepository } from '../../adapters/api/purchase-repository';
+import { createApiPurchaseRepository } from '../../modules/purchase';
 import { createPurchaseQueries } from './purchase-queries';
 import { createApiCourseRepository } from '../../adapters/api/course-repository';
 
