@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
-import { asBrandedId, validEntityId } from '../domain/course/course';
-import type { CourseTree } from '../domain/course/course';
+import { asBrandedId, validEntityId } from '../contracts/course';
+import type { CourseTree } from '../contracts/course';
 import { LessonDocumentEditorLoading, type LessonMeta } from '../modules/document';
 
 // The editor's Tiptap dependency must not reach the shared bundle, so the component is loaded

@@ -2,7 +2,7 @@ import { expect, test } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import userEvent from '@testing-library/user-event';
-import type { OwnReview, PublicReviewPage } from '../../domain/course/course';
+import type { OwnReview, PublicReviewPage } from '../../contracts/course';
 import { ReviewBlock } from './ReviewBlock';
 
 const review = {

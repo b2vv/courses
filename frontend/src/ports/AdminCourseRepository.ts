@@ -8,7 +8,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
   InstructorOption,
-} from '../domain/course/course';
+} from '../contracts/course';
 
 export interface AdminCourseRepository {
   list(query: AdminCourseQuery, signal?: AbortSignal): Promise<AuthoringResult<AdminCoursePage>>;

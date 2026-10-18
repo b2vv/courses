@@ -10,7 +10,7 @@ import type {
   AdminCoursePage,
   AdminCourseSort,
   CourseStatus,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { AdminListState } from '../../app/router/admin-search';
 import {
   Button,

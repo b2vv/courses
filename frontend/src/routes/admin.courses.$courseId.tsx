@@ -12,14 +12,14 @@ import { AuthoringQueryError } from '../app/composition/admin-queries';
 import { VideoQueryError } from '../app/composition/admin-video-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
-import { asBrandedId, validEntityId } from '../domain/course/course';
+import { asBrandedId, validEntityId } from '../contracts/course';
 import type {
   CourseId,
   CoursePrice,
   CourseStatus,
   CourseTree,
   CourseTreeEdit,
-} from '../domain/course/course';
+} from '../contracts/course';
 import type { DraftErrorCode } from '../domain/transcript/draft';
 import type { AuthenticatedUser } from '../modules/identity';
 import type {

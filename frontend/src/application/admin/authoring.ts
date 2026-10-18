@@ -7,7 +7,7 @@ import {
   validTransition,
   unchangedEdit,
   validCoursePrice,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type {
   AdminCourse,
   AdminCourseDraft,
@@ -18,7 +18,7 @@ import type {
   CourseStatus,
   CourseTree,
   CourseTreeEdit,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { AdminCourseRepository } from '../../ports/AdminCourseRepository';
 
 const invalid = { ok: false, error: { code: 'invalid_request' } } as const;

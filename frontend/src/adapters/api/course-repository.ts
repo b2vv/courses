@@ -1,11 +1,11 @@
-import { makePublishedCourse, reviewPercent } from '../../domain/course/course';
+import { makePublishedCourse, reviewPercent } from '../../contracts/course';
 import type {
   CatalogError,
   CourseDetail,
   CoursePage,
   OwnReview,
   Result,
-} from '../../domain/course/course';
+} from '../../contracts/course';
 import type { CourseRepository } from '../../ports/CourseRepository';
 import {
   getPublishedCourse,

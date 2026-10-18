@@ -73,13 +73,13 @@ const teachStub = new Proxy({} as TeachRepository, {
 });
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
-import { asBrandedId } from '../domain/course/course';
+import { asBrandedId } from '../contracts/course';
 import type {
   AdminCourse,
   AdminCourseQuery,
   CourseTree,
   CourseTreeEdit,
-} from '../domain/course/course';
+} from '../contracts/course';
 import type { AdminUser, AdminUserQuery } from '../domain/admin/administration';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';

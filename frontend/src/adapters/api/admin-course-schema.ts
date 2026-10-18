@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { priceSchema } from './price-schema';
-import { asBrandedId, validCourseTree, validEntityId } from '../../domain/course/course';
+import { asBrandedId, validCourseTree, validEntityId } from '../../contracts/course';
 
 const entityIdSchema = z.uuid().refine(validEntityId);
 const courseIdSchema = entityIdSchema.transform((value) => asBrandedId(value, 'course'));

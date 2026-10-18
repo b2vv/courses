@@ -1,6 +1,6 @@
 import type { SearchSchemaInput } from '@tanstack/react-router';
 import { z } from 'zod';
-import type { AdminCourseQuery, AdminCourseSort, CourseStatus } from '../../domain/course/course';
+import type { AdminCourseQuery, AdminCourseSort, CourseStatus } from '../../contracts/course';
 import type {
   AccountStatus,
   AdminUserQuery,

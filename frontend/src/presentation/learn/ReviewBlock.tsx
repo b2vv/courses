@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { OwnReview, PublicReviewPage } from '../../domain/course/course';
+import type { OwnReview, PublicReviewPage } from '../../contracts/course';
 import { formatDate } from '../format-timestamp';
 import { Button, Dialog, RadioGroup, TextArea } from '../ui';
 import { Reviews } from '../storefront/CourseView';

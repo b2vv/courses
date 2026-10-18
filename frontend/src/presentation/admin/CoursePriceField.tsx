@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseUahAmount } from '../../domain/course/course';
-import type { CoursePrice, CourseTree } from '../../domain/course/course';
+import { parseUahAmount } from '../../contracts/course';
+import type { CoursePrice, CourseTree } from '../../contracts/course';
 import { formatPrice } from '../format-price';
 import { Button, TextField } from '../ui';
 

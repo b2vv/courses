@@ -19,8 +19,8 @@ import { createAdminQueries } from '../../app/composition/admin-queries';
 import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { adminCourseQuery } from '../../app/router/admin-search';
-import { asBrandedId } from '../../domain/course/course';
-import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../domain/course/course';
+import { asBrandedId } from '../../contracts/course';
+import type { AdminCourse, AdminCoursePage, CourseStatus } from '../../contracts/course';
 import { CourseListFailure, CourseListView } from './CourseListView';
 
 const draftCourse: AdminCourse = {

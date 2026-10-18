@@ -7,7 +7,7 @@ import type {
   Review,
   ReviewWrite,
   Result,
-} from '../domain/course/course';
+} from '../contracts/course';
 
 export interface CourseRepository {
   listPublished(query: CatalogQuery, signal?: AbortSignal): Promise<Result<CoursePage>>;
