@@ -11,11 +11,11 @@ import {
   removeCourseReview,
   unblockCommentAuthor,
   unblockReviewAuthor,
-} from './generated/courses';
-import { reviewSchema } from './course-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
-import type { TeachRepository } from '../../ports/TeachRepository';
+} from '../../../adapters/api/generated/courses';
+import { reviewSchema } from '../../../adapters/api/course-schema';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
+import type { TeachRepository } from '../ports/TeachRepository';
 import type {
   DismissReportsInput,
   LearnerCourse,
@@ -26,7 +26,7 @@ import type {
   TeachCommentPage,
   TeachErrorCode,
   TeachResult,
-} from '../../domain/teach/teach';
+} from '../domain/teach';
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

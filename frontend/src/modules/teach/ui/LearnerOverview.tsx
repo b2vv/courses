@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Key } from 'react-aria-components';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import type { LearnerFilters, LearnerRow } from '../../domain/teach/teach';
-import { Button, PageHeader, ProgressBar, Select } from '../ui';
+import type { LearnerFilters, LearnerRow } from '../domain/teach';
+import { Button, PageHeader, ProgressBar, Select } from '../../../presentation/ui';
 
 type LearnerOverviewProps = {
   readonly entries: readonly LearnerRow[];

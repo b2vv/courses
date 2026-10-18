@@ -1,7 +1,7 @@
 import { describe, expect, it, rs } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ModerationQueueItem } from '../../domain/teach/teach';
+import type { ModerationQueueItem } from '../domain/teach';
 import { ReviewModerationRow } from './ReviewModerationRow';
 
 const item = {

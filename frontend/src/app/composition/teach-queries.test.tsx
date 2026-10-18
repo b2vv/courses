@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { TeachRepository } from '../../ports/TeachRepository';
+import type { TeachRepository } from '../../modules/teach';
 import { createTeachQueries } from './teach-queries';
 
 const courseId = '10000000-0000-4000-8000-000000000001';

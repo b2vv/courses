@@ -6,7 +6,7 @@ import type {
   ModerationQueuePage,
   TeachCommentPage,
   TeachResult,
-} from '../domain/teach/teach';
+} from '../domain/teach';
 
 export interface TeachRepository {
   listLearners(

@@ -1,6 +1,6 @@
 import type { SearchSchemaInput } from '@tanstack/react-router';
 import { z } from 'zod';
-import type { LearnerFilters } from '../../domain/teach/teach';
+import type { LearnerFilters } from '../../modules/teach';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const courseIdSchema = z.string().refine((value) => uuidPattern.test(value));
