@@ -1,4 +1,4 @@
-import { Link } from '../ui';
+import { Link } from '../../../presentation/ui';
 import { ValueStrip } from './ValueStrip';
 import { useTranslation } from 'react-i18next';
 

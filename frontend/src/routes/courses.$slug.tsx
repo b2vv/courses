@@ -2,12 +2,8 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
-import { CourseView } from '../presentation/storefront/CourseView';
-import {
-  CatalogFailure,
-  CatalogLoading,
-  CourseNotFound,
-} from '../presentation/storefront/CatalogStates';
+import { CourseView } from '../modules/catalog';
+import { CatalogFailure, CatalogLoading, CourseNotFound } from '../modules/catalog';
 
 export const Route = createFileRoute('/courses/$slug')({
   loader: async ({ context, params, abortController }) => {

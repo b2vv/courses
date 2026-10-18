@@ -1,7 +1,7 @@
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 import { expect, test } from '@rstest/core';
 import type { LearningCourse, PlaybackResult } from '../../modules/playback';
-import type { CourseRepository } from '../../ports/CourseRepository';
+import type { CourseRepository } from '../../modules/catalog';
 import type { PlaybackRepository } from '../../modules/playback';
 import { createLearnQueries, learningCourseQueryKey } from './learn-queries';
 

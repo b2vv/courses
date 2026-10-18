@@ -12,7 +12,7 @@ import { createApiDocumentRepository, createDocumentQueries } from '../../module
 import { createDiscussionQueries } from './discussion-queries';
 import { createApiPurchaseRepository } from '../../modules/purchase';
 import { createPurchaseQueries } from './purchase-queries';
-import { createApiCourseRepository } from '../../adapters/api/course-repository';
+import { createApiCourseRepository } from '../../modules/catalog';
 
 const requestOptions = createIsomorphicFn()
   .server(() => ({ cookie: getRequestHeader('cookie') ?? '', requestSignal: getRequest().signal }))
