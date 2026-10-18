@@ -1,12 +1,12 @@
 import { mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { createUserAdministration } from '../../application/admin/users';
+import type { createUserAdministration } from '../../modules/admin';
 import type {
   AdministrationError,
   AdministrationResult,
   AdminUserQuery,
   WritableAccountStatus,
-} from '../../domain/admin/administration';
+} from '../../modules/admin';
 import { adminListStaleMs } from './admin-queries';
 
 export const adminUserListKey = ['admin', 'users', 'list'] as const;

@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
-import type { StatsError, StatsResult, TimeseriesRange } from '../../domain/admin/stats';
-import type { AdminStatsRepository } from '../../ports/AdminStatsRepository';
+import type { StatsError, StatsResult, TimeseriesRange } from '../../modules/admin';
+import type { AdminStatsRepository } from '../../modules/admin';
 import { adminListStaleMs } from './admin-queries';
 
 export const adminStatsKey = ['admin', 'stats'] as const;

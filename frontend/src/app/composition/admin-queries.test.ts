@@ -1,9 +1,9 @@
 import { describe, expect, test } from '@rstest/core';
 import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
-import { createAuthoring } from '../../application/admin/authoring';
+import { createAuthoring } from '../../modules/admin';
 import { asBrandedId } from '../../contracts/course';
 import type { AdminCourseQuery, CourseTree, CourseTreeEdit } from '../../contracts/course';
-import type { AdminCourseRepository } from '../../ports/AdminCourseRepository';
+import type { AdminCourseRepository } from '../../modules/admin';
 import {
   adminCourseListQueryKey,
   adminCourseTreeQueryKey,

@@ -6,7 +6,7 @@ import type {
   AdminUserQuery,
   AdminUserRole,
   AdminUserSort,
-} from '../../domain/admin/administration';
+} from '../../modules/admin';
 
 const pageSize = 20;
 const maximumPage = Math.floor(10000 / pageSize) + 1;

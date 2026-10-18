@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import type { RefundStateFilter } from '../modules/enrollment';
-import { RefundQueue } from '../presentation/admin/RefundQueue';
+import { RefundQueue } from '../modules/admin';
 
 // 'pending' is the default view, so it is never written to the URL; only an explicit
 // 'refunded', 'declined' or 'all' narrows/widens it. An unknown value falls back to the default.

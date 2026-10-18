@@ -12,12 +12,8 @@ import type {
   CourseTree,
 } from '../contracts/course';
 import type { AuthenticatedUser } from '../modules/identity';
-import { CourseCreateDialog } from '../presentation/admin/CourseEditorView';
-import {
-  CourseListFailure,
-  CourseListPending,
-  CourseListView,
-} from '../presentation/admin/CourseListView';
+import { CourseCreateDialog } from '../modules/admin';
+import { CourseListFailure, CourseListPending, CourseListView } from '../modules/admin';
 
 export const Route = createFileRoute('/admin/')({
   ssr: false,

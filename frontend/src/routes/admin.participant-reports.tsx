@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import type { ParticipantReportStateFilter } from '../modules/enrollment';
-import { ParticipantReportQueue } from '../presentation/admin/ParticipantReportQueue';
+import { ParticipantReportQueue } from '../modules/admin';
 
 // 'open' is the default view, so it is never written to the URL; only an explicit
 // 'resolved' or 'all' narrows/widens it. An unknown value falls back to the default.

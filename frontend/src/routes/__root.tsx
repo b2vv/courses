@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../modules/transcript';
 import { useSignOut } from '../app/composition/use-sign-out';
 import { canAccessAdministration, canAdministerAccounts } from '../modules/identity';
-import { AdminShell, type AdminNavSection } from '../presentation/admin/AdminShell';
+import { AdminShell, type AdminNavSection } from '../modules/admin';
 import type { TranscriptHistoryStore } from '../modules/transcript';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../modules/identity';

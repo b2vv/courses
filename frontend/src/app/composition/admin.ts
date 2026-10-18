@@ -1,11 +1,11 @@
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
-import { createApiAdminCourseRepository } from '../../adapters/api/admin-course-repository';
-import { createApiAdminUserRepository } from '../../adapters/api/admin-user-repository';
+import { createApiAdminCourseRepository } from '../../modules/admin';
+import { createApiAdminUserRepository } from '../../modules/admin';
 import { createApiLessonVideoRepository } from '../../modules/media';
-import { createAuthoring } from '../../application/admin/authoring';
+import { createAuthoring } from '../../modules/admin';
 import { createLessonVideos } from '../../modules/media';
-import { createUserAdministration } from '../../application/admin/users';
+import { createUserAdministration } from '../../modules/admin';
 import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
 import { createAdminVideoQueries } from './admin-video-queries';
@@ -15,7 +15,7 @@ import { createDraftQueries } from './admin-draft-queries';
 import { createTranscriptQueries } from './transcript-queries';
 import { createApiCourseGrantRepository } from '../../modules/purchase';
 import { createAdminGrantQueries } from './admin-grant-queries';
-import { createApiAdminStatsRepository } from '../../adapters/api/admin-stats-repository';
+import { createApiAdminStatsRepository } from '../../modules/admin';
 import { createAdminStatsQueries } from './admin-stats-queries';
 import {
   createAdminDocumentQueries,

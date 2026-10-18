@@ -6,7 +6,7 @@ import {
   videoFailureReasons,
   videoStates,
 } from '../domain/video';
-import { adminTimestampSchema } from '../../../adapters/api/admin-course-schema';
+import { isoTimestampSchema } from '../../../adapters/api/timestamp-schema';
 
 const videoIdSchema = z.uuid().refine(validMediaId);
 const byteCountSchema = z.number().int().min(0).max(maximumVideoBytes);
@@ -25,7 +25,7 @@ export const lessonVideoSchema = z
     originalName: originalNameSchema,
     receivedBytes: byteCountSchema,
     declaredBytes: byteCountSchema.min(1),
-    updatedAt: adminTimestampSchema,
+    updatedAt: isoTimestampSchema,
     failureReason: z.enum(videoFailureReasons).optional(),
   })
   .strict()
@@ -39,7 +39,7 @@ export const videoUploadTicketSchema = z
     uploadUrl: z.string(),
     chunkBytes: z.literal(videoChunkBytes),
     maxBytes: z.literal(maximumVideoBytes),
-    expiresAt: adminTimestampSchema,
+    expiresAt: isoTimestampSchema,
   })
   .strict()
   .refine((ticket) => ticket.uploadUrl === `/uploads/${ticket.videoId}`);
