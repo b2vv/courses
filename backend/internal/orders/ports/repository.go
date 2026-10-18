@@ -32,12 +32,13 @@ type OrderRepository interface {
 	// OrderByID reads an order by id alone, for an administrator acting on the refund queue who
 	// does not know the buyer up front. ErrOrderNotFound when it does not exist.
 	OrderByID(context.Context, string) (domain.Order, error)
-	// RefundQueue lists orders flagged refund_required and not yet resolved, each with its charged
-	// amount and received time read from the paid payment_events row (nil when none exists).
-	RefundQueue(context.Context) ([]RefundQueueItem, error)
-	// ResolveRefund marks a refund-queue row handled (idempotent: a no-op when already resolved or
-	// not flagged). actorID records who resolved it.
-	ResolveRefund(ctx context.Context, orderID, actorID string) error
+	// RefundQueue lists orders flagged refund_required, each with its charged amount and received
+	// time read from the paid payment_events row (nil when none exists). state narrows the list:
+	// "pending" (not yet settled), "refunded", "declined", or "" for all flagged orders.
+	RefundQueue(ctx context.Context, state string) ([]RefundQueueItem, error)
+	// SettleRefund records the administrator's decision on a refund-queue row (outcome "refunded"
+	// or "declined") and stamps who/when. Idempotent: a no-op when already settled or not flagged.
+	SettleRefund(ctx context.Context, orderID, actorID, outcome string) error
 }
 
 // RefundQueueItem is one order needing attention: money arrived without the expected grant, or a
@@ -54,6 +55,9 @@ type RefundQueueItem struct {
 	// MembershipState is the current (user, course) grant state, or nil when no grant row exists.
 	// The admin UI offers revoke only for a live grant (active/blocked) — A14.
 	MembershipState *domain.GrantState
+	// Outcome is the administrator's recorded decision: "refunded", "declined", or "" while the
+	// order is still pending in the queue.
+	Outcome string
 }
 
 // GrantRepository reads and writes membership records and their audit rows.

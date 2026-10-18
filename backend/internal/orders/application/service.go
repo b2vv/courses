@@ -234,22 +234,32 @@ func (service *Service) Revoke(ctx context.Context, actor Actor, userID, courseI
 	return service.transitionMembership(ctx, actor, userID, courseID, "revoke", "", true, domain.Grant.Revoke)
 }
 
-// RefundQueue returns the orders that need an administrator's attention (refund_required, not yet
-// resolved). Administrator-only.
-func (service *Service) RefundQueue(ctx context.Context, actor Actor) ([]ports.RefundQueueItem, error) {
+// RefundQueue returns the orders flagged refund_required, narrowed by state ("pending", "refunded",
+// "declined", or "" for all). Administrator-only.
+func (service *Service) RefundQueue(ctx context.Context, actor Actor, state string) ([]ports.RefundQueueItem, error) {
 	if !actor.Administrator {
 		return nil, domain.ErrGrantForbidden
 	}
-	return service.orders.RefundQueue(ctx)
+	return service.orders.RefundQueue(ctx, state)
 }
 
-// ResolveRefund marks a refund-queue row handled. Administrator-only; idempotent (a repeat on an
-// already-resolved or never-flagged order is a no-op, not an error).
-func (service *Service) ResolveRefund(ctx context.Context, actor Actor, orderID string) error {
+// RefundOrder records a refund-queue order as refunded. Administrator-only; idempotent (a repeat on
+// an already-settled or never-flagged order is a no-op, not an error). The membership grant is left
+// untouched — revoking access is a separate decision (RevokeForRefund), decoupled from the outcome.
+func (service *Service) RefundOrder(ctx context.Context, actor Actor, orderID string) error {
 	if !actor.Administrator {
 		return domain.ErrGrantForbidden
 	}
-	return service.orders.ResolveRefund(ctx, orderID, actor.UserID)
+	return service.orders.SettleRefund(ctx, orderID, actor.UserID, "refunded")
+}
+
+// DeclineRefund records a refund-queue order as declined. Administrator-only; idempotent. Money and
+// access stay as they are — declining the refund changes no grant.
+func (service *Service) DeclineRefund(ctx context.Context, actor Actor, orderID string) error {
+	if !actor.Administrator {
+		return domain.ErrGrantForbidden
+	}
+	return service.orders.SettleRefund(ctx, orderID, actor.UserID, "declined")
 }
 
 // RevokeForRefund revokes the grant of a refund-queue order. It resolves the order to its (user,

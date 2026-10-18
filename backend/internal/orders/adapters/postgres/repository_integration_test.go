@@ -737,7 +737,7 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if _, err := pool.Exec(ctx, `UPDATE orders SET refund_required=true,refund_reason='grant_conflict' WHERE id=$1::text::uuid`, order.ID()); err != nil {
 			t.Fatal(err)
 		}
-		queue, err := repository.RefundQueue(ctx)
+		queue, err := repository.RefundQueue(ctx, "pending")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -756,52 +756,70 @@ VALUES($1,'pay17','Pay17','Summary','Description','published',$2,$3,50000,'UAH',
 		if found.MembershipState == nil || *found.MembershipState != domain.GrantActive {
 			t.Fatalf("queue item membership=%v, want active", found.MembershipState)
 		}
+		if found.Outcome != "" {
+			t.Fatalf("pending item carries outcome %q", found.Outcome)
+		}
 
-		if err := repository.ResolveRefund(ctx, order.ID(), integrationAdminID); err != nil {
+		if err := repository.SettleRefund(ctx, order.ID(), integrationAdminID, "refunded"); err != nil {
 			t.Fatal(err)
 		}
 		var resolvedBy *string
 		var resolvedAt *time.Time
-		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt); err != nil {
+		var outcome *string
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at,refund_outcome FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt, &outcome); err != nil {
 			t.Fatal(err)
 		}
-		if resolvedBy == nil || *resolvedBy != integrationAdminID || resolvedAt == nil {
-			t.Fatalf("resolvedBy=%v resolvedAt=%v", resolvedBy, resolvedAt)
+		if resolvedBy == nil || *resolvedBy != integrationAdminID || resolvedAt == nil || outcome == nil || *outcome != "refunded" {
+			t.Fatalf("resolvedBy=%v resolvedAt=%v outcome=%v", resolvedBy, resolvedAt, outcome)
 		}
 		firstResolvedAt := *resolvedAt
-		// A resolved order leaves the queue.
-		queueAfter, err := repository.RefundQueue(ctx)
+		// A settled order leaves the pending queue but appears under its outcome.
+		pendingAfter, err := repository.RefundQueue(ctx, "pending")
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, item := range queueAfter {
+		for _, item := range pendingAfter {
 			if item.OrderID == order.ID() {
-				t.Fatalf("resolved order still in queue")
+				t.Fatalf("settled order still in pending queue")
 			}
 		}
-		// Idempotent: a repeat resolve does not move resolved_at or overwrite the resolver.
-		if err := repository.ResolveRefund(ctx, order.ID(), integrationUserID); err != nil {
+		refundedAfter, err := repository.RefundQueue(ctx, "refunded")
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt); err != nil {
+		var refunded *ports.RefundQueueItem
+		for i := range refundedAfter {
+			if refundedAfter[i].OrderID == order.ID() {
+				refunded = &refundedAfter[i]
+			}
+		}
+		if refunded == nil || refunded.Outcome != "refunded" {
+			t.Fatalf("settled order missing from refunded filter or wrong outcome: %+v", refunded)
+		}
+		// Idempotent: a repeat settle does not move resolved_at, overwrite the resolver, or change the outcome.
+		if err := repository.SettleRefund(ctx, order.ID(), integrationUserID, "declined"); err != nil {
 			t.Fatal(err)
 		}
-		if resolvedBy == nil || *resolvedBy != integrationAdminID || !resolvedAt.Equal(firstResolvedAt) {
-			t.Fatalf("repeat resolve mutated row: by=%v at=%v want %s/%v", resolvedBy, resolvedAt, integrationAdminID, firstResolvedAt)
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_by::text,refund_resolved_at,refund_outcome FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedBy, &resolvedAt, &outcome); err != nil {
+			t.Fatal(err)
+		}
+		if resolvedBy == nil || *resolvedBy != integrationAdminID || !resolvedAt.Equal(firstResolvedAt) || outcome == nil || *outcome != "refunded" {
+			t.Fatalf("repeat settle mutated row: by=%v at=%v outcome=%v want %s/%v/refunded", resolvedBy, resolvedAt, outcome, integrationAdminID, firstResolvedAt)
 		}
 	})
 
-	t.Run("Rf20 resolve on a never-flagged order is a no-op and OrderByID reads it", func(t *testing.T) {
+	t.Run("Rf20 settle on a never-flagged order is a no-op and OrderByID reads it", func(t *testing.T) {
 		order, _ := settlePurchase(t, "rf20@example.test", "a8", "rf20-key")
-		if err := repository.ResolveRefund(ctx, order.ID(), integrationAdminID); err != nil {
-			t.Fatalf("resolve never-flagged errored: %v", err)
+		if err := repository.SettleRefund(ctx, order.ID(), integrationAdminID, "refunded"); err != nil {
+			t.Fatalf("settle never-flagged errored: %v", err)
 		}
 		var resolvedAt *time.Time
-		if err := pool.QueryRow(ctx, `SELECT refund_resolved_at FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedAt); err != nil {
+		var outcome *string
+		if err := pool.QueryRow(ctx, `SELECT refund_resolved_at,refund_outcome FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&resolvedAt, &outcome); err != nil {
 			t.Fatal(err)
 		}
-		if resolvedAt != nil {
-			t.Fatalf("never-flagged order was resolved: %v", resolvedAt)
+		if resolvedAt != nil || outcome != nil {
+			t.Fatalf("never-flagged order was settled: at=%v outcome=%v", resolvedAt, outcome)
 		}
 		got, err := repository.OrderByID(ctx, order.ID())
 		if err != nil || got.ID() != order.ID() || got.UserID() != order.UserID() {

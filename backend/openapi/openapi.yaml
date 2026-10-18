@@ -388,6 +388,12 @@ paths:
     get:
       operationId: listRefundQueue
       summary: List orders flagged for refund attention
+      parameters:
+        - name: state
+          in: query
+          required: false
+          description: Narrows the list. Absent defaults to pending.
+          schema: { type: string, enum: [all, pending, refunded, declined] }
       responses:
         '200': { description: Orders needing refund attention., content: { application/json: { schema: { $ref: '#/components/schemas/RefundQueuePage' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
@@ -395,13 +401,25 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503': { $ref: '#/components/responses/Unavailable' }
-  /api/v1/admin/refunds/{orderId}/resolve:
+  /api/v1/admin/refunds/{orderId}/refund:
     post:
-      operationId: resolveRefund
-      summary: Mark a refund-queue order handled
+      operationId: refundOrder
+      summary: Record a refund-queue order as refunded
       parameters: [ { name: orderId, in: path, required: true, schema: { type: string, format: uuid } } ]
       responses:
-        '204': { description: Refund-queue row resolved }
+        '204': { description: Refund-queue row settled as refunded }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/admin/refunds/{orderId}/decline:
+    post:
+      operationId: declineRefund
+      summary: Record a refund-queue order as declined
+      parameters: [ { name: orderId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '204': { description: Refund-queue row settled as declined }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3068,7 +3086,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [orderId, courseId, userId, orderAmountMinor, chargedAmountMinor, receivedAt, reason, membershipState]
+        [orderId, courseId, userId, orderAmountMinor, chargedAmountMinor, receivedAt, reason, membershipState, outcome]
       properties:
         orderId: { type: string, format: uuid }
         courseId: { type: string, format: uuid }
@@ -3083,6 +3101,8 @@ components:
         # Current (user, course) grant state, or null when no grant exists; the UI offers revoke
         # only for a live grant (active/blocked) — A14.
         membershipState: { type: string, enum: [active, blocked, revoked], nullable: true }
+        # The administrator's recorded decision, or null while the order is still pending.
+        outcome: { type: string, enum: [refunded, declined], nullable: true }
     RefundQueuePage:
       type: object
       additionalProperties: false

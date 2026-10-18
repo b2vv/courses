@@ -23,7 +23,8 @@ test('membership conflict invalidates the exact membership state for a fresh CTA
     resolveReport: async () => ({ ok: true, value: undefined }),
     revoke: async () => ({ ok: true, value: undefined }),
     refundQueue: async () => ({ ok: true, value: { items: [] } }),
-    resolveRefund: async () => ({ ok: true, value: undefined }),
+    refundOrder: async () => ({ ok: true, value: undefined }),
+    declineRefund: async () => ({ ok: true, value: undefined }),
     revokeRefund: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
@@ -53,7 +54,8 @@ test('roster mutations invalidate only their course roster', async () => {
     resolveReport: async () => ({ ok: true, value: undefined }),
     revoke: async () => ({ ok: true, value: undefined }),
     refundQueue: async () => ({ ok: true, value: { items: [] } }),
-    resolveRefund: async () => ({ ok: true, value: undefined }),
+    refundOrder: async () => ({ ok: true, value: undefined }),
+    declineRefund: async () => ({ ok: true, value: undefined }),
     revokeRefund: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
@@ -92,7 +94,8 @@ test('block/unblock refresh the roster on a membership_conflict 409 but not on o
     resolveReport: async () => ({ ok: true, value: undefined }),
     revoke: async () => ({ ok: true, value: undefined }),
     refundQueue: async () => ({ ok: true, value: { items: [] } }),
-    resolveRefund: async () => ({ ok: true, value: undefined }),
+    refundOrder: async () => ({ ok: true, value: undefined }),
+    declineRefund: async () => ({ ok: true, value: undefined }),
     revokeRefund: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
@@ -139,7 +142,8 @@ test('report mutations do not invalidate visible enrollment state', async () => 
     resolveReport: async () => ({ ok: true, value: undefined }),
     revoke: async () => ({ ok: true, value: undefined }),
     refundQueue: async () => ({ ok: true, value: { items: [] } }),
-    resolveRefund: async () => ({ ok: true, value: undefined }),
+    refundOrder: async () => ({ ok: true, value: undefined }),
+    declineRefund: async () => ({ ok: true, value: undefined }),
     revokeRefund: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';
@@ -167,7 +171,8 @@ test('resolve refreshes the report queue, while revoke also refreshes only its c
     resolveReport: async () => ({ ok: true, value: undefined }),
     revoke: async () => ({ ok: true, value: undefined }),
     refundQueue: async () => ({ ok: true, value: { items: [] } }),
-    resolveRefund: async () => ({ ok: true, value: undefined }),
+    refundOrder: async () => ({ ok: true, value: undefined }),
+    declineRefund: async () => ({ ok: true, value: undefined }),
     revokeRefund: async () => ({ ok: true, value: undefined }),
   });
   const courseId = '10000000-0000-4000-8000-000000000001';

@@ -1,15 +1,16 @@
 import {
   blockCourseParticipant,
+  declineRefund,
   enrollInCourse,
   getCourseRoster,
   getMyCourseMembership,
   getMyCourseMemberships,
   listParticipantReports,
   listRefundQueue,
+  refundOrder,
   reportCourseLecturer,
   reportCourseParticipant,
   resolveParticipantReport,
-  resolveRefund,
   revokeCourseParticipant,
   revokeRefundGrant,
   unblockCourseParticipant,
@@ -146,6 +147,9 @@ function refundItem(value: unknown): RefundQueueItem | null {
   const reason = refundReason(value.reason);
   if (reason === null) return null;
   if (!(value.membershipState === null || membershipState(value.membershipState))) return null;
+  if (!(value.outcome === null || value.outcome === 'refunded' || value.outcome === 'declined')) {
+    return null;
+  }
   return {
     orderId: value.orderId,
     courseId: value.courseId,
@@ -155,6 +159,7 @@ function refundItem(value: unknown): RefundQueueItem | null {
     receivedAt: value.receivedAt,
     reason,
     membershipState: value.membershipState,
+    outcome: value.outcome,
   };
 }
 function refundPage(value: unknown): RefundQueuePage | null {
@@ -408,10 +413,10 @@ export function createApiEnrollmentRepository(
         ? { ok: true, value: undefined }
         : failure('invalid_response');
     },
-    async refundQueue(signal) {
+    async refundQueue(state, signal) {
       const outcome = await send(
         'enrollment.refund-queue',
-        (init) => listRefundQueue(init),
+        (init) => listRefundQueue(state ? { state } : undefined, init),
         200,
         signal,
       );
@@ -420,10 +425,22 @@ export function createApiEnrollmentRepository(
       const page = refundPage(outcome.data);
       return page ? { ok: true, value: page } : failure('invalid_response');
     },
-    async resolveRefund(orderId, signal) {
+    async refundOrder(orderId, signal) {
       const outcome = await send(
-        'enrollment.resolve-refund',
-        (init) => resolveRefund(orderId, init),
+        'enrollment.refund-order',
+        (init) => refundOrder(orderId, init),
+        204,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code);
+      return outcome.status === 204
+        ? { ok: true, value: undefined }
+        : failure(namedError(outcome, refundErrors));
+    },
+    async declineRefund(orderId, signal) {
+      const outcome = await send(
+        'enrollment.decline-refund',
+        (init) => declineRefund(orderId, init),
         204,
         signal,
       );

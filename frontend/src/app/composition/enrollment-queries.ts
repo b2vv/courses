@@ -4,6 +4,7 @@ import type {
   EnrollmentErrorCode,
   EnrollmentResult,
   ParticipantReportStateFilter,
+  RefundStateFilter,
 } from '../../domain/enrollment/enrollment';
 import type { EnrollmentRepository } from '../../ports/EnrollmentRepository';
 
@@ -57,10 +58,10 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
           enrollment.participantReports(pageParam, state, signal).then(unwrap),
         getNextPageParam: (page) => page.nextCursor ?? undefined,
       }),
-    refundQueue: () =>
+    refundQueue: (state: RefundStateFilter = 'pending') =>
       queryOptions({
-        queryKey: enrollmentRefundQueueQueryKey,
-        queryFn: ({ signal }) => enrollment.refundQueue(signal).then(unwrap),
+        queryKey: [...enrollmentRefundQueueQueryKey, state],
+        queryFn: ({ signal }) => enrollment.refundQueue(state, signal).then(unwrap),
       }),
     enroll: (client: QueryClient) =>
       mutationOptions({
@@ -146,15 +147,22 @@ export function createEnrollmentQueries(enrollment: EnrollmentRepository) {
           return undefined;
         },
       }),
-    resolveRefund: (client: QueryClient) =>
+    // Both settle actions invalidate the whole refund-queue family (every per-state key), so the
+    // settled order leaves the pending list and appears under its outcome filter.
+    refundOrder: (client: QueryClient) =>
       mutationOptions({
-        mutationFn: (orderId: string) => enrollment.resolveRefund(orderId).then(unwrap),
+        mutationFn: (orderId: string) => enrollment.refundOrder(orderId).then(unwrap),
+        onSuccess: () => client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey }),
+      }),
+    declineRefund: (client: QueryClient) =>
+      mutationOptions({
+        mutationFn: (orderId: string) => enrollment.declineRefund(orderId).then(unwrap),
         onSuccess: () => client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey }),
       }),
     revokeRefund: (client: QueryClient) =>
       mutationOptions({
         mutationFn: (orderId: string) => enrollment.revokeRefund(orderId).then(unwrap),
-        // Revoke leaves the row in the queue (it is cleared by resolve), but re-read so the
+        // Revoke leaves the row pending (outcome is a separate decision), but re-read so the
         // membership state the screen shows reflects the revoke, and to surface a 409 conflict.
         onSuccess: () => client.invalidateQueries({ queryKey: enrollmentRefundQueueQueryKey }),
         onError: (error) => {

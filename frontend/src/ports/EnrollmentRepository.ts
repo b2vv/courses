@@ -5,6 +5,7 @@ import type {
   ParticipantReportQueuePage,
   ParticipantReportStateFilter,
   RefundQueuePage,
+  RefundStateFilter,
   RosterPage,
 } from '../domain/enrollment/enrollment';
 
@@ -37,7 +38,11 @@ export interface EnrollmentRepository {
   ): Promise<EnrollmentResult<ParticipantReportQueuePage>>;
   resolveReport(reportId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
   revoke(courseId: string, userId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
-  refundQueue(signal?: AbortSignal): Promise<EnrollmentResult<RefundQueuePage>>;
-  resolveRefund(orderId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
+  refundQueue(
+    state?: RefundStateFilter,
+    signal?: AbortSignal,
+  ): Promise<EnrollmentResult<RefundQueuePage>>;
+  refundOrder(orderId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
+  declineRefund(orderId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
   revokeRefund(orderId: string, signal?: AbortSignal): Promise<EnrollmentResult<void>>;
 }
