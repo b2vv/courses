@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { EnrollmentErrorCode } from '../../domain/enrollment/enrollment';
-import { Button, Dialog, TextArea } from '../ui';
+import type { EnrollmentErrorCode } from '../domain/enrollment';
+import { Button, Dialog, TextArea } from '../../../presentation/ui';
 
 const maximumReasonLength = 500;
 

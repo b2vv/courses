@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
-import type {
-  RefundOutcome,
-  RefundQueueItem,
-  RefundStateFilter,
-} from '../../domain/enrollment/enrollment';
+import type { RefundOutcome, RefundQueueItem, RefundStateFilter } from '../../modules/enrollment';
 import { Button, Dialog, PageHeader, SegmentedControl } from '../ui';
 
 const stateFilters: readonly RefundStateFilter[] = ['all', 'pending', 'refunded', 'declined'];

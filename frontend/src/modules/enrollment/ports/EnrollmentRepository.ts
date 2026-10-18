@@ -7,7 +7,7 @@ import type {
   RefundQueuePage,
   RefundStateFilter,
   RosterPage,
-} from '../domain/enrollment/enrollment';
+} from '../domain/enrollment';
 
 export interface EnrollmentRepository {
   membership(courseId: string, signal?: AbortSignal): Promise<EnrollmentResult<Membership>>;

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { MembershipCard } from '../../domain/enrollment/enrollment';
+import type { MembershipCard } from '../../modules/enrollment';
 import { EmptyState, Link, ProgressBar } from '../ui';
 
 export function MyLearningList({ items }: { readonly items: readonly MembershipCard[] }) {
