@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { GrantErrorCode } from '../../domain/purchase/grant';
+import type { GrantErrorCode } from '../../modules/purchase';
 import { CourseGrantPanel } from './CourseGrantPanel';
 
 const student = { id: '40000000-0000-4000-8000-000000000001', label: 'Student — s@x.test' };

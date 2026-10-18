@@ -1,4 +1,4 @@
-import type { CourseGrant, GrantResult } from '../domain/purchase/grant';
+import type { CourseGrant, GrantResult } from '../domain/grant';
 
 export interface CourseGrantRepository {
   grant(
