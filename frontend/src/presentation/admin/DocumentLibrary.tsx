@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TranscriptDocument, TranscriptErrorCode } from '../../domain/transcript/transcript';
+import type { TranscriptDocument, TranscriptErrorCode } from '../../modules/transcript';
 import { Button, TextField } from '../ui';
 
 export type DocumentLibraryActions = {

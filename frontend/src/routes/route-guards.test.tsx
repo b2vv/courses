@@ -18,7 +18,7 @@ import { createAdminVideoQueries } from '../app/composition/admin-video-queries'
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
-import { createMemoryTranscriptHistory } from '../adapters/storage/transcript-history-memory';
+import { createMemoryTranscriptHistory } from '../modules/transcript';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import {
   createAdminDocumentQueries,
@@ -34,10 +34,10 @@ import { createAdminGrantQueries } from '../app/composition/admin-grant-queries'
 import { createAdminStatsQueries } from '../app/composition/admin-stats-queries';
 import type { PurchaseRepository } from '../modules/purchase';
 import type { TeachRepository } from '../ports/TeachRepository';
-import type { TranscriptRepository } from '../ports/TranscriptRepository';
+import type { TranscriptRepository } from '../modules/transcript';
 import type { DiscussionRepository } from '../modules/discussion';
 import type { CreatePlaybackMedia } from '../modules/playback';
-import type { LessonTranscript } from '../domain/transcript/transcript';
+import type { LessonTranscript } from '../modules/transcript';
 import type { LearningCourse } from '../modules/playback';
 import type { PurchaseOrder } from '../modules/purchase';
 

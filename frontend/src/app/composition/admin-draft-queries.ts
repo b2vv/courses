@@ -1,7 +1,7 @@
 import { mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { DraftErrorCode, LessonDraft } from '../../domain/transcript/draft';
-import type { DraftRepository } from '../../ports/DraftRepository';
+import type { DraftErrorCode, LessonDraft } from '../../modules/transcript';
+import type { DraftRepository } from '../../modules/transcript';
 
 export const draftPollMs = 5_000;
 // Bound queue waiting before Claim, not recognition; protect against a task lost, e.g. in Redis.

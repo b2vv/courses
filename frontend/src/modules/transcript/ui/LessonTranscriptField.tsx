@@ -1,12 +1,12 @@
-import { transcriptHistoryKey } from '../../application/transcript/recovery';
+import { transcriptHistoryKey } from '../application/recovery';
 import { useEffect } from 'react';
 import type {
   LessonTranscript,
   TranscriptDocument,
   TranscriptErrorCode,
   TranscriptSegment,
-} from '../../domain/transcript/transcript';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+} from '../domain/transcript';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 import { TranscriptEditor } from './TranscriptEditor';
 import type { TranscriptDraftOffer } from './transcript-draft-offer';
 

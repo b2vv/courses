@@ -20,7 +20,7 @@ import type {
   CourseTree,
   CourseTreeEdit,
 } from '../contracts/course';
-import type { DraftErrorCode } from '../domain/transcript/draft';
+import type { DraftErrorCode } from '../modules/transcript';
 import type { AuthenticatedUser } from '../modules/identity';
 import type { VideoErrorCode, VideoTransferProgress, VideoTransferTarget } from '../modules/media';
 import { CourseEditorPending, CourseEditorView } from '../presentation/admin/CourseEditorView';

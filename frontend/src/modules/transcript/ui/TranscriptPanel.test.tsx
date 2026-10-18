@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { LessonTranscript } from '../../domain/transcript/transcript';
+import type { LessonTranscript } from '../domain/transcript';
 import { TranscriptPanel } from './TranscriptPanel';
 
 const documentId = '60000000-0000-4000-8000-000000000001';
