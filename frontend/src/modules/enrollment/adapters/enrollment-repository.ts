@@ -14,10 +14,10 @@ import {
   revokeCourseParticipant,
   revokeRefundGrant,
   unblockCourseParticipant,
-} from './generated/courses';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
-import type { EnrollmentRepository } from '../../ports/EnrollmentRepository';
+} from '../../../adapters/api/generated/courses';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
+import type { EnrollmentRepository } from '../ports/EnrollmentRepository';
 import type {
   EnrollmentErrorCode,
   EnrollmentResult,
@@ -31,7 +31,7 @@ import type {
   RefundReason,
   RosterEntry,
   RosterPage,
-} from '../../domain/enrollment/enrollment';
+} from '../domain/enrollment';
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

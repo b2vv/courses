@@ -4,7 +4,7 @@ import { EnrollmentQueryError } from '../../app/composition/enrollment-queries';
 import type {
   ParticipantReportQueueItem,
   ParticipantReportStateFilter,
-} from '../../domain/enrollment/enrollment';
+} from '../../modules/enrollment';
 import { Button, Dialog, PageHeader, SegmentedControl } from '../ui';
 
 const stateFilters: readonly ParticipantReportStateFilter[] = ['all', 'open', 'resolved'];

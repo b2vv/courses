@@ -5,8 +5,8 @@ import type {
   EnrollmentResult,
   ParticipantReportStateFilter,
   RefundStateFilter,
-} from '../../domain/enrollment/enrollment';
-import type { EnrollmentRepository } from '../../ports/EnrollmentRepository';
+} from '../../modules/enrollment';
+import type { EnrollmentRepository } from '../../modules/enrollment';
 
 export class EnrollmentQueryError extends Error {
   readonly code: EnrollmentErrorCode;
