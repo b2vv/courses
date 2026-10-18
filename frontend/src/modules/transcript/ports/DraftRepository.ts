@@ -1,4 +1,4 @@
-import type { DraftResult, LessonDraft } from '../domain/transcript/draft';
+import type { DraftResult, LessonDraft } from '../domain/draft';
 
 export interface DraftRepository {
   getDraft(lessonId: string, signal?: AbortSignal): Promise<DraftResult<LessonDraft>>;

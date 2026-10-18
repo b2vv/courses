@@ -1,4 +1,4 @@
-import type { TranscriptSnapshot } from '../application/transcript/recovery';
+import type { TranscriptSnapshot } from '../application/recovery';
 
 /**
  * Local, best-effort storage for unsaved editor work. Best-effort is the contract, not a caveat:

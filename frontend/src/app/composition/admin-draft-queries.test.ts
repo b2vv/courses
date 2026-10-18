@@ -6,8 +6,8 @@ import {
   draftPollMs,
   draftTaskTimeoutMs,
 } from './admin-draft-queries';
-import type { LessonDraft } from '../../domain/transcript/draft';
-import type { DraftRepository } from '../../ports/DraftRepository';
+import type { LessonDraft } from '../../modules/transcript';
+import type { DraftRepository } from '../../modules/transcript';
 
 const lessonId = '20000000-0000-4000-8000-000000000001';
 const otherLessonId = '20000000-0000-4000-8000-000000000002';

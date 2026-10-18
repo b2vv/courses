@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
-import type { TranscriptErrorCode } from '../../domain/transcript/transcript';
-import type { TranscriptRepository } from '../../ports/TranscriptRepository';
+import type { TranscriptErrorCode } from '../../modules/transcript';
+import type { TranscriptRepository } from '../../modules/transcript';
 
 export class TranscriptQueryError extends Error {
   readonly code: TranscriptErrorCode;

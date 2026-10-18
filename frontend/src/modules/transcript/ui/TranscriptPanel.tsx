@@ -6,8 +6,8 @@ import {
   searchSegments,
   type LessonTranscript,
   type TranscriptSegment,
-} from '../../domain/transcript/transcript';
-import { formatTimestamp } from '../format-timestamp';
+} from '../domain/transcript';
+import { formatTimestamp } from '../../../presentation/format-timestamp';
 
 type TranscriptPanelProps = {
   readonly transcript: LessonTranscript;

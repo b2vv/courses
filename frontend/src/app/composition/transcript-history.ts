@@ -1,6 +1,6 @@
-import { createIndexedDbTranscriptHistory } from '../../adapters/storage/transcript-history-indexed-database';
-import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+import { createIndexedDbTranscriptHistory } from '../../modules/transcript';
+import { createMemoryTranscriptHistory } from '../../modules/transcript';
+import type { TranscriptHistoryStore } from '../../modules/transcript';
 
 /**
  * One store per composition, never a module-level singleton: SSR renders many requests in one

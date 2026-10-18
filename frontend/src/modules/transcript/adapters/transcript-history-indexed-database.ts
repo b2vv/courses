@@ -1,5 +1,5 @@
-import type { TranscriptSnapshot } from '../../application/transcript/recovery';
-import type { TranscriptHistoryStore } from '../../ports/TranscriptHistoryStore';
+import type { TranscriptSnapshot } from '../application/recovery';
+import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 
 const databaseName = 'courses-transcript-history';
 const databaseVersion = 1;

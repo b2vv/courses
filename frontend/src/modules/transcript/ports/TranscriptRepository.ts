@@ -3,7 +3,7 @@ import type {
   TranscriptDocument,
   TranscriptResult,
   TranscriptSegment,
-} from '../domain/transcript/transcript';
+} from '../domain/transcript';
 
 /** The whole transcript of one lesson in one language: the write replaces, it does not merge. */
 export type TranscriptDraft = {

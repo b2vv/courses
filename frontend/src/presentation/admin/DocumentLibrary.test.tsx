@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { TranscriptDocument, TranscriptErrorCode } from '../../domain/transcript/transcript';
+import type { TranscriptDocument, TranscriptErrorCode } from '../../modules/transcript';
 import { DocumentLibrary } from './DocumentLibrary';
 
 const documents: TranscriptDocument[] = [

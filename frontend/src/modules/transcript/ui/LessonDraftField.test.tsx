@@ -2,8 +2,8 @@ import { describe, expect, it } from '@rstest/core';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { DraftErrorCode, DraftSegment, LessonDraft } from '../../domain/transcript/draft';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+import type { DraftErrorCode, DraftSegment, LessonDraft } from '../domain/draft';
 import { LessonDraftField, type LessonDraftFieldActions } from './LessonDraftField';
 
 const lessonId = '20000000-0000-4000-8000-000000000001';

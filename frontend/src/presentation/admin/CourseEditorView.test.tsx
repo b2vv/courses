@@ -20,12 +20,12 @@ import { createAuthoring } from '../../application/admin/authoring';
 import { AuthoringQueryError, createAdminQueries } from '../../app/composition/admin-queries';
 import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
+import { createMemoryTranscriptHistory } from '../../modules/transcript';
 import { asBrandedId } from '../../contracts/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../contracts/course';
 import type { AuthenticatedUser } from '../../modules/identity';
-import type { LessonDraft } from '../../domain/transcript/draft';
-import type { LessonTranscript } from '../../domain/transcript/transcript';
+import type { LessonDraft } from '../../modules/transcript';
+import type { LessonTranscript } from '../../modules/transcript';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
 

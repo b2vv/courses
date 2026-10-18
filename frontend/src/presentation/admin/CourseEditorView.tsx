@@ -22,7 +22,7 @@ import type {
   CourseTreeEdit,
   InstructorOption,
 } from '../../contracts/course';
-import type { DraftSegment } from '../../domain/transcript/draft';
+import type { DraftSegment } from '../../modules/transcript';
 import type { AuthenticatedUser } from '../../modules/identity';
 import {
   Button,
@@ -36,13 +36,13 @@ import {
   TextField,
 } from '../ui';
 import { CoursePriceField } from './CoursePriceField';
-import { LessonDraftField } from './LessonDraftField';
-import type { CourseEditorDrafts } from './LessonDraftField';
+import { LessonDraftField } from '../../modules/transcript';
+import type { CourseEditorDrafts } from '../../modules/transcript';
 import { LessonVideoField } from '../../modules/media';
 import { DocumentLibrary } from './DocumentLibrary';
-import { LessonTranscriptField } from './LessonTranscriptField';
-import type { CourseEditorTranscripts } from './LessonTranscriptField';
-import type { TranscriptDraftOffer } from './transcript-draft-offer';
+import { LessonTranscriptField } from '../../modules/transcript';
+import type { CourseEditorTranscripts } from '../../modules/transcript';
+import type { TranscriptDraftOffer } from '../../modules/transcript';
 import type { CourseEditorVideo } from '../../modules/media';
 
 const statusVariant: Record<CourseStatus, string> = {

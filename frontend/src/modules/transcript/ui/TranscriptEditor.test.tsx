@@ -1,7 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { TranscriptErrorCode, TranscriptSegment } from '../../domain/transcript/transcript';
-import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
+import type { TranscriptErrorCode, TranscriptSegment } from '../domain/transcript';
+import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
 import { TranscriptEditor } from './TranscriptEditor';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
