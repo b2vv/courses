@@ -609,28 +609,45 @@ func TestRefundQueueOperations(t *testing.T) {
 	t.Run("RefundQueue requires an administrator and returns the flagged orders", func(t *testing.T) {
 		store := newFakeStore(t)
 		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
-		if _, err := service.RefundQueue(ctx, student); !errors.Is(err, domain.ErrGrantForbidden) {
+		if _, err := service.RefundQueue(ctx, student, "pending"); !errors.Is(err, domain.ErrGrantForbidden) {
 			t.Fatalf("student RefundQueue err=%v", err)
 		}
 		charged := int64(50000)
 		store.refundQueue = []ports.RefundQueueItem{{OrderID: orderID, CourseID: courseID, UserID: userID, OrderAmountMinor: 50000, ChargedAmountMinor: &charged, Reason: "grant_conflict"}}
-		items, err := service.RefundQueue(ctx, admin)
+		items, err := service.RefundQueue(ctx, admin, "refunded")
 		if err != nil || len(items) != 1 || items[0].Reason != "grant_conflict" {
 			t.Fatalf("admin RefundQueue items=%+v err=%v", items, err)
 		}
+		if store.refundQueueState != "refunded" {
+			t.Fatalf("state filter not threaded: %q", store.refundQueueState)
+		}
 	})
 
-	t.Run("ResolveRefund requires an administrator and records the actor", func(t *testing.T) {
+	t.Run("RefundOrder requires an administrator and settles as refunded", func(t *testing.T) {
 		store := newFakeStore(t)
 		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
-		if err := service.ResolveRefund(ctx, student, orderID); !errors.Is(err, domain.ErrGrantForbidden) {
-			t.Fatalf("student ResolveRefund err=%v", err)
+		if err := service.RefundOrder(ctx, student, orderID); !errors.Is(err, domain.ErrGrantForbidden) {
+			t.Fatalf("student RefundOrder err=%v", err)
 		}
-		if err := service.ResolveRefund(ctx, admin, orderID); err != nil {
-			t.Fatalf("admin ResolveRefund err=%v", err)
+		if err := service.RefundOrder(ctx, admin, orderID); err != nil {
+			t.Fatalf("admin RefundOrder err=%v", err)
 		}
-		if store.resolveCalls != 1 || store.resolvedOrderID != orderID || store.resolvedActorID != adminID {
-			t.Fatalf("resolve calls=%d order=%q actor=%q", store.resolveCalls, store.resolvedOrderID, store.resolvedActorID)
+		if store.resolveCalls != 1 || store.resolvedOrderID != orderID || store.resolvedActorID != adminID || store.settledOutcome != "refunded" {
+			t.Fatalf("settle calls=%d order=%q actor=%q outcome=%q", store.resolveCalls, store.resolvedOrderID, store.resolvedActorID, store.settledOutcome)
+		}
+	})
+
+	t.Run("DeclineRefund requires an administrator and settles as declined", func(t *testing.T) {
+		store := newFakeStore(t)
+		service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return orderID }, nil)
+		if err := service.DeclineRefund(ctx, student, orderID); !errors.Is(err, domain.ErrGrantForbidden) {
+			t.Fatalf("student DeclineRefund err=%v", err)
+		}
+		if err := service.DeclineRefund(ctx, admin, orderID); err != nil {
+			t.Fatalf("admin DeclineRefund err=%v", err)
+		}
+		if store.resolveCalls != 1 || store.resolvedOrderID != orderID || store.resolvedActorID != adminID || store.settledOutcome != "declined" {
+			t.Fatalf("settle calls=%d order=%q actor=%q outcome=%q", store.resolveCalls, store.resolvedOrderID, store.resolvedActorID, store.settledOutcome)
 		}
 	})
 
@@ -716,10 +733,12 @@ type fakeStore struct {
 	authorID              string
 	refundQueue           []ports.RefundQueueItem
 	refundQueueErr        error
+	refundQueueState      string
 	orderByID             *domain.Order
 	orderByIDErr          error
 	resolvedOrderID       string
 	resolvedActorID       string
+	settledOutcome        string
 	resolveCalls          int
 }
 
@@ -904,14 +923,16 @@ func (store *fakeStore) OrderByID(_ context.Context, _ string) (domain.Order, er
 	return *store.orderByID, nil
 }
 
-func (store *fakeStore) RefundQueue(context.Context) ([]ports.RefundQueueItem, error) {
+func (store *fakeStore) RefundQueue(_ context.Context, state string) ([]ports.RefundQueueItem, error) {
+	store.refundQueueState = state
 	return store.refundQueue, store.refundQueueErr
 }
 
-func (store *fakeStore) ResolveRefund(_ context.Context, orderID, actorID string) error {
+func (store *fakeStore) SettleRefund(_ context.Context, orderID, actorID, outcome string) error {
 	store.resolveCalls++
 	store.resolvedOrderID = orderID
 	store.resolvedActorID = actorID
+	store.settledOutcome = outcome
 	return nil
 }
 

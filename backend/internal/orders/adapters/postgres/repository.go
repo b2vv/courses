@@ -115,13 +115,16 @@ func (repository *Repository) OrderByID(ctx context.Context, orderID string) (do
 	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE id=$1::text::uuid`, orderID))
 }
 
-func (repository *Repository) RefundQueue(ctx context.Context) ([]ports.RefundQueueItem, error) {
-	rows, err := repository.pool.Query(ctx, `SELECT o.id::text,o.course_id::text,o.user_id::text,o.amount_minor,e.amount_minor,e.received_at,COALESCE(o.refund_reason,''),g.state
+func (repository *Repository) RefundQueue(ctx context.Context, state string) ([]ports.RefundQueueItem, error) {
+	// $1 narrows the list without a dynamic WHERE: "" (all flagged), "pending" (not yet settled),
+	// "refunded"/"declined" (that outcome). Any other value matches nothing.
+	rows, err := repository.pool.Query(ctx, `SELECT o.id::text,o.course_id::text,o.user_id::text,o.amount_minor,e.amount_minor,e.received_at,COALESCE(o.refund_reason,''),g.state,COALESCE(o.refund_outcome,'')
 FROM orders o
 LEFT JOIN payment_events e ON e.order_id=o.id AND e.type='paid'
 LEFT JOIN course_grants g ON g.user_id=o.user_id AND g.course_id=o.course_id
-WHERE o.refund_required AND o.refund_resolved_at IS NULL
-ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
+WHERE o.refund_required
+  AND ($1='' OR ($1='pending' AND o.refund_resolved_at IS NULL) OR o.refund_outcome=$1)
+ORDER BY COALESCE(e.received_at, o.created_at), o.id`, state)
 	if err != nil {
 		return nil, persistenceError(err)
 	}
@@ -131,8 +134,8 @@ ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 		var item ports.RefundQueueItem
 		var charged pgtype.Int8
 		var received pgtype.Timestamptz
-		var state pgtype.Text
-		if err := rows.Scan(&item.OrderID, &item.CourseID, &item.UserID, &item.OrderAmountMinor, &charged, &received, &item.Reason, &state); err != nil {
+		var grantState pgtype.Text
+		if err := rows.Scan(&item.OrderID, &item.CourseID, &item.UserID, &item.OrderAmountMinor, &charged, &received, &item.Reason, &grantState, &item.Outcome); err != nil {
 			return nil, persistenceError(err)
 		}
 		if charged.Valid {
@@ -143,8 +146,8 @@ ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 			value := received.Time
 			item.ReceivedAt = &value
 		}
-		if state.Valid {
-			value := domain.GrantState(state.String)
+		if grantState.Valid {
+			value := domain.GrantState(grantState.String)
 			item.MembershipState = &value
 		}
 		items = append(items, item)
@@ -155,10 +158,11 @@ ORDER BY COALESCE(e.received_at, o.created_at), o.id`)
 	return items, nil
 }
 
-func (repository *Repository) ResolveRefund(ctx context.Context, orderID, actorID string) error {
+func (repository *Repository) SettleRefund(ctx context.Context, orderID, actorID, outcome string) error {
 	// Idempotent: the refund_resolved_at IS NULL predicate makes a repeat a no-op (zero rows, no
-	// error), and refund_required keeps a never-flagged order from being resolved.
-	_, err := repository.pool.Exec(ctx, `UPDATE orders SET refund_resolved_at=now(),refund_resolved_by=$2::text::uuid WHERE id=$1::text::uuid AND refund_required AND refund_resolved_at IS NULL`, orderID, actorID)
+	// error), and refund_required keeps a never-flagged order from being settled. outcome is one of
+	// 'refunded'/'declined' (the service's only callers); the column CHECK rejects anything else.
+	_, err := repository.pool.Exec(ctx, `UPDATE orders SET refund_resolved_at=now(),refund_resolved_by=$2::text::uuid,refund_outcome=$3 WHERE id=$1::text::uuid AND refund_required AND refund_resolved_at IS NULL`, orderID, actorID, outcome)
 	return persistenceError(err)
 }
 

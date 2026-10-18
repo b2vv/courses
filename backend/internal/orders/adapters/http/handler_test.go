@@ -58,10 +58,12 @@ type fakeStore struct {
 	authorKind          string
 	refundQueue         []ports.RefundQueueItem
 	refundQueueErr      error
+	refundQueueState    string
 	orderByIDErr        error
 	resolveErr          error
 	resolvedOrderID     string
 	resolvedActorID     string
+	settledOutcome      string
 }
 
 func (store *fakeStore) CourseForPurchase(context.Context, string) (ports.CourseFacts, error) {
@@ -105,12 +107,14 @@ func (store *fakeStore) OrderByID(context.Context, string) (domain.Order, error)
 	}
 	return store.order, nil
 }
-func (store *fakeStore) RefundQueue(context.Context) ([]ports.RefundQueueItem, error) {
+func (store *fakeStore) RefundQueue(_ context.Context, state string) ([]ports.RefundQueueItem, error) {
+	store.refundQueueState = state
 	return store.refundQueue, store.refundQueueErr
 }
-func (store *fakeStore) ResolveRefund(_ context.Context, orderID, actorID string) error {
+func (store *fakeStore) SettleRefund(_ context.Context, orderID, actorID, outcome string) error {
 	store.resolvedOrderID = orderID
 	store.resolvedActorID = actorID
+	store.settledOutcome = outcome
 	return store.resolveErr
 }
 func (store *fakeStore) MarkCheckoutOpened(ctx context.Context, userID, orderID string) (domain.Order, error) {
@@ -300,25 +304,57 @@ func TestPurchaseAndGrantHTTPMatchOpenAPI(t *testing.T) {
 		assertContract(t, request, response)
 	})
 
-	t.Run("refund resolve is administrator-only and idempotent-ack", func(t *testing.T) {
-		forbidden := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/resolve", nil)
-		forbidden.Header.Set("X-Test-Role", "student")
-		response := httptest.NewRecorder()
-		server.ServeHTTP(response, forbidden)
-		if response.Code != http.StatusForbidden {
-			t.Fatalf("student resolve status=%d body=%s", response.Code, response.Body.String())
-		}
-		assertContract(t, forbidden, response)
-
-		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/resolve", nil)
+	t.Run("refund queue rejects an unknown state", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/refunds?state=bogus", nil)
 		request.Header.Set("X-Test-Role", "admin")
-		response = httptest.NewRecorder()
+		response := httptest.NewRecorder()
 		server.ServeHTTP(response, request)
-		if response.Code != http.StatusNoContent || store.resolvedOrderID != testOrder || store.resolvedActorID != testAdmin {
-			t.Fatalf("admin resolve status=%d order=%q actor=%q", response.Code, store.resolvedOrderID, store.resolvedActorID)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("bogus state status=%d body=%s", response.Code, response.Body.String())
+		}
+		// No assertContract: the request intentionally violates the state enum, so it cannot
+		// conform to the spec — only the 400 response matters here.
+	})
+
+	t.Run("refund queue threads the state filter and surfaces the outcome", func(t *testing.T) {
+		store.refundQueue = []ports.RefundQueueItem{{OrderID: testOrder, CourseID: testCourse, UserID: testUser, OrderAmountMinor: 50000, Reason: "grant_conflict", Outcome: "declined"}}
+		defer func() { store.refundQueue = nil }()
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/refunds?state=declined", nil)
+		request.Header.Set("X-Test-Role", "admin")
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != http.StatusOK || store.refundQueueState != "declined" ||
+			!strings.Contains(response.Body.String(), `"outcome":"declined"`) {
+			t.Fatalf("declined queue status=%d state=%q body=%s", response.Code, store.refundQueueState, response.Body.String())
 		}
 		assertContract(t, request, response)
 	})
+
+	for _, settle := range []struct {
+		path    string
+		outcome string
+	}{{"refund", "refunded"}, {"decline", "declined"}} {
+		t.Run("refund "+settle.path+" is administrator-only and idempotent-ack", func(t *testing.T) {
+			store.resolvedOrderID, store.resolvedActorID, store.settledOutcome = "", "", ""
+			forbidden := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/"+settle.path, nil)
+			forbidden.Header.Set("X-Test-Role", "student")
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, forbidden)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("student %s status=%d body=%s", settle.path, response.Code, response.Body.String())
+			}
+			assertContract(t, forbidden, response)
+
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refunds/"+testOrder+"/"+settle.path, nil)
+			request.Header.Set("X-Test-Role", "admin")
+			response = httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != http.StatusNoContent || store.resolvedOrderID != testOrder || store.resolvedActorID != testAdmin || store.settledOutcome != settle.outcome {
+				t.Fatalf("admin %s status=%d order=%q actor=%q outcome=%q", settle.path, response.Code, store.resolvedOrderID, store.resolvedActorID, store.settledOutcome)
+			}
+			assertContract(t, request, response)
+		})
+	}
 
 	t.Run("refund revoke reuses the revoke transition and maps not-found", func(t *testing.T) {
 		adminID := testAdmin

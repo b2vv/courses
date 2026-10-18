@@ -117,7 +117,7 @@ async function createPaidCourse(admin: BrowserContext, baseURL: string) {
 
 test.use({ storageState: authStatePath('student') });
 
-test('Rf-e2e refund queue surfaces a grant conflict, revoke and resolve clear it', async ({
+test('Rf-e2e refund queue surfaces a grant conflict; revoke, refund and the Refunded filter', async ({
   page,
   browser,
   baseURL,
@@ -181,12 +181,23 @@ test('Rf-e2e refund queue surfaces a grant conflict, revoke and resolve clear it
     await expect(refunds.getByRole('alert')).toHaveCount(0);
 
     // A14: once the grant is revoked, the queue refetches and the row no longer offers revoke —
-    // only resolve remains. (The row stays until resolve; revoke and resolve are independent.)
+    // the outcome actions remain. (Revoke and the refund outcome are independent: revoking access
+    // does not settle the refund, so the row stays pending until refund/decline.)
     await expect(row.getByRole('button', { name: 'Відкликати доступ' })).toHaveCount(0);
+    await expect(row.getByRole('button', { name: 'Повернути кошти' })).toBeVisible();
 
-    // A3: resolve removes the row from the queue.
-    await row.getByRole('button', { name: 'Позначити розглянутим' }).click();
+    // A3: recording the refund settles the order and removes it from the pending queue.
+    await row.getByRole('button', { name: 'Повернути кошти' }).click();
     await expect(refunds.locator('li', { hasText: courseId })).toHaveCount(0);
+
+    // A4: under the Refunded filter the settled order reappears, with its outcome pill and no
+    // live action (a settled card is read-only — refund/decline/revoke are pending-only).
+    await refunds.getByRole('radio', { name: 'Повернені' }).click();
+    const settled = refunds.locator('li', { hasText: courseId });
+    await expect(settled).toBeVisible();
+    await expect(settled.getByText('Повернено')).toBeVisible();
+    await expect(settled.getByRole('button', { name: 'Повернути кошти' })).toHaveCount(0);
+    await expect(settled.getByRole('button', { name: 'Відхилити' })).toHaveCount(0);
   } finally {
     await adminPage.close();
   }
