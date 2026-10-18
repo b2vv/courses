@@ -2,18 +2,18 @@ import { afterEach, describe, expect, it, rstest } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
 import type {
   LearningLesson,
   PlaybackHeartbeat,
   PlaybackResult,
   PlaybackSession,
-} from '../../domain/playback/playback';
+} from '../domain/playback';
 import type {
   CreatePlaybackMedia,
   PlaybackMedia,
   PlaybackMediaCallbacks,
-} from '../../ports/PlaybackMedia';
+} from '../ports/PlaybackMedia';
 import { LessonPlayer, type LessonPlayerActions } from './LessonPlayer';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';

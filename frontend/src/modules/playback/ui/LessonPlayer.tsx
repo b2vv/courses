@@ -7,21 +7,21 @@ import {
   mintFailureDirective,
   nextHeartbeatDelayMs,
   type PlaybackReloadMode,
-} from '../../application/playback/recovery';
+} from '../application/recovery';
 import type {
   LearningLesson,
   PlaybackHeartbeat,
   PlaybackHeartbeatReason,
   PlaybackResult,
   PlaybackSession,
-} from '../../domain/playback/playback';
+} from '../domain/playback';
 import type {
   CreatePlaybackMedia,
   PlaybackMedia,
   PlaybackMediaError,
   PlaybackQuality,
-} from '../../ports/PlaybackMedia';
-import { Button, EmptyState, ErrorState, Select } from '../ui';
+} from '../ports/PlaybackMedia';
+import { Button, EmptyState, ErrorState, Select } from '../../../presentation/ui';
 
 export type LessonPlayerActions = {
   play(): Promise<PlaybackResult<PlaybackSession>>;
