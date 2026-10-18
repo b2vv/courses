@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import type { RosterEntry } from '../../domain/enrollment/enrollment';
+import type { RosterEntry } from '../../modules/enrollment';
 import { Button, EmptyState, ProgressBar } from '../ui';
-import { ReportDialog } from '../enrollment/ReportDialog';
+import { ReportDialog } from '../../modules/enrollment';
 import { useEffect, useRef, useState } from 'react';
 
 type CourseRosterProps = {
