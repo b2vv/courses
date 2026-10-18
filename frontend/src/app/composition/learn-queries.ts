@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, mutationOptions, queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { CourseRepository } from '../../ports/CourseRepository';
+import type { CourseRepository } from '../../modules/catalog';
 import type { PlaybackErrorCode } from '../../modules/playback';
 import type { PlaybackRepository } from '../../modules/playback';
 

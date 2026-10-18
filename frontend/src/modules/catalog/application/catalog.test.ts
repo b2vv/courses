@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { createCatalog } from './catalog';
-import type { CourseRepository } from '../../ports/CourseRepository';
+import type { CourseRepository } from '../ports/CourseRepository';
 
 const unavailable: CourseRepository = {
   listPublished: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),

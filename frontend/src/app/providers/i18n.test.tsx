@@ -5,7 +5,7 @@ import { I18nProvider, createI18n } from './i18n';
 import { en } from './locales/en';
 import { uk } from './locales/uk';
 import { LanguageSwitcher } from '../../presentation/LanguageSwitcher';
-import { HomeView } from '../../presentation/storefront/HomeView';
+import { HomeView } from '../../modules/catalog';
 
 const pluralSuffix = /_(?:zero|one|two|few|many|other)$/;
 

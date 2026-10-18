@@ -1,5 +1,5 @@
 import { useRouterState } from '@tanstack/react-router';
-import { EmptyState, ErrorState, Link, Skeleton } from '../ui';
+import { EmptyState, ErrorState, Link, Skeleton } from '../../../presentation/ui';
 import { useTranslation } from 'react-i18next';
 
 export function CatalogLoading() {

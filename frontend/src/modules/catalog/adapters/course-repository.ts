@@ -1,12 +1,12 @@
-import { makePublishedCourse, reviewPercent } from '../../contracts/course';
+import { makePublishedCourse, reviewPercent } from '../../../contracts/course';
 import type {
   CatalogError,
   CourseDetail,
   CoursePage,
   OwnReview,
   Result,
-} from '../../contracts/course';
-import type { CourseRepository } from '../../ports/CourseRepository';
+} from '../../../contracts/course';
+import type { CourseRepository } from '../ports/CourseRepository';
 import {
   getPublishedCourse,
   getOwnCourseReview,
@@ -16,7 +16,7 @@ import {
   listCourseReviews,
   listPublishedCourses,
   reportCourseReview,
-} from './generated/courses';
+} from '../../../adapters/api/generated/courses';
 import {
   courseDetailSchema,
   errorSchema,
@@ -24,9 +24,9 @@ import {
   publicReviewPageSchema,
   ownReviewSchema,
   reviewSchema,
-} from './course-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+} from '../../../adapters/api/course-schema';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 const invalid = { ok: false, error: { code: 'invalid_response' } } satisfies Result<never>;
 

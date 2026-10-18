@@ -1,12 +1,12 @@
-import type { CourseDetail } from '../../contracts/course';
-import type { PublicReviewPage } from '../../contracts/course';
-import type { EnrollmentErrorCode, Membership } from '../../modules/enrollment';
-import { Button, Link } from '../ui';
+import type { CourseDetail } from '../../../contracts/course';
+import type { PublicReviewPage } from '../../../contracts/course';
+import type { EnrollmentErrorCode, Membership } from '../../enrollment';
+import { Button, Link } from '../../../presentation/ui';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { RatingSummary } from './RatingSummary';
-import { formatDate } from '../format-timestamp';
-import { ReportDialog } from '../../modules/enrollment';
+import { formatDate } from '../../../presentation/format-timestamp';
+import { ReportDialog } from '../../enrollment';
 
 export function CourseView({
   course,

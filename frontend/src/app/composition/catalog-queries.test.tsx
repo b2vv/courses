@@ -8,9 +8,9 @@ import {
 } from '@tanstack/react-router';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { createCatalog } from '../../application/catalog/catalog';
+import { createCatalog } from '../../modules/catalog';
 import type { CatalogQuery, CoursePage, Result } from '../../contracts/course';
-import type { CourseRepository } from '../../ports/CourseRepository';
+import type { CourseRepository } from '../../modules/catalog';
 import { createCatalogQueries, ensureRouteQuery } from './catalog-queries';
 
 const baseQuery: CatalogQuery = { q: 'Go', sort: 'recent', limit: 20, offset: 0 };

@@ -1,8 +1,8 @@
-import type { CatalogQuery, CoursePage, PublishedCourse } from '../../contracts/course';
+import type { CatalogQuery, CoursePage, PublishedCourse } from '../../../contracts/course';
 import { ValueStrip } from './ValueStrip';
-import { Button, EmptyState, Link, TextField } from '../ui';
+import { Button, EmptyState, Link, TextField } from '../../../presentation/ui';
 import { useTranslation } from 'react-i18next';
-import { formatPrice } from '../format-price';
+import { formatPrice } from '../../../presentation/format-price';
 import { RatingSummary } from './RatingSummary';
 
 export function CatalogView({ page, query }: { page: CoursePage; query: CatalogQuery }) {

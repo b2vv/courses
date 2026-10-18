@@ -1,7 +1,7 @@
 import { describe, expect, it, rs } from '@rstest/core';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { CourseDetail, CoursePage, PublicReviewPage } from '../../contracts/course';
+import type { CourseDetail, CoursePage, PublicReviewPage } from '../../../contracts/course';
 import { CatalogView } from './CatalogView';
 import { CourseView } from './CourseView';
 
