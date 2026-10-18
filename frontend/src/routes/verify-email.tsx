@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
-import { VerifyEmailView } from '../presentation/identity/VerifyEmailView';
+import { VerifyEmailView } from '../modules/identity';
 export const Route = createFileRoute('/verify-email')({
   validateSearch: parseTokenSearch,
   component: VerifyEmailRoute,

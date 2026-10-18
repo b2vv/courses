@@ -1,4 +1,4 @@
-import { makeCredentials } from '../../domain/identity/identity';
+import { makeCredentials } from '../domain/identity';
 import type {
   AuthenticatedUser,
   CredentialsInput,
@@ -12,8 +12,8 @@ import type {
   TwoFactorEnrollment,
   RecoveryCodes,
   TokenInput,
-} from '../../domain/identity/identity';
-import type { SessionRepository } from '../../ports/SessionRepository';
+} from '../domain/identity';
+import type { SessionRepository } from '../ports/SessionRepository';
 
 export function createSession(repository: SessionRepository) {
   return {

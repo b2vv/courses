@@ -6,10 +6,7 @@ import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
 import { parseOrderId, parseOrderSearch } from '../app/router/learn-route';
 import type { PurchaseErrorCode } from '../domain/purchase/purchase';
-import {
-  ProtectedRouteFailure,
-  ProtectedRoutePending,
-} from '../presentation/identity/ProtectedRouteStates';
+import { ProtectedRouteFailure, ProtectedRoutePending } from '../modules/identity';
 import { OrderStatusView, submitCheckoutForm } from '../presentation/learn/OrderStatusView';
 
 export const Route = createFileRoute('/orders/$orderId')({

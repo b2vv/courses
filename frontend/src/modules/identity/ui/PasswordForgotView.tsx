@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SessionErrorCode } from '../../domain/identity/identity';
-import { Button, TextField } from '../ui';
+import type { SessionErrorCode } from '../domain/identity';
+import { Button, TextField } from '../../../presentation/ui';
 type Props = {
   readonly isPending: boolean;
   readonly sent: boolean;

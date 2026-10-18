@@ -12,8 +12,8 @@ import type {
   AdminUserRole,
   AdminUserSort,
   WritableAccountStatus,
-} from '../domain/identity/administration';
-import { canAdministerAccounts } from '../domain/identity/identity';
+} from '../domain/admin/administration';
+import { canAdministerAccounts } from '../modules/identity';
 import { UserListFailure, UserListPending, UserListView } from '../presentation/admin/UserListView';
 
 export const Route = createFileRoute('/admin/users/')({

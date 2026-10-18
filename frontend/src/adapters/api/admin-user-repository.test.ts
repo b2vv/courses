@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from '@rstest/
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { createUserAdministration } from '../../application/admin/users';
-import type { AdministrationErrorCode } from '../../domain/identity/administration';
+import type { AdministrationErrorCode } from '../../domain/admin/administration';
 import { apiOrigin } from './api-origin';
 import { createApiAdminUserRepository } from './admin-user-repository';
 

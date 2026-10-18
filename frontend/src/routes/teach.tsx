@@ -1,10 +1,7 @@
 import { createFileRoute, notFound, Outlet } from '@tanstack/react-router';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
-import { canAccessAdministration } from '../domain/identity/identity';
-import {
-  ProtectedRouteFailure,
-  ProtectedRoutePending,
-} from '../presentation/identity/ProtectedRouteStates';
+import { canAccessAdministration } from '../modules/identity';
+import { ProtectedRouteFailure, ProtectedRoutePending } from '../modules/identity';
 
 export const Route = createFileRoute('/teach')({
   ssr: false,

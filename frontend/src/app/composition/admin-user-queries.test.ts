@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@rstest/core';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 import { createUserAdministration } from '../../application/admin/users';
-import type { AdminUserQuery } from '../../domain/identity/administration';
+import type { AdminUserQuery } from '../../domain/admin/administration';
 import type { AdminUserRepository } from '../../ports/AdminUserRepository';
 import { adminListStaleMs } from './admin-queries';
 import {

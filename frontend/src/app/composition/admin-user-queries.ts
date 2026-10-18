@@ -6,7 +6,7 @@ import type {
   AdministrationResult,
   AdminUserQuery,
   WritableAccountStatus,
-} from '../../domain/identity/administration';
+} from '../../domain/admin/administration';
 import { adminListStaleMs } from './admin-queries';
 
 export const adminUserListKey = ['admin', 'users', 'list'] as const;

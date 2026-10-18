@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { redirect, useLocation, useNavigate } from '@tanstack/react-router';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import { SessionQueryError } from './identity-queries';
 import type { IdentityDependencies } from './identity';
 import type { RootIdentityContext } from './root-identity';

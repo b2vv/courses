@@ -19,8 +19,8 @@ import { createUserAdministration } from '../../application/admin/users';
 import { createAdminUserQueries } from '../../app/composition/admin-user-queries';
 import { ensureRouteQuery } from '../../app/composition/catalog-queries';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
-import type { AdminUser, AdminUserPage } from '../../domain/identity/administration';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AdminUser, AdminUserPage } from '../../domain/admin/administration';
+import type { AuthenticatedUser } from '../../modules/identity';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { UserListFailure, UserListView } from './UserListView';
 

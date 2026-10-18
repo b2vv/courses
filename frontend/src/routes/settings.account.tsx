@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/require-identity';
 import { SessionQueryError } from '../app/composition/identity-queries';
-import { AccountSettingsView } from '../presentation/identity/AccountSettingsView';
-import type { RecoveryCodes, TwoFactorEnrollment } from '../domain/identity/identity';
+import { AccountSettingsView } from '../modules/identity';
+import type { RecoveryCodes, TwoFactorEnrollment } from '../modules/identity';
 
 export const Route = createFileRoute('/settings/account')({
   ssr: false,

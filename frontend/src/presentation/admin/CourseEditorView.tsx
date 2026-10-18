@@ -23,7 +23,7 @@ import type {
   InstructorOption,
 } from '../../domain/course/course';
 import type { DraftSegment } from '../../domain/transcript/draft';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import {
   Button,
   Checkbox,

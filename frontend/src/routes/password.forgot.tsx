@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
-import { PasswordForgotView } from '../presentation/identity/PasswordForgotView';
+import { PasswordForgotView } from '../modules/identity';
 export const Route = createFileRoute('/password/forgot')({ component: PasswordForgotRoute });
 function PasswordForgotRoute() {
   const { identityDependencies } = Route.useRouteContext();

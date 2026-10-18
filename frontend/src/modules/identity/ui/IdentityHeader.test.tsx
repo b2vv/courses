@@ -1,8 +1,8 @@
 import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { I18nProvider, createI18n } from '../../app/providers/i18n';
-import type { AuthenticatedUser, Role } from '../../domain/identity/identity';
+import { I18nProvider, createI18n } from '../../../app/providers/i18n';
+import type { AuthenticatedUser, Role } from '../domain/identity';
 import { IdentityHeader } from './IdentityHeader';
 
 function signedIn(role: Role): AuthenticatedUser {

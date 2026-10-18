@@ -21,7 +21,7 @@ import type {
   CourseTreeEdit,
 } from '../domain/course/course';
 import type { DraftErrorCode } from '../domain/transcript/draft';
-import type { AuthenticatedUser } from '../domain/identity/identity';
+import type { AuthenticatedUser } from '../modules/identity';
 import type {
   VideoErrorCode,
   VideoTransferProgress,

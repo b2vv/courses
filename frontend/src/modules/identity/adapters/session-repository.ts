@@ -5,8 +5,8 @@ import type {
   SessionError,
   SessionResult,
   TwoFactorEnrollment,
-} from '../../domain/identity/identity';
-import type { SessionRepository } from '../../ports/SessionRepository';
+} from '../domain/identity';
+import type { SessionRepository } from '../ports/SessionRepository';
 import {
   changePassword,
   completeTwoFactor,
@@ -24,8 +24,8 @@ import {
   resendVerification,
   resetPassword,
   verifyEmail,
-} from './generated/courses';
-import { errorSchema } from './course-schema';
+} from '../../../adapters/api/generated/courses';
+import { errorSchema } from '../../../adapters/api/course-schema';
 import {
   authenticatedUserSchema,
   emptyResponseSchema,
@@ -33,8 +33,8 @@ import {
   twoFactorEnrollmentSchema,
   twoFactorRequiredSchema,
 } from './session-schema';
-import { createApiTransport, unnamedStatusCode } from './transport';
-import type { TransportOptions, WireResponse } from './transport';
+import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
+import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
 
 const invalid = { ok: false, error: { code: 'invalid_response' } } satisfies SessionResult<never>;
 

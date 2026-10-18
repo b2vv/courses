@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError, sessionQueryKey } from '../app/composition/identity-queries';
-import { RegisterView } from '../presentation/identity/RegisterView';
-import type { AuthenticatedUser, RegisterInput } from '../domain/identity/identity';
+import { RegisterView } from '../modules/identity';
+import type { AuthenticatedUser, RegisterInput } from '../modules/identity';
 export const Route = createFileRoute('/register')({ component: RegisterRoute });
 function RegisterRoute() {
   const { identityDependencies } = Route.useRouteContext();

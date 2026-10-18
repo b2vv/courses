@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import type { IdentityDependencies } from './identity';
 import { sessionQueryKey } from './identity-queries';
 

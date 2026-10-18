@@ -5,7 +5,7 @@ import axe from 'axe-core';
 import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { asBrandedId } from '../../domain/course/course';
 import type { CourseTree } from '../../domain/course/course';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import type { LessonVideo } from '../../domain/media/video';
 import { CourseEditorView } from './CourseEditorView';
 import {

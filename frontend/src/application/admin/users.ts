@@ -2,12 +2,12 @@ import {
   makeAdminUserQuery,
   validAdministrationPassword,
   validAdminUserId,
-} from '../../domain/identity/administration';
+} from '../../domain/admin/administration';
 import type {
   AdministrationResult,
   AdminUserQuery,
   WritableAccountStatus,
-} from '../../domain/identity/administration';
+} from '../../domain/admin/administration';
 import type { AdminUserRepository } from '../../ports/AdminUserRepository';
 
 const invalid = { ok: false, error: { code: 'invalid_request' } } as const;

@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
-import type { createSession } from '../../application/identity/session';
-import type { SessionError, SessionResult } from '../../domain/identity/identity';
+import type { createSession } from '../../modules/identity';
+import type { SessionError, SessionResult } from '../../modules/identity';
 
 export class SessionQueryError extends Error {
   readonly code: SessionError['code'];

@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { sessionQueryKey, SessionQueryError } from '../app/composition/identity-queries';
 import { parseLoginSearch } from '../app/router/login-search';
-import { LoginView } from '../presentation/identity/LoginView';
-import { safeReturnTo } from '../domain/identity/identity';
-import type { AuthenticatedUser, CredentialsInput, LoginResult } from '../domain/identity/identity';
+import { LoginView } from '../modules/identity';
+import { safeReturnTo } from '../modules/identity';
+import type { AuthenticatedUser, CredentialsInput, LoginResult } from '../modules/identity';
 
 export const Route = createFileRoute('/login')({
   validateSearch: parseLoginSearch,

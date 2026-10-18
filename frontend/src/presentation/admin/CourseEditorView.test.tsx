@@ -23,7 +23,7 @@ import { createI18n, I18nProvider } from '../../app/providers/i18n';
 import { createMemoryTranscriptHistory } from '../../adapters/storage/transcript-history-memory';
 import { asBrandedId } from '../../domain/course/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../domain/course/course';
-import type { AuthenticatedUser } from '../../domain/identity/identity';
+import type { AuthenticatedUser } from '../../modules/identity';
 import type { LessonDraft } from '../../domain/transcript/draft';
 import type { LessonTranscript } from '../../domain/transcript/transcript';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';

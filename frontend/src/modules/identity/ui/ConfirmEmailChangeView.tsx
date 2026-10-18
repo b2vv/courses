@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { SessionErrorCode } from '../../domain/identity/identity';
-import { Link } from '../ui';
+import type { SessionErrorCode } from '../domain/identity';
+import { Link } from '../../../presentation/ui';
 
 export function ConfirmEmailChangeView({
   isPending,

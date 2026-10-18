@@ -6,12 +6,12 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
-import { createApiSessionRepository } from '../adapters/api/session-repository';
+import { createApiSessionRepository } from '../modules/identity';
 import { createAuthoring } from '../application/admin/authoring';
 import { createLessonVideos } from '../application/admin/lesson-video';
 import { createUserAdministration } from '../application/admin/users';
 import { createCatalog } from '../application/catalog/catalog';
-import { createSession } from '../application/identity/session';
+import { createSession } from '../modules/identity';
 import { createAdminQueries } from '../app/composition/admin-queries';
 import { createAdminUserQueries } from '../app/composition/admin-user-queries';
 import { createAdminVideoQueries } from '../app/composition/admin-video-queries';
@@ -80,13 +80,13 @@ import type {
   CourseTree,
   CourseTreeEdit,
 } from '../domain/course/course';
-import type { AdminUser, AdminUserQuery } from '../domain/identity/administration';
+import type { AdminUser, AdminUserQuery } from '../domain/admin/administration';
 import type { AdminCourseRepository } from '../ports/AdminCourseRepository';
 import type { AdminUserRepository } from '../ports/AdminUserRepository';
 import type { CourseRepository } from '../ports/CourseRepository';
 import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
 import type { PlaybackRepository } from '../ports/PlaybackRepository';
-import type { AuthenticatedUser, Role } from '../domain/identity/identity';
+import type { AuthenticatedUser, Role } from '../modules/identity';
 import { routeTree } from '../routeTree.gen';
 
 const currentUserUrl = `${apiOrigin()}/api/v1/auth/me`;

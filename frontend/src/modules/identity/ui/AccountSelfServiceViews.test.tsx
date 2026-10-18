@@ -1,7 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createI18n, I18nProvider } from '../../app/providers/i18n';
+import { createI18n, I18nProvider } from '../../../app/providers/i18n';
 import { PasswordForgotView } from './PasswordForgotView';
 import { PasswordResetView } from './PasswordResetView';
 import { RegisterView } from './RegisterView';

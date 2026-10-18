@@ -3,7 +3,7 @@ import type {
   AdminUserPage,
   AdminUserQuery,
   WritableAccountStatus,
-} from '../domain/identity/administration';
+} from '../domain/admin/administration';
 
 export interface AdminUserRepository {
   list(query: AdminUserQuery, signal?: AbortSignal): Promise<AdministrationResult<AdminUserPage>>;

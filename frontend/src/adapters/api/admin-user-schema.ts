@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validAdminUserId } from '../../domain/identity/administration';
+import { validAdminUserId } from '../../domain/admin/administration';
 
 function hasControlCharacter(value: string): boolean {
   for (const character of value) {

@@ -1,8 +1,8 @@
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useRouterState } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { ErrorState, Link, EmptyState, Skeleton } from '../ui';
-import { LearnQueryError } from '../../app/composition/learn-queries';
+import { ErrorState, Link, EmptyState, Skeleton } from '../../../presentation/ui';
+import { LearnQueryError } from '../../../app/composition/learn-queries';
 
 export function ProtectedRoutePending() {
   const { t } = useTranslation();
