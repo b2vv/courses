@@ -38,12 +38,12 @@ import {
 import { CoursePriceField } from './CoursePriceField';
 import { LessonDraftField } from './LessonDraftField';
 import type { CourseEditorDrafts } from './LessonDraftField';
-import { LessonVideoField } from './LessonVideoField';
+import { LessonVideoField } from '../../modules/media';
 import { DocumentLibrary } from './DocumentLibrary';
 import { LessonTranscriptField } from './LessonTranscriptField';
 import type { CourseEditorTranscripts } from './LessonTranscriptField';
 import type { TranscriptDraftOffer } from './transcript-draft-offer';
-import type { CourseEditorVideo } from './LessonVideoField';
+import type { CourseEditorVideo } from '../../modules/media';
 
 const statusVariant: Record<CourseStatus, string> = {
   draft: 'warning',

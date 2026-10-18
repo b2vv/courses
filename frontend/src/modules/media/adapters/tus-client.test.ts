@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from '@rstest/core';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import type { VideoTransferTarget, VideoUploadTicket } from '../../domain/media/video';
-import { videoChunkBytes } from '../../domain/media/video';
-import { apiOrigin } from './api-origin';
+import type { VideoTransferTarget, VideoUploadTicket } from '../domain/video';
+import { videoChunkBytes } from '../domain/video';
+import { apiOrigin } from '../../../adapters/api/api-origin';
 import {
   buildTusHeaders,
   createTusClient,

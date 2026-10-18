@@ -3,13 +3,9 @@ import {
   validMediaId,
   validVideoTicketInput,
   videoChunkBytes,
-} from '../../domain/media/video';
-import type {
-  VideoResult,
-  VideoTransferProgress,
-  VideoTransferTarget,
-} from '../../domain/media/video';
-import type { LessonVideoRepository } from '../../ports/LessonVideoRepository';
+} from '../domain/video';
+import type { VideoResult, VideoTransferProgress, VideoTransferTarget } from '../domain/video';
+import type { LessonVideoRepository } from '../ports/LessonVideoRepository';
 
 const invalid = { ok: false, error: { code: 'invalid_request' } } as const;
 
