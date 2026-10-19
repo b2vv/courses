@@ -5,11 +5,13 @@ import entry from './dist/server/index.js';
 
 const contentSecurityPolicy = (nonce) =>
   `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`;
-// Enforcing in production: the full e2e run (playback, ASR, media) reported zero
-// CSP violations under report-only, so the directive is complete. The e2e sets
-// CSP_REPORT_ONLY=true because @axe-core/playwright and addStyleTag inject their
-// own script/style without the nonce — enforcing would block the test tooling, not
-// any app resource. Real users never see those injections, so production enforces.
+// CSP enforces in production. Both app entries configure Zod jitless before schemas
+// load, avoiding its new Function probe under script-src 'self' 'nonce-…'. The
+// 2026-10-19 runtime close-out found that violation despite clean report-only runs.
+// E2e uses CSP_REPORT_ONLY=true for axe/addStyleTag injections without the nonce.
+// The 503/render_failed catch below covers shell-level throws and non-render
+// entry.fetch rejections. Start 1.169.3 wraps route components in Suspense: route
+// render errors resolve as HTTP 200 with the error deferred to the client.
 const contentSecurityPolicyHeader =
   process.env.CSP_REPORT_ONLY === 'true'
     ? 'Content-Security-Policy-Report-Only'
