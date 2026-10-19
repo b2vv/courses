@@ -1,4 +1,5 @@
-FROM golang:1.27.1-bookworm AS build
+FROM golang:1.27.2-bookworm AS build
+ENV GOTOOLCHAIN=local
 WORKDIR /src
 COPY frontend/e2e/wayforpay-stub/main.go .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/wayforpay-stub main.go
