@@ -1,0 +1,9 @@
+ДАЛІ: звірити e2e-фікстури, UI-селектори та Mailpit HTTP API перед додаванням accounts.spec.ts.
+
+2026-10-05 — A09 почато: прочитано work/CTO-RESEARCH.md, brief-codex-a09.md і docs/accounts/plan.md §7; підтверджено Mailpit у Compose на localhost:8025, SMTP через service mailpit:1025. Робоче дерево вже містить не пов’язані untracked work-файли — не чіпаю.
+
+2026-10-05 — Додано frontend/e2e/accounts.spec.ts: serial run-scoped journey Acc01/02/04–08/10/16/19, Mailpit HTTP polling і переходи за посиланнями, axe, перевірка cookie 12h/3d, afterAll для курсу й users namespace. ДАЛІ: прибрати мертвий helper, запустити format/typecheck і виправити фактичні помилки.
+
+2026-10-05 — Виправлено Mailpit poll: тепер переглядає всі листи адресата, а не застрягає на першому verification-листі під час reset. Free fixture гарантує UI email-verification gate; purchase use-case перевіряє email_verified до факту платності. `frontend npm run format:check` і `npm run typecheck` — exit 0. Browser e2e не запущено: доступ до Docker socket заборонений (`permission denied`). ДАЛІ: завершити code-review, внести лише підтверджені правки, зафіксувати фінальний стан у цьому журналі.
+
+2026-10-05 — Code-review (standards + brief) закрито: додано точну перевірку 1 verification-листа, глобального banner до/після verify, опису курсу до verify, старої сесії після reset, поточної й другої сесій після password change, старого/new email через `/auth/me`. Mailpit читає конкретні `Text`/`HTML` поля, не JSON serialization. Виправлено UI-селектор password change. Повторно: `npm run format:check`, `npm run typecheck`, `npm run lint` у frontend — exit 0. `make e2e` не запускався через заборонений Docker socket; Courses 1 має прогнати його в Compose. ДАЛІ: передати A09 без коміту; змінені лише accounts.spec.ts і цей append-журнал.

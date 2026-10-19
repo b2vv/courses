@@ -1,0 +1,29 @@
+=== [0s] config services ===
+postgres migrate redis wayforpay-stub mailpit api frontend media-worker upload nginx 
+=== [0s] down -v ===
+rc=0
+=== [3s] make up ===
+UP_RC=0
+=== [37s] containers ===
+api Up 16 seconds (healthy)
+asr-worker Up 6 hours (healthy)
+frontend Up 11 seconds (healthy)
+mailpit Up 23 seconds (healthy)
+media-worker Up 17 seconds (healthy)
+nginx Up 5 seconds (healthy)
+postgres Up 23 seconds (healthy)
+redis Up 23 seconds (healthy)
+upload Up 17 seconds (healthy)
+wayforpay-stub Up 23 seconds (healthy)
+=== [38s] media-worker limits ===
+cpus=1500000000 mem=1610612736
+=== [38s] seed-identities seed smoke ===
+SMOKE_RC=0
+smoke: asr-worker is not in this compose project (CI override) - skipping its readyz and the C20 ASR checks
+smoke: asr-worker absent from this compose project - C15 asr metrics check skipped
+=== [42s] browser tests ===
+E2E_RC=0 E2E_SECONDS=750
+=== [792s] media-worker after ===
+oom=false restarts=0 status=running
+=== [792s] done ===
+TOTAL_SECONDS=792

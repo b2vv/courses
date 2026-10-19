@@ -1,0 +1,31 @@
+run=37749350676
+=== COLD (saves cache) ===
+conclusion=success
+verify 08:22:00→08:37:38
+  Run actions/cache@v4: 08:22:06→08:22:06
+  Run actions/cache@v4: 08:22:06→08:22:06
+  Format: 08:22:20→08:22:40
+  Lint: 08:22:40→08:24:21
+  Unit tests: 08:24:32→08:30:50
+  Integration tests: 08:30:50→08:32:30
+  Generated contract drift: 08:32:30→08:34:23
+  Production build: 08:34:23→08:37:16
+  Post Run actions/cache@v4: 08:37:16→08:37:25
+  Post Run actions/cache@v4: 08:37:25→08:37:36
+8667575094	go-mod-14aa90c1197116a5df14282a28939ee9223216c60a8e79cdaa6a96d3d44835ba	307.54 MiB	2026-10-08T08:37:36Z	2026-10-08T08:37:36Z
+8667567424	go-build-39d6e082c4b52fb39a5716d86e916fa681d0b0f70e2d90a22afa949dfe65d4b0	291.17 MiB	2026-10-08T08:37:25Z	2026-10-08T08:37:25Z
+8663779246	node-cache-Linux-x64-npm-4e905c7fb1717e122d6c92fefadd626b9dd19a8150b1227cd0a133062e015960	137.25 MiB	2026-10-08T06:56:25Z	2026-10-08T08:22:04Z
+8644993251	node-cache-Linux-x64-npm-4e905c7fb1717e122d6c92fefadd626b9dd19a8150b1227cd0a133062e015960	137.25 MiB	2026-10-07T20:32:52Z	2026-10-07T20:32:52Z
+=== WARM (rerun, restores cache) ===
+conclusion=success
+verify 08:38:27→08:48:08
+  Run actions/cache@v4: 08:38:35→08:38:44
+  Run actions/cache@v4: 08:38:44→08:38:55
+  Format: 08:39:13→08:39:35
+  Lint: 08:39:35→08:39:38
+  Unit tests: 08:39:49→08:43:49
+  Integration tests: 08:43:49→08:45:07
+  Generated contract drift: 08:45:07→08:45:09
+  Production build: 08:45:09→08:48:03
+  Post Run actions/cache@v4: 08:48:03→08:48:04
+  Post Run actions/cache@v4: 08:48:04→08:48:04
