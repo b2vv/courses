@@ -488,3 +488,101 @@ test('En07 En14 participant reports resolve in the admin queue and an instructor
     await admin.close();
   }
 });
+
+test('En16 blocked member keeps media bytes (CanConsume) but loses comments (CanCommunicate)', async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(300_000);
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const admin = await openAs(browser, baseURL, 'admin');
+  const student = await openAs(browser, baseURL, 'student');
+  const instructor = await openAs(browser, baseURL, 'instructor');
+  try {
+    const course = await createFreeCourse(admin.request, baseURL, 'block-consume');
+    // Upload a lesson video and wait until it is ready (same production path as En04).
+    const editor = await admin.newPage();
+    await editor.goto(`/admin/courses/${course.id}`);
+    await editor.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    const lesson = editor
+      .getByRole('group', { name: 'Модуль 1', exact: true })
+      .getByRole('group', { name: 'Урок 1', exact: true });
+    const minted = editor.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/v1/admin/lessons/${course.lessonID}/video` &&
+        response.request().method() === 'POST',
+    );
+    await lesson
+      .locator('input[type="file"]')
+      .setInputFiles(
+        path.join(import.meta.dirname, '..', 'playwright', '.fixtures', 'e2e-640x360.mp4'),
+      );
+    const upload = await minted;
+    expect(upload.status()).toBe(201);
+    const videoId = contractField<MediaUploadTicket>(
+      responseObject(await upload.json()),
+      'videoId',
+    );
+    if (typeof videoId !== 'string') throw new Error('Upload ticket has no videoId');
+    await expect
+      .poll(
+        async () => {
+          const videos = await admin.request.get(`/api/v1/admin/courses/${course.id}/videos`);
+          expect(videos.status()).toBe(200);
+          const items = contractField<CourseVideos>(responseObject(await videos.json()), 'items');
+          if (!Array.isArray(items)) throw new Error('Course videos has no items');
+          for (const item of items) {
+            const video = responseObject(item);
+            if (contractField<MediaVideo>(video, 'videoId') === videoId) {
+              return contractField<MediaVideo>(video, 'state');
+            }
+          }
+          return 'absent';
+        },
+        { timeout: 240_000, intervals: [1_000] },
+      )
+      .toBe('ready');
+
+    await enroll(student.request, baseURL, course.id);
+    const memberSegment = await mediaSegment(student.request, baseURL, course.lessonID);
+    // Baseline: an active member consumes media bytes (warms the authorized slot).
+    expect((await student.request.get(memberSegment)).status()).toBe(200);
+
+    // The owning instructor blocks the member (lecturer's communication control, not revoke).
+    const blocked = await instructor.request.post(
+      `/api/v1/teach/courses/${course.id}/participants/${studentID}/block`,
+      { headers: origin(baseURL) },
+    );
+    expect(blocked.status(), await blocked.text()).toBe(200);
+
+    // CanCommunicate is LOST: the same session can no longer post a comment.
+    const comment = await student.request.post(
+      `/api/v1/learn/lessons/${course.lessonID}/comments`,
+      {
+        data: { body: `blocked ${runNamespace}`, positionMs: null },
+        headers: origin(baseURL),
+      },
+    );
+    expect(comment.status()).toBe(403);
+    expect(errorCode(await comment.json())).toBe('enrollment_blocked');
+
+    // CanConsume is RETAINED: the SAME gated media segment still serves bytes through nginx
+    // auth_request. Same session, playbackId and file as the warmed slot; only communication
+    // changed. This is the contract distinction a comment-read does not prove — blocking removes
+    // CanCommunicate without removing CanConsume (contrast En04, where revoke 403s this exact slot).
+    const stillAllowed = await student.request.get(memberSegment);
+    expect(stillAllowed.status(), await stillAllowed.text()).toBe(200);
+    expect((await stillAllowed.body()).length).toBeGreaterThan(0);
+
+    // Unblock restores communication; consumption was never interrupted.
+    const unblocked = await instructor.request.post(
+      `/api/v1/teach/courses/${course.id}/participants/${studentID}/unblock`,
+      { headers: origin(baseURL) },
+    );
+    expect(unblocked.status(), await unblocked.text()).toBe(200);
+  } finally {
+    await instructor.close();
+    await student.close();
+    await admin.close();
+  }
+});
