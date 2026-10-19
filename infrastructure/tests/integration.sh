@@ -256,7 +256,8 @@ set +e
     -e DOCKER_HOST=unix:///var/run/docker.sock \
     -e TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
     -v "${GO_MOD_CACHE:-courses-gomod}:/go/pkg/mod" -v "${GO_BUILD_CACHE:-courses-gobuild}:/root/.cache/go-build" \
-    golang:1.27.1-bookworm go test -count=1 -tags=integration ./...
+    -e GOTOOLCHAIN=local \
+    golang:1.27.2-bookworm go test -count=1 -tags=integration ./...
   echo $? > "$status_file"
 } 2>&1 | tee "$log"
 set -e
