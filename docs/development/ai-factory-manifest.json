@@ -17,7 +17,11 @@
   ],
   "command_files": [
     "Makefile",
-    "frontend/package.json"
+    "frontend/package.json",
+    "frontend/rstest.config.ts",
+    "frontend/.storybook/main.ts",
+    "frontend/.storybook/preview.tsx",
+    "frontend/playwright.config.ts"
   ],
   "skills": [
     {
@@ -29,6 +33,21 @@
       "name": "code-review",
       "source": "shared",
       "path": "arch/code-review/SKILL.md"
+    },
+    {
+      "name": "constraint-driven-development",
+      "source": "shared",
+      "path": "constraint-driven-development/SKILL.md"
+    },
+    {
+      "name": "design-pass",
+      "source": "shared",
+      "path": "design-pass/SKILL.md"
+    },
+    {
+      "name": "entity-e2e-coverage",
+      "source": "shared",
+      "path": "entity-e2e-coverage/SKILL.md"
     }
   ],
   "integrations": [
@@ -67,27 +86,27 @@
   "adapter_files": [
     {
       "path": "docs/development/ai-factory.md",
-      "sha256": "ffe16ec3f0924a70713426a95bad3f3f6db4e830b279da2082bfe3a83bf5bd38"
+      "sha256": "dff0d2977e66867bdccf8d21888d066d7a0e7f0db15711fd7533587455914417"
     },
     {
       "path": "AGENTS.md",
-      "sha256": "89876864bce9a175f2ee5accb0bdc3fc1b2664af5457df017e54170168651deb"
+      "sha256": "7f09d59a068235c4320a9ff749c044f5a2d53530b30f61ab14c17856bc6a958a"
     },
     {
       "path": ".claude/standards.md",
-      "sha256": "80b9f39315474ec8ec69dfb68f8669910a0f2378602c8951df64ac6dd979f8ef"
+      "sha256": "a16c3508897ab7d04a17d0ee9ce1e11e466ad472d4f6df8f2b25429cab560d85"
     },
     {
       "path": "docs/development/ai-factory-package.json",
-      "sha256": "931565b4c278a8e57310eb45a6a0f9a73039f01ac7829ef2a1e026cfb0b20c1f"
+      "sha256": "defed63f2f70de7d6e70d57595cb42c9094d9ba5de066b14a74983209dfa8464"
     },
     {
       "path": "docs/development/ai-factory-readiness.md",
-      "sha256": "6021da8126f396cfc18f20cb7f3ca67a0f2ff26e29b7b7044ef0336473251ee7"
+      "sha256": "884d80e032aff11d70bf8e3f84e1baeaef97559ec0d24272d66d6c83f0238d81"
     },
     {
       "path": "work/tasks.md",
-      "sha256": "4a5b113540c6e741f96fa463daa4f6643b6e89625ddb39c22cb94e7be44998d1"
+      "sha256": "5f4a21e8714e5c63450cd6f66c2a7f9fe4bf978a9f8508ed09401f2775b31be4"
     },
     {
       "path": "CLAUDE.md",

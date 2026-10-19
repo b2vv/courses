@@ -92,3 +92,16 @@ CLAUDE.md веде прямо до checkpoint. У CLAUDE.local.md змінено
 Shared `26c68f6a4c9e3e024e7c9f075b1365778087509b` / `0.6.0-candidate`. Авторський generic versioned plan-critic prompt, точна прив’язка verdict до plan version/hash і target snapshot, material-change критерії та command/exit/status/revision evidence доповнюють чинний checkpoint. Decision surface, per-task READY, impact fallback і small/resume вже були; нових tracker чи native registrations немає. Незалежна планова критика відрізняється від code review, чинний existing-reviewer маршрут збережено.
 
 Baseline `8c2fe63f96bf2bf9087111ed042d7e6b28a892b4` / `feat/modules-teach`; 237 dirty status records. Backups/guards, isolated rollback, NOOP і review handoff: `~/project-data/ai-factory-qna-adoption/courses/`. Статус APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING. Product gates, native discovery, live hooks/graphs/paid probes не запускалися. CLAUDE.local.md не читався і не змінювався; українські правила та чужа робота не є targets. QnA read-only, його код/тексти/стек/landing політики не скопійовані.
+
+
+## Courses 0.7 rollout — 2026-10-18
+
+Primary record для цього Small docs/pin update. Scope: AGENTS pointer, adapter, pin, manifest і цей readiness; product/architecture/test implementation незмінені. Перевищення локального spec-flow threshold немає: жодного subsystem/API або cross-layer implementation. Поточне доручення власника «Давай почнемо з courses» дозволяє саме rollout; product commit/push і pilot implementation не дозволені.
+
+Baseline: `main` / `4c98a7f120bbb8fee52ab3c5e81e42dc8c9f9866`; фактичний previous pin `26c68f6a4c9e3e024e7c9f075b1365778087509b` / 0.6.0, а не історичні 0.6.1 чи feat/modules-teach. Новий exact pin `c427bd807f250e8d4b7d9c42d9bc894d8f8dce71` / **0.7.0-candidate**. Історичні readiness/PASS вище мають старий scope й не приймають цю delta. Незалежний маршрут — **наявна Courses Claude reviewer-сесія**, exact reference pending; manual delivery owner — оператор/користувач. Нова сесія не створюється, доставка/verdict не підтверджені.
+
+Acceptance: exact cached manifest/required hashes; доступні selected skill references; per-task checkpoint і локальні gates збережені; unit/Storybook/E2E mapping не видає file existence за runtime PASS; чужі bytes/index/HEAD не змінено; repeat NOOP та rollback/foreign guards перевіряються лише в isolated fixture. План: static inventory → narrow guarded apply → static postflight → fresh review handoff. Required product checks N/A для цього docs/pin scope; product runtime і CLI discovery NOT_TESTED. Graph не потрібний: file/config inspection із зафіксованими hashes; refresh не запускається.
+
+Concurrent writer: у Courses є інші активні процеси/сесії; exclusive ownership не заявляється. Guard перевіряє HEAD/index, scoped before hashes і незмінені public tracked/untracked bytes перед та після apply; невідповідність блокує запис. Private/local instructions, .env/credentials не читаються й не змінюються; українські правила збережено.
+
+Статус **APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING**, лише коли `receipt.json` збігається з установленими hashes; до apply це proposal. Exact baseline/backups/diff, raw author checks, package ID і ручний handoff: `~/project-data/ai-factory-courses-0.7-rollout/`. Required independent acceptance лишається PENDING, авторські fixtures не заміняють reviewer або live-agent eval.

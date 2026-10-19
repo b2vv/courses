@@ -1,24 +1,28 @@
 # AI Factory in Courses — Codex and Claude
 
+## Owner routing override — task branches
+
+Чинне доручення власника: звичайний маршрут — task branch у головному репозиторії, один active writer; без автоматичного worktree/clone/detached checkout. [Спільний branch ownership contract](/Users/strelia/.agents/ai-factory/workflow.md#task-branches) уточнює WIP guards, передачу ownership і окрему runtime isolation. Цей вузький owner override переважає суперечливі Git-isolation defaults pinned bundle; сам pin/cache і решта локальних gates незмінні. Поточна docs delta потребує review; це не runtime або A–Z PASS. Попередній rollout manifest/receipt описує свій dated snapshot, не ці нові bytes; exact delta hashes — у поточному handoff виправлення.
+
 <a id="portable-package-pin"></a>
 
-## Pinned full collection — 26c68f6
+## Pinned full collection — c427bd8
 
-[Package metadata](ai-factory-package.json) фіксує private `b2vv/ai-factory`, commit `26c68f6a4c9e3e024e7c9f075b1365778087509b`, release `0.6.0-candidate`. Єдине джерело повного спільного плану: `<factory>/ai-factory-plan.md`; оригінальні скіли: `<skills>/`.
+[Package metadata](ai-factory-package.json) фіксує private `b2vv/ai-factory`, commit `c427bd807f250e8d4b7d9c42d9bc894d8f8dce71`, release `0.7.0-candidate`. Єдине джерело повного спільного плану: `<factory>/ai-factory-plan.md`; оригінальні скіли: `<skills>/`.
 
-- `<release>` = `~/project-data/ai-factory-rollout/releases/26c68f6a4c9e3e024e7c9f075b1365778087509b` (розгорнути `~` поточного користувача).
+- `<release>` = `~/project-data/ai-factory-rollout/releases/c427bd807f250e8d4b7d9c42d9bc894d8f8dce71` (розгорнути `~` поточного користувача).
 - `<factory>` = `<release>/ai-factory`; `<skills>` = `<release>/skills`; спільні rules = `<release>/rules`.
 - Перед використанням звірити commit metadata, SHA release manifest/checksums і потрібних файлів із pin; повний release перевіряється `python3 -B <release>/tools/verify_release.py --root <expanded-release>`. Відсутній або змінений cache → BLOCKED потрібної залежності, без auto-clone/install.
 
 Цей adapter — локальний router; чинні acceptance/contracts/ADR, stack, task/phase/journal, thresholds і QA/gates мають пріоритет. Entry-посилання на shared правила читаються через відповідний pinned rule, якщо локальний контракт не задає інший exact source. Повний успадкований plan — defaults і довідник; його історичні machine/project PASS, backlog і global AGENTS не переносяться як нові дозволи. `docs/portable/` і чотири `adapters/legacy-planning/*-portable.md` — явно окремі profiles, не підміна originals; у `skills/` лише канонічні оригінали. Ці adapter documents не є native-discovered SKILL.md.
 
-84 внутрішні визначення враховано: 73 originals доступні, 11 synced license-restricted — лише inventory. Зовнішні та `b2b*` не входять до пакета. Локальні/proprietary/shared capabilities, яких немає в ньому, **не видаляти, не relink і не публікувати**. За колізії обрати exact source явно; локальні Cass/Cargo/Courses contracts та скіли залишаються чинними. Для `<skills>` відносні шляхи таблиці нижче зберігають групи. References усередині bundle читаються поряд із ним; зовнішні посилання на project docs/tools — runtime dependencies, не дозвіл на встановлення або послаблення gate.
+84 внутрішні визначення враховано: 73 originals доступні, 11 synced license-restricted — лише inventory. Окремо додано один погоджений MIT-adapted `constraint-driven-development`; exact provenance — `<release>/provenance/authorized-additions.json`. Інші зовнішні та `b2b*` не входять до пакета. Локальні/proprietary/shared capabilities, яких немає в ньому, **не видаляти, не relink і не публікувати**. За колізії обрати exact source явно; локальні Cass/Cargo/Courses contracts та скіли залишаються чинними. Для `<skills>` відносні шляхи таблиці нижче зберігають групи. References усередині bundle читаються поряд із ним; зовнішні посилання на project docs/tools — runtime dependencies, не дозвіл на встановлення або послаблення gate.
 
 Codex/Claude native discovery/invocation **NOT_TESTED**. Exact-file fallback: прочитати обраний `SKILL.md` та references й назвати точний файл; читання не є native invocation. Історичні `~/.agents`/`~/.claude` згадки всередині source bundle не перемикають чинний pin: для включених shared skills/rules застосувати цей mapping, для зовнішніх — явний local fallback або BLOCKED. Small/full/resume визначають незмінені секції нижче; другий tracker/bootstrap не створюється.
 
 Hooks/MCP/models/permissions/global symlinks та active CRG/Graphify цим оновленням не змінюються. Успадковані helpers тепер у `<release>/runtime/legacy/`; їхня поведінка збережена, але автоматично їх не запускати. Portable `<release>/runtime/session-size/session_guard.py` потребує explicit store; `<release>/runtime/review/review_package.py` має hardened Git reads. Shared preflight: `<release>/runtime/onboarding/preflight.py`. Жодний helper не активується цим оновленням. Наявні live callbacks продовжують свій чинний контракт; це не їхня міграція.
 
-Статус: **APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING**. Наявна незалежна Claude-сесія цього проєкту; exact session reference pending; свіжий файловий пакет підготовлено для ручної передачі, доставка/отримання не підтверджені, без дубля reviewer/повідомлень. Author checks не є product/CLI/UI/review PASS. Baseline, diff, receipt і immutable review package: `~/project-data/ai-factory-qna-adoption/courses/`.
+Статус: **APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING**. Наявна незалежна Claude-сесія цього проєкту; exact session reference pending; свіжий файловий пакет підготовлено для ручної передачі, доставка/отримання не підтверджені, без дубля reviewer/повідомлень. Author checks не є product/CLI/UI/review PASS. Baseline, diff, receipt і immutable review package: `~/project-data/ai-factory-courses-0.7-rollout/`.
 
 
 This is an adapter to the existing workflow, not a new pipeline, Cargo FSD port or tracker. Both hosts enter through [AGENTS](../../AGENTS.md) → [standards](../../.claude/standards.md) → this file. Shared startup: `<factory>/onboarding.md`; resolve `~` for the current user. Missing shared files are reported precisely, not installed automatically.
@@ -53,7 +57,8 @@ Existence, per-host/session discovery, native tool availability and actual invoc
 | Independent two-axis review when selected | `arch/code-review/SKILL.md` |
 | Explicit full orchestration | `deliver/spec-flow/SKILL.md` |
 | Acceptance/plan critique/defense when required | `plan/acceptance-spec/SKILL.md`, `plan/plan-critique/SKILL.md`, `plan/plan-defense/SKILL.md` |
-| UI/design with affected render/interaction | `design-pass/SKILL.md` |
+| UI/design with affected render/interaction | `design-pass/SKILL.md` та `design-pass/references/browser-state-evidence.md` |
+| Quality-floor weakening або зміна перевірок | `constraint-driven-development/SKILL.md` та `constraint-driven-development/references/floor-evidence.md` |
 | Structural change, including test helpers | `pattern-architecture-review/SKILL.md` |
 | Entity/scoped-filter acceptance | `entity-e2e-coverage/SKILL.md` + `entity-e2e-coverage/references/testing-rules.md`; required fields × surfaces × states and matching/nonmatching filters only within acceptance |
 | Briefing or delivery report when useful | `plan/cto-research/SKILL.md`, `ship/ship-report/SKILL.md` |
@@ -109,3 +114,18 @@ Shared контракт: `<factory>/pre-code-checkpoint.md`; exact skills: `<ski
 Опційний `<release>/runtime/checkpoint/precode.py` перевіряє декларації JSON і окремо наданий current snapshot; Markdown достатньо, дубль JSON не потрібен. Це не перевірка правдивості доказів або автоматичне CI/hook enforcement. Тести helper не доводять дотримання агентами. Сильніші локальні gates залишаються чинними.
 
 Courses: checkpoint живе в чинному phase/task plan, на який веде [work/tasks.md](../../work/tasks.md). Фазові acceptance/gates, Go architecture і TanStack Start/Rsbuild зберігаються; історичні рядки tracker не стають доказом READY нової задачі. `make check` не запускати як безпечну перевірку документації: чинні обмеження side effects залишаються.
+
+## Courses 0.7 — докази за впливом зміни
+
+Використай чинний task/phase acceptance → відповідний наявний рівень перевірки → command/run ID, exit, очікуваний/фактичний результат, точний root/base/HEAD і scoped dirty/untracked hashes. Це матриця у поточному record, не новий tracker. Пропущений релевантний рівень має причину; однакові assertions не дублюються на всіх рівнях. Сильніші локальні вимоги з AGENTS зберігаються: зміна shared/persisted state потребує повного E2E, а не лише targeted сценарію.
+
+| Acceptance / вплив | Наявний рівень і джерело | Який доказ потрібний; стан цього rollout |
+|---|---|---|
+| Логіка, контракт, взаємодія компонента; клавіатура/фокус | `frontend` → `npm test` (Rstest); [config](../../frontend/rstest.config.ts) має `dom`/happy-dom і `adapter-node`. [ui.test.tsx](../../frontend/src/presentation/ui/ui.test.tsx) містить Testing Library/userEvent та axe checks | Конкретний test/case + результат на snapshot; component PASS не доводить entity flow. **NOT_RUN** |
+| Ізольований component state/layout | `frontend` → `npm run storybook` / `npm run build-storybook`; [main](../../frontend/.storybook/main.ts), [preview](../../frontend/.storybook/preview.tsx), [AdminKit stories](../../frontend/src/presentation/ui/AdminKit.stories.tsx) | Story ID/state + фактично переглянутий render/interaction. Config зараз `addons: []`, у перевірених stories немає `play`; автоматичні Storybook interaction/visual/a11y gates не підтверджено. Build сам по собі не є browser PASS. **NOT_RUN** |
+| Інтегровані create/view/edit/result, role denial/recovery, persistence | [Playwright config](../../frontend/playwright.config.ts), `frontend/e2e/admin.spec.ts`, `route-guards.spec.ts`, `recovery.spec.ts`; frontend `npm run e2e`, root `make e2e` / `make e2e-local` за локальним контрактом | Acceptance → точний сценарій → фактичний результат, persisted view окремо від форми. `make e2e` піднімає/build-ить Compose; `e2e-local` додає reset/up/seed; setup/teardown змінюють стан. Лише погоджений exclusive heavy window. **NOT_RUN** |
+| Backend/domain/contracts або persistence | Чинні `make test` / `make integration` та ordered gates із [testing](testing.md) | Зберегти відповідні Go/DB/HTTP та full-E2E вимоги; frontend докази їх не заміняють. **NOT_RUN** |
+
+Constraint lens: thresholds/skips/assertion removal/suppressions — сигнали, не автоматичний verdict. Еквівалентний assertion refactor потребує before/after поведінкових доказів; підтверджене послаблення — scoped owner decision. Missing evidence, stale review або невиконаний required view → BLOCKED/NOT_TESTED. Новий task у sprint має власний checkpoint; resume звіряє snapshot; stale graph → явний file fallback, без auto-refresh. Критик отримує artifact/contract/raw evidence без нав’язаного авторського verdict, через вже обраного незалежного reviewer.
+
+Shared details: `<factory>/constraint-adoption.md`, `<factory>/documentation-hygiene.md`. Опційний `<release>/runtime/constraints/evidence_check.py` перевіряє лише consistency декларацій; не істинність доказів, не семантику коду й не поведінку агента. `<release>/evals/lifecycle/README.md` та `scenarios.json` — NOT_RUN: жодного model eval без окремого opt-in і підтвердженого existing subscription CLI; unknown auth/metering → BLOCKED без paid API/billing fallback. Не змінювати auth/models/permissions і не створювати duplicate reviewer.
