@@ -1,6 +1,11 @@
 import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
 import { RouterProvider } from '@tanstack/react-router';
-import { requestHandler } from '@tanstack/react-start/server';
+import { createServerEntry } from '@tanstack/react-start/server';
+// createRequestHandler is imported from router-core directly: rstest.config aliases
+// `@tanstack/react-start/server` to start-server-core/request-response (which carries
+// createServerEntry + the getCookie/getRequest helpers but not the SSR handler), and the
+// full Start server barrel pulls virtual production entries that do not exist under Rstest.
+import { createRequestHandler } from '@tanstack/router-core/ssr/server';
 import { render, screen } from '@testing-library/react';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -29,29 +34,13 @@ type LoadedRequest = {
 
 async function loadRequest(cookie?: string): Promise<LoadedRequest> {
   let loaded: Omit<LoadedRequest, 'responseText'> | undefined;
-  const handle = requestHandler(async () => {
-    const router = getRouter();
-    await router.load();
-    const rootMatch = router.state.matches[0];
-    if (rootMatch === undefined) throw new Error('The root route did not match');
-    const identity = rootMatch.context.identity;
-    loaded = {
-      router,
-      identity,
-      rootStatus: rootMatch.status,
-      rootError: rootMatch.error,
-      cachedSession: router.options.context.queryClient.getQueryData(sessionQueryKey),
-    };
-    const name = identity.status === 'signed-in' ? identity.user.displayName : null;
-    return Response.json({ name });
-  });
   const request =
     cookie === undefined
       ? new Request('http://courseforge.test/')
       : new Request('http://courseforge.test/', { headers: { Cookie: cookie } });
   if (cookie !== undefined && request.headers.get('cookie') === null) {
     // happy-dom applies the browser's forbidden-header rule. A server Request
-    // retains Cookie, so restore that server-only shape for requestHandler.
+    // retains Cookie, so restore that server-only shape for the SSR scope.
     Object.defineProperty(request, 'headers', {
       value: new Headers({ Cookie: cookie }),
     });
@@ -59,7 +48,28 @@ async function loadRequest(cookie?: string): Promise<LoadedRequest> {
   Object.defineProperty(request, 'signal', {
     value: new AbortController().signal,
   });
-  const response = await handle(request, {});
+  // createServerEntry establishes the Start per-request event scope (the same
+  // production wrapper the app's entry uses) so getCookie/getRequest resolve
+  // against this request; createRequestHandler loads the request-scoped router
+  // inside that scope and hands the loaded router to the callback.
+  const entry = createServerEntry({
+    fetch: (req: Request) =>
+      createRequestHandler({ createRouter: getRouter, request: req })(({ router }) => {
+        const rootMatch = router.state.matches[0];
+        if (rootMatch === undefined) throw new Error('The root route did not match');
+        const identity = rootMatch.context.identity;
+        loaded = {
+          router,
+          identity,
+          rootStatus: rootMatch.status,
+          rootError: rootMatch.error,
+          cachedSession: router.options.context.queryClient.getQueryData(sessionQueryKey),
+        };
+        const name = identity.status === 'signed-in' ? identity.user.displayName : null;
+        return Response.json({ name });
+      }),
+  });
+  const response = await entry.fetch(request, {});
   if (loaded === undefined) throw new Error('The SSR route load did not finish');
   return { ...loaded, responseText: await response.text() };
 }

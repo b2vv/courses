@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound, type ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
@@ -45,11 +45,12 @@ export const Route = createFileRoute('/teach/courses/$courseId')({
   errorComponent: TeachCourseFailure,
 });
 
-function TeachCourseFailure({ error }: { readonly error: Error }) {
+function TeachCourseFailure({ error }: ErrorComponentProps) {
+  const message = error instanceof Error ? error.message : String(error);
   return (
     <section role="alert" className="notice">
       <h1>Не вдалося завантажити робоче місце</h1>
-      <p>{error.message}</p>
+      <p>{message}</p>
     </section>
   );
 }
