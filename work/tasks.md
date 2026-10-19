@@ -410,3 +410,10 @@ revoke/resolve) дзеркалить ParticipantReportQueue; міграція 00
 | LB15 | Верифікація фази: ordered `make check` + повний e2e (не таргетний — чіпає learn/shared); звіт `docs/lesson-builder/report.md` (дельта до плану) | LB06,LB10,LB11,LB12,LB13,LB14 | **done** 2026-10-13: ordered `make check` **exit 0** (14.2m e2e) — фронт **720** юніт/0, Go 0 failures, **e2e 118 passed**. Новий `frontend/e2e/lesson-builder.spec.ts` закриває перенесені e2e: admin будує документ (text+image-upload+task) у lazy-editor→publish→member бачить рендер + зображення віддається `/media/i/<id>.png` 200 і декодується (editor→upload→gated-serve→reader наскрізь); reorder-клавіатурою тримає фокус на кнопці (не body), editor проходить axe на 200%; saved-draft невидимий member'у. **Дефект, спійманий повним e2e (за зеленими per-slice гейтами LB06):** playback-фікстури досі слали lesson-level `description` → 400 після drop 00019; фікс `c44315f` (5 описів прибрано). image-authorize.sh у гейт НЕ заводив (playback-authorize.sh теж не в гейті; e2e доводить serve сильніше). Обмеження фази — звіт §Limitations. **Фаза lesson-builder ЗАКРИТА (LB00–LB15).** | LB06,LB10,LB11,LB12,LB13,LB14 | done | #21 + усі |
 
 Верифікація фази: ordered `make check` (format→lint→typecheck→test→integration→check-generated→build→up→seed→smoke→e2e). Чіпає learn/shared + CSP → e2e повним набором під **enforcing** CSP (не report-only, gotcha); зміна дропає `course_lessons.description` → migration-preservation повним `make integration`. Звіт: `docs/lesson-builder/report.md`.
+
+
+## AI Factory 0.7 lifecycle pilot
+
+| ID | Назва | Статус | Result / next gate |
+|---|---|---|---|
+| TSSTART-01 | Цільове оновлення TanStack Start 1.168.49 → 1.169.3 | blocked | [Pre-code plan/research](../docs/development/tanstack-start-pilot.md); потрібні independent plan critique через existing Courses reviewer (exact ID pending), writer/runtime coordination. Dependencies/code NOT_CHANGED. |

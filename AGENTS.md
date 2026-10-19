@@ -59,3 +59,7 @@ that close an alternative — not on every commit.
 - Unit tests at domain/application boundaries; repository tests against isolated Postgres; contract tests at HTTP; browser tests against Compose.
 - Do not represent skipped or blocked checks as passed. CI fails if Docker integration cannot run.
 - Explicit business error codes; no secrets in logs, URLs logged without query strings.
+
+## AI workflow
+
+Для Codex і Claude чинний [локальний AI Factory adapter](docs/development/ai-factory.md) задає pinned shared sources, per-task checkpoint та handoff. Локальні acceptance/ADR, стек і обов’язкові gates зберігаються; adapter не дозволяє автоматичний запуск tools/tests або зміну permissions.
