@@ -416,4 +416,4 @@ revoke/resolve) дзеркалить ParticipantReportQueue; міграція 00
 
 | ID | Назва | Статус | Result / next gate |
 |---|---|---|---|
-| TSSTART-01 | Цільове оновлення TanStack Start 1.168.49 → 1.169.3 | blocked | [Pre-code plan/research](../docs/development/tanstack-start-pilot.md); потрібні independent plan critique через existing Courses reviewer (exact ID pending), writer/runtime coordination. Dependencies/code NOT_CHANGED. |
+| TSSTART-01 | Цільове оновлення TanStack Start 1.168.49 → 1.169.3 | done | **Merged to `main`** 2026-10-19: PR #56 squash `46f1c30` (4 task files: package.json/lock + 2 compat fixes), plan `2f4e4ab`/`389ce9c`. Courses2 [eb5c1a] delta-review ACCEPTED (raw `impl/DELTA-REVIEW-VERDICT-courses2.md`) binding implementation ACCEPTED (raw `impl/IMPL-REVIEW-VERDICT-courses2.md`). CI `foundation` disabled (account-wide Actions provisioning failure; owner won't fix billing) → main-context gate-close ran locally (773/0, build 0). **Open runtime gaps (genuinely not performed): O1 browser/enforcing-CSP, O4 runtime SSR abort, O3 production throw-path** — see plan STATUS; routed to Courses2. |
