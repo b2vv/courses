@@ -1,0 +1,1066 @@
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request less than a minute ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  * Format
+  * Lint
+  * Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 1 minute ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  * Lint
+  * Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 2 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  * Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 3 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 4 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 5 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 6 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 7 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 8 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  * Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 9 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  * Integration tests
+  * Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+failed to get jobs: HTTP 502: Server Error (https://api.github.com/repos/b2vv/courses/actions/runs/37670569075/jobs?per_page=100)
+WATCH_EXIT=1
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 14 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  * Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 15 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  * Start
+  * Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 16 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 17 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 18 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 19 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 20 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 21 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 22 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 23 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 24 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 25 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 26 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 27 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 28 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 29 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 30 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 31 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 32 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 33 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 34 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 35 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 36 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 37 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 38 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 40 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 41 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 42 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 43 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 44 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+Refreshing run status every 60 seconds. Press Ctrl+C to quit.
+
+* chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 45 minutes ago
+
+JOBS
+* verify (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  * Browser tests
+  * Run actions/upload-artifact@v4
+  * Shutdown
+  * Post Run actions/setup-node@v4
+  * Post Run actions/checkout@v4
+X chore/ci-gate-k10 foundation b2vv/courses#11 · 37670569075
+Triggered via pull_request about 46 minutes ago
+
+JOBS
+X verify in 45m19s (ID 112960963644)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Run actions/setup-node@v4
+  ✓ Install
+  ✓ Format
+  ✓ Lint
+  ✓ Typecheck
+  ✓ Unit tests
+  ✓ Integration tests
+  ✓ Generated contract drift
+  ✓ Production build
+  ✓ Start
+  ✓ Seed and smoke
+  X Browser tests
+  - Run actions/upload-artifact@v4
+  ✓ Shutdown
+  - Post Run actions/setup-node@v4
+  ✓ Post Run actions/checkout@v4
+  ✓ Complete job
+
+ANNOTATIONS
+X The job has exceeded the maximum execution time of 45m0s
+verify: .github#1
+
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+verify: .github#6
+
+X The operation was canceled.
+verify: .github#33
+
+- "The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748"
+verify: .github#1
+
+WATCH_EXIT=0

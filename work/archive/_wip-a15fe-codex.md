@@ -1,0 +1,3 @@
+ДАЛІ: повторити `npm run test` у середовищі, де Rstest може слухати `::1:3000`; тут sandbox повертає `EPERM` ще до виконання тестів.
+
+2026-10-05 — 2FA self-service UI завершено без коміту та без запуску Orval: `/settings/account` бере `twoFactorEnabled` із поточного користувача через Query, показує enroll → QR + ручний секрет → confirm → одноразові recovery codes, а для ввімкненого 2FA — disable (пароль + код) і regeneration. Додано uk/en рядки, boundary validation `twoFactorEnabled`, view/application тести для 2FA та другого кроку входу. `npm run typecheck`, `npm run lint`, `npm run build` — PASS; `npm run test` заблокований sandbox bind-помилкою `listen EPERM ::1:3000`.
