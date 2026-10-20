@@ -38,7 +38,16 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
   дедуп(signature+TTL)+StrictMode → один event; B8 без батчингу, один POST/подію + per-session ceiling.
 - NB: drop EventSink port (пряма ін'єкція logger'а); 400/204; sentinel unknown/dev; rollback S2→S1
   безпечний через swallow; nginx `clientlog-req.e2e.conf`; Loki-down — stdout незалежний, проба poll.
-- **Наступне: повторний GATE 2 на доопрацьованому плані.**
+- GATE 2 раунд 2 ЧЕРВОНИЙ (`_wip-gate2-round2.md`): кодова звірка показала корінь — реальний SSR =
+  `frontend/server.mjs` (не `src/server.ts`), уже обгортає entry.fetch + логує JSON. 4/8 чисто закрито
+  (B3/B4/B5/B8), B6 закрито; РЕОПЕН B1/B2/AC3 (SSR) + 6 нових (N1 wrap не той файл; N2 route-render→200
+  не throw, AC3 звузити; N3 release через runtime-env у server.mjs; N4 dedup зайвий+шкідливий — прибрати;
+  N5 TTL без величини; N6 e2e clientlog-зона не розмірена + AC1 має вимагати 204).
+- План ред.round2 (мітки `[G2:N*]`): SSR → збагатити НАЯВНИЙ catch у server.mjs (source/release/route),
+  AC3 звужено до shell-throw/503 + route→200 як limitation; release: client=define, SSR=process.env;
+  dedup ПРИБРАНО (поділ каналів — єдина гарантія); AC1 e2e вимагає 204; nginx e2e-зона під обсяг сьюту.
+- **НАСТУПНА ДІЯ (нова сесія): GATE 2 раунд 3** свіжим незалежним сабагентом на плані ред.round2.
+  Якщо зелений → tasks S1–S6 → tdd по зрізах → code-review → ship-report.
 
 ## Журнал
 - specify: spec.md написано (Проблема/Сценарії/AC1–AC7/Out of scope/5 відкритих).

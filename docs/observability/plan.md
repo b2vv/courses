@@ -36,24 +36,35 @@ New code:
   `204` `[G2:NB]`. No persistence, no DB.
 - **Frontend** `frontend/src/ports/client-log.ts` (port), `frontend/src/adapters/observability/client-log-adapter.ts`
   (posts via `transport.ts`). The adapter **never reports its own transport failure** — a failed POST
-  is swallowed, never re-captured `[G2:B6]`. Capture channels are **separated to avoid double-count**
-  `[G2:B7]`: the React **error boundary** owns render errors; a `window.onerror` / `unhandledrejection`
-  bridge owns everything else; both go through a small **dedup** (signature = message+stack, short TTL)
-  that also absorbs React StrictMode's dev double-invoke, so one failure → one event (AC1). **No
-  batching in v1** `[G2:B8]`: one POST per event (keeps AC1 deterministic and drops the premature-
-  batching NB); a per-session ceiling counter caps a storm. Installed in the composition root, not a
-  component. A client-side pre-send scrub mirrors the backend never-log set as defence in depth
-  `[G2:NB AC2]`.
-- **Release identifier** `[G2:B2]`: a build-time constant injected by Rsbuild `source.define`
-  (`__APP_RELEASE__`) from `APP_RELEASE` (git short SHA at build; compose build-arg). Dev/gate default
-  `"dev"`. Both the client adapter and the SSR logger read it. Named as a step in S1/S2.
-- **SSR source** `[G2:B1]`: `frontend/src/server.ts` today is a bare re-export of
-  `@tanstack/react-start/server-entry` — there is no 500 seam. The real seam is to **wrap the
-  server-entry default export's fetch handler** in `server.ts` with a try/catch that, on a thrown
-  error or a 5xx response from a route lane, emits a structured JSON line via a small TS logger
-  `frontend/src/adapters/observability/ssr-logger.ts` (writes one JSON object to `process.stdout`,
-  `source:"ssr"`; it does NOT import Go code). S3 first locates the 500/throw point in the wrapped
-  handler, then emits.
+  is swallowed, never re-captured `[G2:B6]`. Capture channels are **cleanly separated, with no dedup**
+  `[G2:B7,N4,N5 — reworked round 2]`: the React **error boundary** (React 19 `onCaughtError`) owns
+  render errors; a `window.onerror` + `unhandledrejection` bridge owns everything else. In the prod
+  build e2e runs against, StrictMode is a no-op and React 19 routes boundary-caught errors to
+  `onCaughtError`, not `window.onerror`, so the channels do **not** overlap — separation alone gives
+  one event per failure. The round-1 signature+TTL dedup is **removed**: unnecessary (no overlap in
+  prod) and harmful (a non-`Error` rejection — `reject("x")`, `undefined`, an object — has no
+  message/stack, so distinct failures collapse to one signature and lose N−1 events, breaking AC1 the
+  other way). **No batching in v1** `[G2:B8]`: one POST per event; a per-session ceiling counter caps a
+  storm. Installed in the composition root, not a component. A client-side pre-send scrub mirrors the
+  backend never-log set as defence in depth `[G2:NB AC2]`. **Boot-window limitation** `[G2:NB]`: an
+  error before the bridge installs cannot be captured — documented, not hidden.
+- **Release identifier** `[G2:B2,N3 — reworked round 2]`: the **client** bundle gets a build-time
+  constant via Rsbuild `source.define` (`__APP_RELEASE__`) from `APP_RELEASE` (git short SHA at build).
+  The **SSR** `server.mjs` is **copied verbatim by the Dockerfile, not bundled**, so the define never
+  reaches it — `server.mjs` reads `process.env.APP_RELEASE` **at runtime** instead (Compose passes the
+  env to the frontend service). Dev/gate default `"dev"` on both paths.
+- **SSR source** `[G2:B1,N1,N2 — reworked round 2]`: the real SSR process is **`frontend/server.mjs`**
+  (Dockerfile prod `CMD ["node","server.mjs"]`, `package.json` `start`), NOT `src/server.ts` (a bare
+  re-export). `server.mjs` **already** wraps `entry.fetch` in try/catch and **already** writes
+  structured JSON to stdout (`http_request`+status on success; `render_failed`→503 on a shell/non-
+  render throw). So S3 does **not** add a parallel wrap — it **enriches the existing lines**: add
+  `source:"ssr"` + `release` + `route` to both the success and the `render_failed` lines. No new
+  `ssr-logger.ts`.
+  **AC3 scope correction** `[G2:N2]`: `server.mjs`'s own comment records that Start 1.169.3 wraps route
+  components in Suspense, so **route-render errors resolve as HTTP 200 with the error deferred to the
+  client** (caught by the S2 client logger), not a 5xx/throw. AC3 therefore covers only the
+  shell-throw/503 class the catch actually sees; route-render→200 is a **documented limitation**
+  (owned by the client channel), not a hand-picked throw dressed as full SSR coverage.
 - **Infra** under `--profile monitoring`: `loki`, `promtail`, `grafana`. promtail uses a **pipeline
   stage that parses the JSON `source` field into a Loki label** `[G2:B4]` (so `client`, `ssr`, `api`,
   `worker` separate even though `client` lines leave via the `api` container's stdout), not a per-
@@ -99,8 +110,9 @@ New code:
 - Grafana/Loki data live in named volumes created on first `--profile monitoring` up; absence is
   harmless (default path never starts them).
 - Rollout order (slices, each independently shippable): **S1** backend `clientlog` module + endpoint +
-  release define plumbing; **S2** frontend port+adapter+error boundary+global bridge+dedup+client
-  scrub; **S3** SSR server-entry wrap + ssr-logger; **S4** Loki + promtail (source-label pipeline);
+  release define plumbing; **S2** frontend port+adapter+error boundary+global bridge+client scrub
+  (channel separation, no dedup); **S3** enrich `server.mjs` existing catch (source/release/route);
+  **S4** Loki + promtail (source-label pipeline);
   **S5** Grafana provisioning + overview dashboard; **S6** nginx zone (+e2e variant) + Compose profile
   wiring + the profile-on end-to-end proof.
 
@@ -129,9 +141,9 @@ closes it.
 
 | AC | Observable check | Slice |
 |---|---|---|
-| AC1 | render error / unhandled rejection / boundary catch → exactly **one** event with route+release+UA via the port; dedup absorbs StrictMode; unit on adapter+dedup; e2e triggers a client error and asserts exactly one `/client-logs` POST (await the network POST, no batching) | S2 |
+| AC1 | render error / unhandled rejection / boundary catch → exactly **one** event with route+release+UA via the port, guaranteed by channel separation (no dedup); unit on adapter + each channel incl. a non-`Error` rejection; e2e triggers a client error and asserts exactly one `/client-logs` POST **that returns 204** `[G2:N6]` (a swallowed 429 must not read as a pass), awaiting the network response | S2 |
 | AC2 | an event with a §17 field is dropped **and** a secret embedded in `message`/`stack`/url is scrubbed (domain unit, nested + in-text cases); client-side pre-send scrub unit | S1,S2 |
-| AC3 | a thrown/5xx route lane in the wrapped `server.ts` emits a `source=ssr` structured line (SSR unit/integration against the wrapper) | S3 |
+| AC3 | a shell/non-render throw in `server.mjs`'s existing catch emits a `source=ssr` `render_failed` line carrying release+route (unit/integration against `server.mjs`); route-render→200 errors are out of this channel by design (client-owned), stated as a limitation `[G2:N2]` | S3 |
 | AC4 | API+worker+SSR+client stdout queryable in Loki **by `source` label** (profile-on Compose proof; LogQL asserts each source) | S4,S5,S6 |
 | AC5 | Grafana boots with Prometheus+Loki datasources + overview dashboard from repo provisioning (profile-on Compose proof via Grafana API) | S5 |
 | AC6 | monitoring services only under `monitoring` profile, docker-network-only (compose inspection + `docker ps`/network proof) | S6 |
@@ -145,6 +157,8 @@ runs outside `make check`; its result is recorded in `report.md` as the producti
 
 ## Open (plan-level, resolved here)
 
-- nginx `clientlog` zone rate: mirror the `login` zone shape, modest (e.g. 10 r/s burst 20); exact in S6.
+- nginx `clientlog` zone: prod is modest (mirror `login`, e.g. 10 r/s burst 20). The **e2e variant**
+  `clientlog-req.e2e.conf` must be sized for the whole suite on one docker IP (`$binary_remote_addr`
+  is shared) so a legitimate AC1 target POST is never 429'd `[G2:N6]`; exact burst set in S6.
 - Per-session client report ceiling: a small fixed cap (e.g. 50/session) — storm guard only, no batching.
 - Grafana access: anonymous read within the docker network (no external exposure until S01).
