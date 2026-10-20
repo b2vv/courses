@@ -62,4 +62,6 @@ that close an alternative — not on every commit.
 
 ## AI workflow
 
+Короткий старт і продовження задачі: [work/README.md](work/README.md).
+
 Для Codex і Claude чинний [локальний AI Factory adapter](docs/development/ai-factory.md) задає pinned shared sources, per-task checkpoint та handoff. Локальні acceptance/ADR, стек і обов’язкові gates зберігаються; adapter не дозволяє автоматичний запуск tools/tests або зміну permissions.
