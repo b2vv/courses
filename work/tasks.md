@@ -144,7 +144,7 @@ Compose і фікстур, тобто не може бігти раніше за
 | B04 | B-4: дефолтний `testTimeout` rstest. `testTimeout: 30000` у `frontend/rstest.config.ts` (виміряний безпечний поріг); пересторога «послаблює мірник» знята механізмом (робочий тест <5с, лише справжній hang чекає довше) | 0.5h | — | done | `work/backlog.md` B-4 §Outcome; PR tails-r2 |
 | B22 | B-22: дубль current-video селекторів у 4 модулях. Закрито як **свідома limitation** (не код): видалення перетинає межі модулів, ADR 013 (контракт = чиста Go-функція, не SQL); копії вирівняні рев'ю + discussion пришпилено K09a | 0.5h | — | done | `work/backlog.md` B-22 §Outcome |
 | B01 | B-1: observability — frontend logging, log aggregation, dashboards | L | — | blocked | рішення власника/фаза; `work/backlog.md` B-1 |
-| B19 | B-19: ладдер 360p упирається в `maxrate 365k`, VMAF 60 на рухливому відео — продуктове питання (AV1/драбина) | M | — | blocked | рішення власника; `work/backlog.md` B-19 |
+| B19 | B-19: ранг 360p упирався в `maxrate 365k`. Власник обрав підняти бюджет; VMAF-sweep (§6.5) → лінійна крива → **600k** (bufsize 1200k), +64%, лишає ранг low-bandwidth і під 720p | M | — | done | `work/backlog.md` B-19 §Outcome; PR b19 |
 
 ## Phase 6 — playback
 
