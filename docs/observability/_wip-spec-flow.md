@@ -76,5 +76,7 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
   §17-scrub наскрізь (0 secret, 1 [redacted] у Loki client-лінії).
   Рішення: promtail через docker.sock (не log-dir mount) — portable Linux+Desktop; COMPOSE_PROFILES env
   (не --profile flag — compose v5.5.1 парсинг); клієнтський §17-scrub знято (S2).
-- НАСТУПНЕ: S7 — AC1 e2e (реальний браузер, 204, bounded-wait) + ordered make check + повний e2e + report.md.
+- S7 **done** 2026-10-21: AC1 e2e `observability.spec.ts` (рівно 1 POST→204, bounded-wait) зелений;
+  ordered `make check` **EXIT=0** (frontend 784 unit, e2e **123 passed**, 14.7m); звіт `report.md`.
+  **ФАЗА observability (B-1) ЗАКРИТА (S1–S7).** Наступне: PR у main (гілка feat/observability-full-stack).
 
