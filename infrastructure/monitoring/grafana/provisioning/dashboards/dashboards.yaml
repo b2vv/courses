@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Loads every dashboard JSON under the mounted dashboards directory at boot, so
+# the overview dashboard comes from the repo rather than a manual import.
+providers:
+  - name: courses
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

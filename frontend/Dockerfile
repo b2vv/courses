@@ -11,6 +11,11 @@ CMD ["npm", "run", "dev"]
 FROM dependencies AS build
 ARG PUBLIC_WAYFORPAY_PAY_HOST=
 ENV PUBLIC_WAYFORPAY_PAY_HOST=$PUBLIC_WAYFORPAY_PAY_HOST
+# Baked into the client bundle by rsbuild source.define. The same value is
+# passed to the frontend service's runtime env (compose), so the client bundle
+# and server.mjs log one matching release.
+ARG APP_RELEASE=dev
+ENV APP_RELEASE=$APP_RELEASE
 COPY frontend/ ./
 RUN npm run build
 

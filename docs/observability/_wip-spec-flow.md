@@ -67,5 +67,14 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
   Рішення: modules-розкладка (node-glob); generated-транспорт; лише `onCaughtError`+window-bridge;
   клієнт-scrub ПРИБРАНО (сервер авторитетний, round-3 NB); ceiling 50 лишено. 8 rstest node зелені.
   e2e AC1 (204+bounded-wait, реальний браузер) відкладено в S7 (потрібен стек up).
-- НАСТУПНЕ: S3 (збагатити catch у server.mjs: source/release/route; render_failed=stderr).
+- S3 **done** 2026-10-21 (`c8184c0`): server.mjs catch збагачено; винесено server-log.mjs (+d.mts), 3 unit.
+- S4/S5/S6 **done** 2026-10-21: loki+promtail(docker_sd socket)+grafana(provision+dashboard) під monitoring
+  profile, nginx clientlog-зона+e2e-variant+nested location, APP_RELEASE build-arg+runtime-env, Dockerfile.
+  **monitoring-stack.sh PASS** (production-path, поза make check): AC4 source-мітки
+  {api,asr-worker,client,media-worker,ssr}; AC5 datasources prometheus+loki + dashboard platform-overview;
+  AC6 grafana/loki/prometheus/promtail no host port. nginx -t ok; /client-logs наскрізь 204/400;
+  §17-scrub наскрізь (0 secret, 1 [redacted] у Loki client-лінії).
+  Рішення: promtail через docker.sock (не log-dir mount) — portable Linux+Desktop; COMPOSE_PROFILES env
+  (не --profile flag — compose v5.5.1 парсинг); клієнтський §17-scrub знято (S2).
+- НАСТУПНЕ: S7 — AC1 e2e (реальний браузер, 204, bounded-wait) + ordered make check + повний e2e + report.md.
 
