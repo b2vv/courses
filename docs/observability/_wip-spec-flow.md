@@ -27,7 +27,21 @@ monitoring opt-in [lean: так].
 - Дашборд v1: **один «platform overview»** (Prometheus метрики + 2 media + Loki logs-панель).
 - Дефолти: профіль `monitoring` opt-in = так; release-id = build hash/env.
 
+## GATE 2 — раунд 1 ЧЕРВОНИЙ (2026-10-20), доопрацьовано
+Незалежний сабагент (general-purpose) прогнав plan-critique+plan-defense → 8 blocking + 4 незакриті
+defense-питання. Деталі: `_wip-gate2-review.md`. Несучі факти звірено кодом (server.ts 91B re-export;
+нема release-env; make up без monitoring-профілю). План переписано (ред. GATE2), мітки `[G2:Bn]`:
+- B1 SSR: wrap server-entry default export + `ssr-logger.ts` (TS→stdout); B2 `__APP_RELEASE__` Rsbuild
+  define (git SHA, dev-default); B3 окремий `monitoring-stack.sh` profile-on proof (поза гейтом);
+  B4 promtail JSON `source`→Loki-мітка; B5 two-level §17 (field + value-scrub message/stack/url);
+  B6 adapter ковтає власні transport-помилки (негативний тест); B7 канальний поділ boundary/onerror +
+  дедуп(signature+TTL)+StrictMode → один event; B8 без батчингу, один POST/подію + per-session ceiling.
+- NB: drop EventSink port (пряма ін'єкція logger'а); 400/204; sentinel unknown/dev; rollback S2→S1
+  безпечний через swallow; nginx `clientlog-req.e2e.conf`; Loki-down — stdout незалежний, проба poll.
+- **Наступне: повторний GATE 2 на доопрацьованому плані.**
+
 ## Журнал
 - specify: spec.md написано (Проблема/Сценарії/AC1–AC7/Out of scope/5 відкритих).
 - GATE 1: сфокусований decision-раунд (не повний grilling, flagged); 3 рішення + 2 дефолти. → plan.
+- plan v1 → GATE 2 раунд 1 ЧЕРВОНИЙ → plan ред.GATE2 (8 blocking + defense закрито) → GATE 2 раунд 2.
 
