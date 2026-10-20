@@ -83,14 +83,17 @@ func fixtures() []string {
 		`INSERT INTO video_assets (id,lesson_id,state,generation,original_name,declared_bytes,renditions,expires_at,created_at,updated_at) VALUES
 		 ('50000000-0000-4000-8000-0000000000e4','` + uploadingLesson + `','processing',1,'a.mp4',10,'{}',now()+interval '1 day',now(),now())`,
 
-		`INSERT INTO transcripts (lesson_id,language,authored_against_generation) VALUES
-		 ('` + publishedLesson + `','uk',1),
-		 ('` + replacedLesson + `','uk',1),
-		 ('` + uploadingLesson + `','uk',0),
-		 ('` + reuploadLesson + `','uk',1),
-		 ('` + draftLesson + `','uk',0),
-		 ('` + twoLangLesson + `','uk',0),
-		 ('` + twoLangLesson + `','en',0)`,
+		// is_primary names the canonical transcript per lesson (B-21). Every single-language lesson
+		// marks its one row primary; twoLangLesson marks uk primary and en not, so the no-language
+		// read must return uk even though en sorts first by code.
+		`INSERT INTO transcripts (lesson_id,language,authored_against_generation,is_primary) VALUES
+		 ('` + publishedLesson + `','uk',1,true),
+		 ('` + replacedLesson + `','uk',1,true),
+		 ('` + uploadingLesson + `','uk',0,true),
+		 ('` + reuploadLesson + `','uk',1,true),
+		 ('` + draftLesson + `','uk',0,true),
+		 ('` + twoLangLesson + `','uk',0,true),
+		 ('` + twoLangLesson + `','en',0,false)`,
 		`INSERT INTO course_documents (id,course_id,label,url) VALUES
 		 ('60000000-0000-4000-8000-0000000000f1','10000000-0000-4000-8000-0000000000c1','Doc','https://example.test/a')`,
 		`INSERT INTO transcript_segments (id,lesson_id,language,ordinal,start_ms,end_ms,text,speaker,confidence) VALUES
@@ -307,14 +310,16 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
-	t.Run("language selection is deterministic", func(t *testing.T) {
-		// Two languages exist; no parameter must not be a lottery.
+	t.Run("the primary language is read when none is asked (B-21)", func(t *testing.T) {
+		// twoLangLesson carries uk (primary) and en. en sorts first by code, so the old read
+		// returned en — a second language silently displacing the canonical one. The read now
+		// prefers the primary, so an added language cannot hijack the no-parameter read.
 		first, err := reading.Get(ctx, student, twoLangLesson, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if first.Language != "en" {
-			t.Fatalf("language without a parameter = %q; want the first by normalised code", first.Language)
+		if first.Language != "uk" {
+			t.Fatalf("language without a parameter = %q; want uk — the lesson's primary, not the first by code", first.Language)
 		}
 		asked, err := reading.Get(ctx, student, twoLangLesson, "UK")
 		if err != nil || asked.Language != "uk" {
@@ -338,7 +343,7 @@ var segmentIDs = [...]string{
 	"71000000-0000-4000-8000-000000000003", "71000000-0000-4000-8000-000000000004",
 	"71000000-0000-4000-8000-000000000005", "71000000-0000-4000-8000-000000000006",
 	"71000000-0000-4000-8000-000000000007", "71000000-0000-4000-8000-000000000008",
-	"71000000-0000-4000-8000-000000000009",
+	"71000000-0000-4000-8000-000000000009", "71000000-0000-4000-8000-000000000010",
 }
 
 func newSegmentID(n int) string { return segmentIDs[n] }

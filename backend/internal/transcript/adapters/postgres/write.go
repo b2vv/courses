@@ -53,8 +53,13 @@ func (repository *Repository) SaveLessonTranscript(ctx context.Context, save por
 		// No token means the author believes nothing is there. The unique key is what makes that
 		// belief checkable: a second writer racing into the same empty lesson loses here rather
 		// than appending to the first one's work.
-		err = transaction.QueryRow(ctx, `INSERT INTO transcripts (lesson_id, language, authored_against_generation)
-			VALUES ($1::text::uuid, $2, $3) RETURNING updated_at`,
+		// The first transcript of a lesson is its primary (B-21): a no-language read returns it,
+		// and a later language added here arrives non-primary so it cannot displace that read. The
+		// one-primary index is what makes this true even under a race, not this EXISTS alone.
+		err = transaction.QueryRow(ctx, `INSERT INTO transcripts (lesson_id, language, authored_against_generation, is_primary)
+			VALUES ($1::text::uuid, $2, $3,
+			  NOT EXISTS (SELECT 1 FROM transcripts WHERE lesson_id = $1::text::uuid AND is_primary))
+			RETURNING updated_at`,
 			save.LessonID, string(save.Language), generation).Scan(&updatedAt)
 		var conflict *pgconn.PgError
 		if errors.As(err, &conflict) && conflict.Code == "23505" {
