@@ -1187,6 +1187,13 @@ docs/foundation/screenshots/course-desktop.png
 **Тригер:** будь-який наступний коміт після прогону гейта; або поява другого контриб'ютора, що
 жене `e2e` на іншій машині.
 
+### B-18 закрито 2026-10-20
+
+Вже закрито раніше: PR #32 (`d6ec304`) перевів e2e-скріншоти на проігноровану теку
+`frontend/playwright/.artifacts/`, тож прогін гейта більше не лишає відстежувані бінарники
+зміненими. Запис AGENDA 13.10, що тримав B-18 відкритим, був застарілий. Дерево після гейта
+цієї сесії чисте (лише vim-swap).
+
 ---
 
 ## B-17 — `git add -A` під час роботи відчепленого агента змішує коміти
@@ -1369,6 +1376,13 @@ explicitly to domain entities»).
 єдиний відомий шлях до другої. Це читальний шлях 7a, не приймання A13 — окремий пункт за рішенням
 користувача Courses 2 (2026-09-24).
 
+### Disposition 2026-10-20 — BLOCKED на рішення власника
+
+Фікс вимагає поля «основна мова уроку/курсу» (схема + міграція), якого в моделі **немає**: канонічне
+читання без мови має брати основну мову, а не перший код за алфавітом. Це продуктове рішення, не
+реалізується самочинно. Відкрите питання власнику: додавати поле основної мови тепер чи тримати до
+розвилки «друга мова» (рекомендація Courses 1 — тримати, бо наразі одна мова на урок і проявів немає).
+
 ## B-24 — payment PR #3 review findings (Courses 2, 2026-10-02, non-blocking)
 
 From `work/archive/review-pr3-patterns.md`. 0 blockers; `orders` module judged exemplary. Four polish items:
@@ -1451,3 +1465,12 @@ the HTTP layer returns `null` and OpenAPI marks `nextCursor` nullable; then the 
 The review list handlers return `nextCursor: null` on the last page (`nextCursorOrNull`); OpenAPI marks it nullable;
 Orval regenerated; the frontend `""` mapping is gone. Contract test «B-28 the last page says null, not an empty
 cursor»; repository test passes the null through. Comment and queue lists keep their older `""` (out of scope).
+
+### B-28 residual closed 2026-10-20 (PR #58 `a5f15d2`)
+
+The lists left out of scope on 2026-10-04 — discussion threads (`pageDTO`), course comments
+(`courseCommentsDTO`) and the moderation queue (`queueDTO`) — still sent `""` on the last page, which the
+frontend turned into a phantom next page via `"" ?? undefined`. All three now return `null` through
+`nextCursorOrNull`; the three OpenAPI schemas are `nullable`; Orval regenerated (`commentPage`,
+`teachCourseCommentPage`, `moderationQueuePage` → `string | null`). New backend test
+`TestB28ResidualListCursorsAreNull`. The `""` convention is gone from every list cursor.
