@@ -89,7 +89,7 @@ poll, `Received: undefined`; обидва зафіксовані падіння 
 фінальні перевірки рахуються зі знімка, перечитаного після poll (`readWrites()` + `findRestore`), ранній вивід
 діагностики лишився. Перевірка: повний гейт фази після виправлення (гілка `fix/b28-review-cursor-null`).
 
-## B-22 — Duplicated current-video selectors
+## B-22 — Duplicated current-video selectors — CLOSED 2026-10-20 (deliberate limitation)
 
 **Raised:** 2026-09-28, during Phase 7b D02.
 **Shape:** the filtered current-video selector is duplicated in several places: `transcript`
@@ -105,6 +105,18 @@ with integration K09a; do not merge closed modules without a phase that owns the
 the highest generation, including positive and negative ready/upload fixtures.
 **Чого не стверджує:** this does not prove the filtered selectors are globally unified, nor does
 it remove the duplication or claim that the `course` sorting form is equivalent.
+
+### Outcome 2026-10-20 — закрито як свідома limitation (не код)
+
+Звірено з кодом + ADR 013. Дубль — це **SQL-рядки**, по одному в кожному модулі (transcript/playback/
+media/discussion), не Go-код. **Механізм, чому не прибирається:** ADR 013 забороняє модулю імпортувати
+пакети іншого модуля, а контракт у `internal/contracts/…` — це **чиста Go-функція, не SQL**; винести
+спільний SELECT нікуди, не перетнувши межу модуля або не завівши SQL у contracts (чого ADR не дозволяє).
+media-копія ще й інша за формою (`NULLS LAST`), а `course/learning.go` — свідомо інша (сортує ready
+першим для показу стану). Копії тримаються вирівняними рев'ю-коментарями, а discussion-копія пришпилена
+integration-тестом K09a (`state='ready' AND evicted_at IS NULL` на найвищій генерації). Це свідомо
+прийнятий дубль за архітектурною межею, не борг до виправлення — відкривати лише фазою, що володіє
+seam'ами цих модулів (напр. спільний playback-read-contract), якщо така колись з'явиться.
 
 ---
 
@@ -381,6 +393,18 @@ violations`: максимальний список модулів плюс по�
 **Коли впаде в CI**, а не лише на завантаженому ноуті. Доти це шум середовища з відомою
 причиною, і його не можна плутати з регресією: якщо падає «щоразу інший тест» і не
 відтворюється в ізоляції — дивись на `load average`, перш ніж шукати дефект.
+
+### Outcome 2026-10-20 — закрито (рішення власника: підняти дефолт)
+
+Власник (2026-10-20) обрав варіант 1. `testTimeout: 30000` на верхньому рівні `frontend/rstest.config.ts`
+(успадковують обидва проєкти). Значення — виміряний у цьому записі безпечний поріг (12/12 і 364/364).
+
+**Знята пересторога «послаблює мірник» (механізм):** працюючий тест завершується далеко під 5 с навіть
+без навантаження (один устигав 162 асерти до 5-с дедлайну), тож вищий дефолт не робить жоден робочий
+тест повільнішим — він лише дає запас під зовнішнім навантаженням. Чутливість до **справжнього**
+зависання не зникає: нескінченний await усе одно впирається в будь-який скінченний поріг, різниця —
+30 с замість 5 с до червоного, і гейт його все одно ловить. Коштом є тільки повільніша діагностика
+справжнього hang — прийнятно проти флаку «щоразу інший тест».
 
 ---
 
@@ -1423,6 +1447,15 @@ From `work/archive/review-pr3-patterns.md`. 0 blockers; `orders` module judged e
 
 Trigger: fold 1/3/4 into a follow-up polish commit on `feat/payment` before or just after the PR
 merges; 2 stays a named limitation.
+
+### Outcome 2026-10-20 — закрито
+
+Звірка з кодом (рев'ю було 2026-10-02; код відтоді еволюціонував):
+- **п.4 вже зроблено** — `dateTimeLayout` const існує (`orders/adapters/http/handler.go:26`), літерал не повторюється.
+- **п.1 (gap) вже зроблено** — `decodeCheckout` уже викликає перевірку унікальних ключів і мапить у `ErrOrderInvalid`.
+- **п.3 вже зроблено** — `service.New` і `NewHandler` без variadic/другого конструктора (grep `...` порожній).
+- **п.1 (residual) — зроблено цією сесією:** три копії `validateUniqueJSONObject` (course/orders — рекурсивні, discussion — лише верхній рівень) зведено в один `platform/jsonbody.ValidateUniqueKeys` з нейтральним sentinel; кожен handler мапить non-nil у свій domain-error на місці виклику. Логіку винесено в один unit-тест (`platform/jsonbody/unique_test.go`, 12 кейсів). **Рішення (2026-10-20, Courses 1):** єдина версія рекурсивна — для discussion це глибша перевірка (вкладений дубль-ключ тепер відхиляється), але без зміни для валідних (пласких) discussion-запитів; механізм: discussion-схеми не мають вкладених об'єктних полів.
+- **п.2 лишається named limitation** (in-memory status throttle, `docs/payment/report.md` §6): спільний store — перед горизонтальним масштабуванням.
 
 ## B-25 — WayForPay refuses a second checkout of the same pending order (live run, 2026-10-02) — CLOSED `f306165`
 
