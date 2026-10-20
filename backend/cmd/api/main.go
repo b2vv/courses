@@ -14,6 +14,7 @@ import (
 	adminstatshttp "courses/internal/adminstats/adapters/http"
 	adminstatspostgres "courses/internal/adminstats/adapters/postgres"
 	adminstatsapplication "courses/internal/adminstats/application"
+	clientloghttp "courses/internal/clientlog/adapters/http"
 	coursehttp "courses/internal/course/adapters/http"
 	coursepostgres "courses/internal/course/adapters/postgres"
 	courseapplication "courses/internal/course/application"
@@ -192,11 +193,13 @@ func main() {
 		})
 		adminStatsRepository := adminstatspostgres.NewRepository(dependencies.Database)
 		adminStatsHandler := adminstatshttp.NewHandler(adminstatsapplication.New(adminStatsRepository, adminStatsConfig.SingleInstructor, time.Now))
+		clientLogHandler := clientloghttp.NewHandler(logger)
 		handler := httpserver.NewHandler(httpserver.Options{
 			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
 			Tracer: dependencies.Tracing.Tracer("http"),
 			Register: func(mux *http.ServeMux) {
 				courseHandler.Register(mux)
+				clientLogHandler.Register(mux)
 				ordersHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				ordersHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin, identityHandler.RequireAdministrator)
 				ordersHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
