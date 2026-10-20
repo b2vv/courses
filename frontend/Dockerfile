@@ -24,7 +24,7 @@ ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=runtime-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/package.json /app/server.mjs ./
+COPY --from=build --chown=node:node /app/package.json /app/server.mjs /app/server-log.mjs ./
 USER node
 EXPOSE 3000
 CMD ["node", "server.mjs"]
