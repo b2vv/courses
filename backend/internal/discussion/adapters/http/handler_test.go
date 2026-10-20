@@ -1019,3 +1019,27 @@ func TestT05ReviewRoutesGaps(t *testing.T) {
 		}
 	})
 }
+
+// TestB28ResidualListCursorsAreNull: the thread, course-comment and moderation-queue lists report
+// "no next page" as nextCursor:null, not "" (backlog B-28 residual; the public review and
+// participant-report lists already did). "" is a trap — the frontend's `nextCursor ?? undefined`
+// treats an empty string as a real cursor and shows a phantom next page on the last page.
+func TestB28ResidualListCursorsAreNull(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		who  *httpserver.Actor
+	}{
+		{"lesson threads", "/api/v1/learn/lessons/" + discussionLesson + "/comments", actor(discussionViewer, "student")},
+		{"course comments", "/api/v1/teach/courses/" + discussionOwner + "/comments", actor(discussionOwner, "instructor")},
+		{"moderation queue", "/api/v1/teach/courses/" + discussionOwner + "/moderation-queue", actor(discussionAdmin, "admin")},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			response := serve(t, newFake(), http.MethodGet, test.path, "", test.who, true)
+			if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"nextCursor":null`) {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}

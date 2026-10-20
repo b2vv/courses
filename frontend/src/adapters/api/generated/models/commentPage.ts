@@ -10,5 +10,6 @@ import type { CommentThread } from './commentThread.ts';
 export interface CommentPage {
   /** @maxItems 50 */
   threads: CommentThread[];
-  nextCursor: string;
+  /** @nullable */
+  nextCursor: string | null;
 }

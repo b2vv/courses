@@ -72,7 +72,7 @@ type threadDTO struct {
 
 type pageDTO struct {
 	Threads    []threadDTO `json:"threads"`
-	NextCursor string      `json:"nextCursor"`
+	NextCursor *string     `json:"nextCursor"`
 }
 
 type publishRequest struct {
@@ -131,7 +131,7 @@ type moderationCommentDTO struct {
 
 type courseCommentsDTO struct {
 	Comments   []moderationCommentDTO `json:"comments"`
-	NextCursor string                 `json:"nextCursor"`
+	NextCursor *string                `json:"nextCursor"`
 }
 
 type queueItemDTO struct {
@@ -172,7 +172,7 @@ type putReviewRequest struct {
 
 type queueDTO struct {
 	Items      []queueItemDTO `json:"items"`
-	NextCursor string         `json:"nextCursor"`
+	NextCursor *string        `json:"nextCursor"`
 }
 
 func (handler *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +198,7 @@ func (handler *Handler) list(w http.ResponseWriter, r *http.Request) {
 			threads[i].Replies[j] = mapComment(reply)
 		}
 	}
-	httpserver.WriteJSON(w, http.StatusOK, pageDTO{Threads: threads, NextCursor: page.NextCursor})
+	httpserver.WriteJSON(w, http.StatusOK, pageDTO{Threads: threads, NextCursor: nextCursorOrNull(page.NextCursor)})
 }
 
 func (handler *Handler) publish(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +287,7 @@ func (handler *Handler) listCourseComments(w http.ResponseWriter, r *http.Reques
 	for i, comment := range page.Comments {
 		items[i] = mapModerationComment(comment)
 	}
-	httpserver.WriteJSON(w, http.StatusOK, courseCommentsDTO{Comments: items, NextCursor: page.NextCursor})
+	httpserver.WriteJSON(w, http.StatusOK, courseCommentsDTO{Comments: items, NextCursor: nextCursorOrNull(page.NextCursor)})
 }
 
 func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
@@ -318,7 +318,7 @@ func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
 			items[i].Review = &review
 		}
 	}
-	httpserver.WriteJSON(w, http.StatusOK, queueDTO{Items: items, NextCursor: page.NextCursor})
+	httpserver.WriteJSON(w, http.StatusOK, queueDTO{Items: items, NextCursor: nextCursorOrNull(page.NextCursor)})
 }
 
 func (handler *Handler) publicReviews(w http.ResponseWriter, r *http.Request) {
@@ -783,8 +783,9 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 	httpserver.WriteError(w, r, status, code, message)
 }
 
-// nextCursorOrNull: the review lists say "no next page" with null (backlog B-28); the repository's keyset
-// encoding uses "" for that.
+// nextCursorOrNull: the paginated lists say "no next page" with null (backlog B-28); the repository's keyset
+// encoding uses "" for that. Returning "" to the client is a trap — the frontend's `nextCursor ?? undefined`
+// treats "" as a real cursor and shows a phantom next page, so every list cursor is normalised here.
 func nextCursorOrNull(cursor string) *string {
 	if cursor == "" {
 		return nil

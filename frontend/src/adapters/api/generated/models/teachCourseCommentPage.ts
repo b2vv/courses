@@ -10,5 +10,6 @@ import type { TeachComment } from './teachComment.ts';
 export interface TeachCourseCommentPage {
   /** @maxItems 50 */
   comments: TeachComment[];
-  nextCursor: string;
+  /** @nullable */
+  nextCursor: string | null;
 }

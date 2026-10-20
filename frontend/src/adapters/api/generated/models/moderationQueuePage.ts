@@ -10,5 +10,6 @@ import type { ModerationQueueItem } from './moderationQueueItem.ts';
 export interface ModerationQueuePage {
   /** @maxItems 50 */
   items: ModerationQueueItem[];
-  nextCursor: string;
+  /** @nullable */
+  nextCursor: string | null;
 }
