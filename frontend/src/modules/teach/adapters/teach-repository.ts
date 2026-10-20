@@ -68,7 +68,7 @@ function page(value: unknown): value is TeachCommentPage {
     record(value) &&
     Array.isArray(value.comments) &&
     value.comments.length <= 50 &&
-    typeof value.nextCursor === 'string' &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string') &&
     value.comments.every(comment)
   );
 }
@@ -77,7 +77,7 @@ function queuePage(value: unknown): value is ModerationQueuePage {
     record(value) &&
     Array.isArray(value.items) &&
     value.items.length <= 50 &&
-    typeof value.nextCursor === 'string' &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string') &&
     value.items.every((item) => {
       if (
         !record(item) ||

@@ -2251,7 +2251,7 @@ components:
           type: array
           maxItems: 50
           items: { $ref: '#/components/schemas/CommentThread' }
-        nextCursor: { type: string }
+        nextCursor: { type: string, nullable: true }
     DismissReportsRequest:
       type: object
       additionalProperties: false
@@ -2366,7 +2366,7 @@ components:
           type: array
           maxItems: 50
           items: { $ref: '#/components/schemas/TeachComment' }
-        nextCursor: { type: string }
+        nextCursor: { type: string, nullable: true }
     ModerationQueueItem:
       type: object
       additionalProperties: false
@@ -2388,7 +2388,7 @@ components:
           type: array
           maxItems: 50
           items: { $ref: '#/components/schemas/ModerationQueueItem' }
-        nextCursor: { type: string }
+        nextCursor: { type: string, nullable: true }
     PlaybackSessionRequest:
       type: object
       additionalProperties: false

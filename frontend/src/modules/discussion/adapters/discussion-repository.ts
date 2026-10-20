@@ -83,7 +83,7 @@ function isPage(value: unknown): value is DiscussionPage {
   }
   return (
     value.threads.length <= 50 &&
-    typeof value.nextCursor === 'string' &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string') &&
     value.threads.every(
       (thread) =>
         record(thread) &&
