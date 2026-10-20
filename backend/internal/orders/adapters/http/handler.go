@@ -18,6 +18,7 @@ import (
 	"courses/internal/orders/domain"
 	"courses/internal/orders/ports"
 	"courses/platform/httpserver"
+	"courses/platform/jsonbody"
 )
 
 const (
@@ -615,7 +616,7 @@ func decodeCheckout(r *http.Request) (checkoutRequest, error) {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	if validateUniqueJSONObject(body) != nil {
+	if jsonbody.ValidateUniqueKeys(body) != nil {
 		return checkoutRequest{}, domain.ErrOrderInvalid
 	}
 	var request checkoutRequest
@@ -717,7 +718,7 @@ func decodeGrant(w http.ResponseWriter, r *http.Request) (grantRequest, error) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maximumGrantBody)
 	body, err := io.ReadAll(r.Body)
-	if err != nil || validateUniqueJSONObject(body) != nil {
+	if err != nil || jsonbody.ValidateUniqueKeys(body) != nil {
 		return grantRequest{}, domain.ErrGrantInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
@@ -727,72 +728,6 @@ func decodeGrant(w http.ResponseWriter, r *http.Request) (grantRequest, error) {
 		return grantRequest{}, domain.ErrGrantInvalid
 	}
 	return request, nil
-}
-
-func validateUniqueJSONObject(body []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	opening, err := decoder.Token()
-	if err != nil || opening != json.Delim('{') {
-		return domain.ErrGrantInvalid
-	}
-	if err := validateUniqueObject(decoder); err != nil {
-		return err
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return domain.ErrGrantInvalid
-	}
-	return nil
-}
-
-func validateUniqueObject(decoder *json.Decoder) error {
-	seen := make(map[string]struct{})
-	for decoder.More() {
-		token, err := decoder.Token()
-		key, ok := token.(string)
-		if err != nil || !ok {
-			return domain.ErrGrantInvalid
-		}
-		if _, exists := seen[key]; exists {
-			return domain.ErrGrantInvalid
-		}
-		seen[key] = struct{}{}
-		if err := validateUniqueValue(decoder); err != nil {
-			return err
-		}
-	}
-	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') {
-		return domain.ErrGrantInvalid
-	}
-	return nil
-}
-
-func validateUniqueValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return domain.ErrGrantInvalid
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		return validateUniqueObject(decoder)
-	case '[':
-		for decoder.More() {
-			if err := validateUniqueValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim(']') {
-			return domain.ErrGrantInvalid
-		}
-		return nil
-	default:
-		return domain.ErrGrantInvalid
-	}
 }
 
 func emptyQuery(raw string) bool {
