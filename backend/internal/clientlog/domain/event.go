@@ -67,8 +67,8 @@ func NewClientEvent(in Input) (ClientEvent, error) {
 		Level:      level,
 		Message:    truncate(scrubSecrets(in.Message), maxMessageLength),
 		Route:      sentinel(truncate(scrubSecrets(in.Route), maxRouteLength)),
-		Release:    sentinel(truncate(in.Release, maxReleaseLength)),
-		UserAgent:  truncate(in.UserAgent, maxUserAgentLength),
+		Release:    sentinel(truncate(scrubSecrets(in.Release), maxReleaseLength)),
+		UserAgent:  truncate(scrubSecrets(in.UserAgent), maxUserAgentLength),
 		ErrorName:  truncate(scrubSecrets(in.ErrorName), maxErrorNameLength),
 		ErrorStack: truncate(scrubSecrets(in.ErrorStack), maxErrorStackLength),
 	}, nil

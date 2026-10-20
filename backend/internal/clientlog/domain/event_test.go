@@ -113,6 +113,25 @@ func TestNewClientEventKeepsSafeFields(t *testing.T) {
 	}
 }
 
+func TestNewClientEventScrubsSecretsInUserAgentAndRelease(t *testing.T) {
+	t.Parallel()
+	event, err := NewClientEvent(Input{
+		Level:     "error",
+		Message:   "x",
+		UserAgent: "Chrome token=uaLeak42",
+		Release:   "sha authorization=relLeak99",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(event.UserAgent, "uaLeak42") {
+		t.Fatalf("secret survived in user agent: %q", event.UserAgent)
+	}
+	if strings.Contains(event.Release, "relLeak99") {
+		t.Fatalf("secret survived in release: %q", event.Release)
+	}
+}
+
 func TestNewClientEventScrubsTokenInRoute(t *testing.T) {
 	t.Parallel()
 	event, err := NewClientEvent(Input{Level: "error", Message: "x", Route: "/learn/x?token=leak999"})

@@ -3,7 +3,7 @@
 Дельта до [plan.md](plan.md) (ред.round2, GATE 2 ЗЕЛЕНИЙ на раунді 3 — `_wip-gate2-round3.md`).
 Гілка `feat/observability-full-stack` (off main `8c77860`). Закриває backlog B-1.
 
-Статус гейта: **ordered `make check` EXIT=0** (frontend 784 unit, e2e 123 passed, 14.7m); profile-on доказ
+Статус гейта: **ordered `make check` EXIT=0** (frontend 784 unit, e2e 124 passed, 14.7m); profile-on доказ
 `infrastructure/tests/monitoring-stack.sh` — **PASS** (поза `make check`).
 
 ## 1. Що зроблено
@@ -56,7 +56,7 @@
 | AC4 | API+worker+SSR+client у Loki за `source` | monitoring-stack.sh: source-мітки `{api,asr-worker,client,media-worker,ssr}` queryable | збіглося |
 | AC5 | Grafana datasources+dashboard з provisioning | monitoring-stack.sh: prometheus+loki datasources + `platform-overview` dashboard via Grafana API | збіглося |
 | AC6 | monitoring лише під profile, network-only | monitoring-stack.sh: grafana/loki/prometheus/promtail — no host port | збіглося |
-| AC7 | ordered `make check` зелений; default-up не стартує monitoring | ordered `make check` EXIT=0 (e2e 123 passed); monitoring під `profiles:[monitoring]`, `make up` без профілю їх не стартує | збіглося |
+| AC7 | ordered `make check` зелений; default-up не стартує monitoring | ordered `make check` EXIT=0 (e2e 124 passed); monitoring під `profiles:[monitoring]`, `make up` без профілю їх не стартує | збіглося |
 
 ## 3. monitoring-stack.sh (profile-on, production-path, поза `make check`)
 
@@ -68,13 +68,22 @@
 Додатково вручну: `nginx -t` ok; `/client-logs` наскрізь 204 (valid) / 400 (unknown field); §17-scrub
 наскрізь (у Loki client-лінії 0 `shouldscrub`, 1 `password=[redacted]`).
 
-## 4. Верифікація
+## 4. Незалежне code-review (verify)
+
+Дві осі паралельними fresh-субагентами (автор не самоверифікує; робочі файли
+`_wip-review-standards.md`, `_wip-review-spec.md`): **Standards — PASS** (hard-violations 0),
+**Spec — PASS** (усі 7 AC, 5 відхилень обґрунтовані, blocking 0). Закрито два non-blocking пункти
+перед PR: (1) `scrubSecrets` застосовано і до `UserAgent`/`Release` (не лише message/route/stack) —
+глибший §17-захист від hostile-клієнта; (2) e2e-канал `unhandledrejection` доданий (AC1 тепер має
+browser-доказ для 2 із 3 каналів; `onCaughtError` воронкою веде в той самий `capture`, покритий unit).
+
+## 5. Верифікація
 
 - Backend: `go test ./internal/clientlog/...` (domain 6 + http 8), `go vet`, architecture boundary, `go build ./cmd/api`.
 - Frontend: rstest 11 (adapter 8 + ssr-log 3), `tsc`, `oxfmt --check`, `oxlint`, architecture check.
-- Ordered `make check`: **EXIT=0** (frontend 784 unit, 34 Go-пакети, e2e 123 passed).
+- Ordered `make check`: **EXIT=0** (frontend 784 unit, 34 Go-пакети, e2e 124 passed).
 
-## 5. Обмеження
+## 6. Обмеження
 
 1. **route-render помилки → HTTP 200, не SSR-канал.** Start 1.169.3 обгортає маршрути в Suspense:
    render-помилка маршруту резолвиться як 200 з відкладанням на клієнт (її ловить клієнтський канал
