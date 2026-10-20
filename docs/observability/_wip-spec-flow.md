@@ -59,4 +59,13 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
 - specify: spec.md написано (Проблема/Сценарії/AC1–AC7/Out of scope/5 відкритих).
 - GATE 1: сфокусований decision-раунд (не повний grilling, flagged); 3 рішення + 2 дефолти. → plan.
 - plan v1 → GATE 2 раунд 1 ЧЕРВОНИЙ → plan ред.GATE2 (8 blocking + defense закрито) → GATE 2 раунд 2.
+- GATE 2 раунд 2 ЧЕРВОНИЙ → plan ред.round2 → GATE 2 раунд 3 **ЗЕЛЕНИЙ** 2026-10-20 → tasks S1–S7.
+- S1 **done** 2026-10-21 (`f0ea2f3`): backend clientlog module (domain+http) + endpoint + OpenAPI/Orval
+  + Rsbuild define. Рішення: define-ключ `process.env.APP_RELEASE` (знімає NB-c ambient, дає NB-b).
+  Per-slice: domain 6 + http 8 тестів, gofmt/vet/architecture, go build cmd/api, FE typecheck/format/lint.
+- S2 **done** 2026-10-21: `modules/observability/{ports,adapters,index}` + bridge у `client.tsx`.
+  Рішення: modules-розкладка (node-glob); generated-транспорт; лише `onCaughtError`+window-bridge;
+  клієнт-scrub ПРИБРАНО (сервер авторитетний, round-3 NB); ceiling 50 лишено. 8 rstest node зелені.
+  e2e AC1 (204+bounded-wait, реальний браузер) відкладено в S7 (потрібен стек up).
+- НАСТУПНЕ: S3 (збагатити catch у server.mjs: source/release/route; render_failed=stderr).
 
