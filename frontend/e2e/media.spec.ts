@@ -365,7 +365,10 @@ test.describe('the first real video through the whole chain', () => {
       { timeout: 120_000 },
     );
     const subRungEvidence = await assertPlaylistBundle(subRung.videoId, ['360p']);
-    expect(twoRungEvidence.bandwidth360).toBe('542300');
+    // Declared peak for the 360p rung = its maxrate (B-19: 600k) + the shared 128k audio +
+    // container overhead, so it is pinned by the ladder constant, not the source. Both the
+    // two-rung and the sub-360p upload declare the same 360p peak.
+    expect(twoRungEvidence.bandwidth360).toBe('800800');
     expect(subRungEvidence.bandwidth360).toBe(twoRungEvidence.bandwidth360);
     expect(await readPlaylist(subRung.videoId, 'master.m3u8')).toContain('RESOLUTION=320x240');
     const resolution = await worker(

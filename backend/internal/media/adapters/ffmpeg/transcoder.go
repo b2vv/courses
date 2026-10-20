@@ -231,7 +231,11 @@ func settingsFor(renditions []domain.Rendition) ([]renditionSetting, error) {
 		rendition domain.Rendition
 		setting   renditionSetting
 	}{
-		{domain.Rendition360p, renditionSetting{name: "360p", width: 640, height: 360, maximumRate: "365k", bufferSize: "730k", level: "4.1"}},
+		// B-19: 365k starved the floor rank on demanding content (measured VMAF 33 on a high-motion
+		// 1080p source, ~60 on natural film per docs/media/research-codecs.md §6). 600k lifts it
+		// (~+14 VMAF on the same source) while staying a genuine low-bandwidth rung reachable on a
+		// ~700 kbps link and far below 720p's 3000k, so ABR still has a real lower level.
+		{domain.Rendition360p, renditionSetting{name: "360p", width: 640, height: 360, maximumRate: "600k", bufferSize: "1200k", level: "4.1"}},
 		{domain.Rendition720p, renditionSetting{name: "720p", width: 1280, height: 720, maximumRate: "3000k", bufferSize: "6000k", level: "4.1"}},
 		{domain.Rendition1080p, renditionSetting{name: "1080p", width: 1920, height: 1080, maximumRate: "6000k", bufferSize: "12000k"}},
 	}
