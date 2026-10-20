@@ -140,9 +140,9 @@ Compose і фікстур, тобто не може бігти раніше за
 | ID | Назва | Estimate | Depends on | Status | Result / archive pointer |
 |---|---|---:|---|---|---|
 | B02 | B-2: адаптерні тести під `node`, tus доводиться на дроті в адаптерному шарі | 1h | Phase 5 closed | done | бриф `work/archive/brief-b02.md`; звіт `work/archive/report-b02.md`; беклог `work/backlog.md` B-2 §Outcome; амендмент `docs/media/plan.md` §26 |
-| B24 | B-24: payment polish — пп.1/3/4 (спільний dup-JSON-key helper + `decodeCheckout` з тестом; явний nilable замість variadic; const для date-format). п.2 (in-memory throttle) лишається limitation | 1h | Оплата closed | planned | `work/backlog.md` B-24 |
-| B04 | B-4: дефолтний `testTimeout` rstest тісний під зовнішнім навантаженням хоста — підняти дефолт | 0.5h | — | planned | `work/backlog.md` B-4 |
-| B22 | B-22: дубль current-video селекторів у 4 модулях. ⚠️ видалення дублю перетинає межі модулів (ADR 013); ймовірне закриття — свідома limitation, не код | 0.5h | — | planned | `work/backlog.md` B-22 |
+| B24 | B-24: payment polish — пп.1/3/4. Звірка: пп.1(gap)/3/4 уже зроблені еволюцією коду; residual — 3 копії JSON-dup-key helper зведено в `platform/jsonbody.ValidateUniqueKeys` (12-кейсовий unit). п.2 (throttle) лишається limitation | 1h | Оплата closed | done | `work/backlog.md` B-24 §Outcome; PR tails-r2 |
+| B04 | B-4: дефолтний `testTimeout` rstest. `testTimeout: 30000` у `frontend/rstest.config.ts` (виміряний безпечний поріг); пересторога «послаблює мірник» знята механізмом (робочий тест <5с, лише справжній hang чекає довше) | 0.5h | — | done | `work/backlog.md` B-4 §Outcome; PR tails-r2 |
+| B22 | B-22: дубль current-video селекторів у 4 модулях. Закрито як **свідома limitation** (не код): видалення перетинає межі модулів, ADR 013 (контракт = чиста Go-функція, не SQL); копії вирівняні рев'ю + discussion пришпилено K09a | 0.5h | — | done | `work/backlog.md` B-22 §Outcome |
 | B01 | B-1: observability — frontend logging, log aggregation, dashboards | L | — | blocked | рішення власника/фаза; `work/backlog.md` B-1 |
 | B19 | B-19: ладдер 360p упирається в `maxrate 365k`, VMAF 60 на рухливому відео — продуктове питання (AV1/драбина) | M | — | blocked | рішення власника; `work/backlog.md` B-19 |
 

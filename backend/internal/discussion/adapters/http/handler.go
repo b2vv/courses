@@ -12,6 +12,7 @@ import (
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
 	"courses/platform/httpserver"
+	"courses/platform/jsonbody"
 )
 
 const maximumCommentBody = 16 * 1024
@@ -589,7 +590,7 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maximumCommentBody)
 	body, err := io.ReadAll(r.Body)
-	if err != nil || validateUniqueJSONObject(body) != nil {
+	if err != nil || jsonbody.ValidateUniqueKeys(body) != nil {
 		return result, domain.ErrInvalidRequest
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
@@ -601,35 +602,6 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 		return result, domain.ErrInvalidRequest
 	}
 	return result, nil
-}
-
-func validateUniqueJSONObject(body []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	token, err := decoder.Token()
-	if err != nil || token != json.Delim('{') {
-		return domain.ErrInvalidRequest
-	}
-	seen := map[string]struct{}{}
-	for decoder.More() {
-		key, err := decoder.Token()
-		name, ok := key.(string)
-		if err != nil || !ok {
-			return domain.ErrInvalidRequest
-		}
-		if _, exists := seen[name]; exists {
-			return domain.ErrInvalidRequest
-		}
-		seen[name] = struct{}{}
-		var value json.RawMessage
-		if err := decoder.Decode(&value); err != nil {
-			return domain.ErrInvalidRequest
-		}
-	}
-	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') {
-		return domain.ErrInvalidRequest
-	}
-	return nil
 }
 
 func mapComment(comment application.Comment) commentDTO {

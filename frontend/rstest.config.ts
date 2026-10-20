@@ -19,6 +19,11 @@ const sharedTools = {
 };
 
 export default defineConfig({
+  // B-4: the 5s default timed out CourseEditorView tests whose measured cause was external host
+  // load (load average ~47 from unrelated processes), not the tests — one test reached 162
+  // assertions before the deadline. A single run at 30s gave 12/12 and 364/364. The ceiling is
+  // generous on purpose: it only bites a genuinely hung test, never a slow-but-working one.
+  testTimeout: 30000,
   projects: [
     {
       name: 'adapter-node',

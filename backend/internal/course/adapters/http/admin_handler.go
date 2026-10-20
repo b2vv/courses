@@ -13,6 +13,7 @@ import (
 	"courses/internal/course/application"
 	"courses/internal/course/domain"
 	"courses/platform/httpserver"
+	"courses/platform/jsonbody"
 )
 
 const (
@@ -482,7 +483,7 @@ func decodeLimitedAdminJSON[T any](w http.ResponseWriter, r *http.Request, limit
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	body, err := io.ReadAll(r.Body)
-	if err != nil || validateUniqueJSONObject(body) != nil {
+	if err != nil || jsonbody.ValidateUniqueKeys(body) != nil {
 		return result, domain.ErrInvalidRequest
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
@@ -494,72 +495,6 @@ func decodeLimitedAdminJSON[T any](w http.ResponseWriter, r *http.Request, limit
 		return result, domain.ErrInvalidRequest
 	}
 	return result, nil
-}
-
-func validateUniqueJSONObject(body []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	opening, err := decoder.Token()
-	if err != nil || opening != json.Delim('{') {
-		return domain.ErrInvalidRequest
-	}
-	if err := validateUniqueObject(decoder); err != nil {
-		return err
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return domain.ErrInvalidRequest
-	}
-	return nil
-}
-
-func validateUniqueObject(decoder *json.Decoder) error {
-	seen := make(map[string]struct{})
-	for decoder.More() {
-		token, err := decoder.Token()
-		key, ok := token.(string)
-		if err != nil || !ok {
-			return domain.ErrInvalidRequest
-		}
-		if _, duplicate := seen[key]; duplicate {
-			return domain.ErrInvalidRequest
-		}
-		seen[key] = struct{}{}
-		if err := validateUniqueValue(decoder); err != nil {
-			return err
-		}
-	}
-	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') {
-		return domain.ErrInvalidRequest
-	}
-	return nil
-}
-
-func validateUniqueValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return domain.ErrInvalidRequest
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		return validateUniqueObject(decoder)
-	case '[':
-		for decoder.More() {
-			if err := validateUniqueValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim(']') {
-			return domain.ErrInvalidRequest
-		}
-		return nil
-	default:
-		return domain.ErrInvalidRequest
-	}
 }
 
 func emptyAdminQuery(raw string) bool {
