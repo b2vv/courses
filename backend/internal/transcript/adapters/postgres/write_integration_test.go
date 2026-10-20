@@ -100,6 +100,26 @@ func runWriteTests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, author
 		}
 	})
 
+	t.Run("a second language added through the write path does not displace the primary read (B-21)", func(t *testing.T) {
+		// bareLesson already holds uk, written primary by the first Save in this run. Adding en —
+		// which sorts first by code — through the real write path must leave it non-primary, so a
+		// no-language read still returns uk. This proves the fix on the production insert, not on a
+		// hand-marked fixture row.
+		if _, err := authoring.Save(ctx, owner, application.SaveRequest{
+			LessonID: bareLesson, Language: "en",
+			Segments: []domain.Segment{segment(newSegmentID(10), "english", 0, 100)},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := reading.Get(ctx, owner, bareLesson, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Language != "uk" {
+			t.Fatalf("no-language read after adding en = %q; want uk — the first-written primary", got.Language)
+		}
+	})
+
 	t.Run("a document outside this course's library is a named refusal, not a 500", func(t *testing.T) {
 		_, err := authoring.Save(ctx, owner, application.SaveRequest{
 			LessonID: uploadingLesson, Language: "en",

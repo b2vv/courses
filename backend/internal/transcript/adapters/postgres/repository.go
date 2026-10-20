@@ -40,13 +40,15 @@ LEFT JOIN course_grants AS grants
   ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
 WHERE lessons.id = $2::text::uuid`
 
-// An empty language selects the only transcript, or the first by normalised code when several
-// exist. The order is on the stored, already normalised value, so the choice is deterministic
-// rather than whatever the planner returns first.
+// An empty language selects the only transcript, or the lesson's primary one when several exist
+// (B-21). is_primary is the first-written language unless an author later changes it, so adding a
+// second language cannot silently displace the canonical read the way the old alphabetical order
+// did. The trailing language keeps the choice deterministic if no primary is marked, rather than
+// leaving it to whatever the planner returns first.
 const getTranscript = `SELECT language, authored_against_generation, updated_at
 FROM transcripts
 WHERE lesson_id = $1::text::uuid AND ($2 = '' OR language = $2)
-ORDER BY language
+ORDER BY is_primary DESC, language
 LIMIT 1`
 
 const getSegments = `SELECT
