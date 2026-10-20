@@ -13,6 +13,11 @@ type Case struct {
 	Want   bool
 }
 
+// Cases is the nine (role × status) course-visibility rows: the no-payment subset of the shared
+// access truth table. It is hand-maintained here rather than derived from accesstest.TruthTable
+// because production code (this is a non-test .go file) must not import the access test fixture —
+// platform/architecture guards that boundary. cases_consistency_test.go is the machine cross-check
+// that keeps this table from drifting out of agreement with TruthTable (backlog риз.9).
 func Cases() []Case {
 	return []Case{
 		{Name: "published student", Status: "published", Actor: Student, Want: true},
