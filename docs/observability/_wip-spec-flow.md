@@ -46,8 +46,14 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
 - План ред.round2 (мітки `[G2:N*]`): SSR → збагатити НАЯВНИЙ catch у server.mjs (source/release/route),
   AC3 звужено до shell-throw/503 + route→200 як limitation; release: client=define, SSR=process.env;
   dedup ПРИБРАНО (поділ каналів — єдина гарантія); AC1 e2e вимагає 204; nginx e2e-зона під обсяг сьюту.
-- **НАСТУПНА ДІЯ (нова сесія): GATE 2 раунд 3** свіжим незалежним сабагентом на плані ред.round2.
-  Якщо зелений → tasks S1–S6 → tdd по зрізах → code-review → ship-report.
+- GATE 2 раунд 3 **ЗЕЛЕНИЙ** 2026-10-20 (свіжий незалежний general-purpose рецензент, `_wip-gate2-round3.md`):
+  6/6 N-findings закрито механізмом на рядку + звірено проти коду (HEAD 1a14cb9); 0 нових blocking;
+  defense Q1–Q5 чисто (Q3 реопен round2 — закрито ПОДІЛОМ каналів, не поверненим dedup). 4 NB-деталі
+  wiring занесено в таски (stderr render_failed; однакове release client/SSR; ambient __APP_RELEASE__;
+  AC1 bounded-wait). Залишкові NB → у звіт як обмеження.
+- Таски S1–S7 записано у `work/tasks.md` §Phase observability (B-1).
+- **НАСТУПНА ДІЯ: імплементація S1** (backend clientlog module + endpoint + release-define) за tdd,
+  тоді S2…S7 по зрізах; code-review; ship-report.
 
 ## Журнал
 - specify: spec.md написано (Проблема/Сценарії/AC1–AC7/Out of scope/5 відкритих).
