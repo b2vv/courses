@@ -53,6 +53,8 @@ export * from './changePasswordRequest.ts';
 export * from './checkoutForm.ts';
 export * from './checkoutFormFieldsItem.ts';
 export * from './checkoutRequest.ts';
+export * from './clientLogRequest.ts';
+export * from './clientLogRequestLevel.ts';
 export * from './comment.ts';
 export * from './commentAuthor.ts';
 export * from './commentPage.ts';

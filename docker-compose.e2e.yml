@@ -28,6 +28,7 @@ services:
     volumes:
       - ./infrastructure/nginx/login-req.e2e.conf:/etc/nginx/login-req.conf:ro
       - ./infrastructure/nginx/api-req.e2e.conf:/etc/nginx/api-req.conf:ro
+      - ./infrastructure/nginx/clientlog-req.e2e.conf:/etc/nginx/clientlog-req.conf:ro
   wayforpay-stub:
     restart: unless-stopped
     build:
