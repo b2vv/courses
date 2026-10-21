@@ -78,5 +78,9 @@ defense-питання. Деталі: `_wip-gate2-review.md`. Несучі фа�
   (не --profile flag — compose v5.5.1 парсинг); клієнтський §17-scrub знято (S2).
 - S7 **done** 2026-10-21: AC1 e2e `observability.spec.ts` (рівно 1 POST→204, bounded-wait) зелений;
   ordered `make check` **EXIT=0** (frontend 784 unit, e2e **123 passed**, 14.7m); звіт `report.md`.
-  **ФАЗА observability (B-1) ЗАКРИТА (S1–S7).** Наступне: PR у main (гілка feat/observability-full-stack).
+  **ФАЗА observability (B-1) ЗАКРИТА (S1–S7).**
+- code-review 2026-10-21: дві осі fresh-субагентами — Standards PASS, Spec PASS, blocking 0; закрито 2
+  non-blocking (scrub UA/Release; e2e unhandledrejection-канал); повторний ordered gate EXIT=0, e2e 124.
+- **PR #62** відкрито (feat/observability-full-stack → main) `07724ac`. Чекає рішення власника про merge
+  (код-фаза; не авто-мерджу). CI на гілці впаде на provisioning (account-wide billing, не код).
 
