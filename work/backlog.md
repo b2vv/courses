@@ -124,6 +124,14 @@ seam'ами цих модулів (напр. спільний playback-read-cont
 
 **Raised:** 2026-09-06 (user), during Phase 5.
 **Shape:** end-of-roadmap hardening, after the product does something worth watching.
+**CLOSED 2026-10-21** — spec-flow phase, PR #62 squash-merged `0b69d04`. Shipped: backend
+`/api/v1/client-logs` ingest (§17 redaction) + `source=client`; frontend error bridge (onCaughtError
++ window.onerror + unhandledrejection, no dedup); SSR `server.mjs` lines tagged `source=ssr`+release+
+route; Loki + promtail (docker_sd) + Grafana (provisioned datasources + overview dashboard) under the
+opt-in `monitoring` profile, network-only; nginx `clientlog` zone. Ordered `make check` EXIT=0 (e2e
+124); `infrastructure/tests/monitoring-stack.sh` PASS (AC4/AC5/AC6); independent 2-axis code-review
+PASS. Limitations + 5 dated plan deviations in `docs/observability/report.md`. Not deployed to prod
+(owner 2026-10-03): infra built, not wired; Grafana network-only until S01 (TLS/auth).
 
 ### What already exists (verified in code, 2026-09-06)
 
