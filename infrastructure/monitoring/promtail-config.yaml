@@ -1,0 +1,44 @@
+# promtail discovers the project's containers through the Docker API socket and
+# ships their stdout/stderr to Loki. The docker service-discovery transport is
+# used (not a /var/lib/docker/containers file mount) because the socket path
+# works identically on the Linux deploy host and on Docker Desktop, so the
+# monitoring-stack.sh proof runs the same way the deploy does. The socket is
+# mounted read-only; promtail only reads logs and container metadata.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: courses-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ['com.docker.compose.project=courses']
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+    pipeline_stages:
+      # Parse the structured JSON lines the app services emit. Non-JSON lines
+      # (postgres, redis, nginx) simply leave these empty.
+      - json:
+          expressions:
+            source: source
+            service: service
+      # The `source` label separates client / ssr / api / worker even though the
+      # client lines leave through the api container's stdout. Lines that carry
+      # no explicit source fall back to their service name, then to "other".
+      - template:
+          source: source
+          template: '{{ or .Value .service "other" }}'
+      - labels:
+          source:

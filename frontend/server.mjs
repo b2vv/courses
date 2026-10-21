@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { serve } from 'srvx';
 import { staticMiddleware } from 'srvx/static';
 import entry from './dist/server/index.js';
+import { ssrRenderFailedLine, ssrRequestLine } from './server-log.mjs';
 
 const contentSecurityPolicy = (nonce) =>
   `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`;
@@ -40,19 +41,15 @@ const server = serve({
       response.headers.append('Vary', 'Cookie');
       response.headers.set(contentSecurityPolicyHeader, contentSecurityPolicy(nonce));
       process.stdout.write(
-        JSON.stringify({
-          level: 'info',
-          service: 'frontend',
-          event: 'http_request',
+        ssrRequestLine({
           status: response.status,
           durationMs: Math.round(performance.now() - started),
-        }) + '\n',
+          route: path,
+        }),
       );
       return response;
     } catch {
-      process.stderr.write(
-        JSON.stringify({ level: 'error', service: 'frontend', event: 'render_failed' }) + '\n',
-      );
+      process.stderr.write(ssrRenderFailedLine({ route: path }));
       return new Response('Rendering unavailable', {
         status: 503,
         headers: { 'Cache-Control': 'no-store' },

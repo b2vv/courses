@@ -179,8 +179,15 @@ services:
     tmpfs: [/tmp]
   frontend:
     <<: *runtime
-    build: { context: ., dockerfile: frontend/Dockerfile, target: production }
-    environment: { API_BASE_URL: 'http://api:8080', PORT: '3000' }
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: production
+      args: { APP_RELEASE: '${APP_RELEASE:-dev}' }
+    # APP_RELEASE is passed both as a build arg (baked into the client bundle by
+    # rsbuild define) and as runtime env (read by server.mjs), from one source,
+    # so the client and SSR log lines carry one matching release.
+    environment: { API_BASE_URL: 'http://api:8080', PORT: '3000', APP_RELEASE: '${APP_RELEASE:-dev}' }
     depends_on: { api: { condition: service_healthy } }
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -200,6 +207,7 @@ services:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infrastructure/nginx/login-req.conf:/etc/nginx/login-req.conf:ro
       - ./infrastructure/nginx/api-req.conf:/etc/nginx/api-req.conf:ro
+      - ./infrastructure/nginx/clientlog-req.conf:/etc/nginx/clientlog-req.conf:ro
       - media-data:/media:ro
     depends_on:
       api: { condition: service_healthy }
@@ -221,9 +229,50 @@ services:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     depends_on: { api: { condition: service_healthy }, media-worker: { condition: service_healthy } }
+  # Log aggregation, opt-in and docker-network-only like prometheus (no host
+  # ports — AC6). promtail ships container stdout to loki; grafana reads both
+  # prometheus and loki. Applications always log to stdout regardless, so loki
+  # being down never affects logging.
+  loki:
+    <<: *runtime
+    image: grafana/loki:3.4.1
+    profiles: [monitoring]
+    command: ['-config.file=/etc/loki/loki-config.yaml']
+    volumes:
+      - ./infrastructure/monitoring/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+  promtail:
+    <<: *runtime
+    image: grafana/promtail:3.4.1
+    profiles: [monitoring]
+    command: ['-config.file=/etc/promtail/promtail-config.yaml']
+    volumes:
+      - ./infrastructure/monitoring/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/tmp
+    depends_on: { loki: { condition: service_started } }
+  grafana:
+    <<: *runtime
+    image: grafana/grafana:11.5.2
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      loki: { condition: service_started }
+      prometheus: { condition: service_started }
 
 volumes:
   postgres-data:
   redis-data:
   media-data:
   prometheus-data:
+  loki-data:
+  grafana-data:
+  promtail-positions:

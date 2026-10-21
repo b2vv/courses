@@ -16,6 +16,12 @@ export default defineConfig({
       'process.env.PUBLIC_WAYFORPAY_PAY_HOST': JSON.stringify(
         process.env.PUBLIC_WAYFORPAY_PAY_HOST ?? '',
       ),
+      // Release identifier baked into the client bundle at build time (git short
+      // SHA passed as APP_RELEASE; "dev" in dev/gate builds). The SSR process
+      // (server.mjs) reads the SAME process.env.APP_RELEASE at runtime, so client
+      // and SSR log lines carry one matching release. Using the process.env key
+      // keeps it typed by @types/node — no ambient declaration needed.
+      'process.env.APP_RELEASE': JSON.stringify(process.env.APP_RELEASE ?? 'dev'),
     },
   },
   server: { port: 3000 },

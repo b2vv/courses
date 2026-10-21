@@ -6,6 +6,23 @@ info:
 servers:
   - url: /
 paths:
+  /api/v1/client-logs:
+    post:
+      operationId: ingestClientLog
+      summary: Ingest one browser-captured log event
+      description: >-
+        Unauthenticated by design so a pre-auth client error can still report.
+        The body is one event; the server validates, redacts the §17 set and
+        emits a structured log line. No body is returned. The endpoint is
+        rate-limited by the nginx clientlog zone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientLogRequest' }
+      responses:
+        '204': { description: Event accepted; nothing is returned. }
+        '400': { $ref: '#/components/responses/BadRequest' }
   /api/v1/courses:
     get:
       operationId: listPublishedCourses
@@ -2258,6 +2275,18 @@ components:
       required: [reason]
       properties:
         reason: { type: string, minLength: 1, maxLength: 500 }
+    ClientLogRequest:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        level: { type: string, enum: [error, warn, info] }
+        message: { type: string, maxLength: 2000 }
+        route: { type: string, maxLength: 512 }
+        release: { type: string, maxLength: 128 }
+        userAgent: { type: string, maxLength: 256 }
+        errorName: { type: string, maxLength: 256 }
+        errorStack: { type: string, maxLength: 8000 }
     ParticipantReportRequest:
       type: object
       additionalProperties: false

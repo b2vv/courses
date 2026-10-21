@@ -32,6 +32,7 @@ import type {
   ChangePasswordRequest,
   CheckoutForm,
   CheckoutRequest,
+  ClientLogRequest,
   Comment,
   CommentPage,
   CompleteTwoFactorRequest,
@@ -148,6 +149,63 @@ import type {
   VideoNotRetryableResponse,
   WayForPayAcknowledgement
 } from './models';
+
+
+export type ingestClientLogResponse204 = {
+  data: void
+  status: 204
+}
+
+export type ingestClientLogResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type ingestClientLogResponseSuccess = (ingestClientLogResponse204) & {
+  headers: Headers;
+};
+export type ingestClientLogResponseError = (ingestClientLogResponse400) & {
+  headers: Headers;
+};
+
+export type ingestClientLogResponse = (ingestClientLogResponseSuccess | ingestClientLogResponseError)
+
+export const getIngestClientLogUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/client-logs`
+}
+
+/**
+ * Unauthenticated by design so a pre-auth client error can still report. The body is one event; the server validates, redacts the §17 set and emits a structured log line. No body is returned. The endpoint is rate-limited by the nginx clientlog zone.
+ * @summary Ingest one browser-captured log event
+ */
+export const ingestClientLog = async (clientLogRequest: ClientLogRequest, options?: RequestInit): Promise<ingestClientLogResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getIngestClientLogUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(clientLogRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: ingestClientLogResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as ingestClientLogResponse
+}
+
 
 
 export type listPublishedCoursesResponse200 = {
