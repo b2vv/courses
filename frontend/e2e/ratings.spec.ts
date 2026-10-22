@@ -136,14 +136,30 @@ async function seedProgress(course: CourseFixture, userID = studentID, completed
   );
 }
 
-async function seedReview(course: CourseFixture, index: number, stars: number, body: string) {
+function reviewSeedStatements(course: CourseFixture, index: number, stars: number, body: string) {
   const author = randomUUID();
-  await sql(
+  return [
     `INSERT INTO users(id,email,display_name,role,password_hash) VALUES (${literal(author)}::uuid,${literal(`${runNamespace}-${index}@example.test`)},${literal(`Рецензент ${index}`)},'student','$argon2id$v=19$m=65536,t=3,p=4$abcdefghijklmnop$abcdefghijklmnopqrstuvwxabcdefghijklmnopQRSTUVWX')`,
-  );
-  await sql(
     `INSERT INTO discussion_reviews(id,course_id,author_id,stars,body,completed_lessons,total_lessons,created_at) VALUES (gen_random_uuid(),${literal(course.id)}::uuid,${literal(author)}::uuid,${stars},${literal(body)},0,1,now() + interval '${index} seconds')`,
+  ];
+}
+
+async function seedReview(course: CourseFixture, index: number, stars: number, body: string) {
+  await sql(reviewSeedStatements(course, index, stars, body).join('; '));
+}
+
+// Batch-seed many reviews in a single psql round-trip. A `docker compose exec` costs ~0.7s, so
+// Rt14's 45 reviews as 90 serial statements overran the 30s test timeout (~60s of exec alone);
+// one exec keeps the seed well under a second. Each row keeps its own `created_at` interval, so
+// the pagination order the test asserts is unchanged.
+async function seedReviews(
+  course: CourseFixture,
+  specs: readonly { index: number; stars: number; body: string }[],
+) {
+  const statements = specs.flatMap((spec) =>
+    reviewSeedStatements(course, spec.index, spec.stars, spec.body),
   );
+  await sql(statements.join('; '));
 }
 
 async function grant(
@@ -403,10 +419,17 @@ test('Rt14 pages 20 + 20 + 5 by keyboard, keeps focus on «Показати ще
     await admin.close();
   }
   // 45 reviews make an intermediate page: a natively disabled button would lose focus to <body> there, while
-  // the last page restores focus on its own and would hide that defect.
-  for (let index = 0; index < 45; index += 1)
-    // Indices 200–244: every scenario seeds a disjoint index range (the reviewer email embeds it).
-    await seedReview(course, index + 200, 5, `Rt14 review ${index} ${runNamespace}`);
+  // the last page restores focus on its own and would hide that defect. Seeded in one psql round-trip
+  // (seedReviews) so 90 inserts do not overrun the 30s timeout on a slow `docker compose exec`.
+  // Indices 200–244: every scenario seeds a disjoint index range (the reviewer email embeds it).
+  await seedReviews(
+    course,
+    Array.from({ length: 45 }, (_, index) => ({
+      index: index + 200,
+      stars: 5,
+      body: `Rt14 review ${index} ${runNamespace}`,
+    })),
+  );
   await page.goto(`/courses/${course.slug}`);
   const list = page.getByRole('list', { name: 'Відгуки про курс' });
   const items = list.getByRole('listitem');
