@@ -42,14 +42,34 @@ async function axeAudit(page: Page, scope: 'wcag' | 'contrast') {
 type AxeFinding = Awaited<ReturnType<typeof axeAudit>>['incomplete'][number];
 
 function expectOnlySelectChevronIncomplete(incomplete: AxeFinding[]) {
-  // Axe declines a verdict for Select's decorative non-BMP chevron. Remove this pin when axe can
-  // evaluate that glyph or when the UI-kit markup changes and makes the selector suffix obsolete.
+  // Axe declines a verdict for Select's decorative non-BMP chevron. The player bar carries two
+  // Selects now (speed and quality), so the count is not pinned — what matters is that every
+  // undecided finding is that one decorative glyph and nothing else slips in. Remove this pin when
+  // axe can evaluate the glyph or when the UI-kit markup changes and makes the suffix obsolete.
   const isSelectChevron = ({ id, messageKey, target }: AxeFinding) =>
     id === 'color-contrast' &&
     messageKey === 'nonBmp' &&
     target.endsWith('span[aria-hidden="true"]');
-  expect(incomplete).toHaveLength(1);
-  expect(incomplete.filter(isSelectChevron)).toHaveLength(1);
+  expect(incomplete.length).toBeGreaterThan(0);
+  expect(incomplete.filter((finding) => !isSelectChevron(finding))).toHaveLength(0);
+}
+
+// Keyboard-reach each control in turn and assert its focus ring. The stage is focused first (it is
+// programmatically focusable, tabIndex -1) so the following Tab presses — real keyboard events, so
+// :focus-visible applies — walk forward into the control bar in its visual order.
+async function tabThroughControls(page: Page, controls: Locator, order: Locator[]) {
+  await page
+    .locator('.lesson-player-stage')
+    .evaluate((element) => (element as HTMLElement).focus());
+  for (const control of order) {
+    for (
+      let index = 0;
+      index < 12 && !(await control.evaluate((node) => node === document.activeElement));
+      index += 1
+    )
+      await page.keyboard.press('Tab');
+    await expectVisibleFocus(control, controls);
+  }
 }
 
 async function expectVisibleFocus(control: Locator, controls: Locator) {
@@ -111,6 +131,11 @@ async function expectPlaybackLayout(page: Page, controls: Locator, playbackContr
         (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '',
       );
       if (!hasDirectText) return [];
+      // Skip visually-hidden (sr-only) nodes: a label clipped to a 1px box keeps its text in the
+      // accessibility tree on purpose (the player's menu labels at phone width), so its scrollWidth
+      // naturally exceeds its 1px clientWidth. That is intentional off-screen text, not clipped
+      // visible text, so it must not count as a layout failure.
+      if (element.clientWidth <= 1 && element.clientHeight <= 1) return [];
       const clippedHorizontally = element.scrollWidth > element.clientWidth + 1;
       const clippedVertically = element.scrollHeight > element.clientHeight + 1;
       return clippedHorizontally || clippedVertically
@@ -329,7 +354,7 @@ test.describe('with a stored student session', () => {
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await page.goto(`/learn/layout-course/${lessonId}`);
     await page.addScriptTag({ content: axe.source });
-    const controls = page.locator('.lesson-player-controls');
+    const controls = page.locator('.lesson-player-controlbar');
     const play = page.getByRole('button', { name: 'Відтворити', exact: true });
     const seek = page.getByRole('slider', { name: 'Позиція відтворення', exact: true });
     const quality = page.getByRole('button', { name: /Якість/ });
@@ -344,16 +369,7 @@ test.describe('with a stored student session', () => {
     }));
     expect(lightAppearance.colorScheme).toBe('light');
 
-    for (
-      let index = 0;
-      index < 12 && !(await play.evaluate((node) => node === document.activeElement));
-      index += 1
-    )
-      await page.keyboard.press('Tab');
-    for (const [index, control] of playbackControls.entries()) {
-      if (index > 0) await page.keyboard.press('Tab');
-      await expectVisibleFocus(control, controls);
-    }
+    await tabThroughControls(page, controls, [seek, play, quality]);
     const auditedVideoState = await page.locator('video').evaluate((video) => {
       if (!(video instanceof HTMLVideoElement)) throw new Error('Expected the lesson video');
       return {
@@ -378,12 +394,7 @@ test.describe('with a stored student session', () => {
     }));
     expect(darkAppearance.colorScheme).toBe('dark');
     expect(darkAppearance.surface).not.toBe(lightAppearance.surface);
-    await page.keyboard.press('Shift+Tab');
-    await page.keyboard.press('Shift+Tab');
-    for (const [index, control] of playbackControls.entries()) {
-      if (index > 0) await page.keyboard.press('Tab');
-      await expectVisibleFocus(control, controls);
-    }
+    await tabThroughControls(page, controls, [seek, play, quality]);
     const darkContrast = await axeAudit(page, 'contrast');
     expect(darkContrast.violations).toEqual([]);
     expectOnlySelectChevronIncomplete(darkContrast.incomplete);

@@ -152,6 +152,9 @@ describe('lesson player states', () => {
 
     expect(plays).toBe(0);
     expect(loads).toEqual([]);
+    // The scrubber sits at the top of the control bar, so it is the first tab stop; Play follows.
+    await user.tab();
+    expect(screen.getByRole('slider', { name: 'Playback position' })).toBe(document.activeElement);
     await user.tab();
     expect(screen.getByRole('button', { name: 'Play' })).toBe(document.activeElement);
     await user.keyboard('{Enter}');

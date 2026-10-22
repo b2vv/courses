@@ -100,6 +100,7 @@ export const en = {
       startLearning: 'Start learning',
       blockedNote: 'Content access remains open, but discussion participation is restricted',
       progress: '{{percent}}% complete',
+      progressLabel: 'Course progress',
       myLearning: {
         title: 'My learning',
         empty: 'You have not enrolled in any courses yet.',
@@ -403,6 +404,14 @@ export const en = {
         position: 'Playback position',
         quality: 'Quality',
         qualityAuto: 'Auto',
+        volume: 'Volume',
+        mute: 'Mute',
+        unmute: 'Unmute',
+        speed: 'Speed',
+        fullscreen: 'Fullscreen',
+        fullscreenExit: 'Exit fullscreen',
+        pip: 'Picture in picture',
+        pipExit: 'Exit picture in picture',
       },
     },
     teach: {
