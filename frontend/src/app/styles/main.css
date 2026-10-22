@@ -2316,6 +2316,10 @@ nav a {
   flex: 1 1 18rem;
 }
 .course-outline {
+  position: sticky;
+  top: var(--space-4);
+  max-block-size: calc(100vh - 2 * var(--space-4));
+  overflow: auto;
   border-block-start: 3px solid var(--color-primary);
   background: var(--color-surface);
 }
@@ -2426,32 +2430,43 @@ nav a {
   .course-learning {
     grid-template-columns: minmax(0, 1fr);
   }
+  .course-outline {
+    position: static;
+    max-block-size: none;
+  }
+}
+.lesson-player-head {
+  display: grid;
+  gap: var(--space-1);
 }
 .lesson-player h1 {
-  margin-block-end: 0;
+  margin: 0;
+  /* The slug-shaped seed titles wrap hard; cap the display size and let long words break so the
+     title never pushes the video below the fold on desktop. */
+  font-size: clamp(1.5rem, 1rem + 1.8vw, 2.1rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .lesson-player-course {
   margin: 0;
-  color: var(--color-muted);
-}
-.lesson-player-status {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding-block: var(--space-2);
-  border-block: 1px solid var(--color-border);
   color: var(--color-muted);
   font: 0.78rem var(--font-utility);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.lesson-player-status strong {
-  color: var(--color-success);
-}
-.lesson-player-frame {
+/* The frame and its controls are one bordered media surface, not a video followed by a form. */
+.lesson-player-stage {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
+  background: var(--color-media-frame);
+}
+.lesson-player-stage:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.lesson-player-frame {
+  position: relative;
   background: var(--color-media-frame);
   aspect-ratio: 16 / 9;
 }
@@ -2460,35 +2475,178 @@ nav a {
   inline-size: 100%;
   block-size: 100%;
   object-fit: contain;
+  cursor: pointer;
 }
-.lesson-player-controls {
+.lesson-player-bigplay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
   display: grid;
-  grid-template-columns: auto minmax(12rem, 1fr) minmax(9rem, auto);
-  align-items: end;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
+  place-items: center;
+  padding-inline-start: 0.3rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, #05070a 55%, transparent);
+  color: #f2f3f8;
+  pointer-events: none;
+  box-shadow: 0 0.25rem 1rem color-mix(in srgb, #05070a 45%, transparent);
+}
+.lesson-player-controlbar {
+  display: grid;
+  /* Explicit minmax(0, 1fr) column: without it the implicit grid column grows to the rows'
+     max-content and spills past the stage (clipped, but the controls overflow). Capped here, the
+     scrubber and button rows are held to the bar width and shrink/wrap inside it at 200% zoom. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-block-start: 1px solid var(--color-border);
   background: var(--color-surface);
 }
-.lesson-player-seek {
+/* Grid, not flex: the middle track is minmax(0, 1fr) so the scrubber always shrinks to the space
+   left by the two time readouts and never pushes the bar wider than itself, even at 200% zoom. */
+.lesson-player-scrubrow {
   display: grid;
-  gap: var(--space-2);
-  min-inline-size: 0;
-  font-weight: 650;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
 }
-.lesson-player-seek input {
-  inline-size: 100%;
+.lesson-player-time {
+  color: var(--color-muted);
+  font: 0.8rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  min-inline-size: 3.5ch;
+}
+.lesson-player-time--total {
+  text-align: end;
+}
+.lesson-player-seek {
+  flex: 1;
+  min-inline-size: 0;
   min-block-size: var(--control-min-size);
   accent-color: var(--color-primary);
 }
-.lesson-player-seek input:focus-visible {
+.lesson-player-seek:focus-visible,
+.lesson-player-volumeslider:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }
+.lesson-player-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.lesson-player-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+.lesson-player-volume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.lesson-player-volumeslider {
+  inline-size: 6rem;
+  max-inline-size: 28vw;
+  min-block-size: var(--control-min-size);
+  accent-color: var(--color-primary);
+}
+.lesson-player-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+  min-inline-size: 0;
+}
+.lesson-player-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.lesson-player-iconbtn:hover {
+  background: var(--color-background);
+}
+.lesson-player-iconbtn:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.lesson-player-iconbtn[aria-pressed='true'] {
+  color: var(--color-primary);
+  border-color: var(--color-border);
+}
+/* The menus carry their field label inline and compact, so quality/speed read as player controls
+   rather than stacked form fields. Scoped to the bar; the global field layout is untouched.
+   React Aria renders the field label as <span class="react-aria-Label">, not a <label> element,
+   so the selectors match that span (a bare `> label` never matched, leaving the label in flow). */
+.lesson-player-tools .ui-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.lesson-player-tools .ui-field > :is(label, .react-aria-Label) {
+  margin: 0;
+  color: var(--color-muted);
+  font: 0.68rem var(--font-utility);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lesson-player-tools .ui-select-button {
+  min-block-size: var(--control-min-size);
+  min-inline-size: var(--control-min-size);
+  max-inline-size: 100%;
+}
 @media (max-width: 42rem) {
-  .lesson-player-controls {
-    grid-template-columns: 1fr;
+  /* Reclaim horizontal room so a long menu value (e.g. "Автоматично") fits the bar at 200% zoom:
+     trim the bar's side padding and the menu's inner gap. */
+  .lesson-player-controlbar {
+    padding-inline: var(--space-2);
+  }
+  .lesson-player-tools .ui-select-button {
+    gap: var(--space-1);
+  }
+  /* Stack the button area into full-bar-width rows so the menus get the whole bar to show their
+     value — a row layout squeezed them into a narrow offset block that spilled past the viewport
+     at 200% zoom. */
+  .lesson-player-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lesson-player-tools {
+    margin-inline-start: 0;
+    inline-size: 100%;
+  }
+  /* Phone width: each menu takes a full-width row so its value shows in full — no spill past the
+     bar and no clipped text — and the inline labels move to assistive tech only (kept in the a11y
+     tree, off the canvas) since the menu value already reads the choice. Without this the visible
+     "Якість"/"Швидкість" label kept ~97px of the 292px row, squeezing the button so the value
+     "Автоматично" overran it and axe reported color-contrast elmPartiallyObscured (B24a). */
+  .lesson-player-tools .ui-field {
+    flex: 1 1 100%;
+  }
+  .lesson-player-tools .ui-field > :is(label, .react-aria-Label) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 .transcript {

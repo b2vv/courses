@@ -103,6 +103,7 @@ export const uk = {
       startLearning: 'Почати навчання',
       blockedNote: 'Доступ до контенту відкрито, участь в обговореннях обмежено',
       progress: '{{percent}}% пройдено',
+      progressLabel: 'Прогрес курсу',
       myLearning: {
         title: 'Моє навчання',
         empty: 'Ви ще не записалися на жоден курс.',
@@ -409,6 +410,14 @@ export const uk = {
         position: 'Позиція відтворення',
         quality: 'Якість',
         qualityAuto: 'Автоматично',
+        volume: 'Гучність',
+        mute: 'Вимкнути звук',
+        unmute: 'Увімкнути звук',
+        speed: 'Швидкість',
+        fullscreen: 'На весь екран',
+        fullscreenExit: 'Вийти з повноекранного режиму',
+        pip: 'Картинка в картинці',
+        pipExit: 'Вийти з картинки в картинці',
       },
     },
     teach: {

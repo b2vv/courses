@@ -245,6 +245,7 @@ function Layout() {
           </Link>
           <nav className="client-primary-nav" aria-label={t('common.mainNavigation')}>
             <Link to="/courses">{t('common.catalog')}</Link>
+            {session.data ? <Link to="/learn">{t('common.myLearning')}</Link> : null}
           </nav>
           <div className="client-header-actions">
             <IdentityHeader

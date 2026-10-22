@@ -23,7 +23,7 @@ export function MyLearningList({ items }: { readonly items: readonly MembershipC
             </p>
             {item.state === 'blocked' && <output>{t('enrollment.blockedNote')}</output>}
             <ProgressBar
-              label={t('enrollment.progress', { percent: item.progressPercent })}
+              label={t('enrollment.progressLabel')}
               value={item.progressPercent}
               minValue={0}
               maxValue={100}
