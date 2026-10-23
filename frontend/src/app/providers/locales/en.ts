@@ -412,6 +412,9 @@ export const en = {
         fullscreenExit: 'Exit fullscreen',
         pip: 'Picture in picture',
         pipExit: 'Exit picture in picture',
+        replay: 'Replay',
+        loading: 'Loading…',
+        buffered: 'Buffered',
       },
     },
     teach: {
