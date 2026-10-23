@@ -415,6 +415,8 @@ export const en = {
         replay: 'Replay',
         loading: 'Loading…',
         buffered: 'Buffered',
+        settings: 'Settings',
+        captions: 'Subtitles',
       },
     },
     teach: {

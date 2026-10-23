@@ -421,6 +421,8 @@ export const uk = {
         replay: 'Переглянути знову',
         loading: 'Завантаження…',
         buffered: 'Завантажено',
+        settings: 'Налаштування',
+        captions: 'Субтитри',
       },
     },
     teach: {

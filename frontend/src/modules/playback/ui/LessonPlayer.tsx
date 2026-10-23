@@ -28,12 +28,13 @@ import type {
   PlaybackMediaError,
   PlaybackQuality,
 } from '../ports/PlaybackMedia';
-import { Button, EmptyState, ErrorState, Select } from '../../../presentation/ui';
+import { Button, EmptyState, ErrorState } from '../../../presentation/ui';
 import {
   readPreferences,
   writePreferences,
   type PlayerPreferences,
 } from '../application/preferences';
+import { PlayerSettingsMenu } from './PlayerSettingsMenu';
 
 export type LessonPlayerActions = {
   play(): Promise<PlaybackResult<PlaybackSession>>;
@@ -172,6 +173,10 @@ export function LessonPlayer({
   const [muted, setMuted] = useState(initialPrefs.muted);
   const [volume, setVolume] = useState(initialPrefs.volume);
   const [rate, setRate] = useState(initialPrefs.rate);
+  // Captions follow a remembered on/off, applied to the <track> below; the selected quality is held
+  // here so the gear menu can show the current choice (the native HLS auto/level switch is one-way).
+  const [captionsOn, setCaptionsOn] = useState(initialPrefs.captionsOn);
+  const [qualityKey, setQualityKey] = useState('auto');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const pipSupported = typeof document !== 'undefined' && document.pictureInPictureEnabled === true;
@@ -529,8 +534,18 @@ export function LessonPlayer({
 
   // Remember the knobs for the next lesson. Writing the stored value back on mount is a harmless no-op.
   useEffect(() => {
-    writePreferences({ volume, muted, rate });
-  }, [volume, muted, rate]);
+    writePreferences({ volume, muted, rate, captionsOn });
+  }, [volume, muted, rate, captionsOn]);
+
+  // Drive the caption track from the remembered toggle rather than the <track default> attribute, so
+  // the student's last choice wins. Re-applied when the track element appears (captions prop set).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video === null) return;
+    const track = video.textTracks[0];
+    if (track === undefined) return;
+    track.mode = captionsOn && captions !== undefined ? 'showing' : 'hidden';
+  }, [captionsOn, captions, videoElement]);
 
   // A brief ±10s indicator over the frame, the on-screen echo of a keyboard/gesture skip (YouTube's
   // double-tap ripple, Apple TV's skip badge). Purely decorative; the slider announces real seeks.
@@ -885,9 +900,10 @@ export function LessonPlayer({
             playsInline
           >
             {captionsUrl === null ? null : (
+              // No `default`: the caption track starts hidden and the remembered toggle in the gear
+              // menu drives its mode (see the captions effect above), so the student's choice wins.
               <track
                 kind="captions"
-                default
                 src={captionsUrl}
                 srcLang={captionsLanguage ?? 'uk'}
                 label={t('learn.transcript.heading')}
@@ -1050,29 +1066,44 @@ export function LessonPlayer({
               </div>
             </div>
             <div className="lesson-player-tools">
-              <Select
-                label={t('learn.video.speed')}
-                options={speedOptions}
-                selectedKey={String(rate)}
-                onSelectionChange={(key) => {
-                  const next = Number(key);
-                  if (Number.isFinite(next)) applyRate(next);
+              <PlayerSettingsMenu
+                label={t('learn.video.settings')}
+                speed={{
+                  label: t('learn.video.speed'),
+                  value: String(rate),
+                  options: speedOptions,
+                  onChange: (key) => {
+                    const next = Number(key);
+                    if (Number.isFinite(next)) applyRate(next);
+                  },
                 }}
-              />
-              {mediaKind === 'hls' && (
-                <Select
-                  label={t('learn.video.quality')}
-                  options={qualityOptions}
-                  defaultSelectedKey="auto"
-                  onSelectionChange={(key) => {
-                    if (key === 'auto') mediaRef.current?.selectLevel('auto');
-                    else {
-                      const level = Number(key);
-                      if (Number.isInteger(level)) mediaRef.current?.selectLevel(level);
+                {...(mediaKind === 'hls'
+                  ? {
+                      quality: {
+                        label: t('learn.video.quality'),
+                        value: qualityKey,
+                        options: qualityOptions,
+                        onChange: (key) => {
+                          setQualityKey(key);
+                          if (key === 'auto') mediaRef.current?.selectLevel('auto');
+                          else {
+                            const level = Number(key);
+                            if (Number.isInteger(level)) mediaRef.current?.selectLevel(level);
+                          }
+                        },
+                      },
                     }
-                  }}
-                />
-              )}
+                  : {})}
+                {...(captionsUrl === null
+                  ? {}
+                  : {
+                      captions: {
+                        label: t('learn.video.captions'),
+                        isOn: captionsOn,
+                        onChange: setCaptionsOn,
+                      },
+                    })}
+              />
               {pipSupported && (
                 <button
                   type="button"

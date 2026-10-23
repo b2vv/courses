@@ -7,9 +7,15 @@ export type PlayerPreferences = {
   readonly volume: number;
   readonly muted: boolean;
   readonly rate: number;
+  readonly captionsOn: boolean;
 };
 
-export const defaultPreferences: PlayerPreferences = { volume: 1, muted: false, rate: 1 };
+export const defaultPreferences: PlayerPreferences = {
+  volume: 1,
+  muted: false,
+  rate: 1,
+  captionsOn: false,
+};
 
 const STORAGE_KEY = 'courses.player.prefs.v1';
 
@@ -45,11 +51,18 @@ export function parsePreferences(raw: string | null): PlayerPreferences {
       typeof record.rate === 'number' && ALLOWED_RATES.has(record.rate)
         ? record.rate
         : defaultPreferences.rate,
+    captionsOn:
+      typeof record.captionsOn === 'boolean' ? record.captionsOn : defaultPreferences.captionsOn,
   };
 }
 
 export function serializePreferences(prefs: PlayerPreferences): string {
-  return JSON.stringify({ volume: prefs.volume, muted: prefs.muted, rate: prefs.rate });
+  return JSON.stringify({
+    volume: prefs.volume,
+    muted: prefs.muted,
+    rate: prefs.rate,
+    captionsOn: prefs.captionsOn,
+  });
 }
 
 export function readPreferences(): PlayerPreferences {

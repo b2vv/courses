@@ -11,7 +11,7 @@ test('null (nothing stored) yields the defaults', () => {
 });
 
 test('a complete, valid blob round-trips through serialize/parse', () => {
-  const prefs: PlayerPreferences = { volume: 0.4, muted: true, rate: 1.5 };
+  const prefs: PlayerPreferences = { volume: 0.4, muted: true, rate: 1.5, captionsOn: true };
   expect(parsePreferences(serializePreferences(prefs))).toEqual(prefs);
 });
 
@@ -27,6 +27,7 @@ test('each field falls back independently when its value is wrong', () => {
     volume: 1,
     muted: false,
     rate: 1.25,
+    captionsOn: false,
   });
 });
 
@@ -36,7 +37,13 @@ test('a rate the player does not offer is dropped, not clamped', () => {
     volume: 0.5,
     muted: false,
     rate: 1,
+    captionsOn: false,
   });
+});
+
+test('captionsOn is remembered and defaults off when absent', () => {
+  expect(parsePreferences(JSON.stringify({ captionsOn: true })).captionsOn).toBe(true);
+  expect(parsePreferences(JSON.stringify({ volume: 0.5 })).captionsOn).toBe(false);
 });
 
 test('a negative or non-finite volume falls back to full volume', () => {
