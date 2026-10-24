@@ -814,7 +814,11 @@ test.describe('T7 playback milestone', () => {
       const expectedSegment = await segmentCovering(page, session, '360p', 80);
       await expect(page.getByRole('button', { name: 'Налаштування' })).toBeVisible();
       await page.getByRole('button', { name: 'Налаштування' }).click();
-      await page.getByRole('radio', { name: '360p' }).click();
+      // React Aria hides the radio input inside a visible label and keeps the state itself, so a
+      // pointer click targets the label, not the role=radio input (which the label overlays). Same
+      // convention as the ratings star group's writeReviewInUI.
+      await page.locator('label.ui-radio').filter({ hasText: '360p' }).click();
+      await expect(page.getByRole('radio', { name: '360p' })).toBeChecked();
       await page.keyboard.press('Escape');
       await setPosition(page, 80);
       await expect
