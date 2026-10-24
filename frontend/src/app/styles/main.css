@@ -2531,6 +2531,215 @@ nav a {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }
+
+/* --- Rich player chrome (player-pro A1): auto-hide, buffering, replay, skip, scrub rail/tooltip --- */
+
+/* Auto-hide: while playing and idle the bar fades and the cursor hides, like YouTube/Apple TV/Hulu.
+   Opacity only — never display:none or pointer-events:none — so keyboard users and tests keep the
+   controls, and Playwright (which ignores opacity when deciding visibility) can still drive them. */
+.lesson-player-controlbar {
+  transition: opacity 0.25s ease;
+}
+.lesson-player-stage[data-idle] .lesson-player-controlbar,
+.lesson-player-stage[data-idle] .lesson-player-bigplay {
+  opacity: 0;
+}
+.lesson-player-stage[data-idle] .lesson-player-frame video {
+  cursor: none;
+}
+
+/* Buffering spinner and the ±10s skip badge are decorative overlays: the click passes through to the
+   video. The replay button is real and stays interactive. */
+.lesson-player-spinner,
+.lesson-player-skip {
+  pointer-events: none;
+}
+.lesson-player-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, #f2f3f8 28%, transparent);
+  border-block-start-color: #f2f3f8;
+  animation: lesson-player-spin 0.8s linear infinite;
+}
+@keyframes lesson-player-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.lesson-player-replay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: max-content;
+  block-size: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  min-block-size: var(--control-min-size);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, #05070a 62%, transparent);
+  color: #f2f3f8;
+  font: 0.9rem var(--font-utility);
+  cursor: pointer;
+}
+.lesson-player-replay:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+/* End-of-video "Up Next" card: a centred panel over the frame offering the next lesson, like the
+   end-cards of YouTube/Apple TV/Hulu. Interactive (unlike the decorative overlays above), and sized
+   to stay readable at phone width and 200% zoom. */
+.lesson-player-upnext {
+  position: absolute;
+  inset-block-end: var(--space-4);
+  inset-inline: var(--space-4);
+  margin-inline: auto;
+  inline-size: max-content;
+  max-inline-size: min(28rem, calc(100% - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, #05070a 78%, transparent);
+  color: #f2f3f8;
+}
+.lesson-player-upnext-eyebrow {
+  margin: 0;
+  font: 0.75rem var(--font-utility);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #f2f3f8 72%, transparent);
+}
+.lesson-player-upnext-title {
+  margin: 0;
+  font: 600 1.05rem var(--font-utility);
+  line-height: 1.3;
+}
+.lesson-player-upnext-count {
+  margin: 0;
+  font: 0.85rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, #f2f3f8 80%, transparent);
+}
+.lesson-player-upnext-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block-start: var(--space-1);
+}
+.lesson-player-upnext-secondary {
+  min-block-size: var(--control-min-size);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 0;
+  background: none;
+  color: #f2f3f8;
+  font: 0.9rem var(--font-utility);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lesson-player-upnext-secondary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.lesson-player-skip {
+  position: absolute;
+  inset-block: 0;
+  margin-block: auto;
+  display: grid;
+  place-items: center;
+  inline-size: 4rem;
+  block-size: 4rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, #05070a 55%, transparent);
+  color: #f2f3f8;
+  font: 0.95rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+}
+.lesson-player-skip--back {
+  inset-inline-start: 12%;
+}
+.lesson-player-skip--forward {
+  inset-inline-end: 12%;
+}
+
+/* Scrubber: a custom rail (base + buffered + played) painted under a native range whose own track is
+   made transparent, so the slider keeps its role and keyboard behaviour while the buffered length and
+   a hover time tooltip show through — YouTube's buffered bar and scrub time. */
+.lesson-player-seekwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+.lesson-player-seek {
+  position: relative;
+  width: 100%;
+  background: transparent;
+}
+.lesson-player-seek::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.lesson-player-seek::-moz-range-track {
+  background: transparent;
+}
+.lesson-player-rail {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  block-size: 0.3rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+  overflow: hidden;
+  pointer-events: none;
+}
+.lesson-player-buffered,
+.lesson-player-played {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: inherit;
+}
+.lesson-player-buffered {
+  background: color-mix(in srgb, var(--color-muted) 45%, transparent);
+}
+.lesson-player-played {
+  background: var(--color-primary);
+}
+.lesson-player-scrubtip {
+  position: absolute;
+  inset-block-end: calc(100% + var(--space-2));
+  transform: translateX(-50%);
+  padding-block: 0.15rem;
+  padding-inline: 0.4rem;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, #05070a 85%, transparent);
+  color: #f2f3f8;
+  font: 0.75rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-player-controlbar {
+    transition: none;
+  }
+  .lesson-player-spinner {
+    animation: none;
+  }
+}
+
 .lesson-player-buttons {
   display: flex;
   flex-wrap: wrap;
