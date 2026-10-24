@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   heartbeatFailureDirective,
@@ -21,7 +28,13 @@ import type {
   PlaybackMediaError,
   PlaybackQuality,
 } from '../ports/PlaybackMedia';
-import { Button, EmptyState, ErrorState, Select } from '../../../presentation/ui';
+import { Button, EmptyState, ErrorState } from '../../../presentation/ui';
+import {
+  readPreferences,
+  writePreferences,
+  type PlayerPreferences,
+} from '../application/preferences';
+import { PlayerSettingsMenu } from './PlayerSettingsMenu';
 
 export type LessonPlayerActions = {
   play(): Promise<PlaybackResult<PlaybackSession>>;
@@ -54,6 +67,13 @@ type LessonPlayerProps = {
     readonly positionMs: number;
     readonly seek: ((positionMs: number) => void) | null;
   }) => void;
+  /**
+   * The next lesson to offer at the end, or absent/null when there is none to advance to. The route
+   * passes it only when the neighbour is actually playable (owned and ready) — an "Up Next" into a
+   * paywall or a still-processing video is worse than no card. `onPlayNext` navigates there.
+   */
+  readonly nextLesson?: { readonly id: string; readonly title: string } | null;
+  readonly onPlayNext?: () => void;
 };
 
 type PlayerFailure = 'denied' | 'taken-over' | 'unavailable' | null;
@@ -76,6 +96,22 @@ function clockTime(value: number): string {
 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const;
 
+// Big players jump 10s (YouTube J/L, Apple TV edge-click, Hulu instant-replay); the arrow keys keep
+// the fine ±5s. Controls fade after this idle while playing, like all three.
+const SKIP_SECONDS = 10;
+const IDLE_MS = 2500;
+// The "Up Next" countdown before autoplay advances, like YouTube's end-card ticker.
+const AUTOPLAY_SECONDS = 5;
+
+// Step to the neighbouring offered rate (YouTube's shift+,/.), never outside the set the menu shows:
+// a speed no control lists is a speed the student cannot undo.
+function steppedRate(current: number, direction: 1 | -1): number {
+  const index = PLAYBACK_RATES.indexOf(current as (typeof PLAYBACK_RATES)[number]);
+  const base = index === -1 ? PLAYBACK_RATES.indexOf(1) : index;
+  const next = Math.min(PLAYBACK_RATES.length - 1, Math.max(0, base + direction));
+  return PLAYBACK_RATES[next] ?? 1;
+}
+
 export function LessonPlayer({
   courseTitle,
   lesson,
@@ -84,6 +120,8 @@ export function LessonPlayer({
   captions,
   captionsLanguage,
   onPlaybackChannel,
+  nextLesson,
+  onPlayNext,
 }: LessonPlayerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -140,12 +178,42 @@ export function LessonPlayer({
   // is changed from elsewhere (a media key, the browser's own fullscreen/PiP affordance).
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [muted, setMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [rate, setRate] = useState(1);
+  // Volume, mute and speed are remembered across lessons (localStorage, guarded). Read once, lazily,
+  // so SSR and a blocked store both fall back to the defaults instead of throwing.
+  const [initialPrefs] = useState<PlayerPreferences>(readPreferences);
+  const [muted, setMuted] = useState(initialPrefs.muted);
+  const [volume, setVolume] = useState(initialPrefs.volume);
+  const [rate, setRate] = useState(initialPrefs.rate);
+  // Captions follow a remembered on/off, applied to the <track> below; the selected quality is held
+  // here so the gear menu can show the current choice (the native HLS auto/level switch is one-way).
+  const [captionsOn, setCaptionsOn] = useState(initialPrefs.captionsOn);
+  const [autoplayNext, setAutoplayNext] = useState(initialPrefs.autoplayNext);
+  const [qualityKey, setQualityKey] = useState('auto');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const pipSupported = typeof document !== 'undefined' && document.pictureInPictureEnabled === true;
+  // Presentation-only chrome for the richer controls: buffered length painted behind the playhead, a
+  // spinner while the media stalls, the replay affordance at the end, the auto-hide idle flag, the
+  // hover time tooltip on the scrubber and the transient ±10s skip indicator.
+  const [buffered, setBuffered] = useState(0);
+  const [waiting, setWaiting] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [idle, setIdle] = useState(false);
+  const [scrubHover, setScrubHover] = useState<{ ratio: number; time: number } | null>(null);
+  const [skipHint, setSkipHint] = useState<'back' | 'forward' | null>(null);
+  // The end-of-video "Up Next" ticker: a second count while it runs, null when idle or dismissed.
+  const [autoplayCountdown, setAutoplayCountdown] = useState<number | null>(null);
+  // Read once: a motion-sensitive viewer gets the card without an automatic jump — they press
+  // "Play now" themselves. Matched at mount; the player is per-lesson so a live change is rare.
+  const [prefersReducedMotion] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const skipTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const stop = useCallback(() => {
     pauseSelf();
@@ -474,6 +542,52 @@ export function LessonPlayer({
     setRate(next);
   }, []);
 
+  // Push the remembered prefs onto the element once it attaches; later user changes go straight to
+  // the element through applyMuted/applyVolume/applyRate, so this runs only on attach.
+  useEffect(() => {
+    // Mutate through the ref, not the state element, so this reads as a DOM side-effect rather than
+    // a forbidden write to a useState value; videoElement in the deps runs it on attach.
+    const video = videoRef.current;
+    if (video === null) return;
+    video.volume = initialPrefs.volume;
+    video.muted = initialPrefs.muted;
+    video.playbackRate = initialPrefs.rate;
+  }, [videoElement, initialPrefs]);
+
+  // Remember the knobs for the next lesson. Writing the stored value back on mount is a harmless no-op.
+  useEffect(() => {
+    writePreferences({ volume, muted, rate, captionsOn, autoplayNext });
+  }, [volume, muted, rate, captionsOn, autoplayNext]);
+
+  // Drive the caption track from the remembered toggle rather than the <track default> attribute, so
+  // the student's last choice wins. Re-applied when the track element appears (captions prop set).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video === null) return;
+    const track = video.textTracks[0];
+    if (track === undefined) return;
+    track.mode = captionsOn && captions !== undefined ? 'showing' : 'hidden';
+  }, [captionsOn, captions, videoElement]);
+
+  // A brief ±10s indicator over the frame, the on-screen echo of a keyboard/gesture skip (YouTube's
+  // double-tap ripple, Apple TV's skip badge). Purely decorative; the slider announces real seeks.
+  const flashSkip = useCallback((direction: 'back' | 'forward') => {
+    setSkipHint(direction);
+    if (skipTimerRef.current !== undefined) clearTimeout(skipTimerRef.current);
+    skipTimerRef.current = setTimeout(() => setSkipHint(null), 600);
+  }, []);
+
+  // Any pointer activity over the stage wakes the controls and re-arms the idle countdown — but only
+  // while actually playing, so a paused player keeps its controls up (every player does this).
+  const onActivity = useCallback(() => {
+    setIdle(false);
+    if (idleTimerRef.current !== undefined) clearTimeout(idleTimerRef.current);
+    const video = videoRef.current;
+    if (video !== null && !video.paused) {
+      idleTimerRef.current = setTimeout(() => setIdle(true), IDLE_MS);
+    }
+  }, []);
+
   const toggleFullscreen = useCallback(() => {
     const frame = frameRef.current;
     if (frame === null) return;
@@ -486,6 +600,40 @@ export function LessonPlayer({
     if (document.pictureInPictureElement === video) void document.exitPictureInPicture();
     else void video.requestPictureInPicture?.();
   }, [pipSupported]);
+
+  // One click on the frame = play/pause; a double click is a gesture, like YouTube and Hulu: the
+  // left third rewinds 10s, the right third skips 10s, the centre toggles fullscreen. The single
+  // action waits one double-click window so a double does not first flip play. The control bar sits
+  // outside the frame, so its buttons never reach this handler.
+  const onFrameClick = useCallback(
+    (event: ReactMouseEvent) => {
+      const frame = frameRef.current;
+      if (frame === null) return;
+      const rect = frame.getBoundingClientRect();
+      const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5;
+      if (clickTimerRef.current !== undefined) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = undefined;
+        if (ratio < 0.35) {
+          seekTo(positionRef.current - SKIP_SECONDS);
+          flashSkip('back');
+        } else if (ratio > 0.65) {
+          seekTo(positionRef.current + SKIP_SECONDS);
+          flashSkip('forward');
+        } else {
+          toggleFullscreen();
+        }
+        return;
+      }
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = undefined;
+        togglePlay();
+        // Hand focus to the stage so the keyboard shortcuts take over after a click on the video.
+        stageRef.current?.focus();
+      }, 250);
+    },
+    [seekTo, flashSkip, toggleFullscreen, togglePlay],
+  );
 
   useEffect(() => {
     const onFullscreenChange = () =>
@@ -507,12 +655,65 @@ export function LessonPlayer({
     };
   }, [videoElement]);
 
+  // Arm the auto-hide countdown when playback begins; a paused, ended or just-woken player shows its
+  // controls. onActivity re-arms on every pointer move, so this only owns the start/stop transitions.
+  useEffect(() => {
+    if (!playing || ended) return;
+    idleTimerRef.current = setTimeout(() => setIdle(true), IDLE_MS);
+    return () => {
+      if (idleTimerRef.current !== undefined) clearTimeout(idleTimerRef.current);
+    };
+  }, [playing, ended]);
+
+  // The "Up Next" ticker. It is started by the ending itself (the `onEnded` handler, the event that
+  // causes it), not by an effect reacting to state — so there is no synchronous setState-in-effect.
+  // Running means a number; cancelling or toggling autoplay off sets it back to null. This effect only
+  // synchronises the one-second tick with the running state, and parks at zero rather than going
+  // negative; the sibling effect below fires the advance when it lands on zero. A cancel sets null
+  // directly, which never reaches zero, so cancel can never be mistaken for a completed countdown.
+  const autoplayRunning = autoplayCountdown !== null;
+  useEffect(() => {
+    if (!autoplayRunning) return;
+    const timer = setInterval(() => {
+      setAutoplayCountdown((value) => (value === null ? null : Math.max(0, value - 1)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autoplayRunning]);
+  useEffect(() => {
+    if (autoplayCountdown === 0) onPlayNext?.();
+  }, [autoplayCountdown, onPlayNext]);
+
+  // The buffered length that reaches the playhead — painted as a track behind it. A gap before the
+  // current time does not count: what matters is how far ahead the student can scrub without a stall.
+  const refreshBuffered = useCallback(() => {
+    const video = videoRef.current;
+    if (video === null) return;
+    const ranges = video.buffered;
+    const current = video.currentTime;
+    let end = current;
+    for (let i = 0; i < ranges.length; i += 1) {
+      if (ranges.start(i) <= current + 0.25 && ranges.end(i) >= end) end = ranges.end(i);
+    }
+    setBuffered(finiteTime(end));
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (idleTimerRef.current !== undefined) clearTimeout(idleTimerRef.current);
+      if (skipTimerRef.current !== undefined) clearTimeout(skipTimerRef.current);
+      if (clickTimerRef.current !== undefined) clearTimeout(clickTimerRef.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     const stage = stageRef.current;
     if (stage === null) return;
     const onKey = (event: KeyboardEvent) => {
       // Only when the stage itself holds focus: a key aimed at the slider or a button is theirs.
       if (event.target !== stage) return;
+      const video = videoRef.current;
+      const span = finiteTime(video?.duration ?? 0);
       switch (event.key) {
         case ' ':
         case 'k':
@@ -527,21 +728,74 @@ export function LessonPlayer({
           event.preventDefault();
           seekTo(positionRef.current + 5);
           break;
+        case 'j':
+          event.preventDefault();
+          seekTo(positionRef.current - SKIP_SECONDS);
+          flashSkip('back');
+          break;
+        case 'l':
+          event.preventDefault();
+          seekTo(positionRef.current + SKIP_SECONDS);
+          flashSkip('forward');
+          break;
+        case 'Home':
+          event.preventDefault();
+          seekTo(0);
+          break;
+        case 'End':
+          event.preventDefault();
+          seekTo(span);
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          applyVolume((video?.volume ?? 0) + 0.05);
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          applyVolume((video?.volume ?? 0) - 0.05);
+          break;
+        // Frame step past the edges of a paused frame, YouTube's , / . — a no-op while playing.
+        case ',':
+          if (video?.paused === true) {
+            event.preventDefault();
+            seekTo(positionRef.current - 1 / 30);
+          }
+          break;
+        case '.':
+          if (video?.paused === true) {
+            event.preventDefault();
+            seekTo(positionRef.current + 1 / 30);
+          }
+          break;
+        // shift+, / shift+. step the offered speeds (event.key is the shifted glyph).
+        case '<':
+          event.preventDefault();
+          applyRate(steppedRate(video?.playbackRate ?? 1, -1));
+          break;
+        case '>':
+          event.preventDefault();
+          applyRate(steppedRate(video?.playbackRate ?? 1, 1));
+          break;
         case 'f':
           event.preventDefault();
           toggleFullscreen();
           break;
         case 'm':
           event.preventDefault();
-          applyMuted(!videoRef.current?.muted);
+          applyMuted(!video?.muted);
           break;
         default:
+          // Digits 0–9 jump to that tenth of the video (0 = start, 5 = halfway), like every player.
+          if (span > 0 && event.key >= '0' && event.key <= '9') {
+            event.preventDefault();
+            seekTo((span * (event.key.charCodeAt(0) - 48)) / 10);
+          }
           break;
       }
     };
     stage.addEventListener('keydown', onKey);
     return () => stage.removeEventListener('keydown', onKey);
-  }, [togglePlay, seekTo, toggleFullscreen, applyMuted]);
+  }, [togglePlay, seekTo, toggleFullscreen, applyMuted, applyVolume, applyRate, flashSkip]);
 
   // A blob URL rather than an endpoint: the transcript is already in memory, so a second request
   // would fetch what the page holds. Revoked on change and on unmount — an object URL outlives
@@ -619,9 +873,13 @@ export function LessonPlayer({
       <div
         className="lesson-player-stage"
         data-playing={playing || undefined}
+        data-idle={(idle && playing && !ended) || undefined}
         tabIndex={-1}
         aria-label={t('learn.video.controls')}
         ref={stageRef}
+        onPointerMove={onActivity}
+        onPointerDown={onActivity}
+        onFocusCapture={() => setIdle(false)}
       >
         <div className="lesson-player-frame" ref={frameRef}>
           {/*
@@ -634,21 +892,24 @@ export function LessonPlayer({
           <video
             ref={attachVideo}
             aria-label={lesson.title}
-            onClick={() => {
-              togglePlay();
-              // Focus the stage so the keyboard shortcuts take over after a click on the video.
-              stageRef.current?.focus();
-            }}
+            onClick={onFrameClick}
             onVolumeChange={(event) => {
               setMuted(event.currentTarget.muted);
               setVolume(event.currentTarget.volume);
             }}
             onRateChange={(event) => setRate(event.currentTarget.playbackRate)}
             onDurationChange={(event) => setDuration(finiteTime(event.currentTarget.duration))}
+            onProgress={refreshBuffered}
+            onWaiting={() => setWaiting(true)}
+            onCanPlay={() => setWaiting(false)}
+            onSeeked={() => setWaiting(false)}
+            onPlay={() => setEnded(false)}
             onTimeUpdate={(event) => {
               positionRef.current = finiteTime(event.currentTarget.currentTime);
               mediaRetriesRef.current = 0;
               setPosition(positionRef.current);
+              setWaiting(false);
+              refreshBuffered();
             }}
             onPause={() => {
               setPlaying(false);
@@ -661,51 +922,184 @@ export function LessonPlayer({
               }
               void queueHeartbeatRef.current('pause');
             }}
-            onPlaying={() => setPlaying(true)}
+            onPlaying={() => {
+              setPlaying(true);
+              setWaiting(false);
+              setEnded(false);
+              // A fresh play starts with the controls up; the idle timer re-arms from here.
+              setIdle(false);
+            }}
             onEnded={(event) => {
               positionRef.current = finiteTime(event.currentTarget.currentTime);
               setPosition(positionRef.current);
               setPlaying(false);
+              setWaiting(false);
+              setEnded(true);
+              // Start the Up Next ticker here, where the ending happens, only when the next lesson is
+              // a real autoplay target and the viewer has not opted out (preference, reduced motion).
+              if (
+                nextLesson != null &&
+                onPlayNext !== undefined &&
+                autoplayNext &&
+                !prefersReducedMotion
+              )
+                setAutoplayCountdown(AUTOPLAY_SECONDS);
               void queueHeartbeat('ended');
             }}
             playsInline
           >
             {captionsUrl === null ? null : (
+              // No `default`: the caption track starts hidden and the remembered toggle in the gear
+              // menu drives its mode (see the captions effect above), so the student's choice wins.
               <track
                 kind="captions"
-                default
                 src={captionsUrl}
                 srcLang={captionsLanguage ?? 'uk'}
                 label={t('learn.transcript.heading')}
               />
             )}
           </video>
-          {!playing && !starting && (
+          {/* Buffering wins over every other overlay: a stall mid-play must show the spinner, not the
+              big-play glyph. Then the end-of-video replay, then the paused big-play. */}
+          {waiting || starting ? (
+            <span className="lesson-player-spinner" aria-hidden="true" />
+          ) : ended && nextLesson != null ? (
+            // A labelled group of the end-card's controls. oxlint's prefer-tag-over-role points at
+            // fieldset/hgroup, but those are for form-field and heading grouping; this is a set of
+            // related buttons, which role="group" with an accessible name is exactly the ARIA for.
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+            <div className="lesson-player-upnext" role="group" aria-label={t('learn.video.upNext')}>
+              <p className="lesson-player-upnext-eyebrow">{t('learn.video.upNext')}</p>
+              <p className="lesson-player-upnext-title">{nextLesson.title}</p>
+              {autoplayCountdown !== null && (
+                <p className="lesson-player-upnext-count" aria-live="polite">
+                  {t('learn.video.autoplayIn', { seconds: autoplayCountdown })}
+                </p>
+              )}
+              <div className="lesson-player-upnext-actions">
+                <Button
+                  type="button"
+                  onPress={() => {
+                    setAutoplayCountdown(null);
+                    onPlayNext?.();
+                  }}
+                >
+                  {t('learn.video.playNext')}
+                </Button>
+                {autoplayCountdown !== null ? (
+                  <button
+                    type="button"
+                    className="lesson-player-upnext-secondary"
+                    onClick={() => setAutoplayCountdown(null)}
+                  >
+                    {t('learn.video.cancel')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="lesson-player-upnext-secondary"
+                    onClick={() => {
+                      setEnded(false);
+                      seekTo(0);
+                      void videoRef.current?.play();
+                    }}
+                  >
+                    {t('learn.video.replay')}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : ended ? (
+            <button
+              type="button"
+              className="lesson-player-replay"
+              onClick={() => {
+                setEnded(false);
+                seekTo(0);
+                void videoRef.current?.play();
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none">
+                <path
+                  d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {t('learn.video.replay')}
+            </button>
+          ) : !playing ? (
             <span className="lesson-player-bigplay" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
+            </span>
+          ) : null}
+          {skipHint !== null && (
+            <span
+              className={`lesson-player-skip lesson-player-skip--${skipHint}`}
+              aria-hidden="true"
+            >
+              {skipHint === 'back' ? `-${SKIP_SECONDS}` : `+${SKIP_SECONDS}`}
             </span>
           )}
         </div>
         <div className="lesson-player-controlbar">
           <div className="lesson-player-scrubrow">
             <span className="lesson-player-time">{clockTime(position)}</span>
-            <input
-              className="lesson-player-seek"
-              type="range"
-              aria-label={t('learn.video.position')}
-              min={0}
-              max={boundedDuration}
-              step={1}
-              value={Math.min(position, boundedDuration)}
-              onChange={(event) => seekTo(Number(event.currentTarget.value))}
-              onKeyDown={(event) => {
-                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-                event.preventDefault();
-                seekTo(position + (event.key === 'ArrowRight' ? 5 : -5));
+            <div
+              className="lesson-player-seekwrap"
+              onPointerMove={(event) => {
+                const box = event.currentTarget.getBoundingClientRect();
+                const ratio =
+                  box.width > 0
+                    ? Math.max(0, Math.min(1, (event.clientX - box.left) / box.width))
+                    : 0;
+                setScrubHover({ ratio, time: ratio * boundedDuration });
               }}
-            />
+              onPointerLeave={() => setScrubHover(null)}
+            >
+              <span className="lesson-player-rail" aria-hidden="true">
+                <span
+                  className="lesson-player-buffered"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (buffered / boundedDuration) * 100))}%`,
+                  }}
+                />
+                <span
+                  className="lesson-player-played"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (Math.min(position, boundedDuration) / boundedDuration) * 100))}%`,
+                  }}
+                />
+              </span>
+              <input
+                className="lesson-player-seek"
+                type="range"
+                aria-label={t('learn.video.position')}
+                min={0}
+                max={boundedDuration}
+                step={1}
+                value={Math.min(position, boundedDuration)}
+                onChange={(event) => seekTo(Number(event.currentTarget.value))}
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                  event.preventDefault();
+                  seekTo(position + (event.key === 'ArrowRight' ? 5 : -5));
+                }}
+              />
+              {scrubHover !== null && (
+                <span
+                  className="lesson-player-scrubtip"
+                  aria-hidden="true"
+                  style={{ left: `${scrubHover.ratio * 100}%` }}
+                >
+                  {clockTime(scrubHover.time)}
+                </span>
+              )}
+            </div>
             <span className="lesson-player-time lesson-player-time--total">
               {clockTime(duration)}
             </span>
@@ -767,29 +1161,57 @@ export function LessonPlayer({
               </div>
             </div>
             <div className="lesson-player-tools">
-              <Select
-                label={t('learn.video.speed')}
-                options={speedOptions}
-                selectedKey={String(rate)}
-                onSelectionChange={(key) => {
-                  const next = Number(key);
-                  if (Number.isFinite(next)) applyRate(next);
+              <PlayerSettingsMenu
+                label={t('learn.video.settings')}
+                speed={{
+                  label: t('learn.video.speed'),
+                  value: String(rate),
+                  options: speedOptions,
+                  onChange: (key) => {
+                    const next = Number(key);
+                    if (Number.isFinite(next)) applyRate(next);
+                  },
                 }}
-              />
-              {mediaKind === 'hls' && (
-                <Select
-                  label={t('learn.video.quality')}
-                  options={qualityOptions}
-                  defaultSelectedKey="auto"
-                  onSelectionChange={(key) => {
-                    if (key === 'auto') mediaRef.current?.selectLevel('auto');
-                    else {
-                      const level = Number(key);
-                      if (Number.isInteger(level)) mediaRef.current?.selectLevel(level);
+                {...(mediaKind === 'hls'
+                  ? {
+                      quality: {
+                        label: t('learn.video.quality'),
+                        value: qualityKey,
+                        options: qualityOptions,
+                        onChange: (key) => {
+                          setQualityKey(key);
+                          if (key === 'auto') mediaRef.current?.selectLevel('auto');
+                          else {
+                            const level = Number(key);
+                            if (Number.isInteger(level)) mediaRef.current?.selectLevel(level);
+                          }
+                        },
+                      },
                     }
-                  }}
-                />
-              )}
+                  : {})}
+                {...(captionsUrl === null
+                  ? {}
+                  : {
+                      captions: {
+                        label: t('learn.video.captions'),
+                        isOn: captionsOn,
+                        onChange: setCaptionsOn,
+                      },
+                    })}
+                {...(nextLesson == null
+                  ? {}
+                  : {
+                      autoplay: {
+                        label: t('learn.video.autoplay'),
+                        isOn: autoplayNext,
+                        onChange: (on) => {
+                          setAutoplayNext(on);
+                          // Turning it off mid-countdown stops the pending advance at once.
+                          if (!on) setAutoplayCountdown(null);
+                        },
+                      },
+                    })}
+              />
               {pipSupported && (
                 <button
                   type="button"

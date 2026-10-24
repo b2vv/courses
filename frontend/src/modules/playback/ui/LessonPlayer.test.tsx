@@ -171,12 +171,14 @@ describe('lesson player states', () => {
     await user.keyboard('{ArrowRight}');
     expect(video.currentTime).toBeGreaterThan(12);
 
-    const quality = screen.getByRole('button', { name: /Quality/ });
-    quality.focus();
+    // Speed, quality and captions now live behind one keyboard-reachable gear. Open it and pick the
+    // 360p rendition; the quality radio group drives the same hls.js level switch the Select did.
+    const settings = screen.getByRole('button', { name: /Settings/ });
+    settings.focus();
+    expect(settings).toBe(document.activeElement);
     await user.keyboard('{Enter}');
-    await screen.findByRole('listbox');
-    screen.getByRole('option', { name: 'Auto' }).focus();
-    await user.keyboard('{ArrowDown}{Enter}');
+    const quality360 = await screen.findByRole('radio', { name: '360p' });
+    await user.click(quality360);
     await waitFor(() => expect(selectedLevels).toContain(0));
     expect(callbacks).toBeDefined();
     expect((await axe.run(container)).violations).toEqual([]);
@@ -678,5 +680,89 @@ describe('lesson player states', () => {
         name: 'This video is playing on another device.',
       }),
     ).toBeTruthy();
+  });
+});
+
+describe('A2 Up Next autoplay', () => {
+  // The countdown the player renders before it advances (AUTOPLAY_SECONDS in LessonPlayer).
+  const AUTOPLAY_MS = 5_000;
+
+  function renderWithNext(onPlayNext: () => void) {
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      return {
+        kind: 'hls',
+        load() {
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        destroy() {},
+      };
+    };
+    return render(
+      <I18nProvider instance={createI18n('en')}>
+        <LessonPlayer
+          courseTitle="Reliable Go"
+          lesson={lesson('ready')}
+          actions={actions()}
+          createMedia={createMedia}
+          nextLesson={{ id: 'next-id', title: 'The next lesson' }}
+          onPlayNext={onPlayNext}
+        />
+      </I18nProvider>,
+    );
+  }
+
+  async function playToEnd(container: HTMLElement) {
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Ready lesson did not render a video element');
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+    fireEvent.playing(video);
+    fireEvent.ended(video);
+    await act(async () => {});
+    return video;
+  }
+
+  it('offers an Up Next card at the end and Play now advances, axe-clean', async () => {
+    const onPlayNext = rstest.fn();
+    const { container } = renderWithNext(onPlayNext);
+    await playToEnd(container);
+
+    expect(screen.getByText('The next lesson')).toBeTruthy();
+    expect((await axe.run(container)).violations).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play now' }));
+    expect(onPlayNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('advances automatically once the countdown elapses', async () => {
+    rstest.useFakeTimers();
+    const onPlayNext = rstest.fn();
+    const { container } = renderWithNext(onPlayNext);
+    await playToEnd(container);
+
+    expect(onPlayNext).not.toHaveBeenCalled();
+    await act(async () => rstest.advanceTimersByTimeAsync(AUTOPLAY_MS));
+    expect(onPlayNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cancel stops the pending autoplay without advancing, leaving Replay', async () => {
+    rstest.useFakeTimers();
+    const onPlayNext = rstest.fn();
+    const { container } = renderWithNext(onPlayNext);
+    await playToEnd(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await act(async () => rstest.advanceTimersByTimeAsync(AUTOPLAY_MS * 3));
+    expect(onPlayNext).not.toHaveBeenCalled();
+    // The ticker gone, the secondary action is now Replay; the lesson can still be rewatched.
+    expect(screen.getByRole('button', { name: 'Replay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Play now' })).toBeTruthy();
   });
 });

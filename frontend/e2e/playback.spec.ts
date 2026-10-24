@@ -812,9 +812,14 @@ test.describe('T7 playback milestone', () => {
       });
       const session = await openAndPlay(page);
       const expectedSegment = await segmentCovering(page, session, '360p', 80);
-      await expect(page.getByRole('button', { name: /Якість/ })).toBeVisible();
-      await page.getByRole('button', { name: /Якість/ }).click();
-      await page.getByRole('option', { name: '360p' }).click();
+      await expect(page.getByRole('button', { name: 'Налаштування' })).toBeVisible();
+      await page.getByRole('button', { name: 'Налаштування' }).click();
+      // React Aria hides the radio input inside a visible label and keeps the state itself, so a
+      // pointer click targets the label, not the role=radio input (which the label overlays). Same
+      // convention as the ratings star group's writeReviewInUI.
+      await page.locator('label.ui-radio').filter({ hasText: '360p' }).click();
+      await expect(page.getByRole('radio', { name: '360p' })).toBeChecked();
+      await page.keyboard.press('Escape');
       await setPosition(page, 80);
       await expect
         .poll(() =>
@@ -839,8 +844,10 @@ test.describe('T7 playback milestone', () => {
         if (pathname.endsWith('.m4s')) renditionRequests.push(pathname);
       });
       const session = await openAndPlay(page);
-      const quality = page.getByRole('button', { name: /Якість/ });
-      await expect(quality).toContainText('Автоматично');
+      // Auto is the initial rendition choice; it now lives as a checked radio inside the gear menu.
+      await page.getByRole('button', { name: 'Налаштування' }).click();
+      await expect(page.getByRole('radio', { name: 'Автоматично' })).toBeChecked();
+      await page.keyboard.press('Escape');
       const master = await page.request.get(new URL(session.mediaPath, page.url()).toString());
       expect(master.status()).toBe(200);
       const masterLines = (await master.text())
@@ -926,7 +933,10 @@ test.describe('T7 playback milestone', () => {
         // 360p growth alone. The printed pair still separates "ABR had nothing to abandon" from
         // "ABR abandoned and stepped down" when this row fails.
         expect(lowRequestsAfterThrottle).toBeGreaterThan(lowRequestsBeforeThrottle);
-        await expect(quality).toContainText('Автоматично');
+        // The rung switch was hls.js's doing, not the student's: the quality choice is still Auto.
+        await page.getByRole('button', { name: 'Налаштування' }).click();
+        await expect(page.getByRole('radio', { name: 'Автоматично' })).toBeChecked();
+        await page.keyboard.press('Escape');
       } finally {
         await devtools.send('Network.emulateNetworkConditions', {
           offline: false,

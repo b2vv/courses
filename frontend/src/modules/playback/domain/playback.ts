@@ -83,3 +83,17 @@ export function lessonInCourse(
   }
   return { ok: false, error: { code: 'lesson_not_found' } };
 }
+
+/**
+ * The lesson immediately after `lessonId` in the outline, or null when it is the last one (or the id
+ * is not in the course). Order follows the module/lesson arrays exactly as the outline renders them,
+ * so "next" is always the row the student sees below the current one — never a reordering of their
+ * own. Pure and total; the caller decides whether that neighbour is a sensible autoplay target (an
+ * unpurchased or not-yet-ready lesson is not), because `locked`/`videoState` are read there already.
+ */
+export function nextLesson(course: LearningCourse, lessonId: string): LearningLesson | null {
+  const ordered = course.modules.flatMap((module) => module.lessons);
+  const index = ordered.findIndex((candidate) => candidate.id === lessonId);
+  if (index === -1 || index + 1 >= ordered.length) return null;
+  return ordered[index + 1] ?? null;
+}

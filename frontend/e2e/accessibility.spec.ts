@@ -39,21 +39,6 @@ async function axeAudit(page: Page, scope: 'wcag' | 'contrast') {
   }, scope);
 }
 
-type AxeFinding = Awaited<ReturnType<typeof axeAudit>>['incomplete'][number];
-
-function expectOnlySelectChevronIncomplete(incomplete: AxeFinding[]) {
-  // Axe declines a verdict for Select's decorative non-BMP chevron. The player bar carries two
-  // Selects now (speed and quality), so the count is not pinned — what matters is that every
-  // undecided finding is that one decorative glyph and nothing else slips in. Remove this pin when
-  // axe can evaluate the glyph or when the UI-kit markup changes and makes the suffix obsolete.
-  const isSelectChevron = ({ id, messageKey, target }: AxeFinding) =>
-    id === 'color-contrast' &&
-    messageKey === 'nonBmp' &&
-    target.endsWith('span[aria-hidden="true"]');
-  expect(incomplete.length).toBeGreaterThan(0);
-  expect(incomplete.filter((finding) => !isSelectChevron(finding))).toHaveLength(0);
-}
-
 // Keyboard-reach each control in turn and assert its focus ring. The stage is focused first (it is
 // programmatically focusable, tabIndex -1) so the following Tab presses — real keyboard events, so
 // :focus-visible applies — walk forward into the control bar in its visual order.
@@ -357,8 +342,9 @@ test.describe('with a stored student session', () => {
     const controls = page.locator('.lesson-player-controlbar');
     const play = page.getByRole('button', { name: 'Відтворити', exact: true });
     const seek = page.getByRole('slider', { name: 'Позиція відтворення', exact: true });
-    const quality = page.getByRole('button', { name: /Якість/ });
-    const playbackControls = [play, seek, quality];
+    // Speed, quality and captions now fold into one gear; it is the control bar's third stop.
+    const settings = page.getByRole('button', { name: 'Налаштування' });
+    const playbackControls = [play, seek, settings];
     for (const control of playbackControls) await expect(control).toBeVisible();
     await expectPlaybackLayout(page, controls, playbackControls);
 
@@ -369,7 +355,7 @@ test.describe('with a stored student session', () => {
     }));
     expect(lightAppearance.colorScheme).toBe('light');
 
-    await tabThroughControls(page, controls, [seek, play, quality]);
+    await tabThroughControls(page, controls, [seek, play, settings]);
     const auditedVideoState = await page.locator('video').evaluate((video) => {
       if (!(video instanceof HTMLVideoElement)) throw new Error('Expected the lesson video');
       return {
@@ -384,7 +370,7 @@ test.describe('with a stored student session', () => {
     expect(auditedVideoState).toEqual({ readyState: 0, videoWidth: 0, videoHeight: 0 });
     const lightContrast = await axeAudit(page, 'contrast');
     expect(lightContrast.violations).toEqual([]);
-    expectOnlySelectChevronIncomplete(lightContrast.incomplete);
+    expect(lightContrast.incomplete).toEqual([]);
     await expectPlaybackLayout(page, controls, playbackControls);
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
@@ -394,10 +380,10 @@ test.describe('with a stored student session', () => {
     }));
     expect(darkAppearance.colorScheme).toBe('dark');
     expect(darkAppearance.surface).not.toBe(lightAppearance.surface);
-    await tabThroughControls(page, controls, [seek, play, quality]);
+    await tabThroughControls(page, controls, [seek, play, settings]);
     const darkContrast = await axeAudit(page, 'contrast');
     expect(darkContrast.violations).toEqual([]);
-    expectOnlySelectChevronIncomplete(darkContrast.incomplete);
+    expect(darkContrast.incomplete).toEqual([]);
     await expectPlaybackLayout(page, controls, playbackControls);
 
     await page.getByRole('button', { name: 'EN' }).click();
@@ -405,7 +391,7 @@ test.describe('with a stored student session', () => {
     const englishControls = [
       page.getByRole('button', { name: 'Play', exact: true }),
       page.getByRole('slider', { name: 'Playback position', exact: true }),
-      page.getByRole('button', { name: /Quality/ }),
+      page.getByRole('button', { name: 'Settings' }),
     ];
     for (const control of englishControls) await expect(control).toBeVisible();
     await expectPlaybackLayout(page, controls, englishControls);
