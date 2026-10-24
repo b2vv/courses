@@ -20,6 +20,12 @@ type PlayerSettingsMenuProps = {
     readonly isOn: boolean;
     readonly onChange: (on: boolean) => void;
   };
+  /** Present only when a next lesson exists to advance to; durable autoplay-next preference. */
+  readonly autoplay?: {
+    readonly label: string;
+    readonly isOn: boolean;
+    readonly onChange: (on: boolean) => void;
+  };
 };
 
 /**
@@ -28,7 +34,13 @@ type PlayerSettingsMenuProps = {
  * screen-reader-navigable — rather than inline selects crowding the control bar. Closed by default,
  * so the bar carries just the gear and the layout stays simple at phone width and 200% zoom.
  */
-export function PlayerSettingsMenu({ label, speed, quality, captions }: PlayerSettingsMenuProps) {
+export function PlayerSettingsMenu({
+  label,
+  speed,
+  quality,
+  captions,
+  autoplay,
+}: PlayerSettingsMenuProps) {
   return (
     <Aria.DialogTrigger>
       <Aria.Button className="lesson-player-iconbtn" aria-label={label}>
@@ -61,6 +73,11 @@ export function PlayerSettingsMenu({ label, speed, quality, captions }: PlayerSe
           {captions === undefined ? null : (
             <Switch isSelected={captions.isOn} onChange={captions.onChange}>
               {captions.label}
+            </Switch>
+          )}
+          {autoplay === undefined ? null : (
+            <Switch isSelected={autoplay.isOn} onChange={autoplay.onChange}>
+              {autoplay.label}
             </Switch>
           )}
         </Aria.Dialog>

@@ -10,7 +10,7 @@ import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/reac
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
-import { lessonInCourse } from '../modules/playback';
+import { lessonInCourse, nextLesson } from '../modules/playback';
 import type { LearningCourse, LearningLesson } from '../modules/playback';
 import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { LockedLessonPanel } from '../modules/purchase';
@@ -218,6 +218,16 @@ function OpenLesson({
         : toWebVTT(transcript.segments),
     [transcript],
   );
+  // "Up Next" only when the following lesson is actually playable for this viewer: a locked lesson
+  // would autoplay into a paywall, a non-ready one into an empty state. Those gates are the server's
+  // facts (locked/videoState), read here, never re-derived — the domain helper only orders the tree.
+  const upcoming = nextLesson(course, lessonId);
+  const playableNext =
+    upcoming !== null && !upcoming.locked && upcoming.videoState === 'ready' ? upcoming : null;
+  const onPlayNext = useCallback(() => {
+    if (playableNext === null) return;
+    void navigate({ to: '/learn/$', params: { _splat: `${course.slug}/${playableNext.id}` } });
+  }, [navigate, course.slug, playableNext]);
   const [channel, setChannel] = useState<{
     positionMs: number;
     seek: ((positionMs: number) => void) | null;
@@ -270,6 +280,9 @@ function OpenLesson({
         />
       ) : (
         <LessonPlayer
+          // Keyed by lesson so advancing (autoplay or the outline) remounts a clean player rather
+          // than feeding a new lesson into state and refs seeded from the previous one.
+          key={lessonId}
           courseTitle={course.title}
           lesson={lesson}
           actions={actions}
@@ -277,6 +290,12 @@ function OpenLesson({
           {...(captions === undefined ? {} : { captions })}
           {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
           onPlaybackChannel={onPlaybackChannel}
+          {...(playableNext === null
+            ? {}
+            : {
+                nextLesson: { id: playableNext.id, title: playableNext.title },
+                onPlayNext,
+              })}
         />
       )}
       {lessonDocument === undefined ? null : <LessonDocumentView document={lessonDocument} />}

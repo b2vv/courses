@@ -417,6 +417,11 @@ export const en = {
         buffered: 'Buffered',
         settings: 'Settings',
         captions: 'Subtitles',
+        autoplay: 'Autoplay next',
+        upNext: 'Up next',
+        playNext: 'Play now',
+        autoplayIn: 'Playing in {{seconds}}s',
+        cancel: 'Cancel',
       },
     },
     teach: {

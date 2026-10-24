@@ -423,6 +423,11 @@ export const uk = {
         buffered: 'Завантажено',
         settings: 'Налаштування',
         captions: 'Субтитри',
+        autoplay: 'Автовідтворення наступного',
+        upNext: 'Наступний урок',
+        playNext: 'Відтворити зараз',
+        autoplayIn: 'Автоматично за {{seconds}} с',
+        cancel: 'Скасувати',
       },
     },
     teach: {

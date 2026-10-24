@@ -67,6 +67,13 @@ type LessonPlayerProps = {
     readonly positionMs: number;
     readonly seek: ((positionMs: number) => void) | null;
   }) => void;
+  /**
+   * The next lesson to offer at the end, or absent/null when there is none to advance to. The route
+   * passes it only when the neighbour is actually playable (owned and ready) — an "Up Next" into a
+   * paywall or a still-processing video is worse than no card. `onPlayNext` navigates there.
+   */
+  readonly nextLesson?: { readonly id: string; readonly title: string } | null;
+  readonly onPlayNext?: () => void;
 };
 
 type PlayerFailure = 'denied' | 'taken-over' | 'unavailable' | null;
@@ -93,6 +100,8 @@ const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const;
 // the fine ±5s. Controls fade after this idle while playing, like all three.
 const SKIP_SECONDS = 10;
 const IDLE_MS = 2500;
+// The "Up Next" countdown before autoplay advances, like YouTube's end-card ticker.
+const AUTOPLAY_SECONDS = 5;
 
 // Step to the neighbouring offered rate (YouTube's shift+,/.), never outside the set the menu shows:
 // a speed no control lists is a speed the student cannot undo.
@@ -111,6 +120,8 @@ export function LessonPlayer({
   captions,
   captionsLanguage,
   onPlaybackChannel,
+  nextLesson,
+  onPlayNext,
 }: LessonPlayerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -176,6 +187,7 @@ export function LessonPlayer({
   // Captions follow a remembered on/off, applied to the <track> below; the selected quality is held
   // here so the gear menu can show the current choice (the native HLS auto/level switch is one-way).
   const [captionsOn, setCaptionsOn] = useState(initialPrefs.captionsOn);
+  const [autoplayNext, setAutoplayNext] = useState(initialPrefs.autoplayNext);
   const [qualityKey, setQualityKey] = useState('auto');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
@@ -189,6 +201,16 @@ export function LessonPlayer({
   const [idle, setIdle] = useState(false);
   const [scrubHover, setScrubHover] = useState<{ ratio: number; time: number } | null>(null);
   const [skipHint, setSkipHint] = useState<'back' | 'forward' | null>(null);
+  // The end-of-video "Up Next" ticker: a second count while it runs, null when idle or dismissed.
+  const [autoplayCountdown, setAutoplayCountdown] = useState<number | null>(null);
+  // Read once: a motion-sensitive viewer gets the card without an automatic jump — they press
+  // "Play now" themselves. Matched at mount; the player is per-lesson so a live change is rare.
+  const [prefersReducedMotion] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -534,8 +556,8 @@ export function LessonPlayer({
 
   // Remember the knobs for the next lesson. Writing the stored value back on mount is a harmless no-op.
   useEffect(() => {
-    writePreferences({ volume, muted, rate, captionsOn });
-  }, [volume, muted, rate, captionsOn]);
+    writePreferences({ volume, muted, rate, captionsOn, autoplayNext });
+  }, [volume, muted, rate, captionsOn, autoplayNext]);
 
   // Drive the caption track from the remembered toggle rather than the <track default> attribute, so
   // the student's last choice wins. Re-applied when the track element appears (captions prop set).
@@ -642,6 +664,24 @@ export function LessonPlayer({
       if (idleTimerRef.current !== undefined) clearTimeout(idleTimerRef.current);
     };
   }, [playing, ended]);
+
+  // The "Up Next" ticker. It is started by the ending itself (the `onEnded` handler, the event that
+  // causes it), not by an effect reacting to state — so there is no synchronous setState-in-effect.
+  // Running means a number; cancelling or toggling autoplay off sets it back to null. This effect only
+  // synchronises the one-second tick with the running state, and parks at zero rather than going
+  // negative; the sibling effect below fires the advance when it lands on zero. A cancel sets null
+  // directly, which never reaches zero, so cancel can never be mistaken for a completed countdown.
+  const autoplayRunning = autoplayCountdown !== null;
+  useEffect(() => {
+    if (!autoplayRunning) return;
+    const timer = setInterval(() => {
+      setAutoplayCountdown((value) => (value === null ? null : Math.max(0, value - 1)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autoplayRunning]);
+  useEffect(() => {
+    if (autoplayCountdown === 0) onPlayNext?.();
+  }, [autoplayCountdown, onPlayNext]);
 
   // The buffered length that reaches the playhead — painted as a track behind it. A gap before the
   // current time does not count: what matters is how far ahead the student can scrub without a stall.
@@ -895,6 +935,15 @@ export function LessonPlayer({
               setPlaying(false);
               setWaiting(false);
               setEnded(true);
+              // Start the Up Next ticker here, where the ending happens, only when the next lesson is
+              // a real autoplay target and the viewer has not opted out (preference, reduced motion).
+              if (
+                nextLesson != null &&
+                onPlayNext !== undefined &&
+                autoplayNext &&
+                !prefersReducedMotion
+              )
+                setAutoplayCountdown(AUTOPLAY_SECONDS);
               void queueHeartbeat('ended');
             }}
             playsInline
@@ -914,6 +963,52 @@ export function LessonPlayer({
               big-play glyph. Then the end-of-video replay, then the paused big-play. */}
           {waiting || starting ? (
             <span className="lesson-player-spinner" aria-hidden="true" />
+          ) : ended && nextLesson != null ? (
+            // A labelled group of the end-card's controls. oxlint's prefer-tag-over-role points at
+            // fieldset/hgroup, but those are for form-field and heading grouping; this is a set of
+            // related buttons, which role="group" with an accessible name is exactly the ARIA for.
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+            <div className="lesson-player-upnext" role="group" aria-label={t('learn.video.upNext')}>
+              <p className="lesson-player-upnext-eyebrow">{t('learn.video.upNext')}</p>
+              <p className="lesson-player-upnext-title">{nextLesson.title}</p>
+              {autoplayCountdown !== null && (
+                <p className="lesson-player-upnext-count" aria-live="polite">
+                  {t('learn.video.autoplayIn', { seconds: autoplayCountdown })}
+                </p>
+              )}
+              <div className="lesson-player-upnext-actions">
+                <Button
+                  type="button"
+                  onPress={() => {
+                    setAutoplayCountdown(null);
+                    onPlayNext?.();
+                  }}
+                >
+                  {t('learn.video.playNext')}
+                </Button>
+                {autoplayCountdown !== null ? (
+                  <button
+                    type="button"
+                    className="lesson-player-upnext-secondary"
+                    onClick={() => setAutoplayCountdown(null)}
+                  >
+                    {t('learn.video.cancel')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="lesson-player-upnext-secondary"
+                    onClick={() => {
+                      setEnded(false);
+                      seekTo(0);
+                      void videoRef.current?.play();
+                    }}
+                  >
+                    {t('learn.video.replay')}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : ended ? (
             <button
               type="button"
@@ -1101,6 +1196,19 @@ export function LessonPlayer({
                         label: t('learn.video.captions'),
                         isOn: captionsOn,
                         onChange: setCaptionsOn,
+                      },
+                    })}
+                {...(nextLesson == null
+                  ? {}
+                  : {
+                      autoplay: {
+                        label: t('learn.video.autoplay'),
+                        isOn: autoplayNext,
+                        onChange: (on) => {
+                          setAutoplayNext(on);
+                          // Turning it off mid-countdown stops the pending advance at once.
+                          if (!on) setAutoplayCountdown(null);
+                        },
                       },
                     })}
               />

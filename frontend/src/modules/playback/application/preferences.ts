@@ -8,6 +8,8 @@ export type PlayerPreferences = {
   readonly muted: boolean;
   readonly rate: number;
   readonly captionsOn: boolean;
+  /** Advance to the next lesson when one ends — on by default, as YouTube/Hulu autoplay is. */
+  readonly autoplayNext: boolean;
 };
 
 export const defaultPreferences: PlayerPreferences = {
@@ -15,6 +17,7 @@ export const defaultPreferences: PlayerPreferences = {
   muted: false,
   rate: 1,
   captionsOn: false,
+  autoplayNext: true,
 };
 
 const STORAGE_KEY = 'courses.player.prefs.v1';
@@ -53,6 +56,10 @@ export function parsePreferences(raw: string | null): PlayerPreferences {
         : defaultPreferences.rate,
     captionsOn:
       typeof record.captionsOn === 'boolean' ? record.captionsOn : defaultPreferences.captionsOn,
+    autoplayNext:
+      typeof record.autoplayNext === 'boolean'
+        ? record.autoplayNext
+        : defaultPreferences.autoplayNext,
   };
 }
 
@@ -62,6 +69,7 @@ export function serializePreferences(prefs: PlayerPreferences): string {
     muted: prefs.muted,
     rate: prefs.rate,
     captionsOn: prefs.captionsOn,
+    autoplayNext: prefs.autoplayNext,
   });
 }
 
