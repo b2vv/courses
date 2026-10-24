@@ -43,10 +43,11 @@ of YouTube / Apple TV / Hulu. This report covers the frontend A-batch (PR #1); t
 
 1. **The Up Next card was not screenshotted live.** No seeded or surviving e2e fixture has a course
    with two `ready` lessons (all six ready `video_assets` are the sole lesson of their course), so the
-   card cannot be reached in the running stack, and fabricating a second ready lesson would prove a
-   fake. The card is covered by unit tests (behaviour + axe) and by the e2e coverage of the gear and
-   controls that surround it. A multi-ready-lesson playback fixture would close this; filed as the one
-   visual-verification gap of this batch.
+   card cannot be reached in the running *dev* stack, and fabricating a second ready lesson would
+   prove a fake. The card is covered by unit tests (behaviour + axe) and by the e2e coverage of the
+   gear and controls that surround it. **Resolved in the rc.4 viewport pass** (see §Viewport coverage):
+   the playback e2e seed's T7 fixture *does* have two `ready` lessons (lesson 3 → lesson 4), so the card
+   was captured and viewed live at desktop, tablet-portrait and tablet-landscape.
 2. **A real-browser defect hid behind a green unit test.** A1b's updated P01 clicked
    `getByRole('radio').click()`; React Aria hides the native radio inside the visible label that
    overlays it, so Playwright hit the label (the input's ancestor) and refused with "intercepts
@@ -60,7 +61,41 @@ of YouTube / Apple TV / Hulu. This report covers the frontend A-batch (PR #1); t
 4. Storyboard hover-preview (C) is out of scope here and ships as a separate PR (media-worker sprite +
    WebVTT + `video_assets` persistence + the frontend hover thumbnail).
 
+## Viewport coverage (rc.4 review, 2026-10-24)
+
+Post-merge viewport-matrix pass of the changed player surfaces (control bar, gear popover,
+Up Next card) per `~/.agents/skills/design-pass/references/viewport-coverage.md`, on
+main @ `bc5c4d1`. Captures made via a temporary VPMATRIX block in `playback.spec` reusing the
+T7 fixture (lesson 3 `ready` → lesson 4 `ready`); both the temp spec block and the config dep
+tweak were reverted, frontend tree clean. 16 screenshots in `/tmp/vp-shots`; PW 13/13 passed.
+
+| Class (CSS px) | Control bar | Gear popover | Up Next card |
+| --- | --- | --- | --- |
+| Phone 390×844 | PASS | PASS | PASS (minor: eyebrow slightly clipped by short frame — see below) |
+| Tablet portrait 768×1024 | PASS | PASS | PASS |
+| Tablet landscape 1024×768 | PASS | PASS | PASS |
+| Desktop 1440×900 | PASS | PASS | PASS |
+| Reflow 320 | PASS | PASS | — |
+| 200% text (`font-size:200%`) | PASS | PASS¹ | — |
+
+All 16 screenshots were viewed. The captured `text200-s2-gear.png` opened the popover off the
+zoomed frame, so it was **re-verified live** (real Chrome, localhost:8080 e2e seed, student
+session, `font-size:200%` on root): the gear popover reflows to full width below the control bar,
+the speed/quality radios and the autoplay toggle stay readable, and the popover scrolls so no
+action is lost. ¹ → PASS.
+
+This closes the Up Next live-capture gap in Limitation 1 for the three viewport widths above
+(the T7 two-ready-lesson fixture does exist in the playback e2e seed).
+
+**One minor, non-blocking finding:** at phone 390, the Up Next card's "НАСТУПНИЙ УРОК" eyebrow is
+slightly clipped by the short video frame; the title and both buttons (Відтворити зараз / Переглянути
+знову) remain fully visible and usable. **Owner decided (2026-10-24): fix it** — adjust the card's top
+inset / overlay height on narrow frames so the eyebrow is not clipped. Queued for the follow-up session
+(deferred off this session by the AI-Factory size guard).
+
 ## Next
 
-- Browser design-pass of the Up Next card once a two-ready-lesson fixture exists.
+- **Fix the phone-390 Up Next eyebrow clip** (owner-approved 2026-10-24): on narrow/short video
+  frames the end-card overlay crops the "НАСТУПНИЙ УРОК" eyebrow — adjust the card's top inset or the
+  overlay's vertical fit so the full eyebrow shows. Small frontend CSS change; re-verify at phone 390.
 - C1/C2 storyboard slice as PR #2.
