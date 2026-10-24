@@ -2603,6 +2603,11 @@ nav a {
   margin-inline: auto;
   inline-size: max-content;
   max-inline-size: min(28rem, calc(100% - 2 * var(--space-4)));
+  /* On a short frame (phone, landscape) the card is taller than the video; bounded to the frame and
+     bottom-anchored it would overflow upward and the frame's top edge would clip the eyebrow. Cap the
+     block extent to the frame and scroll inside instead, as the gear popover does. */
+  max-block-size: calc(100% - 2 * var(--space-4));
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
