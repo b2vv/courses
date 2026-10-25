@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"unicode/utf8"
@@ -86,6 +87,26 @@ type Block struct {
 	Ordered bool      `json:"ordered,omitempty"`
 	Spans   []Span    `json:"spans,omitempty"`
 	Items   [][]Span  `json:"items,omitempty"`
+}
+
+// MarshalJSON serializes "ordered" (true or false) only for list blocks, where
+// it is a required discriminator the reader relies on, and omits it entirely for
+// paragraph and heading blocks, which share this struct but whose strict reader
+// schema forbids the key. A plain `json:"ordered"` tag cannot express this: it
+// would emit the field for every block type; `omitempty` instead drops a bullet
+// list's `ordered:false`, which the reader then rejects (audit H2 / SA02).
+func (b Block) MarshalJSON() ([]byte, error) {
+	wire := struct {
+		Type    BlockType `json:"type"`
+		Level   int       `json:"level,omitempty"`
+		Ordered *bool     `json:"ordered,omitempty"`
+		Spans   []Span    `json:"spans,omitempty"`
+		Items   [][]Span  `json:"items,omitempty"`
+	}{Type: b.Type, Level: b.Level, Spans: b.Spans, Items: b.Items}
+	if b.Type == BlockList {
+		wire.Ordered = &b.Ordered
+	}
+	return json.Marshal(wire)
 }
 
 // Text stays literal: HTML escaping belongs to the reader, not stored content.
