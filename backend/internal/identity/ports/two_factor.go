@@ -27,6 +27,11 @@ type RecoveryCodeStore interface {
 type PendingTwoFactor struct {
 	UserID     string
 	RememberMe bool
+	// LoginRateLimitKey carries the login throttle key from the password step to
+	// the second-factor step so that a successful CompleteTwoFactor — and only a
+	// success — resets it. The 2FA-required login path therefore stays counted
+	// until the second factor completes (audit H1 / SA01 Bug A).
+	LoginRateLimitKey string
 }
 
 type PendingTwoFactorStore interface {

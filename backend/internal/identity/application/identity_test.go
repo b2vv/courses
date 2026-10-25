@@ -24,6 +24,7 @@ type limiter struct {
 	allowCalls int
 	resetCalls int
 	key        string
+	resetKeys  []string
 }
 
 func (limiter *limiter) Allow(_ context.Context, key string) (bool, error) {
@@ -35,6 +36,7 @@ func (limiter *limiter) Allow(_ context.Context, key string) (bool, error) {
 func (limiter *limiter) Reset(_ context.Context, key string) error {
 	limiter.resetCalls++
 	limiter.key = key
+	limiter.resetKeys = append(limiter.resetKeys, key)
 	return nil
 }
 

@@ -103,7 +103,7 @@ func (service *TwoFactor) ConfirmTwoFactor(ctx context.Context, userID, code str
 	return ConfirmTwoFactorResult{RecoveryCodes: codes}, nil
 }
 
-func (service *TwoFactor) StartLogin(ctx context.Context, userID string, rememberMe bool) (string, error) {
+func (service *TwoFactor) StartLogin(ctx context.Context, userID string, rememberMe bool, loginRateLimitKey string) (string, error) {
 	if service.pending == nil {
 		return "", domain.ErrDependencyUnavailable
 	}
@@ -111,7 +111,8 @@ func (service *TwoFactor) StartLogin(ctx context.Context, userID string, remembe
 	if err != nil {
 		return "", domain.ErrDependencyUnavailable
 	}
-	if err := service.pending.Put(ctx, pendingID, ports.PendingTwoFactor{UserID: userID, RememberMe: rememberMe}, pendingTwoFactorTTL); err != nil {
+	pending := ports.PendingTwoFactor{UserID: userID, RememberMe: rememberMe, LoginRateLimitKey: loginRateLimitKey}
+	if err := service.pending.Put(ctx, pendingID, pending, pendingTwoFactorTTL); err != nil {
 		return "", err
 	}
 	return pendingID, nil
@@ -121,15 +122,23 @@ func (service *TwoFactor) CompleteTwoFactor(ctx context.Context, input CompleteT
 	if service.pending == nil || input.PendingID == "" {
 		return CompleteTwoFactorResult{}, domain.ErrAuthenticationRequired
 	}
-	if err := service.allow(ctx, "two-factor:"+input.PendingID); err != nil {
-		return CompleteTwoFactorResult{}, err
-	}
 	pending, ok, err := service.pending.Take(ctx, input.PendingID)
 	if err != nil {
 		return CompleteTwoFactorResult{}, err
 	}
 	if !ok {
 		return CompleteTwoFactorResult{}, domain.ErrAuthenticationRequired
+	}
+	// Key the 2FA attempt budget on the account, not the ephemeral pending id: an
+	// attacker who knows the password mints a fresh pending id per login
+	// (identity.Login), so a per-pending budget would refill each attempt (audit
+	// H1 / SA01 Bug B). Take is atomic, so restore the pending on a rate-limit —
+	// as the failed-proof branch below does — to keep a legitimate user's budget.
+	if err := service.allow(ctx, "two-factor:"+pending.UserID); err != nil {
+		if putErr := service.pending.Put(ctx, input.PendingID, pending, pendingTwoFactorTTL); putErr != nil {
+			return CompleteTwoFactorResult{}, putErr
+		}
+		return CompleteTwoFactorResult{}, err
 	}
 	state, err := service.store.GetTwoFactor(ctx, pending.UserID)
 	if err != nil {
@@ -163,6 +172,21 @@ func (service *TwoFactor) CompleteTwoFactor(ctx context.Context, input CompleteT
 	session, err := validTwoFactorIssuedSession(issued, pending.UserID, now, lifetime)
 	if err != nil {
 		return CompleteTwoFactorResult{}, err
+	}
+	// A successful second factor clears both throttles for this account: the 2FA
+	// attempt budget (so a legitimate user who logs in several times in the window
+	// is not blocked by their own successful logins) and the login throttle
+	// carried from the password step (SA01 Bug A). A brute-forcer never reaches
+	// success, so never clears either.
+	if service.limiter != nil {
+		if err := service.limiter.Reset(ctx, "two-factor:"+pending.UserID); err != nil {
+			return CompleteTwoFactorResult{}, err
+		}
+		if pending.LoginRateLimitKey != "" {
+			if err := service.limiter.Reset(ctx, pending.LoginRateLimitKey); err != nil {
+				return CompleteTwoFactorResult{}, err
+			}
+		}
 	}
 	return CompleteTwoFactorResult{Session: session, Token: issued.Token}, nil
 }

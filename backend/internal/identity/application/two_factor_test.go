@@ -206,8 +206,59 @@ func TestCompleteTwoFactorRateLimitsRepeatedInvalidProofs(t *testing.T) {
 		t.Fatal(err)
 	}
 	attempts.allowed = false
-	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "pending", Code: "000000"}); !errors.Is(err, domain.ErrRateLimited) || attempts.key != "two-factor:pending" {
+	// The 2FA attempt budget must be keyed on the account, not the ephemeral
+	// pending id: otherwise an attacker who knows the password mints a fresh
+	// pending id per login (identity.Login) and refills the TOTP guess budget
+	// each time (audit H1 / SA01 Bug B).
+	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "pending", Code: "000000"}); !errors.Is(err, domain.ErrRateLimited) || attempts.key != "two-factor:"+twoFactorUserID {
 		t.Fatalf("err=%v key=%q", err, attempts.key)
+	}
+}
+
+// TestCompleteTwoFactorResetsLoginLimitOnSuccess pins SA01 Option 1: a
+// successful second factor must reset the login rate limiter using the key that
+// Login carried into the pending. This is the only point where the 2FA-required
+// login path is allowed to clear the login throttle.
+func TestCompleteTwoFactorResetsLoginLimitOnSuccess(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	loginKey := "login:learner@example.com:203.0.113.7"
+	limit := &limiter{allowed: true}
+	pending := &pendingStore{}
+	issued := ports.IssuedSession{Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: twoFactorUserID, CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: validToken('A')}
+	service := application.NewTwoFactor(&twoFactorStore{state: ports.TwoFactor{Secret: twoFactorSecret, Enabled: true}}, &recoveryStore{}, pending, &sessions{issued: issued}, func() time.Time { return now }, application.TwoFactorDependency{Limiter: limit})
+	if err := pending.Put(context.Background(), "pending", ports.PendingTwoFactor{UserID: twoFactorUserID, LoginRateLimitKey: loginKey}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "pending", Code: totp(twoFactorSecret, now)}); err != nil {
+		t.Fatal(err)
+	}
+	// Success clears both the login throttle (Bug A) and the per-account 2FA
+	// attempt budget (so repeated successful logins are not self-throttled).
+	reset := map[string]bool{}
+	for _, key := range limit.resetKeys {
+		reset[key] = true
+	}
+	if !reset[loginKey] || !reset["two-factor:"+twoFactorUserID] {
+		t.Fatalf("success must reset both the login key and the per-account 2FA key: resetKeys=%v", limit.resetKeys)
+	}
+}
+
+// TestLoginDoesNotResetRateLimitUntilSecondFactor pins SA01 Bug A: the
+// 2FA-required branch of Login must NOT reset the login rate limiter. Resetting
+// it there lets an attacker who knows the password log in unboundedly (each call
+// succeeds on the password and clears the 5/15min login counter), minting a fresh
+// pending id every time and defeating the login throttle entirely.
+func TestLoginDoesNotResetRateLimitUntilSecondFactor(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	user := validUser(now)
+	loginLimiter := &limiter{allowed: true}
+	twoFactor := application.NewTwoFactor(&twoFactorStore{state: ports.TwoFactor{Secret: twoFactorSecret, Enabled: true}}, &recoveryStore{}, &pendingStore{}, &sessions{}, func() time.Time { return now }, application.TwoFactorDependency{NewPending: func() (string, error) { return "pending", nil }})
+	identity := application.NewIdentity(&credentials{user: user}, &sessions{}, func() time.Time { return now }, loginLimiter).WithTwoFactor(twoFactor)
+	if _, err := identity.Login(context.Background(), application.LoginInput{Email: user.Email, Password: "password"}); !errors.Is(err, domain.ErrTwoFactorRequired) {
+		t.Fatalf("login err=%v, want ErrTwoFactorRequired", err)
+	}
+	if loginLimiter.resetCalls != 0 {
+		t.Fatalf("login reset the rate limiter on the 2FA-required branch (resetCalls=%d); it must stay counted until the second factor completes", loginLimiter.resetCalls)
 	}
 }
 
