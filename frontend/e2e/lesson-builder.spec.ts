@@ -213,6 +213,80 @@ test('reordering a section by keyboard keeps focus on its control, and the edito
   await adminContext.close();
 });
 
+test('a bullet list survives save, reload and publish, and renders for the member (SA02/H2)', async ({
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('baseURL is required');
+  const adminContext = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
+  const lesson = await createPublishedLesson(adminContext.request, baseURL, 'bullet');
+
+  // A bullet list (ordered:false) is the case H2 broke: the server dropped
+  // `ordered` for it, and the strict reader schema then rejected the document.
+  // An ordered list is included alongside to prove numbered lists still survive.
+  const document = {
+    schemaVersion: 1,
+    locale: 'uk',
+    sections: [
+      {
+        id: 'steps',
+        type: 'text',
+        content: {
+          blocks: [
+            {
+              type: 'list',
+              ordered: false,
+              items: [[{ text: 'Перший пункт' }], [{ text: 'Другий пункт' }]],
+            },
+            {
+              type: 'list',
+              ordered: true,
+              items: [[{ text: 'Крок перший' }], [{ text: 'Крок другий' }]],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  // Save the draft through the production API, then reload it (getDraft re-marshals
+  // the domain struct — the exact path that dropped ordered:false) and publish.
+  const saved = await adminContext.request.put(
+    `/api/v1/admin/lessons/${lesson.lessonId}/document`,
+    { data: { expectedUpdatedAt: null, document }, headers: origin(baseURL) },
+  );
+  expect(saved.status(), await saved.text()).toBe(200);
+  const savedAt = ((await saved.json()) as { updatedAt: string }).updatedAt;
+  const reloaded = await adminContext.request.get(
+    `/api/v1/admin/lessons/${lesson.lessonId}/document`,
+  );
+  expect(reloaded.status(), await reloaded.text()).toBe(200);
+  const published = await adminContext.request.post(
+    `/api/v1/admin/lessons/${lesson.lessonId}/document/publish`,
+    { data: { expectedUpdatedAt: savedAt }, headers: origin(baseURL) },
+  );
+  expect(published.status(), await published.text()).toBe(200);
+
+  // The member renders the published lesson: the browser zod-parses getPublished.
+  // Before the fix this failed for the bullet list and the materials never rendered.
+  const studentContext = await browser.newContext({
+    baseURL,
+    storageState: authStatePath('student'),
+  });
+  const student = await studentContext.newPage();
+  await student.goto(`/learn/${lesson.slug}/${lesson.lessonId}`);
+  const region = student.getByRole('region', { name: 'Матеріали уроку' });
+  await expect(region.getByText('Перший пункт')).toBeVisible();
+  await expect(region.getByText('Другий пункт')).toBeVisible();
+  await expect(region.getByText('Крок перший')).toBeVisible();
+  // The bullet list is an unordered list (ul), the numbered one an ordered list (ol).
+  await expect(region.locator('ul')).toContainText('Перший пункт');
+  await expect(region.locator('ol')).toContainText('Крок перший');
+
+  await adminContext.close();
+  await studentContext.close();
+});
+
 test('a saved but unpublished draft stays invisible to the member', async ({
   browser,
   baseURL,

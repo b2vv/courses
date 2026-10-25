@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -334,4 +335,39 @@ func TestLessonDocumentEsoterica(t *testing.T) {
 	column := textSection()
 	column.ID = "explanation"
 	checkDocument(t, documentWith(domain.Section{ID: "video", Type: domain.SectionVideo}, text, domain.Section{ID: "row", Type: domain.SectionRow, Columns: []domain.Section{imageSection(), column}}, task), true)
+}
+
+// TestLessonBlockJSONSerializesOrderedForListsOnly pins SA02 (audit H2): a list
+// block must always carry "ordered" on the wire — including a bullet list
+// (ordered:false), which the strict FE schema requires — while paragraph and
+// heading blocks, which share the Block struct, must NOT carry "ordered" at all
+// (their FE schemas are strict and forbid the key).
+func TestLessonBlockJSONSerializesOrderedForListsOnly(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name  string
+		block domain.Block
+		want  string // substring that must appear
+		deny  bool   // when true, `want` must NOT appear
+	}{
+		{"bullet list keeps ordered:false", domain.Block{Type: domain.BlockList, Items: [][]domain.Span{{{Text: "пункт"}}}}, `"ordered":false`, false},
+		{"ordered list keeps ordered:true", domain.Block{Type: domain.BlockList, Ordered: true, Items: [][]domain.Span{{{Text: "крок"}}}}, `"ordered":true`, false},
+		{"paragraph omits ordered", domain.Block{Type: domain.BlockParagraph, Spans: []domain.Span{{Text: "абзац"}}}, `"ordered"`, true},
+		{"heading omits ordered", domain.Block{Type: domain.BlockHeading, Level: 2, Spans: []domain.Span{{Text: "заголовок"}}}, `"ordered"`, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			encoded, err := json.Marshal(test.block)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			has := strings.Contains(string(encoded), test.want)
+			if test.deny && has {
+				t.Fatalf("block %s must not carry %s: %s", test.block.Type, test.want, encoded)
+			}
+			if !test.deny && !has {
+				t.Fatalf("block %s must carry %s: %s", test.block.Type, test.want, encoded)
+			}
+		})
+	}
 }
