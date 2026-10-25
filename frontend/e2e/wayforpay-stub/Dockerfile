@@ -1,4 +1,4 @@
-FROM golang:1.27.2-bookworm AS build
+FROM golang:1.27.3-bookworm AS build
 ENV GOTOOLCHAIN=local
 WORKDIR /src
 COPY frontend/e2e/wayforpay-stub/main.go .
