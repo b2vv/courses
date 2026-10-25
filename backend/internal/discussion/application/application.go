@@ -298,6 +298,9 @@ func (service *Service) Update(ctx context.Context, actor Actor, commentID, body
 	if record.Comment.RemovedAt != nil {
 		return Comment{}, ErrCommentRemoved
 	}
+	if err := requireCommunication(record.Course, actor); err != nil {
+		return Comment{}, err
+	}
 	validated, err := domain.NewComment(domain.Comment{LessonID: record.Comment.LessonID, Body: body}, nil, nil)
 	if err != nil {
 		return Comment{}, err
