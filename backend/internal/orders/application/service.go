@@ -70,6 +70,15 @@ func (service *Service) StartPurchase(ctx context.Context, actor Actor, courseID
 	} else if !errors.Is(err, domain.ErrOrderNotFound) {
 		return domain.Order{}, err
 	}
+	// SA05/M2: one pending order per (user, course). A fresh Idempotency-Key (the frontend mints one
+	// per attempt) must resume the pending order already opened on this course, never open a second
+	// that could also be paid and charge the buyer twice. A failed or paid order leaves no pending
+	// row, so a genuine retry after a failed payment still opens a new order here.
+	if pending, err := service.orders.PendingForCourse(ctx, actor.UserID, courseID); err == nil {
+		return pending, nil
+	} else if !errors.Is(err, domain.ErrOrderNotFound) {
+		return domain.Order{}, err
+	}
 	order, err := domain.NewOrder(service.newID(), actor.UserID, courseID, *facts.Price, idempotencyKey, service.now())
 	if err != nil {
 		return domain.Order{}, err

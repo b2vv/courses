@@ -220,6 +220,16 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
   await expect(page.getByRole('link', { name: 'Повернутися до курсу' })).toBeVisible();
   expect(contentRequests).toEqual([]);
 
+  // SA05/M2 — one pending order per course. Returning to the locked lesson and buying again resumes
+  // the SAME order (the frontend mints a fresh Idempotency-Key per attempt), never a second order
+  // that could also be paid and charge the buyer twice.
+  const firstOrderId = page.url().match(/\/orders\/([0-9a-f-]{36})/)?.[1];
+  expect(firstOrderId).toBeTruthy();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto(`/learn/${slug}/${lockedLesson.id}`);
+  await page.getByRole('button', { name: 'Купити курс' }).click();
+  await expect(page).toHaveURL(new RegExp(`/orders/${firstOrderId}\\?course=${slug}$`));
+
   // Pay10 — an administrator grants the student access in the editor; the locked lesson opens.
   const grantor = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
   try {

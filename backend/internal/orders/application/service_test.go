@@ -92,6 +92,30 @@ func TestStartPurchaseIsIdempotentAndRejectsOwnedOrUnpurchasableCourses(t *testi
 	}
 }
 
+// SA05/M2: a fresh Idempotency-Key (the frontend mints one per attempt) must resume the single
+// pending order already open on the course, never create a second order that could also be paid and
+// charge the buyer twice. Reuse is keyed by (user, course), across idempotency keys.
+func TestStartPurchaseReusesExistingPendingOrderAcrossKeys(t *testing.T) {
+	existing, err := domain.NewOrder(orderID, userID, courseID, *money(t, "50000"), "older-key", fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newFakeStore(t)
+	store.pendingForCourse = &existing
+	service := application.New(store, store, store, func() time.Time { return fixedNow }, func() string { return "60000000-0000-4000-8000-000000000099" }, nil)
+
+	order, err := service.StartPurchase(context.Background(), application.Actor{UserID: userID, EmailVerified: true}, courseID, "fresh-key")
+	if err != nil {
+		t.Fatalf("StartPurchase: %v", err)
+	}
+	if order.ID() != orderID {
+		t.Fatalf("reused order id=%q, want the existing pending order %q", order.ID(), orderID)
+	}
+	if store.createCalls != 0 {
+		t.Fatalf("create calls=%d, want 0 — a pending order must be reused, not duplicated", store.createCalls)
+	}
+}
+
 func TestPurchaseStatusIsScopedToActor(t *testing.T) {
 	store := newFakeStore(t)
 	existing := pendingOrder(t)
@@ -697,6 +721,7 @@ type fakeStore struct {
 	course                ports.CourseFacts
 	enrollment            ports.EnrollmentFacts
 	idempotentOrder       *domain.Order
+	pendingForCourse      *domain.Order
 	createReturns         *domain.Order
 	membership            *domain.Grant
 	createCalls           int
@@ -805,6 +830,13 @@ func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (d
 		return domain.Order{}, domain.ErrOrderNotFound
 	}
 	return *store.idempotentOrder, nil
+}
+
+func (store *fakeStore) PendingForCourse(context.Context, string, string) (domain.Order, error) {
+	if store.pendingForCourse == nil {
+		return domain.Order{}, domain.ErrOrderNotFound
+	}
+	return *store.pendingForCourse, nil
 }
 
 func (store *fakeStore) Create(_ context.Context, order domain.Order) (domain.Order, error) {

@@ -26,6 +26,11 @@ type CourseReader interface {
 
 type OrderRepository interface {
 	FindByIdempotencyKey(context.Context, string, string) (domain.Order, error)
+	// PendingForCourse returns the single unpaid pending order a user holds on a course, or
+	// ErrOrderNotFound when there is none. One pending order per (user, course) is the double-charge
+	// guard (SA05/M2): StartPurchase reuses this order instead of opening a second that could also
+	// pay. A partial unique index enforces the invariant under concurrency.
+	PendingForCourse(context.Context, string, string) (domain.Order, error)
 	Create(context.Context, domain.Order) (domain.Order, error)
 	Get(context.Context, string, string) (domain.Order, error)
 	MarkCheckoutOpened(context.Context, string, string) (domain.Order, error)
