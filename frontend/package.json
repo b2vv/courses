@@ -40,14 +40,14 @@
     "react-i18next": "17.0.13",
     "srvx": "1.0.1",
     "tailwindcss": "4.3.3",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
     "@rsbuild/core": "2.2.2",
     "@rsbuild/plugin-react": "2.1.0",
     "@rsbuild/plugin-tailwindcss": "2.0.3",
-    "@rstest/core": "0.11.11",
+    "@rstest/core": "0.12.4",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
     "@types/node": "24.13.3",
