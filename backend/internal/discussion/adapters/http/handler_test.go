@@ -512,6 +512,11 @@ func TestK12PatchComments(t *testing.T) {
 			record.Comment.RemovedAt = &now
 			fake.comments[discussionComment] = record
 		}, http.StatusConflict, "comment_removed"},
+		{"403 blocked author", discussionComment, actor(discussionAuthor, "student"), func(fake *fakeRepository) {
+			record := fake.comments[discussionComment]
+			record.Course.Membership = access.MembershipBlocked
+			fake.comments[discussionComment] = record
+		}, http.StatusForbidden, "enrollment_blocked"},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

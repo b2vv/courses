@@ -244,6 +244,23 @@ func TestCommunicationGatePrecedence(t *testing.T) {
 		}
 	})
 
+	t.Run("update comment uses the same membership codes", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			state access.Membership
+			want  error
+		}{{"blocked", access.MembershipBlocked, domain.ErrEnrollmentBlocked}, {"revoked", access.MembershipRevoked, domain.ErrEnrollmentRequired}, {"active", access.MembershipActive, nil}} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := newReviewFake()
+				f.comment = ports.CommentRecord{Comment: domain.Comment{ID: "comment", AuthorID: reviewAuthor}, Course: domain.Course{OwnerID: reviewOwner, Status: domain.Published, Membership: tc.state}}
+				_, err := reviewService(f).Update(context.Background(), Actor{UserID: reviewAuthor, EmailVerified: true}, "comment", "an edited comment body")
+				if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+					t.Fatalf("err=%v want=%v", err, tc.want)
+				}
+			})
+		}
+	})
+
 	t.Run("review communication precedes review eligibility", func(t *testing.T) {
 		for _, tc := range []struct {
 			name     string
