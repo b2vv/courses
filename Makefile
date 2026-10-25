@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-GO_IMAGE := golang:1.27.2-bookworm
+GO_IMAGE := golang:1.27.3-bookworm
 # K12: the Go caches are named volumes locally; CI points them at host directories (absolute paths)
 # that actions/cache restores and saves, so a runner does not rebuild the world on every run.
 GO_MOD_CACHE ?= courses-gomod
