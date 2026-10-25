@@ -83,14 +83,13 @@ func (identity *Identity) Login(ctx context.Context, input LoginInput) (LoginRes
 			return LoginResult{}, err
 		}
 		if state.Enabled {
-			pendingID, err := identity.twoFactor.StartLogin(ctx, user.ID, input.RememberMe)
+			// Carry the login throttle key into the pending so CompleteTwoFactor
+			// resets it on success only. Resetting here would clear the 5/15min
+			// login counter on every correct password, letting an attacker who
+			// knows the password brute-force the second factor (audit H1 / SA01).
+			pendingID, err := identity.twoFactor.StartLogin(ctx, user.ID, input.RememberMe, loginRateLimitKey(input.Email, input.IP))
 			if err != nil {
 				return LoginResult{}, err
-			}
-			if identity.limiter != nil {
-				if err := identity.limiter.Reset(ctx, loginRateLimitKey(input.Email, input.IP)); err != nil {
-					return LoginResult{}, err
-				}
 			}
 			return LoginResult{User: user, PendingID: pendingID}, domain.ErrTwoFactorRequired
 		}

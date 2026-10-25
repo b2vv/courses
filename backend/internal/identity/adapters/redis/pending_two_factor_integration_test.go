@@ -34,7 +34,7 @@ func TestPendingTwoFactorStoreAgainstRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ports.PendingTwoFactor{UserID: "40000000-0000-4000-8000-000000000001", RememberMe: true}
+	want := ports.PendingTwoFactor{UserID: "40000000-0000-4000-8000-000000000001", RememberMe: true, LoginRateLimitKey: "login:learner@example.com:203.0.113.7"}
 	if err := store.Put(ctx, "pending-id", want, time.Minute); err != nil {
 		t.Fatal(err)
 	}
