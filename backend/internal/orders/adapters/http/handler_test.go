@@ -85,6 +85,9 @@ func (store *fakeStore) FindByIdempotencyKey(context.Context, string, string) (d
 	}
 	return store.order, nil
 }
+func (store *fakeStore) PendingForCourse(context.Context, string, string) (domain.Order, error) {
+	return domain.Order{}, domain.ErrOrderNotFound
+}
 func (store *fakeStore) Create(_ context.Context, order domain.Order) (domain.Order, error) {
 	store.order = order
 	return order, nil

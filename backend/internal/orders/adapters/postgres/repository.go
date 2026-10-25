@@ -62,6 +62,10 @@ func (repository *Repository) FindByIdempotencyKey(ctx context.Context, userID, 
 	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE user_id=$1::text::uuid AND idempotency_key=$2`, userID, key))
 }
 
+func (repository *Repository) PendingForCourse(ctx context.Context, userID, courseID string) (domain.Order, error) {
+	return scanOrder(repository.pool.QueryRow(ctx, `SELECT id::text,user_id::text,course_id::text,amount_minor,currency,status,idempotency_key,created_at,paid_at FROM orders WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND status='pending'`, userID, courseID))
+}
+
 func (repository *Repository) Create(ctx context.Context, order domain.Order) (domain.Order, error) {
 	_, err := repository.pool.Exec(ctx, `INSERT INTO orders(id,user_id,course_id,amount_minor,currency,status,idempotency_key,created_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5,$6,$7,$8)`,
 		order.ID(), order.UserID(), order.CourseID(), int64(order.Amount().MinorUnits()), string(order.Amount().Currency()), string(order.Status()), order.IdempotencyKey(), order.CreatedAt())
@@ -70,6 +74,12 @@ func (repository *Repository) Create(ctx context.Context, order domain.Order) (d
 	}
 	if isUnique(err, "orders_user_id_idempotency_key_key") {
 		return repository.FindByIdempotencyKey(ctx, order.UserID(), order.IdempotencyKey())
+	}
+	// SA05/M2: a concurrent StartPurchase with a different key lost the race for the one pending slot
+	// on this (user, course). Hand back the pending order that won, so both callers resume it rather
+	// than one being charged on a second order.
+	if isUnique(err, "orders_one_pending_per_user_course") {
+		return repository.PendingForCourse(ctx, order.UserID(), order.CourseID())
 	}
 	return domain.Order{}, persistenceError(err)
 }
