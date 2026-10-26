@@ -7,7 +7,7 @@ test.each([
   [
     'email_not_verified',
     'Confirm your email to buy the course.',
-    'Підтвердьте пошту, щоб купити курс.',
+    'Підтвердіть пошту, щоб купити курс.',
   ],
   [
     'admin_not_learner',
