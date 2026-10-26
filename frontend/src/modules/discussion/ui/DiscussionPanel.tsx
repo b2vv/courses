@@ -100,7 +100,8 @@ function CommentCard({
             <TextArea label={t('learn.discussion.form.body')} value={body} onChange={setBody} />
             <div className="discussion-actions">
               <Button
-                isDisabled={busy || body.trim() === ''}
+                isPending={busy}
+                isDisabled={body.trim() === ''}
                 onPress={() => void run(() => onUpdate(comment.id, body))}
               >
                 {t('learn.discussion.save')}
@@ -138,7 +139,8 @@ function CommentCard({
           {onReport !== undefined && !comment.canEdit && !comment.removed ? (
             <Button
               variant="secondary"
-              isDisabled={busy || reported}
+              isPending={busy}
+              isDisabled={reported}
               onPress={() => {
                 setReportError(undefined);
                 void run(() => onReport(comment.id))
@@ -172,7 +174,7 @@ function CommentCard({
               value={replyBody}
               onChange={setReplyBody}
             />
-            <Button isDisabled={busy || replyBody.trim() === ''} type="submit">
+            <Button isPending={busy} isDisabled={replyBody.trim() === ''} type="submit">
               {t('learn.discussion.sendReply')}
             </Button>
           </form>
@@ -258,7 +260,7 @@ export function DiscussionPanel({
         </ol>
       )}
       {page?.nextCursor === null || onLoadMore === undefined ? null : (
-        <Button variant="secondary" isDisabled={isLoadingMore} onPress={onLoadMore}>
+        <Button variant="secondary" isPending={isLoadingMore} onPress={onLoadMore}>
           {t('learn.discussion.showMore')}
         </Button>
       )}
@@ -277,7 +279,10 @@ export function DiscussionPanel({
         ) : (
           <p>{t('learn.discussion.form.attached', { time: formatTimestamp(position) })}</p>
         )}
-        <Button isDisabled={busy || body.trim() === ''} type="submit">
+        {/* isPending (not isDisabled) for the in-flight state: a native disabled drops focus to
+            <body> while the request runs (B-L7b.1). isDisabled stays for the genuine empty-body
+            guard. Same split on every busy button in this panel. */}
+        <Button isPending={busy} isDisabled={body.trim() === ''} type="submit">
           {t('learn.discussion.publish')}
         </Button>
       </form>

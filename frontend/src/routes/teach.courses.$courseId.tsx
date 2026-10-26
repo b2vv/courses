@@ -325,10 +325,17 @@ function ModerationRow({
         <p>{commentLabel(item.comment)}</p>
         <p>Скарг: {item.openReports}</p>
         <div className="discussion-actions">
-          <Button variant="secondary" isDisabled={busy} onPress={() => onDismiss(moderationReason)}>
+          {/* isPending (not isDisabled) for the in-flight state: a native disabled drops focus to
+              <body> while the request runs (B-L7b.1), as on the author-block button below. */}
+          <Button variant="secondary" isPending={busy} onPress={() => onDismiss(moderationReason)}>
             Відхилити скарги
           </Button>
-          <Button variant="danger" isDisabled={busy || item.comment.removed} onPress={onRemove}>
+          <Button
+            variant="danger"
+            isPending={busy}
+            isDisabled={item.comment.removed}
+            onPress={onRemove}
+          >
             Прибрати коментар
           </Button>
           {/* isPending (per row), not isDisabled: a native disabled drops focus to <body> while the
