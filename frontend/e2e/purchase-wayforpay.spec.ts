@@ -229,3 +229,89 @@ test('Pay24 callback vectors and Pay25 offline status-check purchase unlock the 
   await expect(page.getByRole('region', { name: 'Обговорення' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Купити курс' })).toHaveCount(0);
 });
+
+// SA05-T1 — the SA05/M2 fix reuses one pending order per (user, course). Pay13 proves a fresh
+// Idempotency-Key resumes the SAME order; this test carries that resumed order all the way to a
+// paid grant, after the buyer opened the provider and abandoned it, and proves the grant lands
+// exactly once (no second chargeable order). It complements Pay24 (which pays a never-abandoned
+// order) by exercising the reused-pending path end to end.
+test('Pay26 SA05-T1 a resumed pending order after an abandoned provider pays and grants exactly once', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const admin = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
+  let course: { slug: string; courseId: string; lessonId: string };
+  try {
+    course = await createPaidCourse(admin, baseURL, 'resume');
+  } finally {
+    await admin.close();
+  }
+
+  // Attempt 1 opens the one pending order and is sent to the provider (checkout opened), then left
+  // without paying.
+  const first = await page.request.post(`/api/v1/learn/courses/${course.courseId}/purchase`, {
+    headers: { ...origin(baseURL), 'Idempotency-Key': `resume-a-${runNamespace}` },
+  });
+  expect(first.status(), await first.text()).toBe(201);
+  const firstOrder = (await first.json()) as { id: string; status: string };
+  expect(firstOrder.status).toBe('pending');
+  const opened = await page.request.post(`/api/v1/learn/orders/${firstOrder.id}/checkout`, {
+    headers: origin(baseURL),
+    data: { courseSlug: course.slug },
+  });
+  expect(opened.status(), await opened.text()).toBe(200);
+
+  // Attempt 2 mints a fresh Idempotency-Key (as the frontend does per attempt): it resumes the SAME
+  // pending order, never a second order that could also be charged (SA05/M2).
+  const resumed = await page.request.post(`/api/v1/learn/courses/${course.courseId}/purchase`, {
+    headers: { ...origin(baseURL), 'Idempotency-Key': `resume-b-${runNamespace}` },
+  });
+  expect(resumed.status(), await resumed.text()).toBe(201);
+  const resumedOrder = (await resumed.json()) as { id: string; status: string };
+  expect(resumedOrder.id).toBe(firstOrder.id);
+  expect(resumedOrder.status).toBe('pending');
+
+  // Re-opening checkout on the resumed (already-opened) order is refused: a pre-existing,
+  // owner-accepted no-expiry limitation — the buyer completes through the provider it was sent to.
+  const reopen = await page.request.post(`/api/v1/learn/orders/${firstOrder.id}/checkout`, {
+    headers: origin(baseURL),
+    data: { courseSlug: course.slug },
+  });
+  expect(reopen.status(), await reopen.text()).toBe(409);
+  expect(((await reopen.json()) as { error: { code: string } }).error.code).toBe(
+    'checkout_already_opened',
+  );
+
+  // The provider confirms the payment out-of-band (callback): the resumed order reaches paid.
+  const paid = await page.request.post('/api/v1/payments/wayforpay/callback', {
+    data: callback(firstOrder.id),
+  });
+  expect(paid.status(), await paid.text()).toBe(200);
+  await expect
+    .poll(async () => (await page.request.get(`/api/v1/learn/orders/${firstOrder.id}`)).json())
+    .toMatchObject({ status: 'paid' });
+
+  // The grant lands exactly once: the course unlocks, a further purchase is refused as already
+  // owned (so there is no second order to charge), and a replayed callback stays paid (idempotent).
+  await page.goto(`/learn/${course.slug}/${course.lessonId}`);
+  await expect(page.getByRole('region', { name: 'Обговорення' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Купити курс' })).toHaveCount(0);
+
+  const again = await page.request.post(`/api/v1/learn/courses/${course.courseId}/purchase`, {
+    headers: { ...origin(baseURL), 'Idempotency-Key': `resume-c-${runNamespace}` },
+  });
+  expect(again.status(), await again.text()).toBe(409);
+  expect(((await again.json()) as { error: { code: string } }).error.code).toBe(
+    'course_already_owned',
+  );
+
+  const replay = await page.request.post('/api/v1/payments/wayforpay/callback', {
+    data: callback(firstOrder.id),
+  });
+  expect(replay.status()).toBe(200);
+  await expect
+    .poll(async () => (await page.request.get(`/api/v1/learn/orders/${firstOrder.id}`)).json())
+    .toMatchObject({ status: 'paid' });
+});
