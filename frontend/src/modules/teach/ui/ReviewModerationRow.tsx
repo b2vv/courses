@@ -36,11 +36,13 @@ export function ReviewModerationRow({
         <p>{item.review.body}</p>
         <p>{t('teach.reviewReports', { count: item.openReports })}</p>
         <div className="discussion-actions">
-          <Button variant="secondary" isDisabled={busy} onPress={onDismiss}>
+          {/* isPending (not isDisabled): a native disabled drops focus to <body> while the
+              request runs (B-L7b.1), as on the author-block button below. */}
+          <Button variant="secondary" isPending={busy} onPress={onDismiss}>
             {t('teach.dismissReviewReport')}
           </Button>
           {admin ? (
-            <Button variant="danger" isDisabled={busy} onPress={onRemove}>
+            <Button variant="danger" isPending={busy} onPress={onRemove}>
               {t('teach.removeReview')}
             </Button>
           ) : null}
