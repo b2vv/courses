@@ -401,4 +401,55 @@ test.describe('discussion branches', () => {
       await admin.close();
     }
   });
+
+  // SA07/M4 — a busy action button must keep focus, not drop it to <body>. The panel uses
+  // isPending (aria-disabled), never isDisabled (native disabled) for the in-flight state; a
+  // native disabled would move focus to the document body mid-request. jsdom hides this, so it
+  // needs a real browser. The comments POST is delayed so the busy state is observable.
+  test('K23 a busy publish button keeps focus instead of dropping to <body> (SA07/M4)', async ({
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(300_000);
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const lessonID = randomUUID();
+    const slug = `${runNamespace}-focus`;
+    const admin = await openAs(browser, baseURL, 'admin');
+    const student = await openAs(browser, baseURL, 'student');
+    try {
+      const course = await createCourse(
+        admin.request,
+        baseURL,
+        slug,
+        lessonID,
+        `Фокус ${runNamespace}`,
+      );
+      await publishVideo(await admin.newPage(), course, lessonID, slug);
+      const studentPage = await student.newPage();
+      await studentPage.route('**/api/v1/learn/lessons/*/comments', async (route) => {
+        if (route.request().method() === 'POST') {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+        await route.continue();
+      });
+      await studentPage.goto(`/learn/${slug}/${lessonID}`);
+      await expect(studentPage.locator('video')).toBeVisible();
+      const panel = studentPage.getByRole('region', { name: /Discussion|Обговорення/ });
+      const composer = panel.getByRole('textbox', { name: /Comment|Коментар/ }).last();
+      await composer.fill(`K23 focus ${runNamespace}`);
+      const publish = panel.getByRole('button', { name: /Publish|Опублікувати/ });
+      await publish.focus();
+      await expect(publish).toBeFocused();
+      await publish.click();
+      // While the delayed request is in flight the button is busy (isPending). It must still hold
+      // focus — the regression would already have moved focus to <body> by now.
+      await expect(publish).toBeFocused();
+      await expect(studentPage.locator('body')).not.toBeFocused();
+      // After the request settles the comment lands and focus was never lost to the body.
+      await expect(await commentCard(studentPage, `K23 focus ${runNamespace}`)).toBeVisible();
+    } finally {
+      await student.close();
+      await admin.close();
+    }
+  });
 });
