@@ -138,6 +138,19 @@ test('names a save refused because the review was removed meanwhile', async () =
   await user.click(screen.getByRole('button', { name: 'Зберегти' }));
   expect(screen.getByRole('alert').textContent).toContain('Відгук знято модератором');
 });
+test('names a save that lost the first-review race to another tab', async () => {
+  const user = userEvent.setup();
+  renderBlock({ review: null, eligibility: 'ok' }, async () => {
+    throw new Error('review_already_exists');
+  });
+  await user.click(screen.getByRole('radio', { name: '3 з 5' }));
+  await user.click(screen.getByRole('textbox'));
+  await user.paste(review.body);
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+  expect(screen.getByRole('alert').textContent).toBe(
+    'Ваш відгук уже збережено в іншій вкладці. Оновіть сторінку.',
+  );
+});
 test('names the rating radio group and all star choices', () => {
   renderBlock({ review: null, eligibility: 'ok' });
   expect(screen.getByRole('radiogroup', { name: 'Оцінка' })).toBeTruthy();

@@ -209,7 +209,7 @@ const readErrors = {
 const enrollErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
-  403: ['enrollment_forbidden', 'email_not_verified'],
+  403: ['enrollment_forbidden', 'email_not_verified', 'admin_not_learner'],
   409: ['membership_conflict', 'course_not_enrollable', 'course_already_owned'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
 const rosterErrors = {
@@ -221,7 +221,7 @@ const membershipMutationErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
   403: ['enrollment_forbidden'],
-  409: ['membership_conflict'],
+  409: ['membership_conflict', 'grant_transition_invalid'],
 } as const satisfies Readonly<Record<number, readonly EnrollmentErrorCode[]>>;
 const reportErrors = {
   400: ['report_invalid', 'report_own_person'],

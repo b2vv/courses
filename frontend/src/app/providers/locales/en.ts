@@ -218,6 +218,7 @@ export const en = {
         course_already_owned: 'You already have access to this course.',
         course_not_found: 'Course not found.',
         email_not_verified: 'Confirm your email to enroll in this course.',
+        admin_not_learner: 'Administrators are not learners and cannot enroll in courses.',
         invalid_request: 'Could not complete the action. Please try again.',
         authentication_required: 'Sign in to continue.',
         dependency_unavailable: 'The service is temporarily unavailable. Please try again.',
@@ -244,6 +245,7 @@ export const en = {
         enrollment_required: 'Enroll in this course to leave or report a review.',
         enrollment_blocked:
           'You are blocked in this course — writing and reporting reviews are unavailable.',
+        review_already_exists: 'Your review was already saved in another tab. Reload the page.',
       },
       writeFailure: 'Could not save, try again',
       deleteFailure: 'Could not delete the review, try again',
@@ -314,6 +316,8 @@ export const en = {
           notPurchasable: 'This course cannot be bought right now.',
           notFound: 'Order not found.',
           checkoutAlreadyOpened: 'This payment attempt is already open. Starting a new attempt…',
+          emailNotVerified: 'Confirm your email to buy the course.',
+          adminNotLearner: 'Administrators cannot buy courses.',
         },
       },
       document: {
@@ -710,6 +714,8 @@ export const en = {
         granted: 'Access granted: {{user}}.',
         alreadyOwned: 'This user already has access to the course.',
         forbidden: 'Only an administrator can grant access.',
+        selfForbidden: 'You cannot grant access to yourself.',
+        adminNotLearner: 'Administrators are not learners and cannot be granted a course.',
         invalid: 'The server refused the grant — check the user and the reason.',
       },
       price: {
@@ -1122,6 +1128,8 @@ export const en = {
       error: {
         email_taken: 'That email is already registered.',
         weak_password: 'The password does not meet the requirements.',
+        invalid_email: 'Enter a valid email address.',
+        invalid_display_name: 'Enter a valid display name.',
         invalid_request: 'Check what you entered.',
         rate_limited: 'Try again later.',
         dependency_unavailable: 'The service is temporarily unavailable. Try again later.',

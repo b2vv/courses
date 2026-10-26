@@ -22,6 +22,8 @@ export function heartbeatFailureDirective(
     case 'playback_taken_over':
       return { kind: 'taken-over' };
     case 'playback_forbidden':
+    case 'course_purchase_required':
+    case 'email_not_verified':
       return { kind: 'denied', refresh: true };
     case 'lesson_not_found':
       return { kind: 'unavailable', refresh: true };
@@ -46,7 +48,14 @@ export function mintFailureDirective(
   code: PlaybackErrorCode,
   retryCount: number,
 ): MintFailureDirective {
-  if (code === 'playback_forbidden') return { kind: 'denied', refresh: true };
+  // Access to the course closed: a refresh re-reads the course and shows the locked panel or
+  // the verification banner instead of a dead player.
+  if (
+    code === 'playback_forbidden' ||
+    code === 'course_purchase_required' ||
+    code === 'email_not_verified'
+  )
+    return { kind: 'denied', refresh: true };
   if (code === 'dependency_unavailable' || code === 'request_timeout') {
     return retryCount >= maximumPlaybackRetries
       ? { kind: 'unavailable', refresh: false }

@@ -109,7 +109,7 @@ export function createApiPlaybackRepository(
           namedError(outcome, {
             400: ['invalid_request'],
             401: ['authentication_required'],
-            403: ['playback_forbidden'],
+            403: ['playback_forbidden', 'course_purchase_required', 'email_not_verified'],
             404: ['lesson_not_found', 'video_not_ready'],
           }),
         );
@@ -137,7 +137,7 @@ export function createApiPlaybackRepository(
         namedError(outcome, {
           400: ['invalid_request'],
           401: ['authentication_required'],
-          403: ['playback_forbidden'],
+          403: ['playback_forbidden', 'course_purchase_required', 'email_not_verified'],
           404: ['lesson_not_found'],
           409: ['playback_taken_over'],
           410: ['playback_session_expired'],

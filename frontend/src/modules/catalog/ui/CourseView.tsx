@@ -184,6 +184,7 @@ export function enrollErrorKey(
   | 'enrollment_forbidden'
   | 'course_already_owned'
   | 'email_not_verified'
+  | 'admin_not_learner'
   | 'generic' {
   switch (code) {
     case 'membership_conflict':
@@ -193,6 +194,7 @@ export function enrollErrorKey(
     case 'enrollment_forbidden':
     case 'course_already_owned':
     case 'email_not_verified':
+    case 'admin_not_learner':
       return code;
     default:
       return 'generic';

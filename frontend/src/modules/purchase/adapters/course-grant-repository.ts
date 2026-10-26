@@ -22,7 +22,7 @@ const errorSchema = z.object({ error: z.object({ code: z.string() }).loose() }).
 const grantErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
-  403: ['grant_forbidden', 'origin_forbidden'],
+  403: ['grant_forbidden', 'grant_self_forbidden', 'admin_not_learner', 'origin_forbidden'],
   409: ['course_already_owned'],
 } as const satisfies Readonly<Record<number, readonly GrantErrorCode[]>>;
 

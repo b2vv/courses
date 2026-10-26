@@ -53,7 +53,7 @@ const checkoutFormSchema = z
 const startErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
-  403: ['origin_forbidden'],
+  403: ['origin_forbidden', 'email_not_verified', 'admin_not_learner'],
   409: ['course_already_owned'],
 } as const satisfies Readonly<Record<number, readonly PurchaseErrorCode[]>>;
 
@@ -66,6 +66,7 @@ const statusErrors = {
 const checkoutErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
+  403: ['email_not_verified'],
   404: ['order_not_found'],
   409: ['checkout_already_opened'],
   503: ['dependency_unavailable'],

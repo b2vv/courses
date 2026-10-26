@@ -15,6 +15,7 @@ export type CatalogErrorCode =
   | 'authentication_required'
   | 'review_invalid'
   | 'review_removed'
+  | 'review_already_exists'
   | 'review_not_found'
   | 'review_owner_forbidden'
   | 'review_purchase_required'

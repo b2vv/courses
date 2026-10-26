@@ -53,6 +53,9 @@ function wireError(response: WireResponse): CatalogError {
       case 'report_own_review':
         if (response.status === 403) return { code: 'report_own_review' };
         break;
+      case 'review_already_exists':
+        if (response.status === 409) return { code: 'review_already_exists' };
+        break;
       case 'review_invalid':
       case 'review_removed':
       case 'review_not_found':

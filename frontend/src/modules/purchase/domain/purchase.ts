@@ -25,6 +25,8 @@ export type PurchaseErrorCode =
   | 'invalid_request'
   | 'authentication_required'
   | 'origin_forbidden'
+  | 'email_not_verified'
+  | 'admin_not_learner'
   | 'course_already_owned'
   | 'checkout_already_opened'
   | 'order_not_found';

@@ -217,11 +217,17 @@ test('maps own-review refusal codes', async () => {
     'review_not_available',
     'review_invalid',
     'review_removed',
+    'review_already_exists',
   ]) {
     server.use(
       http.put(`${apiOrigin()}/api/v1/learn/courses/${course.id}/review`, () =>
         HttpResponse.json(errorBody(code), {
-          status: code === 'review_invalid' ? 400 : code === 'review_removed' ? 409 : 403,
+          status:
+            code === 'review_invalid'
+              ? 400
+              : code === 'review_removed' || code === 'review_already_exists'
+                ? 409
+                : 403,
         }),
       ),
     );

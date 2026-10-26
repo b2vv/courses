@@ -47,11 +47,13 @@ test('names a duplicate and a refusal, and rejects a grant for someone else', as
     ok: false,
     error: { code: 'course_already_owned' },
   });
-  server.use(http.post(url, () => conflict('grant_forbidden', 403)));
-  expect(await repository.grant(courseId, userId, 'r')).toEqual({
-    ok: false,
-    error: { code: 'grant_forbidden' },
-  });
+  for (const code of ['grant_forbidden', 'grant_self_forbidden', 'admin_not_learner'] as const) {
+    server.use(http.post(url, () => conflict(code, 403)));
+    expect(await repository.grant(courseId, userId, 'r')).toEqual({
+      ok: false,
+      error: { code },
+    });
+  }
   server.use(
     http.post(url, () => HttpResponse.json({ ...grant, userId: adminId }, { status: 201 })),
   );

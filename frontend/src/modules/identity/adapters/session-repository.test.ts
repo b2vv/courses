@@ -57,6 +57,8 @@ test('registers a user and retains the unverified state from the API', async () 
 
 test.each([
   ['/api/v1/auth/register', 409, 'email_taken', 'email_taken'],
+  ['/api/v1/auth/register', 422, 'invalid_email', 'invalid_email'],
+  ['/api/v1/auth/register', 422, 'invalid_display_name', 'invalid_display_name'],
   ['/api/v1/auth/password/reset', 400, 'invalid_account_token', 'invalid_account_token'],
   ['/api/v1/auth/password/reset', 410, 'token_used', 'token_used'],
   ['/api/v1/auth/password/reset', 422, 'weak_password', 'weak_password'],

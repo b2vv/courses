@@ -24,6 +24,7 @@ function enrollmentErrorKey(error: unknown): string {
     error instanceof Error ? error.message : typeof error === 'string' ? error : undefined;
   switch (code) {
     case 'membership_conflict':
+    case 'grant_transition_invalid':
     case 'enrollment_forbidden':
     case 'invalid_request':
     case 'authentication_required':
