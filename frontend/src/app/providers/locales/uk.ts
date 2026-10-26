@@ -679,6 +679,7 @@ export const uk = {
       statLessons: 'Уроки',
       miniStatsLabel: 'Коротко',
       statusHint: 'Опублікуйте, щоб відкрити курс студентам; архівуйте, щоб сховати.',
+      saveBeforeStatusChange: 'Збережіть зміни, перш ніж змінювати статус.',
       dangerZone: 'Небезпечна зона',
       dangerHint: 'Видалення курсу незворотне, і видалити можна лише чернетку.',
       backToCourses: '← Усі курси',

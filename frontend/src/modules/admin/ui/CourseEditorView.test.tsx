@@ -301,6 +301,38 @@ describe('course editor', () => {
     expect(screen.getByRole('button', { name: 'Publish' }).hasAttribute('disabled')).toBe(false);
   });
 
+  it('M5 blocks a status change while the form has unsaved edits and warns to save first', async () => {
+    const browser = userEvent.setup();
+    let transitions = 0;
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={[{ id: admin.id, displayName: admin.displayName, role: 'admin' }]}
+          onSave={async (current) => current}
+          onTransition={async (current) => {
+            transitions += 1;
+            return current;
+          }}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+
+    const publish = screen.getByRole('button', { name: 'Publish' });
+    expect(publish.hasAttribute('disabled')).toBe(false);
+
+    // An unsaved edit must not be published silently (the status change resets the form and would
+    // drop it): the control is disabled and a note tells the author to save first.
+    await browser.type(screen.getByRole('textbox', { name: 'Title' }), ' edited');
+    await waitFor(() => expect(publish.hasAttribute('disabled')).toBe(true));
+    expect(screen.getByText('Save your changes before changing the status.')).toBeTruthy();
+    await browser.click(publish);
+    expect(transitions).toBe(0);
+  });
+
   it('C19 omits the notice when every saved lesson has a transcript', async () => {
     const lessonId = asBrandedId('20000000-0000-4000-8000-000000000202', 'lesson');
     const course = {

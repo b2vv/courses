@@ -827,11 +827,16 @@ export function CourseEditorView({
                   <Button
                     type="button"
                     variant="secondary"
-                    isDisabled={lifecyclePending || form.formState.isSubmitting}
+                    isDisabled={
+                      lifecyclePending || form.formState.isSubmitting || form.formState.isDirty
+                    }
                     onPress={() => void transition()}
                   >
                     {transitionLabel}
                   </Button>
+                  {form.formState.isDirty && (
+                    <p className="admin-price-note">{t('administration.saveBeforeStatusChange')}</p>
+                  )}
                 </section>
                 <section className="ui-card" aria-labelledby="course-stats-heading">
                   <div className="card-heading">

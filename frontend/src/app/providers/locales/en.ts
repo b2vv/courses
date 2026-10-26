@@ -672,6 +672,7 @@ export const en = {
       statLessons: 'Lessons',
       miniStatsLabel: 'At a glance',
       statusHint: 'Publish to open the course to learners; archive to hide it.',
+      saveBeforeStatusChange: 'Save your changes before changing the status.',
       dangerZone: 'Danger zone',
       dangerHint: 'Deleting a course is permanent, and only a draft can be removed.',
       backToCourses: '← All courses',
