@@ -28,7 +28,7 @@ type identityService interface {
 type accountsService interface {
 	Register(context.Context, application.RegisterInput, string) (application.RegisterResult, error)
 	VerifyEmail(context.Context, string) error
-	ResendVerification(context.Context, string, string) (bool, error)
+	ResendVerification(context.Context, string, string, string) (bool, error)
 	RequestPasswordReset(context.Context, string, string, string) error
 	ResetPassword(context.Context, string, string) error
 	ChangePassword(context.Context, string, string, string, []byte) error
@@ -362,7 +362,7 @@ func (handler *Handler) resendVerification(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, domain.ErrInvalidUser, "")
 		return
 	}
-	if _, err := handler.accounts.ResendVerification(r.Context(), identifier, language(r)); err != nil {
+	if _, err := handler.accounts.ResendVerification(r.Context(), identifier, clientIP(r), language(r)); err != nil {
 		writeError(w, r, err, "")
 		return
 	}

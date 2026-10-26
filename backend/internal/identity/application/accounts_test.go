@@ -157,12 +157,46 @@ func TestResendVerificationInvalidatesThenIssuesUnlessAlreadyVerified(t *testing
 	tokens := &accountTokens{}
 	mailer := &accountMailer{}
 	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, mailer, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
-	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "uk"); err != nil || !sent || len(tokens.invalidated) != 1 || len(tokens.issued) != 1 {
+	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "203.0.113.9", "uk"); err != nil || !sent || len(tokens.invalidated) != 1 || len(tokens.issued) != 1 {
 		t.Fatalf("sent=%v err=%v tokens=%+v", sent, err, tokens)
 	}
 	users.found.EmailVerified = true
-	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "uk"); err != nil || sent || len(tokens.invalidated) != 1 {
+	if sent, err := accounts.ResendVerification(context.Background(), users.found.ID, "203.0.113.9", "uk"); err != nil || sent || len(tokens.invalidated) != 1 {
 		t.Fatalf("idempotence: sent=%v err=%v", sent, err)
+	}
+}
+
+// SA12/M12: an unauthenticated resend for an unknown account must NOT leak a
+// yes/no oracle. Mirror RequestPasswordReset: a missing account is neutral
+// (false, nil) and issues nothing — never ErrUserNotFound (which the handler
+// maps to 404, distinguishing it from the 204 a real account returns).
+func TestResendVerificationIsNeutralForUnknownAccount(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	users := &accountUsers{found: validUser(now), findErr: domain.ErrUserNotFound}
+	tokens := &accountTokens{}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, &accountMailer{}, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if sent, err := accounts.ResendVerification(context.Background(), "ghost@courseforge.local", "203.0.113.9", "uk"); err != nil || sent {
+		t.Fatalf("unknown account must be neutral: sent=%v err=%v", sent, err)
+	}
+	if len(tokens.issued) != 0 || len(tokens.invalidated) != 0 {
+		t.Fatalf("unknown account must not touch tokens: %+v", tokens)
+	}
+}
+
+// SA12/M12: resend must be rate-limited by submitted identifier + IP, before
+// the account lookup — so an attacker cannot hammer the oracle. Mirror
+// RequestPasswordReset's limiter ordering.
+func TestResendVerificationStopsBeforeLookupWhenRateLimited(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	users := &accountUsers{found: validUser(now)}
+	tokens := &accountTokens{}
+	attempts := &limiter{}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, tokens, &accountMailer{}, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" }, application.AccountsDependency{Limiter: attempts})
+	if _, err := accounts.ResendVerification(context.Background(), "student@courseforge.local", "203.0.113.9", "uk"); !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatalf("rate limit must deny: err=%v", err)
+	}
+	if attempts.allowCalls != 1 || attempts.key == "" || len(tokens.invalidated) != 0 || len(tokens.issued) != 0 {
+		t.Fatalf("rate limit did not stop before lookup: limiter=%+v tokens=%+v", attempts, tokens)
 	}
 }
 
