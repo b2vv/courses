@@ -57,6 +57,8 @@ export type PlaybackErrorCode =
   | 'authentication_required'
   | 'course_forbidden'
   | 'course_not_found'
+  | 'course_purchase_required'
+  | 'email_not_verified'
   | 'invalid_request'
   | 'invalid_response'
   | 'invalid_slug'

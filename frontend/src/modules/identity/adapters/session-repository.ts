@@ -61,6 +61,12 @@ function wireError(response: WireResponse): SessionError {
       case 'password_unchanged':
         if (response.status === 422) return { code: 'password_unchanged' };
         break;
+      case 'invalid_email':
+        if (response.status === 422) return { code: 'invalid_email' };
+        break;
+      case 'invalid_display_name':
+        if (response.status === 422) return { code: 'invalid_display_name' };
+        break;
       case 'invalid_account_token':
         if (response.status === 400) return { code: 'invalid_account_token' };
         break;

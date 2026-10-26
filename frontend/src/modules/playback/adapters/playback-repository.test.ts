@@ -182,6 +182,8 @@ test('P12 carries the real page-scope probe on a denied mint without repeating i
 
 test.each([
   [403, 'playback_forbidden'],
+  [403, 'course_purchase_required'],
+  [403, 'email_not_verified'],
   [404, 'lesson_not_found'],
 ] as const)('maps play status %i to %s', async (status, code) => {
   server.use(
@@ -198,6 +200,8 @@ test.each([
 test.each([
   [204, null],
   [403, 'playback_forbidden'],
+  [403, 'course_purchase_required'],
+  [403, 'email_not_verified'],
   [404, 'lesson_not_found'],
   [409, 'playback_taken_over'],
   [410, 'playback_session_expired'],

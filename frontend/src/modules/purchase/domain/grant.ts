@@ -14,6 +14,8 @@ export type GrantErrorCode =
   | 'authentication_required'
   | 'origin_forbidden'
   | 'grant_forbidden'
+  | 'grant_self_forbidden'
+  | 'admin_not_learner'
   | 'course_already_owned';
 
 export type GrantResult<T> =

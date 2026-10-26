@@ -53,7 +53,7 @@ const checkoutFormSchema = z
 const startErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
-  403: ['origin_forbidden'],
+  403: ['origin_forbidden', 'email_not_verified', 'admin_not_learner'],
   409: ['course_already_owned'],
 } as const satisfies Readonly<Record<number, readonly PurchaseErrorCode[]>>;
 

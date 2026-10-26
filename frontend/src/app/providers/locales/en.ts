@@ -314,6 +314,8 @@ export const en = {
           notPurchasable: 'This course cannot be bought right now.',
           notFound: 'Order not found.',
           checkoutAlreadyOpened: 'This payment attempt is already open. Starting a new attempt…',
+          emailNotVerified: 'Confirm your email to buy the course.',
+          adminNotLearner: 'Administrators cannot buy courses.',
         },
       },
       document: {
@@ -710,6 +712,8 @@ export const en = {
         granted: 'Access granted: {{user}}.',
         alreadyOwned: 'This user already has access to the course.',
         forbidden: 'Only an administrator can grant access.',
+        selfForbidden: 'You cannot grant access to yourself.',
+        adminNotLearner: 'Administrators are not learners and cannot be granted a course.',
         invalid: 'The server refused the grant — check the user and the reason.',
       },
       price: {
@@ -1122,6 +1126,8 @@ export const en = {
       error: {
         email_taken: 'That email is already registered.',
         weak_password: 'The password does not meet the requirements.',
+        invalid_email: 'Enter a valid email address.',
+        invalid_display_name: 'Enter a valid display name.',
         invalid_request: 'Check what you entered.',
         rate_limited: 'Try again later.',
         dependency_unavailable: 'The service is temporarily unavailable. Try again later.',

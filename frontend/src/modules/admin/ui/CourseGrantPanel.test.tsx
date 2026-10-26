@@ -104,6 +104,18 @@ describe('course grant panel', () => {
     );
   });
 
+  it.each([
+    ['grant_self_forbidden', 'You cannot grant access to yourself.'],
+    ['admin_not_learner', 'Administrators are not learners and cannot be granted a course.'],
+  ] as const)('names the %s refusal instead of a generic failure', async (code, message) => {
+    const browser = userEvent.setup();
+    renderPanel(code, []);
+    await choose(browser);
+    await browser.type(screen.getByRole('textbox', { name: 'Reason' }), 'Why');
+    await browser.click(screen.getByRole('button', { name: 'Grant access' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(message);
+  });
+
   it('keeps the chosen user when the input then shows its label', async () => {
     // The server matches a name or an email, never the "name — email" label the input shows
     // after a choice; a search for that label comes back empty.

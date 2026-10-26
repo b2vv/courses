@@ -84,6 +84,24 @@ test('names the purchase conflicts the backend answers', async () => {
   });
 });
 
+test.each(['email_not_verified', 'admin_not_learner'] as const)(
+  'names the start refusal %s instead of a generic failure',
+  async (code) => {
+    server.use(
+      http.post(`${apiOrigin()}/api/v1/learn/courses/${courseId}/purchase`, () =>
+        HttpResponse.json(
+          { error: { code, message: 'x', requestId: 'a'.repeat(32) } },
+          { status: 403 },
+        ),
+      ),
+    );
+    expect(await createApiPurchaseRepository().start(courseId, 'attempt-3')).toEqual({
+      ok: false,
+      error: { code },
+    });
+  },
+);
+
 test('maps a hosted checkout form and sends the course slug', async () => {
   let requestBody: unknown;
   const form = {
