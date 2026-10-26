@@ -6,11 +6,11 @@
 
 <a id="portable-package-pin"></a>
 
-## Pinned full collection — c427bd8
+## Pinned full collection — candidate 17a9527
 
-[Package metadata](ai-factory-package.json) фіксує private `b2vv/ai-factory`, commit `c427bd807f250e8d4b7d9c42d9bc894d8f8dce71`, release `0.7.0-candidate`. Єдине джерело повного спільного плану: `<factory>/ai-factory-plan.md`; оригінальні скіли: `<skills>/`.
+[Package metadata](ai-factory-package.json) фіксує `b2vv/ai-factory`, commit `17a9527421e8fac3e43a16c287c404118699833c`, unreleased commit-pinned candidate (manifest version `0.7.0-rc.5`, not the rc.5 tag). Єдине джерело повного спільного плану: `<factory>/ai-factory-plan.md`; оригінальні скіли: `<skills>/`.
 
-- `<release>` = `~/project-data/ai-factory-rollout/releases/c427bd807f250e8d4b7d9c42d9bc894d8f8dce71` (розгорнути `~` поточного користувача).
+- `<release>` = `~/project-data/ai-factory-workspace/runtime-data/ai-factory-rollout/candidates/17a9527421e8fac3e43a16c287c404118699833c` (розгорнути `~` поточного користувача).
 - `<factory>` = `<release>/ai-factory`; `<skills>` = `<release>/skills`; спільні rules = `<release>/rules`.
 - Перед використанням звірити commit metadata, SHA release manifest/checksums і потрібних файлів із pin; повний release перевіряється `python3 -B <release>/tools/verify_release.py --root <expanded-release>`. Відсутній або змінений cache → BLOCKED потрібної залежності, без auto-clone/install.
 
@@ -22,7 +22,7 @@ Codex/Claude native discovery/invocation **NOT_TESTED**. Exact-file fallback: п
 
 Hooks/MCP/models/permissions/global symlinks та active CRG/Graphify цим оновленням не змінюються. Успадковані helpers тепер у `<release>/runtime/legacy/`; їхня поведінка збережена, але автоматично їх не запускати. Portable `<release>/runtime/session-size/session_guard.py` потребує explicit store; `<release>/runtime/review/review_package.py` має hardened Git reads. Shared preflight: `<release>/runtime/onboarding/preflight.py`. Жодний helper не активується цим оновленням. Наявні live callbacks продовжують свій чинний контракт; це не їхня міграція.
 
-Статус: **APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING**. Наявна незалежна Claude-сесія цього проєкту; exact session reference pending; свіжий файловий пакет підготовлено для ручної передачі, доставка/отримання не підтверджені, без дубля reviewer/повідомлень. Author checks не є product/CLI/UI/review PASS. Baseline, diff, receipt і immutable review package: `~/project-data/ai-factory-courses-0.7-rollout/`.
+Історичний onboarding status: **APPLIED_DOCS / INDEPENDENT_REVIEW_PENDING** стосувався попереднього rollout; він не є статусом цього candidate. Історичні evidence: `~/project-data/ai-factory-workspace/archive/ai-factory-courses-0.7-rollout/`. Поточний proposal/review package: `~/project-data/ai-factory-workspace/task-artifacts/consumer-rollout/plan-v2/`; **APPLIED / FINAL_EXTERNAL_REVIEW_PENDING**. Plan-v2 ACCEPTED; scoped writer window підтверджено власником перед apply. Final applied snapshot передається окремо; author checks не є native/product PASS.
 
 
 This is an adapter to the existing workflow, not a new pipeline, Cargo FSD port or tracker. Both hosts enter through [AGENTS](../../AGENTS.md) → [standards](../../.claude/standards.md) → this file. Shared startup: `<factory>/onboarding.md`; resolve `~` for the current user. Missing shared files are reported precisely, not installed automatically.
@@ -129,3 +129,11 @@ Courses: checkpoint живе в чинному phase/task plan, на який в
 Constraint lens: thresholds/skips/assertion removal/suppressions — сигнали, не автоматичний verdict. Еквівалентний assertion refactor потребує before/after поведінкових доказів; підтверджене послаблення — scoped owner decision. Missing evidence, stale review або невиконаний required view → BLOCKED/NOT_TESTED. Новий task у sprint має власний checkpoint; resume звіряє snapshot; stale graph → явний file fallback, без auto-refresh. Критик отримує artifact/contract/raw evidence без нав’язаного авторського verdict, через вже обраного незалежного reviewer.
 
 Shared details: `<factory>/constraint-adoption.md`, `<factory>/documentation-hygiene.md`. Опційний `<release>/runtime/constraints/evidence_check.py` перевіряє лише consistency декларацій; не істинність доказів, не семантику коду й не поведінку агента. `<release>/evals/lifecycle/README.md` та `scenarios.json` — NOT_RUN: жодного model eval без окремого opt-in і підтвердженого existing subscription CLI; unknown auth/metering → BLOCKED без paid API/billing fallback. Не змінювати auth/models/permissions і не створювати duplicate reviewer.
+
+## Optional language references — candidate 17a9527
+
+Цільовий commit: `17a9527421e8fac3e43a16c287c404118699833c`; publication status: **UNRELEASED_COMMIT_PINNED_CANDIDATE**. Історичний version у manifest не означає новий release/tag rc.5. Потрібен окремий verdict цього rollout.
+
+Для scope-specific review/testing прочитати `<skills>/arch/code-review/references/languages/index.md`, потім лише застосовний language reference. Тут підтверджено TypeScript і Go; React тільки для відповідних TSX/React задач. PHP/Python/Rust і Laravel/Django/FastAPI не завантажуються автоматично; unknown stack/version позначати явно. Локальна архітектура та required gates мають пріоритет. Це file fallback, не native activation.
+
+Optional `<release>/runtime/onboarding/discovery_check.py` перевіряє лише явно надану offline response; `RESPONSE_MATCH` не є native discovery/invocation PASS. Немає probes, model calls, hooks або automatic helper execution.

@@ -20,6 +20,9 @@ playwright-report/
 .DS_Store
 .idea/
 CLAUDE.local.md
+# Claude Code local junk (swap files, settings.local.json тощо); спільний standards.md лишається у git.
+.claude/*
+!.claude/standards.md
 # Added by code-review-graph
 .code-review-graph/
 
