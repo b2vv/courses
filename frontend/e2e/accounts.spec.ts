@@ -235,7 +235,7 @@ async function startTwoFactorLogin(page: Page) {
   await page.getByRole('textbox', { name: 'Електронна пошта' }).fill(changedEmail);
   await page.getByLabel('Пароль').fill(changedPassword);
   await page.getByRole('button', { name: 'Увійти' }).click();
-  await expect(page.getByRole('heading', { name: 'Підтвердьте вхід' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Підтвердіть вхід' })).toBeVisible();
 }
 
 test('Acc01–Acc08 register, gate unverified playback and mutation, verify, reset, and change account credentials', async ({

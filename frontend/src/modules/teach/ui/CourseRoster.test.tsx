@@ -50,6 +50,13 @@ describe('CourseRoster', () => {
     expect(roster.onUnblock).toHaveBeenCalledWith(active.userId);
   });
 
+  it('names an invalid membership transition instead of a generic failure', () => {
+    renderRoster({ actionError: 'grant_transition_invalid' });
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Стан участі вже змінився. Оновіть і спробуйте ще раз.',
+    );
+  });
+
   it('shows the required empty state', () => {
     renderRoster({ entries: [] });
     expect(screen.getByRole('heading', { name: 'Поки немає учасників' })).toBeTruthy();

@@ -99,17 +99,16 @@ test('a segment whose end precedes its start is refused, not silently hidden', a
   expect(result.ok).toBe(false);
 });
 
-test('named refusals keep their code', async () => {
-  server.use(
-    http.get(route, () =>
-      HttpResponse.json({ error: { code: 'course_forbidden' } }, { status: 403 }),
-    ),
-  );
-  const result = await createApiTranscriptRepository().getLessonTranscript(lessonId);
-  expect(result.ok).toBe(false);
-  if (result.ok) return;
-  expect(result.error.code).toBe('course_forbidden');
-});
+test.each(['course_forbidden', 'course_purchase_required', 'email_not_verified'] as const)(
+  'named refusal %s keeps its code',
+  async (code) => {
+    server.use(http.get(route, () => HttpResponse.json({ error: { code } }, { status: 403 })));
+    const result = await createApiTranscriptRepository().getLessonTranscript(lessonId);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe(code);
+  },
+);
 
 test('the language parameter reaches the wire', async () => {
   let seen: string | null = null;

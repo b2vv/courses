@@ -19,6 +19,10 @@ function errorKey(code: GrantErrorCode) {
       return 'administration.grant.alreadyOwned';
     case 'grant_forbidden':
       return 'administration.grant.forbidden';
+    case 'grant_self_forbidden':
+      return 'administration.grant.selfForbidden';
+    case 'admin_not_learner':
+      return 'administration.grant.adminNotLearner';
     case 'invalid_request':
       return 'administration.grant.invalid';
     default:

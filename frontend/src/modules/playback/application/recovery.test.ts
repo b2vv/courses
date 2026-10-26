@@ -82,8 +82,12 @@ test('retries mint dependency failures with a bounded exponential delay', () => 
     kind: 'unavailable',
     refresh: false,
   });
-  expect(mintFailureDirective('playback_forbidden', 0)).toEqual({
-    kind: 'denied',
-    refresh: true,
-  });
+  for (const code of [
+    'playback_forbidden',
+    'course_purchase_required',
+    'email_not_verified',
+  ] as const) {
+    expect(mintFailureDirective(code, 0)).toEqual({ kind: 'denied', refresh: true });
+    expect(heartbeatFailureDirective(code, 1_000)).toEqual({ kind: 'denied', refresh: true });
+  }
 });

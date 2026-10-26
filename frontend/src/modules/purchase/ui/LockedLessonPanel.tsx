@@ -50,8 +50,19 @@ export function LockedLessonPanel({
 
 export function purchaseErrorKey(
   code: PurchaseErrorCode,
-): 'unavailable' | 'session' | 'notPurchasable' | 'notFound' | 'checkoutAlreadyOpened' {
+):
+  | 'unavailable'
+  | 'session'
+  | 'notPurchasable'
+  | 'notFound'
+  | 'checkoutAlreadyOpened'
+  | 'emailNotVerified'
+  | 'adminNotLearner' {
   switch (code) {
+    case 'email_not_verified':
+      return 'emailNotVerified';
+    case 'admin_not_learner':
+      return 'adminNotLearner';
     case 'authentication_required':
     case 'origin_forbidden':
       return 'session';

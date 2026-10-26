@@ -101,6 +101,7 @@ export type EnrollmentErrorCode =
   | 'enrollment_forbidden'
   | 'course_already_owned'
   | 'email_not_verified'
+  | 'admin_not_learner'
   | 'report_own_person'
   | 'report_invalid'
   | 'report_forbidden'

@@ -13,6 +13,8 @@ export type SessionErrorCode =
   | 'email_not_verified'
   | 'weak_password'
   | 'password_unchanged'
+  | 'invalid_email'
+  | 'invalid_display_name'
   | 'invalid_account_token'
   | 'token_used'
   | 'rate_limited'
