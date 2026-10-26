@@ -218,6 +218,7 @@ export const en = {
         course_already_owned: 'You already have access to this course.',
         course_not_found: 'Course not found.',
         email_not_verified: 'Confirm your email to enroll in this course.',
+        admin_not_learner: 'Administrators are not learners and cannot enroll in courses.',
         invalid_request: 'Could not complete the action. Please try again.',
         authentication_required: 'Sign in to continue.',
         dependency_unavailable: 'The service is temporarily unavailable. Please try again.',

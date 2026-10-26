@@ -66,6 +66,7 @@ const statusErrors = {
 const checkoutErrors = {
   400: ['invalid_request'],
   401: ['authentication_required'],
+  403: ['email_not_verified'],
   404: ['order_not_found'],
   409: ['checkout_already_opened'],
   503: ['dependency_unavailable'],

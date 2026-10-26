@@ -219,6 +219,7 @@ export const uk = {
         course_already_owned: 'Ви вже маєте доступ до цього курсу.',
         course_not_found: 'Курс не знайдено.',
         email_not_verified: 'Підтвердіть email, щоб записатися на курс.',
+        admin_not_learner: 'Адміністратори не є слухачами й не можуть записуватися на курси.',
         invalid_request: 'Не вдалося виконати дію. Спробуйте ще раз.',
         authentication_required: 'Увійдіть, щоб продовжити.',
         dependency_unavailable: 'Сервіс тимчасово недоступний. Спробуйте ще раз.',

@@ -164,6 +164,15 @@ test('names checkout not-found and unavailable responses', async () => {
     ok: false,
     error: { code: 'dependency_unavailable' },
   });
+  server.use(
+    http.post(`${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`, () =>
+      error('email_not_verified', 403),
+    ),
+  );
+  expect(await createApiPurchaseRepository().checkout(orderId, 'go-basics')).toEqual({
+    ok: false,
+    error: { code: 'email_not_verified' },
+  });
 });
 
 test('names checkout_already_opened conflicts', async () => {
