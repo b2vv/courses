@@ -115,6 +115,11 @@ func (accounts *Accounts) ResendVerification(ctx context.Context, identifier, ip
 	if err := accounts.allow(ctx, resendVerificationRateLimitKey(identifier, ip)); err != nil {
 		return false, err
 	}
+	// The lookup matches the stored normalized email exactly. A user ID has no
+	// "@" and fails NormalizeEmail, so the authenticated path passes unchanged.
+	if normalized, err := domain.NormalizeEmail(identifier); err == nil {
+		identifier = normalized
+	}
 	user, err := accounts.reader.FindUser(ctx, identifier)
 	if errors.Is(err, domain.ErrUserNotFound) {
 		return false, nil

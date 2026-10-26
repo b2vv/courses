@@ -19,6 +19,7 @@ type accountUsers struct {
 	findErr              error
 	updatedPassword      string
 	updatedEmail         string
+	lookups              []string
 }
 
 func (f *accountUsers) CreateUser(_ context.Context, user domain.User, _ string) (domain.User, error) {
@@ -40,7 +41,8 @@ func (f *accountUsers) UpdateEmail(_ context.Context, _ string, email string) er
 	f.updatedEmail = email
 	return nil
 }
-func (f *accountUsers) FindUser(context.Context, string) (domain.User, error) {
+func (f *accountUsers) FindUser(_ context.Context, identifier string) (domain.User, error) {
+	f.lookups = append(f.lookups, identifier)
 	return f.found, f.findErr
 }
 
@@ -180,6 +182,25 @@ func TestResendVerificationIsNeutralForUnknownAccount(t *testing.T) {
 	}
 	if len(tokens.issued) != 0 || len(tokens.invalidated) != 0 {
 		t.Fatalf("unknown account must not touch tokens: %+v", tokens)
+	}
+}
+
+// SA12 NB-1: the repository matches the stored (normalized) email exactly, so a
+// submitted email must be normalized before the lookup — otherwise a mixed-case
+// address silently finds nothing and, now that resend is neutral, looks like a
+// success with no email sent. A user ID (authenticated path) passes unchanged.
+func TestResendVerificationNormalizesSubmittedEmailButNotUserID(t *testing.T) {
+	now := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	users := &accountUsers{found: validUser(now)}
+	accounts := application.NewAccounts(users, users, &accountHasher{}, &accountTokens{}, &accountMailer{}, &sessions{}, func() time.Time { return now }, func() string { return "40000000-0000-4000-8000-000000000001" })
+	if _, err := accounts.ResendVerification(context.Background(), "  Student@CourseForge.Local ", "203.0.113.9", "uk"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.ResendVerification(context.Background(), users.found.ID, "203.0.113.9", "uk"); err != nil {
+		t.Fatal(err)
+	}
+	if len(users.lookups) != 2 || users.lookups[0] != "student@courseforge.local" || users.lookups[1] != users.found.ID {
+		t.Fatalf("lookups=%q", users.lookups)
 	}
 }
 
