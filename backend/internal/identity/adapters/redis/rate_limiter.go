@@ -35,13 +35,19 @@ func NewRateLimiter(client rateLimiterClient, limit int64, window time.Duration,
 func (limiter *RateLimiter) Allow(ctx context.Context, key string) (bool, error) {
 	count, err := limiter.client.Incr(ctx, rateLimitKey(key)).Result()
 	if err != nil {
-		limiter.failOpen("increment", err)
-		return true, nil
+		// Fail CLOSED (SA08/M1): this limiter guards login, 2FA and password-reset. A Redis outage
+		// must not silently remove those limits (that amplified H1); deny instead. The caller maps
+		// `!allowed` to ErrRateLimited, so auth is refused for as long as Redis is unreachable —
+		// a deliberate availability-for-security trade documented in the audit §SA08.
+		limiter.unavailable("increment", err)
+		return false, nil
 	}
 	if count == 1 {
 		if err := limiter.client.Expire(ctx, rateLimitKey(key), limiter.window).Err(); err != nil {
-			limiter.failOpen("set expiry", err)
-			return true, nil
+			// Incr already succeeded, so Redis is up and the count is real and enforced — only the
+			// TTL housekeeping failed. Log it, but keep the real decision rather than spuriously
+			// deny a legitimate first attempt.
+			limiter.unavailable("set expiry", err)
 		}
 	}
 	return count <= limiter.limit, nil
@@ -49,13 +55,15 @@ func (limiter *RateLimiter) Allow(ctx context.Context, key string) (bool, error)
 
 func (limiter *RateLimiter) Reset(ctx context.Context, key string) error {
 	if err := limiter.client.Del(ctx, rateLimitKey(key)).Err(); err != nil {
-		limiter.failOpen("reset", err)
+		// Leaving the counter in place is the safe (closed) direction — the account stays limited.
+		// Do not fail the caller's already-successful authentication over a Redis hiccup.
+		limiter.unavailable("reset", err)
 	}
 	return nil
 }
 
-func (limiter *RateLimiter) failOpen(operation string, err error) {
-	limiter.logger.Error("identity rate limiter unavailable; allowing request", "operation", operation, "error", err)
+func (limiter *RateLimiter) unavailable(operation string, err error) {
+	limiter.logger.Error("identity rate limiter unavailable", "operation", operation, "error", err)
 }
 
 func rateLimitKey(key string) string { return "identity:rate-limit:" + key }
