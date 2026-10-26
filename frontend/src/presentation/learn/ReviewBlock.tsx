@@ -114,7 +114,8 @@ export function ReviewBlock({
           ? t('ratings.removed')
           : failure instanceof Error &&
               (failure.message === 'enrollment_required' ||
-                failure.message === 'enrollment_blocked')
+                failure.message === 'enrollment_blocked' ||
+                failure.message === 'review_already_exists')
             ? t(`ratings.errors.${failure.message}`)
             : t('ratings.writeFailure'),
       );

@@ -245,6 +245,7 @@ export const en = {
         enrollment_required: 'Enroll in this course to leave or report a review.',
         enrollment_blocked:
           'You are blocked in this course — writing and reporting reviews are unavailable.',
+        review_already_exists: 'Your review was already saved in another tab. Reload the page.',
       },
       writeFailure: 'Could not save, try again',
       deleteFailure: 'Could not delete the review, try again',
