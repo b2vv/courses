@@ -86,7 +86,7 @@
   "adapter_files": [
     {
       "path": "docs/development/ai-factory.md",
-      "sha256": "dff0d2977e66867bdccf8d21888d066d7a0e7f0db15711fd7533587455914417"
+      "sha256": "9ccac338d530334e63a902ca503f4dd814324aac79d622a1ceba7662cd0f5e07"
     },
     {
       "path": "AGENTS.md",
@@ -98,7 +98,7 @@
     },
     {
       "path": "docs/development/ai-factory-package.json",
-      "sha256": "defed63f2f70de7d6e70d57595cb42c9094d9ba5de066b14a74983209dfa8464"
+      "sha256": "68c93ffe65cb113002ff71ce07a426bae678037cbb81fd0c8a8c5eb494841e0d"
     },
     {
       "path": "docs/development/ai-factory-readiness.md",
