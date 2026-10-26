@@ -54,7 +54,7 @@ export function createApiTranscriptRepository(
           namedError(outcome, {
             400: ['invalid_request'],
             401: ['authentication_required'],
-            403: ['course_forbidden'],
+            403: ['course_forbidden', 'course_purchase_required', 'email_not_verified'],
             404: ['lesson_not_found'],
             503: ['dependency_unavailable'],
           }),

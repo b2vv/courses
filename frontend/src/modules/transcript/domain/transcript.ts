@@ -28,6 +28,8 @@ export type LessonTranscript = {
 
 export type TranscriptErrorCode =
   | 'course_forbidden'
+  | 'course_purchase_required'
+  | 'email_not_verified'
   | 'lesson_not_found'
   | 'authentication_required'
   | 'invalid_request'
