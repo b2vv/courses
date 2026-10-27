@@ -84,6 +84,15 @@ func mergeOverlay(dst, patch, original map[string]any, path []string) error {
 			continue
 		}
 		old, exists := dst[key]
+		if key == "parameters" && (len(path) == 2 || len(path) == 3) && path[0] == "paths" {
+			if len(path) != 3 {
+				return fmt.Errorf("parameter metadata must be operation-scoped at %v", path)
+			}
+			if err := mergeParamMetadata(old, value, path); err != nil {
+				return err
+			}
+			continue
+		}
 		if anchored(path) && !exists {
 			return fmt.Errorf("orphan overlay key %s/%s", strings.Join(path, "/"), key)
 		}
@@ -186,4 +195,60 @@ func expand(site, original map[string]any, seen map[string]bool) (map[string]any
 		return expanded, nil
 	}
 	return nil, fmt.Errorf("expected generated ref or single allOf wrapper")
+}
+
+// Parameter metadata is keyed by name within a path/method. Arrays and structural
+// keywords are rejected so the overlay cannot replace Go-declared parameters.
+func mergeParamMetadata(old, patch any, path []string) error {
+	metadata, ok := patch.(map[string]any)
+	if !ok {
+		return fmt.Errorf("parameter metadata must be a mapping at %v", path)
+	}
+	params, _ := old.([]any)
+	declared := map[string]map[string]any{}
+	for _, entry := range params {
+		param := entry.(map[string]any)
+		declared[param["name"].(string)] = param
+	}
+	names := make([]string, 0, len(metadata))
+	for name := range metadata {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		param, exists := declared[name]
+		if !exists {
+			return fmt.Errorf("orphan overlay parameter %v/%s", path, name)
+		}
+		fields, ok := metadata[name].(map[string]any)
+		if !ok {
+			return fmt.Errorf("invalid parameter metadata %v/%s", path, name)
+		}
+		for key, value := range fields {
+			switch key {
+			case "description":
+				if _, ok := value.(string); !ok {
+					return fmt.Errorf("invalid parameter description %v/%s", path, name)
+				}
+				param[key] = value
+			case "schema":
+				validation, ok := value.(map[string]any)
+				if !ok {
+					return fmt.Errorf("invalid parameter validation %v/%s", path, name)
+				}
+				schema := param["schema"].(map[string]any)
+				for keyword, value := range validation {
+					switch keyword {
+					case "minimum", "maximum", "default", "minLength", "maxLength", "pattern", "description":
+						schema[keyword] = value
+					default:
+						return fmt.Errorf("unsupported parameter metadata %v/%s/schema/%s", path, name, keyword)
+					}
+				}
+			default:
+				return fmt.Errorf("unsupported parameter metadata %v/%s/%s", path, name, key)
+			}
+		}
+	}
+	return nil
 }

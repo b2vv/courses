@@ -274,36 +274,18 @@ paths:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
             operationId: listPublishedCourses
+            # Structure comes from RouteBinding.Params; keys resolve Go-declared names.
             parameters:
-                - in: query
-                  name: limit
-                  schema:
-                    default: 20
-                    maximum: 50
-                    minimum: 1
-                    type: integer
-                - in: query
-                  name: offset
-                  schema:
-                    default: 0
-                    maximum: 10000
-                    minimum: 0
-                    type: integer
-                - description: Search text, maximum 100 Unicode code points after trimming whitespace.
-                  in: query
-                  name: q
-                  schema:
-                    default: ""
-                    type: string
-                - description: Recent orders by publishedAt descending then ID ascending; title uses PostgreSQL C collation then ID ascending.
-                  in: query
-                  name: sort
-                  schema:
-                    default: recent
-                    enum:
-                        - recent
-                        - title
-                    type: string
+                limit:
+                    schema: {default: 20, maximum: 50, minimum: 1}
+                offset:
+                    schema: {default: 0, maximum: 10000, minimum: 0}
+                q:
+                    description: Search text, maximum 100 Unicode code points after trimming whitespace.
+                    schema: {default: ""}
+                sort:
+                    description: Recent orders by publishedAt descending then ID ascending; title uses PostgreSQL C collation then ID ascending.
+                    schema: {default: recent}
             responses:
                 "200":
                     description: Published courses and pagination, including an empty items array when beyond the final page.
@@ -316,14 +298,11 @@ paths:
             description: Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
             operationId: getPublishedCourse
             parameters:
-                - in: path
-                  name: slug
-                  required: true
-                  schema:
-                    maxLength: 120
-                    minLength: 1
-                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
-                    type: string
+                slug:
+                    schema:
+                        maxLength: 120
+                        minLength: 1
+                        pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
             responses:
                 "200":
                     description: Published course with its ordered title-only program.

@@ -27,9 +27,19 @@ type Response struct {
 	// Component optionally names a reusable response (not a schema).
 	Component string
 }
+
+// Param declares parameter structure; validation and prose belong to the overlay.
+type Param struct {
+	Name     string
+	In       string
+	Type     string
+	Enum     []string
+	Required bool
+}
 type RouteBinding struct {
 	Method, Path string
 	Responses    map[int]Response
+	Params       []Param
 }
 type ModuleContribution struct {
 	Routes         []RouteBinding
@@ -102,6 +112,24 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 			return nil, fmt.Errorf("duplicate route %s %s", r.Method, r.Path)
 		}
 		op := &openapi3.Operation{Responses: openapi3.NewResponses()}
+		params := slices.Clone(r.Params)
+		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
+		for i, p := range params {
+			if p.Name == "" || (i > 0 && params[i-1].Name == p.Name) ||
+				!slices.Contains([]string{"query", "path"}, p.In) ||
+				!slices.Contains([]string{"integer", "string"}, p.Type) ||
+				(p.In == "path" && (!p.Required || !strings.Contains(r.Path, "{"+p.Name+"}"))) ||
+				(len(p.Enum) > 0 && p.Type != "string") {
+				return nil, fmt.Errorf("invalid parameter %q on %s %s", p.Name, r.Method, r.Path)
+			}
+			schema := &openapi3.Schema{Type: &openapi3.Types{p.Type}}
+			for _, value := range p.Enum {
+				schema.Enum = append(schema.Enum, value)
+			}
+			op.Parameters = append(op.Parameters, &openapi3.ParameterRef{Value: &openapi3.Parameter{
+				Name: p.Name, In: p.In, Required: p.Required, Schema: &openapi3.SchemaRef{Value: schema},
+			}})
+		}
 		// NewResponses supplies a default response; this generator requires explicit bindings.
 		op.Responses.Delete("default")
 		if len(r.Responses) == 0 {

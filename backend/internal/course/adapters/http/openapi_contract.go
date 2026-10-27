@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 
+	"courses/internal/course/domain"
 	"courses/internal/platform/openapigen"
 	"courses/platform/httpserver"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -25,8 +26,15 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 	detail[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "NotFound"}
 	return openapigen.ModuleContribution{
 		Routes: []openapigen.RouteBinding{
-			{Method: "GET", Path: "/api/v1/courses", Responses: list},
-			{Method: "GET", Path: "/api/v1/courses/{slug}", Responses: detail},
+			{Method: "GET", Path: "/api/v1/courses", Responses: list, Params: []openapigen.Param{
+				{Name: "limit", In: "query", Type: "integer"},
+				{Name: "offset", In: "query", Type: "integer"},
+				{Name: "q", In: "query", Type: "string"},
+				{Name: "sort", In: "query", Type: "string", Enum: []string{string(domain.SortRecent), string(domain.SortTitle)}},
+			}},
+			{Method: "GET", Path: "/api/v1/courses/{slug}", Responses: detail, Params: []openapigen.Param{
+				{Name: "slug", In: "path", Type: "string", Required: true},
+			}},
 		},
 		NameMap: map[reflect.Type]string{
 			reflect.TypeFor[courseDTO](): "Course", reflect.TypeFor[courseDetailDTO](): "CourseDetail",
