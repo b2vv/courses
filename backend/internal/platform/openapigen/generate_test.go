@@ -2,6 +2,7 @@ package openapigen
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -320,5 +321,130 @@ func TestParameterMetadataDoesNotInterceptResponseField(t *testing.T) {
 `))
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+type requestPointers struct {
+	Required *string `json:"required"`
+	Optional *string `json:"optional,omitempty"`
+	Child    *child  `json:"child"`
+}
+
+func TestRequestPointerDecisions(t *testing.T) {
+	c := contribution(child{})
+	c.Routes = append(c.Routes, RouteBinding{Method: "POST", Path: "/requests", Request: requestPointers{}})
+	c.NullableFields = map[Field]bool{
+		{reflect.TypeFor[requestPointers](), "Required"}: false,
+		{reflect.TypeFor[requestPointers](), "Optional"}: true,
+		{reflect.TypeFor[requestPointers](), "Child"}:    false,
+	}
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := doc.Paths.Value("/requests").Post.RequestBody.Value
+	s := body.Content["application/json"].Schema.Value
+	if !body.Required || !reflect.DeepEqual(s.Required, []string{"child", "required"}) {
+		t.Fatalf("request required semantics: %+v", s)
+	}
+	for _, tc := range []struct {
+		raw   string
+		valid bool
+	}{
+		{`{"required":"yes","child":{"value":1}}`, true},
+		{`{"required":"yes","optional":null,"child":{"value":1}}`, true},
+		{`{"required":"yes","optional":"present","child":{"value":1}}`, true},
+		{`{"required":null,"child":{"value":1}}`, false},
+		{`{"child":{"value":1}}`, false},
+		{`{"required":"yes","child":null}`, false},
+	} {
+		var v any
+		if err := json.Unmarshal([]byte(tc.raw), &v); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.VisitJSON(v); (err == nil) != tc.valid {
+			t.Fatalf("%s: valid=%v error=%v", tc.raw, tc.valid, err)
+		}
+	}
+	if !s.Properties["optional"].Value.Nullable || s.Properties["required"].Value.Nullable {
+		t.Fatal("explicit nullable decisions lost")
+	}
+	for field := range c.NullableFields {
+		t.Run("missing decision "+field.Name, func(t *testing.T) {
+			decision := c.NullableFields[field]
+			delete(c.NullableFields, field)
+			_, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+			c.NullableFields[field] = decision
+			if err == nil || !strings.Contains(err.Error(), "missing request pointer nullability decision") {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+}
+
+func TestSharedRequestResponseCannotBypassDecisions(t *testing.T) {
+	// Response is visited first; a shared type still needs request decisions.
+	c := contribution(requestPointers{})
+	c.Routes = append(c.Routes, RouteBinding{Method: "POST", Path: "/requests", Request: requestPointers{}})
+	_, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err == nil || !strings.Contains(err.Error(), "missing request pointer nullability decision") {
+		t.Fatalf("got %v", err)
+	}
+	c.NullableFields = map[Field]bool{
+		{reflect.TypeFor[requestPointers](), "Required"}: false,
+		{reflect.TypeFor[requestPointers](), "Optional"}: true,
+		{reflect.TypeFor[requestPointers](), "Child"}:    false,
+	}
+	_, err = Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err == nil || !strings.Contains(err.Error(), "conflicting schema") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestScalarFieldReference(t *testing.T) {
+	c := contribution(child{})
+	c.Routes = append(c.Routes, RouteBinding{Method: "POST", Path: "/requests", Request: requestPointers{}})
+	c.NullableFields = map[Field]bool{
+		{reflect.TypeFor[requestPointers](), "Required"}: false,
+		{reflect.TypeFor[requestPointers](), "Optional"}: true,
+		{reflect.TypeFor[requestPointers](), "Child"}:    false,
+	}
+	c.FieldRefs = map[Field]string{{reflect.TypeFor[requestPointers](), "Required"}: "Text"}
+	for _, tc := range []struct {
+		name   string
+		schema *openapi3.Schema
+		valid  bool
+	}{
+		{"matching scalar", openapi3.NewStringSchema(), true},
+		{"wrong scalar", openapi3.NewIntegerSchema(), false},
+		{"nullable target", openapi3.NewStringSchema().WithNullable(), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c.Components.Schemas = openapi3.Schemas{"Text": {Value: tc.schema}}
+			doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+			if !tc.valid {
+				if err == nil || !strings.Contains(err.Error(), "incompatible scalar field reference") {
+					t.Fatalf("got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if doc.Components.Schemas["requestPointers"].Value.Properties["required"].Ref != "#/components/schemas/Text" {
+				t.Fatal("field reference lost")
+			}
+		})
+	}
+}
+
+func TestParameterFormatMetadata(t *testing.T) {
+	c := paramContribution()
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "paths:\n  /examples/{slug}:\n    get:\n      parameters:\n        slug:\n          schema: {format: uuid}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Paths.Value("/examples/{slug}").Get.Parameters[1].Value.Schema.Value.Format != "uuid" {
+		t.Fatal("format lost")
 	}
 }

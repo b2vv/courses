@@ -239,7 +239,7 @@ func mergeParamMetadata(old, patch any, path []string) error {
 				schema := param["schema"].(map[string]any)
 				for keyword, value := range validation {
 					switch keyword {
-					case "minimum", "maximum", "default", "minLength", "maxLength", "pattern", "description":
+					case "minimum", "maximum", "default", "minLength", "maxLength", "pattern", "description", "format":
 						schema[keyword] = value
 					default:
 						return fmt.Errorf("unsupported parameter metadata %v/%s/schema/%s", path, name, keyword)

@@ -28,7 +28,49 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := normalizedDocument(t, generated)
+	requestPath := "/api/v1/admin/courses/{id}/status"
+	// Only this request-only operation is projected. Keep every generated catalog
+	// path/component in the comparison so unexpected schema additions still fail.
+	got["paths"].(map[string]any)[requestPath] = fidelitySurface(t, got)["paths"].(map[string]any)[requestPath]
 	source := normalizedDocument(t, hand)
+	want := fidelitySurface(t, source)
+	if diff := firstDifference("$", got, want); diff != "" {
+		t.Fatal(diff)
+	}
+	first, err := openapigen.MarshalYAML(generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := openapigen.Generate([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := openapigen.MarshalYAML(again)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("catalog regeneration is not byte-identical")
+	}
+	artifact := filepath.Join(dir, "openapi.generated.yaml")
+	if os.Getenv("UPDATE_OPENAPI_GENERATED") == "1" {
+		if err = os.WriteFile(artifact, first, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checked, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(checked, first) {
+		t.Fatal("parallel artifact is stale; run UPDATE_OPENAPI_GENERATED=1 go test -run TestCatalogOpenAPIFidelity ./internal/course/adapters/http")
+	}
+	t.Log("catalog and status request + complete referenced component closures equal hand spec; two generations byte-identical")
+}
+
+// Preserve whole catalog fidelity and add the request-only route's complete ref closure.
+func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
+	t.Helper()
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
 	for _, path := range []string{"/api/v1/courses", "/api/v1/courses/{slug}"} {
@@ -67,41 +109,18 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 			}
 		}
 	}
+	requestPath := "/api/v1/admin/courses/{id}/status"
+	operation := source["paths"].(map[string]any)[requestPath].(map[string]any)["post"].(map[string]any)
+	request := operation["requestBody"]
+	if request == nil {
+		t.Fatal("status request binding is missing")
+	}
+	paths[requestPath] = map[string]any{"post": map[string]any{"requestBody": request, "parameters": operation["parameters"]}}
 	collect(paths)
 	collect(map[string]any{"$ref": "#/components/schemas/Rating"})
-	if diff := firstDifference("$", got, want); diff != "" {
-		t.Fatal(diff)
-	}
-	first, err := openapigen.MarshalYAML(generated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	again, err := openapigen.Generate([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := openapigen.MarshalYAML(again)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(first, second) {
-		t.Fatal("catalog regeneration is not byte-identical")
-	}
-	artifact := filepath.Join(dir, "openapi.generated.yaml")
-	if os.Getenv("UPDATE_OPENAPI_GENERATED") == "1" {
-		if err = os.WriteFile(artifact, first, 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	checked, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(checked, first) {
-		t.Fatal("parallel artifact is stale; run UPDATE_OPENAPI_GENERATED=1 go test -run TestCatalogOpenAPIFidelity ./internal/course/adapters/http")
-	}
-	t.Log("catalog paths + complete referenced component closure + standalone Rating equal hand spec; two generations byte-identical")
+	return want
 }
+
 func normalizedDocument(t *testing.T, doc *openapi3.T) map[string]any {
 	t.Helper()
 	raw, err := json.Marshal(doc)
