@@ -146,9 +146,7 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusConflict, "transcript_document_exists", "A document with that id already exists")
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
-	case errors.Is(err, domain.ErrInvalidRequest):
-		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is not valid")
 	default:
-		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
+		httpserver.WriteError(w, r, http.StatusBadRequest, "invalid_request", "Request is not valid")
 	}
 }

@@ -101,7 +101,7 @@ func TestCatalogHTTPMatchesOpenAPI(t *testing.T) {
 		{"invalid slug", "/api/v1/courses/Uppercase", "invalid_slug", 400, nil, false},
 		{"detail query rejected", "/api/v1/courses/go-foundations?limit=1", "invalid_query", 400, nil, false},
 		{"dependency", "/api/v1/courses", "dependency_unavailable", 503, domain.ErrDependencyUnavailable, true},
-		{"unexpected", "/api/v1/courses", "dependency_unavailable", 503, errors.New("password=private SQL secret"), true},
+		{"unexpected", "/api/v1/courses", "internal_error", 500, errors.New("password=private SQL secret"), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := httptest.NewRequest("GET", tc.path, nil)

@@ -1,13 +1,17 @@
 package http
 
 import (
+	"context"
 	"courses/internal/discussion/application"
 	"courses/internal/discussion/domain"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgconn"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -43,7 +47,7 @@ func TestErrorBoundaries(t *testing.T) {
 	for name, writer := range writers {
 		t.Run(name+"/unknown", func(t *testing.T) {
 			for _, err := range []error{errors.New("boom database=private user=private"), fmt.Errorf("query: %w", errors.New("boom")), errors.New("invalid_request"), errors.New("course_not_found"), errors.New("origin_forbidden")} {
-				assertResponse(t, writer, err, http.StatusServiceUnavailable, "dependency_unavailable")
+				assertResponse(t, writer, err, http.StatusInternalServerError, "internal_error")
 			}
 		})
 	}
@@ -115,5 +119,45 @@ func TestStaticTransportErrorMappings(t *testing.T) {
 		if response.Code != tc.status || body.Error.Code != tc.code {
 			t.Fatalf("got %d/%q, want %d/%q", response.Code, body.Error.Code, tc.status, tc.code)
 		}
+	}
+}
+
+// Exercise pgx's real ConnectError formatting without a network dependency.
+func TestWrappedPGXConnectErrorDoesNotLeak(t *testing.T) {
+	for _, database := range []string{"private_database_alpha", "private_database_beta"} {
+		t.Run(database, func(t *testing.T) {
+			config, err := pgconn.ParseConfig("host=127.0.0.1 user=private_database_user dbname=" + database + " sslmode=disable")
+			if err != nil {
+				t.Fatal(err)
+			}
+			config.DialFunc = func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("connection refused") }
+			_, err = pgconn.ConnectConfig(context.Background(), config)
+			var connectError *pgconn.ConnectError
+			if !errors.As(err, &connectError) {
+				t.Fatalf("expected real pgx ConnectError, got %T: %v", err, err)
+			}
+			wrapped := fmt.Errorf("repository: %w", err)
+			if !strings.Contains(wrapped.Error(), database) || !strings.Contains(wrapped.Error(), config.User) {
+				t.Fatal("fixture does not carry private connection details")
+			}
+			response := httptest.NewRecorder()
+			writeListError(response, httptest.NewRequest(http.MethodGet, "/", nil), wrapped)
+			var body struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != http.StatusInternalServerError || body.Error.Code != "internal_error" {
+				t.Fatalf("got %d/%q, want 500/internal_error", response.Code, body.Error.Code)
+			}
+			for _, secret := range []string{database, config.User, wrapped.Error()} {
+				if strings.Contains(response.Body.String(), secret) {
+					t.Fatalf("private connection detail leaked: %s", response.Body.String())
+				}
+			}
+		})
 	}
 }

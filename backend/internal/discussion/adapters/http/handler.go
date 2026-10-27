@@ -706,12 +706,12 @@ func statusFor(err error) int {
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusBadRequest
 	default:
-		return http.StatusServiceUnavailable
+		return http.StatusInternalServerError
 	}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
-	code := "dependency_unavailable"
+	var code string
 	switch {
 	case errors.Is(err, domain.ErrBodyInvalid):
 		code = "comment_body_invalid"
@@ -772,7 +772,8 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 	case errors.Is(err, application.ErrEmailNotVerified):
 		code = "email_not_verified"
 	default:
-		status = http.StatusServiceUnavailable
+		code = "internal_error"
+		status = http.StatusInternalServerError
 	}
 	writeErrorCode(w, r, status, code)
 }

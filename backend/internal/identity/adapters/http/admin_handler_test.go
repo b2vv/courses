@@ -265,7 +265,7 @@ func TestAdminUsersBusinessErrorMapping(t *testing.T) {
 		{name: "unknown reset target", method: http.MethodPost, path: "/api/v1/admin/users/" + missingID + "/password", body: `{"password":"x"}`, failure: domain.ErrUserNotFound, status: 404, code: "user_not_found", wantCalls: 1},
 		{name: "deleted reset target", method: http.MethodPost, path: "/api/v1/admin/users/" + deletedID + "/password", body: `{"password":"x"}`, failure: domain.ErrUserNotFound, status: 404, code: "user_not_found", wantCalls: 1},
 		{name: "dependency unavailable", method: http.MethodGet, path: "/api/v1/admin/users", failure: domain.ErrDependencyUnavailable, status: 503, code: "dependency_unavailable", wantCalls: 1},
-		{name: "unexpected failure", method: http.MethodGet, path: "/api/v1/admin/users", failure: errors.New("private database detail"), status: 503, code: "dependency_unavailable", wantCalls: 1},
+		{name: "unexpected failure", method: http.MethodGet, path: "/api/v1/admin/users", failure: errors.New("private database detail"), status: 500, code: "internal_error", wantCalls: 1},
 		{name: "malformed id", method: http.MethodDelete, path: "/api/v1/admin/users/not-a-uuid", status: 400, code: "invalid_request"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
