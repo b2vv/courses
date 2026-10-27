@@ -502,4 +502,34 @@ Also adopted (Codex ARGUE channel, correct): the brief's "no nullable slices in 
 §11.2 needs an **explicit** nil/non-nil decision per `[]T` field. Catalog has three
 (`pageDTO.Items`→CoursePage.items, `courseDetailDTO.Program`, `programModuleDTO.Lessons`); all are
 **non-nullable, required** in the hand spec (no `nullable:true`; handler builds with `make([]T,0)`), so each
-is encoded as an **explicit non-null** decision — a `[]T` added later with no decision still fails closed.
+is encoded as an **explicit non-null** decision, and the generator fail-closes on a `[]T` with no decision.
+
+## 16.8 S0.1 Run 1 (catalog) — Courses 2 verdict PASS + dispositions (2026-10-27)
+
+Run 1 @ `7d5fff1` (slice `bc49613`+`534542e`): **PASS as a staged parallel-artifact slice, 0 blocking**
+(nothing ships — `openapi.yaml` untouched). Courses 2 confirmed independently: openapigen imports 0 internal
+modules (M8 ✓), DTOs stay unexported (Option 1 ✓), fidelity non-vacuous, Layer-B real. Five non-blocking
+findings, dispositioned:
+- **Q2b (params) — the key one; blocking-for-S0.2-cutover, not for Run 1.** `RouteBinding` has no params
+  field; catalog query/path params (limit/offset/q/sort, slug) live **entirely in the overlay** — structural
+  AND Go-sourceable, contradicting §4-A ("registry carries path/query params"). Headers were split correctly
+  (structure in Go Components, validation/prose in overlay); params must get the same split. **Before S0.2:**
+  add `Params` to `RouteBinding` (existence/type/enum from Go; validation+prose in overlay), or record params
+  as an explicit named limitation. Un-fixed, cutover would ship hand-maintained param specs → handler↔param
+  drift ungated (the exact class S0 exists to close). **Resolution chosen: add `Params` to `RouteBinding`**
+  in the next S0.1 run (Go-structural), matching the header split.
+- **Q2a (error-enum in overlay) — temporary, must exit in 16.1.** Run 1's overlay carries
+  `ErrorResponse.error.code` enum, marked temporary. **§16.7 condition added:** the 16.1 error-code parser run
+  MUST remove the error-enum from the overlay (else it stays a hand-maintained drift source). Tracked.
+- **Q1 (fidelity normalization blind spot) — non-blocking, dormant for catalog.** Both hand and generated
+  round-trip through kin-openapi `openapi3.T` in `normalizedDocument`, so any keyword kin-openapi does not
+  preserve vanishes from BOTH sides invisibly. Catalog uses only modelled keywords. **For richer surfaces
+  (later runs):** add a raw-YAML subset-diff (hand vs generated) OR assert the spec contains no
+  kin-openapi-unsupported keywords. Added as a later-run condition.
+- **Q3 (open-map fail-closed) — non-blocking, dormant.** No fail-closed test for the `additionalProperties`
+  open-map whitelist (no maps in catalog). **Add this fail-closed case in the slice that first touches an open
+  map (ClientLogRequest).**
+- **Q5-depth (nullable fixture) — non-blocking.** Add a catalog fixture with null price/publishedAt/rating so
+  Layer-B ValidateResponse actually exercises the nullable branches. Cheap; fold into the next course touch.
+
+Run 1 closed PASS. These are S0.1-completion / S0.2-cutover conditions, not Run-1 blockers.
