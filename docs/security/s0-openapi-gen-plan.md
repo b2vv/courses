@@ -419,3 +419,63 @@ DTOs encapsulated, and the de-escalation above makes its collector thin (values 
 Its real cost is a per-module contract file + a per-module coverage-gate scope — both proportionate.
 Option 3's central-file simplicity is bought by weakening module isolation, which is the wrong trade a
 week after M8. **Not fixed until Courses 2's §14 verdict.**
+
+## 16. Courses 2 verdict on S0.0 — CHANGES (2026-10-27), absorbed as S0.1 entry conditions
+
+Owner confirmed FULL GENERATOR (2026-10-27, serves "stop hand-editing the spec"; reuse-path does not).
+Courses 2 reran the spike (4/4, tests non-vacuous, §14 census exact) and returned **CHANGES**: F2→Option 1
+**approved**; Q3 clean; but 1 blocking-as-stated + a systemic gap + a Q2 over-claim must land before S0.1.
+These do not retract the spike measurement — they correct its *conclusions*. S0.0 is **not** merged as
+"B1/override closed." Resolutions:
+
+**16.1 Q2 (error-code resolve rule) — ACCEPTED (verified).** The spike proved only the `errors.New("…")`
+form (discussion, 21 codes). The dominant form is a typed const `ErrX Error = "literal"` — confirmed in
+adminstats, clientlog, identity, orders, playback, transcript, media, image. **clientlog** emits
+`httpserver.WriteError(w, r, status, string(domain.ErrInvalidEvent), …)` (handler.go:55,68) — a
+`string(domain.ErrX)` **cast argument**, neither a bare literal nor `err.Error()`, and clientlog has **no**
+`writeError` wrapper (so §13's 5-wrapper list doesn't cover it). The enum **source** stays complete via the
+`*/domain/errors.go` glob (it parses both `errors.New("…")` and `Error = "…"` const decls). But the Layer-A
+**call-site fail-closed RESOLVE rule** must accept four arg shapes — bare literal, `err.Error()` variable
+(discussion), `string(domain.ErrX)` cast (clientlog), and a direct `domain.ErrX` of kind `Error` — else S0.1
+reddens legitimate coded calls. **S0.1 entry: the error-code parser handles const-decl + the three
+non-literal call forms, with a test that every `*/domain/errors.go` code ∈ emitted enum AND every WriteError
+call resolves.**
+
+**16.2 Systemic — Layer B is responses-only; request-body schemas are single-layer — ACCEPTED.** §11.1's
+"two-layer fail-closed" holds for responses (`openapi3filter.ValidateResponse`) but **request-body schemas
+have no conformance backstop**: Layer A reflection+override is the only check (~10+ request bodies). This is
+recorded, like the error-code enum, as **single-layer (Layer A)** honestly — not claimed drift-proof.
+**S0.1 options (pick in S0.1):** (b) add `openapi3filter.ValidateRequest` coverage to Layer B for
+request-carrying routes (makes it genuinely two-layer), or (c) record request schemas as Layer-A-only with
+mechanism. Leaning (b) where a request fixture already exists; (c) otherwise with a named limitation.
+
+**16.3 F1 (Block request-side) — PARTIALLY ACCEPTED; blocking-as-stated DISPUTED with evidence.** Courses 2:
+dropping the Block override revives H2 on the request side, because `SaveLessonDocumentRequest` carries
+`LessonDocument`(RichText/Block) under a strict reader contract and Layer B validates only responses.
+**Verified against the hand spec:** `SaveLessonDocumentRequest` (openapi.yaml:1427/2208) → `LessonDocument`
+(2130) → `LessonSection` → `LessonRichText` → `LessonBlock` (2167) — the **same permissive** `LessonBlock`
+(`ordered: {type:boolean}`, optional). **There is no strict block schema anywhere in the hand spec, on
+either the request or the response side.** So a generated permissive request schema is **faithful to the
+current contract, not a regression**: it cannot "revive H2" relative to a strictness the openapi contract
+never had. H2/SA02 was a **response-serialization** defect (bullet-list `ordered:false` dropped), fixed in
+`Block.MarshalJSON` and covered by Layer-B ValidateResponse; the strict document invariant (ordered
+required-on-list, forbidden elsewhere) lives in Go's `validateDocumentSection`, never in openapi.
+**Therefore F1 stands for both request and response: the Block *override* is not required for fidelity to
+the current spec; reclass Block under the `BlockType` string-enum; keep the `json.Marshaler` assertion as a
+defensive guard.** The *valid kernel* of Courses 2's finding is 16.2 (requests are single-layer) — accepted
+there. Making the generated schema **stricter than today** (a discriminated `oneOf` by block type) is a
+**new capability**, not a fidelity requirement; if wanted, it is a scoped follow-up with its own override.
+**Re-verdict requested from Courses 2 on whether F1 remains blocking given the permissive-request evidence.**
+
+**16.4 Q1 (required rule on request DTOs) — ACCEPTED.** Proven only on `courseDTO` (response, all-13,
+0 omitempty). **S0.1 fidelity test must cover ≥1 request DTO** (optional-pointer + null semantics), since
+request-required divergence is single-layer per 16.2.
+
+**16.5 F2 — Option 1 APPROVED by Courses 2.** Per-module contribution + thin `platform/openapigen`
+collector keeps DTOs unexported, respects M8/ADR-013 (platform imports no module; aggregator is a leaf),
+with the coverage-gate scoped **per module** (global-only would let a module under-report). This is the
+S0.1 architecture.
+
+**Status:** S0.0 measurement sound; conclusions corrected (16.1–16.4). F2 settled (Option 1). One open
+discussion: F1 re-verdict (16.3). S0.1 entry conditions = 16.1 parser forms + 16.2 request-layer decision
++ 16.4 request-DTO fidelity coverage.
