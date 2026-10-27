@@ -315,3 +315,58 @@ non-blocking fold-ins. Absorbed here; supersedes §11.1/§11.2/§11.3/§11.5 whe
 
 **Open blocking after plan-review: 0** once B1(a)+(b) land in §11.1/§11.2 and the overlay is narrowed
 (N1). Re-send the plan delta to Courses 2, then owner-approval, then S0.0.
+
+## 14. S0.0 expressiveness spike — outcome (2026-10-27, owner-approved go)
+
+Spike code (throwaway, `//go:build s0spike`): `backend/internal/course/adapters/http/s0_spike_test.go`
++ `s0_spike_errcode_test.go`. Run `go test -tags s0spike -run TestS0Spike -v ./internal/course/adapters/http/`.
+**4/4 tests green.** Resolves the §7↔§8 open question: fidelity is achievable, and the override surface
+is measured, not assumed. Evidence per claim below.
+
+**14.1 Reproducible from Go (Layer A, no override) — confirmed green.**
+- Reflection (openapi3gen v0.149.0) emits the 13 `courseDTO` properties with correct base types.
+- `*T` → `nullable:true` is the library default (`publishedAt`/`price`/`rating`); non-pointer →
+  non-nullable. Pins §11.2 pointer row **without custom config**.
+- `time.Time` → `format:date-time`, `int64` → `format:int64` — library defaults.
+- **`required` is NOT emitted by openapi3gen at all** — the generator owns it. Rule "required unless
+  json tag has `,omitempty`" reproduces hand-spec `Course.required` (all 13) **exactly**. Confirms
+  §11.2 and that required-derivation is our code.
+
+**14.2 Override surface — measured census (matches §11.2, two refinements).** Each class below is NOT
+derivable by reflection and needs its §11.2 mechanism: `format:uuid` (bare string), status `enum`
+(plain `string` field, not `type X string` — enum lives in overlay/registry), validation keywords
+(minLength/pattern/minimum — in domain validators, not DTO types → overlay per N1), `additionalProperties:false`
+(library leaves unset), name-map (`Block`→`LessonBlock`, `Span`→`LessonSpan`), string-enum `BlockType`
+(const-set registry). Two **new** findings refine the plan:
+- **F1 — the §2 Block premise is imprecise.** The *published* `LessonBlock` schema is **permissive**
+  (`ordered` is an optional bool allowed on any block); reflecting the `Block` **struct** reproduces it
+  *modulo the `BlockType` enum*. The custom `MarshalJSON` (ordered-as-pointer) does **not** change the
+  published component — H2/SA02 lived in a **stricter reader schema**, not this published schema. So the
+  Block *override-registry* entry (§11.2 row 1) is **not required for the published schema**; only the
+  **string-enum mechanism** for `BlockType` is. The `json.Marshaler` fail-closed assertion stays valuable
+  as a guard, but its stated justification ("the one type reflection gets wrong") is wrong for the
+  published surface. **Plan edit:** reclassify Block under string-enum, keep the marshaler assertion as a
+  defensive guard not a correctness mechanism.
+- **F2 — DTOs are unexported; §4-A central registry cannot reflect them cross-package.** `courseDTO`,
+  `priceDTO`, … are package-private. A single registry file in a `openapigen` package **cannot**
+  reference them. The generator must therefore run **per-module** (each adapter package exports its
+  route→type bindings / contributes its reflected schemas) rather than from one central typed registry.
+  This supersedes §4 approach-A's "one Go file lists all 85 routes": the route→type binding lives
+  **inside each module's adapter package**, and a thin central collector aggregates + the mux cross-check
+  stays. **Plan edit:** §4/§11 registry is per-module-contributed, not central-typed.
+
+**14.3 B1 (error-code source) — proven green.** `go/parser` extracts all **21** `errors.New("…")` codes
+from `discussion/domain/errors.go` (incl. `review_already_exists`, `report_already_open`,
+`course_forbidden`). Confirms B1(a): the call-site literal scan yields **0** of these (discussion passes
+`code := err.Error()`, a variable), so the enum **must** union domain/errors.go consts + direct
+`WriteError` literals + per-module `writeError` wrappers, with a coverage test asserting every
+domain/errors.go code ∈ emitted enum. Error-code fidelity stays **single-layer (Layer A parser)** per §13.
+
+**14.4 N3 (non-JSON route) — proven green.** `orders/adapters/http/handler.go` has exactly **1** raw
+`w.Write` (the WayForPay `Acknowledge()` callback) vs 13 `WriteJSON`. The callback route goes on a
+**declared** non-JSON exclusion list so the Layer-B coverage-gate does not fail on it.
+
+**S0.0 verdict:** fidelity achievable; override surface = §11.2 with F1/F2 refinements. **Next: Courses 2
+review of this outcome (existing_session), then S0.1 (course end-to-end behind parallel file).** The
+spike tests are throwaway (build-tagged, no build wired) — delete or evolve into the real generator's
+fidelity test in S0.1.
