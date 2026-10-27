@@ -94,6 +94,25 @@ func TestMembershipPredicates(t *testing.T) {
 	}
 }
 
+// SA09/M10: an anonymous subject must not match a course whose OwnerID is empty. The
+// `subject.UserID != ""` guard on the owner branch is the only thing between "" == "" and access;
+// CanView pins it, these pin it for CanConsume and CanCommunicate.
+func TestEmptySubjectDoesNotMatchEmptyOwner(t *testing.T) {
+	t.Parallel()
+
+	for _, membership := range []access.Membership{access.MembershipNone, access.MembershipRevoked} {
+		for _, published := range []bool{false, true} {
+			course := access.Course{Published: published, Membership: membership}
+			if access.CanConsume(access.Subject{}, course) {
+				t.Fatalf("CanConsume(empty subject, empty owner, membership=%q, published=%v) = true, want false", membership, published)
+			}
+			if access.CanCommunicate(access.Subject{}, course) {
+				t.Fatalf("CanCommunicate(empty subject, empty owner, membership=%q, published=%v) = true, want false", membership, published)
+			}
+		}
+	}
+}
+
 func TestPurchaseRequiredImpliesCannotView(t *testing.T) {
 	t.Parallel()
 
