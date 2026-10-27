@@ -533,3 +533,21 @@ findings, dispositioned:
   Layer-B ValidateResponse actually exercises the nullable branches. Cheap; fold into the next course touch.
 
 Run 1 closed PASS. These are S0.1-completion / S0.2-cutover conditions, not Run-1 blockers.
+
+**16.9 S0.1b-1 (Params Go-ward) — Courses 2 PASS, Q2b resolved + Q3 generalization (2026-10-27).**
+Slice `ac970b7` (HEAD `cb2e9b5`): **PASS**, Q2b closed. Courses 2 re-ran fidelity fresh (green), confirmed
+the watch-point: overlay param structure deleted same commit, fidelity green after deletion, generated.yaml
+byte-identical → Params-from-Go reproduce the same param surface. Merge discipline (delete overlay structure
++ green fidelity in the same commit) is the template for the error-enum removal at 16.1.
+- **Q1 honest framing (record it):** "drift gated" = declared-Params vs the **spec** (fidelity reddens if a
+  param is added/removed/retyped in `RouteBinding`). Declared-Params vs the handler's actual `r.URL.Query()`
+  reads stays **single-layer** (request-conformance not wired) — the accepted 16.2 limit, not a regression.
+- **Q3 (non-blocking) — string-enum single-source, generalize with 16.1.** The catalog `sort` Enum in the
+  contribution ({SortRecent,SortTitle}) is correct today but is a **second** hand-maintained list of public
+  sorts (the first is the variadic in `NewQuery`, query.go:33; SortStudents/SortPrice are admin-only via
+  NewAuthoringQuery). A 3rd public sort added to `NewQuery` without updating the contribution → generated enum
+  misses it → fidelity green (hand unchanged) → Layer-B (responses-only) blind → **undetected drift**. Fix:
+  export a single `domain.PublicCatalogSorts = []Sort{SortRecent,SortTitle}`, consumed by both `NewQuery` and
+  `contribution.Enum`, with a test. **This is the string-enum generalization of 16.1's "domain-set ∈ emitted
+  enum" discipline; apply it to ALL const-set enums (sort, status, BlockType), not only error-codes.** Folded
+  into the S0.1b-3 (16.1 / const-set-enum) run. Non-blocking (sorts rarely change; correct now).
