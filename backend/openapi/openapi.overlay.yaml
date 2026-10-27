@@ -16,6 +16,27 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        GrantForbidden:
+            description: Administrator permission is required to issue a grant.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+        InvalidRequest:
+            description: The request path, query or body is missing, malformed, oversized or carries unexpected members.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+        Unauthenticated:
+            description: Credentials were rejected or no usable session was presented.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
         BadRequest:
             description: Invalid query parameters or slug.
             headers:
@@ -43,6 +64,27 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        # These fields are generic JSON numbers in the hand contract, not doubles.
+        AdminStatsEngagement:
+            properties:
+                avgProgress:
+                    format: null
+        AdminStatsMedia:
+            properties:
+                avgDurationSeconds:
+                    format: null
+                totalDurationSeconds:
+                    format: null
+        AdminStatsInstructor:
+            properties:
+                instructorId:
+                    format: uuid
+        AdminStatsTimeseriesPoint:
+            properties:
+                value:
+                    format: null
+                bucketStart:
+                    format: date-time
         AdminTimestamp:
             format: date-time
             description: RFC 3339 timestamp carrying exactly six fractional-second digits.
@@ -168,6 +210,47 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/admin/stats:
+        get:
+            operationId: getAdminStats
+            summary: Platform statistics snapshot
+            description: >-
+                Admin-only. A point-in-time aggregate across people, content, access and sales,
+                moderation and media, plus the per-instructor leaderboard and the single-instructor
+                flag. Accepts no query parameters and responses are never cached.
+            responses:
+                "200":
+                    description: The platform snapshot.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+    /api/v1/admin/stats/timeseries:
+        get:
+            operationId: getAdminStatsTimeseries
+            summary: Platform statistics timeseries
+            description: >-
+                Admin-only. Buckets one metric (signups, enrollments, orders or revenue) by day or
+                week over a UTC window. Revenue buckets by paid time, enrollments by grant time, the
+                rest by creation time. An unparseable or inverted range is invalid_range; a window
+                wider than the bucket cap is range_too_wide; an unknown metric or bucket is rejected.
+                Responses are never cached.
+            parameters:
+                from:
+                    description: Inclusive RFC 3339 start; defaults to `to` minus 30 days.
+                    schema: {format: date-time}
+                to:
+                    description: Inclusive RFC 3339 end; defaults to now.
+                    schema: {format: date-time}
+            responses:
+                "200":
+                    description: Ordered timeseries buckets.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
     /api/v1/admin/courses/{id}/status:
         post:
             parameters:

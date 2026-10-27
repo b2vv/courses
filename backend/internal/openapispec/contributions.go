@@ -1,0 +1,14 @@
+// Package openapispec is the leaf composition root for the parallel OpenAPI artifact.
+// Business modules and the generator must not import this collector.
+package openapispec
+
+import (
+	adminstatshttp "courses/internal/adminstats/adapters/http"
+	coursehttp "courses/internal/course/adapters/http"
+	"courses/internal/platform/openapigen"
+)
+
+// AllOpenAPIContributions collects the modules migrated to Go-owned contracts.
+func AllOpenAPIContributions() []openapigen.ModuleContribution {
+	return []openapigen.ModuleContribution{coursehttp.OpenAPIContribution(), adminstatshttp.OpenAPIContribution()}
+}

@@ -575,3 +575,125 @@ This is exactly the request-side risk Courses 2 raised in the Run-1 review (Q1).
   both request-pointer meanings are covered before the document route (16.3) exercises a real optional one.
 Supersedes §11.2's pointer row for request bodies. Courses 2 will verify the request-nullability handling in
 the S0.1b-2 review.
+
+**16.11 Error-enum = emitted-set, hand spec corrected now (owner decision, 2026-10-27).** S0.1b-3a Codex
+STOP (verified by Courses 13): generate-from-Go found the hand `ErrorResponse` enum (`openapi.yaml:3409`) is
+incomplete relative to codes the API actually returns — `image/adapters/http/handler.go:110–118`
+(`writeUploadError`) emits `unsupported_image`, `image_too_large`, `image_too_many_pixels`, `invalid_image`
+via `httpserver.WriteError`, none present in the hand enum (census: 99 domain codes, 20 absent from hand).
+"Full domain enum from Go" + "hand unchanged" + "green exact fidelity" are mutually incompatible on HEAD —
+a real contract bug, exactly what the migration exists to catch.
+- **Decision (owner):** the generated `ErrorResponse.code` enum = the **emitted set** — codes that actually
+  RESOLVE at a `WriteError` call-site — not the full 99 domain constants (internal codes a client never sees
+  stay out). The hand `openapi.yaml` enum is **corrected now** to equal the emitted set exactly: add the
+  genuinely-emitted-but-missing codes, remove any hand code that is never emitted. This edits the
+  source-of-truth before the S0.2 cutover — a **deliberate, owner-approved exception** justified because it
+  fixes a real contract incompleteness the migration surfaced.
+- **Safety:** the hand *removals* are only trustworthy if the RESOLVE parser is complete. The parser MUST
+  handle the four call forms (§16.1) and **fail-closed on any unrecognized form** — an unresolved call errors
+  the build, never silently under-counts the emitted set (which would wrongly drop a real code from hand).
+  So: build + verify the 4-form resolver first; the emitted-set census drives hand edits only after the
+  resolver proves every `WriteError` call resolves.
+- **Audit:** Codex records the exact emitted set and the precise hand additions/removals in the work file
+  BEFORE editing `openapi.yaml`; hand edits are limited to the `ErrorResponse.code` enum. Overlay error-enum
+  removed in the same commit; fidelity generated↔hand green + byte-identical regen = proof.
+- **Check:** `go test` coverage gate — every `WriteError` call resolves (fail-closed) AND generated enum ==
+  hand enum (fidelity) AND every resolved code ∈ `*/domain/errors.go` source universe. Courses 2 per-slice
+  review before any merge; this slice now touches `openapi.yaml`, so flag the contract change explicitly.
+
+**16.12 Source universe = all domain error declarations + a named transport-literal allowlist (writer
+decision, Courses 13, 2026-10-27).** S0.1b-3a Codex STOP #2 (verified by Courses 13): the §16.1 source
+universe `*/domain/errors.go` glob is too narrow. Codes are declared across many domain files, not only
+`errors.go` — verified: `ErrInvalidQuery Error = "invalid_query"` in `course/domain/course.go:16`; the
+discussion comment codes (`comment_body_invalid`…`comment_cursor_invalid`) via `errors.New(...)` in
+`discussion/domain/comment.go:16–20`; further `Error = "..."` consts in `course/domain/{authoring,document,
+document_access}.go`. A few resolved codes are pure **transport literals** with no domain const at all —
+`method_not_allowed` is a bare literal in `media/adapters/tus/server.go:56`.
+- **This is a mechanism refinement, not a product/contract change** — the owner's §16.11 emitted-set
+  semantics stand. The emitted set (what drives the enum + hand) is computed by the RESOLVE census and is
+  unaffected: a bare literal like `method_not_allowed` is already one of the four accepted call forms. Only
+  the secondary cross-check "every resolved code ∈ source universe" needs a correct universe.
+- **Decision (writer):** the source universe = all `Error = "..."` const decls AND `errors.New("...")` calls
+  found under `internal/*/domain/**` (both forms, every file, not just `errors.go`), PLUS a small, explicit,
+  documented transport-literal allowlist (each entry named with its emit site, e.g. `method_not_allowed →
+  media/adapters/tus/server.go`). A resolved code matching neither the broadened domain universe nor the
+  named allowlist → build/test error (fail-closed; catches a typo'd emitted literal).
+- **RESOLVE call-form fail-close is unchanged** — an unrecognized *call form* at a `WriteError` site still
+  errors (a different axis from the declaration site). **Check:** coverage test asserts every resolved code
+  has provenance (domain decl or named allowlist) and the allowlist has no unused entries.
+
+**16.13 Error boundary normalization — a prerequisite security slice S0.1b-sec (owner decision,
+2026-10-27).** S0.1b-3a Codex STOP #3 (verified by Courses 13): `discussion/adapters/http/handler.go:711–712`
+`writeError` sets `code := err.Error()` and passes it to `httpserver.WriteError`; `statusFor` defaults to
+400. An unknown/infrastructure error (a wrapped pgx `ConnectError` carrying `Config.User`/`Database`) is
+returned to the client as the raw string in `error.code` with HTTP 400. Verified real (probe: two DB names →
+two distinct codes); already flagged in the S0.0 spike (`course/adapters/http/s0_spike_errcode_test.go`, B1).
+This is an **info-disclosure defect + wrong status + an unbounded `error.code`** that makes a finite enum
+impossible. Only discussion has the literal `code := err.Error()`; the other modules' own `writeError`
+wrappers (course/admin/document/learning, adminstats, identity, orders, media, image, playback) are
+**unaudited** for the same raw-err / default-400 class.
+- **Decision (owner): audit + fix ALL module HTTP boundaries now**, as a distinct prerequisite slice
+  **S0.1b-sec**, before resuming the enum work (3a). Normalize: an error that is **not** a recognized
+  domain/application business error → a stable `dependency_unavailable` code + **503**, preserving every
+  recognized business code and its current status unchanged. Recognized business errors keep their exact
+  code/status — only the unknown/default path changes.
+- **Blast radius: this changes runtime error responses across modules**, so per the shared/persisted-state
+  rule it is gated by the **FULL ordered suite (make test + make integration + make e2e)**, not targeted
+  tests — an existing contract/e2e assertion on a now-changed status/code must surface. (CI is broken
+  account-wide; local gates authoritative.) Courses 13 runs `make e2e` itself at writer-verify (never trusts
+  the agent's claim on the cross-module safety net).
+- **Guardrail:** if normalization would alter a *recognized business* code/status (ambiguous recognized vs
+  unknown), STOP and ask — do not silently reclassify a business error. Each module gets a test: an
+  unknown/infra error → `dependency_unavailable`/503 (not a raw string / 400).
+- Courses 2 per-slice review (security-sensitive: flag every behavior change). After S0.1b-sec PASS + merge
+  discipline, resume S0.1b-3a on the now-bounded emitted set.
+- **Refinement (owner 2026-10-27, after writer diff review + two Codex STOPs):** the only module that leaked
+  a raw string was discussion (`code := err.Error()`); every other module already had a bounded, safe
+  unknown-error default, but NOT a uniform one — most emit `internal_error/500`, **image** emits
+  `dependency_unavailable/503` (upload module), **transcript** emits `invalid_request/400`. Decision: **fix
+  only discussion** — its unknown/default routes to `internal_error/500` (matching the majority), and its
+  recognized business codes keep their exact values via an explicit switch (removes the raw-string path).
+  **Every other module is restored to its exact baseline** (Codex's first pass wrongly flipped eight modules'
+  `internal_error/500` → `503` and changed transcript; all reverted). Net runtime change of the slice =
+  discussion only. The pre-existing cross-module inconsistency (500/503/400 for unknown) predates this slice
+  and is a **non-blocking tracked note**, not fixed here. Per-module `error_boundary_test.go` guards each
+  module's actual unknown-error contract (no raw string anywhere) as a regression guard.
+
+**16.14 Multi-module aggregation seam (S0.1c adminstats STOP, 2026-10-27).** Adding any second module hit
+the expected seam: there is no multi-module aggregator yet — only `course`'s fidelity test passes
+`{OpenAPIContribution()}` and writes the shared `openapi.generated.yaml`. §16.5 (F2 Option 1) already fixed
+the architecture: per-module contribution + a thin collector whose aggregator is a **leaf composition root**
+(ADR-013: `platform/openapigen` imports no module; the composition root does the importing).
+- **Approach (writer, faithful to §16.5) — interim, defers the cutover:** introduce one composition-level
+  aggregation point (a package the composition root owns, allowed to import every module) that collects
+  `[]ModuleContribution` from each module's `OpenAPIContribution()` and feeds `openapigen.Generate`. Each
+  module keeps its OWN per-module fidelity test (validates its slice of the aggregated doc against hand) and
+  its own per-module coverage-gate (every route it registers ∈ its contribution). The single
+  `openapi.generated.yaml` writer moves behind this aggregation (one writer over ALL contributions), not per
+  test. **The full `make generate` CLI + `check-generated` gate + Orval rewire stay in S0.2 cutover** (owner
+  paused before cutover) — this interim seam only unblocks module-by-module migration without pulling the
+  merge/cutover forward.
+- Each subsequent module slice: add its `OpenAPIContribution()`, register it in the aggregation point, add
+  its per-module fidelity + coverage-gate, remove any hand/overlay duplication now Go-sourced, keep deliberate
+  narrowings explicit. generated↔hand fidelity green + byte-identical regen = proof. Courses 2 per-slice.
+
+**16.15 Named root-slice response component — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1c adminstats STOP #2).** adminstats `GET /api/v1/admin/stats/timeseries` returns a bare JSON
+array `[]timeseriesPointDTO` whose hand contract names the array component `AdminStatsTimeseries`
+(openapi.yaml:611, :2890-closure). Codex mapped `reflect.TypeFor[[]timeseriesPointDTO]() → "AdminStatsTimeseries"`
+in NameMap and STOPPED correctly: `openapigen.reflectBody` does not honour NameMap for a **root** slice — the
+library returns the array schema inline, so the component is never emitted and per-module fidelity fails
+("missing DTO in reference closure: AdminStatsTimeseries"). Verified by Courses 13 against generate.go:233-274
+(no root-slice lift) and the fidelity FAIL in the work journal.
+- **Decision — Option A (minimal generator extension), faithful to generate-from-Go.** When the root body
+  type carries an explicit NameMap entry and the reflected root ref is an inline (non-`$ref`) array schema,
+  `reflectBody` lifts it into `doc.Components.Schemas[name]` and returns a `$ref`, with the existing
+  `sameJSON` collision guard and the two-generation byte-identity proof. A bare-array 200 is a standard REST
+  shape; a FULL generate-from-Go generator must emit it from Go, hand unchanged.
+- **Alternatives closed:** (B) wrapping the array in a struct changes the wire contract (the endpoint returns a
+  top-level array) — rejected; (C) declaring `AdminStatsTimeseries` structurally in the overlay duplicates a
+  shape that is now Go-sourced, against §16.14 — rejected; (D) editing the hand spec to inline the array fits
+  the contract to a generator gap instead of the reverse — rejected.
+- **Scope:** writer-level mechanism inside the owner-confirmed FULL generate-from-Go S0; no product/contract
+  change, nothing merges. Courses 2 per-slice review still gates S0.1c. The `make generate` CLI +
+  `check-generated` + Orval rewire remain in the S0.2 cutover.

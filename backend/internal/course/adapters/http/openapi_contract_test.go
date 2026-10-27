@@ -1,25 +1,24 @@
-package http
+package http_test
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
+	"courses/internal/openapispec"
 	"courses/internal/platform/openapigen"
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-// Run with UPDATE_OPENAPI_GENERATED=1 to emit the parallel artifact. Normal tests
-// require the checked-in artifact to match; neither mode writes the hand spec.
+// Catalog fidelity owns its complete surface; the composition package owns the artifact.
 func TestCatalogOpenAPIFidelity(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "..", "openapi")
-	generated, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
+	generated, err := openapigen.GenerateFromSource(openapispec.AllOpenAPIContributions(), filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,11 +26,7 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := normalizedDocument(t, generated)
-	requestPath := "/api/v1/admin/courses/{id}/status"
-	// Only this request-only operation is projected. Keep every generated catalog
-	// path/component in the comparison so unexpected schema additions still fail.
-	got["paths"].(map[string]any)[requestPath] = fidelitySurface(t, got)["paths"].(map[string]any)[requestPath]
+	got := fidelitySurface(t, normalizedDocument(t, generated))
 	source := normalizedDocument(t, hand)
 	want := fidelitySurface(t, source)
 	if diff := firstDifference("$", got, want); diff != "" {
@@ -57,7 +52,7 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
+	again, err := openapigen.GenerateFromSource(openapispec.AllOpenAPIContributions(), filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,19 +63,6 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("catalog regeneration is not byte-identical")
 	}
-	artifact := filepath.Join(dir, "openapi.generated.yaml")
-	if os.Getenv("UPDATE_OPENAPI_GENERATED") == "1" {
-		if err = os.WriteFile(artifact, first, 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	checked, err := os.ReadFile(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(checked, first) {
-		t.Fatal("parallel artifact is stale; run UPDATE_OPENAPI_GENERATED=1 go test -run TestCatalogOpenAPIFidelity ./internal/course/adapters/http")
-	}
 	t.Log("catalog and status request + complete referenced component closures equal hand spec; two generations byte-identical")
 }
 
@@ -90,7 +72,11 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
 	for _, path := range []string{"/api/v1/courses", "/api/v1/courses/{slug}"} {
-		paths[path] = source["paths"].(map[string]any)[path]
+		value, ok := source["paths"].(map[string]any)[path]
+		if !ok || value == nil {
+			t.Fatalf("missing path %s", path)
+		}
+		paths[path] = value
 	}
 	// Take the transitive reference closure, including responses and headers.
 	// Rating is explicitly part of the requested surface even though catalog inlines it.
@@ -108,6 +94,9 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 					needed[ref] = true
 					parts := strings.Split(strings.TrimPrefix(ref, "#/components/"), "/")
 					component := source["components"].(map[string]any)[parts[0]].(map[string]any)[parts[1]]
+					if component == nil {
+						t.Fatalf("missing component %s", ref)
+					}
 					group, ok := want["components"].(map[string]any)[parts[0]].(map[string]any)
 					if !ok {
 						group = map[string]any{}
