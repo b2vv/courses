@@ -33,11 +33,15 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 				{Name: "limit", In: "query", Type: "integer"},
 				{Name: "offset", In: "query", Type: "integer"},
 				{Name: "q", In: "query", Type: "string"},
-				{Name: "sort", In: "query", Type: "string", Enum: []string{string(domain.SortRecent), string(domain.SortTitle)}},
+				{Name: "sort", In: "query", Type: "string", Enum: enumStrings(domain.PublicCatalogSorts)},
 			}},
 			{Method: "GET", Path: "/api/v1/courses/{slug}", Responses: detail, Params: []openapigen.Param{
 				{Name: "slug", In: "path", Type: "string", Required: true},
 			}},
+		},
+		Enums: map[reflect.Type][]string{
+			reflect.TypeFor[domain.Status]():    enumStrings(domain.CourseStatuses),
+			reflect.TypeFor[domain.BlockType](): enumStrings(domain.BlockTypes),
 		},
 		NameMap: map[reflect.Type]string{
 			reflect.TypeFor[transitionAdminCourseRequest](): "AdminCourseStatusRequest",
@@ -67,4 +71,13 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			},
 		},
 	}
+}
+
+// enumStrings maps the domain-owned set without maintaining another allowlist.
+func enumStrings[T ~string](values []T) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = string(value)
+	}
+	return result
 }

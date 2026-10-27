@@ -43,10 +43,6 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
-        AdminCourseStatusRequest:
-            properties:
-                status:
-                    enum: [draft, published, archived]
         AdminTimestamp:
             format: date-time
             description: RFC 3339 timestamp carrying exactly six fractional-second digits.
@@ -78,10 +74,6 @@ components:
                     pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
                 status:
                     description: Foundation public operations only return published.
-                    enum:
-                        - draft
-                        - published
-                        - archived
                 summary:
                     maxLength: 500
                     minLength: 1

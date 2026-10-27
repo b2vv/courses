@@ -26,19 +26,19 @@ func (h *Handler) Register(mux *http.ServeMux) {
 }
 
 type courseDTO struct {
-	ID          string     `json:"id"`
-	Slug        string     `json:"slug"`
-	Title       string     `json:"title"`
-	Summary     string     `json:"summary"`
-	Description string     `json:"description"`
-	Status      string     `json:"status"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	PublishedAt *time.Time `json:"publishedAt"`
-	Price       *priceDTO  `json:"price"`
-	Paid        bool       `json:"paid"`
-	Rating      *ratingDTO `json:"rating"`
-	LessonCount int        `json:"lessonCount"`
+	ID          string        `json:"id"`
+	Slug        string        `json:"slug"`
+	Title       string        `json:"title"`
+	Summary     string        `json:"summary"`
+	Description string        `json:"description"`
+	Status      domain.Status `json:"status"`
+	CreatedAt   time.Time     `json:"createdAt"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
+	PublishedAt *time.Time    `json:"publishedAt"`
+	Price       *priceDTO     `json:"price"`
+	Paid        bool          `json:"paid"`
+	Rating      *ratingDTO    `json:"rating"`
+	LessonCount int           `json:"lessonCount"`
 }
 type ratingDTO struct {
 	Average float64 `json:"average"`
@@ -163,7 +163,7 @@ func mapCourse(course domain.Course) courseDTO {
 	if course.Rating != nil {
 		summary = &ratingDTO{Average: course.Rating.Average, Count: course.Rating.Count}
 	}
-	return courseDTO{ID: course.ID, Slug: course.Slug, Title: course.Title, Summary: course.Summary, Description: course.Description, Status: string(course.Status), CreatedAt: course.CreatedAt, UpdatedAt: course.UpdatedAt, PublishedAt: course.PublishedAt, Price: price, Paid: course.Paid, Rating: summary, LessonCount: course.LessonCount}
+	return courseDTO{ID: course.ID, Slug: course.Slug, Title: course.Title, Summary: course.Summary, Description: course.Description, Status: course.Status, CreatedAt: course.CreatedAt, UpdatedAt: course.UpdatedAt, PublishedAt: course.PublishedAt, Price: price, Paid: course.Paid, Rating: summary, LessonCount: course.LessonCount}
 }
 
 func mapCourseDetail(course domain.CourseDetail) courseDetailDTO {
