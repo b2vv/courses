@@ -70,6 +70,10 @@ func TestImportRuleStewardsCrossModuleIsolation(t *testing.T) {
 		{"own module domain from domain", "orders", "domain", "courses/internal/orders/domain", false},
 		{"third party from application", "orders", "application", "github.com/jackc/pgx/v5", false},
 		{"adapters from application", "orders", "application", "courses/internal/orders/adapters/http", false},
+		{"own module domain from ports", "orders", "ports", "courses/internal/orders/domain", true},
+		{"contracts from ports", "orders", "ports", "courses/internal/contracts/access", true},
+		{"foreign module domain from ports", "orders", "ports", "courses/internal/discussion/domain", false},
+		{"application from ports", "orders", "ports", "courses/internal/orders/application", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := importAllowed(tc.module, tc.layer, tc.path); got != tc.allowed {
@@ -95,8 +99,10 @@ func importAllowed(module, layer, importPath string) bool {
 	if strings.HasPrefix(importPath, "courses/internal/contracts/") {
 		return true
 	}
-	// The sole remaining allowance: an application reaching its OWN module's domain or ports.
-	if layer == "application" {
+	// The sole remaining allowance: an application or a ports file reaching its OWN module's domain
+	// or ports (AGENTS.md: application sees domain and ports; ports may reference domain). Never
+	// another module, never an adapter, never the application layer from ports.
+	if layer == "application" || layer == "ports" {
 		own := "courses/internal/" + module + "/"
 		if strings.HasPrefix(importPath, own) && (strings.Contains(importPath, "/domain") || strings.Contains(importPath, "/ports")) {
 			return true
@@ -105,8 +111,12 @@ func importAllowed(module, layer, importPath string) bool {
 	return false
 }
 
-// layerOf returns "domain" or "application" for a file on that inward layer, or "" for any other
-// file (adapters, composition roots) the inward-dependency rule does not police here.
+// layerOf returns "domain", "application" or "ports" for a file on that inward layer, or "" for any
+// other file (adapters, composition roots) the inward-dependency rule does not police here. This
+// assumes a FLAT layer layout — no nested packages under a module's domain/application/ports — which
+// holds today; the predicate forbids a same-module same-layer subpackage import, so splitting a layer
+// into subpackages later would need this rule widened. The contracts package's own purity (ADR 013:
+// standard library only, zero module imports) is a separate rule, not policed here.
 func layerOf(path string) string {
 	slash := filepath.ToSlash(path)
 	switch {
@@ -114,6 +124,8 @@ func layerOf(path string) string {
 		return "domain"
 	case strings.Contains(slash, "/application/"):
 		return "application"
+	case strings.Contains(slash, "/ports/"):
+		return "ports"
 	default:
 		return ""
 	}
