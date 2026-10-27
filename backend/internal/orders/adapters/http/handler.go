@@ -823,6 +823,6 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Purchases are temporarily unavailable")
 	default:
-		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
+		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
 	}
 }
