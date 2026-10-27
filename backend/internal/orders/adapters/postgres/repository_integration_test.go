@@ -403,14 +403,21 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 			t.Fatalf("rejected=%d errs=%v, want exactly one — both reads saw 'pending' and the losing write was lost", rejected, errs)
 		}
 
-		var grants, audits int
+		var paymentEvents, grants, audits int
 		var status string
 		var refundRequired bool
 		if err := pool.QueryRow(ctx, `SELECT
+  (SELECT count(*) FROM payment_events WHERE order_id=$1::text::uuid),
   (SELECT count(*) FROM course_grants WHERE order_id=$1::text::uuid AND state='active'),
   (SELECT count(*) FROM grant_audit AS audit JOIN course_grants AS grants ON grants.id=audit.grant_id WHERE grants.order_id=$1::text::uuid),
-  status, refund_required FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&grants, &audits, &status, &refundRequired); err != nil {
+  status, refund_required FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&paymentEvents, &grants, &audits, &status, &refundRequired); err != nil {
 			t.Fatal(err)
+		}
+		// Both distinct events clear the inbox dedupe and persist: the winner inserts and the loser,
+		// rejected, still commits its own payment_events row. The deterministic count of 2 is the
+		// premise this test rests on (two distinct deliveries, not one) and complements O-F2's events=1.
+		if paymentEvents != 2 {
+			t.Fatalf("payment_events=%d, want 2 — both distinct events must persist (premise of the race)", paymentEvents)
 		}
 		// Both serial orderings are internally consistent: the Approved winner leaves paid + 1 grant +
 		// 1 audit and no refund flag; the Failed winner leaves failed + 0 grants + 0 audits, and the
