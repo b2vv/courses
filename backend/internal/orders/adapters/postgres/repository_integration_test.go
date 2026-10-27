@@ -309,6 +309,120 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("SA09-T1 O-F3 two distinct events on one order serialize via FOR UPDATE", func(t *testing.T) {
+		// O-F2 proved UNIQUE(provider,event_id)+ON CONFLICT settle the SAME event, delivered twice,
+		// exactly once without FOR UPDATE. Two DISTINCT events (distinct event_id) clear both guards
+		// and both reach the orders/grant/audit read-modify-write; only FOR UPDATE serializes that.
+		// An Approved (paid) and a Failed (declined) race on one pending order. Serialized, the lock
+		// winner transitions the order and the loser reads a no-longer-pending order and is rejected,
+		// so — regardless of which wins — exactly ONE call is rejected and the final state is a
+		// consistent serialization (paid+grant, or failed+no grant). Drop FOR UPDATE and both reads
+		// see 'pending', both decide Apply, NEITHER is rejected and the losing write lands anyway (a
+		// failed order can keep an active grant): the order-independent tell is the rejected-count.
+		// Same holder + pg_blocking_pids harness as O-F2; needs 4 pool connections (pgxpool floor 4).
+		const userID = "40000000-0000-4000-8000-000000000027"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'of3-race@example.test','O-F3 race','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
+			t.Fatal(err)
+		}
+		amount, err := domain.NewMoney("50000", "UAH")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending, err := domain.NewOrder(subtestIDs("c1")(), userID, integrationCourseID, amount, "of3-race", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		order, err := repository.Create(ctx, pending)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events := []domain.PaymentEvent{
+			{Provider: "wayforpay", EventID: order.ID() + ":Approved", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: amount, ReceivedAt: now.Add(time.Minute)},
+			{Provider: "wayforpay", EventID: order.ID() + ":Failed", OrderID: order.ID(), Type: domain.PaymentFailed, Amount: amount, ReceivedAt: now.Add(2 * time.Minute)},
+		}
+
+		holder, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = holder.Rollback(ctx) }()
+		if _, err := holder.Exec(ctx, `SELECT id FROM orders WHERE id=$1::text::uuid FOR UPDATE`, order.ID()); err != nil {
+			t.Fatal(err)
+		}
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		for index, prefix := range []string{"c2", "c3"} {
+			wg.Add(1)
+			go func(index int, event domain.PaymentEvent, newID func() string) {
+				defer wg.Done()
+				errs[index] = repository.Apply(ctx, event, newID)
+			}(index, events[index], subtestIDs(prefix))
+		}
+		release := func() {
+			_ = holder.Rollback(ctx)
+			wg.Wait()
+		}
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			// Lock state, not SQL text: with FOR UPDATE both queue at the order SELECT, without it
+			// both queue at UPDATE orders — either way two backends block, so the precondition holds
+			// for the mutation too and the test fails on the consequence below, not here.
+			var waiting int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND cardinality(pg_blocking_pids(pid))>0`).Scan(&waiting); err != nil {
+				release()
+				t.Fatal(err)
+			}
+			if waiting == 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				release()
+				t.Fatalf("waiting on the order lock=%d, want both events queued (errors=%v)", waiting, errs)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if err := holder.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		wg.Wait()
+
+		// Order-independent consequence of serialization: the lock loser reads a non-pending order
+		// and is rejected; the winner acknowledges. Without FOR UPDATE both read 'pending' and
+		// neither is rejected (errs=[nil nil]) — the losing write was silently lost.
+		rejected := 0
+		for _, applyErr := range errs {
+			switch {
+			case applyErr == nil:
+			case errors.Is(applyErr, domain.ErrPaymentEventRejected):
+				rejected++
+			default:
+				t.Fatalf("unexpected apply error=%v (errs=%v)", applyErr, errs)
+			}
+		}
+		if rejected != 1 {
+			t.Fatalf("rejected=%d errs=%v, want exactly one — both reads saw 'pending' and the losing write was lost", rejected, errs)
+		}
+
+		var grants, audits int
+		var status string
+		var refundRequired bool
+		if err := pool.QueryRow(ctx, `SELECT
+  (SELECT count(*) FROM course_grants WHERE order_id=$1::text::uuid AND state='active'),
+  (SELECT count(*) FROM grant_audit AS audit JOIN course_grants AS grants ON grants.id=audit.grant_id WHERE grants.order_id=$1::text::uuid),
+  status, refund_required FROM orders WHERE id=$1::text::uuid`, order.ID()).Scan(&grants, &audits, &status, &refundRequired); err != nil {
+			t.Fatal(err)
+		}
+		// Both serial orderings are internally consistent: the Approved winner leaves paid + 1 grant +
+		// 1 audit and no refund flag; the Failed winner leaves failed + 0 grants + 0 audits, and the
+		// later Approved — rejected on a non-pending order — flags refund_required. No serialization
+		// leaves a failed order holding an active grant.
+		paidWinner := status == "paid" && grants == 1 && audits == 1 && !refundRequired
+		failedWinner := status == "failed" && grants == 0 && audits == 0 && refundRequired
+		if !paidWinner && !failedWinner {
+			t.Fatalf("status=%s grants=%d audits=%d refund_required=%v, want a consistent serialization of Approved+Failed", status, grants, audits, refundRequired)
+		}
+	})
+
 	t.Run("B1 foreign paid amount marks pending order for refund", func(t *testing.T) {
 		const userID = "40000000-0000-4000-0000-000000000023"
 		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'b25-mismatch@example.test','B25 mismatch','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
