@@ -15,6 +15,9 @@ const (
 	SortPrice    Sort = "price"
 )
 
+// PublicCatalogSorts is the authoritative public allowlist; admin-only sorts stay separate.
+var PublicCatalogSorts = []Sort{SortRecent, SortTitle}
+
 type Query struct {
 	Limit  int
 	Offset int
@@ -30,7 +33,7 @@ type Page struct {
 
 // NewQuery validates a public catalog list query. The catalog offers two sorts.
 func NewQuery(limit, offset int, search, sort string) (Query, error) {
-	return newQuery(limit, offset, search, sort, SortRecent, SortTitle)
+	return newQuery(limit, offset, search, sort, PublicCatalogSorts...)
 }
 
 // NewAuthoringQuery validates an admin list query. Admin offers two sorts the public

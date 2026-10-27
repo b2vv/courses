@@ -123,8 +123,8 @@ type saveAdminCourseRequest struct {
 }
 
 type transitionAdminCourseRequest struct {
-	Status            *string `json:"status"`
-	ExpectedUpdatedAt *string `json:"expectedUpdatedAt"`
+	Status            *domain.Status `json:"status"`
+	ExpectedUpdatedAt *string        `json:"expectedUpdatedAt"`
 }
 
 type deleteAdminCourseRequest struct {
@@ -274,7 +274,7 @@ func (h *Handler) transitionAdminCourse(w http.ResponseWriter, r *http.Request) 
 		writeAdminError(w, r, domain.ErrInvalidRequest)
 		return
 	}
-	tree, err := h.authoring.Transition(r.Context(), actor, r.PathValue("id"), domain.Status(*request.Status), expectedUpdatedAt)
+	tree, err := h.authoring.Transition(r.Context(), actor, r.PathValue("id"), *request.Status, expectedUpdatedAt)
 	if err != nil {
 		writeAdminError(w, r, err)
 		return

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -26,6 +27,9 @@ const (
 	Published Status = "published"
 	Archived  Status = "archived"
 )
+
+// CourseStatuses is the complete course status set.
+var CourseStatuses = []Status{Draft, Published, Archived}
 
 type Course struct {
 	ID          string
@@ -71,7 +75,7 @@ func NewCourse(course Course) (Course, error) {
 	if !validID(course.ID) || ValidateSlug(course.Slug) != nil || !validText(course.Title, 200) || !validText(course.Summary, 500) || !validText(course.Description, 20000) {
 		return Course{}, ErrInvalidCourse
 	}
-	if course.Status != Draft && course.Status != Published && course.Status != Archived {
+	if !slices.Contains(CourseStatuses, course.Status) {
 		return Course{}, ErrInvalidCourse
 	}
 	if course.CreatedAt.IsZero() || course.UpdatedAt.Before(course.CreatedAt) {

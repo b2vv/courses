@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"unicode/utf8"
 )
 
@@ -43,6 +44,9 @@ const (
 	BlockHeading   BlockType = "heading"
 	BlockList      BlockType = "list"
 )
+
+// BlockTypes is the complete rich-text block discriminator set.
+var BlockTypes = []BlockType{BlockParagraph, BlockHeading, BlockList}
 
 type Mark string
 
@@ -191,6 +195,9 @@ func validateRichText(content RichText, textCount *int) error {
 }
 
 func validateDocumentBlock(block Block, textCount *int) error {
+	if !slices.Contains(BlockTypes, block.Type) {
+		return ErrInvalidLessonDocument
+	}
 	switch block.Type {
 	case BlockParagraph, BlockHeading:
 		if block.Ordered || block.Items != nil || block.Type == BlockParagraph && block.Level != 0 || block.Type == BlockHeading && block.Level != 2 && block.Level != 3 {
