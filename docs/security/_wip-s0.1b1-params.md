@@ -59,3 +59,10 @@ First three commands produced no stdout/stderr. `git diff --check` exit 0.
 
 ## ПИТАННЯ
 None. No missing or contradictory contract stopped implementation. Artifact regeneration intentionally produces identical bytes; no synthetic diff was manufactured.
+
+## ВЕРИФІКАЦІЯ Courses 13 (writer) — 2026-10-27, HEAD ac970b7
+Прогнав сам: gofmt/vet/build чисто; openapigen+course http тести ok; `TestCatalogOpenAPIFidelity` PASS
+явно (1.5s, не кеш) — зелений ПІСЛЯ видалення param-структури з overlay = доказ, що Params-з-Go
+відтворюють ту саму поверхню (watch-point Courses 2 виконано). M8 architecture ok. Overlay-params тепер
+лише metadata (min/max/default/description за name), без in:/type:/enum. sort-enum з domain.SortRecent/
+SortTitle. RouteBinding.Params []Param + type Param присутні. Q2b РОЗВ'ЯЗАНО. Готово на рев'ю Courses 2.
