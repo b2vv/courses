@@ -34,7 +34,7 @@ func TestErrorBoundaries(t *testing.T) {
 	for name, writer := range writers {
 		t.Run(name+"/unknown", func(t *testing.T) {
 			for _, err := range []error{errors.New("boom database=private user=private"), fmt.Errorf("query: %w", errors.New("boom")), errors.New("invalid_request"), errors.New("course_not_found"), errors.New("origin_forbidden")} {
-				assertResponse(t, writer, err, http.StatusServiceUnavailable, "dependency_unavailable")
+				assertResponse(t, writer, err, http.StatusInternalServerError, "internal_error")
 			}
 		})
 	}

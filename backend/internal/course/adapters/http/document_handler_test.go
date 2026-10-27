@@ -348,7 +348,7 @@ func TestDocumentErrorMapping(t *testing.T) {
 	}{
 		{domain.ErrInvalidLessonDocument, 400, "invalid_lesson_document"}, {domain.ErrInvalidRequest, 400, "invalid_request"}, {domain.ErrInvalidQuery, 400, "invalid_query"},
 		{domain.ErrEmailNotVerified, 403, "email_not_verified"}, {domain.ErrPurchaseRequired, 403, "course_purchase_required"}, {domain.ErrForbidden, 403, "forbidden"}, {domain.ErrCourseForbidden, 403, "course_forbidden"},
-		{domain.ErrLessonNotFound, 404, "lesson_not_found"}, {domain.ErrDocumentConflict, 409, "document_conflict"}, {domain.ErrDependencyUnavailable, 503, "dependency_unavailable"}, {errors.New("unexpected"), 503, "dependency_unavailable"},
+		{domain.ErrLessonNotFound, 404, "lesson_not_found"}, {domain.ErrDocumentConflict, 409, "document_conflict"}, {domain.ErrDependencyUnavailable, 503, "dependency_unavailable"}, {errors.New("unexpected"), 500, "internal_error"},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
 			repo, reader, actor := documentFixture()

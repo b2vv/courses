@@ -563,6 +563,6 @@ func writeAdminError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, domain.ErrDependencyUnavailable):
 		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "Course authoring is temporarily unavailable")
 	default:
-		httpserver.WriteError(w, r, http.StatusServiceUnavailable, "dependency_unavailable", "A dependency is unavailable")
+		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
 	}
 }
