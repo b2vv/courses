@@ -28,3 +28,24 @@ Scope/owner: доручення власника S0.1b-2, §16.2 + §16.4; од�
 ФАКТ: fixture доступний (`seededAdminWriteRepository`, `adminReadHandler`, `serveAdminJSON`/`serveAdminRawAs` відновлює ті самі request bytes після handler). Blocker — контракт, не fixture.
 
 Gates: gofmt / go vet / go build / scoped go test — **NOT_RUN** (STOP до реалізації). Request fidelity / ValidateRequest / regeneration — **NOT_IMPLEMENTED / NOT_RUN**. Код і generated/hand spec не змінені; комітів, merge, push немає. ДАЛІ: відповідь власника на nullability, потім продовження цього самого slice.
+
+## RESUME (для свіжої сесії після handoff — Codex НЕ відновлено, це наступна дія)
+Codex S0.1b-2 session id: `01a17e84-4953-7a41-8ce1-b62996482d93` (branch s0.0-spike).
+Рішення §16.10 ухвалено. Наступна дія: відновити Codex цією відповіддю (НЕ переробляти):
+`cd /Users/strelia/projects/courses && codex exec --approve-for-me resume 01a17e84-4953-7a41-8ce1-b62996482d93 "<ТЕКСТ НИЖЧЕ>" -o <scratch>/r.md > <scratch>/r.log 2>&1 < /dev/null` (у фоні).
+Текст відповіді (= §16.10 + кроки):
+1. Правило `*T→nullable` — RESPONSE-only; для REQUEST nullability вказівника = явне per-field рішення
+   (розширити NullableFields на request-поля), генератор fail-close на request-pointer без рішення;
+   контекст req/resp генератор знає з RouteBinding.Request vs Responses. required — за hand-контрактом/omitempty.
+2. transitionAdminCourseRequest (POST /admin/courses/{id}/status): обидва *string = явний non-null, required;
+   status enum [draft,published,archived] → overlay (як response status); expectedUpdatedAt→AdminTimestamp.
+3. Довести: fidelity на request-body + closure vs рукописний openapi.yaml (non-vacuous); ValidateRequest на
+   реальних байтах, що хендлер приймає (admin-фікстури) + негативні кейси (nil status/nil expectedUpdatedAt → FAIL)
+   = route two-layer (16.2 опція b).
+4. 16.4 optional-pointer: transition доводить non-null required шлях; + generator UNIT-тест на genuine-optional
+   (request `*T` з omitempty → nullable+optional).
+5. Структура з Go; overlay лише validation/prose; видалити будь-яку overlay-request-структуру в тому ж коміті;
+   fidelity зелений = доказ; regen openapi.generated.yaml (2-а генерація byte-identical).
+6. Гейти по порядку (gofmt/vet/build/test), реальний вивід. Малі коміти на s0.0-spike, trailers як було.
+7. Scope: лише цей request-route + request-conformance + generator request-nullability + optional-pointer unit test.
+Далі: writer-верифікація гейтів → пакет Courses 2 (per-slice) з акцентом на request-nullability handling.
