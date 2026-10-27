@@ -6,16 +6,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	coursehttp "courses/internal/course/adapters/http"
 	"courses/internal/course/domain"
 	identitydomain "courses/internal/identity/domain"
+	"courses/internal/openapispec"
 	"courses/internal/platform/openapigen"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/legacy"
 )
 
 func TestAdminStatusRequestMatchesGeneratedOpenAPI(t *testing.T) {
-	doc, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{coursehttp.OpenAPIContribution()}, filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
+	doc, err := openapigen.GenerateFromSource(openapispec.AllOpenAPIContributions(), filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}

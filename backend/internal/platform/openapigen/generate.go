@@ -267,6 +267,15 @@ func (g *generator) reflectBody(doc *openapi3.T, body any, request bool) (*opena
 			doc.Components.Schemas[name] = s
 		}
 	}
+	// The reflector keeps root arrays inline even with an explicit type name.
+	// Lift only explicitly named array roots; nested slices retain their shape.
+	if name, named := g.config.NameMap[t]; named && ref.Ref == "" && ref.Value != nil && ref.Value.Type.Is("array") {
+		if old, exists := doc.Components.Schemas[name]; exists && !sameJSON(old, ref) {
+			return nil, fmt.Errorf("conflicting schema %s", name)
+		}
+		doc.Components.Schemas[name] = ref
+		ref = &openapi3.SchemaRef{Ref: "#/components/schemas/" + name}
+	}
 	if t.Kind() == reflect.Pointer {
 		ref = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{ref}, Nullable: true}}
 	}

@@ -23,6 +23,17 @@ components:
             headers:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        GrantForbidden:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: Administrator permission is required to issue a grant.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         InternalError:
             content:
                 application/json:
@@ -34,12 +45,34 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        InvalidRequest:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The request path, query or body is missing, malformed, oversized or carries unexpected members.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         NotFound:
             content:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
             description: Course was not found.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        Unauthenticated:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: Credentials were rejected or no usable session was presented.
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/NoStore'
@@ -71,6 +104,219 @@ components:
             required:
                 - expectedUpdatedAt
                 - status
+            type: object
+        AdminStatsCourses:
+            additionalProperties: false
+            properties:
+                archived:
+                    type: integer
+                draft:
+                    type: integer
+                published:
+                    type: integer
+            required:
+                - archived
+                - draft
+                - published
+            type: object
+        AdminStatsEngagement:
+            additionalProperties: false
+            properties:
+                activeLearners30d:
+                    type: integer
+                avgProgress:
+                    nullable: true
+                    type: number
+                completions:
+                    type: integer
+            required:
+                - activeLearners30d
+                - avgProgress
+                - completions
+            type: object
+        AdminStatsGrants:
+            additionalProperties: false
+            properties:
+                active:
+                    type: integer
+                blocked:
+                    type: integer
+                revoked:
+                    type: integer
+            required:
+                - active
+                - blocked
+                - revoked
+            type: object
+        AdminStatsInstructor:
+            additionalProperties: false
+            properties:
+                activeEnrollments:
+                    type: integer
+                displayName:
+                    type: string
+                instructorId:
+                    format: uuid
+                    type: string
+                publishedCourses:
+                    type: integer
+                revenueMinorUAH:
+                    format: int64
+                    type: integer
+            required:
+                - activeEnrollments
+                - displayName
+                - instructorId
+                - publishedCourses
+                - revenueMinorUAH
+            type: object
+        AdminStatsMedia:
+            additionalProperties: false
+            properties:
+                avgDurationSeconds:
+                    nullable: true
+                    type: number
+                failed:
+                    type: integer
+                inProgress:
+                    type: integer
+                ready:
+                    type: integer
+                totalDurationSeconds:
+                    type: number
+                withDurationCount:
+                    type: integer
+            required:
+                - avgDurationSeconds
+                - failed
+                - inProgress
+                - ready
+                - totalDurationSeconds
+                - withDurationCount
+            type: object
+        AdminStatsOrders:
+            additionalProperties: false
+            properties:
+                failed:
+                    type: integer
+                paid:
+                    type: integer
+                pending:
+                    type: integer
+                revenueMinorUAH:
+                    format: int64
+                    type: integer
+            required:
+                - failed
+                - paid
+                - pending
+                - revenueMinorUAH
+            type: object
+        AdminStatsPlatform:
+            additionalProperties: false
+            properties:
+                singleInstructor:
+                    type: boolean
+            required:
+                - singleInstructor
+            type: object
+        AdminStatsReports:
+            additionalProperties: false
+            properties:
+                open:
+                    type: integer
+                resolved:
+                    type: integer
+            required:
+                - open
+                - resolved
+            type: object
+        AdminStatsRole:
+            additionalProperties: false
+            properties:
+                admin:
+                    type: integer
+                instructor:
+                    type: integer
+                student:
+                    type: integer
+            required:
+                - admin
+                - instructor
+                - student
+            type: object
+        AdminStatsSnapshot:
+            additionalProperties: false
+            properties:
+                courses:
+                    $ref: '#/components/schemas/AdminStatsCourses'
+                engagement:
+                    $ref: '#/components/schemas/AdminStatsEngagement'
+                grants:
+                    $ref: '#/components/schemas/AdminStatsGrants'
+                instructors:
+                    items:
+                        $ref: '#/components/schemas/AdminStatsInstructor'
+                    type: array
+                media:
+                    $ref: '#/components/schemas/AdminStatsMedia'
+                orders:
+                    $ref: '#/components/schemas/AdminStatsOrders'
+                platform:
+                    $ref: '#/components/schemas/AdminStatsPlatform'
+                reports:
+                    $ref: '#/components/schemas/AdminStatsReports'
+                users:
+                    $ref: '#/components/schemas/AdminStatsUsers'
+            required:
+                - courses
+                - engagement
+                - grants
+                - instructors
+                - media
+                - orders
+                - platform
+                - reports
+                - users
+            type: object
+        AdminStatsTimeseries:
+            items:
+                $ref: '#/components/schemas/AdminStatsTimeseriesPoint'
+            type: array
+        AdminStatsTimeseriesPoint:
+            additionalProperties: false
+            properties:
+                bucketStart:
+                    format: date-time
+                    type: string
+                value:
+                    type: number
+            required:
+                - bucketStart
+                - value
+            type: object
+        AdminStatsUsers:
+            additionalProperties: false
+            properties:
+                active:
+                    type: integer
+                blocked:
+                    type: integer
+                byRole:
+                    $ref: '#/components/schemas/AdminStatsRole'
+                deleted:
+                    type: integer
+                twoFactor:
+                    type: integer
+                verified:
+                    type: integer
+            required:
+                - active
+                - blocked
+                - byRole
+                - deleted
+                - twoFactor
+                - verified
             type: object
         AdminTimestamp:
             description: RFC 3339 timestamp carrying exactly six fractional-second digits.
@@ -484,6 +730,89 @@ paths:
             responses:
                 default:
                     description: Response schemas are not generated for this request-only binding.
+    /api/v1/admin/stats:
+        get:
+            description: Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
+            operationId: getAdminStats
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminStatsSnapshot'
+                    description: The platform snapshot.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/GrantForbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Platform statistics snapshot
+    /api/v1/admin/stats/timeseries:
+        get:
+            description: Admin-only. Buckets one metric (signups, enrollments, orders or revenue) by day or week over a UTC window. Revenue buckets by paid time, enrollments by grant time, the rest by creation time. An unparseable or inverted range is invalid_range; a window wider than the bucket cap is range_too_wide; an unknown metric or bucket is rejected. Responses are never cached.
+            operationId: getAdminStatsTimeseries
+            parameters:
+                - in: query
+                  name: bucket
+                  required: true
+                  schema:
+                    enum:
+                        - day
+                        - week
+                    type: string
+                - description: Inclusive RFC 3339 start; defaults to `to` minus 30 days.
+                  in: query
+                  name: from
+                  schema:
+                    format: date-time
+                    type: string
+                - in: query
+                  name: metric
+                  required: true
+                  schema:
+                    enum:
+                        - signups
+                        - enrollments
+                        - orders
+                        - revenue
+                    type: string
+                - description: Inclusive RFC 3339 end; defaults to now.
+                  in: query
+                  name: to
+                  schema:
+                    format: date-time
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminStatsTimeseries'
+                    description: Ordered timeseries buckets.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/GrantForbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Platform statistics timeseries
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.

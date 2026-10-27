@@ -448,3 +448,90 @@ func TestParameterFormatMetadata(t *testing.T) {
 		t.Fatal("format lost")
 	}
 }
+
+func TestNamedRootSlice(t *testing.T) {
+	path := overlay(t, "{}")
+	inline, err := Generate([]ModuleContribution{contribution([]child{})}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inlineSchema := inline.Paths.Value("/examples").Get.Responses.Value("200").Value.Content["application/json"].Schema
+	if inlineSchema.Ref != "" || !inlineSchema.Value.Type.Is("array") {
+		t.Fatal("baseline is not an inline array")
+	}
+	c := contribution([]child{})
+	c.NameMap = map[reflect.Type]string{reflect.TypeFor[[]child](): "Children"}
+	generate := func() *openapi3.T {
+		t.Helper()
+		doc, err := Generate([]ModuleContribution{c}, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	doc := generate()
+	root := doc.Paths.Value("/examples").Get.Responses.Value("200").Value.Content["application/json"].Schema
+	if root.Ref != "#/components/schemas/Children" {
+		t.Fatalf("root ref = %q", root.Ref)
+	}
+	component := doc.Components.Schemas["Children"]
+	if component == nil || !sameJSON(component, inlineSchema) {
+		t.Fatal("named component differs from reflected inline array")
+	}
+	first, err := MarshalYAML(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := MarshalYAML(generate())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("named slice regeneration changed bytes")
+	}
+	// A different contributor owns the same component name with a conflicting shape.
+	other := ModuleContribution{Components: openapi3.Components{Schemas: openapi3.Schemas{"Children": {Value: openapi3.NewStringSchema()}}}}
+	if _, err := Generate([]ModuleContribution{c, other}, path); err == nil || !strings.Contains(err.Error(), "conflicting schema Children") {
+		t.Fatalf("conflicting component accepted: %v", err)
+	}
+	// Identical declarations remain compatible with the existing sameJSON rule.
+	other.Components.Schemas["Children"] = inlineSchema
+	if _, err := Generate([]ModuleContribution{c, other}, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNamedRootSlicePreservesPointerAndStructRoots(t *testing.T) {
+	path := overlay(t, "{}")
+	children := []child{}
+	for _, tc := range []struct {
+		name    string
+		body    any
+		names   map[reflect.Type]string
+		ref     string
+		pointer bool
+	}{
+		{"struct", child{}, nil, "#/components/schemas/child", false},
+		{"pointer struct", &child{}, nil, "#/components/schemas/child", true},
+		{"pointer named slice", &children, map[reflect.Type]string{reflect.TypeFor[*[]child](): "Children"}, "#/components/schemas/Children", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := contribution(tc.body)
+			c.NameMap = tc.names
+			doc, err := Generate([]ModuleContribution{c}, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := doc.Paths.Value("/examples").Get.Responses.Value("200").Value.Content["application/json"].Schema
+			if tc.pointer {
+				if root.Value == nil || !root.Value.Nullable || len(root.Value.AllOf) != 1 {
+					t.Fatal("nullable pointer wrapper lost")
+				}
+				root = root.Value.AllOf[0]
+			}
+			if root.Ref != tc.ref {
+				t.Fatalf("root ref=%q want=%q", root.Ref, tc.ref)
+			}
+		})
+	}
+}
