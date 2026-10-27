@@ -60,3 +60,11 @@ ok  	courses/internal/course/domain	1.836s
 РЕЗУЛЬТАТ: реалізовано core generator, module-owned catalog contribution, curated overlay, parallel generated doc, fail-closed/determinism/fidelity/real-handler-response tests. Reconciled: component pointer nullability; exact Go↔schema names; CourseDetail narrowing; inline rating vs standalone Rating; NullablePrice wrapper; inline ErrorDetail. Жодної зміни ручного spec або послаблення fidelity. Run 1 implementation/gates PASS; незалежний Courses 2 review ще PENDING (власник передає пакет). S0.1 у цілому НЕ закрито: parser/error-code source coverage, request-layer decision/request-DTO fidelity, інші routes/modules і full coverage-gate залишаються наступним runs за §16.7. Validation keywords та тимчасовий error-code enum overlay-carried і НЕ drift-proof. External checkpoint веде власник; pending STOP питань після уточнення немає.
 
 ФАКТ: core закомічено `bc49613` — `feat(openapigen): add deterministic response generator core (SA10/S0.1)` із заданими двома trailers. Sandbox спочатку відмовив запис .git/index.lock; повтор через approved escalation завершився EXIT=0. Другий logical commit включає catalog contribution/tests, overlay/generated artifact і цей work file. Push/merge/перемикання гілок не виконуються.
+
+## ВЕРИФІКАЦІЯ Courses 13 (writer) — 2026-10-27, HEAD 534542e
+Незалежно прогнав (не за словом Codex): gofmt чисто, `go vet` 0, `go build ./...` чисто,
+`go test ./internal/platform/openapigen/... ./internal/course/adapters/http/...` ok,
+`go test ./platform/architecture/...` ok (M8 цілий). Fidelity-тест НЕ вакуумний: вантажить
+рукописний openapi.yaml і deep-порівнює catalog-замикання; Layer-B ганяє реальні байти хендлера
+через ValidateResponse (5 кейсів); regenerate-twice byte-identical. openapigen імпортує 0 internal-модулів.
+Два канали Codex спрацювали: STOP (entry-vs-completion §16.7) + ARGUE (slice nil-рішення). Готово на рев'ю Courses 2.
