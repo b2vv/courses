@@ -4281,10 +4281,15 @@ export type resendVerificationResponse401 = {
   status: 401
 }
 
+export type resendVerificationResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
 export type resendVerificationResponseSuccess = (resendVerificationResponse204) & {
   headers: Headers;
 };
-export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401) & {
+export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401 | resendVerificationResponse429) & {
   headers: Headers;
 };
 
@@ -4298,6 +4303,9 @@ export const getResendVerificationUrl = () => {
   return `${apiOrigin()}/api/v1/auth/resend-verification`
 }
 
+/**
+ * Returns 204 whether or not the email identifies an account.
+ */
 export const resendVerification = async (optionalEmailRequest: OptionalEmailRequest, options?: RequestInit): Promise<resendVerificationResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {

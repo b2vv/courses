@@ -106,10 +106,24 @@ func (accounts *Accounts) VerifyEmail(ctx context.Context, rawToken string) erro
 	return accounts.users.SetEmailVerified(ctx, userID)
 }
 
-func (accounts *Accounts) ResendVerification(ctx context.Context, identifier, lang string) (bool, error) {
+func (accounts *Accounts) ResendVerification(ctx context.Context, identifier, ip, lang string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
+	// SA12/M12: rate-limit before the lookup, and treat a missing account as a
+	// neutral no-op — mirror RequestPasswordReset so resend cannot be a
+	// yes/no enumeration oracle.
+	if err := accounts.allow(ctx, resendVerificationRateLimitKey(identifier, ip)); err != nil {
+		return false, err
+	}
+	// The lookup matches the stored normalized email exactly. A user ID has no
+	// "@" and fails NormalizeEmail, so the authenticated path passes unchanged.
+	if normalized, err := domain.NormalizeEmail(identifier); err == nil {
+		identifier = normalized
+	}
 	user, err := accounts.reader.FindUser(ctx, identifier)
+	if errors.Is(err, domain.ErrUserNotFound) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -286,6 +300,10 @@ func (accounts *Accounts) allow(ctx context.Context, key string) error {
 
 func passwordResetRateLimitKey(email, ip string) string {
 	return "password-reset:" + strings.ToLower(strings.TrimSpace(email)) + ":" + ip
+}
+
+func resendVerificationRateLimitKey(identifier, ip string) string {
+	return "resend-verification:" + strings.ToLower(strings.TrimSpace(identifier)) + ":" + ip
 }
 
 func (accounts *Accounts) timestamp() time.Time {
