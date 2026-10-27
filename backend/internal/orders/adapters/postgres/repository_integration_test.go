@@ -223,8 +223,13 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("SA09 O-F2 a callback delivered twice concurrently settles exactly once", func(t *testing.T) {
 		// Both deliveries must pass the payment_events EXISTS dedupe before either commits — the
 		// interleaving the inbox alone cannot stop. A holder transaction locks the order row, both
-		// Apply calls queue on FOR UPDATE (observed in pg_stat_activity, not slept for), then the
-		// holder releases. The order lock serializes them and ON CONFLICT drops the second insert.
+		// Apply calls queue on FOR UPDATE (observed via pg_blocking_pids, not slept for), then the
+		// holder releases. Exactly-once rests on UNIQUE(provider,event_id) + ON CONFLICT: the second
+		// delivery short-circuits on ErrNoRows before it touches the order or the grant. FOR UPDATE
+		// serializes the order/grant read-modify-write; with ON CONFLICT intact, dropping it alone
+		// yields no double settle (the first delivery then blocks on the holder at UPDATE orders
+		// instead), so this test does not — and is not meant to — catch that mutation.
+		// Needs 4 pool connections at once (holder, two appliers, poller); pgxpool's floor is 4.
 		const userID = "40000000-0000-4000-8000-000000000026"
 		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'of2-race@example.test','O-F2 race','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
 			t.Fatal(err)
@@ -260,18 +265,24 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 				errs[index] = repository.Apply(ctx, event, newID)
 			}(index, subtestIDs(prefix))
 		}
+		release := func() {
+			_ = holder.Rollback(ctx)
+			wg.Wait()
+		}
 		deadline := time.Now().Add(15 * time.Second)
 		for {
+			// Counted by lock state, not by SQL text, so a reformatted Apply query still matches.
+			// Subtests run serially, so no sibling backend is blocked in this database meanwhile.
 			var waiting int
-			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM orders WHERE id=%FOR UPDATE%'`).Scan(&waiting); err != nil {
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND cardinality(pg_blocking_pids(pid))>0`).Scan(&waiting); err != nil {
+				release()
 				t.Fatal(err)
 			}
 			if waiting == 2 {
 				break
 			}
 			if time.Now().After(deadline) {
-				_ = holder.Rollback(ctx)
-				wg.Wait()
+				release()
 				t.Fatalf("waiting on the order lock=%d, want both deliveries queued (errors=%v)", waiting, errs)
 			}
 			time.Sleep(20 * time.Millisecond)
