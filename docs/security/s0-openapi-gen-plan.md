@@ -479,3 +479,13 @@ S0.1 architecture.
 **Status:** S0.0 measurement sound; conclusions corrected (16.1–16.4). F2 settled (Option 1). One open
 discussion: F1 re-verdict (16.3). S0.1 entry conditions = 16.1 parser forms + 16.2 request-layer decision
 + 16.4 request-DTO fidelity coverage.
+
+**16.6 Final verdict (Courses 2, 2026-10-27): S0.0 PASS, 0 blocking.** F1 withdrawn after line-by-line
+hand-spec check (`SaveLessonDocumentRequest`:2208 and `LessonDocumentDraft`:2195 both `$ref` the one
+`LessonDocument`:2130 → the single permissive `LessonBlock`:2168; no strict/oneOf block schema exists
+request or response). Accepted: 16.1, 16.2 (systemic request single-layer survives independently of Block),
+16.3 (Block → `BlockType` string-enum + `json.Marshaler` assertion as guard), 16.4, 16.5/F2 Option 1. Q3
+clean. **Cleared for S0.1 under the 16.1/16.2/16.4/16.5/16.3 entry conditions + owner go.** Per-slice code
+review returns to Courses 2. Future-only note: if S0.1 ever makes the spec stricter than the document's Go
+validator (discriminated `oneOf` by block type), that strict schema becomes a new surface and 16.2's
+request-conformance must cover it — not now.
