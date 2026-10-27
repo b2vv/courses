@@ -489,3 +489,17 @@ clean. **Cleared for S0.1 under the 16.1/16.2/16.4/16.5/16.3 entry conditions + 
 review returns to Courses 2. Future-only note: if S0.1 ever makes the spec stricter than the document's Go
 validator (discriminated `oneOf` by block type), that strict schema becomes a new surface and 16.2's
 request-conformance must cover it — not now.
+
+**16.7 S0.1 staging clarification (2026-10-27, Codex STOP on brief↔plan conflict).** Codex (Run 1) stopped
+pre-code: the brief scoped Run 1 to the course **catalog** (GET /courses, GET /courses/{slug}), but §16's
+"S0.1 entry conditions" wording reads as *preconditions to start*. **Clarified:** 16.1 (error-code parser),
+16.2 (request-layer), 16.4 (≥1 request DTO in fidelity) are **S0.1 completion-gate conditions, verified by
+Courses 2's per-slice review across S0.1's staged runs (N2: course → S0.1b…S0.1n) before the S0.2 cutover —
+not line-1 preconditions of the first run.** This changes no *what*: every condition stays mandatory before
+S0.1 closes. Run 1 = catalog-only (response surface) is in-scope. Consistent with Courses 2's own framing
+("checklist for S0.1") and N2's staged slices.
+Also adopted (Codex ARGUE channel, correct): the brief's "no nullable slices in catalog" was imprecise —
+§11.2 needs an **explicit** nil/non-nil decision per `[]T` field. Catalog has three
+(`pageDTO.Items`→CoursePage.items, `courseDetailDTO.Program`, `programModuleDTO.Lessons`); all are
+**non-nullable, required** in the hand spec (no `nullable:true`; handler builds with `make([]T,0)`), so each
+is encoded as an **explicit non-null** decision — a `[]T` added later with no decision still fails closed.
