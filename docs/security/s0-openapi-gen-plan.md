@@ -370,3 +370,52 @@ domain/errors.go code ∈ emitted enum. Error-code fidelity stays **single-layer
 review of this outcome (existing_session), then S0.1 (course end-to-end behind parallel file).** The
 spike tests are throwaway (build-tagged, no build wired) — delete or evolve into the real generator's
 fidelity test in S0.1.
+
+## 15. F2 generator-architecture options (owner-requested +/− + pitfalls, 2026-10-27)
+
+Owner chose: Courses 2 reviews §14 first; direction not fixed until their verdict. This is the decision
+input. **Key de-escalation found while writing it:** the constraint is NOT "reflection can't see
+unexported types." openapi3gen reflects a `reflect.Type`/`any` **value**; exportedness of the type
+*identifier* is a compile-time source concern, not a runtime reflection one, and `courseDTO`'s **fields**
+are all exported (`ID`, `Slug`, …). So any package handed a `courseDTO{}` value reflects it fine. The
+real constraint is only that a central registry **cannot name `courseDTO` in its own source** — it must
+**receive values** built inside the owning package. That difference is what separates the two options.
+
+**Option 1 — per-module contribution (each adapter package hands values to a thin central collector).**
+Each `*/adapters/http` package gets a small `openapi_contract.go` that builds its route→type bindings
+(it can construct its own unexported DTOs) and registers them with a `platform/openapigen` collector it
+is given. A top-level generator (cmd or test) runs every module's contribution, aggregates, applies the
+override surface (§11.2), and emits. The mux cross-check runs **per module**.
+- **+** DTOs stay unexported — encapsulation and the M8 isolation rule (just merged in #80) are
+  untouched; no module can reach another's transport types. `platform/openapigen` is infra (like
+  `httpserver`); modules may import it, it imports no module → no cycle, no ADR-013 breach.
+- **+** Each module owns its contract next to its handlers; a route and its schema binding live together.
+- **−** Touches all ~8 modules (one contract file each) and adds a per-handler/`Register` seam — the
+  enlarged-signature cost the plan disliked about approach-B, in a milder form (a separate file, not a
+  changed `Register`).
+- **−** The "one Go file lists all 85 routes" simplicity of §4-A is gone; the route list is distributed.
+- **Pitfalls:** (1) a new route added with no contract entry must **fail** the per-module mux cross-check
+  — a global-only cross-check would let a module under-report silently (this is the §11.1 Layer-B
+  coverage-gate's job; it must be scoped per module, not just per document). (2) The collector takes
+  `any`/`reflect.Type`; a module passing the wrong value (pointer vs value, `*priceDTO` vs `priceDTO`)
+  shifts nullability — needs a typed helper so the binding is checked at compile time where possible.
+  (3) ordering: aggregation across modules must sort by (path, method) or the diff is unstable (§11.4).
+
+**Option 3 — export the DTOs, keep the central §4-A registry.** Rename `courseDTO`→`CourseDTO` across
+modules; one registry file imports every `adapters/http` package and lists the exported types.
+- **+** §4-A as originally planned: a single central file, no per-module seam, the simplest collector.
+- **−** Exporting transport DTOs widens each module's public API for no domain reason, and **directly
+  invites the cross-module coupling M8 (#80) exists to forbid**: another module could now import
+  `course/adapters/http.CourseDTO`. We'd have to add a boundaries_test rule banning exactly that — fighting
+  our own just-merged isolation gate.
+- **−** Large mechanical rename diff across all modules; exported names are now a maintenance contract.
+- **Pitfalls:** (1) a central `openapigen` registry importing all 8 `adapters/http` packages is a package
+  that depends on every module — fine only if it is a **leaf tool** (cmd/), never imported back by a
+  module, or it cycles. (2) Export makes misuse compile cleanly, so the only guard is a test — strictly
+  weaker than "unexported, cannot be named."
+
+**Recommendation (pending Courses 2):** Option 1. It preserves the M8 isolation we just shipped, keeps
+DTOs encapsulated, and the de-escalation above makes its collector thin (values in, not a type rewrite).
+Its real cost is a per-module contract file + a per-module coverage-gate scope — both proportionate.
+Option 3's central-file simplicity is bought by weakening module isolation, which is the wrong trade a
+week after M8. **Not fixed until Courses 2's §14 verdict.**
