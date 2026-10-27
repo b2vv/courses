@@ -17,7 +17,7 @@ import (
 // Catalog Layer B exercises real handler bytes against freshly generated schemas.
 // The all-module mux/coverage gate is still a later S0.1 run.
 func TestCatalogHandlersMatchGeneratedOpenAPI(t *testing.T) {
-	doc, err := openapigen.Generate([]openapigen.ModuleContribution{coursehttp.OpenAPIContribution()}, filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"))
+	doc, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{coursehttp.OpenAPIContribution()}, filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}

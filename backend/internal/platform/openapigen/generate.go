@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"courses/platform/httpserver"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3gen"
 	"github.com/oasdiff/yaml"
@@ -56,16 +58,31 @@ type ModuleContribution struct {
 }
 
 type generator struct {
-	config  ModuleContribution
-	names   map[string]reflect.Type
-	seen    map[reflect.Type]bool
-	request bool
+	errorCodes []string
+	config     ModuleContribution
+	names      map[string]reflect.Type
+	seen       map[reflect.Type]bool
+	request    bool
 }
 
 // Generate builds JSON request and response bindings. Request-only bindings carry
 // a descriptive default response without claiming a generated response schema.
 func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, error) {
-	g := generator{config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, names: map[string]reflect.Type{}, seen: map[reflect.Type]bool{}}
+	return generate(contribs, overlayPath, nil)
+}
+
+// GenerateFromSource resolves the complete production error surface before
+// generating any schemas. Unknown expressions/provenance prevent generation.
+func GenerateFromSource(contribs []ModuleContribution, overlayPath, backendRoot string) (*openapi3.T, error) {
+	census, err := ScanErrorCodes(backendRoot, TransportErrorCodes())
+	if err != nil {
+		return nil, err
+	}
+	return generate(contribs, overlayPath, census.Codes)
+}
+
+func generate(contribs []ModuleContribution, overlayPath string, errorCodes []string) (*openapi3.T, error) {
+	g := generator{errorCodes: errorCodes, config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, names: map[string]reflect.Type{}, seen: map[reflect.Type]bool{}}
 	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "API", Version: "1.0.0"}, Paths: openapi3.NewPaths(), Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}}}
 	for _, c := range contribs {
 		if err := mergeRegistry(g.config.Enums, c.Enums); err != nil {
@@ -404,6 +421,18 @@ func (g *generator) customize(_ string, t reflect.Type, _ reflect.StructTag, s *
 	if values, ok := g.config.Enums[t]; ok {
 		for _, value := range values {
 			s.Enum = append(s.Enum, value)
+		}
+	}
+	if t == reflect.TypeFor[httpserver.ErrorDetail]() {
+		if len(g.errorCodes) == 0 {
+			return fmt.Errorf("ErrorDetail requires resolved Go error codes: use GenerateFromSource")
+		}
+		code := s.Properties["code"]
+		if code == nil || code.Value == nil {
+			return fmt.Errorf("ErrorDetail.code is missing")
+		}
+		for _, value := range g.errorCodes {
+			code.Value.Enum = append(code.Value.Enum, value)
 		}
 	}
 	if overridden || t.Kind() != reflect.Struct {

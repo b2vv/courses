@@ -15,7 +15,7 @@ import (
 )
 
 func TestAdminStatusRequestMatchesGeneratedOpenAPI(t *testing.T) {
-	doc, err := openapigen.Generate([]openapigen.ModuleContribution{coursehttp.OpenAPIContribution()}, filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"))
+	doc, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{coursehttp.OpenAPIContribution()}, filepath.Join("..", "..", "..", "..", "openapi", "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}

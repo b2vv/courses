@@ -19,7 +19,7 @@ import (
 // require the checked-in artifact to match; neither mode writes the hand spec.
 func TestCatalogOpenAPIFidelity(t *testing.T) {
 	dir := filepath.Join("..", "..", "..", "..", "openapi")
-	generated, err := openapigen.Generate([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"))
+	generated, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,11 +37,27 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	if diff := firstDifference("$", got, want); diff != "" {
 		t.Fatal(diff)
 	}
+	// Prove that the comparison includes the error enum through the response ref
+	// closure. Removing any emitted member must make this exact fidelity gate red.
+	schemas := got["components"].(map[string]any)["schemas"].(map[string]any)
+	errorSchema := schemas["ErrorResponse"].(map[string]any)
+	errorObject := errorSchema["properties"].(map[string]any)["error"].(map[string]any)
+	code := errorObject["properties"].(map[string]any)["code"].(map[string]any)
+	values := code["enum"].([]any)
+	if len(values) == 0 {
+		t.Fatal("vacuous error-code fidelity")
+	}
+	code["enum"] = values[1:]
+	if diff := firstDifference("$", got, want); diff == "" {
+		t.Fatal("error enum mutation escaped fidelity")
+	}
+	code["enum"] = values
+	t.Logf("error enum ref-closure mutation detected; %d emitted codes compared", len(values))
 	first, err := openapigen.MarshalYAML(generated)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := openapigen.Generate([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"))
+	again, err := openapigen.GenerateFromSource([]openapigen.ModuleContribution{OpenAPIContribution()}, filepath.Join(dir, "openapi.overlay.yaml"), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
