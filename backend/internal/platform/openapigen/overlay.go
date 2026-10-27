@@ -80,6 +80,10 @@ func mergeOverlay(dst, patch, original map[string]any, path []string) error {
 	sort.Strings(keys)
 	for _, key := range keys {
 		value := patch[key]
+		if key == "enum" && len(path) > 0 && path[len(path)-1] == "code" &&
+			(strings.Contains(strings.Join(path, "/"), "/ErrorResponse/") || strings.Contains(strings.Join(path, "/"), "/ErrorDetail/")) {
+			return fmt.Errorf("error-code enum must come from Go, not overlay")
+		}
 		if key == "$ref" && value == nil {
 			continue
 		}
