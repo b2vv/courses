@@ -641,7 +641,7 @@ func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
 
 func writeListError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("lesson_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "lesson_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -649,7 +649,7 @@ func writeListError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writePublishError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("lesson_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "lesson_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -657,7 +657,7 @@ func writePublishError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeMutationError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("comment_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "comment_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -665,7 +665,7 @@ func writeMutationError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeReportError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("comment_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "comment_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -673,21 +673,21 @@ func writeReportError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeTeachListError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "course_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
 }
 func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFound string) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New(notFound))
+		writeErrorCode(w, r, http.StatusNotFound, notFound)
 		return
 	}
 	writeError(w, r, statusFor(err), err)
 }
 func writeParticipantReportError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "course_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -703,13 +703,82 @@ func statusFor(err error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest), errors.Is(err, domain.ErrReviewInvalid), errors.Is(err, domain.ErrReportInvalid):
 		return http.StatusBadRequest
-	default:
+	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusBadRequest
+	default:
+		return http.StatusServiceUnavailable
 	}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
-	code := err.Error()
+	code := "dependency_unavailable"
+	switch {
+	case errors.Is(err, domain.ErrBodyInvalid):
+		code = "comment_body_invalid"
+	case errors.Is(err, domain.ErrPositionInvalid):
+		code = "comment_position_invalid"
+	case errors.Is(err, domain.ErrParentInvalid):
+		code = "comment_parent_invalid"
+	case errors.Is(err, domain.ErrThreadFull):
+		code = "comment_thread_full"
+	case errors.Is(err, domain.ErrInvalidCursor):
+		code = "comment_cursor_invalid"
+	case errors.Is(err, domain.ErrNotFound):
+		code = "not_found"
+	case errors.Is(err, domain.ErrDependencyUnavailable):
+		code = "dependency_unavailable"
+	case errors.Is(err, domain.ErrForbidden):
+		code = "course_forbidden"
+	case errors.Is(err, domain.ErrPurchaseRequired):
+		code = "course_purchase_required"
+	case errors.Is(err, domain.ErrEnrollmentRequired):
+		code = "enrollment_required"
+	case errors.Is(err, domain.ErrEnrollmentBlocked):
+		code = "enrollment_blocked"
+	case errors.Is(err, domain.ErrInvalidRequest):
+		code = "invalid_request"
+	case errors.Is(err, domain.ErrReportOwnComment):
+		code = "report_own_comment"
+	case errors.Is(err, domain.ErrReviewOwnerForbidden):
+		code = "review_owner_forbidden"
+	case errors.Is(err, domain.ErrReviewNotAvailable):
+		code = "review_not_available"
+	case errors.Is(err, domain.ErrReviewPurchaseRequired):
+		code = "review_purchase_required"
+	case errors.Is(err, domain.ErrReviewNotStarted):
+		code = "review_not_started"
+	case errors.Is(err, domain.ErrReviewInvalid):
+		code = "review_invalid"
+	case errors.Is(err, domain.ErrReviewAlreadyExists):
+		code = "review_already_exists"
+	case errors.Is(err, domain.ErrReviewRemoved):
+		code = "review_removed"
+	case errors.Is(err, domain.ErrReportOwnReview):
+		code = "report_own_review"
+	case errors.Is(err, domain.ErrReviewModerationForbidden):
+		code = "review_moderation_forbidden"
+	case errors.Is(err, domain.ErrReportSelf):
+		code = "report_own_person"
+	case errors.Is(err, domain.ErrReportInvalid):
+		code = "report_invalid"
+	case errors.Is(err, domain.ErrReportForbidden):
+		code = "report_forbidden"
+	case errors.Is(err, domain.ErrReportDuplicate):
+		code = "report_already_open"
+	case errors.Is(err, application.ErrCommentForbidden):
+		code = "comment_forbidden"
+	case errors.Is(err, application.ErrCommentRemoved):
+		code = "comment_removed"
+	case errors.Is(err, application.ErrEmailNotVerified):
+		code = "email_not_verified"
+	default:
+		status = http.StatusServiceUnavailable
+	}
+	writeErrorCode(w, r, status, code)
+}
+
+// writeErrorCode renders only canonical business codes and static transport mappings.
+func writeErrorCode(w http.ResponseWriter, r *http.Request, status int, code string) {
 	message := "Request is not valid"
 	switch code {
 	case "course_purchase_required":
