@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -216,6 +217,84 @@ func TestOrdersRepositoryAgainstPostgreSQL(t *testing.T) {
 		var pending int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE user_id=$1::text::uuid AND course_id=$2::text::uuid AND status='pending'`, userID, integrationCourseID).Scan(&pending); err != nil || pending != 1 {
 			t.Fatalf("pending orders=%d error=%v, want exactly one", pending, err)
+		}
+	})
+
+	t.Run("SA09 O-F2 a callback delivered twice concurrently settles exactly once", func(t *testing.T) {
+		// Both deliveries must pass the payment_events EXISTS dedupe before either commits — the
+		// interleaving the inbox alone cannot stop. A holder transaction locks the order row, both
+		// Apply calls queue on FOR UPDATE (observed in pg_stat_activity, not slept for), then the
+		// holder releases. The order lock serializes them and ON CONFLICT drops the second insert.
+		const userID = "40000000-0000-4000-8000-000000000026"
+		if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash) VALUES($1,'of2-race@example.test','O-F2 race','student','$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNhbHQ$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is')`, userID); err != nil {
+			t.Fatal(err)
+		}
+		amount, err := domain.NewMoney("50000", "UAH")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending, err := domain.NewOrder(subtestIDs("b6")(), userID, integrationCourseID, amount, "of2-race", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		order, err := repository.Create(ctx, pending)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event := domain.PaymentEvent{Provider: "wayforpay", EventID: order.ID() + ":Approved", OrderID: order.ID(), Type: domain.PaymentSucceeded, Amount: amount, ReceivedAt: now.Add(time.Minute)}
+
+		holder, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = holder.Rollback(ctx) }()
+		if _, err := holder.Exec(ctx, `SELECT id FROM orders WHERE id=$1::text::uuid FOR UPDATE`, order.ID()); err != nil {
+			t.Fatal(err)
+		}
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		for index, prefix := range []string{"b7", "b8"} {
+			wg.Add(1)
+			go func(index int, newID func() string) {
+				defer wg.Done()
+				errs[index] = repository.Apply(ctx, event, newID)
+			}(index, subtestIDs(prefix))
+		}
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			var waiting int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM orders WHERE id=%FOR UPDATE%'`).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting == 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				_ = holder.Rollback(ctx)
+				wg.Wait()
+				t.Fatalf("waiting on the order lock=%d, want both deliveries queued (errors=%v)", waiting, errs)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if err := holder.Rollback(ctx); err != nil {
+			t.Fatal(err)
+		}
+		wg.Wait()
+		if errs[0] != nil || errs[1] != nil {
+			t.Fatalf("apply errors=%v, want both deliveries acknowledged", errs)
+		}
+		var events, grants, audits int
+		var status string
+		var refundRequired bool
+		if err := pool.QueryRow(ctx, `SELECT
+  (SELECT count(*) FROM payment_events WHERE order_id=$1::text::uuid),
+  (SELECT count(*) FROM course_grants WHERE user_id=$2::text::uuid AND course_id=$3::text::uuid AND order_id=$1::text::uuid AND state='active'),
+  (SELECT count(*) FROM grant_audit AS audit JOIN course_grants AS grants ON grants.id=audit.grant_id WHERE grants.order_id=$1::text::uuid),
+  status, refund_required FROM orders WHERE id=$1::text::uuid`, order.ID(), userID, integrationCourseID).Scan(&events, &grants, &audits, &status, &refundRequired); err != nil {
+			t.Fatal(err)
+		}
+		if events != 1 || grants != 1 || audits != 1 || status != "paid" || refundRequired {
+			t.Fatalf("events=%d grants=%d audits=%d status=%s refund_required=%v, want 1/1/1/paid/false", events, grants, audits, status, refundRequired)
 		}
 	})
 
