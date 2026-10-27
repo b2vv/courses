@@ -268,3 +268,50 @@ silently-wrong spec.
 — файл). Єдине «одностороннє» — видалення ручного супроводу спеку, але історія в git тримає попередній зміст.
 
 **Дірок: 0 — гейт зелений.** План іде на рев'ю плану (Courses 2), далі — таски S0.0→S0.2.
+
+## 13. Plan-review delta (Courses 2, 2b98c4a → 2026-10-27) — B1 absorbed, 4 fold-ins
+
+Courses 2 approved the approach but found one BLOCKING-for-plan the §12 defense missed, plus 4
+non-blocking fold-ins. Absorbed here; supersedes §11.1/§11.2/§11.3/§11.5 where in conflict.
+
+**B1 — the error-code enum is single-layer, and §11.2's mechanism is undercomputable as written.**
+- Layer A §11.2 parses `WriteError(w,r,status,"literal")`. But several modules wrap it: `course`,
+  `identity`, `orders`, `adminstats`, `discussion` each have a local `writeError`, and `discussion`
+  (`handler.go:755`) passes a **variable** `code := err.Error()` whose values are `errors.New("…")`
+  consts in `discussion/domain/errors.go` (~26 codes) — the call-site parser never collects them, and
+  the "non-constant code arg → build fails" rule would simply redden the build with no path. §2's
+  "measured on main" missed this.
+- Layer B coverage-gate is per-**route** (≥1 `ValidateResponse`), not per-(route,status,error-code);
+  a rarely-reached code (`review_already_exists` on a race, `thread_full`, `report_duplicate`) is
+  touched by no case, so Layer B never validates its enum membership.
+- **Fix (plan):** (a) the error-code source parser also reads `errors.New("…")` / `Error = "…"` consts
+  in `*/domain/errors.go` **and** recognizes each module's local `writeError` wrapper; the enum is the
+  union of those plus direct `WriteError` literals. (b) **Record error-code enum fidelity explicitly as
+  single-layer (Layer A parser), not two-layer** — its fail-closed rule is: any `WriteError`/`writeError`
+  code argument that cannot be resolved to the parsed union → build fails; and the parser's coverage of
+  wrappers + domain-errors is itself asserted (a test that every `domain/errors.go` code appears in the
+  emitted enum). **S0.0 spike extended** to exercise the discussion code-source path before S0.1.
+
+**Fold-ins:**
+- **N1 (overlay is prose-only; validation keywords have a Go source).** Validation keywords
+  (minLength/pattern/maximum) often DO have a Go truth (`domain.ValidatePassword`, regexes), so putting
+  them in a hand overlay revives the very drift S0 fights. **Narrow the overlay to PROSE + truly-non-Go
+  metadata** (descriptions/summaries, `servers`, `securitySchemes`, `CourseDetail` narrowing, per-field
+  array nil-vs-make, additionalProperties whitelist). Validation-keyword fidelity is recorded as a
+  **named limitation with mechanism** (derive from the Go validators in a later slice, or accept the
+  overlay carries them and they are *not* claimed drift-proof) — drop the "can never drift" claim for
+  that subset. Prose has no Go source, so it genuinely cannot drift.
+- **N2 (restore per-module staging).** v2 §11.5 collapsed v1's staged S0.1(course)→S0.2(all 85) into
+  one oversized S0.1. Restore it: **S0.1 = course end-to-end behind the parallel file (per-module
+  fidelity); S0.1b…S0.1n widen module by module**; each lands green within a session (cf. the
+  "Codex: impl and tests in separate runs" lesson). Cutover stays last.
+- **N3 (non-JSON route exclusion).** `orders/handler.go:659` `w.Write(callback.Acknowledge())` is a
+  non-JSON WayForPay callback response; the §4-A "respType per status" and the Layer-B "every route has
+  a ValidateResponse" gate would fail on it. Add an explicit **non-JSON route exclusion list** (declared,
+  so a new route isn't silently excluded).
+- **N4 (determinism additions).** Also sort object `properties` (not just `required`). An encoder /
+  `yaml.v3` / `kin-openapi` bump reflows YAML deterministically but produces a large diff — treat such a
+  bump as a deliberate regen event (note, not a blocker).
+
+**Open blocking after plan-review: 0** once B1(a)+(b) land in §11.1/§11.2 and the overlay is narrowed
+(N1). Re-send the plan delta to Courses 2, then owner-approval, then S0.0.
