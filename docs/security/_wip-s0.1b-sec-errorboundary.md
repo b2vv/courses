@@ -482,3 +482,233 @@ integration log: /Users/strelia/projects/courses/backend/test-results/integratio
 ДАЛІ: Courses 13 — власний повний e2e/writer verification на 4aa15a8; Courses 2 — незалежний security-sensitive review baseline 0149d9c → 4aa15a8, звернути увагу на unknown 500/400→503, canonical wrapped discussion codes і незмінні static mappings. Review/e2e PENDING; загального phase PASS не заявляю.
 ФАКТ: Final AI Factory checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-3-997d82b7a02b; native Codex session 01a17ee7-7da0-7562-9c44-86ad0a6b96ae. Scope/gates/evidence зафіксовані.
 ДАЛІ: Journal-only delivery commit цього append-only файлу з тими самими trailers; product snapshot 4aa15a8 незмінний, повторний product gate не потрібен. Наступний власник — Courses 13.
+
+## WRITER REVIEW FINDING (Courses 13, 2026-10-27) — перед гейтами/рев'ю Courses 2
+Діф 4aa15a8 перевірено. ЗАУВАЖЕННЯ:
+- Витік (code := err.Error()) був ЛИШЕ в discussion. Решта 8 модулів (adminstats/course/admin/document/identity/media/orders/playback) ВЖЕ мали безпечний default `internal_error`/500 — не текли.
+- Codex змінив їх default `internal_error`/500 → `dependency_unavailable`/503. Семантично спірно: невідома/неочікувана помилка (баг/паніка) чесно = internal_error/500, а не dependency_unavailable/503 (специфічна заява «downstream лежить, ретрайни»).
+- Неконсистентність: playback writePlayError:306 ЛИШИВСЯ internal_error/500, тоді як writePlaybackError:330 став 503. media/domain/errors.go:20 має ErrInternal="internal_error".
+- discussion-фікс (явний switch кодів + default) — коректний і потрібний; його лишаємо.
+РЕКОМЕНДАЦІЯ: unknown → internal_error/500 КОНСИСТЕНТНО (повернути 8 модулів до оригінального default; фіксувати лише discussion-витік через маршрут unknown→internal_error/500; вирівняти playback). internal_error і dependency_unavailable лишаються живими. Ескальовано власнику (реверс §16.13 wording + клієнт-видима семантика). Гейти/e2e НЕ ганяв до рішення — діф може зміститись.
+РІШЕННЯ: Writer передав нове рішення власника 2026-10-27: security slice має зберегти baseline business mappings; discussion unknown → internal_error/500 замість raw/400, попередні зміни 500→503 в інших модулях відкликати. ДАЛІ: звірити baseline/current та неоднозначність image/transcript перед новими повними gates.
+ФАКТ: Review recheck baseline 0149d9c: image.writeUploadError default = dependency_unavailable/503 (Image upload is temporarily unavailable); transcript.writeTranscriptError default = invalid_request/400 (Request is not valid). Решта перелічених generic defaults були internal_error/500. Поточний HEAD 5395257; знайдено 9 error_boundary_test.go, не 10.
+ПИТАННЯ: Новий інваріант «єдина поведінкова зміна — discussion unknown» суперечить пункту «ВСІ error_boundary_test.go unknown → internal_error/500» для image/transcript. Чи зберігати їхні baseline fallback-и (image 503, transcript 400), чи санкціоновано також змінити їхні unknown на 500, з explicit recognized cases (зокрема transcript.ErrInvalidRequest=400, image.ErrDependencyUnavailable=503)?
+РІШЕННЯ: До відповіді product-змін не роблю, щоб не порушити один із двох явних інваріантів. Застосовано receiving-code-review (/Users/strelia/.agents/skills/receiving-code-review/SKILL.md): «IF any item is unclear: STOP - do not implement anything yet». Це уточнення контракту image/transcript, а не повторний запит дозволу на погоджені правки discussion/restoration. Gates NOT_RUN у цьому review-followup; попередній green не покриває нове рішення.
+ФАКТ: Review-followup checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-4-d5b6d4bc5e74. ДАЛІ: відповідь власника щодо baseline-vs-uniform fallback для image/transcript; product diff цього followup порожній.
+РІШЕННЯ: Writer зняв неоднозначність: єдина production behavior delta проти 0149d9c — discussion; image unknown 503 та transcript unknown 400 зберегти. ДАЛІ: відновити інші handlers і чотири legacy test expectations до baseline; discussion unknown internal_error/500; regression pgx; ordered gates.
+ФАКТ: Відновлено 9 non-discussion handler-файлів і 4 старі test-файли байтами 0149d9c; перед записом перевірено current==HEAD (жодних чужих правок). Image не змінено. Нові per-module tests тепер assert baseline unknown: image 503/dependency_unavailable, transcript 400/invalid_request, решта 500/internal_error.
+ФАКТ: Discussion explicit errors.Is classifier та static renderer збережено; statusFor unknown=500, writeError default code=internal_error/status=500; explicit ErrDependencyUnavailable=503 незмінний.
+ФАКТ: Додано real pgx ConnectError regression: pgconn.ConnectConfig з контрольованим DialFunc (без мережі) формує справжній ConnectError; два різні імені БД + user у wrapped err перевіряються як передумова, response мусить бути 500/internal_error і не містити приватних даних. Локальний pgx v5.10.0 source перевірено в Makefile Docker cache.
+ДАЛІ: Перевірити exact baseline invariant, потім ordered full gates; будь-який business-test failure → STOP без зміни expected business mapping.
+
+ФАКТ: Exact baseline invariant PASS: git diff 0149d9c для восьми non-discussion module trees містить лише нові error_boundary_test.go; жодних production/legacy-test deltas.
+
+ДАЛІ: RUN 3 GATE gofmt -l .; Docker golang:1.27.3-bookworm /work=backend, Makefile cache volumes.
+```text
+
+```
+ФАКТ: RUN 3 gofmt -l . EXIT=0
+
+ДАЛІ: RUN 3 GATE go vet ./...; Docker golang:1.27.3-bookworm /work=backend, Makefile cache volumes.
+```text
+
+```
+ФАКТ: RUN 3 go vet ./... EXIT=0
+
+ДАЛІ: RUN 3 GATE go build ./...; Docker golang:1.27.3-bookworm /work=backend, Makefile cache volumes.
+```text
+
+```
+ФАКТ: RUN 3 go build ./... EXIT=0
+
+ДАЛІ: RUN 3 GATE go test -race ./...; Docker golang:1.27.3-bookworm /work=backend, Makefile cache volumes.
+```text
+?   	courses/cmd/api	[no test files]
+ok  	courses/cmd/asr-worker	(cached)
+?   	courses/cmd/media-worker	[no test files]
+?   	courses/cmd/migrate	[no test files]
+?   	courses/cmd/upload	[no test files]
+ФАКТ: git diff --check EXIT=0. Production behavior delta від baseline обмежена discussion; розпізнані domain/application коди та static transport mappings збережені. Старі записи про загальну 503-нормалізацію є історією відкликаного рішення, не фінальним контрактом.
+ok  	courses/internal/adminstats/adapters/http	7.677s
+?   	courses/internal/adminstats/adapters/postgres	[no test files]
+?   	courses/internal/adminstats/application	[no test files]
+ok  	courses/internal/adminstats/domain	(cached)
+?   	courses/internal/adminstats/ports	[no test files]
+ok  	courses/internal/clientlog/adapters/http	(cached)
+ok  	courses/internal/clientlog/domain	(cached)
+ok  	courses/internal/contracts/access	(cached)
+?   	courses/internal/contracts/access/accesstest	[no test files]
+ok  	courses/internal/contracts/rating	(cached)
+ФАКТ: Discussion-only implementation checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-5-0cde31d64b7a. Повний race gate ще працює; completion не заявляється до його виходу та integration.
+ok  	courses/internal/course/adapters/http	52.782s
+ok  	courses/internal/course/adapters/postgres	(cached)
+?   	courses/internal/course/adapters/postgres/generated	[no test files]
+ok  	courses/internal/course/application	(cached)
+ok  	courses/internal/course/domain	(cached)
+?   	courses/internal/course/ports	[no test files]
+ok  	courses/internal/discussion/adapters/http	54.547s
+?   	courses/internal/discussion/adapters/postgres	[no test files]
+ok  	courses/internal/discussion/application	(cached)
+ok  	courses/internal/discussion/domain	(cached)
+?   	courses/internal/discussion/ports	[no test files]
+ok  	courses/internal/identity/adapters/argon2id	(cached)
+ok  	courses/internal/identity/adapters/http	38.623s
+ok  	courses/internal/identity/adapters/mail	(cached)
+?   	courses/internal/identity/adapters/postgres	[no test files]
+?   	courses/internal/identity/adapters/postgres/generated	[no test files]
+ok  	courses/internal/identity/adapters/redis	(cached)
+ok  	courses/internal/identity/application	(cached)
+ok  	courses/internal/identity/domain	(cached)
+?   	courses/internal/identity/ports	[no test files]
+ok  	courses/internal/image/adapters/filesystem	(cached)
+ok  	courses/internal/image/adapters/http	(cached)
+?   	courses/internal/image/adapters/postgres	[no test files]
+ok  	courses/internal/image/application	(cached)
+ok  	courses/internal/image/domain	(cached)
+?   	courses/internal/image/ports	[no test files]
+ok  	courses/internal/media/adapters/asynq	(cached)
+ok  	courses/internal/media/adapters/ffmpeg	(cached)
+ok  	courses/internal/media/adapters/filesystem	(cached)
+ok  	courses/internal/media/adapters/http	30.176s
+?   	courses/internal/media/adapters/postgres	[no test files]
+?   	courses/internal/media/adapters/postgres/generated	[no test files]
+?   	courses/internal/media/adapters/tus	[no test files]
+ok  	courses/internal/media/application	(cached)
+ok  	courses/internal/media/domain	(cached)
+?   	courses/internal/media/ports	[no test files]
+ok  	courses/internal/orders/adapters/http	31.513s
+?   	courses/internal/orders/adapters/postgres	[no test files]
+ok  	courses/internal/orders/adapters/wayforpay	(cached)
+ok  	courses/internal/orders/application	(cached)
+ok  	courses/internal/orders/domain	(cached)
+?   	courses/internal/orders/ports	[no test files]
+ok  	courses/internal/platform/openapigen	(cached)
+ok  	courses/internal/playback/adapters/http	1.887s
+ok  	courses/internal/playback/adapters/postgres	(cached)
+ok  	courses/internal/playback/adapters/redis	(cached)
+ok  	courses/internal/playback/application	(cached)
+ok  	courses/internal/playback/domain	(cached)
+?   	courses/internal/playback/ports	[no test files]
+ok  	courses/internal/testsupport/containers	1.317s
+ok  	courses/internal/testsupport/coursevisibility	(cached)
+ok  	courses/internal/transcript/adapters/asynq	(cached)
+ok  	courses/internal/transcript/adapters/http	7.104s
+ok  	courses/internal/transcript/adapters/media	(cached)
+?   	courses/internal/transcript/adapters/postgres	[no test files]
+ok  	courses/internal/transcript/adapters/whisper	(cached)
+ok  	courses/internal/transcript/application	(cached)
+ok  	courses/internal/transcript/domain	(cached)
+?   	courses/internal/transcript/ports	[no test files]
+ok  	courses/platform/architecture	1.713s
+ok  	courses/platform/config	(cached)
+ok  	courses/platform/httpserver	(cached)
+ok  	courses/platform/jsonbody	(cached)
+ok  	courses/platform/mail	(cached)
+ok  	courses/platform/observability	(cached)
+?   	courses/platform/postgres	[no test files]
+?   	courses/platform/redis	[no test files]
+?   	courses/platform/runtime	[no test files]
+
+```
+ФАКТ: RUN 3 go test -race ./... EXIT=0
+
+ДАЛІ: RUN 3 GATE make integration; Docker golang:1.27.3-bookworm /work=backend, Makefile cache volumes.
+```text
+sh infrastructure/tests/integration.sh
+?   	courses/cmd/api	[no test files]
+ok  	courses/cmd/asr-worker	0.020s
+?   	courses/cmd/media-worker	[no test files]
+?   	courses/cmd/migrate	[no test files]
+?   	courses/cmd/upload	[no test files]
+
+ФАКТ: Final source audit assertions EXIT=0: повний backend diff 0149d9c має рівно один non-test файл — discussion/adapters/http/handler.go; static renderer byte-identical baseline, code := err.Error() вилучено.
+ok  	courses/internal/adminstats/adapters/http	1.309s
+ok  	courses/internal/adminstats/adapters/postgres	13.672s
+?   	courses/internal/adminstats/application	[no test files]
+ok  	courses/internal/adminstats/domain	0.007s
+?   	courses/internal/adminstats/ports	[no test files]
+ok  	courses/internal/clientlog/adapters/http	0.006s
+ok  	courses/internal/clientlog/domain	0.005s
+ok  	courses/internal/contracts/access	0.002s
+?   	courses/internal/contracts/access/accesstest	[no test files]
+ok  	courses/internal/contracts/rating	0.011s
+ok  	courses/internal/course/adapters/http	13.232s
+
+ФАКТ: Discussion-only correction commit d2ad7dd (22 scoped backend files), no merge/push; gofmt/vet/build/full go test -race ./... RUN 3 EXIT=0. make integration ще in progress. Чужі docs/tasks не staged.
+ok  	courses/internal/course/adapters/postgres	21.462s
+?   	courses/internal/course/adapters/postgres/generated	[no test files]
+ok  	courses/internal/course/application	3.027s
+ok  	courses/internal/course/domain	0.007s
+?   	courses/internal/course/ports	[no test files]
+ok  	courses/internal/discussion/adapters/http	12.963s
+ok  	courses/internal/discussion/adapters/postgres	5.056s
+ok  	courses/internal/discussion/application	0.002s
+ok  	courses/internal/discussion/domain	0.012s
+?   	courses/internal/discussion/ports	[no test files]
+ok  	courses/internal/identity/adapters/argon2id	1.102s
+ok  	courses/internal/identity/adapters/http	9.938s
+ok  	courses/internal/identity/adapters/mail	0.006s
+ok  	courses/internal/identity/adapters/postgres	15.913s
+?   	courses/internal/identity/adapters/postgres/generated	[no test files]
+ok  	courses/internal/identity/adapters/redis	1.651s
+ok  	courses/internal/identity/application	0.009s
+ok  	courses/internal/identity/domain	0.008s
+?   	courses/internal/identity/ports	[no test files]
+ok  	courses/internal/image/adapters/filesystem	0.033s
+ok  	courses/internal/image/adapters/http	0.033s
+ok  	courses/internal/image/adapters/postgres	5.201s
+ok  	courses/internal/image/application	0.006s
+ok  	courses/internal/image/domain	0.003s
+?   	courses/internal/image/ports	[no test files]
+ok  	courses/internal/media/adapters/asynq	0.019s
+ok  	courses/internal/media/adapters/ffmpeg	0.009s
+ok  	courses/internal/media/adapters/filesystem	0.034s
+ok  	courses/internal/media/adapters/http	7.338s
+ok  	courses/internal/media/adapters/postgres	3.814s
+?   	courses/internal/media/adapters/postgres/generated	[no test files]
+ok  	courses/internal/media/adapters/tus	4.097s
+ok  	courses/internal/media/application	0.018s
+ok  	courses/internal/media/domain	0.004s
+?   	courses/internal/media/ports	[no test files]
+ok  	courses/internal/orders/adapters/http	6.834s
+ok  	courses/internal/orders/adapters/postgres	3.819s
+ok  	courses/internal/orders/adapters/wayforpay	0.004s
+ok  	courses/internal/orders/application	0.003s
+ok  	courses/internal/orders/domain	0.004s
+?   	courses/internal/orders/ports	[no test files]
+ok  	courses/internal/platform/openapigen	0.062s
+ok  	courses/internal/playback/adapters/http	0.146s
+ok  	courses/internal/playback/adapters/postgres	5.067s
+ok  	courses/internal/playback/adapters/redis	0.915s
+ok  	courses/internal/playback/application	5.499s
+ok  	courses/internal/playback/domain	0.004s
+?   	courses/internal/playback/ports	[no test files]
+ok  	courses/internal/testsupport/containers	3.641s
+ok  	courses/internal/testsupport/coursevisibility	0.008s
+ok  	courses/internal/transcript/adapters/asynq	3.381s
+ok  	courses/internal/transcript/adapters/http	1.231s
+ok  	courses/internal/transcript/adapters/media	0.011s
+ok  	courses/internal/transcript/adapters/postgres	4.447s
+ok  	courses/internal/transcript/adapters/whisper	5.116s
+ok  	courses/internal/transcript/application	0.007s
+ok  	courses/internal/transcript/domain	0.008s
+?   	courses/internal/transcript/ports	[no test files]
+ok  	courses/platform/architecture	0.854s
+ok  	courses/platform/config	0.008s
+ok  	courses/platform/httpserver	0.049s
+ok  	courses/platform/jsonbody	0.028s
+ok  	courses/platform/mail	1.142s
+ok  	courses/platform/observability	0.011s
+?   	courses/platform/postgres	[no test files]
+?   	courses/platform/redis	[no test files]
+?   	courses/platform/runtime	[no test files]
+integration log: /Users/strelia/projects/courses/backend/test-results/integration.log
+
+```
+ФАКТ: RUN 3 make integration EXIT=0
+ФАКТ: FINAL ACCEPTANCE (остаточне рішення writer): baseline 0149d9c → correction d2ad7dd. Єдиний production-file diff — backend/internal/discussion/adapters/http/handler.go. Усі інші handlers БАЙТОВО baseline; чотири legacy tests також відновлено. Нові baseline regression tests лишаються у 9 модулях.
+ФАКТ: Discussion unknown plain/wrapped/spoof → internal_error/500; explicit business errors зберігають canonical code/status, ErrDependencyUnavailable → dependency_unavailable/503; static notFound/origin renderer byte-identical. Real pgx ConnectError з двома DB names та user не витікає в response (передумова приватного тексту перевірена тестом). Image unknown лишається dependency_unavailable/503, transcript unknown invalid_request/400, інші generic fallbacks internal_error/500; обидві playback wrappers consistent на unknown/500.
+ФАКТ: RUN 3 ordered gates на product snapshot d2ad7dd: gofmt -l . (порожній output) EXIT=0 → go vet ./... EXIT=0 → go build ./... EXIT=0 → FULL go test -race ./... EXIT=0 → make integration EXIT=0. Реальний вивід кожної команди вище. Бізнес-тести не червоніли; Docker/Ryuk не блокували integration. Старий RUN 1 red стосувався відкликаного cross-module 503-рішення; не фінального коду.
+ФАКТ: make e2e NOT_RUN за дорученням. OpenAPI/parser не змінено; tmp cmd/spike не створювались; чужі WIP збережено; no merge/push. Попередні записи про all-module normalization superseded цим рішенням.
+ДАЛІ: Courses 13 writer/e2e та Courses 2 security-sensitive review baseline 0149d9c → d2ad7dd. Незалежний review/e2e залишаються PENDING, загальний phase PASS не заявляється. Зберегти journal-only delivery commit з тими самими trailers.
+ФАКТ: Final discussion-only checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-6-10a291235020; native session 01a17ee7-7da0-7562-9c44-86ad0a6b96ae. Product snapshot d2ad7dd незмінний після gates.
