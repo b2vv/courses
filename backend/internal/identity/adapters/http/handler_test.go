@@ -79,7 +79,7 @@ func (service *accountsService) VerifyEmail(context.Context, string) error {
 	service.verifyCalls++
 	return service.err
 }
-func (service *accountsService) ResendVerification(context.Context, string, string) (bool, error) {
+func (service *accountsService) ResendVerification(context.Context, string, string, string) (bool, error) {
 	service.resendCalls++
 	return true, service.err
 }
