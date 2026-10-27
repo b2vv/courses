@@ -1,0 +1,335 @@
+# Catalog-only S0.1 Run 1 overlay. Prose has no Go source.
+# LIMITATION (N1): validation keywords are carried here, not derived from domain
+# validators; they are NOT claimed drift-proof. Error-code enum is also temporary
+# hand metadata until the S0.1 parser run (16.7 completion gate).
+# Null deletes a key; $ref: null expands the generated schema before metadata merge.
+# CourseDetail publishedAt/status narrowing is the published endpoint contract.
+components:
+    headers:
+        NoStore:
+            description: This response is never stored by caches or shared proxies.
+            schema:
+                enum:
+                    - no-store
+        RequestID:
+            description: Server-generated correlation identifier.
+            schema:
+                pattern: ^[a-f0-9]{32}$
+    responses:
+        BadRequest:
+            description: Invalid query parameters or slug.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        InternalError:
+            description: Unexpected error; internal details are never returned.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        NotFound:
+            description: Course was not found.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        Unavailable:
+            description: A dependency was unavailable or the bounded read timed out.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+    schemas:
+        Course:
+            properties:
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                id:
+                    format: uuid
+                lessonCount:
+                    minimum: 0
+                paid:
+                    description: True when the course has a price; this is display metadata, not an access decision.
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                rating:
+                    $ref: null
+                    properties:
+                        average:
+                            maximum: 5
+                            minimum: 1
+                        count:
+                            minimum: 3
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                status:
+                    description: Foundation public operations only return published.
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                title:
+                    maxLength: 200
+                    minLength: 1
+        CourseDetail:
+            properties:
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                id:
+                    format: uuid
+                lessonCount:
+                    minimum: 0
+                paid:
+                    description: True when the course has a price; this is display metadata, not an access decision.
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                program:
+                    maxItems: 40
+                publishedAt:
+                    nullable: false
+                rating:
+                    $ref: null
+                    properties:
+                        average:
+                            maximum: 5
+                            minimum: 1
+                        count:
+                            minimum: 3
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                status:
+                    enum:
+                        - published
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                title:
+                    maxLength: 200
+                    minLength: 1
+        CoursePage:
+            properties:
+                items:
+                    maxItems: 50
+        ErrorDetail: null
+        ErrorResponse:
+            properties:
+                error:
+                    $ref: null
+                    properties:
+                        code:
+                            enum:
+                                - invalid_lesson_document
+                                - document_conflict
+                                - invalid_query
+                                - invalid_slug
+                                - course_not_found
+                                - invalid_request
+                                - invalid_credentials
+                                - authentication_required
+                                - origin_forbidden
+                                - forbidden
+                                - email_taken
+                                - weak_password
+                                - invalid_email
+                                - invalid_display_name
+                                - password_unchanged
+                                - token_used
+                                - invalid_account_token
+                                - rate_limited
+                                - invalid_totp
+                                - recovery_code_invalid
+                                - twofactor_already_enabled
+                                - twofactor_not_enabled
+                                - email_not_verified
+                                - course_forbidden
+                                - course_purchase_required
+                                - enrollment_required
+                                - enrollment_blocked
+                                - membership_conflict
+                                - course_not_enrollable
+                                - enrollment_forbidden
+                                - course_already_owned
+                                - checkout_already_opened
+                                - grant_forbidden
+                                - grant_self_forbidden
+                                - admin_not_learner
+                                - learner_course_forbidden
+                                - grant_transition_invalid
+                                - payment_event_rejected
+                                - invalid_callback
+                                - order_not_found
+                                - playback_forbidden
+                                - playback_taken_over
+                                - playback_session_expired
+                                - slug_taken
+                                - slug_immutable
+                                - invalid_owner
+                                - invalid_status_transition
+                                - course_not_deletable
+                                - course_modified
+                                - lesson_limit
+                                - transcript_document_referenced
+                                - transcript_document_exists
+                                - transcript_segment_limit
+                                - transcript_text_limit
+                                - transcript_document_limit
+                                - transcript_modified
+                                - transcript_exists
+                                - already_running
+                                - cannot_target_self
+                                - admin_immutable
+                                - last_admin
+                                - user_not_found
+                                - lesson_not_found
+                                - comment_not_found
+                                - comment_forbidden
+                                - comment_removed
+                                - comment_body_invalid
+                                - comment_position_invalid
+                                - comment_parent_invalid
+                                - comment_cursor_invalid
+                                - comment_thread_full
+                                - report_own_comment
+                                - report_own_person
+                                - report_invalid
+                                - report_forbidden
+                                - report_already_open
+                                - review_owner_forbidden
+                                - review_not_available
+                                - review_purchase_required
+                                - review_not_started
+                                - review_moderation_forbidden
+                                - report_own_review
+                                - review_already_exists
+                                - review_removed
+                                - review_invalid
+                                - review_not_found
+                                - upload_in_progress
+                                - unsupported_media
+                                - upload_too_large
+                                - video_not_found
+                                - video_not_ready
+                                - video_not_retryable
+                                - invalid_range
+                                - range_too_wide
+                                - unknown_metric
+                                - unknown_bucket
+                                - dependency_unavailable
+                                - internal_error
+                                - not_found
+                                - method_not_allowed
+                        requestId:
+                            pattern: ^[a-f0-9]{32}$
+        Pagination:
+            properties:
+                limit:
+                    maximum: 50
+                    minimum: 1
+                offset:
+                    maximum: 10000
+                    minimum: 0
+                total:
+                    minimum: 0
+        Price:
+            properties:
+                currency:
+                    enum:
+                        - UAH
+                minor:
+                    minimum: 1
+        ProgramLesson:
+            properties:
+                title:
+                    maxLength: 200
+                    minLength: 1
+        ProgramModule:
+            properties:
+                lessons:
+                    maxItems: 120
+                title:
+                    maxLength: 200
+                    minLength: 1
+        Rating:
+            properties:
+                count:
+                    minimum: 3
+info:
+    description: Public catalog, session authentication, protected administration, learning purchases and playback-session control.
+    title: Courses API
+    version: 1.0.0
+paths:
+    /api/v1/courses:
+        get:
+            description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+            operationId: listPublishedCourses
+            parameters:
+                - in: query
+                  name: limit
+                  schema:
+                    default: 20
+                    maximum: 50
+                    minimum: 1
+                    type: integer
+                - in: query
+                  name: offset
+                  schema:
+                    default: 0
+                    maximum: 10000
+                    minimum: 0
+                    type: integer
+                - description: Search text, maximum 100 Unicode code points after trimming whitespace.
+                  in: query
+                  name: q
+                  schema:
+                    default: ""
+                    type: string
+                - description: Recent orders by publishedAt descending then ID ascending; title uses PostgreSQL C collation then ID ascending.
+                  in: query
+                  name: sort
+                  schema:
+                    default: recent
+                    enum:
+                        - recent
+                        - title
+                    type: string
+            responses:
+                "200":
+                    description: Published courses and pagination, including an empty items array when beyond the final page.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+            summary: List published courses
+    /api/v1/courses/{slug}:
+        get:
+            description: Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
+            operationId: getPublishedCourse
+            parameters:
+                - in: path
+                  name: slug
+                  required: true
+                  schema:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+            responses:
+                "200":
+                    description: Published course with its ordered title-only program.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+            summary: Get a published course
+servers:
+    - url: /
