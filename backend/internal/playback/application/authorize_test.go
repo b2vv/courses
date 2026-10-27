@@ -62,6 +62,24 @@ func TestRandomPlaybackIDStopsAfterOwnershipRead(t *testing.T) {
 	}
 }
 
+// SA09/M6: the session's own playbackID paired with another video must be refused before any
+// course lookup. owner.VideoID is the only session→video binding; LoadVideoCourse would otherwise
+// authorize any video in a course the user can already consume.
+func TestMatchingPlaybackIDWithForeignVideoIDStopsAfterOwnershipRead(t *testing.T) {
+	t.Parallel()
+	ownership := &ownershipReader{owner: domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}}
+	access := &accessReader{access: domain.VideoCourse{OwnerID: "40000000-0000-4000-8000-000000000002", Status: domain.Published, Membership: "active"}}
+	authorizer := application.NewAuthorizer(ownership, access)
+
+	err := authorizer.Authorize(context.Background(), domain.Actor{UserID: userID, EmailVerified: true}, playbackID, "50000000-0000-4000-8000-000000000099")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("got %v, want forbidden", err)
+	}
+	if ownership.calls != 1 || access.calls != 0 {
+		t.Fatalf("ownership calls=%d access calls=%d, want 1 and 0", ownership.calls, access.calls)
+	}
+}
+
 func TestActiveMemberOfMatchingPlaybackCanConsumePublishedCourse(t *testing.T) {
 	t.Parallel()
 	ownership := &ownershipReader{owner: domain.Ownership{PlaybackID: playbackID, VideoID: videoID, LessonID: lessonID}}
