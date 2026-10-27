@@ -551,3 +551,27 @@ byte-identical → Params-from-Go reproduce the same param surface. Merge discip
   `contribution.Enum`, with a test. **This is the string-enum generalization of 16.1's "domain-set ∈ emitted
   enum" discipline; apply it to ALL const-set enums (sort, status, BlockType), not only error-codes.** Folded
   into the S0.1b-3 (16.1 / const-set-enum) run. Non-blocking (sorts rarely change; correct now).
+
+**16.10 Request-body nullability is NOT pointer-derived (Codex STOP, S0.1b-2, 2026-10-27).** Codex stopped
+pre-code on a real §11.2 contradiction, verified: `transitionAdminCourseRequest` (admin_handler.go:125) has
+`Status *string` and `ExpectedUpdatedAt *string`, **no omitempty**; the §11.2 rule says `*T → nullable:true`,
+but the hand spec `AdminCourseStatusRequest` **requires** both and forbids null (`status` is a non-null enum,
+`expectedUpdatedAt`→`AdminTimestamp` non-null), and the handler (`:268`) rejects `nil` for both. So the
+pointer here is a **decode-presence idiom** (distinguish "absent" from "present"), not a nullable wire value.
+This is exactly the request-side risk Courses 2 raised in the Run-1 review (Q1). **Decision (plan owner):**
+- The `*T → nullable:true` rule is **RESPONSE-only** — a response `*T` genuinely serializes `null` (e.g.
+  `publishedAt`), proven for catalog. It does **not** hold for request bodies.
+- For **request** bodies, a pointer field's nullability is an **explicit per-field decision** in the
+  contribution (extend the `NullableFields` mechanism to request fields), and the generator **fail-closes on a
+  request pointer field with no explicit decision** — so request null-semantics can never be silently wrong.
+  `required` still follows the hand contract / omitempty. The generator already knows req-vs-resp context from
+  `RouteBinding.Request` vs `Responses`, so the split is clean. (A type shared between request and response
+  with different nullability would be caught by the fail-closed rule and need a per-use override — no such type
+  in course today; note for later modules.)
+- For `transitionAdminCourseRequest`: both pointer fields = **explicit non-null, required**; `status`'s enum
+  [draft,published,archived] goes to the overlay like the response `status` enum.
+- 16.4's "optional-pointer" case: the transition route proves the **non-null required** pointer path; add a
+  generator **unit test** for the genuine-optional path (a request `*T` with omitempty → nullable+optional), so
+  both request-pointer meanings are covered before the document route (16.3) exercises a real optional one.
+Supersedes §11.2's pointer row for request bodies. Courses 2 will verify the request-nullability handling in
+the S0.1b-2 review.
