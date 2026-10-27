@@ -43,6 +43,14 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        AdminCourseStatusRequest:
+            properties:
+                status:
+                    enum: [draft, published, archived]
+        AdminTimestamp:
+            format: date-time
+            description: RFC 3339 timestamp carrying exactly six fractional-second digits.
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$'
         Course:
             properties:
                 description:
@@ -270,6 +278,11 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/admin/courses/{id}/status:
+        post:
+            parameters:
+                id:
+                    schema: {format: uuid}
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.

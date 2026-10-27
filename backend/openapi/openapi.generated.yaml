@@ -57,6 +57,26 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        AdminCourseStatusRequest:
+            additionalProperties: false
+            properties:
+                expectedUpdatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                status:
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                    type: string
+            required:
+                - expectedUpdatedAt
+                - status
+            type: object
+        AdminTimestamp:
+            description: RFC 3339 timestamp carrying exactly six fractional-second digits.
+            format: date-time
+            pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$
+            type: string
         Course:
             additionalProperties: false
             properties:
@@ -437,6 +457,24 @@ info:
     version: 1.0.0
 openapi: 3.0.3
 paths:
+    /api/v1/admin/courses/{id}/status:
+        post:
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminCourseStatusRequest'
+                required: true
+            responses:
+                default:
+                    description: Response schemas are not generated for this request-only binding.
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.

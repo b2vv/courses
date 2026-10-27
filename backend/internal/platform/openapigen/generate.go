@@ -38,8 +38,10 @@ type Param struct {
 }
 type RouteBinding struct {
 	Method, Path string
-	Responses    map[int]Response
-	Params       []Param
+	// Request declares a required JSON body; nil means no request binding.
+	Request   any
+	Responses map[int]Response
+	Params    []Param
 }
 type ModuleContribution struct {
 	Routes         []RouteBinding
@@ -47,20 +49,23 @@ type ModuleContribution struct {
 	Overrides      map[reflect.Type]*openapi3.Schema
 	NameMap        map[reflect.Type]string
 	NullableFields map[Field]bool
+	// FieldRefs names reusable scalar schemas for transport fields.
+	FieldRefs map[Field]string
 	// Components declares non-reflectable schemas/headers, e.g. a nullable wrapper.
 	Components openapi3.Components
 }
 
 type generator struct {
-	config ModuleContribution
-	names  map[string]reflect.Type
-	seen   map[reflect.Type]bool
+	config  ModuleContribution
+	names   map[string]reflect.Type
+	seen    map[reflect.Type]bool
+	request bool
 }
 
-// Generate builds JSON responses only. Request and non-JSON bindings are intentionally
-// absent until their own runs can supply conformance tests.
+// Generate builds JSON request and response bindings. Request-only bindings carry
+// a descriptive default response without claiming a generated response schema.
 func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, error) {
-	g := generator{config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}}, names: map[string]reflect.Type{}, seen: map[reflect.Type]bool{}}
+	g := generator{config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, names: map[string]reflect.Type{}, seen: map[reflect.Type]bool{}}
 	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "API", Version: "1.0.0"}, Paths: openapi3.NewPaths(), Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}}}
 	for _, c := range contribs {
 		if err := mergeRegistry(g.config.Enums, c.Enums); err != nil {
@@ -75,6 +80,9 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 		if err := mergeRegistry(g.config.NullableFields, c.NullableFields); err != nil {
 			return nil, err
 		}
+		if err := mergeRegistry(g.config.FieldRefs, c.FieldRefs); err != nil {
+			return nil, err
+		}
 		if err := mergeRegistry(doc.Components.Schemas, c.Components.Schemas); err != nil {
 			return nil, err
 		}
@@ -83,6 +91,7 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 		}
 		g.config.Routes = append(g.config.Routes, c.Routes...)
 	}
+	g.config.Components.Schemas = doc.Components.Schemas
 	for t, name := range g.config.NameMap {
 		if t == nil || name == "" {
 			return nil, fmt.Errorf("invalid name mapping %v: %q", t, name)
@@ -130,10 +139,21 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 				Name: p.Name, In: p.In, Required: p.Required, Schema: &openapi3.SchemaRef{Value: schema},
 			}})
 		}
-		// NewResponses supplies a default response; this generator requires explicit bindings.
-		op.Responses.Delete("default")
+		if r.Request != nil {
+			ref, err := g.reflectBody(doc, r.Request, true)
+			if err != nil {
+				return nil, err
+			}
+			op.RequestBody = &openapi3.RequestBodyRef{Value: &openapi3.RequestBody{Required: true, Content: openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}}}
+		}
 		if len(r.Responses) == 0 {
-			return nil, fmt.Errorf("route without responses: %s", r.Path)
+			if r.Request == nil {
+				return nil, fmt.Errorf("route without responses: %s", r.Path)
+			}
+			description := "Response schemas are not generated for this request-only binding."
+			op.Responses.Set("default", &openapi3.ResponseRef{Value: &openapi3.Response{Description: &description}})
+		} else {
+			op.Responses.Delete("default")
 		}
 		statuses := make([]int, 0, len(r.Responses))
 		for status := range r.Responses {
@@ -145,39 +165,9 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 				return nil, fmt.Errorf("invalid response status %d", status)
 			}
 			response := r.Responses[status]
-			t := reflect.TypeOf(response.Body)
-			if t == nil {
-				return nil, fmt.Errorf("nil response body: %s %d", r.Path, status)
-			}
-			if err := g.check(t); err != nil {
-				return nil, err
-			}
-			schemas := openapi3.Schemas{}
-			ref, err := openapi3gen.NewSchemaRefForValue(response.Body, schemas,
-				openapi3gen.CreateComponentSchemas(openapi3gen.ExportComponentSchemasOptions{ExportComponentSchemas: true, ExportTopLevelSchema: true}),
-				openapi3gen.CreateTypeNameGenerator(g.name), openapi3gen.UseAllExportedFields(),
-				openapi3gen.CreateFieldNameGenerator(func(f reflect.StructField, _ string) string {
-					name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-					if name == "" {
-						return f.Name
-					}
-					return name
-				}),
-				openapi3gen.ThrowErrorOnCycle(), openapi3gen.SchemaCustomizer(g.customize))
+			ref, err := g.reflectBody(doc, response.Body, false)
 			if err != nil {
-				return nil, fmt.Errorf("reflect %v: %w", t, err)
-			}
-			for name, s := range schemas {
-				if old, ok := doc.Components.Schemas[name]; ok {
-					if !sameJSON(old, s) {
-						return nil, fmt.Errorf("conflicting schema %s", name)
-					}
-				} else {
-					doc.Components.Schemas[name] = s
-				}
-			}
-			if t.Kind() == reflect.Pointer {
-				ref = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{ref}, Nullable: true}}
+				return nil, err
 			}
 			desc := ""
 			resp := &openapi3.ResponseRef{Value: &openapi3.Response{Description: &desc, Content: openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}}}
@@ -220,6 +210,50 @@ func Generate(contribs []ModuleContribution, overlayPath string) (*openapi3.T, e
 		return nil, fmt.Errorf("invalid merged document: %w", err)
 	}
 	return result, nil
+}
+
+// Each body gets a fresh traversal: a prior response must not bypass request checks.
+func (g *generator) reflectBody(doc *openapi3.T, body any, request bool) (*openapi3.SchemaRef, error) {
+	g.request = request
+	g.seen = map[reflect.Type]bool{}
+	t := reflect.TypeOf(body)
+	if t == nil {
+		return nil, fmt.Errorf("nil response body")
+	}
+	if request && t.Kind() == reflect.Pointer {
+		return nil, fmt.Errorf("request root must be a value; declare pointer nullability on fields")
+	}
+	if err := g.check(t); err != nil {
+		return nil, err
+	}
+	schemas := openapi3.Schemas{}
+	ref, err := openapi3gen.NewSchemaRefForValue(body, schemas,
+		openapi3gen.CreateComponentSchemas(openapi3gen.ExportComponentSchemasOptions{ExportComponentSchemas: true, ExportTopLevelSchema: true}),
+		openapi3gen.CreateTypeNameGenerator(g.name), openapi3gen.UseAllExportedFields(),
+		openapi3gen.CreateFieldNameGenerator(func(f reflect.StructField, _ string) string {
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if name == "" {
+				return f.Name
+			}
+			return name
+		}),
+		openapi3gen.ThrowErrorOnCycle(), openapi3gen.SchemaCustomizer(g.customize))
+	if err != nil {
+		return nil, fmt.Errorf("reflect %v: %w", t, err)
+	}
+	for name, s := range schemas {
+		if old, ok := doc.Components.Schemas[name]; ok {
+			if !sameJSON(old, s) {
+				return nil, fmt.Errorf("conflicting schema %s", name)
+			}
+		} else {
+			doc.Components.Schemas[name] = s
+		}
+	}
+	if t.Kind() == reflect.Pointer {
+		ref = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{ref}, Nullable: true}}
+	}
+	return ref, nil
 }
 
 func mergeRegistry[K comparable, V any](dst, src map[K]V) error {
@@ -336,6 +370,11 @@ func (g *generator) check(t reflect.Type) error {
 			return err
 		}
 		for _, f := range fs {
+			if g.request && f.field.Type.Kind() == reflect.Pointer {
+				if _, ok := g.config.NullableFields[Field{f.owner, f.field.Name}]; !ok {
+					return fmt.Errorf("missing request pointer nullability decision: %v.%s", f.owner, f.field.Name)
+				}
+			}
 			if base(f.field.Type).Kind() == reflect.Slice {
 				if _, ok := g.config.NullableFields[Field{f.owner, f.field.Name}]; !ok {
 					return fmt.Errorf("missing slice nullability decision: %v.%s", f.owner, f.field.Name)
@@ -385,17 +424,35 @@ func (g *generator) customize(_ string, t reflect.Type, _ reflect.StructTag, s *
 			return fmt.Errorf("reflection omitted %v.%s", t, f.name)
 		}
 		if f.field.Type.Kind() == reflect.Pointer {
+			nullable := true
+			if g.request {
+				nullable = g.config.NullableFields[Field{f.owner, f.field.Name}]
+			}
 			if prop.Ref != "" && strings.HasPrefix(prop.Ref, "#/components/") {
-				s.Properties[f.name] = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{prop}, Nullable: true}}
+				s.Properties[f.name] = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{prop}, Nullable: nullable}}
 			} else if prop.Value != nil {
-				prop.Value.Nullable = true
+				prop.Value.Nullable = nullable
 			}
 		}
 		if nullable, ok := g.config.NullableFields[Field{f.owner, f.field.Name}]; ok {
 			prop = s.Properties[f.name]
 			if prop.Value != nil {
-				prop.Value.Nullable = nullable || f.field.Type.Kind() == reflect.Pointer
+				prop.Value.Nullable = nullable || (!g.request && f.field.Type.Kind() == reflect.Pointer)
 			}
+		}
+		if name, ok := g.config.FieldRefs[Field{f.owner, f.field.Name}]; ok {
+			target := g.config.Components.Schemas[name]
+			prop := s.Properties[f.name]
+			if target == nil || target.Value == nil || target.Value.Nullable || prop.Value == nil ||
+				!slices.Contains([]reflect.Kind{reflect.String, reflect.Bool, reflect.Int, reflect.Int64, reflect.Float64}, base(f.field.Type).Kind()) ||
+				!reflect.DeepEqual(target.Value.Type, prop.Value.Type) {
+				return fmt.Errorf("incompatible scalar field reference %v.%s: %s", t, f.name, name)
+			}
+			ref := &openapi3.SchemaRef{Ref: "#/components/schemas/" + name}
+			if s.Properties[f.name].Value != nil && s.Properties[f.name].Value.Nullable {
+				ref = &openapi3.SchemaRef{Value: &openapi3.Schema{AllOf: openapi3.SchemaRefs{ref}, Nullable: true}}
+			}
+			s.Properties[f.name] = ref
 		}
 	}
 	sort.Strings(s.Required)
