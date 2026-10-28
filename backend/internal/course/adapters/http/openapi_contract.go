@@ -108,7 +108,7 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			{Method: "PUT", Path: "/api/v1/admin/lessons/{lessonId}/document", Request: saveLessonDocumentRequest{}, Responses: documentResponses(openapigen.Response{Body: lessonDocumentUpdatedResponse{}}, true), Params: []openapigen.Param{lessonParam}},
 			{Method: "POST", Path: "/api/v1/admin/lessons/{lessonId}/document/publish", Request: lessonDocumentUpdatedRequest{}, Responses: documentResponses(openapigen.Response{Empty: true}, true), Params: []openapigen.Param{lessonParam, localeParam}},
 			{Method: "GET", Path: "/api/v1/learn/lessons/{lessonId}/document", Responses: documentResponses(openapigen.Response{Body: domain.LessonDocument{}}, false), Params: []openapigen.Param{lessonParam, localeParam}},
-			{Method: "POST", Path: "/api/v1/admin/courses/{id}/status", Request: transitionAdminCourseRequest{}, Params: []openapigen.Param{
+			{Method: "POST", Path: "/api/v1/admin/courses/{id}/status", Request: transitionAdminCourseRequest{}, Responses: adminResponses(200, openapigen.Response{Body: adminCourseTreeDTO{}}, true, true), Params: []openapigen.Param{
 				{Name: "id", In: "path", Type: "string", Required: true},
 			}},
 			{Method: "GET", Path: "/api/v1/courses", Responses: list, Params: []openapigen.Param{

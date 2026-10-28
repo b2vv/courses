@@ -1488,9 +1488,26 @@ paths:
                             $ref: '#/components/headers/NoStore'
     /api/v1/admin/courses/{id}/status:
         post:
+            description: >-
+                Performs one legal lifecycle transition: draft to published, published to archived,
+                or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond
+                token returned by a read, and every accepted transition returns a new token.
+                Instructors may transition only their own course; admins may transition any course.
+                Requires one matching Origin header, accepts no duplicate or unknown body members,
+                and responses are never cached.
+            operationId: transitionAdminCourse
             parameters:
                 id:
                     schema: {format: uuid}
+            responses:
+                "200":
+                    description: The transitioned course tree with a new updatedAt token.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+            summary: Publish, archive or restore a course
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
