@@ -68,6 +68,17 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        AdminWriteBadRequest:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The body is missing, malformed, oversized, outside field/tree bounds, names an ineligible owner, or carries unexpected members.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         BadRequest:
             content:
                 application/json:
@@ -400,6 +411,121 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        AdminCourse:
+            additionalProperties: false
+            properties:
+                id:
+                    format: uuid
+                    type: string
+                instructorId:
+                    format: uuid
+                    type: string
+                lessonCount:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                status:
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                    type: string
+                studentCount:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                updatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+            required:
+                - id
+                - instructorId
+                - lessonCount
+                - price
+                - slug
+                - status
+                - studentCount
+                - title
+                - updatedAt
+            type: object
+        AdminCourseDeleteRequest:
+            additionalProperties: false
+            properties:
+                expectedUpdatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+            required:
+                - expectedUpdatedAt
+            type: object
+        AdminCoursePage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/AdminCourse'
+                    maxItems: 50
+                    type: array
+                pagination:
+                    $ref: '#/components/schemas/Pagination'
+                statusCounts:
+                    $ref: '#/components/schemas/AdminCourseStatusCounts'
+            required:
+                - items
+                - pagination
+                - statusCounts
+            type: object
+        AdminCourseSaveRequest:
+            additionalProperties: false
+            properties:
+                course:
+                    $ref: '#/components/schemas/AdminCourseWrite'
+                expectedUpdatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                modules:
+                    description: 'At most 40 modules, and at most 120 lessons across all of them together. The per-module maxItems of 120 is the single-module case, not a per-module allowance: JSON Schema cannot bound a sum over sibling arrays, so the course-wide ceiling is stated here and enforced by the server, which refuses a breach with lesson_limit.'
+                    items:
+                        $ref: '#/components/schemas/AdminModule'
+                    maxItems: 40
+                    type: array
+            required:
+                - course
+                - expectedUpdatedAt
+                - modules
+            type: object
+        AdminCourseStatusCounts:
+            additionalProperties: false
+            properties:
+                archived:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                draft:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                published:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                total:
+                    format: int64
+                    minimum: 0
+                    type: integer
+            required:
+                - archived
+                - draft
+                - published
+                - total
+            type: object
         AdminCourseStatusRequest:
             additionalProperties: false
             properties:
@@ -415,6 +541,101 @@ components:
                 - expectedUpdatedAt
                 - status
             type: object
+        AdminCourseTree:
+            additionalProperties: false
+            properties:
+                createdAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                instructorId:
+                    format: uuid
+                    type: string
+                modules:
+                    items:
+                        $ref: '#/components/schemas/AdminModule'
+                    maxItems: 40
+                    type: array
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                publishedAt:
+                    $ref: '#/components/schemas/NullableAdminTimestamp'
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                status:
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                    type: string
+                studentCount:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                updatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+            required:
+                - createdAt
+                - description
+                - id
+                - instructorId
+                - modules
+                - price
+                - publishedAt
+                - slug
+                - status
+                - studentCount
+                - summary
+                - title
+                - updatedAt
+            type: object
+        AdminCourseWrite:
+            additionalProperties: false
+            properties:
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                    type: string
+                instructorId:
+                    format: uuid
+                    type: string
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - description
+                - slug
+                - summary
+                - title
+            type: object
         AdminGrantRequest:
             additionalProperties: false
             properties:
@@ -428,6 +649,43 @@ components:
             required:
                 - reason
                 - userId
+            type: object
+        AdminLesson:
+            additionalProperties: false
+            properties:
+                id:
+                    format: uuid
+                    type: string
+                isPreview:
+                    default: false
+                    type: boolean
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - id
+                - title
+            type: object
+        AdminModule:
+            additionalProperties: false
+            properties:
+                id:
+                    format: uuid
+                    type: string
+                lessons:
+                    items:
+                        $ref: '#/components/schemas/AdminLesson'
+                    maxItems: 120
+                    type: array
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - id
+                - lessons
+                - title
             type: object
         AdminStatsCourses:
             additionalProperties: false
@@ -2131,6 +2389,12 @@ components:
             required:
                 - newEmail
             type: object
+        NullableAdminTimestamp:
+            description: RFC 3339 timestamp carrying exactly six fractional-second digits, or null.
+            format: date-time
+            nullable: true
+            pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$
+            type: string
         NullablePrice:
             allOf:
                 - $ref: '#/components/schemas/Price'
@@ -3015,6 +3279,108 @@ info:
     version: 1.0.0
 openapi: 3.0.3
 paths:
+    /api/v1/admin/courses:
+        get:
+            description: Admins see every course. Instructors see only courses they own. Students and unrecognised roles are forbidden. Query parameters must occur at most once and unknown parameters are rejected. Responses are never cached.
+            operationId: listAdminCourses
+            parameters:
+                - in: query
+                  name: limit
+                  schema:
+                    default: 20
+                    maximum: 50
+                    minimum: 1
+                    type: integer
+                - in: query
+                  name: offset
+                  schema:
+                    default: 0
+                    maximum: 10000
+                    minimum: 0
+                    type: integer
+                - description: Full-text filter over course title and summary. Rejected when empty.
+                  in: query
+                  name: search
+                  schema:
+                    maxLength: 100
+                    minLength: 1
+                    type: string
+                - description: 'Ordering of the page. Each key has one natural direction: title A→Z, students and price highest first, recent (the default) newest first. Rejected when empty.'
+                  in: query
+                  name: sort
+                  schema:
+                    default: recent
+                    enum:
+                        - recent
+                        - title
+                        - students
+                        - price
+                    type: string
+                - in: query
+                  name: status
+                  schema:
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCoursePage'
+                    description: Owner-scoped course rows and pagination.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List courses visible to the authenticated staff member
+        post:
+            description: Creates a new draft with no modules. Instructors always become the owner and may omit instructorId or echo their own ID. Admins must choose an eligible active instructor or admin. The unique slug is the replay guard, so an identical replay returns slug_taken. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
+            operationId: createAdminCourse
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminCourseWrite'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCourseTree'
+                    description: The newly created draft course with a server-minted ID and empty tree.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/AdminWriteBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/AdminMutationForbidden'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Create a draft course
     /api/v1/admin/courses/{courseId}/documents:
         get:
             description: 'The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it.'
@@ -3251,6 +3617,124 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List a course's video assets
+    /api/v1/admin/courses/{id}:
+        delete:
+            description: Permanently deletes a draft course and its tree. Published and archived courses cannot be deleted. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may delete only their own draft; admins may delete any draft. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.
+            operationId: deleteAdminCourse
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminCourseDeleteRequest'
+                required: true
+            responses:
+                "204":
+                    description: The draft course and its tree were deleted.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/AdminWriteBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/AdminMutationForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Delete a draft course
+        get:
+            description: Admins may read any tree. An instructor may read only a tree they own. Unknown IDs are distinguished from ownership refusals for authenticated staff. Query parameters are not supported. Responses are never cached.
+            operationId: getAdminCourse
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCourseTree'
+                    description: The complete authored course tree in module and lesson order.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Get an authored course tree
+        put:
+            description: Replaces all editable course fields, modules and lessons. Array indexes define contiguous zero-based positions; lifecycle and position members are rejected. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may save only their own course and must omit instructorId or echo their own ID; admins may reassign to an eligible active instructor or admin. Slugs remain mutable only until first publication. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
+            operationId: saveAdminCourse
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminCourseSaveRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCourseTree'
+                    description: The saved course tree with a new updatedAt token.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/AdminWriteBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/AdminMutationForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Replace an authored course tree
     /api/v1/admin/courses/{id}/status:
         post:
             parameters:

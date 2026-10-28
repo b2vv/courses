@@ -18,6 +18,9 @@ const (
 // PublicCatalogSorts is the authoritative public allowlist; admin-only sorts stay separate.
 var PublicCatalogSorts = []Sort{SortRecent, SortTitle}
 
+// AdminCourseSorts is the authoritative ordered admin allowlist, including both admin-only sorts.
+var AdminCourseSorts = []Sort{SortRecent, SortTitle, SortStudents, SortPrice}
+
 type Query struct {
 	Limit  int
 	Offset int
@@ -40,7 +43,7 @@ func NewQuery(limit, offset int, search, sort string) (Query, error) {
 // catalog does not — by active-student count and by price — so they live here, not in
 // NewQuery, and a catalog request for them stays an invalid_query.
 func NewAuthoringQuery(limit, offset int, search, sort string) (Query, error) {
-	return newQuery(limit, offset, search, sort, SortRecent, SortTitle, SortStudents, SortPrice)
+	return newQuery(limit, offset, search, sort, AdminCourseSorts...)
 }
 
 func newQuery(limit, offset int, search, sort string, allowed ...Sort) (Query, error) {
