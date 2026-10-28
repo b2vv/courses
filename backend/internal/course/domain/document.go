@@ -37,6 +37,9 @@ const (
 	SectionTask  SectionType = "task"
 )
 
+// SectionTypes is the complete section discriminator set.
+var SectionTypes = []SectionType{SectionVideo, SectionText, SectionImage, SectionRow, SectionTask}
+
 type BlockType string
 
 const (
@@ -54,6 +57,9 @@ const (
 	MarkBold   Mark = "bold"
 	MarkItalic Mark = "italic"
 )
+
+// Marks is the complete inline formatting mark set.
+var Marks = []Mark{MarkBold, MarkItalic}
 
 // Image content types an image section may carry. They mirror the image module's upload allowlist
 // (internal/image/domain) — a browser cannot import a Go constant, and a module never imports
@@ -144,7 +150,7 @@ func ValidateLessonDocument(document LessonDocument) error {
 }
 
 func validateDocumentSection(section Section, inRow bool, textCount *int) error {
-	if !validText(section.ID, MaximumSectionID) || inRow && section.Type != SectionText && section.Type != SectionImage {
+	if !slices.Contains(SectionTypes, section.Type) || !validText(section.ID, MaximumSectionID) || inRow && section.Type != SectionText && section.Type != SectionImage {
 		return ErrInvalidLessonDocument
 	}
 	switch section.Type {
@@ -228,7 +234,7 @@ func validateDocumentSpans(spans []Span, textCount *int) error {
 			return ErrInvalidLessonDocument
 		}
 		for _, mark := range span.Marks {
-			if mark != MarkBold && mark != MarkItalic {
+			if !slices.Contains(Marks, mark) {
 				return ErrInvalidLessonDocument
 			}
 		}

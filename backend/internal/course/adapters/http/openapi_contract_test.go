@@ -59,6 +59,17 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	}
 	lessonProperties["videoState"] = videoState
 	t.Log("learning videoState deletion detected by fidelity")
+	spanProperties := schemas["LessonSpan"].(map[string]any)["properties"].(map[string]any)
+	spanText, exists := spanProperties["text"]
+	if !exists {
+		t.Fatal("vacuous document fidelity: LessonSpan.text missing")
+	}
+	delete(spanProperties, "text")
+	if diff := firstDifference("$", got, want); diff == "" {
+		t.Fatal("nested document property deletion escaped fidelity")
+	}
+	spanProperties["text"] = spanText
+	t.Log("nested LessonSpan.text deletion detected by fidelity")
 	first, err := openapigen.MarshalYAML(generated)
 	if err != nil {
 		t.Fatal(err)
@@ -72,9 +83,9 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(first, second) {
-		t.Fatal("catalog/learning regeneration is not byte-identical")
+		t.Fatal("catalog/learning/document regeneration is not byte-identical")
 	}
-	t.Log("catalog, learning and status request + complete referenced component closures equal hand spec; two generations byte-identical")
+	t.Log("catalog, learning, document and status request + complete referenced component closures equal hand spec; two generations byte-identical")
 }
 
 // Preserve whole catalog fidelity and add the request-only route's complete ref closure.
@@ -82,7 +93,7 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 	t.Helper()
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
-	for _, path := range []string{"/api/v1/courses", "/api/v1/courses/{slug}", "/api/v1/learn/courses/{slug}"} {
+	for _, path := range []string{"/api/v1/courses", "/api/v1/courses/{slug}", "/api/v1/learn/courses/{slug}", "/api/v1/admin/lessons/{lessonId}/document", "/api/v1/admin/lessons/{lessonId}/document/publish", "/api/v1/learn/lessons/{lessonId}/document"} {
 		value, ok := source["paths"].(map[string]any)[path]
 		if !ok || value == nil {
 			t.Fatalf("missing path %s", path)

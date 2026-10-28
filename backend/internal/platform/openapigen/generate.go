@@ -73,6 +73,7 @@ type generator struct {
 	errorCodes []string
 	config     ModuleContribution
 	seen       map[reflect.Type]bool
+	cycleNames map[reflect.Type]string
 	request    bool
 }
 
@@ -120,6 +121,7 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 		g.config.Routes = append(g.config.Routes, c.Routes...)
 	}
 	g.config.Components.Schemas = doc.Components.Schemas
+	g.cycleNames = g.config.NameMap
 	// A component name may be shared by several Go types only when they reflect to an identical
 	// schema (§16.19: a frozen cross-module schema such as Rating is expressed as distinct module
 	// DTOs mapped to one name). Injectivity is replaced by schema-equality, not dropped: a differing
@@ -337,6 +339,9 @@ func (g *generator) reflectBody(doc *openapi3.T, body any, request bool) (*opena
 	if request && t.Kind() == reflect.Pointer {
 		return nil, fmt.Errorf("request root must be a value; declare pointer nullability on fields")
 	}
+	if err := g.checkCycles(t, nil); err != nil {
+		return nil, err
+	}
 	if err := g.check(t); err != nil {
 		return nil, err
 	}
@@ -351,7 +356,7 @@ func (g *generator) reflectBody(doc *openapi3.T, body any, request bool) (*opena
 			}
 			return name
 		}),
-		openapi3gen.ThrowErrorOnCycle(), openapi3gen.SchemaCustomizer(g.customize))
+		openapi3gen.SchemaCustomizer(g.customize))
 	if err != nil {
 		return nil, fmt.Errorf("reflect %v: %w", t, err)
 	}
@@ -455,6 +460,42 @@ func fields(t reflect.Type) ([]jsonField, error) {
 	}
 	return out, nil
 }
+
+// §16.23 (owner, 2026-10-28): only explicitly NameMapped cycles may become refs.
+// Check before reflection: kin-openapi's customizer runs after cycle handling.
+// Keep the original registry during canonicalSchema's isolated name comparison.
+func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
+	t = base(t)
+	if index := slices.Index(parents, t); index >= 0 {
+		for _, member := range parents[index:] {
+			// Unnamed containers carry the edge; the component types own the cycle.
+			if member.Name() == "" {
+				continue
+			}
+			if g.cycleNames[member] == "" {
+				return fmt.Errorf("recursive type %v requires a NameMap entry", member)
+			}
+		}
+		return nil
+	}
+	parents = append(parents, t)
+	switch t.Kind() {
+	case reflect.Struct:
+		fs, err := fields(t)
+		if err != nil {
+			return err
+		}
+		for _, field := range fs {
+			if err := g.checkCycles(field.field.Type, parents); err != nil {
+				return err
+			}
+		}
+	case reflect.Slice, reflect.Array, reflect.Map:
+		return g.checkCycles(t.Elem(), parents)
+	}
+	return nil
+}
+
 func (g *generator) check(t reflect.Type) error {
 	t = base(t)
 	if g.seen[t] {

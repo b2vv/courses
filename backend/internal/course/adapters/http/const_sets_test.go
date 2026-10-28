@@ -82,20 +82,22 @@ func TestDomainConstSetCensus(t *testing.T) {
 		{"Sort", enumStrings(domain.PublicCatalogSorts)},
 		{"Status", enumStrings(domain.CourseStatuses)},
 		{"BlockType", enumStrings(domain.BlockTypes)},
+		{"SectionType", enumStrings(domain.SectionTypes)},
+		{"Mark", enumStrings(domain.Marks)},
 		{"LearningVideoState", enumStrings(domain.LearningVideoStates)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if missing := missingConsts(scope, tc.name, tc.values); len(missing) != 0 {
 				t.Fatalf("domain constants absent from authoritative set: %v", missing)
 			}
-			if tc.name == "LearningVideoState" {
-				if len(tc.values) == 0 || slices.Contains(tc.values, string(domain.VideoAbsent)) {
-					t.Fatal("video state set must be non-empty and exclude VideoAbsent")
+			if tc.name == "LearningVideoState" || tc.name == "SectionType" || tc.name == "Mark" {
+				if len(tc.values) == 0 {
+					t.Fatal("vacuous authoritative enum set")
 				}
 				var declared []string
 				for _, name := range scope.Names() {
 					c, ok := scope.Lookup(name).(*types.Const)
-					if ok && c.Type() == scope.Lookup(tc.name).Type() && name != "VideoAbsent" {
+					if ok && c.Type() == scope.Lookup(tc.name).Type() && !(tc.name == "LearningVideoState" && name == "VideoAbsent") {
 						declared = append(declared, constant.StringVal(c.Val()))
 					}
 				}
@@ -103,14 +105,15 @@ func TestDomainConstSetCensus(t *testing.T) {
 				slices.Sort(declared)
 				slices.Sort(values)
 				if !slices.Equal(declared, values) {
-					t.Fatalf("declared video states %v != authoritative set %v", declared, values)
+					t.Fatalf("declared constants %v != authoritative set %v", declared, values)
 				}
-				emitted := OpenAPIContribution().Enums[reflect.TypeFor[domain.LearningVideoState]()]
+				typesByName := map[string]reflect.Type{"LearningVideoState": reflect.TypeFor[domain.LearningVideoState](), "SectionType": reflect.TypeFor[domain.SectionType](), "Mark": reflect.TypeFor[domain.Mark]()}
+				emitted := OpenAPIContribution().Enums[typesByName[tc.name]]
 				if !slices.Equal(emitted, tc.values) {
-					t.Fatalf("emitted video states %v != authoritative ordered set %v", emitted, tc.values)
+					t.Fatalf("emitted enum %v != authoritative ordered set %v", emitted, tc.values)
 				}
-				if !domain.VideoAbsent.Valid() {
-					t.Fatal("non-emitted VideoAbsent must remain valid")
+				if tc.name == "LearningVideoState" && (!domain.VideoAbsent.Valid() || slices.Contains(tc.values, string(domain.VideoAbsent))) {
+					t.Fatal("VideoAbsent must remain valid but not emitted")
 				}
 			}
 			// A typed declaration added without updating the set must be detected.
