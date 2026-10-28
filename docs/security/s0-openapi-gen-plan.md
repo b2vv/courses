@@ -894,3 +894,21 @@ type.
 - **Surfaced by:** full `go test ./...` on S0.1j (the targeted orders/openapispec/openapigen suites Codex ran
   do not include `platform/architecture`) — the AGENTS.md lesson that shared-state changes need the full set.
   Courses 2 review gates this as an architecture-boundary change (higher stakes than a plain contributor).
+
+**16.23 Non-blocking review follow-ups (independent gate-reviewer, fresh Opus 4.8, 2026-10-28).** The
+independent review of the seven S0.1h–S0.1j commits (53ef56d..234c835) returned all PASS / PASS-WITH-CONCERNS,
+no blocking findings, gate green, branch safe toward S0.2 (report: docs/security/_wip-s0.1-review.md). Two
+follow-ups were raised; neither holds the S0.2 merge, both should land as a small reviewed slice:
+- **F1 (§16.19 fallback-name collisions).** The eager `canonicalSchema` check iterates only `NameMap`; the
+  removed `check()`-time registry also caught collisions between fallback-named (`t.Name()`) struct types.
+  Residual gap: two distinct Go types with the same SIMPLE name reachable within one reflection graph, neither
+  in `NameMap`, are collapsed silently by the reflector and now caught by nobody (emission-time `sameJSON`
+  only sees cross-call reuse). Narrow — all current DTOs are module-local, the artifact is byte-identical, the
+  full suite is green — but it is the silently-wrong-artifact class. Resolve by restoring a check-time registry
+  for fallback names, or by documenting that a type reachable in more than one graph must carry an explicit
+  `NameMap` name (and asserting it).
+- **F2 (§16.22 prefix-width).** The two `orders_ownership_test.go` exemptions are prefix-based
+  (`courses/internal/platform/*`, the whole `openapispec` collector), wider than today's need (only
+  `openapigen`, only the collector's http import). Narrow them to the specific packages, or add a cautionary
+  comment, so a future `internal/platform` package or business logic added to the collector cannot slip the
+  guard unnoticed.
