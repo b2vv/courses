@@ -1,5 +1,7 @@
 package domain
 
+import "slices"
+
 // Level is the severity of a captured browser event. The set is closed: an
 // unknown level is a malformed event, not a silently-accepted one.
 type Level string
@@ -9,6 +11,9 @@ const (
 	LevelWarn  Level = "warn"
 	LevelInfo  Level = "info"
 )
+
+// Levels is the ordered set of accepted client-event severities.
+var Levels = []Level{LevelError, LevelWarn, LevelInfo}
 
 // unknownSentinel fills an empty route or release so the earliest boot error —
 // captured before the app knows its route, or on a build without a release id —
@@ -77,14 +82,13 @@ func NewClientEvent(in Input) (ClientEvent, error) {
 // normalizeLevel defaults an empty level to error (the common client capture)
 // and rejects any non-empty value outside the closed set.
 func normalizeLevel(raw string) (Level, error) {
-	switch Level(raw) {
-	case "":
+	if raw == "" {
 		return LevelError, nil
-	case LevelError, LevelWarn, LevelInfo:
-		return Level(raw), nil
-	default:
-		return "", ErrInvalidEvent
 	}
+	if slices.Contains(Levels, Level(raw)) {
+		return Level(raw), nil
+	}
+	return "", ErrInvalidEvent
 }
 
 func sentinel(value string) string {

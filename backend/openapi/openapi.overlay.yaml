@@ -202,6 +202,7 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        "ClientLogRequest": {"properties": {"message": {"maxLength": 2000}, "route": {"maxLength": 512}, "release": {"maxLength": 128}, "userAgent": {"maxLength": 256}, "errorName": {"maxLength": 256}, "errorStack": {"maxLength": 8000}}}
         "PurchaseOrder": {"properties": {"id": {"format": "uuid"}, "courseId": {"format": "uuid"}, "createdAt": {"format": "date-time"}, "paidAt": {"format": "date-time"}}}
         "MembershipGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}}}
         "CourseGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}, "source": {"enum": ["admin"]}, "state": {"enum": ["active"]}}}
@@ -819,6 +820,17 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/client-logs:
+      post:
+        operationId: ingestClientLog
+        summary: Ingest one browser-captured log event
+        description: >-
+          Unauthenticated by design so a pre-auth client error can still report.
+          The body is one event; the server validates, redacts the §17 set and
+          emits a structured log line. No body is returned. The endpoint is
+          rate-limited by the nginx clientlog zone.
+        responses:
+          '204': { description: Event accepted; nothing is returned. }
     "/api/v1/learn/courses/{courseId}/purchase": {"post": {"operationId": "startCoursePurchase", "summary": "Start an idempotent course purchase", "description": "Authenticated same-origin mutation. The order snapshots the published course price.", "responses": {"201": {"description": "The new or replayed pending order.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
     "/api/v1/learn/courses/{courseId}/enroll": {"post": {"operationId": "enrollInCourse", "summary": "Enroll the authenticated account in a free published course", "responses": {"201": {"description": "Active membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
     "/api/v1/learn/courses/{courseId}/membership": {"get": {"operationId": "getMyCourseMembership", "summary": "Read the authenticated account membership state", "responses": {"200": {"description": "Membership state, or no membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}

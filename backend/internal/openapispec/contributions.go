@@ -4,6 +4,7 @@ package openapispec
 
 import (
 	adminstatshttp "courses/internal/adminstats/adapters/http"
+	clientloghttp "courses/internal/clientlog/adapters/http"
 	coursehttp "courses/internal/course/adapters/http"
 	discussionhttp "courses/internal/discussion/adapters/http"
 	identityhttp "courses/internal/identity/adapters/http"
@@ -17,5 +18,5 @@ import (
 
 // AllOpenAPIContributions collects the modules migrated to Go-owned contracts.
 func AllOpenAPIContributions() []openapigen.ModuleContribution {
-	return []openapigen.ModuleContribution{coursehttp.OpenAPIContribution(), adminstatshttp.OpenAPIContribution(), imagehttp.OpenAPIContribution(), mediahttp.OpenAPIContribution(), playbackhttp.OpenAPIContribution(), transcripthttp.OpenAPIContribution(), discussionhttp.OpenAPIContribution(), identityhttp.OpenAPIContribution(), ordershttp.OpenAPIContribution()}
+	return []openapigen.ModuleContribution{coursehttp.OpenAPIContribution(), adminstatshttp.OpenAPIContribution(), imagehttp.OpenAPIContribution(), mediahttp.OpenAPIContribution(), playbackhttp.OpenAPIContribution(), transcripthttp.OpenAPIContribution(), discussionhttp.OpenAPIContribution(), identityhttp.OpenAPIContribution(), ordershttp.OpenAPIContribution(), clientloghttp.OpenAPIContribution()}
 }
