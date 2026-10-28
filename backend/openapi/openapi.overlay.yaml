@@ -6,6 +6,10 @@
 # CourseDetail publishedAt/status narrowing is the published endpoint contract.
 components:
     headers:
+        SessionCookie:
+          description: Opaque session cookie; HttpOnly and SameSite=Lax, Secure when configured.
+          required: true
+          schema: {}
         NoStore:
             description: This response is never stored by caches or shared proxies.
             schema:
@@ -16,6 +20,50 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        EmailTaken:
+          description: The email is already registered.
+        AccountValidationFailed:
+          description: Account input is invalid.
+        RateLimited:
+          description: Too many requests.
+        InvalidAccountToken:
+          description: The account token is malformed.
+        TokenUsed:
+          description: The one-time token has expired or was already used.
+        TwoFactorConflict:
+          description: Two-factor authentication is already enabled or is not enabled.
+        TwoFactorInvalidCode:
+          description: The supplied TOTP or recovery code is invalid.
+        OriginForbidden:
+          description: The request origin is missing, repeated or does not match the public
+            origin.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        AdminUserMutationForbidden:
+          description: The Origin is not allowed or the authenticated account is not an administrator.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        UserNotFound:
+          description: The target account is unknown or deleted.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        AdminUserConflict:
+          description: The operation targets the caller, targets an immutable admin, or would
+            block the last active admin.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
         AdminMutationForbidden:
             description: "The Origin is not allowed, the actor is not staff, or the instructor does not own the course or attempted reassignment."
             headers:
@@ -149,6 +197,141 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        AuthenticatedUser:
+          properties:
+            id:
+              format: uuid
+            email:
+              minLength: 3
+              maxLength: 254
+            displayName:
+              minLength: 1
+              maxLength: 120
+            role:
+              description: student may learn; instructor and admin may enter the administration
+                shell.
+        Instructor:
+          properties:
+            id:
+              format: uuid
+            displayName:
+              minLength: 1
+              maxLength: 120
+        AdminUser:
+          properties:
+            id:
+              format: uuid
+            email:
+              minLength: 3
+              maxLength: 254
+            displayName:
+              minLength: 1
+              maxLength: 120
+        AdminUserPage:
+          properties:
+            items:
+              maxItems: 50
+        LoginRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+            password:
+              minLength: 1
+              maxLength: 1024
+        TwoFactorRequired:
+          properties:
+            pendingId:
+              minLength: 1
+              maxLength: 128
+        TwoFactorEnrollment:
+          properties:
+            secret:
+              minLength: 16
+            otpauthUri:
+              format: uri
+        RecoveryCodes:
+          properties:
+            recoveryCodes:
+              minItems: 10
+              maxItems: 10
+              items:
+                minLength: 1
+                maxLength: 128
+        TwoFactorCodeRequest:
+          properties:
+            code:
+              minLength: 1
+              maxLength: 128
+        CompleteTwoFactorRequest:
+          properties:
+            pendingId:
+              minLength: 1
+              maxLength: 128
+            code:
+              minLength: 1
+              maxLength: 128
+        DisableTwoFactorRequest:
+          properties:
+            password:
+              minLength: 1
+              maxLength: 1024
+            code:
+              minLength: 1
+              maxLength: 128
+        RegisterRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+            password:
+              minLength: 8
+              maxLength: 128
+            displayName:
+              minLength: 1
+              maxLength: 100
+        TokenRequest:
+          properties:
+            token:
+              minLength: 1
+              maxLength: 128
+        EmailRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+        OptionalEmailRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+        ResetPasswordRequest:
+          properties:
+            token:
+              minLength: 1
+              maxLength: 128
+            password:
+              minLength: 8
+              maxLength: 128
+        ChangePasswordRequest:
+          properties:
+            oldPassword:
+              minLength: 1
+              maxLength: 128
+            newPassword:
+              minLength: 8
+              maxLength: 128
+        NewEmailRequest:
+          properties:
+            newEmail:
+              minLength: 3
+              maxLength: 254
+        AdminUserPasswordRequest:
+          properties:
+            password:
+              minLength: 1
+              maxLength: 1024
+              description: The UTF-8 encoding must also be no more than 1024 bytes.
         PublicReviewPage:
             properties:
                 items:
@@ -618,6 +801,276 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    "/api/v1/auth/login":
+      post:
+        operationId: login
+        summary: Exchange credentials for a session
+        description: Requires exactly one Origin header equal to the configured public
+          origin; a missing, repeated, null or foreign origin is rejected. The body accepts
+          only email and password, and rejects duplicate keys, unknown members, trailing
+          content and bodies over 8 KiB. Unknown accounts and wrong passwords are indistinguishable.
+          A success sets an HttpOnly, SameSite=Lax session cookie and revokes any session
+          the request already presented. Responses are never cached.
+        responses:
+          '200':
+            description: The authenticated user, or a pending two-factor challenge. A
+              session cookie is set only for the authenticated-user variant.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+              Set-Cookie:
+                "$ref": "#/components/headers/SessionCookie"
+    "/api/v1/auth/register":
+      post:
+        operationId: register
+        summary: Register and start a session
+        responses:
+          '201':
+            description: Registered user and session cookie
+    "/api/v1/auth/verify-email":
+      post:
+        operationId: verifyEmail
+        responses:
+          '204':
+            description: Email verified.
+    "/api/v1/auth/resend-verification":
+      post:
+        operationId: resendVerification
+        description: Returns 204 whether or not the email identifies an account.
+        responses:
+          '204':
+            description: Verification email was requested.
+    "/api/v1/auth/password/forgot":
+      post:
+        operationId: requestPasswordReset
+        description: Returns 200 whether or not the email identifies an account.
+        responses:
+          '200':
+            description: Reset request accepted.
+    "/api/v1/auth/password/reset":
+      post:
+        operationId: resetPassword
+        responses:
+          '204':
+            description: Password reset and all sessions revoked.
+    "/api/v1/auth/password/change":
+      post:
+        operationId: changePassword
+        responses:
+          '204':
+            description: Password changed; other sessions revoked.
+    "/api/v1/auth/email/change":
+      post:
+        operationId: requestEmailChange
+        responses:
+          '204':
+            description: Confirmation email requested.
+    "/api/v1/auth/email/change/confirm":
+      post:
+        operationId: confirmEmailChange
+        responses:
+          '204':
+            description: Email changed and verified.
+    "/api/v1/auth/2fa/enroll":
+      post:
+        operationId: enrollTwoFactor
+        summary: Create an unconfirmed TOTP secret for the authenticated account
+        responses:
+          '200':
+            description: Scan or record this secret, then confirm it. The secret is returned
+              only by this endpoint.
+    "/api/v1/auth/2fa/confirm":
+      post:
+        operationId: confirmTwoFactor
+        summary: Confirm a TOTP secret and receive one-time recovery codes
+        responses:
+          '200':
+            description: Two-factor authentication is enabled; save recovery codes now
+              because they are not shown again.
+    "/api/v1/auth/2fa/complete":
+      post:
+        operationId: completeTwoFactor
+        summary: Complete a pending login using a TOTP or recovery code
+        responses:
+          '204':
+            description: Session cookie issued.
+    "/api/v1/auth/2fa/disable":
+      post:
+        operationId: disableTwoFactor
+        summary: Disable two-factor authentication after password and factor proof
+        responses:
+          '204':
+            description: Two-factor authentication disabled.
+    "/api/v1/auth/2fa/recovery-codes":
+      post:
+        operationId: regenerateRecoveryCodes
+        summary: Replace recovery codes after a TOTP or recovery-code proof
+        responses:
+          '200':
+            description: New recovery codes, returned only once.
+    "/api/v1/auth/me":
+      get:
+        operationId: getCurrentUser
+        summary: Read the authenticated user
+        description: Resolves the session cookie. A missing, malformed, repeated, expired
+          or revoked cookie returns the same 401, and a disabled account is treated as
+          unauthenticated.
+        responses:
+          '200':
+            description: The authenticated user.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/auth/logout":
+      post:
+        operationId: logout
+        summary: End the current session
+        description: 'Requires the same single matching Origin header as login. Revocation
+          is idempotent: an absent, malformed or already revoked session still returns
+          204 and still clears the cookie, so the response reveals nothing about session
+          existence.'
+        responses:
+          '204':
+            description: The session is revoked and the cookie is cleared.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+              Set-Cookie:
+                "$ref": "#/components/headers/SessionCookie"
+    "/api/v1/admin/instructors":
+      get:
+        operationId: listInstructors
+        summary: List eligible course owners
+        description: Admin-only, unpaginated and bounded to 200 active instructor or admin
+          accounts. Email, password data and account status are never exposed. Responses
+          are never cached.
+        responses:
+          '200':
+            description: Eligible owners in deterministic display-name and ID order.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+            content:
+              application/json:
+                schema:
+                  maxItems: 200
+    "/api/v1/admin/users":
+      get:
+        operationId: listAdminUsers
+        summary: List accounts for identity administration
+        description: Admin-only. By default returns active and blocked accounts while
+          omitting deleted accounts; an explicit status filter selects one state. Search
+          is a case-insensitive literal substring of email or display name. Query parameters
+          must occur at most once, unknown parameters are rejected, and responses are
+          never cached.
+        parameters:
+          limit:
+            schema:
+              minimum: 1
+              maximum: 50
+              default: 20
+          offset:
+            schema:
+              minimum: 0
+              maximum: 10000
+              default: 0
+          q:
+            schema:
+              default: ''
+            description: Search text, maximum 100 Unicode code points after trimming whitespace.
+          role:
+            description: Optional single-role filter; omitted returns every role.
+          sort:
+            description: Row ordering; omitted or 'email' sorts by email, 'name' by display
+              name, 'recent' by newest account first.
+        responses:
+          '200':
+            description: Status-projected account rows and pagination.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/status":
+      post:
+        operationId: setAdminUserStatus
+        summary: Block or restore an account
+        description: Admin-only and idempotent. Block revokes the target's sessions; restore
+          makes a non-deleted target active. Requires one matching Origin header. Bodies
+          are limited to 8 KiB, accept no duplicate or unknown members, and responses
+          are never cached.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '200':
+            description: The requested status is in effect.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}":
+      delete:
+        operationId: deleteAdminUser
+        summary: Soft-delete an account
+        description: Admin-only. Marks a non-admin target deleted and disabled and revokes
+          its sessions. Deleted and unknown targets are indistinguishable. Requires one
+          matching Origin header, accepts no query parameters, and responses are never
+          cached.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: The account was soft-deleted and its sessions were revoked.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/password":
+      post:
+        operationId: resetAdminUserPassword
+        summary: Reset an account password
+        description: Admin-only. Replaces the credential and revokes every target session,
+          including for a blocked target; a deleted target is not operable. Requires one
+          matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or
+          unknown members, and responses are never cached. Passwords contain 1 to 1024
+          UTF-8 bytes; any content is accepted.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: The password was reset and the target's sessions were revoked.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/2fa/disable":
+      post:
+        operationId: adminDisableUserTwoFactor
+        summary: Disable two-factor authentication for an account
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: Two-factor authentication disabled and recovery codes removed.
     /api/v1/admin/courses/{courseId}/documents:
         get:
             operationId: "listCourseDocuments"
