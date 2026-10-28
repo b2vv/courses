@@ -213,8 +213,17 @@ func mergeParamMetadata(old, patch any, path []string) error {
 	params, _ := old.([]any)
 	declared := map[string]map[string]any{}
 	for _, entry := range params {
-		param := entry.(map[string]any)
-		declared[param["name"].(string)] = param
+		param, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		// A $ref parameter (e.g. a reusable header) has no inline name; its metadata lives on the
+		// referenced component, so it is not addressable by name here. Skip it rather than panic.
+		name, ok := param["name"].(string)
+		if !ok {
+			continue
+		}
+		declared[name] = param
 	}
 	names := make([]string, 0, len(metadata))
 	for name := range metadata {
