@@ -272,6 +272,50 @@ func TestOneOfResponseEmitsAlternatives(t *testing.T) {
 	}
 }
 
+func TestHeaderParameterComponent(t *testing.T) {
+	// A reusable header parameter (e.g. Idempotency-Key) emits a components.parameters entry and the
+	// operation references it; a plain header stays inline.
+	c := ModuleContribution{Routes: []RouteBinding{{
+		Method: "POST", Path: "/buy", Request: child{},
+		Params: []Param{
+			{Name: "Idempotency-Key", In: "header", Type: "string", Required: true, Component: "IdempotencyKey"},
+			{Name: "X-Trace", In: "header", Type: "string"},
+		},
+		Responses: map[int]Response{200: {Body: child{}}},
+	}}}
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	comp := doc.Components.Parameters["IdempotencyKey"]
+	if comp == nil || comp.Value == nil || comp.Value.In != "header" || comp.Value.Name != "Idempotency-Key" || !comp.Value.Required {
+		t.Fatalf("reusable header parameter not emitted as a component: %+v", comp)
+	}
+	var sawRef, sawInline bool
+	for _, p := range doc.Paths.Value("/buy").Post.Parameters {
+		if p.Ref == "#/components/parameters/IdempotencyKey" {
+			sawRef = true
+		}
+		if p.Value != nil && p.Value.Name == "X-Trace" && p.Value.In == "header" {
+			sawInline = true
+		}
+	}
+	if !sawRef {
+		t.Fatal("operation does not reference the IdempotencyKey parameter component")
+	}
+	if !sawInline {
+		t.Fatal("plain header parameter should stay inline")
+	}
+	// Fail closed: the same component name reused with a differing definition conflicts.
+	bad := ModuleContribution{Routes: []RouteBinding{
+		{Method: "GET", Path: "/a", Params: []Param{{Name: "Idempotency-Key", In: "header", Type: "string", Required: true, Component: "IdempotencyKey"}}, Responses: map[int]Response{200: {Body: child{}}}},
+		{Method: "GET", Path: "/b", Params: []Param{{Name: "Idempotency-Key", In: "header", Type: "string", Required: false, Component: "IdempotencyKey"}}, Responses: map[int]Response{200: {Body: child{}}}},
+	}}
+	if _, err := Generate([]ModuleContribution{bad}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "conflicting parameter") {
+		t.Fatalf("differing reusable parameter should fail closed, got %v", err)
+	}
+}
+
 func TestSharedComponentNameAllowsIdenticalSchemaOnly(t *testing.T) {
 	type ratingA struct {
 		Average float64 `json:"average"`
@@ -414,7 +458,8 @@ func TestParameterMetadataFailsClosed(t *testing.T) {
 func TestInvalidGoParameters(t *testing.T) {
 	for _, p := range []Param{
 		{In: "query", Type: "string"},
-		{Name: "x", In: "header", Type: "string"},
+		{Name: "x", In: "cookie", Type: "string"}, // header is now valid (§16.21); cookie is not a supported location
+		{Name: "x", In: "header", Type: "object"}, // a supported location with an unsupported type still fails
 		{Name: "x", In: "query", Type: "object"},
 		{Name: "slug", In: "path", Type: "string"},
 		{Name: "absent", In: "path", Type: "string", Required: true},

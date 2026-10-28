@@ -833,3 +833,36 @@ than work around it (generator, frozen spec and git untouched), the same discipl
 - **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18 / §16.19); no
   product/contract change, hand spec untouched, nothing merges. Unblocks S0.1i identity (login 200).
   Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 / S0.1h-gen).
+
+**16.21 Header parameter + reusable parameter component — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1j orders STOP).** orders `POST /api/v1/learn/courses/{courseId}/purchase` carries the
+`Idempotency-Key` request header, declared in the frozen spec as `$ref:
+'#/components/parameters/IdempotencyKey'` → `components.parameters.IdempotencyKey` (`name: Idempotency-Key,
+in: header, required, schema: {string, minLength 1, maxLength 128}`; openapi.yaml:102, 2110-2115). It is the
+only header parameter and the only reusable parameter component in the frozen contract. The generator
+accepted only `in: query`/`path` and emitted every parameter inline (no `components.parameters`), and the
+overlay cannot ADD a parameter (orphan guard, overlay.go:227), so Codex STOPped — same discipline as the
+oneOf and Rating STOPs.
+- **Decision — `Param.In: "header"` is allowed, and `Param.Component` emits a reusable parameter.** Header is
+  added to the accepted locations (no path-template rule; type rules unchanged). When `Param.Component` is set
+  the generator emits the parameter once under `components.parameters[Component]` (name, in, required, schema
+  type/enum) and references it from the operation as `$ref: '#/components/parameters/<Component>'`; a reuse
+  with a differing definition fails closed (`conflicting parameter`), mirroring shared response components.
+  Hand-only keywords (`description`, `minLength`/`maxLength`) enrich the EMITTED component via the overlay —
+  the component now exists, so the orphan guard permits enrichment; the overlay's parameter special-case is
+  scoped to `paths/*` (overlay.go:91), so `components.parameters` merges normally. No change for existing
+  inline query/path parameters.
+- **Why a component + overlay enrichment, not a fuller Go parameter.** The frozen spec references one shared
+  `IdempotencyKey` component from the operation; emitting it inline would diverge from that shape, and putting
+  `description`/min-max on the Go `Param` would move hand-only keywords into Go against §16.2. The generator
+  emits the structural skeleton; the overlay owns the prose and bounds — the same single-source split used
+  everywhere else.
+- **Test (prove non-vacuous):** `TestHeaderParameterComponent` — a `Component` header emits a
+  `components.parameters` entry (in: header, required) and the operation `$ref`s it, while a plain header stays
+  inline; the same `Component` reused with a differing definition fails closed with `conflicting parameter`.
+  `TestInvalidGoParameters` updated: `in: header` is now valid, `in: cookie` and a header with an unsupported
+  type still fail. `TestOpenAPIArtifact` byte-identical (no contributor uses header params until orders lands).
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18 / §16.19 / §16.20); no
+  product/contract change, hand spec untouched, nothing merges. Unblocks S0.1j orders (purchase
+  Idempotency-Key). Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 /
+  S0.1h-gen / S0.1i-gen).
