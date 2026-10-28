@@ -774,3 +774,36 @@ Codex's narrow STOP (it did not hand-fix the generator, edit the frozen spec, or
   end-to-end `TestOpenAPIArtifact` also exercises the real playback `204`.
 - **Scope:** generate-from-Go generator capability (same class as §16.15 named-root-slice lift); no
   product/contract change, hand spec untouched, nothing merges. Courses 2 per-slice review gates it.
+
+**16.19 Shared component name across modules — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1h discussion STOP).** discussion's review rating DTO (`reviewRatingDTO`) shares the frozen
+component name `Rating` with course (`course.ratingDTO`), and the two are an identical schema
+(`{average float64/double, count int}`; `minimum:3` is an overlay keyword, §16.2). The generator rejected
+this a priori: it kept a `names map[string]reflect.Type` and errored `component name collision` whenever two
+distinct Go types mapped to one component name (an eager loop over `NameMap` and a second check in
+`check()`). That is strictly stronger than correctness requires — two different Go structs that serialise to
+the *same* JSON schema are a legitimate shared component, which is exactly how a frozen cross-module schema
+like `Rating` is expressed.
+- **Decision — a shared component name is allowed iff the schemas are identical; this supersedes the strict
+  NameMap injectivity.** The two eager collision rejections and the now-unused `generator.names` field (and
+  its init) are removed. Reconciliation moves to the EXISTING emission-time `sameJSON` guard
+  (`generate.go` ~273-285): a component name first seen is emitted; a name seen again with a byte-identical
+  JSON schema is accepted (one shared component); a name seen again with a differing schema still fails closed
+  with `conflicting schema NAME`. So injectivity is replaced by schema-equality, not dropped — a real
+  divergence (a module silently reusing `Rating` for a different shape) is still rejected, now at the schema
+  level where the actual contract lives.
+- **Why schema-equality, not name-injectivity.** Name-injectivity answers "do two types share a name?" when
+  the contract question is "do two types share a *schema*?". The frozen hand spec has exactly one `Rating`
+  component referenced from both course and discussion, so the generated artifact must emit one `Rating` too;
+  injectivity made that impossible without a cross-module Go import (forbidden by architecture) or a second
+  name (forbidden by the frozen contract). `sameJSON` was already the authority for shared `Response`
+  components (`generate.go:203`) and named-root slices (§16.15, line 284) — this extends the same authority to
+  named struct schemas, so the whole generator now uses one rule for "same name" everywhere.
+- **Test (prove non-vacuous, both directions):** `TestSharedComponentNameAllowsIdenticalSchemaOnly` — two
+  distinct Go types mapped to `Rating` with an identical shape → accepted, one `Rating` component present; the
+  same two names with a differing field type (`int64` vs `int`) → fails closed with `conflicting schema`.
+  `TestOpenAPIArtifact` stays byte-identical (no current contributor shared a name before discussion lands),
+  and `TestNamedRootSlice` + `TestGenerateTwice` still pass.
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18); no product/contract
+  change, hand spec untouched, nothing merges. Unblocks S0.1h discussion, which maps `reviewRatingDTO` →
+  `Rating` like course. Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2).
