@@ -488,6 +488,83 @@ components:
             format: date-time
             pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$
             type: string
+        Comment:
+            additionalProperties: false
+            properties:
+                author:
+                    $ref: '#/components/schemas/CommentAuthor'
+                body:
+                    nullable: true
+                    type: string
+                canEdit:
+                    type: boolean
+                canRemove:
+                    type: boolean
+                createdAt:
+                    format: date-time
+                    type: string
+                editedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                positionMs:
+                    format: int64
+                    minimum: 0
+                    nullable: true
+                    type: integer
+                removed:
+                    type: boolean
+            required:
+                - author
+                - body
+                - canEdit
+                - canRemove
+                - createdAt
+                - editedAt
+                - id
+                - positionMs
+                - removed
+            type: object
+        CommentAuthor:
+            additionalProperties: false
+            properties:
+                displayName:
+                    nullable: true
+                    type: string
+            required:
+                - displayName
+            type: object
+        CommentPage:
+            additionalProperties: false
+            properties:
+                nextCursor:
+                    nullable: true
+                    type: string
+                threads:
+                    items:
+                        $ref: '#/components/schemas/CommentThread'
+                    maxItems: 50
+                    type: array
+            required:
+                - nextCursor
+                - threads
+            type: object
+        CommentThread:
+            additionalProperties: false
+            properties:
+                replies:
+                    items:
+                        $ref: '#/components/schemas/Comment'
+                    type: array
+                root:
+                    $ref: '#/components/schemas/Comment'
+            required:
+                - replies
+                - root
+            type: object
         Course:
             additionalProperties: false
             properties:
@@ -671,6 +748,16 @@ components:
                     type: array
             required:
                 - items
+            type: object
+        DismissReportsRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+            required:
+                - reason
             type: object
         DraftSegment:
             additionalProperties: false
@@ -1057,10 +1144,66 @@ components:
                 - updatedAt
                 - videoId
             type: object
+        ModerationQueueItem:
+            additionalProperties: false
+            properties:
+                authorBlocked:
+                    type: boolean
+                comment:
+                    allOf:
+                        - $ref: '#/components/schemas/TeachComment'
+                    nullable: true
+                kind:
+                    enum:
+                        - comment
+                        - review
+                    type: string
+                openReports:
+                    minimum: 1
+                    type: integer
+                review:
+                    allOf:
+                        - $ref: '#/components/schemas/Review'
+                    nullable: true
+            required:
+                - authorBlocked
+                - comment
+                - kind
+                - openReports
+                - review
+            type: object
+        ModerationQueuePage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/ModerationQueueItem'
+                    maxItems: 50
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+            required:
+                - items
+                - nextCursor
+            type: object
         NullablePrice:
             allOf:
                 - $ref: '#/components/schemas/Price'
             nullable: true
+        OwnReview:
+            additionalProperties: false
+            properties:
+                eligibility:
+                    type: string
+                review:
+                    allOf:
+                        - $ref: '#/components/schemas/Review'
+                    nullable: true
+            required:
+                - eligibility
+                - review
+            type: object
         Pagination:
             additionalProperties: false
             properties:
@@ -1080,6 +1223,126 @@ components:
                 - limit
                 - offset
                 - total
+            type: object
+        ParticipantReport:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                kind:
+                    enum:
+                        - on_lecturer
+                        - on_student
+                    type: string
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                reporterId:
+                    format: uuid
+                    type: string
+                state:
+                    enum:
+                        - open
+                        - resolved
+                    type: string
+                targetId:
+                    format: uuid
+                    type: string
+            required:
+                - courseId
+                - createdAt
+                - id
+                - kind
+                - reason
+                - reporterId
+                - state
+                - targetId
+            type: object
+        ParticipantReportQueueItem:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                courseTitle:
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                kind:
+                    enum:
+                        - on_lecturer
+                        - on_student
+                    type: string
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                reporterId:
+                    format: uuid
+                    type: string
+                reporterName:
+                    nullable: true
+                    type: string
+                state:
+                    enum:
+                        - open
+                        - resolved
+                    type: string
+                targetId:
+                    format: uuid
+                    type: string
+                targetName:
+                    nullable: true
+                    type: string
+            required:
+                - courseId
+                - courseTitle
+                - createdAt
+                - id
+                - kind
+                - reason
+                - reporterId
+                - reporterName
+                - state
+                - targetId
+                - targetName
+            type: object
+        ParticipantReportQueuePage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/ParticipantReportQueueItem'
+                    maxItems: 20
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+            required:
+                - items
+                - nextCursor
+            type: object
+        ParticipantReportRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+            required:
+                - reason
             type: object
         PlaybackHeartbeatRequest:
             additionalProperties: false
@@ -1198,12 +1461,66 @@ components:
                 - lessons
                 - title
             type: object
+        PublicReviewPage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/Review'
+                    maxItems: 20
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+                rating:
+                    allOf:
+                        - $ref: '#/components/schemas/Rating'
+                    nullable: true
+            required:
+                - items
+                - nextCursor
+                - rating
+            type: object
+        PublishCommentRequest:
+            additionalProperties: false
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+                    type: string
+                parentId:
+                    format: uuid
+                    nullable: true
+                    type: string
+                positionMs:
+                    format: int64
+                    minimum: 0
+                    nullable: true
+                    type: integer
+            required:
+                - body
+            type: object
         PublishLessonDraftRequest:
             additionalProperties: false
             properties:
                 expectedUpdatedAt:
                     format: date-time
                     type: string
+            type: object
+        PutReviewRequest:
+            additionalProperties: false
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 20
+                    type: string
+                stars:
+                    maximum: 5
+                    minimum: 1
+                    type: integer
+            required:
+                - body
+                - stars
             type: object
         Rating:
             additionalProperties: false
@@ -1226,6 +1543,44 @@ components:
                     minLength: 2
                     pattern: ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
                     type: string
+            type: object
+        Review:
+            additionalProperties: false
+            properties:
+                authorDisplayName:
+                    nullable: true
+                    type: string
+                body:
+                    type: string
+                completedLessons:
+                    minimum: 0
+                    type: integer
+                createdAt:
+                    format: date-time
+                    type: string
+                editedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                stars:
+                    maximum: 5
+                    minimum: 1
+                    type: integer
+                totalLessons:
+                    minimum: 0
+                    type: integer
+            required:
+                - authorDisplayName
+                - body
+                - completedLessons
+                - createdAt
+                - editedAt
+                - id
+                - stars
+                - totalLessons
             type: object
         SaveTranscriptRequest:
             additionalProperties: false
@@ -1287,6 +1642,69 @@ components:
                 - language
                 - segments
             type: object
+        TeachComment:
+            additionalProperties: false
+            properties:
+                author:
+                    $ref: '#/components/schemas/CommentAuthor'
+                body:
+                    nullable: true
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                editedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                lessonId:
+                    format: uuid
+                    type: string
+                lessonTitle:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                parentId:
+                    format: uuid
+                    nullable: true
+                    type: string
+                positionMs:
+                    format: int64
+                    minimum: 0
+                    nullable: true
+                    type: integer
+                removed:
+                    type: boolean
+            required:
+                - author
+                - body
+                - createdAt
+                - editedAt
+                - id
+                - lessonId
+                - lessonTitle
+                - parentId
+                - positionMs
+                - removed
+            type: object
+        TeachCourseCommentPage:
+            additionalProperties: false
+            properties:
+                comments:
+                    items:
+                        $ref: '#/components/schemas/TeachComment'
+                    maxItems: 50
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+            required:
+                - comments
+                - nextCursor
+            type: object
         TranscriptDocumentLink:
             additionalProperties: false
             properties:
@@ -1347,6 +1765,16 @@ components:
                 - id
                 - startMs
                 - text
+            type: object
+        UpdateCommentRequest:
+            additionalProperties: false
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+                    type: string
+            required:
+                - body
             type: object
 info:
     description: Public catalog, session authentication, protected administration, learning purchases and playback-session control.
@@ -1796,6 +2224,58 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Mint a video upload ticket
+    /api/v1/admin/participant-reports:
+        get:
+            operationId: listParticipantReports
+            parameters:
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+                - description: Filter by report state; absent means open.
+                  in: query
+                  name: state
+                  schema:
+                    enum:
+                        - open
+                        - resolved
+                        - all
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantReportQueuePage'
+                    description: Participant reports for the requested state
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/admin/participant-reports/{reportId}/resolve:
+        post:
+            operationId: resolveParticipantReport
+            parameters:
+                - in: path
+                  name: reportId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: Participant report resolved
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/admin/stats:
         get:
             description: Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
@@ -2000,6 +2480,365 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Get a published course
+    /api/v1/courses/{slug}/reviews:
+        get:
+            operationId: listCourseReviews
+            parameters:
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+                - in: path
+                  name: slug
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PublicReviewPage'
+                    description: Public reviews
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/learn/comments/{commentId}:
+        delete:
+            operationId: removeLessonComment
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: The comment was removed, or was already removed.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Remove a lesson comment
+        patch:
+            operationId: updateLessonComment
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCommentRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Comment'
+                    description: The comment was updated.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Edit an authored lesson comment
+    /api/v1/learn/comments/{commentId}/reports:
+        post:
+            operationId: reportLessonComment
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "201":
+                    description: The report was accepted, or was already present for this reporter.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Report a lesson comment
+    /api/v1/learn/courses/{courseId}/report-lecturer:
+        post:
+            operationId: reportCourseLecturer
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ParticipantReportRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantReport'
+                    description: Participant report created
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/learn/courses/{courseId}/review:
+        delete:
+            operationId: deleteCourseReview
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: Review deleted
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+        get:
+            operationId: getOwnCourseReview
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OwnReview'
+                    description: Own review and current eligibility
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+        put:
+            operationId: putCourseReview
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PutReviewRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Review'
+                    description: Updated review
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Review'
+                    description: Created review
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/learn/courses/{courseId}/reviews:
+        get:
+            operationId: listLearningCourseReviews
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PublicReviewPage'
+                    description: Reviews visible to the learner
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/learn/lessons/{lessonId}/comments:
+        get:
+            operationId: listLessonComments
+            parameters:
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CommentPage'
+                    description: The lesson's discussion threads.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/LessonNotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List lesson discussion threads
+        post:
+            operationId: publishLessonComment
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PublishCommentRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Comment'
+                    description: The comment was published.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/PlaybackForbidden'
+                "404":
+                    $ref: '#/components/responses/LessonNotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Publish a lesson comment or reply
     /api/v1/learn/lessons/{lessonId}/transcript:
         get:
             description: 'Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do.'
@@ -2043,6 +2882,27 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Get a lesson transcript
+    /api/v1/learn/reviews/{reviewId}/reports:
+        post:
+            operationId: reportCourseReview
+            parameters:
+                - in: path
+                  name: reviewId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: Report accepted
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/playback/heartbeat:
         post:
             description: Authenticated same-origin mutation. Only the current owner renews the slot and writes progress. A taken-over session and an expired session are distinct outcomes. Positions above the current video duration are accepted and clamped by the server. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
@@ -2113,5 +2973,221 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Mint a playback session for one lesson
+    /api/v1/teach/comments/{commentId}/dismiss-report:
+        post:
+            operationId: dismissCommentReports
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DismissReportsRequest'
+                required: true
+            responses:
+                "204":
+                    description: The open reports were dismissed.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Dismiss all open reports for a comment
+    /api/v1/teach/courses/{courseId}/comments:
+        get:
+            operationId: listTeachCourseComments
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TeachCourseCommentPage'
+                    description: The course-wide comment list.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List all comments in an instructor course workspace
+    /api/v1/teach/courses/{courseId}/moderation-queue:
+        get:
+            operationId: listTeachModerationQueue
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    minLength: 1
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ModerationQueuePage'
+                    description: The open moderation queue.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List the open moderation queue for an instructor course
+    /api/v1/teach/courses/{courseId}/participants/{userId}/report:
+        post:
+            operationId: reportCourseParticipant
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: userId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ParticipantReportRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ParticipantReport'
+                    description: Participant report created
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/teach/reviews/{reviewId}/dismiss-report:
+        post:
+            operationId: dismissCourseReviewReports
+            parameters:
+                - in: path
+                  name: reviewId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DismissReportsRequest'
+                required: true
+            responses:
+                "204":
+                    description: Review reports dismissed
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/teach/reviews/{reviewId}/remove:
+        post:
+            operationId: removeCourseReview
+            parameters:
+                - in: path
+                  name: reviewId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DismissReportsRequest'
+                required: true
+            responses:
+                "204":
+                    description: Review removed
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
 servers:
     - url: /
