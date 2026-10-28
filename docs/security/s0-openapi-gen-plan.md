@@ -752,23 +752,25 @@ the result in an `application/json` content block; a `204` carries `Response{}` 
 `reflectBody` rejected it with `nil response body`. A `204` must also carry no content block at all, by
 OpenAPI semantics. Verified by Courses 13 on the host against `generate.go` and `artifact_test.go:32`, and
 Codex's narrow STOP (it did not hand-fix the generator, edit the frozen spec, or touch the artifact).
-- **Decision — emit a content-less response when `Response.Body == nil`, but only for a no-content status.**
-  In the response loop, build the `openapi3.Response` with its description (and component ref / headers)
-  first, and attach the `application/json` content schema ONLY when `response.Body != nil`. A nil body is a
-  bodyless response ONLY for a no-content status (`204`/`304`); for any content-bearing status a nil body is
-  a mistake and fails closed with `nil response body for content-bearing status N`. Bodied responses are
-  unchanged (the content block is built exactly as before). No new field, no behaviour change for any
-  existing contributor (all their responses have bodies).
-- **Fail-closed restriction (Courses 2 S0.1f non-blocking, adopted 2026-10-28).** The first version allowed a
-  content-less response for ANY status, which would let a mistaken nil `Body` on a `200`/`201` silently emit a
-  content-less response instead of erroring — the exact silent-acceptance class the S0 line guards against.
-  Restricting the nil-body branch to `204`/`304` keeps the generator fail-closed; backstops (fidelity vs. the
-  hand spec, Layer-B) remain, but the generator no longer depends on them here.
-- **Test (prove non-vacuous, both directions):** `TestBodylessResponseEmitsNoContent` — a route with a
-  `204 {}` and a `200` with a body: the `204` emits a response with a description and zero content entries, the
-  `200` keeps its `application/json` schema; AND a separate route with `200 {}` (nil body on a content-bearing
-  status) must fail closed with `content-bearing status 200`. Without the branch, `Generate` errors on the
-  `204`; without the restriction, the `200 {}` case would pass. The end-to-end `TestOpenAPIArtifact` also
-  exercises the real playback `204`.
+- **Decision — a bodyless response is declared explicitly with `Response.Empty`.** In the response loop,
+  build the `openapi3.Response` with its description (and component ref / headers) first, then: if `Empty` is
+  set, emit no content schema (and reject `Empty` set together with a non-nil `Body` as contradictory); if
+  `Body != nil`, reflect the content schema as before; if `Body == nil` and `Empty` is NOT set, fail closed
+  with `nil response body for status N; set Empty for an intentional bodyless response`, whatever the status.
+  Bodied responses are unchanged. One new field (`Empty bool`), no behaviour change for any existing bodied
+  response.
+- **Why an explicit marker, not a status heuristic (supersedes the first S0.1f-1 attempt).** S0.1f-1 first
+  restricted the nil-body branch to no-content statuses (`204`/`304`), per Courses 2's non-blocking. The
+  transcript module then showed that legitimate bodyless responses also occur on content-bearing statuses —
+  `POST …/documents` returns a bodyless `201`, `POST …/draft/regenerate` a bodyless `202` (both in the frozen
+  hand spec). A status heuristic cannot tell a forgotten body on a `201`/`202` from an intentional one, so it
+  would silently accept the mistake there — the very failure it was meant to prevent. The explicit `Empty`
+  marker makes a nil body ALWAYS fail closed unless the contributor states the response is bodyless, uniform
+  across statuses. playback's heartbeat `204` is declared `Empty: true`; its emitted artifact is unchanged.
+- **Test (prove non-vacuous, all directions):** `TestBodylessResponseEmitsNoContent` — a route with a
+  `202 {Empty:true}` and a `200` with a body: the `202` emits a response with a description and zero content
+  entries, the `200` keeps its schema; a separate `200 {}` (nil body, no `Empty`) fails closed with
+  `nil response body for status 200`; and `200 {Body, Empty:true}` fails closed as contradictory. The
+  end-to-end `TestOpenAPIArtifact` also exercises the real playback `204`.
 - **Scope:** generate-from-Go generator capability (same class as §16.15 named-root-slice lift); no
   product/contract change, hand spec untouched, nothing merges. Courses 2 per-slice review gates it.
