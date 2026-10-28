@@ -10,15 +10,17 @@ import type { NullablePrice } from './nullablePrice.ts';
 export interface AdminCourseWrite {
   /**
      * @minLength 1
+     * @maxLength 20000
+     */
+  description: string;
+  instructorId?: string;
+  price?: NullablePrice | null;
+  /**
+     * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
   /**
      * @minLength 1
      * @maxLength 500
@@ -26,9 +28,7 @@ export interface AdminCourseWrite {
   summary: string;
   /**
      * @minLength 1
-     * @maxLength 20000
+     * @maxLength 200
      */
-  description: string;
-  instructorId?: string;
-  price?: NullablePrice | null;
+  title: string;
 }

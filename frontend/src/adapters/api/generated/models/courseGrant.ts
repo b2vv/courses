@@ -9,12 +9,12 @@ import type { CourseGrantSource } from './courseGrantSource.ts';
 import type { CourseGrantState } from './courseGrantState.ts';
 
 export interface CourseGrant {
-  id: string;
-  userId: string;
   courseId: string;
-  source: CourseGrantSource;
-  state: CourseGrantState;
   grantedAt: string;
   /** @nullable */
   grantedBy: string | null;
+  id: string;
+  source: CourseGrantSource;
+  state: CourseGrantState;
+  userId: string;
 }

@@ -9,11 +9,11 @@ import type { Price } from './price.ts';
 import type { PurchaseOrderStatus } from './purchaseOrderStatus.ts';
 
 export interface PurchaseOrder {
-  id: string;
-  courseId: string;
   amount: Price;
-  status: PurchaseOrderStatus;
+  courseId: string;
   createdAt: string;
+  id: string;
   /** @nullable */
   paidAt: string | null;
+  status: PurchaseOrderStatus;
 }

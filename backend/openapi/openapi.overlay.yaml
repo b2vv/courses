@@ -1,0 +1,1927 @@
+# Catalog-only S0.1 Run 1 overlay. Prose has no Go source.
+# LIMITATION (N1): validation keywords are carried here, not derived from domain
+# validators; they are NOT claimed drift-proof. Error-code enum is also temporary
+# hand metadata until the S0.1 parser run (16.7 completion gate).
+# Null deletes a key; $ref: null expands the generated schema before metadata merge.
+# CourseDetail publishedAt/status narrowing is the published endpoint contract.
+components:
+    parameters:
+        "IdempotencyKey": {"description": "User-scoped replay key for starting a course purchase.", "schema": {"minLength": 1, "maxLength": 128}}
+    headers:
+        SessionCookie:
+          description: Opaque session cookie; HttpOnly and SameSite=Lax, Secure when configured.
+          required: true
+          schema: {}
+        NoStore:
+            description: This response is never stored by caches or shared proxies.
+            schema:
+                enum:
+                    - no-store
+        RequestID:
+            description: Server-generated correlation identifier.
+            schema:
+                pattern: ^[a-f0-9]{32}$
+    responses:
+        LessonDocumentConflict:
+            description: The lesson document changed since it was loaded.
+            headers:
+                X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                Cache-Control: { $ref: '#/components/headers/NoStore' }
+        "OrderNotFound": {"description": "The order is unknown or belongs to another account.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
+        "MembershipConflict": {"description": "Enrollment is unavailable or changed concurrently.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
+        "PurchaseConflict": {"description": "The course is already owned or the price operation conflicted.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
+        EmailTaken:
+          description: The email is already registered.
+        AccountValidationFailed:
+          description: Account input is invalid.
+        RateLimited:
+          description: Too many requests.
+        InvalidAccountToken:
+          description: The account token is malformed.
+        TokenUsed:
+          description: The one-time token has expired or was already used.
+        TwoFactorConflict:
+          description: Two-factor authentication is already enabled or is not enabled.
+        TwoFactorInvalidCode:
+          description: The supplied TOTP or recovery code is invalid.
+        OriginForbidden:
+          description: The request origin is missing, repeated or does not match the public
+            origin.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        AdminUserMutationForbidden:
+          description: The Origin is not allowed or the authenticated account is not an administrator.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        UserNotFound:
+          description: The target account is unknown or deleted.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        AdminUserConflict:
+          description: The operation targets the caller, targets an immutable admin, or would
+            block the last active admin.
+          headers:
+            X-Request-ID:
+              "$ref": "#/components/headers/RequestID"
+            Cache-Control:
+              "$ref": "#/components/headers/NoStore"
+        AdminWriteBadRequest:
+            description: "The body is missing, malformed, oversized, outside field/tree bounds, names an ineligible owner, or carries unexpected members."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        AdminMutationForbidden:
+            description: "The Origin is not allowed, the actor is not staff, or the instructor does not own the course or attempted reassignment."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        DraftConflict:
+            description: "Recognition is already running for the lesson's current video asset."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        Forbidden:
+            description: "The authenticated actor lacks permission for the resource or operation."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        LearningForbidden:
+            description: "The authenticated actor cannot view the requested course."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        TranscriptConflict:
+            description: "The transcript changed under the author, or a second writer reached the same empty lesson first. Named so the editor can say which of the two happened."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        PlaybackForbidden:
+          description: The Origin is not allowed or the authenticated actor cannot view the lesson's course.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackNotFound:
+          description: The lesson is unknown or has no current ready video.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackTakenOver:
+          description: Another playback session currently owns the account's playback slot.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackExpired:
+          description: The playback ownership record is unknown or expired.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        VideoNotRetryable:
+          description: The video state is not retryable, its processing claim is still live, or its source never landed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        VideoNotFound:
+          description: The video is unknown or evicted.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        UploadConflict:
+          description: The lesson already has a non-terminal, unexpired video asset.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        MediaBadRequest:
+          description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        MediaForbidden:
+          description: The Origin is not allowed, the actor is not staff, or the instructor does not own the course.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        LessonNotFound:
+          description: The lesson is unknown.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        GrantForbidden:
+            description: Administrator permission is required to issue a grant.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+        InvalidRequest:
+            description: The request path, query or body is missing, malformed, oversized or carries unexpected members.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+        Unauthenticated:
+            description: Credentials were rejected or no usable session was presented.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+        BadRequest:
+            description: Invalid query parameters or slug.
+            headers:
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        InternalError:
+            description: Unexpected error; internal details are never returned.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        NotFound:
+            description: Course was not found.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        Unavailable:
+            description: A dependency was unavailable or the bounded read timed out.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+    schemas:
+        AdminCoursePage: {"properties":{"items":{"items":{"$ref":"#/components/schemas/AdminCourse"},"maxItems":50},"pagination":{"$ref":"#/components/schemas/Pagination"},"statusCounts":{"$ref":"#/components/schemas/AdminCourseStatusCounts"}}}
+        AdminCourse: {"properties":{"id":{"format":"uuid"},"instructorId":{"format":"uuid"},"lessonCount":{"format":"int64","minimum":0},"price":{"$ref":"#/components/schemas/NullablePrice"},"slug":{"maxLength":120,"minLength":1,"pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"},"status":{"enum":["draft","published","archived"]},"studentCount":{"format":"int64","minimum":0},"title":{"maxLength":200,"minLength":1},"updatedAt":{"$ref":"#/components/schemas/AdminTimestamp"}}}
+        AdminCourseStatusCounts: {"properties":{"archived":{"format":"int64","minimum":0},"draft":{"format":"int64","minimum":0},"published":{"format":"int64","minimum":0},"total":{"format":"int64","minimum":0}}}
+        AdminLesson: {"properties":{"id":{"format":"uuid"},"isPreview":{"default":false},"title":{"maxLength":200,"minLength":1}}}
+        AdminModule: {"properties":{"id":{"format":"uuid"},"lessons":{"items":{"$ref":"#/components/schemas/AdminLesson"},"maxItems":120},"title":{"maxLength":200,"minLength":1}}}
+        AdminCourseTree: {"properties":{"createdAt":{"$ref":"#/components/schemas/AdminTimestamp"},"description":{"maxLength":20000,"minLength":1},"id":{"format":"uuid"},"instructorId":{"format":"uuid"},"modules":{"items":{"$ref":"#/components/schemas/AdminModule"},"maxItems":40},"price":{"$ref":"#/components/schemas/NullablePrice"},"publishedAt":{"$ref":"#/components/schemas/NullableAdminTimestamp"},"slug":{"maxLength":120,"minLength":1,"pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"},"status":{"enum":["draft","published","archived"]},"studentCount":{"format":"int64","minimum":0},"summary":{"maxLength":500,"minLength":1},"title":{"maxLength":200,"minLength":1},"updatedAt":{"$ref":"#/components/schemas/AdminTimestamp"}}}
+        AdminCourseWrite: {"properties":{"description":{"maxLength":20000,"minLength":1},"instructorId":{"format":"uuid"},"price":{"$ref":"#/components/schemas/NullablePrice"},"slug":{"maxLength":120,"minLength":1,"pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"},"summary":{"maxLength":500,"minLength":1},"title":{"maxLength":200,"minLength":1}}}
+        AdminCourseSaveRequest: {"properties":{"course":{"$ref":"#/components/schemas/AdminCourseWrite"},"expectedUpdatedAt":{"$ref":"#/components/schemas/AdminTimestamp"},"modules":{"description":"At most 40 modules, and at most 120 lessons across all of them together. The per-module maxItems of 120 is the single-module case, not a per-module allowance: JSON Schema cannot bound a sum over sibling arrays, so the course-wide ceiling is stated here and enforced by the server, which refuses a breach with lesson_limit.","items":{"$ref":"#/components/schemas/AdminModule"},"maxItems":40}}}
+        AdminCourseDeleteRequest: {"properties":{"expectedUpdatedAt":{"$ref":"#/components/schemas/AdminTimestamp"}}}
+        NullableAdminTimestamp: {"description":"RFC 3339 timestamp carrying exactly six fractional-second digits, or null.","format":"date-time","pattern":"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}(Z|[+-]\\d{2}:\\d{2})$"}
+        "ClientLogRequest": {"properties": {"message": {"maxLength": 2000}, "route": {"maxLength": 512}, "release": {"maxLength": 128}, "userAgent": {"maxLength": 256}, "errorName": {"maxLength": 256}, "errorStack": {"maxLength": 8000}}}
+        "PurchaseOrder": {"properties": {"id": {"format": "uuid"}, "courseId": {"format": "uuid"}, "createdAt": {"format": "date-time"}, "paidAt": {"format": "date-time"}}}
+        "MembershipGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}}}
+        "CourseGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}, "source": {"enum": ["admin"]}, "state": {"enum": ["active"]}}}
+        "MembershipCard": {"properties": {"courseId": {"format": "uuid"}, "slug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}, "title": {"minLength": 1, "maxLength": 200}, "progressPercent": {"minimum": 0, "maximum": 100}, "enrolledAt": {"format": "date-time"}}}
+        "RosterEntry": {"properties": {"userId": {"format": "uuid"}, "displayName": {"minLength": 1, "maxLength": 120}, "enrolledAt": {"format": "date-time"}, "progressPercent": {"minimum": 0, "maximum": 100}}}
+        "LearnerCourse": {"properties": {"courseId": {"format": "uuid"}, "slug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}, "title": {"minLength": 1, "maxLength": 200}, "progressPercent": {"minimum": 0, "maximum": 100}, "enrolledAt": {"format": "date-time"}}}
+        "LearnerRow": {"properties": {"userId": {"format": "uuid"}, "displayName": {"maxLength": 120}, "lastActivityAt": {"format": "date-time"}, "courses": {"minItems": 1}}}
+        "LearnerPage": {"properties": {"entries": {"maxItems": 100}}}
+        "RefundQueueItem": {"properties": {"orderId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "userId": {"format": "uuid"}, "orderAmountMinor": {"format": "int64", "minimum": 1}, "chargedAmountMinor": {"format": "int64"}, "receivedAt": {"format": "date-time"}}}
+        "CheckoutRequest": {"properties": {"courseSlug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}}}
+        "AdminGrantRequest": {"properties": {"userId": {"format": "uuid"}, "reason": {"minLength": 1, "maxLength": 500}}}
+        "CheckoutForm": {"properties": {"action": {"format": "uri"}, "fields": {"minItems": 1, "items": {"properties": {"name": {"minLength": 1}}, "$ref": null}}}}
+        "WayForPayAcknowledgement": {"properties": {"orderReference": {"minLength": 1}, "time": {"format": "int64"}, "signature": {"minLength": 32, "maxLength": 32}}}
+        AuthenticatedUser:
+          properties:
+            id:
+              format: uuid
+            email:
+              minLength: 3
+              maxLength: 254
+            displayName:
+              minLength: 1
+              maxLength: 120
+            role:
+              description: student may learn; instructor and admin may enter the administration
+                shell.
+        Instructor:
+          properties:
+            id:
+              format: uuid
+            displayName:
+              minLength: 1
+              maxLength: 120
+        AdminUser:
+          properties:
+            id:
+              format: uuid
+            email:
+              minLength: 3
+              maxLength: 254
+            displayName:
+              minLength: 1
+              maxLength: 120
+        AdminUserPage:
+          properties:
+            items:
+              maxItems: 50
+        LoginRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+            password:
+              minLength: 1
+              maxLength: 1024
+        TwoFactorRequired:
+          properties:
+            pendingId:
+              minLength: 1
+              maxLength: 128
+        TwoFactorEnrollment:
+          properties:
+            secret:
+              minLength: 16
+            otpauthUri:
+              format: uri
+        RecoveryCodes:
+          properties:
+            recoveryCodes:
+              minItems: 10
+              maxItems: 10
+              items:
+                minLength: 1
+                maxLength: 128
+        TwoFactorCodeRequest:
+          properties:
+            code:
+              minLength: 1
+              maxLength: 128
+        CompleteTwoFactorRequest:
+          properties:
+            pendingId:
+              minLength: 1
+              maxLength: 128
+            code:
+              minLength: 1
+              maxLength: 128
+        DisableTwoFactorRequest:
+          properties:
+            password:
+              minLength: 1
+              maxLength: 1024
+            code:
+              minLength: 1
+              maxLength: 128
+        RegisterRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+            password:
+              minLength: 8
+              maxLength: 128
+            displayName:
+              minLength: 1
+              maxLength: 100
+        TokenRequest:
+          properties:
+            token:
+              minLength: 1
+              maxLength: 128
+        EmailRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+        OptionalEmailRequest:
+          properties:
+            email:
+              minLength: 3
+              maxLength: 254
+        ResetPasswordRequest:
+          properties:
+            token:
+              minLength: 1
+              maxLength: 128
+            password:
+              minLength: 8
+              maxLength: 128
+        ChangePasswordRequest:
+          properties:
+            oldPassword:
+              minLength: 1
+              maxLength: 128
+            newPassword:
+              minLength: 8
+              maxLength: 128
+        NewEmailRequest:
+          properties:
+            newEmail:
+              minLength: 3
+              maxLength: 254
+        AdminUserPasswordRequest:
+          properties:
+            password:
+              minLength: 1
+              maxLength: 1024
+              description: The UTF-8 encoding must also be no more than 1024 bytes.
+        PublicReviewPage:
+            properties:
+                items:
+                    maxItems: 20
+        Review:
+            properties:
+                completedLessons:
+                    minimum: 0
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                stars:
+                    maximum: 5
+                    minimum: 1
+                totalLessons:
+                    minimum: 0
+        PutReviewRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 20
+                stars:
+                    maximum: 5
+                    minimum: 1
+        Comment:
+            properties:
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        CommentPage:
+            properties:
+                threads:
+                    maxItems: 50
+        PublishCommentRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+                parentId:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        UpdateCommentRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+        DismissReportsRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+        ParticipantReportRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+        ParticipantReport:
+            properties:
+                courseId:
+                    format: "uuid"
+                createdAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                reporterId:
+                    format: "uuid"
+                targetId:
+                    format: "uuid"
+        ParticipantReportQueueItem:
+            properties:
+                courseId:
+                    format: "uuid"
+                createdAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                reporterId:
+                    format: "uuid"
+                targetId:
+                    format: "uuid"
+        ParticipantReportQueuePage:
+            properties:
+                items:
+                    maxItems: 20
+        TeachComment:
+            properties:
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                lessonId:
+                    format: "uuid"
+                lessonTitle:
+                    maxLength: 200
+                    minLength: 1
+                parentId:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        TeachCourseCommentPage:
+            properties:
+                comments:
+                    maxItems: 50
+        ModerationQueueItem:
+            properties:
+                openReports:
+                    minimum: 1
+        ModerationQueuePage:
+            properties:
+                items:
+                    maxItems: 50
+        LessonTranscript:
+            properties:
+                documents:
+                    description: "Every document referenced by any segment, carried once. A document belongs to the course library and is stored once per course, so inlining it into each of up to 5000 segments would send the same bytes back up to 15000 times: measured on the declared maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id."
+                    maxItems: 200
+                language:
+                    description: "Null when the lesson has no transcript. An absent transcript is a state of the lesson, not a missing resource, so the read answers 200 with an empty body rather than 404 — 404 would be answered identically for a lesson that does not exist, which is the one thing this read must not leak."
+                    maxLength: 35
+                    minLength: 2
+                lessonId:
+                    format: "uuid"
+                segments:
+                    maxItems: 5000
+                stale:
+                    description: "Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale."
+                updatedAt:
+                    description: "The optimistic-lock token to send back when saving, null when the lesson has no transcript. Without it on the read an author could never obtain the token the write demands, and the editing loop could not close."
+                    format: "date-time"
+        LessonDraft:
+            properties:
+                assetId:
+                    format: "uuid"
+                failure:
+                    maxLength: 200
+                    minLength: 1
+                generation:
+                    format: "int32"
+                    minimum: 1
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+                lessonId:
+                    format: "uuid"
+                segments:
+                    maxItems: 5000
+                stale:
+                    description: "True when the draft was made from a previous ready video generation."
+                state:
+                    description: "Null when recognition has not created a draft row yet."
+                updatedAt:
+                    format: "date-time"
+        SaveTranscriptRequest:
+            properties:
+                expectedUpdatedAt:
+                    format: "date-time"
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+                segments:
+                    items:
+                        properties:
+                            confidence:
+                                format: "double"
+                                maximum: 1
+                                minimum: 0
+                            documentIds:
+                                items:
+                                    format: "uuid"
+                                maxItems: 3
+                            endMs:
+                                format: "int64"
+                                minimum: 0
+                            id:
+                                format: "uuid"
+                            speaker:
+                                maxLength: 100
+                                minLength: 1
+                            startMs:
+                                format: "int64"
+                                minimum: 0
+                            text:
+                                maxLength: 1000
+                                minLength: 1
+                        $ref: null
+                        required: ["id", "startMs", "endMs", "text", "documentIds"]
+                    maxItems: 5000
+            required: ["language", "segments"]
+        TranscriptDocumentLink:
+            properties:
+                id:
+                    format: "uuid"
+                label:
+                    maxLength: 200
+                    minLength: 1
+                url:
+                    maxLength: 2000
+                    minLength: 1
+        TranscriptSegment:
+            properties:
+                confidence:
+                    format: "double"
+                    maximum: 1
+                    minimum: 0
+                documentIds:
+                    items:
+                        format: "uuid"
+                    maxItems: 3
+                endMs:
+                    format: "int64"
+                    minimum: 0
+                id:
+                    format: "uuid"
+                speaker:
+                    maxLength: 100
+                    minLength: 1
+                startMs:
+                    format: "int64"
+                    minimum: 0
+                text:
+                    maxLength: 1000
+                    minLength: 1
+        DraftSegment:
+            properties:
+                confidence:
+                    format: "double"
+                    maximum: 1
+                    minimum: 0
+                    nullable: false
+                endMs:
+                    description: "Must be greater than or equal to startMs."
+                    format: "int64"
+                    minimum: 0
+                id:
+                    format: "uuid"
+                speaker:
+                    maxLength: 100
+                    minLength: 1
+                    nullable: false
+                startMs:
+                    format: "int64"
+                    minimum: 0
+                text:
+                    maxLength: 1000
+                    minLength: 1
+        RegenerateLessonDraftRequest:
+            properties:
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+            required: null
+        PublishLessonDraftRequest:
+            properties:
+                expectedUpdatedAt:
+                    format: "date-time"
+            required: null
+        saveSegmentRequest: null
+        saveResult: null
+        publishResult: null
+        documentsResult: null
+        PlaybackSessionRequest:
+            properties:
+                lessonId: { format: uuid }
+        PlaybackSession:
+            properties:
+                playbackId: { pattern: '^[0-9a-f]{32}$' }
+                mediaPath:
+                    pattern: '^/media/p/[0-9a-f]{32}/hls/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/master\.m3u8$'
+                clientSeq: { format: int64, minimum: 0, maximum: 2147483647 }
+                heartbeatSeconds: { minimum: 1 }
+                ownershipTtlSeconds: { minimum: 3 }
+        PlaybackHeartbeatRequest:
+            properties:
+                playbackId: { pattern: '^[0-9a-f]{32}$' }
+                lessonId: { format: uuid }
+                positionSeconds: { format: double, minimum: 0 }
+                clientSeq: { format: int64, minimum: 0, maximum: 2147483647 }
+        MediaTicketRequest:
+            properties:
+                declaredBytes: { minimum: 1, maximum: 2147483648 }
+                originalName: { minLength: 1, maxLength: 255 }
+        MediaUploadTicket:
+            properties:
+                videoId: { format: uuid }
+                uploadUrl:
+                    pattern: '^/uploads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                chunkBytes: { enum: [8388608] }
+                maxBytes: { enum: [2147483648] }
+        MediaVideo:
+            properties:
+                lessonId: { format: uuid }
+                videoId: { format: uuid }
+                generation: { minimum: 1 }
+                originalName: { minLength: 1, maxLength: 255 }
+                receivedBytes: { minimum: 0, maximum: 2147483648 }
+                declaredBytes: { minimum: 1, maximum: 2147483648 }
+        ImageUploadResponse:
+            properties:
+                id:
+                    format: uuid
+        # These fields are generic JSON numbers in the hand contract, not doubles.
+        AdminStatsEngagement:
+            properties:
+                avgProgress:
+                    format: null
+        AdminStatsMedia:
+            properties:
+                avgDurationSeconds:
+                    format: null
+                totalDurationSeconds:
+                    format: null
+        AdminStatsInstructor:
+            properties:
+                instructorId:
+                    format: uuid
+        AdminStatsTimeseriesPoint:
+            properties:
+                value:
+                    format: null
+                bucketStart:
+                    format: date-time
+        AdminTimestamp:
+            format: date-time
+            description: RFC 3339 timestamp carrying exactly six fractional-second digits.
+            pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}(Z|[+-]\d{2}:\d{2})$'
+        Course:
+            properties:
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                id:
+                    format: uuid
+                lessonCount:
+                    minimum: 0
+                paid:
+                    description: True when the course has a price; this is display metadata, not an access decision.
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                rating:
+                    $ref: null
+                    properties:
+                        average:
+                            maximum: 5
+                            minimum: 1
+                        count:
+                            minimum: 3
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                status:
+                    description: Foundation public operations only return published.
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                title:
+                    maxLength: 200
+                    minLength: 1
+        LessonDocument:
+            properties:
+                schemaVersion: { enum: [1] }
+                locale: { enum: [uk, en] }
+        LessonSection:
+            properties:
+                contentType: { enum: [image/jpeg, image/png, image/webp] }
+                content:
+                    $ref: null
+                    properties: null
+                    required: null
+                    additionalProperties: null
+                    type: object
+                    nullable: true
+                    allOf:
+                        - $ref: '#/components/schemas/LessonRichText'
+        LessonDocumentDraft:
+            properties:
+                updatedAt: { format: date-time }
+        LessonDocumentUpdated:
+            properties:
+                updatedAt: { format: date-time }
+        SaveLessonDocumentRequest:
+            properties:
+                expectedUpdatedAt: { format: date-time }
+        PublishLessonDocumentRequest:
+            properties:
+                expectedUpdatedAt: { format: date-time }
+        LearningCourse:
+            properties:
+                id: { format: uuid }
+                slug: { minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+                title: { minLength: 1, maxLength: 200 }
+                summary: { minLength: 1, maxLength: 500 }
+                description: { minLength: 1, maxLength: 20000 }
+                price: { $ref: '#/components/schemas/NullablePrice' }
+                rating:
+                    $ref: null
+                    properties:
+                        average: { maximum: 5, minimum: 1 }
+                        count: { minimum: 3 }
+                lessonCount: { minimum: 0 }
+                modules: { maxItems: 40 }
+                continueLessonId: { format: uuid }
+                canPurchase: { description: "True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy." }
+        LearningModule:
+            properties:
+                id: { format: uuid }
+                title: { minLength: 1, maxLength: 200 }
+                lessons: { maxItems: 120 }
+        LearningLesson:
+            properties:
+                id: { format: uuid }
+                title: { minLength: 1, maxLength: 200 }
+                position: { minimum: 0 }
+                clientSeq: { minimum: 0, maximum: 2147483647 }
+                isPreview: { description: "The lesson is open to anyone who can see a published course, without a purchase." }
+                locked: { description: "For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it." }
+        CourseDetail:
+            properties:
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                id:
+                    format: uuid
+                lessonCount:
+                    minimum: 0
+                paid:
+                    description: True when the course has a price; this is display metadata, not an access decision.
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                program:
+                    maxItems: 40
+                publishedAt:
+                    nullable: false
+                rating:
+                    $ref: null
+                    properties:
+                        average:
+                            maximum: 5
+                            minimum: 1
+                        count:
+                            minimum: 3
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                status:
+                    enum:
+                        - published
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                title:
+                    maxLength: 200
+                    minLength: 1
+        CoursePage:
+            properties:
+                items:
+                    maxItems: 50
+        ErrorDetail: null
+        ErrorResponse:
+            properties:
+                error:
+                    $ref: null
+                    properties:
+                        requestId:
+                            pattern: ^[a-f0-9]{32}$
+        Pagination:
+            properties:
+                limit:
+                    maximum: 50
+                    minimum: 1
+                offset:
+                    maximum: 10000
+                    minimum: 0
+                total:
+                    minimum: 0
+        Price:
+            properties:
+                currency:
+                    enum:
+                        - UAH
+                minor:
+                    minimum: 1
+        ProgramLesson:
+            properties:
+                title:
+                    maxLength: 200
+                    minLength: 1
+        ProgramModule:
+            properties:
+                lessons:
+                    maxItems: 120
+                title:
+                    maxLength: 200
+                    minLength: 1
+        Rating:
+            properties:
+                count:
+                    minimum: 3
+info:
+    description: Public catalog, session authentication, protected administration, learning purchases and playback-session control.
+    title: Courses API
+    version: 1.0.0
+paths:
+    /api/v1/admin/courses: {"get":{"description":"Admins see every course. Instructors see only courses they own. Students and unrecognised roles are forbidden. Query parameters must occur at most once and unknown parameters are rejected. Responses are never cached.","operationId":"listAdminCourses","parameters":{"limit":{"schema":{"default":20,"maximum":50,"minimum":1}},"offset":{"schema":{"default":0,"maximum":10000,"minimum":0}},"search":{"description":"Full-text filter over course title and summary. Rejected when empty.","schema":{"maxLength":100,"minLength":1}},"sort":{"description":"Ordering of the page. Each key has one natural direction: title A→Z, students and price highest first, recent (the default) newest first. Rejected when empty.","schema":{"default":"recent"}}},"responses":{"200":{"description":"Owner-scoped course rows and pagination.","headers":{"Cache-Control":{"$ref":"#/components/headers/NoStore"},"X-Request-ID":{"$ref":"#/components/headers/RequestID"}}}},"summary":"List courses visible to the authenticated staff member"},"post":{"description":"Creates a new draft with no modules. Instructors always become the owner and may omit instructorId or echo their own ID. Admins must choose an eligible active instructor or admin. The unique slug is the replay guard, so an identical replay returns slug_taken. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.","operationId":"createAdminCourse","responses":{"201":{"description":"The newly created draft course with a server-minted ID and empty tree.","headers":{"Cache-Control":{"$ref":"#/components/headers/NoStore"},"X-Request-ID":{"$ref":"#/components/headers/RequestID"}}}},"summary":"Create a draft course"}}
+    /api/v1/admin/courses/{id}: {"delete":{"description":"Permanently deletes a draft course and its tree. Published and archived courses cannot be deleted. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may delete only their own draft; admins may delete any draft. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.","operationId":"deleteAdminCourse","parameters":{"id":{"schema":{"format":"uuid"}}},"responses":{"204":{"description":"The draft course and its tree were deleted.","headers":{"Cache-Control":{"$ref":"#/components/headers/NoStore"},"X-Request-ID":{"$ref":"#/components/headers/RequestID"}}}},"summary":"Delete a draft course"},"get":{"description":"Admins may read any tree. An instructor may read only a tree they own. Unknown IDs are distinguished from ownership refusals for authenticated staff. Query parameters are not supported. Responses are never cached.","operationId":"getAdminCourse","parameters":{"id":{"schema":{"format":"uuid"}}},"responses":{"200":{"description":"The complete authored course tree in module and lesson order.","headers":{"Cache-Control":{"$ref":"#/components/headers/NoStore"},"X-Request-ID":{"$ref":"#/components/headers/RequestID"}}}},"summary":"Get an authored course tree"},"put":{"description":"Replaces all editable course fields, modules and lessons. Array indexes define contiguous zero-based positions; lifecycle and position members are rejected. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may save only their own course and must omit instructorId or echo their own ID; admins may reassign to an eligible active instructor or admin. Slugs remain mutable only until first publication. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.","operationId":"saveAdminCourse","parameters":{"id":{"schema":{"format":"uuid"}}},"responses":{"200":{"description":"The saved course tree with a new updatedAt token.","headers":{"Cache-Control":{"$ref":"#/components/headers/NoStore"},"X-Request-ID":{"$ref":"#/components/headers/RequestID"}}}},"summary":"Replace an authored course tree"}}
+    /api/v1/learn/courses/{slug}:
+        get:
+            operationId: getLearningCourse
+            summary: Get an authenticated course learning model
+            description: >-
+                Returns the ordered course program with module and lesson ids, the currently playable
+                video state, and caller-specific progress. Missing progress is represented by concrete
+                zero values. Draft and archived courses are visible only to their owner or an admin.
+            parameters:
+                slug:
+                    schema: { minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+            responses:
+                '200':
+                    description: Ordered learning content and caller-specific progress.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/client-logs:
+      post:
+        operationId: ingestClientLog
+        summary: Ingest one browser-captured log event
+        description: >-
+          Unauthenticated by design so a pre-auth client error can still report.
+          The body is one event; the server validates, redacts the §17 set and
+          emits a structured log line. No body is returned. The endpoint is
+          rate-limited by the nginx clientlog zone.
+        responses:
+          '204': { description: Event accepted; nothing is returned. }
+    "/api/v1/learn/courses/{courseId}/purchase": {"post": {"operationId": "startCoursePurchase", "summary": "Start an idempotent course purchase", "description": "Authenticated same-origin mutation. The order snapshots the published course price.", "responses": {"201": {"description": "The new or replayed pending order.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/courses/{courseId}/enroll": {"post": {"operationId": "enrollInCourse", "summary": "Enroll the authenticated account in a free published course", "responses": {"201": {"description": "Active membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/courses/{courseId}/membership": {"get": {"operationId": "getMyCourseMembership", "summary": "Read the authenticated account membership state", "responses": {"200": {"description": "Membership state, or no membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/memberships": {"get": {"operationId": "getMyCourseMemberships", "summary": "List the authenticated account course memberships", "responses": {"200": {"description": "Active and blocked memberships, newest enrollment first.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}}}
+    "/api/v1/learn/orders/{orderId}/checkout": {"post": {"operationId": "createPurchaseCheckout", "summary": "Create the hosted WayForPay checkout form for the authenticated order owner", "requestBody": {"required": false}, "responses": {"200": {"description": "Ordered fields to POST to the hosted payment page.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/orders/{orderId}": {"get": {"operationId": "getPurchaseStatus", "summary": "Read the authenticated account's purchase status", "responses": {"200": {"description": "Current order status.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/payments/wayforpay/callback": {"post": {"operationId": "receiveWayForPayCallback", "summary": "Receive a signed WayForPay service callback", "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}}}}, "responses": {"200": {"description": "Signed acknowledgement, including duplicate and ignored statuses."}}}}
+    "/api/v1/admin/courses/{courseId}/grants": {"post": {"operationId": "grantCourseAccess", "summary": "Grant course access as an administrator", "description": "Admin-only same-origin mutation. Creates an active admin grant and its audit record.", "requestBody": {"required": true}, "responses": {"201": {"description": "Active administrative grant.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/courses/{courseId}/participants/{userId}/revoke": {"post": {"operationId": "revokeCourseParticipant", "summary": "Revoke a participant membership as an administrator", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/learners": {"get": {"operationId": "listAdminLearners", "summary": "List learners across every course for an administrator", "responses": {"200": {"description": "A cursor page of learners; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "q": {"schema": {"minLength": 1, "maxLength": 80}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/admin/refunds": {"get": {"operationId": "listRefundQueue", "summary": "List orders flagged for refund attention", "responses": {"200": {"description": "Orders needing refund attention."}}, "parameters": {"state": {"description": "Narrows the list. Absent defaults to pending."}}}}
+    "/api/v1/admin/refunds/{orderId}/refund": {"post": {"operationId": "refundOrder", "summary": "Record a refund-queue order as refunded", "responses": {"204": {"description": "Refund-queue row settled as refunded"}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/refunds/{orderId}/decline": {"post": {"operationId": "declineRefund", "summary": "Record a refund-queue order as declined", "responses": {"204": {"description": "Refund-queue row settled as declined"}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/refunds/{orderId}/revoke": {"post": {"operationId": "revokeRefundGrant", "summary": "Revoke the grant of a refund-queue order", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/courses/{courseId}/roster": {"get": {"operationId": "getCourseRoster", "summary": "List course members for the instructor or administrator", "responses": {"200": {"description": "A cursor page of members; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/teach/learners": {"get": {"operationId": "listTeachLearners", "summary": "List learners across the instructor's own courses", "responses": {"200": {"description": "A cursor page of learners; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "q": {"schema": {"minLength": 1, "maxLength": 80}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/block": {"post": {"operationId": "blockCourseParticipant", "summary": "Block a participant from course communication", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/unblock": {"post": {"operationId": "unblockCourseParticipant", "summary": "Restore a participant's course communication", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/comments/{commentId}/block-author": {"post": {"operationId": "blockCommentAuthor", "summary": "Block the author of a comment from course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"commentId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/comments/{commentId}/unblock-author": {"post": {"operationId": "unblockCommentAuthor", "summary": "Restore the comment author's course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"commentId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/reviews/{reviewId}/block-author": {"post": {"operationId": "blockReviewAuthor", "summary": "Block the author of a review from course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"reviewId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/reviews/{reviewId}/unblock-author": {"post": {"operationId": "unblockReviewAuthor", "summary": "Restore the review author's course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"reviewId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/auth/login":
+      post:
+        operationId: login
+        summary: Exchange credentials for a session
+        description: Requires exactly one Origin header equal to the configured public
+          origin; a missing, repeated, null or foreign origin is rejected. The body accepts
+          only email and password, and rejects duplicate keys, unknown members, trailing
+          content and bodies over 8 KiB. Unknown accounts and wrong passwords are indistinguishable.
+          A success sets an HttpOnly, SameSite=Lax session cookie and revokes any session
+          the request already presented. Responses are never cached.
+        responses:
+          '200':
+            description: The authenticated user, or a pending two-factor challenge. A
+              session cookie is set only for the authenticated-user variant.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+              Set-Cookie:
+                "$ref": "#/components/headers/SessionCookie"
+    "/api/v1/auth/register":
+      post:
+        operationId: register
+        summary: Register and start a session
+        responses:
+          '201':
+            description: Registered user and session cookie
+    "/api/v1/auth/verify-email":
+      post:
+        operationId: verifyEmail
+        responses:
+          '204':
+            description: Email verified.
+    "/api/v1/auth/resend-verification":
+      post:
+        operationId: resendVerification
+        description: Returns 204 whether or not the email identifies an account.
+        responses:
+          '204':
+            description: Verification email was requested.
+    "/api/v1/auth/password/forgot":
+      post:
+        operationId: requestPasswordReset
+        description: Returns 200 whether or not the email identifies an account.
+        responses:
+          '200':
+            description: Reset request accepted.
+    "/api/v1/auth/password/reset":
+      post:
+        operationId: resetPassword
+        responses:
+          '204':
+            description: Password reset and all sessions revoked.
+    "/api/v1/auth/password/change":
+      post:
+        operationId: changePassword
+        responses:
+          '204':
+            description: Password changed; other sessions revoked.
+    "/api/v1/auth/email/change":
+      post:
+        operationId: requestEmailChange
+        responses:
+          '204':
+            description: Confirmation email requested.
+    "/api/v1/auth/email/change/confirm":
+      post:
+        operationId: confirmEmailChange
+        responses:
+          '204':
+            description: Email changed and verified.
+    "/api/v1/auth/2fa/enroll":
+      post:
+        operationId: enrollTwoFactor
+        summary: Create an unconfirmed TOTP secret for the authenticated account
+        responses:
+          '200':
+            description: Scan or record this secret, then confirm it. The secret is returned
+              only by this endpoint.
+    "/api/v1/auth/2fa/confirm":
+      post:
+        operationId: confirmTwoFactor
+        summary: Confirm a TOTP secret and receive one-time recovery codes
+        responses:
+          '200':
+            description: Two-factor authentication is enabled; save recovery codes now
+              because they are not shown again.
+    "/api/v1/auth/2fa/complete":
+      post:
+        operationId: completeTwoFactor
+        summary: Complete a pending login using a TOTP or recovery code
+        responses:
+          '204':
+            description: Session cookie issued.
+    "/api/v1/auth/2fa/disable":
+      post:
+        operationId: disableTwoFactor
+        summary: Disable two-factor authentication after password and factor proof
+        responses:
+          '204':
+            description: Two-factor authentication disabled.
+    "/api/v1/auth/2fa/recovery-codes":
+      post:
+        operationId: regenerateRecoveryCodes
+        summary: Replace recovery codes after a TOTP or recovery-code proof
+        responses:
+          '200':
+            description: New recovery codes, returned only once.
+    "/api/v1/auth/me":
+      get:
+        operationId: getCurrentUser
+        summary: Read the authenticated user
+        description: Resolves the session cookie. A missing, malformed, repeated, expired
+          or revoked cookie returns the same 401, and a disabled account is treated as
+          unauthenticated.
+        responses:
+          '200':
+            description: The authenticated user.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/auth/logout":
+      post:
+        operationId: logout
+        summary: End the current session
+        description: 'Requires the same single matching Origin header as login. Revocation
+          is idempotent: an absent, malformed or already revoked session still returns
+          204 and still clears the cookie, so the response reveals nothing about session
+          existence.'
+        responses:
+          '204':
+            description: The session is revoked and the cookie is cleared.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+              Set-Cookie:
+                "$ref": "#/components/headers/SessionCookie"
+    "/api/v1/admin/instructors":
+      get:
+        operationId: listInstructors
+        summary: List eligible course owners
+        description: Admin-only, unpaginated and bounded to 200 active instructor or admin
+          accounts. Email, password data and account status are never exposed. Responses
+          are never cached.
+        responses:
+          '200':
+            description: Eligible owners in deterministic display-name and ID order.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+            content:
+              application/json:
+                schema:
+                  maxItems: 200
+    "/api/v1/admin/users":
+      get:
+        operationId: listAdminUsers
+        summary: List accounts for identity administration
+        description: Admin-only. By default returns active and blocked accounts while
+          omitting deleted accounts; an explicit status filter selects one state. Search
+          is a case-insensitive literal substring of email or display name. Query parameters
+          must occur at most once, unknown parameters are rejected, and responses are
+          never cached.
+        parameters:
+          limit:
+            schema:
+              minimum: 1
+              maximum: 50
+              default: 20
+          offset:
+            schema:
+              minimum: 0
+              maximum: 10000
+              default: 0
+          q:
+            schema:
+              default: ''
+            description: Search text, maximum 100 Unicode code points after trimming whitespace.
+          role:
+            description: Optional single-role filter; omitted returns every role.
+          sort:
+            description: Row ordering; omitted or 'email' sorts by email, 'name' by display
+              name, 'recent' by newest account first.
+        responses:
+          '200':
+            description: Status-projected account rows and pagination.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/status":
+      post:
+        operationId: setAdminUserStatus
+        summary: Block or restore an account
+        description: Admin-only and idempotent. Block revokes the target's sessions; restore
+          makes a non-deleted target active. Requires one matching Origin header. Bodies
+          are limited to 8 KiB, accept no duplicate or unknown members, and responses
+          are never cached.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '200':
+            description: The requested status is in effect.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}":
+      delete:
+        operationId: deleteAdminUser
+        summary: Soft-delete an account
+        description: Admin-only. Marks a non-admin target deleted and disabled and revokes
+          its sessions. Deleted and unknown targets are indistinguishable. Requires one
+          matching Origin header, accepts no query parameters, and responses are never
+          cached.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: The account was soft-deleted and its sessions were revoked.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/password":
+      post:
+        operationId: resetAdminUserPassword
+        summary: Reset an account password
+        description: Admin-only. Replaces the credential and revokes every target session,
+          including for a blocked target; a deleted target is not operable. Requires one
+          matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or
+          unknown members, and responses are never cached. Passwords contain 1 to 1024
+          UTF-8 bytes; any content is accepted.
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: The password was reset and the target's sessions were revoked.
+            headers:
+              X-Request-ID:
+                "$ref": "#/components/headers/RequestID"
+              Cache-Control:
+                "$ref": "#/components/headers/NoStore"
+    "/api/v1/admin/users/{id}/2fa/disable":
+      post:
+        operationId: adminDisableUserTwoFactor
+        summary: Disable two-factor authentication for an account
+        parameters:
+          id:
+            schema:
+              format: uuid
+        responses:
+          '204':
+            description: Two-factor authentication disabled and recovery codes removed.
+    /api/v1/admin/courses/{courseId}/documents:
+        get:
+            operationId: "listCourseDocuments"
+            summary: "List the course document library"
+            description: "The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The course library."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    documents:
+                                        maxItems: 200
+                                $ref: null
+        post:
+            operationId: "addCourseDocument"
+            summary: "Add a document to the course library"
+            description: "Only http(s) is accepted, and a path under /media/ is refused outright: a transcript must not become a second way to name media bytes."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The document was added."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/courses/{courseId}/documents/{documentId}:
+        delete:
+            operationId: "removeCourseDocument"
+            summary: "Remove a document from the course library"
+            description: "Refused while any segment still references it, so a reference can never point at nothing. This governs the author's action only; deleting the course still cascades."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                documentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The document was removed."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/draft:
+        get:
+            operationId: "getLessonDraft"
+            summary: "Get a lesson recognition draft"
+            description: "Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The lesson draft, or the empty draft state."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/draft/publish:
+        post:
+            operationId: "publishLessonDraft"
+            summary: "Publish a lesson recognition draft"
+            description: "Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            requestBody:
+                required: false
+            responses:
+                "200":
+                    description: "The draft was published as the lesson transcript."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    updatedAt:
+                                        format: "date-time"
+                                $ref: null
+    /api/v1/admin/lessons/{lessonId}/draft/regenerate:
+        post:
+            operationId: "regenerateLessonDraft"
+            summary: "Queue lesson speech recognition"
+            description: "Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            requestBody:
+                required: false
+            responses:
+                "202":
+                    description: "Recognition was queued."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/transcript:
+        put:
+            operationId: "saveLessonTranscript"
+            summary: "Replace a lesson transcript"
+            description: "Authenticated same-origin mutation, scoped to the course owner or an admin. The write REPLACES the transcript of one lesson in one language: the author edits a document, not a set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt is the optimistic-lock token and is omitted when the author believes no transcript exists; a second writer racing into the same empty lesson is refused with transcript_exists rather than appending to the first one's work."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The transcript was replaced."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    updatedAt:
+                                        format: "date-time"
+                                $ref: null
+    /api/v1/learn/lessons/{lessonId}/transcript:
+        get:
+            operationId: "getLessonTranscript"
+            summary: "Get a lesson transcript"
+            description: "Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+                language:
+                    schema:
+                        maxLength: 35
+                        minLength: 2
+                        pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+            responses:
+                "200":
+                    description: "The whole transcript of the lesson."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/playback/sessions:
+      post:
+        operationId: createPlaybackSession
+        summary: Mint a playback session for one lesson
+        description: >-
+          Authenticated same-origin mutation. The server selects the current highest-generation
+          ready video for the lesson, checks course visibility before taking ownership, and always
+          replaces the caller's previous playback slot on success. The client cannot name a video.
+          Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+        responses:
+          '201':
+            description: A new playback session owns the account's single playback slot.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/playback/heartbeat:
+      post:
+        operationId: heartbeatPlayback
+        summary: Renew playback ownership and save lesson progress
+        description: >-
+          Authenticated same-origin mutation. Only the current owner renews the slot and writes
+          progress. A taken-over session and an expired session are distinct outcomes. Positions
+          above the current video duration are accepted and clamped by the server.
+          Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+        responses:
+          '204':
+            description: Ownership was renewed and the progress update was processed.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/admin/lessons/{id}/images:
+        post:
+            operationId: uploadAdminLessonImage
+            parameters:
+                id:
+                    schema: {format: uuid}
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [file]
+                            properties:
+                                file:
+                                    type: string
+                                    format: binary
+                                    description: The image file (JPEG, PNG or WebP; up to 5 MiB; max 40 megapixels).
+            responses:
+                "201":
+                    description: Image stored.
+                "413":
+                    description: Image is too large.
+                "415":
+                    description: Image format is not supported.
+    /api/v1/admin/stats:
+        get:
+            operationId: getAdminStats
+            summary: Platform statistics snapshot
+            description: >-
+                Admin-only. A point-in-time aggregate across people, content, access and sales,
+                moderation and media, plus the per-instructor leaderboard and the single-instructor
+                flag. Accepts no query parameters and responses are never cached.
+            responses:
+                "200":
+                    description: The platform snapshot.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+    /api/v1/admin/stats/timeseries:
+        get:
+            operationId: getAdminStatsTimeseries
+            summary: Platform statistics timeseries
+            description: >-
+                Admin-only. Buckets one metric (signups, enrollments, orders or revenue) by day or
+                week over a UTC window. Revenue buckets by paid time, enrollments by grant time, the
+                rest by creation time. An unparseable or inverted range is invalid_range; a window
+                wider than the bucket cap is range_too_wide; an unknown metric or bucket is rejected.
+                Responses are never cached.
+            parameters:
+                from:
+                    description: Inclusive RFC 3339 start; defaults to `to` minus 30 days.
+                    schema: {format: date-time}
+                to:
+                    description: Inclusive RFC 3339 end; defaults to now.
+                    schema: {format: date-time}
+            responses:
+                "200":
+                    description: Ordered timeseries buckets.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+    /api/v1/admin/courses/{id}/status:
+        post:
+            description: >-
+                Performs one legal lifecycle transition: draft to published, published to archived,
+                or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond
+                token returned by a read, and every accepted transition returns a new token.
+                Instructors may transition only their own course; admins may transition any course.
+                Requires one matching Origin header, accepts no duplicate or unknown body members,
+                and responses are never cached.
+            operationId: transitionAdminCourse
+            parameters:
+                id:
+                    schema: {format: uuid}
+            responses:
+                "200":
+                    description: The transitioned course tree with a new updatedAt token.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+            summary: Publish, archive or restore a course
+    /api/v1/courses:
+        get:
+            description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+            operationId: listPublishedCourses
+            # Structure comes from RouteBinding.Params; keys resolve Go-declared names.
+            parameters:
+                limit:
+                    schema: {default: 20, maximum: 50, minimum: 1}
+                offset:
+                    schema: {default: 0, maximum: 10000, minimum: 0}
+                q:
+                    description: Search text, maximum 100 Unicode code points after trimming whitespace.
+                    schema: {default: ""}
+                sort:
+                    description: Recent orders by publishedAt descending then ID ascending; title uses PostgreSQL C collation then ID ascending.
+                    schema: {default: recent}
+            responses:
+                "200":
+                    description: Published courses and pagination, including an empty items array when beyond the final page.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+            summary: List published courses
+    /api/v1/courses/{slug}:
+        get:
+            description: Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
+            operationId: getPublishedCourse
+            parameters:
+                slug:
+                    schema:
+                        maxLength: 120
+                        minLength: 1
+                        pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+            responses:
+                "200":
+                    description: Published course with its ordered title-only program.
+                    headers:
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+            summary: Get a published course
+
+    /api/v1/admin/lessons/{lessonId}/video:
+      post:
+        operationId: mintAdminVideoTicket
+        summary: Mint a video upload ticket
+        description: >-
+          Admins may mint for any saved lesson; instructors may mint only for lessons in courses
+          they own. The minted video asset ID is also the single-use upload ticket ID. Requires
+          one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown
+          members, and responses are never cached. The API records metadata only and does not
+          access media storage.
+        parameters:
+          lessonId:
+            schema: { format: uuid }
+        responses:
+          '201':
+            description: A created asset and its resumable upload ticket.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/courses/{courseId}/videos:
+      get:
+        operationId: listAdminCourseVideos
+        summary: List a course's video assets
+        description: >-
+          Admins may read any course; instructors may read only courses they own. Returns one
+          item per non-evicted asset, including multiple generations for a lesson. Storage keys
+          and filesystem paths are never exposed. Query parameters are not supported and
+          responses are never cached.
+        parameters:
+          courseId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The course's non-evicted video assets, or an empty items array.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/videos/{videoId}/retry:
+      post:
+        operationId: retryAdminVideo
+        summary: Retry video transcoding
+        description: >-
+          Admins may retry any owned asset; instructors may retry only assets in courses they
+          own. A failed or queued asset may be retried, as may a processing asset whose claim is
+          older than 40 minutes, but only after the complete source landed. Success clears any
+          claim, increments the attempt and enqueues the asset. Requires one matching Origin
+          header, accepts no query parameters, and responses are never cached.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The asset is queued for another transcoding attempt.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    # Discussion transport metadata (S0.1h); structure and enums come from Go.
+    "/api/v1/courses/{slug}/reviews":
+        get:
+            operationId: "listCourseReviews"
+            parameters:
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "Public reviews"
+    "/api/v1/learn/courses/{courseId}/reviews":
+        get:
+            operationId: "listLearningCourseReviews"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "Reviews visible to the learner"
+    "/api/v1/learn/courses/{courseId}/review":
+        get:
+            operationId: "getOwnCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "Own review and current eligibility"
+        put:
+            operationId: "putCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "Updated review"
+                "201":
+                    description: "Created review"
+        delete:
+            operationId: "deleteCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review deleted"
+    "/api/v1/learn/reviews/{reviewId}/reports":
+        post:
+            operationId: "reportCourseReview"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Report accepted"
+    "/api/v1/learn/lessons/{lessonId}/comments":
+        get:
+            operationId: "listLessonComments"
+            summary: "List lesson discussion threads"
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The lesson's discussion threads."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+        post:
+            operationId: "publishLessonComment"
+            summary: "Publish a lesson comment or reply"
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The comment was published."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/comments/{commentId}":
+        patch:
+            operationId: "updateLessonComment"
+            summary: "Edit an authored lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The comment was updated."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+        delete:
+            operationId: "removeLessonComment"
+            summary: "Remove a lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The comment was removed, or was already removed."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/comments/{commentId}/reports":
+        post:
+            operationId: "reportLessonComment"
+            summary: "Report a lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The report was accepted, or was already present for this reporter."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/courses/{courseId}/report-lecturer":
+        post:
+            operationId: "reportCourseLecturer"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "Participant report created"
+    "/api/v1/teach/courses/{courseId}/comments":
+        get:
+            operationId: "listTeachCourseComments"
+            summary: "List all comments in an instructor course workspace"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The course-wide comment list."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/courses/{courseId}/moderation-queue":
+        get:
+            operationId: "listTeachModerationQueue"
+            summary: "List the open moderation queue for an instructor course"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The open moderation queue."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/comments/{commentId}/dismiss-report":
+        post:
+            operationId: "dismissCommentReports"
+            summary: "Dismiss all open reports for a comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The open reports were dismissed."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/reviews/{reviewId}/remove":
+        post:
+            operationId: "removeCourseReview"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review removed"
+    "/api/v1/teach/reviews/{reviewId}/dismiss-report":
+        post:
+            operationId: "dismissCourseReviewReports"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review reports dismissed"
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/report":
+        post:
+            operationId: "reportCourseParticipant"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                userId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "Participant report created"
+    "/api/v1/admin/participant-reports":
+        get:
+            operationId: "listParticipantReports"
+            parameters:
+                cursor:
+                    schema:
+                        minLength: 1
+                state:
+                    description: "Filter by report state; absent means open."
+            responses:
+                "200":
+                    description: "Participant reports for the requested state"
+    "/api/v1/admin/participant-reports/{reportId}/resolve":
+        post:
+            operationId: "resolveParticipantReport"
+            parameters:
+                reportId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Participant report resolved"
+    /api/v1/admin/lessons/{lessonId}/document:
+        get:
+            operationId: getAdminLessonDocument
+            description: Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        put:
+            operationId: saveAdminLessonDocument
+            description: Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/lessons/{lessonId}/document/publish:
+        post:
+            operationId: publishAdminLessonDocument
+            description: Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/learn/lessons/{lessonId}/document:
+        get:
+            operationId: getLearnLessonDocument
+            description: Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+servers:
+    - url: /

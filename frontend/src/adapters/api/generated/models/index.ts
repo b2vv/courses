@@ -50,6 +50,7 @@ export * from './authenticatedUser.ts';
 export * from './authenticatedUserRole.ts';
 export * from './badRequestResponse.ts';
 export * from './changePasswordRequest.ts';
+export * from './checkoutField.ts';
 export * from './checkoutForm.ts';
 export * from './checkoutFormFieldsItem.ts';
 export * from './checkoutRequest.ts';

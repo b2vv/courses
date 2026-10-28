@@ -12,18 +12,27 @@ import type { NullableAdminTimestamp } from './nullableAdminTimestamp.ts';
 import type { NullablePrice } from './nullablePrice.ts';
 
 export interface AdminCourseTree {
+  createdAt: AdminTimestamp;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  description: string;
   id: string;
+  instructorId: string;
+  /** @maxItems 40 */
+  modules: AdminModule[];
+  price: NullablePrice | null;
+  publishedAt: NullableAdminTimestamp | null;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
+  status: AdminCourseTreeStatus;
+  /** @minimum 0 */
+  studentCount: number;
   /**
      * @minLength 1
      * @maxLength 500
@@ -31,17 +40,8 @@ export interface AdminCourseTree {
   summary: string;
   /**
      * @minLength 1
-     * @maxLength 20000
+     * @maxLength 200
      */
-  description: string;
-  status: AdminCourseTreeStatus;
-  instructorId: string;
-  createdAt: AdminTimestamp;
+  title: string;
   updatedAt: AdminTimestamp;
-  publishedAt: NullableAdminTimestamp | null;
-  price: NullablePrice | null;
-  /** @minimum 0 */
-  studentCount: number;
-  /** @maxItems 40 */
-  modules: AdminModule[];
 }

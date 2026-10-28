@@ -9,6 +9,6 @@ import type { AdminCourseStatusRequestStatus } from './adminCourseStatusRequestS
 import type { AdminTimestamp } from './adminTimestamp.ts';
 
 export interface AdminCourseStatusRequest {
-  status: AdminCourseStatusRequestStatus;
   expectedUpdatedAt: AdminTimestamp;
+  status: AdminCourseStatusRequestStatus;
 }

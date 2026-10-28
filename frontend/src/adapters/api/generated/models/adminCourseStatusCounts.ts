@@ -8,11 +8,11 @@
 
 export interface AdminCourseStatusCounts {
   /** @minimum 0 */
-  total: number;
+  archived: number;
   /** @minimum 0 */
   draft: number;
   /** @minimum 0 */
   published: number;
   /** @minimum 0 */
-  archived: number;
+  total: number;
 }

@@ -9,12 +9,12 @@ import type { GetAdminStatsTimeseriesBucket } from './getAdminStatsTimeseriesBuc
 import type { GetAdminStatsTimeseriesMetric } from './getAdminStatsTimeseriesMetric.ts';
 
 export type GetAdminStatsTimeseriesParams = {
-metric: GetAdminStatsTimeseriesMetric;
 bucket: GetAdminStatsTimeseriesBucket;
 /**
  * Inclusive RFC 3339 start; defaults to `to` minus 30 days.
  */
 from?: string;
+metric: GetAdminStatsTimeseriesMetric;
 /**
  * Inclusive RFC 3339 end; defaults to now.
  */

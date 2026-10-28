@@ -8,10 +8,10 @@
 
 export interface AdminLesson {
   id: string;
+  isPreview?: boolean;
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  isPreview?: boolean;
 }

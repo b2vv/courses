@@ -7,27 +7,27 @@
  */
 
 export interface DraftSegment {
-  id: string;
-  /** @minimum 0 */
-  startMs: number;
-  /**
-     * Must be greater than or equal to startMs.
-     * @minimum 0
-     */
-  endMs: number;
-  /**
-     * @minLength 1
-     * @maxLength 1000
-     */
-  text: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  speaker?: string;
   /**
      * @minimum 0
      * @maximum 1
      */
   confidence?: number;
+  /**
+     * Must be greater than or equal to startMs.
+     * @minimum 0
+     */
+  endMs: number;
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  speaker?: string;
+  /** @minimum 0 */
+  startMs: number;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  text: string;
 }

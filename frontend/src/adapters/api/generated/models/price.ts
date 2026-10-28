@@ -8,7 +8,7 @@
 import type { PriceCurrency } from './priceCurrency.ts';
 
 export interface Price {
+  currency: PriceCurrency;
   /** @minimum 1 */
   minor: number;
-  currency: PriceCurrency;
 }

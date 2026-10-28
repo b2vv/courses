@@ -8,8 +8,8 @@
 import type { ImageUploadResponseContentType } from './imageUploadResponseContentType.ts';
 
 export interface ImageUploadResponse {
-  id: string;
   contentType: ImageUploadResponseContentType;
-  width: number;
   height: number;
+  id: string;
+  width: number;
 }

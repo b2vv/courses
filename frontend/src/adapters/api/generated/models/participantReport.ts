@@ -9,16 +9,16 @@ import type { ParticipantReportKind } from './participantReportKind.ts';
 import type { ParticipantReportState } from './participantReportState.ts';
 
 export interface ParticipantReport {
-  id: string;
   courseId: string;
-  reporterId: string;
-  targetId: string;
+  createdAt: string;
+  id: string;
   kind: ParticipantReportKind;
   /**
      * @minLength 1
      * @maxLength 500
      */
   reason: string;
+  reporterId: string;
   state: ParticipantReportState;
-  createdAt: string;
+  targetId: string;
 }

@@ -8,17 +8,17 @@
 import type { RosterEntryState } from './rosterEntryState.ts';
 
 export interface RosterEntry {
-  userId: string;
   /**
      * @minLength 1
      * @maxLength 120
      */
   displayName: string;
-  state: RosterEntryState;
   enrolledAt: string;
   /**
      * @minimum 0
      * @maximum 100
      */
   progressPercent: number;
+  state: RosterEntryState;
+  userId: string;
 }

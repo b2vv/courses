@@ -7,20 +7,20 @@
  */
 
 export interface Review {
-  id: string;
   /** @nullable */
   authorDisplayName: string | null;
+  body: string;
+  /** @minimum 0 */
+  completedLessons: number;
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
+  id: string;
   /**
      * @minimum 1
      * @maximum 5
      */
   stars: number;
-  body: string;
-  /** @minimum 0 */
-  completedLessons: number;
   /** @minimum 0 */
   totalLessons: number;
-  createdAt: string;
-  /** @nullable */
-  editedAt: string | null;
 }

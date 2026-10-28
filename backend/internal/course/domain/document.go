@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"unicode/utf8"
 )
 
@@ -36,6 +37,9 @@ const (
 	SectionTask  SectionType = "task"
 )
 
+// SectionTypes is the complete section discriminator set.
+var SectionTypes = []SectionType{SectionVideo, SectionText, SectionImage, SectionRow, SectionTask}
+
 type BlockType string
 
 const (
@@ -44,12 +48,18 @@ const (
 	BlockList      BlockType = "list"
 )
 
+// BlockTypes is the complete rich-text block discriminator set.
+var BlockTypes = []BlockType{BlockParagraph, BlockHeading, BlockList}
+
 type Mark string
 
 const (
 	MarkBold   Mark = "bold"
 	MarkItalic Mark = "italic"
 )
+
+// Marks is the complete inline formatting mark set.
+var Marks = []Mark{MarkBold, MarkItalic}
 
 // Image content types an image section may carry. They mirror the image module's upload allowlist
 // (internal/image/domain) — a browser cannot import a Go constant, and a module never imports
@@ -140,7 +150,7 @@ func ValidateLessonDocument(document LessonDocument) error {
 }
 
 func validateDocumentSection(section Section, inRow bool, textCount *int) error {
-	if !validText(section.ID, MaximumSectionID) || inRow && section.Type != SectionText && section.Type != SectionImage {
+	if !slices.Contains(SectionTypes, section.Type) || !validText(section.ID, MaximumSectionID) || inRow && section.Type != SectionText && section.Type != SectionImage {
 		return ErrInvalidLessonDocument
 	}
 	switch section.Type {
@@ -191,6 +201,9 @@ func validateRichText(content RichText, textCount *int) error {
 }
 
 func validateDocumentBlock(block Block, textCount *int) error {
+	if !slices.Contains(BlockTypes, block.Type) {
+		return ErrInvalidLessonDocument
+	}
 	switch block.Type {
 	case BlockParagraph, BlockHeading:
 		if block.Ordered || block.Items != nil || block.Type == BlockParagraph && block.Level != 0 || block.Type == BlockHeading && block.Level != 2 && block.Level != 3 {
@@ -221,7 +234,7 @@ func validateDocumentSpans(spans []Span, textCount *int) error {
 			return ErrInvalidLessonDocument
 		}
 		for _, mark := range span.Marks {
-			if mark != MarkBold && mark != MarkItalic {
+			if !slices.Contains(Marks, mark) {
 				return ErrInvalidLessonDocument
 			}
 		}

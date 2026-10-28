@@ -10,11 +10,11 @@ import type { WayForPayAcknowledgementStatus } from './wayForPayAcknowledgementS
 export interface WayForPayAcknowledgement {
   /** @minLength 1 */
   orderReference: string;
-  status: WayForPayAcknowledgementStatus;
-  time: number;
   /**
      * @minLength 32
      * @maxLength 32
      */
   signature: string;
+  status: WayForPayAcknowledgementStatus;
+  time: number;
 }

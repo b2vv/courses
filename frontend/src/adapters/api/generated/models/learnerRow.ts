@@ -8,11 +8,11 @@
 import type { LearnerCourse } from './learnerCourse.ts';
 
 export interface LearnerRow {
-  userId: string;
+  /** @minItems 1 */
+  courses: LearnerCourse[];
   /** @maxLength 120 */
   displayName: string;
   /** @nullable */
   lastActivityAt: string | null;
-  /** @minItems 1 */
-  courses: LearnerCourse[];
+  userId: string;
 }

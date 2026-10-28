@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"slices"
 	"time"
 )
 
@@ -18,6 +19,9 @@ const (
 	ProgressEnded ProgressReason = "ended"
 )
 
+// ProgressReasons is the ordered set used by validation and the HTTP contract.
+var ProgressReasons = []ProgressReason{ProgressTick, ProgressPause, ProgressSeek, ProgressHide, ProgressNav, ProgressEnded}
+
 type ProgressUpdate struct {
 	positionSeconds float64
 	clientSequence  int64
@@ -30,12 +34,10 @@ func NewProgressUpdate(positionSeconds float64, clientSequence int64, reason str
 		return ProgressUpdate{}, ErrInvalidProgress
 	}
 	progressReason := ProgressReason(reason)
-	switch progressReason {
-	case ProgressTick, ProgressPause, ProgressSeek, ProgressHide, ProgressNav, ProgressEnded:
-		return ProgressUpdate{positionSeconds: positionSeconds, clientSequence: clientSequence, reason: progressReason}, nil
-	default:
+	if !slices.Contains(ProgressReasons, progressReason) {
 		return ProgressUpdate{}, ErrInvalidProgress
 	}
+	return ProgressUpdate{positionSeconds: positionSeconds, clientSequence: clientSequence, reason: progressReason}, nil
 }
 
 func (update ProgressUpdate) PositionSeconds() float64 { return update.positionSeconds }

@@ -8,6 +8,11 @@
 
 export interface RegisterRequest {
   /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  displayName: string;
+  /**
      * @minLength 3
      * @maxLength 254
      */
@@ -17,9 +22,4 @@ export interface RegisterRequest {
      * @maxLength 128
      */
   password: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  displayName: string;
 }

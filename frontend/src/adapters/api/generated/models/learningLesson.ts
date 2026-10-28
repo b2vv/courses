@@ -8,7 +8,19 @@
 import type { LearningLessonVideoState } from './learningLessonVideoState.ts';
 
 export interface LearningLesson {
+  /**
+     * @minimum 0
+     * @maximum 2147483647
+     */
+  clientSeq: number;
+  completed: boolean;
   id: string;
+  /** The lesson is open to anyone who can see a published course, without a purchase. */
+  isPreview: boolean;
+  /** For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it. */
+  locked: boolean;
+  /** @minimum 0 */
+  position: number;
   /**
      * @minLength 1
      * @maxLength 200
@@ -16,16 +28,4 @@ export interface LearningLesson {
   title: string;
   /** @nullable */
   videoState: LearningLessonVideoState;
-  /** @minimum 0 */
-  position: number;
-  completed: boolean;
-  /**
-     * @minimum 0
-     * @maximum 2147483647
-     */
-  clientSeq: number;
-  /** The lesson is open to anyone who can see a published course, without a purchase. */
-  isPreview: boolean;
-  /** For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it. */
-  locked: boolean;
 }

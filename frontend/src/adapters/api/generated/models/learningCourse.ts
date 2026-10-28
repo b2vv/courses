@@ -11,18 +11,34 @@ import type { LearningModule } from './learningModule.ts';
 import type { NullablePrice } from './nullablePrice.ts';
 
 export interface LearningCourse {
+  /** True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy. */
+  canPurchase: boolean;
+  /** @nullable */
+  continueLessonId: string | null;
+  createdAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  description: string;
   id: string;
+  /** @minimum 0 */
+  lessonCount: number;
+  /** @maxItems 40 */
+  modules: LearningModule[];
+  paid: boolean;
+  price: NullablePrice | null;
+  /** @nullable */
+  publishedAt: string | null;
+  /** @nullable */
+  rating: LearningCourseRating;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
+  status: LearningCourseStatus;
   /**
      * @minLength 1
      * @maxLength 500
@@ -30,24 +46,8 @@ export interface LearningCourse {
   summary: string;
   /**
      * @minLength 1
-     * @maxLength 20000
+     * @maxLength 200
      */
-  description: string;
-  status: LearningCourseStatus;
-  createdAt: string;
+  title: string;
   updatedAt: string;
-  /** @nullable */
-  publishedAt: string | null;
-  price: NullablePrice | null;
-  paid: boolean;
-  /** @nullable */
-  rating: LearningCourseRating;
-  /** @minimum 0 */
-  lessonCount: number;
-  /** @maxItems 40 */
-  modules: LearningModule[];
-  /** @nullable */
-  continueLessonId: string | null;
-  /** True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy. */
-  canPurchase: boolean;
 }

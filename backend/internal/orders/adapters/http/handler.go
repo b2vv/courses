@@ -76,12 +76,12 @@ type moneyDTO struct {
 }
 
 type orderDTO struct {
-	ID        string   `json:"id"`
-	CourseID  string   `json:"courseId"`
-	Amount    moneyDTO `json:"amount"`
-	Status    string   `json:"status"`
-	CreatedAt string   `json:"createdAt"`
-	PaidAt    *string  `json:"paidAt"`
+	ID        string             `json:"id"`
+	CourseID  string             `json:"courseId"`
+	Amount    moneyDTO           `json:"amount"`
+	Status    domain.OrderStatus `json:"status"`
+	CreatedAt string             `json:"createdAt"`
+	PaidAt    *string            `json:"paidAt"`
 }
 
 type grantRequest struct {
@@ -90,15 +90,15 @@ type grantRequest struct {
 }
 
 type refundQueueItemDTO struct {
-	OrderID            string  `json:"orderId"`
-	CourseID           string  `json:"courseId"`
-	UserID             string  `json:"userId"`
-	OrderAmountMinor   int64   `json:"orderAmountMinor"`
-	ChargedAmountMinor *int64  `json:"chargedAmountMinor"`
-	ReceivedAt         *string `json:"receivedAt"`
-	Reason             string  `json:"reason"`
-	MembershipState    *string `json:"membershipState"`
-	Outcome            *string `json:"outcome"`
+	OrderID            string             `json:"orderId"`
+	CourseID           string             `json:"courseId"`
+	UserID             string             `json:"userId"`
+	OrderAmountMinor   int64              `json:"orderAmountMinor"`
+	ChargedAmountMinor *int64             `json:"chargedAmountMinor"`
+	ReceivedAt         *string            `json:"receivedAt"`
+	Reason             refundReason       `json:"reason"`
+	MembershipState    *domain.GrantState `json:"membershipState"`
+	Outcome            *refundOutcome     `json:"outcome"`
 }
 
 type refundQueueDTO struct {
@@ -106,31 +106,31 @@ type refundQueueDTO struct {
 }
 
 type checkoutRequest struct {
-	CourseSlug string `json:"courseSlug"`
+	CourseSlug string `json:"courseSlug,omitempty"`
 }
 
 type grantDTO struct {
-	ID        string  `json:"id"`
-	UserID    string  `json:"userId"`
-	CourseID  string  `json:"courseId"`
-	Source    string  `json:"source"`
-	State     string  `json:"state"`
-	GrantedAt string  `json:"grantedAt"`
-	GrantedBy *string `json:"grantedBy"`
+	ID        string             `json:"id"`
+	UserID    string             `json:"userId"`
+	CourseID  string             `json:"courseId"`
+	Source    domain.GrantSource `json:"source"`
+	State     domain.GrantState  `json:"state"`
+	GrantedAt string             `json:"grantedAt"`
+	GrantedBy *string            `json:"grantedBy"`
 }
 
 type membershipDTO struct {
-	State  *string `json:"state"`
-	Member bool    `json:"member"`
+	State  *domain.GrantState `json:"state"`
+	Member bool               `json:"member"`
 }
 
 type membershipCardDTO struct {
-	CourseID        string `json:"courseId"`
-	Slug            string `json:"slug"`
-	Title           string `json:"title"`
-	State           string `json:"state"`
-	ProgressPercent int    `json:"progressPercent"`
-	EnrolledAt      string `json:"enrolledAt"`
+	CourseID        string                `json:"courseId"`
+	Slug            string                `json:"slug"`
+	Title           string                `json:"title"`
+	State           activeMembershipState `json:"state"`
+	ProgressPercent int                   `json:"progressPercent"`
+	EnrolledAt      string                `json:"enrolledAt"`
 }
 
 type myMembershipsPageDTO struct {
@@ -138,11 +138,11 @@ type myMembershipsPageDTO struct {
 }
 
 type rosterEntryDTO struct {
-	UserID          string `json:"userId"`
-	DisplayName     string `json:"displayName"`
-	State           string `json:"state"`
-	EnrolledAt      string `json:"enrolledAt"`
-	ProgressPercent int    `json:"progressPercent"`
+	UserID          string            `json:"userId"`
+	DisplayName     string            `json:"displayName"`
+	State           domain.GrantState `json:"state"`
+	EnrolledAt      string            `json:"enrolledAt"`
+	ProgressPercent int               `json:"progressPercent"`
 }
 
 type rosterPageDTO struct {
@@ -151,12 +151,12 @@ type rosterPageDTO struct {
 }
 
 type learnerCourseDTO struct {
-	CourseID        string `json:"courseId"`
-	Slug            string `json:"slug"`
-	Title           string `json:"title"`
-	State           string `json:"state"`
-	ProgressPercent int    `json:"progressPercent"`
-	EnrolledAt      string `json:"enrolledAt"`
+	CourseID        string                `json:"courseId"`
+	Slug            string                `json:"slug"`
+	Title           string                `json:"title"`
+	State           activeMembershipState `json:"state"`
+	ProgressPercent int                   `json:"progressPercent"`
+	EnrolledAt      string                `json:"enrolledAt"`
 }
 
 type learnerRowDTO struct {
@@ -238,7 +238,7 @@ func (handler *Handler) membershipState(w http.ResponseWriter, r *http.Request) 
 	}
 	response := membershipDTO{Member: member}
 	if member {
-		value := string(state)
+		value := state
 		response.State = &value
 	}
 	httpserver.WriteJSON(w, http.StatusOK, response)
@@ -261,7 +261,7 @@ func (handler *Handler) myMemberships(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]membershipCardDTO, 0, len(cards))
 	for _, card := range cards {
-		items = append(items, membershipCardDTO{CourseID: card.CourseID, Slug: card.Slug, Title: card.Title, State: string(card.State), ProgressPercent: card.ProgressPercent, EnrolledAt: card.EnrolledAt.UTC().Format(dateTimeLayout)})
+		items = append(items, membershipCardDTO{CourseID: card.CourseID, Slug: card.Slug, Title: card.Title, State: activeMembershipState(card.State), ProgressPercent: card.ProgressPercent, EnrolledAt: card.EnrolledAt.UTC().Format(dateTimeLayout)})
 	}
 	httpserver.WriteJSON(w, http.StatusOK, myMembershipsPageDTO{Items: items})
 }
@@ -301,7 +301,7 @@ func (handler *Handler) roster(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := make([]rosterEntryDTO, 0, len(page.Entries))
 	for _, entry := range page.Entries {
-		entries = append(entries, rosterEntryDTO{UserID: entry.UserID, DisplayName: entry.DisplayName, State: string(entry.State), EnrolledAt: entry.EnrolledAt.UTC().Format(dateTimeLayout), ProgressPercent: entry.ProgressPercent})
+		entries = append(entries, rosterEntryDTO{UserID: entry.UserID, DisplayName: entry.DisplayName, State: entry.State, EnrolledAt: entry.EnrolledAt.UTC().Format(dateTimeLayout), ProgressPercent: entry.ProgressPercent})
 	}
 	response := rosterPageDTO{Entries: entries}
 	if page.NextCursor != "" {
@@ -382,7 +382,7 @@ func (handler *Handler) learners(w http.ResponseWriter, r *http.Request, adminSc
 	for _, row := range page.Entries {
 		courses := make([]learnerCourseDTO, 0, len(row.Courses))
 		for _, course := range row.Courses {
-			courses = append(courses, learnerCourseDTO{CourseID: course.CourseID, Slug: course.Slug, Title: course.Title, State: string(course.State), ProgressPercent: course.ProgressPercent, EnrolledAt: course.EnrolledAt.UTC().Format(dateTimeLayout)})
+			courses = append(courses, learnerCourseDTO{CourseID: course.CourseID, Slug: course.Slug, Title: course.Title, State: activeMembershipState(course.State), ProgressPercent: course.ProgressPercent, EnrolledAt: course.EnrolledAt.UTC().Format(dateTimeLayout)})
 		}
 		dto := learnerRowDTO{UserID: row.UserID, DisplayName: row.DisplayName, Courses: courses}
 		if row.LastActivityAt != nil {
@@ -472,7 +472,7 @@ func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	dtos := make([]refundQueueItemDTO, 0, len(items))
 	for _, item := range items {
-		dto := refundQueueItemDTO{OrderID: item.OrderID, CourseID: item.CourseID, UserID: item.UserID, OrderAmountMinor: item.OrderAmountMinor, Reason: item.Reason}
+		dto := refundQueueItemDTO{OrderID: item.OrderID, CourseID: item.CourseID, UserID: item.UserID, OrderAmountMinor: item.OrderAmountMinor, Reason: refundReason(item.Reason)}
 		if item.ChargedAmountMinor != nil {
 			value := *item.ChargedAmountMinor
 			dto.ChargedAmountMinor = &value
@@ -482,11 +482,11 @@ func (handler *Handler) refundQueue(w http.ResponseWriter, r *http.Request) {
 			dto.ReceivedAt = &stamp
 		}
 		if item.MembershipState != nil {
-			state := string(*item.MembershipState)
+			state := *item.MembershipState
 			dto.MembershipState = &state
 		}
 		if item.Outcome != "" {
-			outcome := item.Outcome
+			outcome := refundOutcome(item.Outcome)
 			dto.Outcome = &outcome
 		}
 		dtos = append(dtos, dto)
@@ -687,11 +687,11 @@ func (handler *Handler) grantCourse(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusCreated, mapGrant(grant))
+	httpserver.WriteJSON(w, http.StatusCreated, adminGrantDTO(mapGrant(grant)))
 }
 
 func mapGrant(grant domain.Grant) grantDTO {
-	return grantDTO{ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: string(grant.Source()), State: string(grant.State()), GrantedAt: grant.GrantedAt().UTC().Format(dateTimeLayout), GrantedBy: grant.GrantedBy()}
+	return grantDTO{ID: grant.ID(), UserID: grant.UserID(), CourseID: grant.CourseID(), Source: grant.Source(), State: grant.State(), GrantedAt: grant.GrantedAt().UTC().Format(dateTimeLayout), GrantedBy: grant.GrantedBy()}
 }
 
 func actorFromRequest(w http.ResponseWriter, r *http.Request) (application.Actor, bool) {
@@ -709,7 +709,7 @@ func mapOrder(order domain.Order) orderDTO {
 		formatted := value.UTC().Format(dateTimeLayout)
 		paidAt = &formatted
 	}
-	return orderDTO{ID: order.ID(), CourseID: order.CourseID(), Amount: moneyDTO{Minor: int64(order.Amount().MinorUnits()), Currency: string(order.Amount().Currency())}, Status: string(order.Status()), CreatedAt: order.CreatedAt().UTC().Format(dateTimeLayout), PaidAt: paidAt}
+	return orderDTO{ID: order.ID(), CourseID: order.CourseID(), Amount: moneyDTO{Minor: int64(order.Amount().MinorUnits()), Currency: string(order.Amount().Currency())}, Status: order.Status(), CreatedAt: order.CreatedAt().UTC().Format(dateTimeLayout), PaidAt: paidAt}
 }
 
 func decodeGrant(w http.ResponseWriter, r *http.Request) (grantRequest, error) {
@@ -826,3 +826,10 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
 	}
 }
+
+// adminGrantDTO is the admin-grant endpoint projection (source admin, state active).
+type adminGrantDTO grantDTO
+
+type activeMembershipState string
+type refundReason string
+type refundOutcome string

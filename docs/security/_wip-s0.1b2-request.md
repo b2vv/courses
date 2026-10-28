@@ -1,0 +1,99 @@
+# S0.1b-2 — one course request DTO + request conformance (16.4 + 16.2) — WORK FILE
+
+Дописуй ПІСЛЯ КОЖНОГО КРОКУ (append). Перший запис — `ДАЛІ:` до першого інструменту.
+ФАКТ / РІШЕННЯ / ДАЛІ / ПИТАННЯ. Фінал = стислий переказ. Base: branch `s0.0-spike` @ `cb2e9b5`.
+
+## Журнал
+
+### 2026-10-27 — Codex: discovery / pre-code checkpoint
+
+ДАЛІ: прочитати контракт і Go DTO, вибрати один scalar-field request route, звірити hand spec та handler fixture; product mutation лише після усунення суперечностей. Цей запис зроблено після read-only discovery (вступну вимогу запису до першого інструменту побачено під час читання файлу).
+
+ФАКТ: root `/Users/strelia/projects/courses`, branch `s0.0-spike`, HEAD `36fee5eb7382c91c7140ef17f28953a3e9597144`; requested base `cb2e9b5` є його безпосереднім предком. HEAD додає тільки попереднє review/disposition; не скидав його. На вході єдиний untracked файл — цей наданий work-file; оригінальний заголовок збережений. Початковий SHA-256 work-file: `db020f22ee5c4c27d66ce55796b286a3ff3f6f54d2c89c12e0177cc3fdb9e6a9`.
+
+Scope/owner: доручення власника S0.1b-2, §16.2 + §16.4; один request route, без document/Block, error-code parser, інших модулів, hand-spec edits, merge/push. Small: генератор/контрактні тести, без зміни публічного API чи runtime behavior; inline plan достатній за `.claude/standards.md`. Незалежне per-slice review — Courses 2 за планом §16.6, NOT_RUN; planning critique/defense N/A для цього малого scope. Виконавець/writer — поточний Codex; інших writers не виявлено.
+
+ФАКТ: `RouteBinding` не має Request; `Generate` відбиває лише responses. Existing `customize` робить pointer nullable; `NullableFields=false` не скасовує pointer-nullability (`nullable || Kind()==Pointer`). Overlay зараз не містить request structure, тож переносити/видаляти її поки немає звідки. File fallback замість graph: перевірено generate.go/overlay.go, course contribution/fidelity/response-conformance, admin DTO/handlers/fixtures і відповідні hand schemas. Ніяких graph refresh або product mutations.
+
+РІШЕННЯ (пропозиція Codex, 2026-10-27): кандидат `POST /api/v1/admin/courses/{id}/status`, `transitionAdminCourseRequest`: лише два scalar-string поля, без вкладених документів, масивів чи custom UnmarshalJSON; є реальний handler fixture. DELETE має лише один scalar, але потребує додаткової підтримки bodyless 204, яку нинішній generator відмовляє як nil response body. Create/save додають optionalPriceDTO або дерево. Перевірити вибір можна за `admin_handler.go:125`, hand spec `openapi.yaml:936`, fixture `admin_handler_test.go`.
+
+План після узгодження: спільна reflection-функція request/response → Request binding та scalar metadata → fidelity до hand request/ref closure → ValidateRequest над тими самими байтами, що успішно пройшли admin handler, плюс missing/null negative cases → regen + second-generation equality → чотири gates у brief-порядку → scoped commit з заданими trailers. Це план, НЕ виконаний доказ.
+
+## ПИТАННЯ
+
+**STOP / pre-code BLOCKED — request pointer null semantics.** §11.2 вимагає `*T → nullable:true`, brief вимагає ті самі rules і незмінну fidelity. Але `transitionAdminCourseRequest.Status` та `.ExpectedUpdatedAt` — `*string` без omitempty (`admin_handler.go:125–128`), тоді як `AdminCourseStatusRequest` (`openapi.yaml:3206`) вимагає обидва поля і не дозволяє null; `AdminTimestamp` (`:3271`) теж non-null. Handler `:268` явно відхиляє nil для обох полів. Отже pointer тут кодує missing/null detection під час decode, не дозволений null у wire contract. DELETE має ту саму суперечність (`:130`, `:296`).
+
+Потрібне рішення власника: дозволити явне request-specific non-null narrowing за nil-check handler, лишивши required і hand spec без змін, чи змінити контракт генератора іншим узгодженим способом. Не сховав суперечність в overlay `nullable:false`, не послабив fidelity/validation assertions, не підмінив production request DTO синтетичним. §16.4 також згадує optional-pointer semantics; у transition DTO немає omitempty — окремий generator unit case може довести це правило, але його не можна назвати production-route optional-field proof.
+
+ФАКТ: fixture доступний (`seededAdminWriteRepository`, `adminReadHandler`, `serveAdminJSON`/`serveAdminRawAs` відновлює ті самі request bytes після handler). Blocker — контракт, не fixture.
+
+Gates: gofmt / go vet / go build / scoped go test — **NOT_RUN** (STOP до реалізації). Request fidelity / ValidateRequest / regeneration — **NOT_IMPLEMENTED / NOT_RUN**. Код і generated/hand spec не змінені; комітів, merge, push немає. ДАЛІ: відповідь власника на nullability, потім продовження цього самого slice.
+
+## RESUME (для свіжої сесії після handoff — Codex НЕ відновлено, це наступна дія)
+Codex S0.1b-2 session id: `01a17e84-4953-7a41-8ce1-b62996482d93` (branch s0.0-spike).
+Рішення §16.10 ухвалено. Наступна дія: відновити Codex цією відповіддю (НЕ переробляти):
+`cd /Users/strelia/projects/courses && codex exec --approve-for-me resume 01a17e84-4953-7a41-8ce1-b62996482d93 "<ТЕКСТ НИЖЧЕ>" -o <scratch>/r.md > <scratch>/r.log 2>&1 < /dev/null` (у фоні).
+Текст відповіді (= §16.10 + кроки):
+1. Правило `*T→nullable` — RESPONSE-only; для REQUEST nullability вказівника = явне per-field рішення
+   (розширити NullableFields на request-поля), генератор fail-close на request-pointer без рішення;
+   контекст req/resp генератор знає з RouteBinding.Request vs Responses. required — за hand-контрактом/omitempty.
+2. transitionAdminCourseRequest (POST /admin/courses/{id}/status): обидва *string = явний non-null, required;
+   status enum [draft,published,archived] → overlay (як response status); expectedUpdatedAt→AdminTimestamp.
+3. Довести: fidelity на request-body + closure vs рукописний openapi.yaml (non-vacuous); ValidateRequest на
+   реальних байтах, що хендлер приймає (admin-фікстури) + негативні кейси (nil status/nil expectedUpdatedAt → FAIL)
+   = route two-layer (16.2 опція b).
+4. 16.4 optional-pointer: transition доводить non-null required шлях; + generator UNIT-тест на genuine-optional
+   (request `*T` з omitempty → nullable+optional).
+5. Структура з Go; overlay лише validation/prose; видалити будь-яку overlay-request-структуру в тому ж коміті;
+   fidelity зелений = доказ; regen openapi.generated.yaml (2-а генерація byte-identical).
+6. Гейти по порядку (gofmt/vet/build/test), реальний вивід. Малі коміти на s0.0-spike, trailers як було.
+7. Scope: лише цей request-route + request-conformance + generator request-nullability + optional-pointer unit test.
+Далі: writer-верифікація гейтів → пакет Courses 2 (per-slice) з акцентом на request-nullability handling.
+
+### 2026-10-27 — resume за рішенням власника §16.10
+ФАКТ: branch `s0.0-spike`, HEAD `d74a886`, clean; попередній STOP закрито явним рішенням власника. Pre-code READY для того самого small slice, impact і fixture з попереднього checkpoint чинні. Request-pointer nullability — явний NullableFields decision; response behavior зберігається. План: спільна reflection-функція з request context і per-use seen set, fail-close на відсутню pointer annotation та conflicting shared schemas; status binding; request/ref-closure fidelity; real-handler positive/null/missing cases; optional-pointer unit; regen і ordered gates. Незалежне review лишається Courses 2, NOT_RUN автором.
+РІШЕННЯ (Codex, scope, 2026-10-27): новий binding є request-only: response surface status-route не мігруємо в цьому slice. OpenAPI вимагає responses, тому request-only operation матиме явно описаний default placeholder без content/schema. Fidelity порівнює requestBody + його transitive closure, а catalog — як раніше; placeholder не є доказом або описом response shape. Перевірка: generator unit і course fidelity projection; runtime не змінюється.
+
+### Крок: request emission і course binding
+ФАКТ: додано RouteBinding.Request, спільний reflectBody з окремим per-body seen set; request pointers без NullableFields decision відхиляються, response nullable правило збережене. Додано status DTO name-map, два non-null decisions, Go FieldRefs/Components для expectedUpdatedAt→AdminTimestamp. Enum, timestamp pattern/format/prose і id format — overlay metadata. Наявної overlay-request-структури не було; нова структура лише Go. Fidelity projection зберігає весь catalog/ref closure і додає status request/ref closure з обох документів; відсутній request — fatal. ДАЛІ: generator unit та реальний handler conformance.
+
+### Крок: тести request semantics і Layer B
+ФАКТ: unit cases для explicit required/non-null, genuine optional nullable pointer, nested pointer, пропущених decisions та response-first shared-type collision. Layer B використовує admin-фікстуру і реальний registered handler: publish має повернути 200, викликати transition рівно раз та змінити status; null/missing кожного поля мають повернути 400 без transition і бути відхилені ValidateRequest. Валідуються ті самі bytes після відновлення fixture. ДАЛІ: форматування, regeneration/fidelity diagnostic, потім ordered gate.
+
+### Крок: перша regeneration діагностика
+ФАКТ: sandbox run `UPDATE_OPENAPI_GENERATED=1 go test ...` exit 1 до компіляції: Go cache `operation not permitted`. Повтор запущено з дозволом доступу до наявного cache. Це diagnostic, не ordered gate. Fidelity додатково залишає всі generated components/catalog paths у порівнянні (не приховує зайві), проектує лише status operation на requestBody+parameters. ДАЛІ: результат diagnostic і корекція лише реальних дефектів.
+
+### Крок: diagnostic fix
+ФАКТ: diagnostic exit 1: openapigen PASS (1.677s), course FAIL — `unsupported parameter metadata .../id/schema/format`. Додано `format` до validation whitelist та unit test. FieldRefs додатково fail-close на невідповідний scalar type/nullable target, щоб timestamp ref не маскував зміну Go type. Тестами закріплено matching/mismatched/null target. Це не зміна hand spec або weakening assertions. ДАЛІ: повторна regeneration.
+
+### Крок: regeneration PASS і gate 1
+`UPDATE_OPENAPI_GENERATED=1 go test ./internal/platform/openapigen/... ./internal/course/adapters/http/...` — exit 0:
+```
+ok  	courses/internal/platform/openapigen	1.021s
+ok  	courses/internal/course/adapters/http	6.530s
+```
+ФАКТ: generated delta лише AdminCourseStatusRequest, AdminTimestamp, status operation; hand spec незмінний. Fidelity порівнює requestBody, parameters і весь reference closure проти hand; тест перевірив дві byte-identical генерації. `git diff --check` exit 0.
+Gate 1: `cd backend && gofmt -l .` — exit 0, stdout порожній. Супровідна спроба append з backend cwd дала `no such file or directory`; повторний запис тут виправляє лише шлях журналу, gofmt виконався успішно. ДАЛІ: vet.
+
+### Крок: gate 2
+`cd backend && go vet ./...` — exit 0, stdout/stderr порожні. ДАЛІ: build.
+
+### Крок: gate 3
+`cd backend && go build ./...` — exit 0, stdout/stderr порожні. ДАЛІ: scoped test з `-count=1`, щоб фінальний доказ не був cached.
+
+### Крок: gate 4 PASS, фінальна перевірка scope
+`cd backend && go test -count=1 ./internal/platform/openapigen/... ./internal/course/adapters/http/...` — exit 0:
+```
+ok  	courses/internal/platform/openapigen	1.257s
+ok  	courses/internal/course/adapters/http	6.375s
+```
+Порядок фінальних gates: gofmt (0, no output) → vet (0, no output) → build (0, no output) → scoped tests (0, вище). `git diff --check` exit 0; `git diff --exit-code -- backend/openapi/openapi.yaml backend/go.mod backend/go.sum` exit 0. `rg -n '"courses/internal/' backend/internal/platform/openapigen` exit 1 / no matches — platform imports no module. No make generate/check-generated wiring, runtime handlers, other modules, document/Block або parser changes.
+
+Acceptance: §16.10 explicit non-null required pointers + missing annotation fail-close PASS; §16.4 genuine optional nullable pointer unit PASS (omit/null/value), production transition required-pointer path PASS; requestBody+AdminCourseStatusRequest+AdminTimestamp closure vs hand PASS; Layer B actual accepted publish + four null/missing negatives PASS; response catalog tests залишилися зеленими; deterministic regeneration і checked-in artifact PASS. Overlay request structure відсутня — structural request/body/fields/required/ref/type/nullable у Go, overlay лише enum/validation/prose.
+
+Межі: status operation response schemas ще не мігровані; default placeholder це явно позначає, а fidelity project тільки цього operation не заявляє response equivalence. Root request value має бути non-pointer: root не є per-field рішенням, тому pointer root відхиляється явно. Shared request/response schema із різними nullability відхиляється як conflicting schema, перевірено unit. Ці механізми не скасовують майбутню повну module coverage перед cutover. Full make check/E2E не запускалися: за brief цей slice має чотири scoped Go gates, runtime/shared persisted state не змінено. Нових STOP немає; попередній nullability STOP закрито §16.10. Незалежне Courses 2 review — PENDING, не авторський PASS.
+
+ДАЛІ: один логічний commit цієї request-only вертикалі з owner trailers; передати Courses 2 цей diff/record для per-slice review. Merge/push не виконувати.
+
+### Крок: implementation commit
+ФАКТ: `45599ca` — `feat(openapigen): generate course status requests with conformance (SA10/S0.1b)`; 9 scoped files, задані Co-Authored-By/Claude-Session trailers. Ordered gates вище стосуються саме committed code/artifact; після них змінювався лише цей журнал. Наступний docs-only commit фіксує delivery evidence. Courses 2 reviewer target: base `d74a886` → implementation `45599ca` (+ journal-only delivery commit); жодного merge/push. Owner-approved implementation завершено; independent review лишається PENDING.

@@ -8,8 +8,8 @@
 import type { CommentThread } from './commentThread.ts';
 
 export interface CommentPage {
-  /** @maxItems 50 */
-  threads: CommentThread[];
   /** @nullable */
   nextCursor: string | null;
+  /** @maxItems 50 */
+  threads: CommentThread[];
 }

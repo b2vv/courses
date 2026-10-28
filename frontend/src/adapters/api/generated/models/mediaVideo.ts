@@ -10,11 +10,15 @@ import type { MediaVideoFailureReason } from './mediaVideoFailureReason.ts';
 import type { MediaVideoState } from './mediaVideoState.ts';
 
 export interface MediaVideo {
-  lessonId: string;
-  videoId: string;
-  state: MediaVideoState;
+  /**
+     * @minimum 1
+     * @maximum 2147483648
+     */
+  declaredBytes: number;
+  failureReason?: MediaVideoFailureReason;
   /** @minimum 1 */
   generation: number;
+  lessonId: string;
   /**
      * @minLength 1
      * @maxLength 255
@@ -25,11 +29,7 @@ export interface MediaVideo {
      * @maximum 2147483648
      */
   receivedBytes: number;
-  /**
-     * @minimum 1
-     * @maximum 2147483648
-     */
-  declaredBytes: number;
+  state: MediaVideoState;
   updatedAt: AdminTimestamp;
-  failureReason?: MediaVideoFailureReason;
+  videoId: string;
 }

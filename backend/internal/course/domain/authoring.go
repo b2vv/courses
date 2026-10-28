@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -235,7 +236,7 @@ func ValidateID(id string) error {
 }
 
 func ValidateStatusFilter(status Status) error {
-	if status != "" && status != Draft && status != Published && status != Archived {
+	if status != "" && !slices.Contains(CourseStatuses, status) {
 		return ErrInvalidRequest
 	}
 	return nil

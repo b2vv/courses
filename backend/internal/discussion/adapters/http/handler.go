@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"courses/internal/discussion/application"
@@ -78,8 +79,8 @@ type pageDTO struct {
 
 type publishRequest struct {
 	Body       string  `json:"body"`
-	PositionMs *int64  `json:"positionMs"`
-	ParentID   *string `json:"parentId"`
+	PositionMs *int64  `json:"positionMs,omitempty"`
+	ParentID   *string `json:"parentId,omitempty"`
 }
 
 type updateRequest struct {
@@ -95,14 +96,14 @@ type participantReportRequest struct {
 }
 
 type participantReportDTO struct {
-	ID         string    `json:"id"`
-	CourseID   string    `json:"courseId"`
-	ReporterID string    `json:"reporterId"`
-	TargetID   string    `json:"targetId"`
-	Kind       string    `json:"kind"`
-	Reason     string    `json:"reason"`
-	State      string    `json:"state"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         string             `json:"id"`
+	CourseID   string             `json:"courseId"`
+	ReporterID string             `json:"reporterId"`
+	TargetID   string             `json:"targetId"`
+	Kind       domain.ReportKind  `json:"kind"`
+	Reason     string             `json:"reason"`
+	State      domain.ReportState `json:"state"`
+	CreatedAt  time.Time          `json:"createdAt"`
 }
 
 type participantReportQueueItemDTO struct {
@@ -135,8 +136,19 @@ type courseCommentsDTO struct {
 	NextCursor *string                `json:"nextCursor"`
 }
 
+type moderationKind string
+
+const (
+	moderationComment          moderationKind = "comment"
+	moderationReview           moderationKind = "review"
+	participantReportAllStates                = "all"
+)
+
+// moderationKinds is the ordered set of item variants emitted by the queue.
+var moderationKinds = []moderationKind{moderationComment, moderationReview}
+
 type queueItemDTO struct {
-	Kind          string                `json:"kind"`
+	Kind          moderationKind        `json:"kind"`
 	Comment       *moderationCommentDTO `json:"comment"`
 	Review        *reviewDTO            `json:"review"`
 	OpenReports   int                   `json:"openReports"`
@@ -309,7 +321,7 @@ func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]queueItemDTO, len(page.Items))
 	for i, item := range page.Items {
-		items[i] = queueItemDTO{Kind: item.Kind, OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
+		items[i] = queueItemDTO{Kind: moderationKind(item.Kind), OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
 		if item.Comment != nil {
 			comment := mapModerationComment(*item.Comment)
 			items[i].Comment = &comment
@@ -481,18 +493,19 @@ func (handler *Handler) participantReportQueue(w http.ResponseWriter, r *http.Re
 		return
 	}
 	// Absent state defaults to the open queue; "all" clears the repository filter.
-	stateFilter := "open"
-	switch query.Get("state") {
-	case "", "open":
-		stateFilter = "open"
-	case "resolved":
-		stateFilter = "resolved"
-	case "all":
+	stateFilter := query.Get("state")
+	switch {
+	case stateFilter == "":
+		stateFilter = string(domain.ReportOpen)
+	case stateFilter == participantReportAllStates:
 		stateFilter = ""
+	case slices.Contains(domain.ReportStates, domain.ReportState(stateFilter)):
+		// Preserve a recognized state as the repository filter.
 	default:
 		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
 		return
 	}
+
 	actor, ok := actorFromRequest(w, r)
 	if !ok {
 		return
@@ -619,7 +632,7 @@ func mapReview(review application.Review) reviewDTO {
 	return reviewDTO{ID: review.ID, AuthorDisplayName: review.AuthorDisplayName, Stars: review.Stars, Body: review.Body, CompletedLessons: review.CompletedLessons, TotalLessons: review.TotalLessons, CreatedAt: review.CreatedAt, EditedAt: review.EditedAt}
 }
 func mapParticipantReport(report domain.ParticipantReport) participantReportDTO {
-	return participantReportDTO{ID: report.ID, CourseID: report.CourseID, ReporterID: report.ReporterID, TargetID: report.TargetID, Kind: string(report.Kind), Reason: report.Reason, State: string(report.State), CreatedAt: report.CreatedAt}
+	return participantReportDTO{ID: report.ID, CourseID: report.CourseID, ReporterID: report.ReporterID, TargetID: report.TargetID, Kind: report.Kind, Reason: report.Reason, State: report.State, CreatedAt: report.CreatedAt}
 }
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
@@ -641,7 +654,7 @@ func hasUnexpectedQuery(query url.Values, allowed ...string) bool {
 
 func writeListError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("lesson_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "lesson_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -649,7 +662,7 @@ func writeListError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writePublishError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("lesson_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "lesson_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -657,7 +670,7 @@ func writePublishError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeMutationError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("comment_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "comment_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -665,7 +678,7 @@ func writeMutationError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeReportError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("comment_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "comment_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -673,21 +686,21 @@ func writeReportError(w http.ResponseWriter, r *http.Request, err error) {
 
 func writeTeachListError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "course_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
 }
 func writeReviewError(w http.ResponseWriter, r *http.Request, err error, notFound string) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New(notFound))
+		writeErrorCode(w, r, http.StatusNotFound, notFound)
 		return
 	}
 	writeError(w, r, statusFor(err), err)
 }
 func writeParticipantReportError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
-		writeError(w, r, http.StatusNotFound, errors.New("course_not_found"))
+		writeErrorCode(w, r, http.StatusNotFound, "course_not_found")
 		return
 	}
 	writeError(w, r, statusFor(err), err)
@@ -703,13 +716,83 @@ func statusFor(err error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(err, domain.ErrBodyInvalid), errors.Is(err, domain.ErrPositionInvalid), errors.Is(err, domain.ErrParentInvalid), errors.Is(err, domain.ErrInvalidCursor), errors.Is(err, domain.ErrInvalidRequest), errors.Is(err, domain.ErrReviewInvalid), errors.Is(err, domain.ErrReportInvalid):
 		return http.StatusBadRequest
-	default:
+	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
 	}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
-	code := err.Error()
+	var code string
+	switch {
+	case errors.Is(err, domain.ErrBodyInvalid):
+		code = "comment_body_invalid"
+	case errors.Is(err, domain.ErrPositionInvalid):
+		code = "comment_position_invalid"
+	case errors.Is(err, domain.ErrParentInvalid):
+		code = "comment_parent_invalid"
+	case errors.Is(err, domain.ErrThreadFull):
+		code = "comment_thread_full"
+	case errors.Is(err, domain.ErrInvalidCursor):
+		code = "comment_cursor_invalid"
+	case errors.Is(err, domain.ErrNotFound):
+		code = "not_found"
+	case errors.Is(err, domain.ErrDependencyUnavailable):
+		code = "dependency_unavailable"
+	case errors.Is(err, domain.ErrForbidden):
+		code = "course_forbidden"
+	case errors.Is(err, domain.ErrPurchaseRequired):
+		code = "course_purchase_required"
+	case errors.Is(err, domain.ErrEnrollmentRequired):
+		code = "enrollment_required"
+	case errors.Is(err, domain.ErrEnrollmentBlocked):
+		code = "enrollment_blocked"
+	case errors.Is(err, domain.ErrInvalidRequest):
+		code = "invalid_request"
+	case errors.Is(err, domain.ErrReportOwnComment):
+		code = "report_own_comment"
+	case errors.Is(err, domain.ErrReviewOwnerForbidden):
+		code = "review_owner_forbidden"
+	case errors.Is(err, domain.ErrReviewNotAvailable):
+		code = "review_not_available"
+	case errors.Is(err, domain.ErrReviewPurchaseRequired):
+		code = "review_purchase_required"
+	case errors.Is(err, domain.ErrReviewNotStarted):
+		code = "review_not_started"
+	case errors.Is(err, domain.ErrReviewInvalid):
+		code = "review_invalid"
+	case errors.Is(err, domain.ErrReviewAlreadyExists):
+		code = "review_already_exists"
+	case errors.Is(err, domain.ErrReviewRemoved):
+		code = "review_removed"
+	case errors.Is(err, domain.ErrReportOwnReview):
+		code = "report_own_review"
+	case errors.Is(err, domain.ErrReviewModerationForbidden):
+		code = "review_moderation_forbidden"
+	case errors.Is(err, domain.ErrReportSelf):
+		code = "report_own_person"
+	case errors.Is(err, domain.ErrReportInvalid):
+		code = "report_invalid"
+	case errors.Is(err, domain.ErrReportForbidden):
+		code = "report_forbidden"
+	case errors.Is(err, domain.ErrReportDuplicate):
+		code = "report_already_open"
+	case errors.Is(err, application.ErrCommentForbidden):
+		code = "comment_forbidden"
+	case errors.Is(err, application.ErrCommentRemoved):
+		code = "comment_removed"
+	case errors.Is(err, application.ErrEmailNotVerified):
+		code = "email_not_verified"
+	default:
+		code = "internal_error"
+		status = http.StatusInternalServerError
+	}
+	writeErrorCode(w, r, status, code)
+}
+
+// writeErrorCode renders only canonical business codes and static transport mappings.
+func writeErrorCode(w http.ResponseWriter, r *http.Request, status int, code string) {
 	message := "Request is not valid"
 	switch code {
 	case "course_purchase_required":

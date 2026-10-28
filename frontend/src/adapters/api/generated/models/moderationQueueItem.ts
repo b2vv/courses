@@ -10,10 +10,10 @@ import type { Review } from './review.ts';
 import type { TeachComment } from './teachComment.ts';
 
 export interface ModerationQueueItem {
-  kind: ModerationQueueItemKind;
+  authorBlocked: boolean;
   comment: TeachComment | null;
-  review: Review | null;
+  kind: ModerationQueueItemKind;
   /** @minimum 1 */
   openReports: number;
-  authorBlocked: boolean;
+  review: Review | null;
 }

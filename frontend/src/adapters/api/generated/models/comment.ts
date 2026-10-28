@@ -8,19 +8,19 @@
 import type { CommentAuthor } from './commentAuthor.ts';
 
 export interface Comment {
-  id: string;
   author: CommentAuthor;
   /** @nullable */
   body: string | null;
+  canEdit: boolean;
+  canRemove: boolean;
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
+  id: string;
   /**
      * @minimum 0
      * @nullable
      */
   positionMs: number | null;
-  createdAt: string;
-  /** @nullable */
-  editedAt: string | null;
   removed: boolean;
-  canEdit: boolean;
-  canRemove: boolean;
 }

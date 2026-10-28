@@ -11,18 +11,30 @@ import type { NullablePrice } from './nullablePrice.ts';
 import type { ProgramModule } from './programModule.ts';
 
 export interface CourseDetail {
+  createdAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  description: string;
   id: string;
+  /** @minimum 0 */
+  lessonCount: number;
+  /** True when the course has a price; this is display metadata, not an access decision. */
+  paid: boolean;
+  price: NullablePrice | null;
+  /** @maxItems 40 */
+  program: ProgramModule[];
+  publishedAt: string;
+  /** @nullable */
+  rating: CourseDetailRating;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
+  status: CourseDetailStatus;
   /**
      * @minLength 1
      * @maxLength 500
@@ -30,20 +42,8 @@ export interface CourseDetail {
   summary: string;
   /**
      * @minLength 1
-     * @maxLength 20000
+     * @maxLength 200
      */
-  description: string;
-  status: CourseDetailStatus;
-  createdAt: string;
+  title: string;
   updatedAt: string;
-  publishedAt: string;
-  price: NullablePrice | null;
-  /** True when the course has a price; this is display metadata, not an access decision. */
-  paid: boolean;
-  /** @nullable */
-  rating: CourseDetailRating;
-  /** @minimum 0 */
-  lessonCount: number;
-  /** @maxItems 40 */
-  program: ProgramModule[];
 }

@@ -10,8 +10,8 @@ import type { LessonDocumentSchemaVersion } from './lessonDocumentSchemaVersion.
 import type { LessonSection } from './lessonSection.ts';
 
 export interface LessonDocument {
-  schemaVersion: LessonDocumentSchemaVersion;
   locale: LessonDocumentLocale;
+  schemaVersion: LessonDocumentSchemaVersion;
   /** @nullable */
   sections: LessonSection[] | null;
 }
