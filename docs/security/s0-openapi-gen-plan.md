@@ -735,3 +735,11 @@ and Codex's STOP #2.
   (guard still fires). 
 - **Scope:** generate-from-Go overlay mechanism (same class as §16.15); no product/contract change, hand
   untouched beyond the §16.16 one-liner, nothing merges. Courses 2 per-slice review gates it.
+- **Named limitation (Courses 2 S0.1d tracking, 2026-10-28), same single-layer class as §16.2/N1.** An
+  overlay-owned multipart `requestBody` is hand-written with no Go source and no request-conformance backstop
+  (`ValidateRequest` on a `multipart/form-data` binary upload is impractical), so it is **drift-prone** — the
+  overlay's declared form can diverge from what the handler's `r.FormFile` actually reads, and nothing fails.
+  Mechanism of the gap: it is single-layer (overlay only), exactly like params and validation keywords (§16.2,
+  N1). Minor theoretical edge: the `overlayOwned` flag trusts the generator's `!exists`, so a generator bug
+  that dropped a reflected JSON `requestBody` could let the overlay mask it; the per-route Layer-B conformance
+  (present for JSON routes) is the backstop. Low risk, recorded for completeness — not fixed now.
