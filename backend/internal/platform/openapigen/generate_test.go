@@ -128,11 +128,16 @@ func TestMissingOverlay(t *testing.T) {
 		t.Fatal("missing overlay accepted")
 	}
 }
+
+// Two differently-shaped Go types mapped to one component name must still fail closed. Since §16.19
+// this is caught at emission by the sameJSON guard as a "conflicting schema", not a priori by a
+// NameMap-injectivity check; an identical shared schema is now allowed
+// (TestSharedComponentNameAllowsIdenticalSchemaOnly).
 func TestNonInjectiveNameMap(t *testing.T) {
 	c := exampleContribution()
 	c.NameMap = map[reflect.Type]string{reflect.TypeFor[example](): "Same", reflect.TypeFor[child](): "Same"}
 	_, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
-	if err == nil || !strings.Contains(err.Error(), "collision") {
+	if err == nil || !strings.Contains(err.Error(), "conflicting schema") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -219,6 +224,49 @@ func TestBodylessResponseEmitsNoContent(t *testing.T) {
 	both := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/both", Responses: map[int]Response{200: {Body: child{}, Empty: true}}}}}
 	if _, err := Generate([]ModuleContribution{both}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "both a body and Empty") {
 		t.Fatalf("body+Empty should fail closed, got %v", err)
+	}
+}
+
+func TestSharedComponentNameAllowsIdenticalSchemaOnly(t *testing.T) {
+	type ratingA struct {
+		Average float64 `json:"average"`
+		Count   int     `json:"count"`
+	}
+	type ratingB struct {
+		Average float64 `json:"average"`
+		Count   int     `json:"count"`
+	}
+	type ratingC struct {
+		Average float64 `json:"average"`
+		Count   int64   `json:"count"`
+	}
+	path := overlay(t, "{}")
+	// Two distinct Go types, same component name, identical schema: allowed (a shared schema such
+	// as Rating that several modules each map their own DTO onto).
+	ok := ModuleContribution{
+		Routes: []RouteBinding{
+			{Method: "GET", Path: "/a", Responses: map[int]Response{200: {Body: ratingA{}}}},
+			{Method: "GET", Path: "/b", Responses: map[int]Response{200: {Body: ratingB{}}}},
+		},
+		NameMap: map[reflect.Type]string{reflect.TypeFor[ratingA](): "Rating", reflect.TypeFor[ratingB](): "Rating"},
+	}
+	doc, err := Generate([]ModuleContribution{ok}, path)
+	if err != nil {
+		t.Fatalf("identical shared schema must be allowed: %v", err)
+	}
+	if doc.Components.Schemas["Rating"] == nil {
+		t.Fatal("shared Rating component missing")
+	}
+	// Same name but a different shape (int64 vs int) must still fail closed.
+	bad := ModuleContribution{
+		Routes: []RouteBinding{
+			{Method: "GET", Path: "/a", Responses: map[int]Response{200: {Body: ratingA{}}}},
+			{Method: "GET", Path: "/c", Responses: map[int]Response{200: {Body: ratingC{}}}},
+		},
+		NameMap: map[reflect.Type]string{reflect.TypeFor[ratingA](): "Rating", reflect.TypeFor[ratingC](): "Rating"},
+	}
+	if _, err := Generate([]ModuleContribution{bad}, path); err == nil || !strings.Contains(err.Error(), "conflicting schema") {
+		t.Fatalf("a differing shared schema must conflict, got %v", err)
 	}
 }
 

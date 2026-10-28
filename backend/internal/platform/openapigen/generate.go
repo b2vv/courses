@@ -63,7 +63,6 @@ type ModuleContribution struct {
 type generator struct {
 	errorCodes []string
 	config     ModuleContribution
-	names      map[string]reflect.Type
 	seen       map[reflect.Type]bool
 	request    bool
 }
@@ -85,7 +84,7 @@ func GenerateFromSource(contribs []ModuleContribution, overlayPath, backendRoot 
 }
 
 func generate(contribs []ModuleContribution, overlayPath string, errorCodes []string) (*openapi3.T, error) {
-	g := generator{errorCodes: errorCodes, config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, names: map[string]reflect.Type{}, seen: map[reflect.Type]bool{}}
+	g := generator{errorCodes: errorCodes, config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, seen: map[reflect.Type]bool{}}
 	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "API", Version: "1.0.0"}, Paths: openapi3.NewPaths(), Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}}}
 	for _, c := range contribs {
 		if err := mergeRegistry(g.config.Enums, c.Enums); err != nil {
@@ -112,14 +111,42 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 		g.config.Routes = append(g.config.Routes, c.Routes...)
 	}
 	g.config.Components.Schemas = doc.Components.Schemas
+	// A component name may be shared by several Go types only when they reflect to an identical
+	// schema (§16.19: a frozen cross-module schema such as Rating is expressed as distinct module
+	// DTOs mapped to one name). Injectivity is replaced by schema-equality, not dropped: a differing
+	// shape under one name still fails closed. This eager check also covers a collision WITHIN one
+	// reflection graph, which the emission-time sameJSON guard cannot see — there the reflector would
+	// otherwise collapse the two shapes silently and emit a wrong artifact.
+	type namedType struct {
+		t    reflect.Type
+		name string
+	}
+	named := make([]namedType, 0, len(g.config.NameMap))
 	for t, name := range g.config.NameMap {
 		if t == nil || name == "" {
 			return nil, fmt.Errorf("invalid name mapping %v: %q", t, name)
 		}
-		if old, ok := g.names[name]; ok && old != t {
-			return nil, fmt.Errorf("component name collision %q: %v and %v", name, old, t)
+		named = append(named, namedType{t, name})
+	}
+	sort.Slice(named, func(i, j int) bool {
+		if named[i].name != named[j].name {
+			return named[i].name < named[j].name
 		}
-		g.names[name] = t
+		return named[i].t.String() < named[j].t.String()
+	})
+	canonical := map[string]string{}
+	for _, nt := range named {
+		schema, err := g.canonicalSchema(nt.t, nt.name)
+		if err != nil {
+			return nil, err
+		}
+		if prev, ok := canonical[nt.name]; ok {
+			if prev != schema {
+				return nil, fmt.Errorf("conflicting schema %s", nt.name)
+			}
+			continue
+		}
+		canonical[nt.name] = schema
 	}
 	sort.Slice(g.config.Routes, func(i, j int) bool {
 		a, b := g.config.Routes[i], g.config.Routes[j]
@@ -243,6 +270,25 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 		return nil, fmt.Errorf("invalid merged document: %w", err)
 	}
 	return result, nil
+}
+
+// canonicalSchema reflects a single named type in isolation — only this type keeps its component
+// name, so a type nested under a colliding name is inlined rather than collapsed — and returns the
+// JSON of the resulting named schema. Two types mapped to the same component name are compared
+// through this so the comparison is on OpenAPI shape, independent of where the collision occurs.
+func (g *generator) canonicalSchema(t reflect.Type, name string) (string, error) {
+	scratch := *g
+	scratch.config.NameMap = map[reflect.Type]string{t: name}
+	doc := &openapi3.T{Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}}}
+	body := reflect.New(t).Elem().Interface()
+	if _, err := scratch.reflectBody(doc, body, false); err != nil {
+		return "", err
+	}
+	s, err := json.Marshal(doc.Components.Schemas[name])
+	if err != nil {
+		return "", err
+	}
+	return string(s), nil
 }
 
 // Each body gets a fresh traversal: a prior response must not bypass request checks.
@@ -391,15 +437,6 @@ func (g *generator) check(t reflect.Type) error {
 	if t.Kind() == reflect.String && t.PkgPath() != "" {
 		if len(g.config.Enums[t]) == 0 {
 			return fmt.Errorf("unregistered string enum %v", t)
-		}
-	}
-	if t.Kind() == reflect.Struct {
-		name := g.name(t)
-		if name != "" {
-			if old, ok := g.names[name]; ok && old != t {
-				return fmt.Errorf("component name collision %q", name)
-			}
-			g.names[name] = t
 		}
 	}
 	if overridden {
