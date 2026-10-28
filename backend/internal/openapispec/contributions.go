@@ -9,9 +9,10 @@ import (
 	mediahttp "courses/internal/media/adapters/http"
 	"courses/internal/platform/openapigen"
 	playbackhttp "courses/internal/playback/adapters/http"
+	transcripthttp "courses/internal/transcript/adapters/http"
 )
 
 // AllOpenAPIContributions collects the modules migrated to Go-owned contracts.
 func AllOpenAPIContributions() []openapigen.ModuleContribution {
-	return []openapigen.ModuleContribution{coursehttp.OpenAPIContribution(), adminstatshttp.OpenAPIContribution(), imagehttp.OpenAPIContribution(), mediahttp.OpenAPIContribution(), playbackhttp.OpenAPIContribution()}
+	return []openapigen.ModuleContribution{coursehttp.OpenAPIContribution(), adminstatshttp.OpenAPIContribution(), imagehttp.OpenAPIContribution(), mediahttp.OpenAPIContribution(), playbackhttp.OpenAPIContribution(), transcripthttp.OpenAPIContribution()}
 }

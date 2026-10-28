@@ -18,6 +18,14 @@ import (
 // refusal below would be unreachable.
 const maximumTranscriptBody = 4 * 1024 * 1024
 
+type documentsResult struct {
+	Documents []documentDTO `json:"documents"`
+}
+
+type saveResult struct {
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type AdminHandler struct {
 	authoring *application.Authoring
 	library   *application.Library
@@ -70,9 +78,7 @@ func (handler *AdminHandler) listDocuments(w http.ResponseWriter, r *http.Reques
 	for _, link := range documents {
 		mapped = append(mapped, documentDTO{ID: link.ID, Label: link.Label, URL: link.URL})
 	}
-	httpserver.WriteJSON(w, http.StatusOK, struct {
-		Documents []documentDTO `json:"documents"`
-	}{Documents: mapped})
+	httpserver.WriteJSON(w, http.StatusOK, documentsResult{Documents: mapped})
 }
 
 func (handler *AdminHandler) addDocument(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +190,5 @@ func (handler *AdminHandler) save(w http.ResponseWriter, r *http.Request) {
 		writeTranscriptError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusOK, struct {
-		UpdatedAt string `json:"updatedAt"`
-	}{UpdatedAt: updatedAt})
+	httpserver.WriteJSON(w, http.StatusOK, saveResult{UpdatedAt: updatedAt})
 }

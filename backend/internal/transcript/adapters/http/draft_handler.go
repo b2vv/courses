@@ -11,6 +11,10 @@ import (
 	"courses/platform/httpserver"
 )
 
+type publishResult struct {
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type DraftHandler struct{ drafting *application.Drafting }
 
 func NewDraftHandler(drafting *application.Drafting) *DraftHandler {
@@ -40,15 +44,15 @@ type draftSegmentDTO struct {
 }
 
 type draftDTO struct {
-	LessonID   string            `json:"lessonId"`
-	State      *string           `json:"state"`
-	Language   *string           `json:"language"`
-	Failure    *string           `json:"failure"`
-	Stale      bool              `json:"stale"`
-	UpdatedAt  *string           `json:"updatedAt"`
-	AssetID    *string           `json:"assetId"`
-	Generation *int32            `json:"generation"`
-	Segments   []draftSegmentDTO `json:"segments"`
+	LessonID   string             `json:"lessonId"`
+	State      *domain.DraftState `json:"state"`
+	Language   *string            `json:"language"`
+	Failure    *string            `json:"failure"`
+	Stale      bool               `json:"stale"`
+	UpdatedAt  *string            `json:"updatedAt"`
+	AssetID    *string            `json:"assetId"`
+	Generation *int32             `json:"generation"`
+	Segments   []draftSegmentDTO  `json:"segments"`
 }
 
 func (handler *DraftHandler) getDraft(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +91,7 @@ func (handler *DraftHandler) getDraft(w http.ResponseWriter, r *http.Request) {
 		segments = append(segments, mapped)
 	}
 
-	state := string(draft.State)
+	state := draft.State
 	dto := draftDTO{
 		LessonID:   r.PathValue("lessonId"),
 		State:      &state,
@@ -145,9 +149,7 @@ func (handler *DraftHandler) publish(w http.ResponseWriter, r *http.Request) {
 		writeTranscriptError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusOK, struct {
-		UpdatedAt string `json:"updatedAt"`
-	}{UpdatedAt: token})
+	httpserver.WriteJSON(w, http.StatusOK, publishResult{UpdatedAt: token})
 }
 
 type regenerateRequest struct {

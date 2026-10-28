@@ -1,5 +1,7 @@
 package domain
 
+import "slices"
+
 // A draft is what the machine produces and the author corrects. It is deliberately NOT a
 // transcript: the transcript is what a student reads, and D8-10 keeps publication on the
 // existing write path, so nothing here needs a promotion step of its own.
@@ -17,16 +19,15 @@ const (
 	DraftNoSpeech DraftState = "no_speech"
 )
 
+// DraftStates is the ordered set used by validation and the HTTP contract.
+var DraftStates = []DraftState{DraftQueued, DraftRunning, DraftReady, DraftFailed, DraftNoSpeech}
+
 // MaximumFailureRunes bounds the named cause carried back to the author. It is short on
 // purpose: the field holds a reason, not a stack trace, and the migration mirrors the number.
 const MaximumFailureRunes = 200
 
 func validDraftState(state DraftState) bool {
-	switch state {
-	case DraftQueued, DraftRunning, DraftReady, DraftFailed, DraftNoSpeech:
-		return true
-	}
-	return false
+	return slices.Contains(DraftStates, state)
 }
 
 // Terminal answers whether the worker is done with this draft. Recovery (plan P-5) reads it to

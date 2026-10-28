@@ -16,6 +16,41 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        AdminMutationForbidden:
+            description: "The Origin is not allowed, the actor is not staff, or the instructor does not own the course or attempted reassignment."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        DraftConflict:
+            description: "Recognition is already running for the lesson's current video asset."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        Forbidden:
+            description: "The authenticated actor lacks permission for the resource or operation."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        LearningForbidden:
+            description: "The authenticated actor cannot view the requested course."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
+        TranscriptConflict:
+            description: "The transcript changed under the author, or a second writer reached the same empty lesson first. Named so the editor can say which of the two happened."
+            headers:
+                Cache-Control:
+                    $ref: "#/components/headers/NoStore"
+                X-Request-ID:
+                    $ref: "#/components/headers/RequestID"
         PlaybackForbidden:
           description: The Origin is not allowed or the authenticated actor cannot view the lesson's course.
           headers:
@@ -114,6 +149,158 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        LessonTranscript:
+            properties:
+                documents:
+                    description: "Every document referenced by any segment, carried once. A document belongs to the course library and is stored once per course, so inlining it into each of up to 5000 segments would send the same bytes back up to 15000 times: measured on the declared maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id."
+                    maxItems: 200
+                language:
+                    description: "Null when the lesson has no transcript. An absent transcript is a state of the lesson, not a missing resource, so the read answers 200 with an empty body rather than 404 — 404 would be answered identically for a lesson that does not exist, which is the one thing this read must not leak."
+                    maxLength: 35
+                    minLength: 2
+                lessonId:
+                    format: "uuid"
+                segments:
+                    maxItems: 5000
+                stale:
+                    description: "Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale."
+                updatedAt:
+                    description: "The optimistic-lock token to send back when saving, null when the lesson has no transcript. Without it on the read an author could never obtain the token the write demands, and the editing loop could not close."
+                    format: "date-time"
+        LessonDraft:
+            properties:
+                assetId:
+                    format: "uuid"
+                failure:
+                    maxLength: 200
+                    minLength: 1
+                generation:
+                    format: "int32"
+                    minimum: 1
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+                lessonId:
+                    format: "uuid"
+                segments:
+                    maxItems: 5000
+                stale:
+                    description: "True when the draft was made from a previous ready video generation."
+                state:
+                    description: "Null when recognition has not created a draft row yet."
+                updatedAt:
+                    format: "date-time"
+        SaveTranscriptRequest:
+            properties:
+                expectedUpdatedAt:
+                    format: "date-time"
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+                segments:
+                    items:
+                        properties:
+                            confidence:
+                                format: "double"
+                                maximum: 1
+                                minimum: 0
+                            documentIds:
+                                items:
+                                    format: "uuid"
+                                maxItems: 3
+                            endMs:
+                                format: "int64"
+                                minimum: 0
+                            id:
+                                format: "uuid"
+                            speaker:
+                                maxLength: 100
+                                minLength: 1
+                            startMs:
+                                format: "int64"
+                                minimum: 0
+                            text:
+                                maxLength: 1000
+                                minLength: 1
+                        $ref: null
+                        required: ["id", "startMs", "endMs", "text", "documentIds"]
+                    maxItems: 5000
+            required: ["language", "segments"]
+        TranscriptDocumentLink:
+            properties:
+                id:
+                    format: "uuid"
+                label:
+                    maxLength: 200
+                    minLength: 1
+                url:
+                    maxLength: 2000
+                    minLength: 1
+        TranscriptSegment:
+            properties:
+                confidence:
+                    format: "double"
+                    maximum: 1
+                    minimum: 0
+                documentIds:
+                    items:
+                        format: "uuid"
+                    maxItems: 3
+                endMs:
+                    format: "int64"
+                    minimum: 0
+                id:
+                    format: "uuid"
+                speaker:
+                    maxLength: 100
+                    minLength: 1
+                startMs:
+                    format: "int64"
+                    minimum: 0
+                text:
+                    maxLength: 1000
+                    minLength: 1
+        DraftSegment:
+            properties:
+                confidence:
+                    format: "double"
+                    maximum: 1
+                    minimum: 0
+                    nullable: false
+                endMs:
+                    description: "Must be greater than or equal to startMs."
+                    format: "int64"
+                    minimum: 0
+                id:
+                    format: "uuid"
+                speaker:
+                    maxLength: 100
+                    minLength: 1
+                    nullable: false
+                startMs:
+                    format: "int64"
+                    minimum: 0
+                text:
+                    maxLength: 1000
+                    minLength: 1
+        RegenerateLessonDraftRequest:
+            properties:
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+            required: null
+        PublishLessonDraftRequest:
+            properties:
+                expectedUpdatedAt:
+                    format: "date-time"
+            required: null
+        saveSegmentRequest: null
+        saveResult: null
+        publishResult: null
+        documentsResult: null
         PlaybackSessionRequest:
             properties:
                 lessonId: { format: uuid }
@@ -300,6 +487,174 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/admin/courses/{courseId}/documents:
+        get:
+            operationId: "listCourseDocuments"
+            summary: "List the course document library"
+            description: "The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The course library."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    documents:
+                                        maxItems: 200
+                                $ref: null
+        post:
+            operationId: "addCourseDocument"
+            summary: "Add a document to the course library"
+            description: "Only http(s) is accepted, and a path under /media/ is refused outright: a transcript must not become a second way to name media bytes."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The document was added."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/courses/{courseId}/documents/{documentId}:
+        delete:
+            operationId: "removeCourseDocument"
+            summary: "Remove a document from the course library"
+            description: "Refused while any segment still references it, so a reference can never point at nothing. This governs the author's action only; deleting the course still cascades."
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                documentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The document was removed."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/draft:
+        get:
+            operationId: "getLessonDraft"
+            summary: "Get a lesson recognition draft"
+            description: "Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The lesson draft, or the empty draft state."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/draft/publish:
+        post:
+            operationId: "publishLessonDraft"
+            summary: "Publish a lesson recognition draft"
+            description: "Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            requestBody:
+                required: false
+            responses:
+                "200":
+                    description: "The draft was published as the lesson transcript."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    updatedAt:
+                                        format: "date-time"
+                                $ref: null
+    /api/v1/admin/lessons/{lessonId}/draft/regenerate:
+        post:
+            operationId: "regenerateLessonDraft"
+            summary: "Queue lesson speech recognition"
+            description: "Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            requestBody:
+                required: false
+            responses:
+                "202":
+                    description: "Recognition was queued."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+    /api/v1/admin/lessons/{lessonId}/transcript:
+        put:
+            operationId: "saveLessonTranscript"
+            summary: "Replace a lesson transcript"
+            description: "Authenticated same-origin mutation, scoped to the course owner or an admin. The write REPLACES the transcript of one lesson in one language: the author edits a document, not a set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt is the optimistic-lock token and is omitted when the author believes no transcript exists; a second writer racing into the same empty lesson is refused with transcript_exists rather than appending to the first one's work."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The transcript was replaced."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    updatedAt:
+                                        format: "date-time"
+                                $ref: null
+    /api/v1/learn/lessons/{lessonId}/transcript:
+        get:
+            operationId: "getLessonTranscript"
+            summary: "Get a lesson transcript"
+            description: "Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do."
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+                language:
+                    schema:
+                        maxLength: 35
+                        minLength: 2
+                        pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
+            responses:
+                "200":
+                    description: "The whole transcript of the lesson."
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/NoStore"
+                        X-Request-ID:
+                            $ref: "#/components/headers/RequestID"
     /api/v1/playback/sessions:
       post:
         operationId: createPlaybackSession
