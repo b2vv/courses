@@ -42,12 +42,12 @@ func applyOverlay(doc map[string]any, path string) (map[string]any, error) {
 	if err = json.Unmarshal(raw, &original); err != nil {
 		return nil, err
 	}
-	if err = mergeOverlay(doc, patch, original, nil); err != nil {
+	if err = mergeOverlay(doc, patch, original, nil, false); err != nil {
 		return nil, err
 	}
 	return doc, nil
 }
-func mergeOverlay(dst, patch, original map[string]any, path []string) error {
+func mergeOverlay(dst, patch, original map[string]any, path []string, overlayOwned bool) error {
 	if value, ok := patch["$ref"]; ok {
 		if value != nil {
 			ref, ok := value.(string)
@@ -97,7 +97,7 @@ func mergeOverlay(dst, patch, original map[string]any, path []string) error {
 			}
 			continue
 		}
-		if anchored(path) && !exists {
+		if !overlayOwned && anchored(path) && !exists {
 			return fmt.Errorf("orphan overlay key %s/%s", strings.Join(path, "/"), key)
 		}
 		if value == nil {
@@ -117,7 +117,9 @@ func mergeOverlay(dst, patch, original map[string]any, path []string) error {
 				target = map[string]any{}
 				dst[key] = target
 			}
-			if err := mergeOverlay(target, object, original, next); err != nil {
+			// Only a new body on an existing operation is owned by the overlay.
+			owned := overlayOwned || (key == "requestBody" && !exists && len(path) == 3 && path[0] == "paths")
+			if err := mergeOverlay(target, object, original, next, owned); err != nil {
 				return err
 			}
 		} else {

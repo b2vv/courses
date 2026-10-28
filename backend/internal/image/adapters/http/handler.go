@@ -43,11 +43,13 @@ func (handler *Handler) RegisterInternal(mux *http.ServeMux, authenticate func(h
 	mux.Handle("GET /internal/image/authorize", normalizeAuthenticationDenial(authenticate(http.HandlerFunc(handler.authorize))))
 }
 
+type uploadContentType string
+
 type uploadResponse struct {
-	ID          string `json:"id"`
-	ContentType string `json:"contentType"`
-	Width       int    `json:"width"`
-	Height      int    `json:"height"`
+	ID          string            `json:"id"`
+	ContentType uploadContentType `json:"contentType"`
+	Width       int               `json:"width"`
+	Height      int               `json:"height"`
 }
 
 func (handler *Handler) upload(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +101,7 @@ func (handler *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		writeUploadError(w, r, err)
 		return
 	}
-	httpserver.WriteJSON(w, http.StatusCreated, uploadResponse{ID: img.ID, ContentType: img.ContentType, Width: img.Width, Height: img.Height})
+	httpserver.WriteJSON(w, http.StatusCreated, uploadResponse{ID: img.ID, ContentType: uploadContentType(img.ContentType), Width: img.Width, Height: img.Height})
 }
 
 func writeUploadError(w http.ResponseWriter, r *http.Request, err error) {

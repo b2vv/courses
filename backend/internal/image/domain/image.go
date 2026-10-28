@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 const (
 	ContentTypeJPEG = "image/jpeg"
@@ -11,6 +14,9 @@ const (
 	MaximumImageBytes  int64 = 5 << 20
 	MaximumImagePixels       = 40_000_000
 )
+
+// ContentTypes is the ordered set accepted by image validation.
+var ContentTypes = []string{ContentTypeJPEG, ContentTypePNG, ContentTypeWebP}
 
 type Image struct {
 	ID          string    `json:"id"`
@@ -27,14 +33,18 @@ func DetectContentType(head []byte) (string, error) {
 	if len(head) < SniffBytes {
 		return "", ErrUnsupportedImage
 	}
+	contentType := ""
 	if head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF {
-		return ContentTypeJPEG, nil
+		contentType = ContentTypeJPEG
 	}
 	if string(head[:8]) == "\x89PNG\r\n\x1a\n" {
-		return ContentTypePNG, nil
+		contentType = ContentTypePNG
 	}
 	if string(head[:4]) == "RIFF" && string(head[8:12]) == "WEBP" {
-		return ContentTypeWebP, nil
+		contentType = ContentTypeWebP
+	}
+	if slices.Contains(ContentTypes, contentType) {
+		return contentType, nil
 	}
 	return "", ErrUnsupportedImage
 }
@@ -68,9 +78,7 @@ func NewImage(id, lessonID, contentType, createdBy string, width, height int, by
 	if id == "" || lessonID == "" || createdBy == "" {
 		return Image{}, ErrInvalidImage
 	}
-	switch contentType {
-	case ContentTypeJPEG, ContentTypePNG, ContentTypeWebP:
-	default:
+	if !slices.Contains(ContentTypes, contentType) {
 		return Image{}, ErrUnsupportedImage
 	}
 	if err := AcceptDimensions(width, height); err != nil {
