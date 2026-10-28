@@ -403,3 +403,189 @@ f3cbb495876bea89eed2082795da665ebee2903c4c7aeffa796f8b8d2fd92043  backend/intern
 РІШЕННЯ: exact final tree = Step 11 snapshot (5 modified implementation/artifact files + 4 new Go files + this new journal, alongside 4 untouched pre-existing modified journals); branch/HEAD unchanged at `s0.0-spike` / `c7dab79`, no staging/commit/merge. Request single-layer and N1 metadata limitations accepted and retained. STOP: none.
 ДАЛІ: writer takes tree for per-slice review. NOT_RUN: `make e2e` by explicit instruction; CI account-wide broken per brief; independent review belongs to writer/Courses 2; separate tagged integration/make gates outside the explicitly requested local Go gate set. No skipped check claimed PASS.
 ПИТАННЯ: none.
+
+## S0.1e-1 — preflight STOP (2026-10-28)
+ФАКТ: requested branch/HEAD PASS: `git branch --show-current` → `s0.0-spike`; `git rev-parse --short HEAD` → `47c9794` (commands exit 0). Initial `git status --short` (exit 0):
+```text
+ M docs/security/_wip-s0.1b-sec-errorboundary.md
+ M docs/security/_wip-s0.1b2-request.md
+ M docs/security/_wip-s0.1b3a-errorcode.md
+ M docs/security/_wip-s0.1b3b-constset.md
+```
+РІШЕННЯ: STOP before implementation under owner's “STOP+surface on any surprise”: current request did not identify these pre-existing modifications. Earlier S0.1e journal does list the same four paths as dirty on its older base; their current bytes have not been validated. All four preserved untouched. This is a preflight stop, not a code/test failure.
+ФАКТ: census test NOT_RUN/not added; regeneration UPDATE/plain and byte-identical-generated proof NOT_RUN; hand-spec diff check NOT_RUN; gofmt/vet/build/whole go test NOT_RUN because stopped before implementation. No PASS inferred from earlier S0.1e results. `make e2e` NOT_RUN by explicit instruction. No code changes, staging, commit or merge.
+ДАЛІ: confirm that the four existing dirty journals are expected, then implement the requested ordered FailureReasons set, enum mapping and AST census, and run the requested gates. Exact resulting tree: the four modified paths above plus this modified `docs/security/_wip-s0.1e-media.md`; branch/HEAD unchanged.
+ПИТАННЯ: may these four pre-existing journal modifications be treated as expected preserved work for S0.1e-1?
+
+## S0.1e-1 — resumed pre-code checkpoint (2026-10-28)
+ФАКТ: owner confirmed the four dirty journals are expected previous-session bookkeeping; previous STOP resolved. Root `/Users/strelia/projects/courses`, branch `s0.0-spike`, HEAD `47c9794`; scoped production files clean. Existing journals will remain byte-identical.
+РІШЕННЯ (owner brief + Codex implementation, 2026-10-28): small/READY, below `.claude/standards.md` pipeline threshold: no public API or runtime behavior change. Plan: ordered domain.FailureReasons → local []string mapping → AST/go-types census over production domain scalar types/constants, exact set comparison and ordered contribution equality → UPDATE/plain artifact proof → requested ordered Go gates. Independent plan critique/defense N/A for this bounded small change; independent code review remains writer/Courses 2, not an author PASS. User explicitly authorizes the implementation and local Go gates, excludes e2e/commit/merge.
+ФАКТ: file-based impact (no graph refresh needed): `media/domain/asset.go` declares 5 FailureReason constants; `media/adapters/http/openapi_contract.go` currently enumerates the same 5 inline and maps States by loop; `course/adapters/http/const_sets_test.go` supplies the AST/type-check census pattern; `internal/openapispec` owns the generated artifact writer `TestOpenAPIArtifact`. Existing media fidelity tests compare the generated media reference closure with the hand spec. No application/worker/DTO behavior changes needed. Scope and decisions supplied by S0.1e-1 brief; §16.2/N1 request-validation limitations remain.
+ДАЛІ: implement 3 scoped Go files and run exact requested proof commands; capture real stdout/stderr and exits below.
+ПИТАННЯ: none.
+
+## S0.1e-1 — host verification output (2026-10-28)
+ФАКТ: cwd `backend`; all Go commands use `GOCACHE=/tmp/courses-s01e-go-cache`. Real merged stdout/stderr follows; commands stop on first nonzero exit.
+
+`go test ./internal/media/adapters/http -run ^TestFailureReasonConstSetCensus$ -count=1 -v` — PASS, exit 0
+```text
+=== RUN   TestFailureReasonConstSetCensus
+--- PASS: TestFailureReasonConstSetCensus (0.01s)
+PASS
+ok  	courses/internal/media/adapters/http	1.309s
+```
+
+`env UPDATE_OPENAPI_GENERATED=1 go test ./internal/openapispec -run ^TestOpenAPIArtifact$ -count=1 -v` — PASS, exit 0
+```text
+=== RUN   TestOpenAPIArtifact
+    artifact_test.go:49: all contributions present; two generations byte-identical; checked artifact matches
+--- PASS: TestOpenAPIArtifact (0.23s)
+PASS
+ok  	courses/internal/openapispec	1.587s
+```
+
+`go test ./internal/openapispec -run ^TestOpenAPIArtifact$ -count=1 -v` — PASS, exit 0
+```text
+=== RUN   TestOpenAPIArtifact
+    artifact_test.go:49: all contributions present; two generations byte-identical; checked artifact matches
+--- PASS: TestOpenAPIArtifact (0.22s)
+PASS
+ok  	courses/internal/openapispec	1.448s
+```
+
+`git diff --stat -- openapi/openapi.generated.yaml` — PASS, exit 0
+```text
+(no output)
+```
+
+`git diff --exit-code -- openapi/openapi.generated.yaml` — PASS, exit 0
+```text
+(no output)
+```
+
+`git diff --exit-code -- openapi/openapi.yaml` — PASS, exit 0
+```text
+(no output)
+```
+
+`gofmt -l .` — PASS, exit 0
+```text
+(no output)
+```
+
+`go vet ./...` — PASS, exit 0
+```text
+(no output)
+```
+
+`go build ./...` — PASS, exit 0
+```text
+(no output)
+```
+
+`go test ./...` — PASS, exit 0
+```text
+?   	courses/cmd/api	[no test files]
+ok  	courses/cmd/asr-worker	(cached)
+?   	courses/cmd/media-worker	[no test files]
+?   	courses/cmd/migrate	[no test files]
+?   	courses/cmd/upload	[no test files]
+ok  	courses/internal/adminstats/adapters/http	2.219s
+?   	courses/internal/adminstats/adapters/postgres	[no test files]
+?   	courses/internal/adminstats/application	[no test files]
+ok  	courses/internal/adminstats/domain	(cached)
+?   	courses/internal/adminstats/ports	[no test files]
+ok  	courses/internal/clientlog/adapters/http	(cached)
+ok  	courses/internal/clientlog/domain	(cached)
+ok  	courses/internal/contracts/access	(cached)
+?   	courses/internal/contracts/access/accesstest	[no test files]
+ok  	courses/internal/contracts/rating	(cached)
+ok  	courses/internal/course/adapters/http	7.530s
+ok  	courses/internal/course/adapters/postgres	(cached)
+?   	courses/internal/course/adapters/postgres/generated	[no test files]
+ok  	courses/internal/course/application	(cached)
+ok  	courses/internal/course/domain	(cached)
+?   	courses/internal/course/ports	[no test files]
+ok  	courses/internal/discussion/adapters/http	(cached)
+?   	courses/internal/discussion/adapters/postgres	[no test files]
+ok  	courses/internal/discussion/application	(cached)
+ok  	courses/internal/discussion/domain	(cached)
+?   	courses/internal/discussion/ports	[no test files]
+ok  	courses/internal/identity/adapters/argon2id	(cached)
+ok  	courses/internal/identity/adapters/http	(cached)
+ok  	courses/internal/identity/adapters/mail	(cached)
+?   	courses/internal/identity/adapters/postgres	[no test files]
+?   	courses/internal/identity/adapters/postgres/generated	[no test files]
+ok  	courses/internal/identity/adapters/redis	(cached)
+ok  	courses/internal/identity/application	(cached)
+ok  	courses/internal/identity/domain	(cached)
+?   	courses/internal/identity/ports	[no test files]
+ok  	courses/internal/image/adapters/filesystem	(cached)
+ok  	courses/internal/image/adapters/http	2.821s
+?   	courses/internal/image/adapters/postgres	[no test files]
+ok  	courses/internal/image/application	(cached)
+ok  	courses/internal/image/domain	(cached)
+?   	courses/internal/image/ports	[no test files]
+ok  	courses/internal/media/adapters/asynq	1.939s
+ok  	courses/internal/media/adapters/ffmpeg	(cached)
+ok  	courses/internal/media/adapters/filesystem	(cached)
+ok  	courses/internal/media/adapters/http	7.152s
+?   	courses/internal/media/adapters/postgres	[no test files]
+?   	courses/internal/media/adapters/postgres/generated	[no test files]
+?   	courses/internal/media/adapters/tus	[no test files]
+ok  	courses/internal/media/application	2.184s
+ok  	courses/internal/media/domain	2.842s
+?   	courses/internal/media/ports	[no test files]
+ok  	courses/internal/openapispec	3.270s
+ok  	courses/internal/orders/adapters/http	(cached)
+?   	courses/internal/orders/adapters/postgres	[no test files]
+ok  	courses/internal/orders/adapters/wayforpay	(cached)
+ok  	courses/internal/orders/application	(cached)
+ok  	courses/internal/orders/domain	(cached)
+?   	courses/internal/orders/ports	[no test files]
+ok  	courses/internal/platform/openapigen	5.235s
+ok  	courses/internal/playback/adapters/http	(cached)
+ok  	courses/internal/playback/adapters/postgres	(cached)
+ok  	courses/internal/playback/adapters/redis	(cached)
+ok  	courses/internal/playback/application	(cached)
+ok  	courses/internal/playback/domain	(cached)
+?   	courses/internal/playback/ports	[no test files]
+ok  	courses/internal/testsupport/containers	4.016s
+ok  	courses/internal/testsupport/coursevisibility	(cached)
+ok  	courses/internal/transcript/adapters/asynq	(cached)
+ok  	courses/internal/transcript/adapters/http	(cached)
+ok  	courses/internal/transcript/adapters/media	3.642s
+?   	courses/internal/transcript/adapters/postgres	[no test files]
+ok  	courses/internal/transcript/adapters/whisper	(cached)
+ok  	courses/internal/transcript/application	(cached)
+ok  	courses/internal/transcript/domain	(cached)
+?   	courses/internal/transcript/ports	[no test files]
+ok  	courses/platform/architecture	4.120s
+ok  	courses/platform/config	(cached)
+ok  	courses/platform/httpserver	(cached)
+ok  	courses/platform/jsonbody	(cached)
+ok  	courses/platform/mail	(cached)
+ok  	courses/platform/observability	(cached)
+?   	courses/platform/postgres	[no test files]
+?   	courses/platform/redis	[no test files]
+?   	courses/platform/runtime	[no test files]
+```
+
+## S0.1e-1 — final recap (2026-10-28)
+ФАКТ: `TestFailureReasonConstSetCensus -count=1` PASS: AST/typechecked production constants equal domain.FailureReasons exactly (missing/extra/duplicate entries fail), and contribution enum equals the ordered set. Five values and order unchanged. UPDATE + plain `TestOpenAPIArtifact` PASS; generated diff stat empty, generated and hand `git diff --exit-code` both exit 0. Generated SHA-256 before/after: `d0a29d09c016c0c3f5f245e3b54265e3031d36ba280a13ab43453a1d742664ec`; hand before/after: `6dcb608b5aa6b604363ecf3c95d773261f2cf6837efb674e0b5374f9705938f3`.
+ФАКТ: host ordered `gofmt -l .` (empty), `go vet ./...`, `go build ./...`, whole `go test ./...`: all PASS/exit 0; real output above. Whole-suite cached results are shown honestly as `(cached)`; new census also ran uncached separately. `git diff --check` PASS/exit 0. Four known dirty journals SHA-256 verified unchanged. No e2e, tagged integration or CI run claimed.
+ФАКТ: exact final tree at `s0.0-spike` / `47c9794` (no stage/commit/merge):
+```text
+ M backend/internal/media/adapters/http/openapi_contract.go
+ M backend/internal/media/domain/asset.go
+ M docs/security/_wip-s0.1b-sec-errorboundary.md
+ M docs/security/_wip-s0.1b2-request.md
+ M docs/security/_wip-s0.1b3a-errorcode.md
+ M docs/security/_wip-s0.1b3b-constset.md
+ M docs/security/_wip-s0.1e-media.md
+?? backend/internal/media/adapters/http/const_sets_test.go
+```
+ФАКТ: final native checkpoint exit 0: `{"status":"OK","result":{"checkpoint_id":"3fd5656b43ea0634baa74e073c27f6bf-2-400c6d9416eb"}}`.
+РІШЕННЯ: S0.1e-1 implementation and requested local gates complete. Initial STOP resolved by explicit owner confirmation; no implementation STOP or unexpected failure. §16.2/N1 request-conformance limitations unchanged. Independent review NOT_RUN here; belongs to writer/Courses 2.
+ДАЛІ: leave the 3 Go-file change plus this append-only journal for writer review; no commit.
+ПИТАННЯ: none.

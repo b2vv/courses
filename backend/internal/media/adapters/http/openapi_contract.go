@@ -32,6 +32,10 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 	for i, state := range domain.States {
 		states[i] = string(state)
 	}
+	failureReasonStrings := make([]string, len(domain.FailureReasons))
+	for i, reason := range domain.FailureReasons {
+		failureReasonStrings[i] = string(reason)
+	}
 	return openapigen.ModuleContribution{
 		Routes: []openapigen.RouteBinding{
 			{Method: "POST", Path: "/api/v1/admin/lessons/{lessonId}/video", Request: mintVideoRequest{}, Responses: mint, Params: []openapigen.Param{{Name: "lessonId", In: "path", Type: "string", Required: true}}},
@@ -46,7 +50,7 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 		},
 		Enums: map[reflect.Type][]string{
 			reflect.TypeFor[domain.State]():         states,
-			reflect.TypeFor[domain.FailureReason](): {string(domain.UnsupportedSource), string(domain.ProbeFailed), string(domain.RenderFailed), string(domain.PublishFailed), string(domain.StorageUnavailable)},
+			reflect.TypeFor[domain.FailureReason](): failureReasonStrings,
 		},
 		NullableFields: map[openapigen.Field]bool{{Type: reflect.TypeFor[courseVideosDTO](), Name: "Items"}: false},
 		FieldRefs: map[openapigen.Field]string{
