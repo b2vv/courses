@@ -8,6 +8,12 @@
 import type { CommentAuthor } from './commentAuthor.ts';
 
 export interface TeachComment {
+  author: CommentAuthor;
+  /** @nullable */
+  body: string | null;
+  createdAt: string;
+  /** @nullable */
+  editedAt: string | null;
   id: string;
   lessonId: string;
   /**
@@ -17,16 +23,10 @@ export interface TeachComment {
   lessonTitle: string;
   /** @nullable */
   parentId: string | null;
-  author: CommentAuthor;
-  /** @nullable */
-  body: string | null;
   /**
      * @minimum 0
      * @nullable
      */
   positionMs: number | null;
-  createdAt: string;
-  /** @nullable */
-  editedAt: string | null;
   removed: boolean;
 }

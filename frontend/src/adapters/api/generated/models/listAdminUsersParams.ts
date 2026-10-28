@@ -24,7 +24,6 @@ offset?: number;
  * Search text, maximum 100 Unicode code points after trimming whitespace.
  */
 q?: string;
-status?: ListAdminUsersStatus;
 /**
  * Optional single-role filter; omitted returns every role.
  */
@@ -33,4 +32,5 @@ role?: ListAdminUsersRole;
  * Row ordering; omitted or 'email' sorts by email, 'name' by display name, 'recent' by newest account first.
  */
 sort?: ListAdminUsersSort;
+status?: ListAdminUsersStatus;
 };

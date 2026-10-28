@@ -8,7 +8,7 @@
 import type { LessonSpanMarksItem } from './lessonSpanMarksItem.ts';
 
 export interface LessonSpan {
-  text: string;
-  marks?: LessonSpanMarksItem[];
   href?: string;
+  marks?: LessonSpanMarksItem[];
+  text: string;
 }

@@ -151,38 +151,141 @@ import type {
 } from './models';
 
 
-export type ingestClientLogResponse204 = {
-  data: void
-  status: 204
+export type listAdminCoursesResponse200 = {
+  data: AdminCoursePage
+  status: 200
 }
 
-export type ingestClientLogResponse400 = {
-  data: BadRequestResponse
+export type listAdminCoursesResponse400 = {
+  data: InvalidRequestResponse
   status: 400
 }
 
-export type ingestClientLogResponseSuccess = (ingestClientLogResponse204) & {
+export type listAdminCoursesResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listAdminCoursesResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listAdminCoursesResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listAdminCoursesResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listAdminCoursesResponseSuccess = (listAdminCoursesResponse200) & {
   headers: Headers;
 };
-export type ingestClientLogResponseError = (ingestClientLogResponse400) & {
+export type listAdminCoursesResponseError = (listAdminCoursesResponse400 | listAdminCoursesResponse401 | listAdminCoursesResponse403 | listAdminCoursesResponse500 | listAdminCoursesResponse503) & {
   headers: Headers;
 };
 
-export type ingestClientLogResponse = (ingestClientLogResponseSuccess | ingestClientLogResponseError)
+export type listAdminCoursesResponse = (listAdminCoursesResponseSuccess | listAdminCoursesResponseError)
 
-export const getIngestClientLogUrl = () => {
+export const getListAdminCoursesUrl = (params?: ListAdminCoursesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/client-logs`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/courses?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/courses`
 }
 
 /**
- * Unauthenticated by design so a pre-auth client error can still report. The body is one event; the server validates, redacts the §17 set and emits a structured log line. No body is returned. The endpoint is rate-limited by the nginx clientlog zone.
- * @summary Ingest one browser-captured log event
+ * Admins see every course. Instructors see only courses they own. Students and unrecognised roles are forbidden. Query parameters must occur at most once and unknown parameters are rejected. Responses are never cached.
+ * @summary List courses visible to the authenticated staff member
  */
-export const ingestClientLog = async (clientLogRequest: ClientLogRequest, options?: RequestInit): Promise<ingestClientLogResponse> => {
+export const listAdminCourses = async (params?: ListAdminCoursesParams, options?: RequestInit): Promise<listAdminCoursesResponse> => {
+
+  const res = await fetch(getListAdminCoursesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminCoursesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminCoursesResponse
+}
+
+
+
+export type createAdminCourseResponse201 = {
+  data: AdminCourseTree
+  status: 201
+}
+
+export type createAdminCourseResponse400 = {
+  data: AdminWriteBadRequestResponse
+  status: 400
+}
+
+export type createAdminCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type createAdminCourseResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type createAdminCourseResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type createAdminCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type createAdminCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type createAdminCourseResponseSuccess = (createAdminCourseResponse201) & {
+  headers: Headers;
+};
+export type createAdminCourseResponseError = (createAdminCourseResponse400 | createAdminCourseResponse401 | createAdminCourseResponse403 | createAdminCourseResponse409 | createAdminCourseResponse500 | createAdminCourseResponse503) & {
+  headers: Headers;
+};
+
+export type createAdminCourseResponse = (createAdminCourseResponseSuccess | createAdminCourseResponseError)
+
+export const getCreateAdminCourseUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses`
+}
+
+/**
+ * Creates a new draft with no modules. Instructors always become the owner and may omit instructorId or echo their own ID. Admins must choose an eligible active instructor or admin. The unique slug is the replay guard, so an identical replay returns slug_taken. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
+ * @summary Create a draft course
+ */
+export const createAdminCourse = async (adminCourseWrite: AdminCourseWrite, options?: RequestInit): Promise<createAdminCourseResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -190,141 +293,83 @@ export const ingestClientLog = async (clientLogRequest: ClientLogRequest, option
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getIngestClientLogUrl(),
+const res = await fetch(getCreateAdminCourseUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(clientLogRequest)
+    body: JSON.stringify(adminCourseWrite)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: ingestClientLogResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as ingestClientLogResponse
+  const data: createAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createAdminCourseResponse
 }
 
 
 
-export type listPublishedCoursesResponse200 = {
-  data: CoursePage
+export type listCourseDocumentsResponse200 = {
+  data: ListCourseDocuments200
   status: 200
 }
 
-export type listPublishedCoursesResponse400 = {
+export type listCourseDocumentsResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type listPublishedCoursesResponse500 = {
-  data: InternalErrorResponse
-  status: 500
+export type listCourseDocumentsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
 }
 
-export type listPublishedCoursesResponse503 = {
-  data: UnavailableResponse
-  status: 503
+export type listCourseDocumentsResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
 }
 
-export type listPublishedCoursesResponseSuccess = (listPublishedCoursesResponse200) & {
-  headers: Headers;
-};
-export type listPublishedCoursesResponseError = (listPublishedCoursesResponse400 | listPublishedCoursesResponse500 | listPublishedCoursesResponse503) & {
-  headers: Headers;
-};
-
-export type listPublishedCoursesResponse = (listPublishedCoursesResponseSuccess | listPublishedCoursesResponseError)
-
-export const getListPublishedCoursesUrl = (params?: ListPublishedCoursesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/courses?${stringifiedParams}` : `${apiOrigin()}/api/v1/courses`
-}
-
-/**
- * Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
- * @summary List published courses
- */
-export const listPublishedCourses = async (params?: ListPublishedCoursesParams, options?: RequestInit): Promise<listPublishedCoursesResponse> => {
-
-  const res = await fetch(getListPublishedCoursesUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listPublishedCoursesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listPublishedCoursesResponse
-}
-
-
-
-export type getPublishedCourseResponse200 = {
-  data: CourseDetail
-  status: 200
-}
-
-export type getPublishedCourseResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getPublishedCourseResponse404 = {
+export type listCourseDocumentsResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type getPublishedCourseResponse500 = {
+export type listCourseDocumentsResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type getPublishedCourseResponse503 = {
+export type listCourseDocumentsResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getPublishedCourseResponseSuccess = (getPublishedCourseResponse200) & {
+export type listCourseDocumentsResponseSuccess = (listCourseDocumentsResponse200) & {
   headers: Headers;
 };
-export type getPublishedCourseResponseError = (getPublishedCourseResponse400 | getPublishedCourseResponse404 | getPublishedCourseResponse500 | getPublishedCourseResponse503) & {
+export type listCourseDocumentsResponseError = (listCourseDocumentsResponse400 | listCourseDocumentsResponse401 | listCourseDocumentsResponse403 | listCourseDocumentsResponse404 | listCourseDocumentsResponse500 | listCourseDocumentsResponse503) & {
   headers: Headers;
 };
 
-export type getPublishedCourseResponse = (getPublishedCourseResponseSuccess | getPublishedCourseResponseError)
+export type listCourseDocumentsResponse = (listCourseDocumentsResponseSuccess | listCourseDocumentsResponseError)
 
-export const getGetPublishedCourseUrl = (slug: string,) => {
-
-
+export const getListCourseDocumentsUrl = (courseId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/courses/${slug}`
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
 }
 
 /**
- * Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
- * @summary Get a published course
+ * The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it.
+ * @summary List the course document library
  */
-export const getPublishedCourse = async (slug: string, options?: RequestInit): Promise<getPublishedCourseResponse> => {
+export const listCourseDocuments = async (courseId: string, options?: RequestInit): Promise<listCourseDocumentsResponse> => {
 
-  const res = await fetch(getGetPublishedCourseUrl(slug),
+  const res = await fetch(getListCourseDocumentsUrl(courseId),
   {
     ...options,
     method: 'GET'
@@ -336,442 +381,326 @@ export const getPublishedCourse = async (slug: string, options?: RequestInit): P
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getPublishedCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getPublishedCourseResponse
+  const data: listCourseDocumentsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listCourseDocumentsResponse
 }
 
 
 
-export type startCoursePurchaseResponse201 = {
-  data: PurchaseOrder
+export type addCourseDocumentResponse201 = {
+  data: void
   status: 201
 }
 
-export type startCoursePurchaseResponse400 = {
-  data: InvalidRequestResponse
+export type addCourseDocumentResponse400 = {
+  data: BadRequestResponse
   status: 400
 }
 
-export type startCoursePurchaseResponse401 = {
+export type addCourseDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type startCoursePurchaseResponse403 = {
-  data: ForbiddenResponse
+export type addCourseDocumentResponse403 = {
+  data: LearningForbiddenResponse
   status: 403
 }
 
-export type startCoursePurchaseResponse409 = {
+export type addCourseDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type addCourseDocumentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type addCourseDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type addCourseDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type addCourseDocumentResponseSuccess = (addCourseDocumentResponse201) & {
+  headers: Headers;
+};
+export type addCourseDocumentResponseError = (addCourseDocumentResponse400 | addCourseDocumentResponse401 | addCourseDocumentResponse403 | addCourseDocumentResponse404 | addCourseDocumentResponse409 | addCourseDocumentResponse500 | addCourseDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type addCourseDocumentResponse = (addCourseDocumentResponseSuccess | addCourseDocumentResponseError)
+
+export const getAddCourseDocumentUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
+}
+
+/**
+ * Only http(s) is accepted, and a path under /media/ is refused outright: a transcript must not become a second way to name media bytes.
+ * @summary Add a document to the course library
+ */
+export const addCourseDocument = async (courseId: string,
+    transcriptDocumentLink: TranscriptDocumentLink, options?: RequestInit): Promise<addCourseDocumentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getAddCourseDocumentUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(transcriptDocumentLink)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as addCourseDocumentResponse
+}
+
+
+
+export type removeCourseDocumentResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeCourseDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type removeCourseDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type removeCourseDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type removeCourseDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type removeCourseDocumentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type removeCourseDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type removeCourseDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type removeCourseDocumentResponseSuccess = (removeCourseDocumentResponse204) & {
+  headers: Headers;
+};
+export type removeCourseDocumentResponseError = (removeCourseDocumentResponse400 | removeCourseDocumentResponse401 | removeCourseDocumentResponse403 | removeCourseDocumentResponse404 | removeCourseDocumentResponse409 | removeCourseDocumentResponse500 | removeCourseDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type removeCourseDocumentResponse = (removeCourseDocumentResponseSuccess | removeCourseDocumentResponseError)
+
+export const getRemoveCourseDocumentUrl = (courseId: string,
+    documentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents/${documentId}`
+}
+
+/**
+ * Refused while any segment still references it, so a reference can never point at nothing. This governs the author's action only; deleting the course still cascades.
+ * @summary Remove a document from the course library
+ */
+export const removeCourseDocument = async (courseId: string,
+    documentId: string, options?: RequestInit): Promise<removeCourseDocumentResponse> => {
+
+  const res = await fetch(getRemoveCourseDocumentUrl(courseId,documentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeCourseDocumentResponse
+}
+
+
+
+export type grantCourseAccessResponse201 = {
+  data: CourseGrant
+  status: 201
+}
+
+export type grantCourseAccessResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type grantCourseAccessResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type grantCourseAccessResponse403 = {
+  data: GrantForbiddenResponse
+  status: 403
+}
+
+export type grantCourseAccessResponse409 = {
   data: PurchaseConflictResponse
   status: 409
 }
 
-export type startCoursePurchaseResponse500 = {
+export type grantCourseAccessResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type startCoursePurchaseResponse503 = {
+export type grantCourseAccessResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type startCoursePurchaseResponseSuccess = (startCoursePurchaseResponse201) & {
+export type grantCourseAccessResponseSuccess = (grantCourseAccessResponse201) & {
   headers: Headers;
 };
-export type startCoursePurchaseResponseError = (startCoursePurchaseResponse400 | startCoursePurchaseResponse401 | startCoursePurchaseResponse403 | startCoursePurchaseResponse409 | startCoursePurchaseResponse500 | startCoursePurchaseResponse503) & {
+export type grantCourseAccessResponseError = (grantCourseAccessResponse400 | grantCourseAccessResponse401 | grantCourseAccessResponse403 | grantCourseAccessResponse409 | grantCourseAccessResponse500 | grantCourseAccessResponse503) & {
   headers: Headers;
 };
 
-export type startCoursePurchaseResponse = (startCoursePurchaseResponseSuccess | startCoursePurchaseResponseError)
+export type grantCourseAccessResponse = (grantCourseAccessResponseSuccess | grantCourseAccessResponseError)
 
-export const getStartCoursePurchaseUrl = (courseId: string,) => {
-
-
+export const getGrantCourseAccessUrl = (courseId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/purchase`
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/grants`
 }
 
 /**
- * Authenticated same-origin mutation. The order snapshots the published course price.
- * @summary Start an idempotent course purchase
+ * Admin-only same-origin mutation. Creates an active admin grant and its audit record.
+ * @summary Grant course access as an administrator
  */
-export const startCoursePurchase = async (courseId: string, options?: RequestInit): Promise<startCoursePurchaseResponse> => {
+export const grantCourseAccess = async (courseId: string,
+    adminGrantRequest: AdminGrantRequest, options?: RequestInit): Promise<grantCourseAccessResponse> => {
 
-  const res = await fetch(getStartCoursePurchaseUrl(courseId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getGrantCourseAccessUrl(courseId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminGrantRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: startCoursePurchaseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as startCoursePurchaseResponse
+  const data: grantCourseAccessResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as grantCourseAccessResponse
 }
 
 
 
-export type enrollInCourseResponse201 = {
-  data: MembershipGrant
-  status: 201
-}
-
-export type enrollInCourseResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type enrollInCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type enrollInCourseResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type enrollInCourseResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type enrollInCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type enrollInCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type enrollInCourseResponseSuccess = (enrollInCourseResponse201) & {
-  headers: Headers;
-};
-export type enrollInCourseResponseError = (enrollInCourseResponse400 | enrollInCourseResponse401 | enrollInCourseResponse403 | enrollInCourseResponse409 | enrollInCourseResponse500 | enrollInCourseResponse503) & {
-  headers: Headers;
-};
-
-export type enrollInCourseResponse = (enrollInCourseResponseSuccess | enrollInCourseResponseError)
-
-export const getEnrollInCourseUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/enroll`
-}
-
-/**
- * @summary Enroll the authenticated account in a free published course
- */
-export const enrollInCourse = async (courseId: string, options?: RequestInit): Promise<enrollInCourseResponse> => {
-
-  const res = await fetch(getEnrollInCourseUrl(courseId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: enrollInCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as enrollInCourseResponse
-}
-
-
-
-export type getMyCourseMembershipResponse200 = {
-  data: MembershipState
-  status: 200
-}
-
-export type getMyCourseMembershipResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type getMyCourseMembershipResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getMyCourseMembershipResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getMyCourseMembershipResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getMyCourseMembershipResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getMyCourseMembershipResponseSuccess = (getMyCourseMembershipResponse200) & {
-  headers: Headers;
-};
-export type getMyCourseMembershipResponseError = (getMyCourseMembershipResponse400 | getMyCourseMembershipResponse401 | getMyCourseMembershipResponse403 | getMyCourseMembershipResponse500 | getMyCourseMembershipResponse503) & {
-  headers: Headers;
-};
-
-export type getMyCourseMembershipResponse = (getMyCourseMembershipResponseSuccess | getMyCourseMembershipResponseError)
-
-export const getGetMyCourseMembershipUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/membership`
-}
-
-/**
- * @summary Read the authenticated account membership state
- */
-export const getMyCourseMembership = async (courseId: string, options?: RequestInit): Promise<getMyCourseMembershipResponse> => {
-
-  const res = await fetch(getGetMyCourseMembershipUrl(courseId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getMyCourseMembershipResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipResponse
-}
-
-
-
-export type getMyCourseMembershipsResponse200 = {
-  data: MyMembershipsPage
-  status: 200
-}
-
-export type getMyCourseMembershipsResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type getMyCourseMembershipsResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getMyCourseMembershipsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getMyCourseMembershipsResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getMyCourseMembershipsResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getMyCourseMembershipsResponseSuccess = (getMyCourseMembershipsResponse200) & {
-  headers: Headers;
-};
-export type getMyCourseMembershipsResponseError = (getMyCourseMembershipsResponse400 | getMyCourseMembershipsResponse401 | getMyCourseMembershipsResponse403 | getMyCourseMembershipsResponse500 | getMyCourseMembershipsResponse503) & {
-  headers: Headers;
-};
-
-export type getMyCourseMembershipsResponse = (getMyCourseMembershipsResponseSuccess | getMyCourseMembershipsResponseError)
-
-export const getGetMyCourseMembershipsUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/memberships`
-}
-
-/**
- * @summary List the authenticated account course memberships
- */
-export const getMyCourseMemberships = async ( options?: RequestInit): Promise<getMyCourseMembershipsResponse> => {
-
-  const res = await fetch(getGetMyCourseMembershipsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getMyCourseMembershipsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipsResponse
-}
-
-
-
-export type getCourseRosterResponse200 = {
-  data: RosterPage
-  status: 200
-}
-
-export type getCourseRosterResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type getCourseRosterResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getCourseRosterResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getCourseRosterResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getCourseRosterResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getCourseRosterResponseSuccess = (getCourseRosterResponse200) & {
-  headers: Headers;
-};
-export type getCourseRosterResponseError = (getCourseRosterResponse400 | getCourseRosterResponse401 | getCourseRosterResponse403 | getCourseRosterResponse500 | getCourseRosterResponse503) & {
-  headers: Headers;
-};
-
-export type getCourseRosterResponse = (getCourseRosterResponseSuccess | getCourseRosterResponseError)
-
-export const getGetCourseRosterUrl = (courseId: string,
-    params?: GetCourseRosterParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster`
-}
-
-/**
- * @summary List course members for the instructor or administrator
- */
-export const getCourseRoster = async (courseId: string,
-    params?: GetCourseRosterParams, options?: RequestInit): Promise<getCourseRosterResponse> => {
-
-  const res = await fetch(getGetCourseRosterUrl(courseId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getCourseRosterResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getCourseRosterResponse
-}
-
-
-
-export type blockCourseParticipantResponse200 = {
+export type revokeCourseParticipantResponse200 = {
   data: MembershipGrant
   status: 200
 }
 
-export type blockCourseParticipantResponse400 = {
+export type revokeCourseParticipantResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type blockCourseParticipantResponse401 = {
+export type revokeCourseParticipantResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type blockCourseParticipantResponse403 = {
+export type revokeCourseParticipantResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type blockCourseParticipantResponse409 = {
+export type revokeCourseParticipantResponse409 = {
   data: MembershipConflictResponse
   status: 409
 }
 
-export type blockCourseParticipantResponse500 = {
+export type revokeCourseParticipantResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type blockCourseParticipantResponse503 = {
+export type revokeCourseParticipantResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type blockCourseParticipantResponseSuccess = (blockCourseParticipantResponse200) & {
+export type revokeCourseParticipantResponseSuccess = (revokeCourseParticipantResponse200) & {
   headers: Headers;
 };
-export type blockCourseParticipantResponseError = (blockCourseParticipantResponse400 | blockCourseParticipantResponse401 | blockCourseParticipantResponse403 | blockCourseParticipantResponse409 | blockCourseParticipantResponse500 | blockCourseParticipantResponse503) & {
+export type revokeCourseParticipantResponseError = (revokeCourseParticipantResponse400 | revokeCourseParticipantResponse401 | revokeCourseParticipantResponse403 | revokeCourseParticipantResponse409 | revokeCourseParticipantResponse500 | revokeCourseParticipantResponse503) & {
   headers: Headers;
 };
 
-export type blockCourseParticipantResponse = (blockCourseParticipantResponseSuccess | blockCourseParticipantResponseError)
+export type revokeCourseParticipantResponse = (revokeCourseParticipantResponseSuccess | revokeCourseParticipantResponseError)
 
-export const getBlockCourseParticipantUrl = (courseId: string,
+export const getRevokeCourseParticipantUrl = (courseId: string,
     userId: string,) => {
 
 
 
 
-  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/block`
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/participants/${userId}/revoke`
 }
 
 /**
- * @summary Block a participant from course communication
+ * @summary Revoke a participant membership as an administrator
  */
-export const blockCourseParticipant = async (courseId: string,
-    userId: string, options?: RequestInit): Promise<blockCourseParticipantResponse> => {
+export const revokeCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<revokeCourseParticipantResponse> => {
 
-  const res = await fetch(getBlockCourseParticipantUrl(courseId,userId),
+  const res = await fetch(getRevokeCourseParticipantUrl(courseId,userId),
   {
     ...options,
     method: 'POST'
@@ -783,149 +712,66 @@ export const blockCourseParticipant = async (courseId: string,
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: blockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as blockCourseParticipantResponse
+  const data: revokeCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as revokeCourseParticipantResponse
 }
 
 
 
-export type unblockCourseParticipantResponse200 = {
-  data: MembershipGrant
+export type listAdminCourseVideosResponse200 = {
+  data: CourseVideos
   status: 200
 }
 
-export type unblockCourseParticipantResponse400 = {
+export type listAdminCourseVideosResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type unblockCourseParticipantResponse401 = {
+export type listAdminCourseVideosResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type unblockCourseParticipantResponse403 = {
-  data: ForbiddenResponse
+export type listAdminCourseVideosResponse403 = {
+  data: MediaForbiddenResponse
   status: 403
 }
 
-export type unblockCourseParticipantResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type unblockCourseParticipantResponse500 = {
+export type listAdminCourseVideosResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type unblockCourseParticipantResponse503 = {
+export type listAdminCourseVideosResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type unblockCourseParticipantResponseSuccess = (unblockCourseParticipantResponse200) & {
+export type listAdminCourseVideosResponseSuccess = (listAdminCourseVideosResponse200) & {
   headers: Headers;
 };
-export type unblockCourseParticipantResponseError = (unblockCourseParticipantResponse400 | unblockCourseParticipantResponse401 | unblockCourseParticipantResponse403 | unblockCourseParticipantResponse409 | unblockCourseParticipantResponse500 | unblockCourseParticipantResponse503) & {
+export type listAdminCourseVideosResponseError = (listAdminCourseVideosResponse400 | listAdminCourseVideosResponse401 | listAdminCourseVideosResponse403 | listAdminCourseVideosResponse500 | listAdminCourseVideosResponse503) & {
   headers: Headers;
 };
 
-export type unblockCourseParticipantResponse = (unblockCourseParticipantResponseSuccess | unblockCourseParticipantResponseError)
+export type listAdminCourseVideosResponse = (listAdminCourseVideosResponseSuccess | listAdminCourseVideosResponseError)
 
-export const getUnblockCourseParticipantUrl = (courseId: string,
-    userId: string,) => {
-
+export const getListAdminCourseVideosUrl = (courseId: string,) => {
 
 
 
-  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/unblock`
+
+  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/videos`
 }
 
 /**
- * @summary Restore a participant's course communication
+ * Admins may read any course; instructors may read only courses they own. Returns one item per non-evicted asset, including multiple generations for a lesson. Storage keys and filesystem paths are never exposed. Query parameters are not supported and responses are never cached.
+ * @summary List a course's video assets
  */
-export const unblockCourseParticipant = async (courseId: string,
-    userId: string, options?: RequestInit): Promise<unblockCourseParticipantResponse> => {
+export const listAdminCourseVideos = async (courseId: string, options?: RequestInit): Promise<listAdminCourseVideosResponse> => {
 
-  const res = await fetch(getUnblockCourseParticipantUrl(courseId,userId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
-}
-
-
-
-export type listTeachLearnersResponse200 = {
-  data: LearnerPage
-  status: 200
-}
-
-export type listTeachLearnersResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type listTeachLearnersResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type listTeachLearnersResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type listTeachLearnersResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type listTeachLearnersResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type listTeachLearnersResponseSuccess = (listTeachLearnersResponse200) & {
-  headers: Headers;
-};
-export type listTeachLearnersResponseError = (listTeachLearnersResponse400 | listTeachLearnersResponse401 | listTeachLearnersResponse403 | listTeachLearnersResponse500 | listTeachLearnersResponse503) & {
-  headers: Headers;
-};
-
-export type listTeachLearnersResponse = (listTeachLearnersResponseSuccess | listTeachLearnersResponseError)
-
-export const getListTeachLearnersUrl = (params?: ListTeachLearnersParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/learners?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/learners`
-}
-
-/**
- * @summary List learners across the instructor's own courses
- */
-export const listTeachLearners = async (params?: ListTeachLearnersParams, options?: RequestInit): Promise<listTeachLearnersResponse> => {
-
-  const res = await fetch(getListTeachLearnersUrl(params),
+  const res = await fetch(getListAdminCourseVideosUrl(courseId),
   {
     ...options,
     method: 'GET'
@@ -937,8 +783,414 @@ export const listTeachLearners = async (params?: ListTeachLearnersParams, option
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: listTeachLearnersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listTeachLearnersResponse
+  const data: listAdminCourseVideosResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminCourseVideosResponse
+}
+
+
+
+export type deleteAdminCourseResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAdminCourseResponse400 = {
+  data: AdminWriteBadRequestResponse
+  status: 400
+}
+
+export type deleteAdminCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type deleteAdminCourseResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type deleteAdminCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type deleteAdminCourseResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type deleteAdminCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type deleteAdminCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type deleteAdminCourseResponseSuccess = (deleteAdminCourseResponse204) & {
+  headers: Headers;
+};
+export type deleteAdminCourseResponseError = (deleteAdminCourseResponse400 | deleteAdminCourseResponse401 | deleteAdminCourseResponse403 | deleteAdminCourseResponse404 | deleteAdminCourseResponse409 | deleteAdminCourseResponse500 | deleteAdminCourseResponse503) & {
+  headers: Headers;
+};
+
+export type deleteAdminCourseResponse = (deleteAdminCourseResponseSuccess | deleteAdminCourseResponseError)
+
+export const getDeleteAdminCourseUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${id}`
+}
+
+/**
+ * Permanently deletes a draft course and its tree. Published and archived courses cannot be deleted. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may delete only their own draft; admins may delete any draft. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.
+ * @summary Delete a draft course
+ */
+export const deleteAdminCourse = async (id: string,
+    adminCourseDeleteRequest: AdminCourseDeleteRequest, options?: RequestInit): Promise<deleteAdminCourseResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDeleteAdminCourseUrl(id),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminCourseDeleteRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAdminCourseResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteAdminCourseResponse
+}
+
+
+
+export type getAdminCourseResponse200 = {
+  data: AdminCourseTree
+  status: 200
+}
+
+export type getAdminCourseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getAdminCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getAdminCourseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getAdminCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getAdminCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getAdminCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getAdminCourseResponseSuccess = (getAdminCourseResponse200) & {
+  headers: Headers;
+};
+export type getAdminCourseResponseError = (getAdminCourseResponse400 | getAdminCourseResponse401 | getAdminCourseResponse403 | getAdminCourseResponse404 | getAdminCourseResponse500 | getAdminCourseResponse503) & {
+  headers: Headers;
+};
+
+export type getAdminCourseResponse = (getAdminCourseResponseSuccess | getAdminCourseResponseError)
+
+export const getGetAdminCourseUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${id}`
+}
+
+/**
+ * Admins may read any tree. An instructor may read only a tree they own. Unknown IDs are distinguished from ownership refusals for authenticated staff. Query parameters are not supported. Responses are never cached.
+ * @summary Get an authored course tree
+ */
+export const getAdminCourse = async (id: string, options?: RequestInit): Promise<getAdminCourseResponse> => {
+
+  const res = await fetch(getGetAdminCourseUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAdminCourseResponse
+}
+
+
+
+export type saveAdminCourseResponse200 = {
+  data: AdminCourseTree
+  status: 200
+}
+
+export type saveAdminCourseResponse400 = {
+  data: AdminWriteBadRequestResponse
+  status: 400
+}
+
+export type saveAdminCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type saveAdminCourseResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type saveAdminCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type saveAdminCourseResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type saveAdminCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type saveAdminCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type saveAdminCourseResponseSuccess = (saveAdminCourseResponse200) & {
+  headers: Headers;
+};
+export type saveAdminCourseResponseError = (saveAdminCourseResponse400 | saveAdminCourseResponse401 | saveAdminCourseResponse403 | saveAdminCourseResponse404 | saveAdminCourseResponse409 | saveAdminCourseResponse500 | saveAdminCourseResponse503) & {
+  headers: Headers;
+};
+
+export type saveAdminCourseResponse = (saveAdminCourseResponseSuccess | saveAdminCourseResponseError)
+
+export const getSaveAdminCourseUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${id}`
+}
+
+/**
+ * Replaces all editable course fields, modules and lessons. Array indexes define contiguous zero-based positions; lifecycle and position members are rejected. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may save only their own course and must omit instructorId or echo their own ID; admins may reassign to an eligible active instructor or admin. Slugs remain mutable only until first publication. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
+ * @summary Replace an authored course tree
+ */
+export const saveAdminCourse = async (id: string,
+    adminCourseSaveRequest: AdminCourseSaveRequest, options?: RequestInit): Promise<saveAdminCourseResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getSaveAdminCourseUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminCourseSaveRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveAdminCourseResponse
+}
+
+
+
+export type transitionAdminCourseResponse200 = {
+  data: AdminCourseTree
+  status: 200
+}
+
+export type transitionAdminCourseResponse400 = {
+  data: AdminWriteBadRequestResponse
+  status: 400
+}
+
+export type transitionAdminCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type transitionAdminCourseResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type transitionAdminCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type transitionAdminCourseResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type transitionAdminCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type transitionAdminCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type transitionAdminCourseResponseSuccess = (transitionAdminCourseResponse200) & {
+  headers: Headers;
+};
+export type transitionAdminCourseResponseError = (transitionAdminCourseResponse400 | transitionAdminCourseResponse401 | transitionAdminCourseResponse403 | transitionAdminCourseResponse404 | transitionAdminCourseResponse409 | transitionAdminCourseResponse500 | transitionAdminCourseResponse503) & {
+  headers: Headers;
+};
+
+export type transitionAdminCourseResponse = (transitionAdminCourseResponseSuccess | transitionAdminCourseResponseError)
+
+export const getTransitionAdminCourseUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/courses/${id}/status`
+}
+
+/**
+ * Performs one legal lifecycle transition: draft to published, published to archived, or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read, and every accepted transition returns a new token. Instructors may transition only their own course; admins may transition any course. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.
+ * @summary Publish, archive or restore a course
+ */
+export const transitionAdminCourse = async (id: string,
+    adminCourseStatusRequest: AdminCourseStatusRequest, options?: RequestInit): Promise<transitionAdminCourseResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getTransitionAdminCourseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminCourseStatusRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: transitionAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as transitionAdminCourseResponse
+}
+
+
+
+export type listInstructorsResponse200 = {
+  data: Instructor[]
+  status: 200
+}
+
+export type listInstructorsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listInstructorsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listInstructorsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listInstructorsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listInstructorsResponseSuccess = (listInstructorsResponse200) & {
+  headers: Headers;
+};
+export type listInstructorsResponseError = (listInstructorsResponse401 | listInstructorsResponse403 | listInstructorsResponse500 | listInstructorsResponse503) & {
+  headers: Headers;
+};
+
+export type listInstructorsResponse = (listInstructorsResponseSuccess | listInstructorsResponseError)
+
+export const getListInstructorsUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/instructors`
+}
+
+/**
+ * Admin-only, unpaginated and bounded to 200 active instructor or admin accounts. Email, password data and account status are never exposed. Responses are never cached.
+ * @summary List eligible course owners
+ */
+export const listInstructors = async ( options?: RequestInit): Promise<listInstructorsResponse> => {
+
+  const res = await fetch(getListInstructorsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listInstructorsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listInstructorsResponse
 }
 
 
@@ -1020,380 +1272,232 @@ export const listAdminLearners = async (params?: ListAdminLearnersParams, option
 
 
 
-export type blockCommentAuthorResponse200 = {
-  data: MembershipGrant
-  status: 200
-}
-
-export type blockCommentAuthorResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type blockCommentAuthorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type blockCommentAuthorResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type blockCommentAuthorResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type blockCommentAuthorResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type blockCommentAuthorResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type blockCommentAuthorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type blockCommentAuthorResponseSuccess = (blockCommentAuthorResponse200) & {
-  headers: Headers;
-};
-export type blockCommentAuthorResponseError = (blockCommentAuthorResponse400 | blockCommentAuthorResponse401 | blockCommentAuthorResponse403 | blockCommentAuthorResponse404 | blockCommentAuthorResponse409 | blockCommentAuthorResponse500 | blockCommentAuthorResponse503) & {
-  headers: Headers;
-};
-
-export type blockCommentAuthorResponse = (blockCommentAuthorResponseSuccess | blockCommentAuthorResponseError)
-
-export const getBlockCommentAuthorUrl = (commentId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/block-author`
-}
-
-/**
- * @summary Block the author of a comment from course communication (owner or administrator)
- */
-export const blockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<blockCommentAuthorResponse> => {
-
-  const res = await fetch(getBlockCommentAuthorUrl(commentId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: blockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as blockCommentAuthorResponse
-}
-
-
-
-export type unblockCommentAuthorResponse200 = {
-  data: MembershipGrant
-  status: 200
-}
-
-export type unblockCommentAuthorResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type unblockCommentAuthorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type unblockCommentAuthorResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type unblockCommentAuthorResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type unblockCommentAuthorResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type unblockCommentAuthorResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type unblockCommentAuthorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type unblockCommentAuthorResponseSuccess = (unblockCommentAuthorResponse200) & {
-  headers: Headers;
-};
-export type unblockCommentAuthorResponseError = (unblockCommentAuthorResponse400 | unblockCommentAuthorResponse401 | unblockCommentAuthorResponse403 | unblockCommentAuthorResponse404 | unblockCommentAuthorResponse409 | unblockCommentAuthorResponse500 | unblockCommentAuthorResponse503) & {
-  headers: Headers;
-};
-
-export type unblockCommentAuthorResponse = (unblockCommentAuthorResponseSuccess | unblockCommentAuthorResponseError)
-
-export const getUnblockCommentAuthorUrl = (commentId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/unblock-author`
-}
-
-/**
- * @summary Restore the comment author's course communication (owner or administrator)
- */
-export const unblockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<unblockCommentAuthorResponse> => {
-
-  const res = await fetch(getUnblockCommentAuthorUrl(commentId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: unblockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unblockCommentAuthorResponse
-}
-
-
-
-export type blockReviewAuthorResponse200 = {
-  data: MembershipGrant
-  status: 200
-}
-
-export type blockReviewAuthorResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type blockReviewAuthorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type blockReviewAuthorResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type blockReviewAuthorResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type blockReviewAuthorResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type blockReviewAuthorResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type blockReviewAuthorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type blockReviewAuthorResponseSuccess = (blockReviewAuthorResponse200) & {
-  headers: Headers;
-};
-export type blockReviewAuthorResponseError = (blockReviewAuthorResponse400 | blockReviewAuthorResponse401 | blockReviewAuthorResponse403 | blockReviewAuthorResponse404 | blockReviewAuthorResponse409 | blockReviewAuthorResponse500 | blockReviewAuthorResponse503) & {
-  headers: Headers;
-};
-
-export type blockReviewAuthorResponse = (blockReviewAuthorResponseSuccess | blockReviewAuthorResponseError)
-
-export const getBlockReviewAuthorUrl = (reviewId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/block-author`
-}
-
-/**
- * @summary Block the author of a review from course communication (owner or administrator)
- */
-export const blockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<blockReviewAuthorResponse> => {
-
-  const res = await fetch(getBlockReviewAuthorUrl(reviewId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: blockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as blockReviewAuthorResponse
-}
-
-
-
-export type unblockReviewAuthorResponse200 = {
-  data: MembershipGrant
-  status: 200
-}
-
-export type unblockReviewAuthorResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type unblockReviewAuthorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type unblockReviewAuthorResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type unblockReviewAuthorResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type unblockReviewAuthorResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type unblockReviewAuthorResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type unblockReviewAuthorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type unblockReviewAuthorResponseSuccess = (unblockReviewAuthorResponse200) & {
-  headers: Headers;
-};
-export type unblockReviewAuthorResponseError = (unblockReviewAuthorResponse400 | unblockReviewAuthorResponse401 | unblockReviewAuthorResponse403 | unblockReviewAuthorResponse404 | unblockReviewAuthorResponse409 | unblockReviewAuthorResponse500 | unblockReviewAuthorResponse503) & {
-  headers: Headers;
-};
-
-export type unblockReviewAuthorResponse = (unblockReviewAuthorResponseSuccess | unblockReviewAuthorResponseError)
-
-export const getUnblockReviewAuthorUrl = (reviewId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/unblock-author`
-}
-
-/**
- * @summary Restore the review author's course communication (owner or administrator)
- */
-export const unblockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<unblockReviewAuthorResponse> => {
-
-  const res = await fetch(getUnblockReviewAuthorUrl(reviewId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: unblockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as unblockReviewAuthorResponse
-}
-
-
-
-export type reportCourseLecturerResponse201 = {
-  data: ParticipantReport
+export type uploadAdminLessonImageResponse201 = {
+  data: ImageUploadResponse
   status: 201
 }
 
-export type reportCourseLecturerResponse400 = {
+export type uploadAdminLessonImageResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type uploadAdminLessonImageResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type uploadAdminLessonImageResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type uploadAdminLessonImageResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type uploadAdminLessonImageResponse413 = {
+  data: ErrorResponse
+  status: 413
+}
+
+export type uploadAdminLessonImageResponse415 = {
+  data: ErrorResponse
+  status: 415
+}
+
+export type uploadAdminLessonImageResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type uploadAdminLessonImageResponseSuccess = (uploadAdminLessonImageResponse201) & {
+  headers: Headers;
+};
+export type uploadAdminLessonImageResponseError = (uploadAdminLessonImageResponse400 | uploadAdminLessonImageResponse401 | uploadAdminLessonImageResponse403 | uploadAdminLessonImageResponse404 | uploadAdminLessonImageResponse413 | uploadAdminLessonImageResponse415 | uploadAdminLessonImageResponse503) & {
+  headers: Headers;
+};
+
+export type uploadAdminLessonImageResponse = (uploadAdminLessonImageResponseSuccess | uploadAdminLessonImageResponseError)
+
+export const getUploadAdminLessonImageUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${id}/images`
+}
+
+export const uploadAdminLessonImage = async (id: string,
+    uploadAdminLessonImageBody: UploadAdminLessonImageBody, options?: RequestInit): Promise<uploadAdminLessonImageResponse> => {
+    const formData = new FormData();
+formData.append(`file`, uploadAdminLessonImageBody.file);
+
+  const res = await fetch(getUploadAdminLessonImageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: uploadAdminLessonImageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as uploadAdminLessonImageResponse
+}
+
+
+
+export type getAdminLessonDocumentResponse200 = {
+  data: LessonDocumentDraft
+  status: 200
+}
+
+export type getAdminLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type reportCourseLecturerResponse401 = {
+export type getAdminLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type reportCourseLecturerResponse403 = {
-  data: ForbiddenResponse
+export type getAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
   status: 403
 }
 
-export type reportCourseLecturerResponse404 = {
+export type getAdminLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type reportCourseLecturerResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
+export type getAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
 }
 
-export type reportCourseLecturerResponse503 = {
+export type getAdminLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type reportCourseLecturerResponseSuccess = (reportCourseLecturerResponse201) & {
+export type getAdminLessonDocumentResponseSuccess = (getAdminLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type reportCourseLecturerResponseError = (reportCourseLecturerResponse400 | reportCourseLecturerResponse401 | reportCourseLecturerResponse403 | reportCourseLecturerResponse404 | reportCourseLecturerResponse409 | reportCourseLecturerResponse503) & {
+export type getAdminLessonDocumentResponseError = (getAdminLessonDocumentResponse400 | getAdminLessonDocumentResponse401 | getAdminLessonDocumentResponse403 | getAdminLessonDocumentResponse404 | getAdminLessonDocumentResponse500 | getAdminLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type reportCourseLecturerResponse = (reportCourseLecturerResponseSuccess | reportCourseLecturerResponseError)
+export type getAdminLessonDocumentResponse = (getAdminLessonDocumentResponseSuccess | getAdminLessonDocumentResponseError)
 
-export const getReportCourseLecturerUrl = (courseId: string,) => {
+export const getGetAdminLessonDocumentUrl = (lessonId: string,
+    params?: GetAdminLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/report-lecturer`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
 }
 
-export const reportCourseLecturer = async (courseId: string,
-    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseLecturerResponse> => {
+/**
+ * Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
+ */
+export const getAdminLessonDocument = async (lessonId: string,
+    params?: GetAdminLessonDocumentParams, options?: RequestInit): Promise<getAdminLessonDocumentResponse> => {
+
+  const res = await fetch(getGetAdminLessonDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAdminLessonDocumentResponse
+}
+
+
+
+export type saveAdminLessonDocumentResponse200 = {
+  data: LessonDocumentUpdated
+  status: 200
+}
+
+export type saveAdminLessonDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type saveAdminLessonDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type saveAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type saveAdminLessonDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type saveAdminLessonDocumentResponse409 = {
+  data: LessonDocumentConflictResponse
+  status: 409
+}
+
+export type saveAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type saveAdminLessonDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type saveAdminLessonDocumentResponseSuccess = (saveAdminLessonDocumentResponse200) & {
+  headers: Headers;
+};
+export type saveAdminLessonDocumentResponseError = (saveAdminLessonDocumentResponse400 | saveAdminLessonDocumentResponse401 | saveAdminLessonDocumentResponse403 | saveAdminLessonDocumentResponse404 | saveAdminLessonDocumentResponse409 | saveAdminLessonDocumentResponse500 | saveAdminLessonDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type saveAdminLessonDocumentResponse = (saveAdminLessonDocumentResponseSuccess | saveAdminLessonDocumentResponseError)
+
+export const getSaveAdminLessonDocumentUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
+}
+
+/**
+ * Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+ */
+export const saveAdminLessonDocument = async (lessonId: string,
+    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<saveAdminLessonDocumentResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1401,80 +1505,95 @@ export const reportCourseLecturer = async (courseId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getReportCourseLecturerUrl(courseId),
+const res = await fetch(getSaveAdminLessonDocumentUrl(lessonId),
   {
     ...options,
-    method: 'POST',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(participantReportRequest)
+    body: JSON.stringify(saveLessonDocumentRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: reportCourseLecturerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as reportCourseLecturerResponse
+  const data: saveAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveAdminLessonDocumentResponse
 }
 
 
 
-export type reportCourseParticipantResponse201 = {
-  data: ParticipantReport
-  status: 201
+export type publishAdminLessonDocumentResponse200 = {
+  data: void
+  status: 200
 }
 
-export type reportCourseParticipantResponse400 = {
+export type publishAdminLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type reportCourseParticipantResponse401 = {
+export type publishAdminLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type reportCourseParticipantResponse403 = {
-  data: ForbiddenResponse
+export type publishAdminLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
   status: 403
 }
 
-export type reportCourseParticipantResponse404 = {
+export type publishAdminLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type reportCourseParticipantResponse409 = {
-  data: TranscriptConflictResponse
+export type publishAdminLessonDocumentResponse409 = {
+  data: LessonDocumentConflictResponse
   status: 409
 }
 
-export type reportCourseParticipantResponse503 = {
+export type publishAdminLessonDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type publishAdminLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type reportCourseParticipantResponseSuccess = (reportCourseParticipantResponse201) & {
+export type publishAdminLessonDocumentResponseSuccess = (publishAdminLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type reportCourseParticipantResponseError = (reportCourseParticipantResponse400 | reportCourseParticipantResponse401 | reportCourseParticipantResponse403 | reportCourseParticipantResponse404 | reportCourseParticipantResponse409 | reportCourseParticipantResponse503) & {
+export type publishAdminLessonDocumentResponseError = (publishAdminLessonDocumentResponse400 | publishAdminLessonDocumentResponse401 | publishAdminLessonDocumentResponse403 | publishAdminLessonDocumentResponse404 | publishAdminLessonDocumentResponse409 | publishAdminLessonDocumentResponse500 | publishAdminLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type reportCourseParticipantResponse = (reportCourseParticipantResponseSuccess | reportCourseParticipantResponseError)
+export type publishAdminLessonDocumentResponse = (publishAdminLessonDocumentResponseSuccess | publishAdminLessonDocumentResponseError)
 
-export const getReportCourseParticipantUrl = (courseId: string,
-    userId: string,) => {
+export const getPublishAdminLessonDocumentUrl = (lessonId: string,
+    params?: PublishAdminLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/report`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish`
 }
 
-export const reportCourseParticipant = async (courseId: string,
-    userId: string,
-    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseParticipantResponse> => {
+/**
+ * Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+ */
+export const publishAdminLessonDocument = async (lessonId: string,
+    publishLessonDocumentRequest: PublishLessonDocumentRequest,
+    params?: PublishAdminLessonDocumentParams, options?: RequestInit): Promise<publishAdminLessonDocumentResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -1482,20 +1601,433 @@ export const reportCourseParticipant = async (courseId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getReportCourseParticipantUrl(courseId,userId),
+const res = await fetch(getPublishAdminLessonDocumentUrl(lessonId,params),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(participantReportRequest)
+    body: JSON.stringify(publishLessonDocumentRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: reportCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as reportCourseParticipantResponse
+  const data: publishAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as publishAdminLessonDocumentResponse
+}
+
+
+
+export type getLessonDraftResponse200 = {
+  data: LessonDraft
+  status: 200
+}
+
+export type getLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLessonDraftResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type getLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLessonDraftResponseSuccess = (getLessonDraftResponse200) & {
+  headers: Headers;
+};
+export type getLessonDraftResponseError = (getLessonDraftResponse400 | getLessonDraftResponse401 | getLessonDraftResponse403 | getLessonDraftResponse404 | getLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type getLessonDraftResponse = (getLessonDraftResponseSuccess | getLessonDraftResponseError)
+
+export const getGetLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft`
+}
+
+/**
+ * Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached.
+ * @summary Get a lesson recognition draft
+ */
+export const getLessonDraft = async (lessonId: string, options?: RequestInit): Promise<getLessonDraftResponse> => {
+
+  const res = await fetch(getGetLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLessonDraftResponse
+}
+
+
+
+export type publishLessonDraftResponse200 = {
+  data: PublishLessonDraft200
+  status: 200
+}
+
+export type publishLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type publishLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type publishLessonDraftResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type publishLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type publishLessonDraftResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type publishLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type publishLessonDraftResponseSuccess = (publishLessonDraftResponse200) & {
+  headers: Headers;
+};
+export type publishLessonDraftResponseError = (publishLessonDraftResponse400 | publishLessonDraftResponse401 | publishLessonDraftResponse403 | publishLessonDraftResponse404 | publishLessonDraftResponse409 | publishLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type publishLessonDraftResponse = (publishLessonDraftResponseSuccess | publishLessonDraftResponseError)
+
+export const getPublishLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/publish`
+}
+
+/**
+ * Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+ * @summary Publish a lesson recognition draft
+ */
+export const publishLessonDraft = async (lessonId: string,
+    publishLessonDraftRequest?: PublishLessonDraftRequest, options?: RequestInit): Promise<publishLessonDraftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPublishLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishLessonDraftRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: publishLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as publishLessonDraftResponse
+}
+
+
+
+export type regenerateLessonDraftResponse202 = {
+  data: void
+  status: 202
+}
+
+export type regenerateLessonDraftResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type regenerateLessonDraftResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type regenerateLessonDraftResponse403 = {
+  data: AdminMutationForbiddenResponse
+  status: 403
+}
+
+export type regenerateLessonDraftResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type regenerateLessonDraftResponse409 = {
+  data: DraftConflictResponse
+  status: 409
+}
+
+export type regenerateLessonDraftResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type regenerateLessonDraftResponseSuccess = (regenerateLessonDraftResponse202) & {
+  headers: Headers;
+};
+export type regenerateLessonDraftResponseError = (regenerateLessonDraftResponse400 | regenerateLessonDraftResponse401 | regenerateLessonDraftResponse403 | regenerateLessonDraftResponse404 | regenerateLessonDraftResponse409 | regenerateLessonDraftResponse503) & {
+  headers: Headers;
+};
+
+export type regenerateLessonDraftResponse = (regenerateLessonDraftResponseSuccess | regenerateLessonDraftResponseError)
+
+export const getRegenerateLessonDraftUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/regenerate`
+}
+
+/**
+ * Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+ * @summary Queue lesson speech recognition
+ */
+export const regenerateLessonDraft = async (lessonId: string,
+    regenerateLessonDraftRequest?: RegenerateLessonDraftRequest, options?: RequestInit): Promise<regenerateLessonDraftResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegenerateLessonDraftUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(regenerateLessonDraftRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: regenerateLessonDraftResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as regenerateLessonDraftResponse
+}
+
+
+
+export type saveLessonTranscriptResponse200 = {
+  data: SaveLessonTranscript200
+  status: 200
+}
+
+export type saveLessonTranscriptResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type saveLessonTranscriptResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type saveLessonTranscriptResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type saveLessonTranscriptResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type saveLessonTranscriptResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type saveLessonTranscriptResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type saveLessonTranscriptResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type saveLessonTranscriptResponseSuccess = (saveLessonTranscriptResponse200) & {
+  headers: Headers;
+};
+export type saveLessonTranscriptResponseError = (saveLessonTranscriptResponse400 | saveLessonTranscriptResponse401 | saveLessonTranscriptResponse403 | saveLessonTranscriptResponse404 | saveLessonTranscriptResponse409 | saveLessonTranscriptResponse500 | saveLessonTranscriptResponse503) & {
+  headers: Headers;
+};
+
+export type saveLessonTranscriptResponse = (saveLessonTranscriptResponseSuccess | saveLessonTranscriptResponseError)
+
+export const getSaveLessonTranscriptUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcript`
+}
+
+/**
+ * Authenticated same-origin mutation, scoped to the course owner or an admin. The write REPLACES the transcript of one lesson in one language: the author edits a document, not a set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt is the optimistic-lock token and is omitted when the author believes no transcript exists; a second writer racing into the same empty lesson is refused with transcript_exists rather than appending to the first one's work.
+ * @summary Replace a lesson transcript
+ */
+export const saveLessonTranscript = async (lessonId: string,
+    saveTranscriptRequest: SaveTranscriptRequest, options?: RequestInit): Promise<saveLessonTranscriptResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getSaveLessonTranscriptUrl(lessonId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveTranscriptRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveLessonTranscriptResponse
+}
+
+
+
+export type mintAdminVideoTicketResponse201 = {
+  data: MediaUploadTicket
+  status: 201
+}
+
+export type mintAdminVideoTicketResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type mintAdminVideoTicketResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type mintAdminVideoTicketResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type mintAdminVideoTicketResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type mintAdminVideoTicketResponse409 = {
+  data: UploadConflictResponse
+  status: 409
+}
+
+export type mintAdminVideoTicketResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type mintAdminVideoTicketResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type mintAdminVideoTicketResponseSuccess = (mintAdminVideoTicketResponse201) & {
+  headers: Headers;
+};
+export type mintAdminVideoTicketResponseError = (mintAdminVideoTicketResponse400 | mintAdminVideoTicketResponse401 | mintAdminVideoTicketResponse403 | mintAdminVideoTicketResponse404 | mintAdminVideoTicketResponse409 | mintAdminVideoTicketResponse500 | mintAdminVideoTicketResponse503) & {
+  headers: Headers;
+};
+
+export type mintAdminVideoTicketResponse = (mintAdminVideoTicketResponseSuccess | mintAdminVideoTicketResponseError)
+
+export const getMintAdminVideoTicketUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/video`
+}
+
+/**
+ * Admins may mint for any saved lesson; instructors may mint only for lessons in courses they own. The minted video asset ID is also the single-use upload ticket ID. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. The API records metadata only and does not access media storage.
+ * @summary Mint a video upload ticket
+ */
+export const mintAdminVideoTicket = async (lessonId: string,
+    mediaTicketRequest: MediaTicketRequest, options?: RequestInit): Promise<mintAdminVideoTicketResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getMintAdminVideoTicketUrl(lessonId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(mediaTicketRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mintAdminVideoTicketResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as mintAdminVideoTicketResponse
 }
 
 
@@ -1626,83 +2158,6 @@ export const resolveParticipantReport = async (reportId: string, options?: Reque
 
 
 
-export type revokeCourseParticipantResponse200 = {
-  data: MembershipGrant
-  status: 200
-}
-
-export type revokeCourseParticipantResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type revokeCourseParticipantResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type revokeCourseParticipantResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type revokeCourseParticipantResponse409 = {
-  data: MembershipConflictResponse
-  status: 409
-}
-
-export type revokeCourseParticipantResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type revokeCourseParticipantResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type revokeCourseParticipantResponseSuccess = (revokeCourseParticipantResponse200) & {
-  headers: Headers;
-};
-export type revokeCourseParticipantResponseError = (revokeCourseParticipantResponse400 | revokeCourseParticipantResponse401 | revokeCourseParticipantResponse403 | revokeCourseParticipantResponse409 | revokeCourseParticipantResponse500 | revokeCourseParticipantResponse503) & {
-  headers: Headers;
-};
-
-export type revokeCourseParticipantResponse = (revokeCourseParticipantResponseSuccess | revokeCourseParticipantResponseError)
-
-export const getRevokeCourseParticipantUrl = (courseId: string,
-    userId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/participants/${userId}/revoke`
-}
-
-/**
- * @summary Revoke a participant membership as an administrator
- */
-export const revokeCourseParticipant = async (courseId: string,
-    userId: string, options?: RequestInit): Promise<revokeCourseParticipantResponse> => {
-
-  const res = await fetch(getRevokeCourseParticipantUrl(courseId,userId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: revokeCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as revokeCourseParticipantResponse
-}
-
-
-
 export type listRefundQueueResponse200 = {
   data: RefundQueuePage
   status: 200
@@ -1780,76 +2235,6 @@ export const listRefundQueue = async (params?: ListRefundQueueParams, options?: 
 
 
 
-export type refundOrderResponse204 = {
-  data: void
-  status: 204
-}
-
-export type refundOrderResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type refundOrderResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type refundOrderResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type refundOrderResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type refundOrderResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type refundOrderResponseSuccess = (refundOrderResponse204) & {
-  headers: Headers;
-};
-export type refundOrderResponseError = (refundOrderResponse400 | refundOrderResponse401 | refundOrderResponse403 | refundOrderResponse500 | refundOrderResponse503) & {
-  headers: Headers;
-};
-
-export type refundOrderResponse = (refundOrderResponseSuccess | refundOrderResponseError)
-
-export const getRefundOrderUrl = (orderId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/refunds/${orderId}/refund`
-}
-
-/**
- * @summary Record a refund-queue order as refunded
- */
-export const refundOrder = async (orderId: string, options?: RequestInit): Promise<refundOrderResponse> => {
-
-  const res = await fetch(getRefundOrderUrl(orderId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refundOrderResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as refundOrderResponse
-}
-
-
-
 export type declineRefundResponse204 = {
   data: void
   status: 204
@@ -1916,6 +2301,76 @@ export const declineRefund = async (orderId: string, options?: RequestInit): Pro
 
   const data: declineRefundResponse['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as declineRefundResponse
+}
+
+
+
+export type refundOrderResponse204 = {
+  data: void
+  status: 204
+}
+
+export type refundOrderResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type refundOrderResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type refundOrderResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type refundOrderResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type refundOrderResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type refundOrderResponseSuccess = (refundOrderResponse204) & {
+  headers: Headers;
+};
+export type refundOrderResponseError = (refundOrderResponse400 | refundOrderResponse401 | refundOrderResponse403 | refundOrderResponse500 | refundOrderResponse503) & {
+  headers: Headers;
+};
+
+export type refundOrderResponse = (refundOrderResponseSuccess | refundOrderResponseError)
+
+export const getRefundOrderUrl = (orderId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/refunds/${orderId}/refund`
+}
+
+/**
+ * @summary Record a refund-queue order as refunded
+ */
+export const refundOrder = async (orderId: string, options?: RequestInit): Promise<refundOrderResponse> => {
+
+  const res = await fetch(getRefundOrderUrl(orderId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: refundOrderResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as refundOrderResponse
 }
 
 
@@ -1996,297 +2451,6 @@ export const revokeRefundGrant = async (orderId: string, options?: RequestInit):
 
   const data: revokeRefundGrantResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as revokeRefundGrantResponse
-}
-
-
-
-export type getPurchaseStatusResponse200 = {
-  data: PurchaseOrder
-  status: 200
-}
-
-export type getPurchaseStatusResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type getPurchaseStatusResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getPurchaseStatusResponse404 = {
-  data: OrderNotFoundResponse
-  status: 404
-}
-
-export type getPurchaseStatusResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getPurchaseStatusResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getPurchaseStatusResponseSuccess = (getPurchaseStatusResponse200) & {
-  headers: Headers;
-};
-export type getPurchaseStatusResponseError = (getPurchaseStatusResponse400 | getPurchaseStatusResponse401 | getPurchaseStatusResponse404 | getPurchaseStatusResponse500 | getPurchaseStatusResponse503) & {
-  headers: Headers;
-};
-
-export type getPurchaseStatusResponse = (getPurchaseStatusResponseSuccess | getPurchaseStatusResponseError)
-
-export const getGetPurchaseStatusUrl = (orderId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/orders/${orderId}`
-}
-
-/**
- * @summary Read the authenticated account's purchase status
- */
-export const getPurchaseStatus = async (orderId: string, options?: RequestInit): Promise<getPurchaseStatusResponse> => {
-
-  const res = await fetch(getGetPurchaseStatusUrl(orderId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getPurchaseStatusResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getPurchaseStatusResponse
-}
-
-
-
-export type createPurchaseCheckoutResponse200 = {
-  data: CheckoutForm
-  status: 200
-}
-
-export type createPurchaseCheckoutResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type createPurchaseCheckoutResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type createPurchaseCheckoutResponse404 = {
-  data: OrderNotFoundResponse
-  status: 404
-}
-
-export type createPurchaseCheckoutResponse409 = {
-  data: PurchaseConflictResponse
-  status: 409
-}
-
-export type createPurchaseCheckoutResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type createPurchaseCheckoutResponseSuccess = (createPurchaseCheckoutResponse200) & {
-  headers: Headers;
-};
-export type createPurchaseCheckoutResponseError = (createPurchaseCheckoutResponse400 | createPurchaseCheckoutResponse401 | createPurchaseCheckoutResponse404 | createPurchaseCheckoutResponse409 | createPurchaseCheckoutResponse503) & {
-  headers: Headers;
-};
-
-export type createPurchaseCheckoutResponse = (createPurchaseCheckoutResponseSuccess | createPurchaseCheckoutResponseError)
-
-export const getCreatePurchaseCheckoutUrl = (orderId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`
-}
-
-/**
- * @summary Create the hosted WayForPay checkout form for the authenticated order owner
- */
-export const createPurchaseCheckout = async (orderId: string,
-    checkoutRequest?: CheckoutRequest, options?: RequestInit): Promise<createPurchaseCheckoutResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getCreatePurchaseCheckoutUrl(orderId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(checkoutRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createPurchaseCheckoutResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createPurchaseCheckoutResponse
-}
-
-
-
-export type receiveWayForPayCallbackResponse200 = {
-  data: WayForPayAcknowledgement
-  status: 200
-}
-
-export type receiveWayForPayCallbackResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type receiveWayForPayCallbackResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type receiveWayForPayCallbackResponseSuccess = (receiveWayForPayCallbackResponse200) & {
-  headers: Headers;
-};
-export type receiveWayForPayCallbackResponseError = (receiveWayForPayCallbackResponse401 | receiveWayForPayCallbackResponse503) & {
-  headers: Headers;
-};
-
-export type receiveWayForPayCallbackResponse = (receiveWayForPayCallbackResponseSuccess | receiveWayForPayCallbackResponseError)
-
-export const getReceiveWayForPayCallbackUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/payments/wayforpay/callback`
-}
-
-/**
- * @summary Receive a signed WayForPay service callback
- */
-export const receiveWayForPayCallback = async (receiveWayForPayCallbackBody: ReceiveWayForPayCallbackBody, options?: RequestInit): Promise<receiveWayForPayCallbackResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getReceiveWayForPayCallbackUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(receiveWayForPayCallbackBody)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: receiveWayForPayCallbackResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as receiveWayForPayCallbackResponse
-}
-
-
-
-export type grantCourseAccessResponse201 = {
-  data: CourseGrant
-  status: 201
-}
-
-export type grantCourseAccessResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type grantCourseAccessResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type grantCourseAccessResponse403 = {
-  data: GrantForbiddenResponse
-  status: 403
-}
-
-export type grantCourseAccessResponse409 = {
-  data: PurchaseConflictResponse
-  status: 409
-}
-
-export type grantCourseAccessResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type grantCourseAccessResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type grantCourseAccessResponseSuccess = (grantCourseAccessResponse201) & {
-  headers: Headers;
-};
-export type grantCourseAccessResponseError = (grantCourseAccessResponse400 | grantCourseAccessResponse401 | grantCourseAccessResponse403 | grantCourseAccessResponse409 | grantCourseAccessResponse500 | grantCourseAccessResponse503) & {
-  headers: Headers;
-};
-
-export type grantCourseAccessResponse = (grantCourseAccessResponseSuccess | grantCourseAccessResponseError)
-
-export const getGrantCourseAccessUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/grants`
-}
-
-/**
- * Admin-only same-origin mutation. Creates an active admin grant and its audit record.
- * @summary Grant course access as an administrator
- */
-export const grantCourseAccess = async (courseId: string,
-    adminGrantRequest: AdminGrantRequest, options?: RequestInit): Promise<grantCourseAccessResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getGrantCourseAccessUrl(courseId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminGrantRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: grantCourseAccessResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as grantCourseAccessResponse
 }
 
 
@@ -2594,6 +2758,164 @@ export const deleteAdminUser = async (id: string, options?: RequestInit): Promis
 
 
 
+export type adminDisableUserTwoFactorResponse204 = {
+  data: void
+  status: 204
+}
+
+export type adminDisableUserTwoFactorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type adminDisableUserTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type adminDisableUserTwoFactorResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type adminDisableUserTwoFactorResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type adminDisableUserTwoFactorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type adminDisableUserTwoFactorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type adminDisableUserTwoFactorResponseSuccess = (adminDisableUserTwoFactorResponse204) & {
+  headers: Headers;
+};
+export type adminDisableUserTwoFactorResponseError = (adminDisableUserTwoFactorResponse400 | adminDisableUserTwoFactorResponse401 | adminDisableUserTwoFactorResponse403 | adminDisableUserTwoFactorResponse404 | adminDisableUserTwoFactorResponse500 | adminDisableUserTwoFactorResponse503) & {
+  headers: Headers;
+};
+
+export type adminDisableUserTwoFactorResponse = (adminDisableUserTwoFactorResponseSuccess | adminDisableUserTwoFactorResponseError)
+
+export const getAdminDisableUserTwoFactorUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}/2fa/disable`
+}
+
+/**
+ * @summary Disable two-factor authentication for an account
+ */
+export const adminDisableUserTwoFactor = async (id: string, options?: RequestInit): Promise<adminDisableUserTwoFactorResponse> => {
+
+  const res = await fetch(getAdminDisableUserTwoFactorUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: adminDisableUserTwoFactorResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as adminDisableUserTwoFactorResponse
+}
+
+
+
+export type resetAdminUserPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetAdminUserPasswordResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type resetAdminUserPasswordResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resetAdminUserPasswordResponse403 = {
+  data: AdminUserMutationForbiddenResponse
+  status: 403
+}
+
+export type resetAdminUserPasswordResponse404 = {
+  data: UserNotFoundResponse
+  status: 404
+}
+
+export type resetAdminUserPasswordResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type resetAdminUserPasswordResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type resetAdminUserPasswordResponseSuccess = (resetAdminUserPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetAdminUserPasswordResponseError = (resetAdminUserPasswordResponse400 | resetAdminUserPasswordResponse401 | resetAdminUserPasswordResponse403 | resetAdminUserPasswordResponse404 | resetAdminUserPasswordResponse500 | resetAdminUserPasswordResponse503) & {
+  headers: Headers;
+};
+
+export type resetAdminUserPasswordResponse = (resetAdminUserPasswordResponseSuccess | resetAdminUserPasswordResponseError)
+
+export const getResetAdminUserPasswordUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/users/${id}/password`
+}
+
+/**
+ * Admin-only. Replaces the credential and revokes every target session, including for a blocked target; a deleted target is not operable. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. Passwords contain 1 to 1024 UTF-8 bytes; any content is accepted.
+ * @summary Reset an account password
+ */
+export const resetAdminUserPassword = async (id: string,
+    adminUserPasswordRequest: AdminUserPasswordRequest, options?: RequestInit): Promise<resetAdminUserPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResetAdminUserPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUserPasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetAdminUserPasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resetAdminUserPasswordResponse
+}
+
+
+
 export type setAdminUserStatusResponse200 = {
   data: void
   status: 200
@@ -2682,903 +3004,6 @@ const res = await fetch(getSetAdminUserStatusUrl(id),
 
 
 
-export type resetAdminUserPasswordResponse204 = {
-  data: void
-  status: 204
-}
-
-export type resetAdminUserPasswordResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type resetAdminUserPasswordResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type resetAdminUserPasswordResponse403 = {
-  data: AdminUserMutationForbiddenResponse
-  status: 403
-}
-
-export type resetAdminUserPasswordResponse404 = {
-  data: UserNotFoundResponse
-  status: 404
-}
-
-export type resetAdminUserPasswordResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type resetAdminUserPasswordResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type resetAdminUserPasswordResponseSuccess = (resetAdminUserPasswordResponse204) & {
-  headers: Headers;
-};
-export type resetAdminUserPasswordResponseError = (resetAdminUserPasswordResponse400 | resetAdminUserPasswordResponse401 | resetAdminUserPasswordResponse403 | resetAdminUserPasswordResponse404 | resetAdminUserPasswordResponse500 | resetAdminUserPasswordResponse503) & {
-  headers: Headers;
-};
-
-export type resetAdminUserPasswordResponse = (resetAdminUserPasswordResponseSuccess | resetAdminUserPasswordResponseError)
-
-export const getResetAdminUserPasswordUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/users/${id}/password`
-}
-
-/**
- * Admin-only. Replaces the credential and revokes every target session, including for a blocked target; a deleted target is not operable. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. Passwords contain 1 to 1024 UTF-8 bytes; any content is accepted.
- * @summary Reset an account password
- */
-export const resetAdminUserPassword = async (id: string,
-    adminUserPasswordRequest: AdminUserPasswordRequest, options?: RequestInit): Promise<resetAdminUserPasswordResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getResetAdminUserPasswordUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminUserPasswordRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: resetAdminUserPasswordResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as resetAdminUserPasswordResponse
-}
-
-
-
-export type adminDisableUserTwoFactorResponse204 = {
-  data: void
-  status: 204
-}
-
-export type adminDisableUserTwoFactorResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type adminDisableUserTwoFactorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type adminDisableUserTwoFactorResponse403 = {
-  data: AdminUserMutationForbiddenResponse
-  status: 403
-}
-
-export type adminDisableUserTwoFactorResponse404 = {
-  data: UserNotFoundResponse
-  status: 404
-}
-
-export type adminDisableUserTwoFactorResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type adminDisableUserTwoFactorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type adminDisableUserTwoFactorResponseSuccess = (adminDisableUserTwoFactorResponse204) & {
-  headers: Headers;
-};
-export type adminDisableUserTwoFactorResponseError = (adminDisableUserTwoFactorResponse400 | adminDisableUserTwoFactorResponse401 | adminDisableUserTwoFactorResponse403 | adminDisableUserTwoFactorResponse404 | adminDisableUserTwoFactorResponse500 | adminDisableUserTwoFactorResponse503) & {
-  headers: Headers;
-};
-
-export type adminDisableUserTwoFactorResponse = (adminDisableUserTwoFactorResponseSuccess | adminDisableUserTwoFactorResponseError)
-
-export const getAdminDisableUserTwoFactorUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/users/${id}/2fa/disable`
-}
-
-/**
- * @summary Disable two-factor authentication for an account
- */
-export const adminDisableUserTwoFactor = async (id: string, options?: RequestInit): Promise<adminDisableUserTwoFactorResponse> => {
-
-  const res = await fetch(getAdminDisableUserTwoFactorUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: adminDisableUserTwoFactorResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as adminDisableUserTwoFactorResponse
-}
-
-
-
-export type listAdminCoursesResponse200 = {
-  data: AdminCoursePage
-  status: 200
-}
-
-export type listAdminCoursesResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type listAdminCoursesResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type listAdminCoursesResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type listAdminCoursesResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type listAdminCoursesResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type listAdminCoursesResponseSuccess = (listAdminCoursesResponse200) & {
-  headers: Headers;
-};
-export type listAdminCoursesResponseError = (listAdminCoursesResponse400 | listAdminCoursesResponse401 | listAdminCoursesResponse403 | listAdminCoursesResponse500 | listAdminCoursesResponse503) & {
-  headers: Headers;
-};
-
-export type listAdminCoursesResponse = (listAdminCoursesResponseSuccess | listAdminCoursesResponseError)
-
-export const getListAdminCoursesUrl = (params?: ListAdminCoursesParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/courses?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/courses`
-}
-
-/**
- * Admins see every course. Instructors see only courses they own. Students and unrecognised roles are forbidden. Query parameters must occur at most once and unknown parameters are rejected. Responses are never cached.
- * @summary List courses visible to the authenticated staff member
- */
-export const listAdminCourses = async (params?: ListAdminCoursesParams, options?: RequestInit): Promise<listAdminCoursesResponse> => {
-
-  const res = await fetch(getListAdminCoursesUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listAdminCoursesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listAdminCoursesResponse
-}
-
-
-
-export type createAdminCourseResponse201 = {
-  data: AdminCourseTree
-  status: 201
-}
-
-export type createAdminCourseResponse400 = {
-  data: AdminWriteBadRequestResponse
-  status: 400
-}
-
-export type createAdminCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type createAdminCourseResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type createAdminCourseResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type createAdminCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type createAdminCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type createAdminCourseResponseSuccess = (createAdminCourseResponse201) & {
-  headers: Headers;
-};
-export type createAdminCourseResponseError = (createAdminCourseResponse400 | createAdminCourseResponse401 | createAdminCourseResponse403 | createAdminCourseResponse409 | createAdminCourseResponse500 | createAdminCourseResponse503) & {
-  headers: Headers;
-};
-
-export type createAdminCourseResponse = (createAdminCourseResponseSuccess | createAdminCourseResponseError)
-
-export const getCreateAdminCourseUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses`
-}
-
-/**
- * Creates a new draft with no modules. Instructors always become the owner and may omit instructorId or echo their own ID. Admins must choose an eligible active instructor or admin. The unique slug is the replay guard, so an identical replay returns slug_taken. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
- * @summary Create a draft course
- */
-export const createAdminCourse = async (adminCourseWrite: AdminCourseWrite, options?: RequestInit): Promise<createAdminCourseResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getCreateAdminCourseUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminCourseWrite)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createAdminCourseResponse
-}
-
-
-
-export type getAdminCourseResponse200 = {
-  data: AdminCourseTree
-  status: 200
-}
-
-export type getAdminCourseResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type getAdminCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getAdminCourseResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type getAdminCourseResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getAdminCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getAdminCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getAdminCourseResponseSuccess = (getAdminCourseResponse200) & {
-  headers: Headers;
-};
-export type getAdminCourseResponseError = (getAdminCourseResponse400 | getAdminCourseResponse401 | getAdminCourseResponse403 | getAdminCourseResponse404 | getAdminCourseResponse500 | getAdminCourseResponse503) & {
-  headers: Headers;
-};
-
-export type getAdminCourseResponse = (getAdminCourseResponseSuccess | getAdminCourseResponseError)
-
-export const getGetAdminCourseUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${id}`
-}
-
-/**
- * Admins may read any tree. An instructor may read only a tree they own. Unknown IDs are distinguished from ownership refusals for authenticated staff. Query parameters are not supported. Responses are never cached.
- * @summary Get an authored course tree
- */
-export const getAdminCourse = async (id: string, options?: RequestInit): Promise<getAdminCourseResponse> => {
-
-  const res = await fetch(getGetAdminCourseUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAdminCourseResponse
-}
-
-
-
-export type saveAdminCourseResponse200 = {
-  data: AdminCourseTree
-  status: 200
-}
-
-export type saveAdminCourseResponse400 = {
-  data: AdminWriteBadRequestResponse
-  status: 400
-}
-
-export type saveAdminCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type saveAdminCourseResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type saveAdminCourseResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type saveAdminCourseResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type saveAdminCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type saveAdminCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type saveAdminCourseResponseSuccess = (saveAdminCourseResponse200) & {
-  headers: Headers;
-};
-export type saveAdminCourseResponseError = (saveAdminCourseResponse400 | saveAdminCourseResponse401 | saveAdminCourseResponse403 | saveAdminCourseResponse404 | saveAdminCourseResponse409 | saveAdminCourseResponse500 | saveAdminCourseResponse503) & {
-  headers: Headers;
-};
-
-export type saveAdminCourseResponse = (saveAdminCourseResponseSuccess | saveAdminCourseResponseError)
-
-export const getSaveAdminCourseUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${id}`
-}
-
-/**
- * Replaces all editable course fields, modules and lessons. Array indexes define contiguous zero-based positions; lifecycle and position members are rejected. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may save only their own course and must omit instructorId or echo their own ID; admins may reassign to an eligible active instructor or admin. Slugs remain mutable only until first publication. Requires one matching Origin header. Bodies are limited to 512 KiB, accept no duplicate or unknown members, and responses are never cached.
- * @summary Replace an authored course tree
- */
-export const saveAdminCourse = async (id: string,
-    adminCourseSaveRequest: AdminCourseSaveRequest, options?: RequestInit): Promise<saveAdminCourseResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getSaveAdminCourseUrl(id),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminCourseSaveRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: saveAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as saveAdminCourseResponse
-}
-
-
-
-export type deleteAdminCourseResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteAdminCourseResponse400 = {
-  data: AdminWriteBadRequestResponse
-  status: 400
-}
-
-export type deleteAdminCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type deleteAdminCourseResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type deleteAdminCourseResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type deleteAdminCourseResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type deleteAdminCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type deleteAdminCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type deleteAdminCourseResponseSuccess = (deleteAdminCourseResponse204) & {
-  headers: Headers;
-};
-export type deleteAdminCourseResponseError = (deleteAdminCourseResponse400 | deleteAdminCourseResponse401 | deleteAdminCourseResponse403 | deleteAdminCourseResponse404 | deleteAdminCourseResponse409 | deleteAdminCourseResponse500 | deleteAdminCourseResponse503) & {
-  headers: Headers;
-};
-
-export type deleteAdminCourseResponse = (deleteAdminCourseResponseSuccess | deleteAdminCourseResponseError)
-
-export const getDeleteAdminCourseUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${id}`
-}
-
-/**
- * Permanently deletes a draft course and its tree. Published and archived courses cannot be deleted. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read. Instructors may delete only their own draft; admins may delete any draft. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.
- * @summary Delete a draft course
- */
-export const deleteAdminCourse = async (id: string,
-    adminCourseDeleteRequest: AdminCourseDeleteRequest, options?: RequestInit): Promise<deleteAdminCourseResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getDeleteAdminCourseUrl(id),
-  {
-    ...options,
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminCourseDeleteRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteAdminCourseResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as deleteAdminCourseResponse
-}
-
-
-
-export type transitionAdminCourseResponse200 = {
-  data: AdminCourseTree
-  status: 200
-}
-
-export type transitionAdminCourseResponse400 = {
-  data: AdminWriteBadRequestResponse
-  status: 400
-}
-
-export type transitionAdminCourseResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type transitionAdminCourseResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type transitionAdminCourseResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type transitionAdminCourseResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type transitionAdminCourseResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type transitionAdminCourseResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type transitionAdminCourseResponseSuccess = (transitionAdminCourseResponse200) & {
-  headers: Headers;
-};
-export type transitionAdminCourseResponseError = (transitionAdminCourseResponse400 | transitionAdminCourseResponse401 | transitionAdminCourseResponse403 | transitionAdminCourseResponse404 | transitionAdminCourseResponse409 | transitionAdminCourseResponse500 | transitionAdminCourseResponse503) & {
-  headers: Headers;
-};
-
-export type transitionAdminCourseResponse = (transitionAdminCourseResponseSuccess | transitionAdminCourseResponseError)
-
-export const getTransitionAdminCourseUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${id}/status`
-}
-
-/**
- * Performs one legal lifecycle transition: draft to published, published to archived, or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read, and every accepted transition returns a new token. Instructors may transition only their own course; admins may transition any course. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.
- * @summary Publish, archive or restore a course
- */
-export const transitionAdminCourse = async (id: string,
-    adminCourseStatusRequest: AdminCourseStatusRequest, options?: RequestInit): Promise<transitionAdminCourseResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getTransitionAdminCourseUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(adminCourseStatusRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: transitionAdminCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as transitionAdminCourseResponse
-}
-
-
-
-export type uploadAdminLessonImageResponse201 = {
-  data: ImageUploadResponse
-  status: 201
-}
-
-export type uploadAdminLessonImageResponse400 = {
-  data: MediaBadRequestResponse
-  status: 400
-}
-
-export type uploadAdminLessonImageResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type uploadAdminLessonImageResponse403 = {
-  data: MediaForbiddenResponse
-  status: 403
-}
-
-export type uploadAdminLessonImageResponse404 = {
-  data: LessonNotFoundResponse
-  status: 404
-}
-
-export type uploadAdminLessonImageResponse413 = {
-  data: ErrorResponse
-  status: 413
-}
-
-export type uploadAdminLessonImageResponse415 = {
-  data: ErrorResponse
-  status: 415
-}
-
-export type uploadAdminLessonImageResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type uploadAdminLessonImageResponseSuccess = (uploadAdminLessonImageResponse201) & {
-  headers: Headers;
-};
-export type uploadAdminLessonImageResponseError = (uploadAdminLessonImageResponse400 | uploadAdminLessonImageResponse401 | uploadAdminLessonImageResponse403 | uploadAdminLessonImageResponse404 | uploadAdminLessonImageResponse413 | uploadAdminLessonImageResponse415 | uploadAdminLessonImageResponse503) & {
-  headers: Headers;
-};
-
-export type uploadAdminLessonImageResponse = (uploadAdminLessonImageResponseSuccess | uploadAdminLessonImageResponseError)
-
-export const getUploadAdminLessonImageUrl = (id: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${id}/images`
-}
-
-export const uploadAdminLessonImage = async (id: string,
-    uploadAdminLessonImageBody: UploadAdminLessonImageBody, options?: RequestInit): Promise<uploadAdminLessonImageResponse> => {
-    const formData = new FormData();
-formData.append(`file`, uploadAdminLessonImageBody.file);
-
-  const res = await fetch(getUploadAdminLessonImageUrl(id),
-  {
-    ...options,
-    method: 'POST'
-    ,
-    body: formData
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: uploadAdminLessonImageResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as uploadAdminLessonImageResponse
-}
-
-
-
-export type mintAdminVideoTicketResponse201 = {
-  data: MediaUploadTicket
-  status: 201
-}
-
-export type mintAdminVideoTicketResponse400 = {
-  data: MediaBadRequestResponse
-  status: 400
-}
-
-export type mintAdminVideoTicketResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type mintAdminVideoTicketResponse403 = {
-  data: MediaForbiddenResponse
-  status: 403
-}
-
-export type mintAdminVideoTicketResponse404 = {
-  data: LessonNotFoundResponse
-  status: 404
-}
-
-export type mintAdminVideoTicketResponse409 = {
-  data: UploadConflictResponse
-  status: 409
-}
-
-export type mintAdminVideoTicketResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type mintAdminVideoTicketResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type mintAdminVideoTicketResponseSuccess = (mintAdminVideoTicketResponse201) & {
-  headers: Headers;
-};
-export type mintAdminVideoTicketResponseError = (mintAdminVideoTicketResponse400 | mintAdminVideoTicketResponse401 | mintAdminVideoTicketResponse403 | mintAdminVideoTicketResponse404 | mintAdminVideoTicketResponse409 | mintAdminVideoTicketResponse500 | mintAdminVideoTicketResponse503) & {
-  headers: Headers;
-};
-
-export type mintAdminVideoTicketResponse = (mintAdminVideoTicketResponseSuccess | mintAdminVideoTicketResponseError)
-
-export const getMintAdminVideoTicketUrl = (lessonId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/video`
-}
-
-/**
- * Admins may mint for any saved lesson; instructors may mint only for lessons in courses they own. The minted video asset ID is also the single-use upload ticket ID. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. The API records metadata only and does not access media storage.
- * @summary Mint a video upload ticket
- */
-export const mintAdminVideoTicket = async (lessonId: string,
-    mediaTicketRequest: MediaTicketRequest, options?: RequestInit): Promise<mintAdminVideoTicketResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getMintAdminVideoTicketUrl(lessonId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(mediaTicketRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: mintAdminVideoTicketResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as mintAdminVideoTicketResponse
-}
-
-
-
-export type listAdminCourseVideosResponse200 = {
-  data: CourseVideos
-  status: 200
-}
-
-export type listAdminCourseVideosResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type listAdminCourseVideosResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type listAdminCourseVideosResponse403 = {
-  data: MediaForbiddenResponse
-  status: 403
-}
-
-export type listAdminCourseVideosResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type listAdminCourseVideosResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type listAdminCourseVideosResponseSuccess = (listAdminCourseVideosResponse200) & {
-  headers: Headers;
-};
-export type listAdminCourseVideosResponseError = (listAdminCourseVideosResponse400 | listAdminCourseVideosResponse401 | listAdminCourseVideosResponse403 | listAdminCourseVideosResponse500 | listAdminCourseVideosResponse503) & {
-  headers: Headers;
-};
-
-export type listAdminCourseVideosResponse = (listAdminCourseVideosResponseSuccess | listAdminCourseVideosResponseError)
-
-export const getListAdminCourseVideosUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/videos`
-}
-
-/**
- * Admins may read any course; instructors may read only courses they own. Returns one item per non-evicted asset, including multiple generations for a lesson. Storage keys and filesystem paths are never exposed. Query parameters are not supported and responses are never cached.
- * @summary List a course's video assets
- */
-export const listAdminCourseVideos = async (courseId: string, options?: RequestInit): Promise<listAdminCourseVideosResponse> => {
-
-  const res = await fetch(getListAdminCourseVideosUrl(courseId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listAdminCourseVideosResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listAdminCourseVideosResponse
-}
-
-
-
 export type retryAdminVideoResponse200 = {
   data: MediaVideo
   status: 200
@@ -3660,275 +3085,6 @@ export const retryAdminVideo = async (videoId: string, options?: RequestInit): P
 
 
 
-export type listInstructorsResponse200 = {
-  data: Instructor[]
-  status: 200
-}
-
-export type listInstructorsResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type listInstructorsResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type listInstructorsResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type listInstructorsResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type listInstructorsResponseSuccess = (listInstructorsResponse200) & {
-  headers: Headers;
-};
-export type listInstructorsResponseError = (listInstructorsResponse401 | listInstructorsResponse403 | listInstructorsResponse500 | listInstructorsResponse503) & {
-  headers: Headers;
-};
-
-export type listInstructorsResponse = (listInstructorsResponseSuccess | listInstructorsResponseError)
-
-export const getListInstructorsUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/instructors`
-}
-
-/**
- * Admin-only, unpaginated and bounded to 200 active instructor or admin accounts. Email, password data and account status are never exposed. Responses are never cached.
- * @summary List eligible course owners
- */
-export const listInstructors = async ( options?: RequestInit): Promise<listInstructorsResponse> => {
-
-  const res = await fetch(getListInstructorsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listInstructorsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listInstructorsResponse
-}
-
-
-
-export type loginResponse200 = {
-  data: AuthenticatedUser | TwoFactorRequired
-  status: 200
-}
-
-export type loginResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type loginResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type loginResponse403 = {
-  data: PlaybackForbiddenResponse
-  status: 403
-}
-
-export type loginResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type loginResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type loginResponseSuccess = (loginResponse200) & {
-  headers: Headers;
-};
-export type loginResponseError = (loginResponse400 | loginResponse401 | loginResponse403 | loginResponse500 | loginResponse503) & {
-  headers: Headers;
-};
-
-export type loginResponse = (loginResponseSuccess | loginResponseError)
-
-export const getLoginUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/login`
-}
-
-/**
- * Requires exactly one Origin header equal to the configured public origin; a missing, repeated, null or foreign origin is rejected. The body accepts only email and password, and rejects duplicate keys, unknown members, trailing content and bodies over 8 KiB. Unknown accounts and wrong passwords are indistinguishable. A success sets an HttpOnly, SameSite=Lax session cookie and revokes any session the request already presented. Responses are never cached.
- * @summary Exchange credentials for a session
- */
-export const login = async (loginRequest: LoginRequest, options?: RequestInit): Promise<loginResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getLoginUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(loginRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: loginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as loginResponse
-}
-
-
-
-export type enrollTwoFactorResponse200 = {
-  data: TwoFactorEnrollment
-  status: 200
-}
-
-export type enrollTwoFactorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type enrollTwoFactorResponse409 = {
-  data: TwoFactorConflictResponse
-  status: 409
-}
-
-export type enrollTwoFactorResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type enrollTwoFactorResponseSuccess = (enrollTwoFactorResponse200) & {
-  headers: Headers;
-};
-export type enrollTwoFactorResponseError = (enrollTwoFactorResponse401 | enrollTwoFactorResponse409 | enrollTwoFactorResponse503) & {
-  headers: Headers;
-};
-
-export type enrollTwoFactorResponse = (enrollTwoFactorResponseSuccess | enrollTwoFactorResponseError)
-
-export const getEnrollTwoFactorUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/2fa/enroll`
-}
-
-/**
- * @summary Create an unconfirmed TOTP secret for the authenticated account
- */
-export const enrollTwoFactor = async ( options?: RequestInit): Promise<enrollTwoFactorResponse> => {
-
-  const res = await fetch(getEnrollTwoFactorUrl(),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: enrollTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as enrollTwoFactorResponse
-}
-
-
-
-export type confirmTwoFactorResponse200 = {
-  data: RecoveryCodes
-  status: 200
-}
-
-export type confirmTwoFactorResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type confirmTwoFactorResponse409 = {
-  data: TwoFactorConflictResponse
-  status: 409
-}
-
-export type confirmTwoFactorResponse422 = {
-  data: TwoFactorInvalidCodeResponse
-  status: 422
-}
-
-export type confirmTwoFactorResponseSuccess = (confirmTwoFactorResponse200) & {
-  headers: Headers;
-};
-export type confirmTwoFactorResponseError = (confirmTwoFactorResponse401 | confirmTwoFactorResponse409 | confirmTwoFactorResponse422) & {
-  headers: Headers;
-};
-
-export type confirmTwoFactorResponse = (confirmTwoFactorResponseSuccess | confirmTwoFactorResponseError)
-
-export const getConfirmTwoFactorUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/2fa/confirm`
-}
-
-/**
- * @summary Confirm a TOTP secret and receive one-time recovery codes
- */
-export const confirmTwoFactor = async (twoFactorCodeRequest: TwoFactorCodeRequest, options?: RequestInit): Promise<confirmTwoFactorResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getConfirmTwoFactorUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(twoFactorCodeRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: confirmTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as confirmTwoFactorResponse
-}
-
-
-
 export type completeTwoFactorResponse204 = {
   data: void
   status: 204
@@ -4000,6 +3156,72 @@ const res = await fetch(getCompleteTwoFactorUrl(),
 
 
 
+export type confirmTwoFactorResponse200 = {
+  data: RecoveryCodes
+  status: 200
+}
+
+export type confirmTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type confirmTwoFactorResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type confirmTwoFactorResponse422 = {
+  data: TwoFactorInvalidCodeResponse
+  status: 422
+}
+
+export type confirmTwoFactorResponseSuccess = (confirmTwoFactorResponse200) & {
+  headers: Headers;
+};
+export type confirmTwoFactorResponseError = (confirmTwoFactorResponse401 | confirmTwoFactorResponse409 | confirmTwoFactorResponse422) & {
+  headers: Headers;
+};
+
+export type confirmTwoFactorResponse = (confirmTwoFactorResponseSuccess | confirmTwoFactorResponseError)
+
+export const getConfirmTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/confirm`
+}
+
+/**
+ * @summary Confirm a TOTP secret and receive one-time recovery codes
+ */
+export const confirmTwoFactor = async (twoFactorCodeRequest: TwoFactorCodeRequest, options?: RequestInit): Promise<confirmTwoFactorResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getConfirmTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(twoFactorCodeRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: confirmTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as confirmTwoFactorResponse
+}
+
+
+
 export type disableTwoFactorResponse204 = {
   data: void
   status: 204
@@ -4066,6 +3288,66 @@ const res = await fetch(getDisableTwoFactorUrl(),
 
 
 
+export type enrollTwoFactorResponse200 = {
+  data: TwoFactorEnrollment
+  status: 200
+}
+
+export type enrollTwoFactorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type enrollTwoFactorResponse409 = {
+  data: TwoFactorConflictResponse
+  status: 409
+}
+
+export type enrollTwoFactorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type enrollTwoFactorResponseSuccess = (enrollTwoFactorResponse200) & {
+  headers: Headers;
+};
+export type enrollTwoFactorResponseError = (enrollTwoFactorResponse401 | enrollTwoFactorResponse409 | enrollTwoFactorResponse503) & {
+  headers: Headers;
+};
+
+export type enrollTwoFactorResponse = (enrollTwoFactorResponseSuccess | enrollTwoFactorResponseError)
+
+export const getEnrollTwoFactorUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/2fa/enroll`
+}
+
+/**
+ * @summary Create an unconfirmed TOTP secret for the authenticated account
+ */
+export const enrollTwoFactor = async ( options?: RequestInit): Promise<enrollTwoFactorResponse> => {
+
+  const res = await fetch(getEnrollTwoFactorUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollTwoFactorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as enrollTwoFactorResponse
+}
+
+
+
 export type regenerateRecoveryCodesResponse200 = {
   data: RecoveryCodes
   status: 200
@@ -4128,388 +3410,6 @@ const res = await fetch(getRegenerateRecoveryCodesUrl(),
 
   const data: regenerateRecoveryCodesResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as regenerateRecoveryCodesResponse
-}
-
-
-
-export type registerResponse201 = {
-  data: AuthenticatedUser
-  status: 201
-}
-
-export type registerResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type registerResponse409 = {
-  data: EmailTakenResponse
-  status: 409
-}
-
-export type registerResponse422 = {
-  data: AccountValidationFailedResponse
-  status: 422
-}
-
-export type registerResponse429 = {
-  data: RateLimitedResponse
-  status: 429
-}
-
-export type registerResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type registerResponseSuccess = (registerResponse201) & {
-  headers: Headers;
-};
-export type registerResponseError = (registerResponse400 | registerResponse409 | registerResponse422 | registerResponse429 | registerResponse503) & {
-  headers: Headers;
-};
-
-export type registerResponse = (registerResponseSuccess | registerResponseError)
-
-export const getRegisterUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/register`
-}
-
-/**
- * @summary Register and start a session
- */
-export const register = async (registerRequest: RegisterRequest, options?: RequestInit): Promise<registerResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getRegisterUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(registerRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: registerResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as registerResponse
-}
-
-
-
-export type verifyEmailResponse204 = {
-  data: void
-  status: 204
-}
-
-export type verifyEmailResponse400 = {
-  data: InvalidAccountTokenResponse
-  status: 400
-}
-
-export type verifyEmailResponse410 = {
-  data: TokenUsedResponse
-  status: 410
-}
-
-export type verifyEmailResponseSuccess = (verifyEmailResponse204) & {
-  headers: Headers;
-};
-export type verifyEmailResponseError = (verifyEmailResponse400 | verifyEmailResponse410) & {
-  headers: Headers;
-};
-
-export type verifyEmailResponse = (verifyEmailResponseSuccess | verifyEmailResponseError)
-
-export const getVerifyEmailUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/verify-email`
-}
-
-export const verifyEmail = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<verifyEmailResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getVerifyEmailUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(tokenRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: verifyEmailResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as verifyEmailResponse
-}
-
-
-
-export type resendVerificationResponse204 = {
-  data: void
-  status: 204
-}
-
-export type resendVerificationResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type resendVerificationResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type resendVerificationResponse429 = {
-  data: RateLimitedResponse
-  status: 429
-}
-
-export type resendVerificationResponseSuccess = (resendVerificationResponse204) & {
-  headers: Headers;
-};
-export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401 | resendVerificationResponse429) & {
-  headers: Headers;
-};
-
-export type resendVerificationResponse = (resendVerificationResponseSuccess | resendVerificationResponseError)
-
-export const getResendVerificationUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/resend-verification`
-}
-
-/**
- * Returns 204 whether or not the email identifies an account.
- */
-export const resendVerification = async (optionalEmailRequest: OptionalEmailRequest, options?: RequestInit): Promise<resendVerificationResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getResendVerificationUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(optionalEmailRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: resendVerificationResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as resendVerificationResponse
-}
-
-
-
-export type requestPasswordResetResponse200 = {
-  data: void
-  status: 200
-}
-
-export type requestPasswordResetResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type requestPasswordResetResponse429 = {
-  data: RateLimitedResponse
-  status: 429
-}
-
-export type requestPasswordResetResponseSuccess = (requestPasswordResetResponse200) & {
-  headers: Headers;
-};
-export type requestPasswordResetResponseError = (requestPasswordResetResponse400 | requestPasswordResetResponse429) & {
-  headers: Headers;
-};
-
-export type requestPasswordResetResponse = (requestPasswordResetResponseSuccess | requestPasswordResetResponseError)
-
-export const getRequestPasswordResetUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/password/forgot`
-}
-
-/**
- * Returns 200 whether or not the email identifies an account.
- */
-export const requestPasswordReset = async (emailRequest: EmailRequest, options?: RequestInit): Promise<requestPasswordResetResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getRequestPasswordResetUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(emailRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: requestPasswordResetResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as requestPasswordResetResponse
-}
-
-
-
-export type resetPasswordResponse204 = {
-  data: void
-  status: 204
-}
-
-export type resetPasswordResponse400 = {
-  data: InvalidAccountTokenResponse
-  status: 400
-}
-
-export type resetPasswordResponse410 = {
-  data: TokenUsedResponse
-  status: 410
-}
-
-export type resetPasswordResponse422 = {
-  data: AccountValidationFailedResponse
-  status: 422
-}
-
-export type resetPasswordResponseSuccess = (resetPasswordResponse204) & {
-  headers: Headers;
-};
-export type resetPasswordResponseError = (resetPasswordResponse400 | resetPasswordResponse410 | resetPasswordResponse422) & {
-  headers: Headers;
-};
-
-export type resetPasswordResponse = (resetPasswordResponseSuccess | resetPasswordResponseError)
-
-export const getResetPasswordUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/password/reset`
-}
-
-export const resetPassword = async (resetPasswordRequest: ResetPasswordRequest, options?: RequestInit): Promise<resetPasswordResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getResetPasswordUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(resetPasswordRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: resetPasswordResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as resetPasswordResponse
-}
-
-
-
-export type changePasswordResponse204 = {
-  data: void
-  status: 204
-}
-
-export type changePasswordResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type changePasswordResponse422 = {
-  data: AccountValidationFailedResponse
-  status: 422
-}
-
-export type changePasswordResponseSuccess = (changePasswordResponse204) & {
-  headers: Headers;
-};
-export type changePasswordResponseError = (changePasswordResponse401 | changePasswordResponse422) & {
-  headers: Headers;
-};
-
-export type changePasswordResponse = (changePasswordResponseSuccess | changePasswordResponseError)
-
-export const getChangePasswordUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/auth/password/change`
-}
-
-export const changePassword = async (changePasswordRequest: ChangePasswordRequest, options?: RequestInit): Promise<changePasswordResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getChangePasswordUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(changePasswordRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: changePasswordResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as changePasswordResponse
 }
 
 
@@ -4640,63 +3540,79 @@ const res = await fetch(getConfirmEmailChangeUrl(),
 
 
 
-export type getCurrentUserResponse200 = {
-  data: AuthenticatedUser
+export type loginResponse200 = {
+  data: AuthenticatedUser | TwoFactorRequired
   status: 200
 }
 
-export type getCurrentUserResponse401 = {
+export type loginResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type loginResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type getCurrentUserResponse500 = {
+export type loginResponse403 = {
+  data: PlaybackForbiddenResponse
+  status: 403
+}
+
+export type loginResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type getCurrentUserResponse503 = {
+export type loginResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getCurrentUserResponseSuccess = (getCurrentUserResponse200) & {
+export type loginResponseSuccess = (loginResponse200) & {
   headers: Headers;
 };
-export type getCurrentUserResponseError = (getCurrentUserResponse401 | getCurrentUserResponse500 | getCurrentUserResponse503) & {
+export type loginResponseError = (loginResponse400 | loginResponse401 | loginResponse403 | loginResponse500 | loginResponse503) & {
   headers: Headers;
 };
 
-export type getCurrentUserResponse = (getCurrentUserResponseSuccess | getCurrentUserResponseError)
+export type loginResponse = (loginResponseSuccess | loginResponseError)
 
-export const getGetCurrentUserUrl = () => {
-
-
+export const getLoginUrl = () => {
 
 
-  return `${apiOrigin()}/api/v1/auth/me`
+
+
+  return `${apiOrigin()}/api/v1/auth/login`
 }
 
 /**
- * Resolves the session cookie. A missing, malformed, repeated, expired or revoked cookie returns the same 401, and a disabled account is treated as unauthenticated.
- * @summary Read the authenticated user
+ * Requires exactly one Origin header equal to the configured public origin; a missing, repeated, null or foreign origin is rejected. The body accepts only email and password, and rejects duplicate keys, unknown members, trailing content and bodies over 8 KiB. Unknown accounts and wrong passwords are indistinguishable. A success sets an HttpOnly, SameSite=Lax session cookie and revokes any session the request already presented. Responses are never cached.
+ * @summary Exchange credentials for a session
  */
-export const getCurrentUser = async ( options?: RequestInit): Promise<getCurrentUserResponse> => {
+export const login = async (loginRequest: LoginRequest, options?: RequestInit): Promise<loginResponse> => {
 
-  const res = await fetch(getGetCurrentUserUrl(),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getLoginUrl(),
   {
     ...options,
-    method: 'GET'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(loginRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getCurrentUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getCurrentUserResponse
+  const data: loginResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as loginResponse
 }
 
 
@@ -4762,147 +3678,50 @@ export const logout = async ( options?: RequestInit): Promise<logoutResponse> =>
 
 
 
-export type createPlaybackSessionResponse201 = {
-  data: PlaybackSession
-  status: 201
-}
-
-export type createPlaybackSessionResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type createPlaybackSessionResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type createPlaybackSessionResponse403 = {
-  data: PlaybackForbiddenResponse
-  status: 403
-}
-
-export type createPlaybackSessionResponse404 = {
-  data: PlaybackNotFoundResponse
-  status: 404
-}
-
-export type createPlaybackSessionResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type createPlaybackSessionResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type createPlaybackSessionResponseSuccess = (createPlaybackSessionResponse201) & {
-  headers: Headers;
-};
-export type createPlaybackSessionResponseError = (createPlaybackSessionResponse400 | createPlaybackSessionResponse401 | createPlaybackSessionResponse403 | createPlaybackSessionResponse404 | createPlaybackSessionResponse500 | createPlaybackSessionResponse503) & {
-  headers: Headers;
-};
-
-export type createPlaybackSessionResponse = (createPlaybackSessionResponseSuccess | createPlaybackSessionResponseError)
-
-export const getCreatePlaybackSessionUrl = () => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/playback/sessions`
-}
-
-/**
- * Authenticated same-origin mutation. The server selects the current highest-generation ready video for the lesson, checks course visibility before taking ownership, and always replaces the caller's previous playback slot on success. The client cannot name a video. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
- * @summary Mint a playback session for one lesson
- */
-export const createPlaybackSession = async (playbackSessionRequest: PlaybackSessionRequest, options?: RequestInit): Promise<createPlaybackSessionResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getCreatePlaybackSessionUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(playbackSessionRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createPlaybackSessionResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createPlaybackSessionResponse
-}
-
-
-
-export type getLearningCourseResponse200 = {
-  data: LearningCourse
+export type getCurrentUserResponse200 = {
+  data: AuthenticatedUser
   status: 200
 }
 
-export type getLearningCourseResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getLearningCourseResponse401 = {
+export type getCurrentUserResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type getLearningCourseResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type getLearningCourseResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getLearningCourseResponse500 = {
+export type getCurrentUserResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type getLearningCourseResponse503 = {
+export type getCurrentUserResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getLearningCourseResponseSuccess = (getLearningCourseResponse200) & {
+export type getCurrentUserResponseSuccess = (getCurrentUserResponse200) & {
   headers: Headers;
 };
-export type getLearningCourseResponseError = (getLearningCourseResponse400 | getLearningCourseResponse401 | getLearningCourseResponse403 | getLearningCourseResponse404 | getLearningCourseResponse500 | getLearningCourseResponse503) & {
+export type getCurrentUserResponseError = (getCurrentUserResponse401 | getCurrentUserResponse500 | getCurrentUserResponse503) & {
   headers: Headers;
 };
 
-export type getLearningCourseResponse = (getLearningCourseResponseSuccess | getLearningCourseResponseError)
+export type getCurrentUserResponse = (getCurrentUserResponseSuccess | getCurrentUserResponseError)
 
-export const getGetLearningCourseUrl = (slug: string,) => {
-
-
+export const getGetCurrentUserUrl = () => {
 
 
-  return `${apiOrigin()}/api/v1/learn/courses/${slug}`
+
+
+  return `${apiOrigin()}/api/v1/auth/me`
 }
 
 /**
- * Returns the ordered course program with module and lesson ids, the currently playable video state, and caller-specific progress. Missing progress is represented by concrete zero values. Draft and archived courses are visible only to their owner or an admin.
- * @summary Get an authenticated course learning model
+ * Resolves the session cookie. A missing, malformed, repeated, expired or revoked cookie returns the same 401, and a disabled account is treated as unauthenticated.
+ * @summary Read the authenticated user
  */
-export const getLearningCourse = async (slug: string, options?: RequestInit): Promise<getLearningCourseResponse> => {
+export const getCurrentUser = async ( options?: RequestInit): Promise<getCurrentUserResponse> => {
 
-  const res = await fetch(getGetLearningCourseUrl(slug),
+  const res = await fetch(getGetCurrentUserUrl(),
   {
     ...options,
     method: 'GET'
@@ -4914,758 +3733,45 @@ export const getLearningCourse = async (slug: string, options?: RequestInit): Pr
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getLearningCourseResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLearningCourseResponse
+  const data: getCurrentUserResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCurrentUserResponse
 }
 
 
 
-export type getAdminLessonDocumentResponse200 = {
-  data: LessonDocumentDraft
-  status: 200
-}
-
-export type getAdminLessonDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getAdminLessonDocumentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getAdminLessonDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type getAdminLessonDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getAdminLessonDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getAdminLessonDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getAdminLessonDocumentResponseSuccess = (getAdminLessonDocumentResponse200) & {
-  headers: Headers;
-};
-export type getAdminLessonDocumentResponseError = (getAdminLessonDocumentResponse400 | getAdminLessonDocumentResponse401 | getAdminLessonDocumentResponse403 | getAdminLessonDocumentResponse404 | getAdminLessonDocumentResponse500 | getAdminLessonDocumentResponse503) & {
-  headers: Headers;
-};
-
-export type getAdminLessonDocumentResponse = (getAdminLessonDocumentResponseSuccess | getAdminLessonDocumentResponseError)
-
-export const getGetAdminLessonDocumentUrl = (lessonId: string,
-    params?: GetAdminLessonDocumentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
-}
-
-/**
- * Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
- */
-export const getAdminLessonDocument = async (lessonId: string,
-    params?: GetAdminLessonDocumentParams, options?: RequestInit): Promise<getAdminLessonDocumentResponse> => {
-
-  const res = await fetch(getGetAdminLessonDocumentUrl(lessonId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAdminLessonDocumentResponse
-}
-
-
-
-export type saveAdminLessonDocumentResponse200 = {
-  data: LessonDocumentUpdated
-  status: 200
-}
-
-export type saveAdminLessonDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type saveAdminLessonDocumentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type saveAdminLessonDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type saveAdminLessonDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type saveAdminLessonDocumentResponse409 = {
-  data: LessonDocumentConflictResponse
-  status: 409
-}
-
-export type saveAdminLessonDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type saveAdminLessonDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type saveAdminLessonDocumentResponseSuccess = (saveAdminLessonDocumentResponse200) & {
-  headers: Headers;
-};
-export type saveAdminLessonDocumentResponseError = (saveAdminLessonDocumentResponse400 | saveAdminLessonDocumentResponse401 | saveAdminLessonDocumentResponse403 | saveAdminLessonDocumentResponse404 | saveAdminLessonDocumentResponse409 | saveAdminLessonDocumentResponse500 | saveAdminLessonDocumentResponse503) & {
-  headers: Headers;
-};
-
-export type saveAdminLessonDocumentResponse = (saveAdminLessonDocumentResponseSuccess | saveAdminLessonDocumentResponseError)
-
-export const getSaveAdminLessonDocumentUrl = (lessonId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document`
-}
-
-/**
- * Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
- */
-export const saveAdminLessonDocument = async (lessonId: string,
-    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<saveAdminLessonDocumentResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getSaveAdminLessonDocumentUrl(lessonId),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(saveLessonDocumentRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: saveAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as saveAdminLessonDocumentResponse
-}
-
-
-
-export type publishAdminLessonDocumentResponse200 = {
-  data: void
-  status: 200
-}
-
-export type publishAdminLessonDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type publishAdminLessonDocumentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type publishAdminLessonDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type publishAdminLessonDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type publishAdminLessonDocumentResponse409 = {
-  data: LessonDocumentConflictResponse
-  status: 409
-}
-
-export type publishAdminLessonDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type publishAdminLessonDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type publishAdminLessonDocumentResponseSuccess = (publishAdminLessonDocumentResponse200) & {
-  headers: Headers;
-};
-export type publishAdminLessonDocumentResponseError = (publishAdminLessonDocumentResponse400 | publishAdminLessonDocumentResponse401 | publishAdminLessonDocumentResponse403 | publishAdminLessonDocumentResponse404 | publishAdminLessonDocumentResponse409 | publishAdminLessonDocumentResponse500 | publishAdminLessonDocumentResponse503) & {
-  headers: Headers;
-};
-
-export type publishAdminLessonDocumentResponse = (publishAdminLessonDocumentResponseSuccess | publishAdminLessonDocumentResponseError)
-
-export const getPublishAdminLessonDocumentUrl = (lessonId: string,
-    params?: PublishAdminLessonDocumentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish?${stringifiedParams}` : `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/document/publish`
-}
-
-/**
- * Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
- */
-export const publishAdminLessonDocument = async (lessonId: string,
-    publishLessonDocumentRequest: PublishLessonDocumentRequest,
-    params?: PublishAdminLessonDocumentParams, options?: RequestInit): Promise<publishAdminLessonDocumentResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getPublishAdminLessonDocumentUrl(lessonId,params),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(publishLessonDocumentRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: publishAdminLessonDocumentResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as publishAdminLessonDocumentResponse
-}
-
-
-
-export type getLearnLessonDocumentResponse200 = {
-  data: LessonDocument
-  status: 200
-}
-
-export type getLearnLessonDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getLearnLessonDocumentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getLearnLessonDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type getLearnLessonDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getLearnLessonDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getLearnLessonDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getLearnLessonDocumentResponseSuccess = (getLearnLessonDocumentResponse200) & {
-  headers: Headers;
-};
-export type getLearnLessonDocumentResponseError = (getLearnLessonDocumentResponse400 | getLearnLessonDocumentResponse401 | getLearnLessonDocumentResponse403 | getLearnLessonDocumentResponse404 | getLearnLessonDocumentResponse500 | getLearnLessonDocumentResponse503) & {
-  headers: Headers;
-};
-
-export type getLearnLessonDocumentResponse = (getLearnLessonDocumentResponseSuccess | getLearnLessonDocumentResponseError)
-
-export const getGetLearnLessonDocumentUrl = (lessonId: string,
-    params?: GetLearnLessonDocumentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document`
-}
-
-/**
- * Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
- */
-export const getLearnLessonDocument = async (lessonId: string,
-    params?: GetLearnLessonDocumentParams, options?: RequestInit): Promise<getLearnLessonDocumentResponse> => {
-
-  const res = await fetch(getGetLearnLessonDocumentUrl(lessonId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getLearnLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLearnLessonDocumentResponse
-}
-
-
-
-export type getLessonTranscriptResponse200 = {
-  data: LessonTranscript
-  status: 200
-}
-
-export type getLessonTranscriptResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getLessonTranscriptResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type getLessonTranscriptResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type getLessonTranscriptResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getLessonTranscriptResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type getLessonTranscriptResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type getLessonTranscriptResponseSuccess = (getLessonTranscriptResponse200) & {
-  headers: Headers;
-};
-export type getLessonTranscriptResponseError = (getLessonTranscriptResponse400 | getLessonTranscriptResponse401 | getLessonTranscriptResponse403 | getLessonTranscriptResponse404 | getLessonTranscriptResponse500 | getLessonTranscriptResponse503) & {
-  headers: Headers;
-};
-
-export type getLessonTranscriptResponse = (getLessonTranscriptResponseSuccess | getLessonTranscriptResponseError)
-
-export const getGetLessonTranscriptUrl = (lessonId: string,
-    params?: GetLessonTranscriptParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript`
-}
-
-/**
- * Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do.
- * @summary Get a lesson transcript
- */
-export const getLessonTranscript = async (lessonId: string,
-    params?: GetLessonTranscriptParams, options?: RequestInit): Promise<getLessonTranscriptResponse> => {
-
-  const res = await fetch(getGetLessonTranscriptUrl(lessonId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLessonTranscriptResponse
-}
-
-
-
-export type listCourseDocumentsResponse200 = {
-  data: ListCourseDocuments200
-  status: 200
-}
-
-export type listCourseDocumentsResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type listCourseDocumentsResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type listCourseDocumentsResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type listCourseDocumentsResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type listCourseDocumentsResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type listCourseDocumentsResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type listCourseDocumentsResponseSuccess = (listCourseDocumentsResponse200) & {
-  headers: Headers;
-};
-export type listCourseDocumentsResponseError = (listCourseDocumentsResponse400 | listCourseDocumentsResponse401 | listCourseDocumentsResponse403 | listCourseDocumentsResponse404 | listCourseDocumentsResponse500 | listCourseDocumentsResponse503) & {
-  headers: Headers;
-};
-
-export type listCourseDocumentsResponse = (listCourseDocumentsResponseSuccess | listCourseDocumentsResponseError)
-
-export const getListCourseDocumentsUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
-}
-
-/**
- * The library is an authoring surface: a document is stored once per course and segments reference it by id, so the same link is never carried twice on the wire. Visible to whoever may edit the course, not to whoever may watch it.
- * @summary List the course document library
- */
-export const listCourseDocuments = async (courseId: string, options?: RequestInit): Promise<listCourseDocumentsResponse> => {
-
-  const res = await fetch(getListCourseDocumentsUrl(courseId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listCourseDocumentsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listCourseDocumentsResponse
-}
-
-
-
-export type addCourseDocumentResponse201 = {
-  data: void
-  status: 201
-}
-
-export type addCourseDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type addCourseDocumentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type addCourseDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type addCourseDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type addCourseDocumentResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type addCourseDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type addCourseDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type addCourseDocumentResponseSuccess = (addCourseDocumentResponse201) & {
-  headers: Headers;
-};
-export type addCourseDocumentResponseError = (addCourseDocumentResponse400 | addCourseDocumentResponse401 | addCourseDocumentResponse403 | addCourseDocumentResponse404 | addCourseDocumentResponse409 | addCourseDocumentResponse500 | addCourseDocumentResponse503) & {
-  headers: Headers;
-};
-
-export type addCourseDocumentResponse = (addCourseDocumentResponseSuccess | addCourseDocumentResponseError)
-
-export const getAddCourseDocumentUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents`
-}
-
-/**
- * Only http(s) is accepted, and a path under /media/ is refused outright: a transcript must not become a second way to name media bytes.
- * @summary Add a document to the course library
- */
-export const addCourseDocument = async (courseId: string,
-    transcriptDocumentLink: TranscriptDocumentLink, options?: RequestInit): Promise<addCourseDocumentResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getAddCourseDocumentUrl(courseId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(transcriptDocumentLink)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: addCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as addCourseDocumentResponse
-}
-
-
-
-export type removeCourseDocumentResponse204 = {
+export type changePasswordResponse204 = {
   data: void
   status: 204
 }
 
-export type removeCourseDocumentResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type removeCourseDocumentResponse401 = {
+export type changePasswordResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type removeCourseDocumentResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
+export type changePasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
 }
 
-export type removeCourseDocumentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type removeCourseDocumentResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type removeCourseDocumentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type removeCourseDocumentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type removeCourseDocumentResponseSuccess = (removeCourseDocumentResponse204) & {
+export type changePasswordResponseSuccess = (changePasswordResponse204) & {
   headers: Headers;
 };
-export type removeCourseDocumentResponseError = (removeCourseDocumentResponse400 | removeCourseDocumentResponse401 | removeCourseDocumentResponse403 | removeCourseDocumentResponse404 | removeCourseDocumentResponse409 | removeCourseDocumentResponse500 | removeCourseDocumentResponse503) & {
+export type changePasswordResponseError = (changePasswordResponse401 | changePasswordResponse422) & {
   headers: Headers;
 };
 
-export type removeCourseDocumentResponse = (removeCourseDocumentResponseSuccess | removeCourseDocumentResponseError)
+export type changePasswordResponse = (changePasswordResponseSuccess | changePasswordResponseError)
 
-export const getRemoveCourseDocumentUrl = (courseId: string,
-    documentId: string,) => {
-
+export const getChangePasswordUrl = () => {
 
 
 
-  return `${apiOrigin()}/api/v1/admin/courses/${courseId}/documents/${documentId}`
+
+  return `${apiOrigin()}/api/v1/auth/password/change`
 }
 
-/**
- * Refused while any segment still references it, so a reference can never point at nothing. This governs the author's action only; deleting the course still cascades.
- * @summary Remove a document from the course library
- */
-export const removeCourseDocument = async (courseId: string,
-    documentId: string, options?: RequestInit): Promise<removeCourseDocumentResponse> => {
-
-  const res = await fetch(getRemoveCourseDocumentUrl(courseId,documentId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeCourseDocumentResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as removeCourseDocumentResponse
-}
-
-
-
-export type saveLessonTranscriptResponse200 = {
-  data: SaveLessonTranscript200
-  status: 200
-}
-
-export type saveLessonTranscriptResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type saveLessonTranscriptResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type saveLessonTranscriptResponse403 = {
-  data: LearningForbiddenResponse
-  status: 403
-}
-
-export type saveLessonTranscriptResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type saveLessonTranscriptResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type saveLessonTranscriptResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type saveLessonTranscriptResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type saveLessonTranscriptResponseSuccess = (saveLessonTranscriptResponse200) & {
-  headers: Headers;
-};
-export type saveLessonTranscriptResponseError = (saveLessonTranscriptResponse400 | saveLessonTranscriptResponse401 | saveLessonTranscriptResponse403 | saveLessonTranscriptResponse404 | saveLessonTranscriptResponse409 | saveLessonTranscriptResponse500 | saveLessonTranscriptResponse503) & {
-  headers: Headers;
-};
-
-export type saveLessonTranscriptResponse = (saveLessonTranscriptResponseSuccess | saveLessonTranscriptResponseError)
-
-export const getSaveLessonTranscriptUrl = (lessonId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcript`
-}
-
-/**
- * Authenticated same-origin mutation, scoped to the course owner or an admin. The write REPLACES the transcript of one lesson in one language: the author edits a document, not a set of rows, and a partial write would need a merge rule nobody asked for. expectedUpdatedAt is the optimistic-lock token and is omitted when the author believes no transcript exists; a second writer racing into the same empty lesson is refused with transcript_exists rather than appending to the first one's work.
- * @summary Replace a lesson transcript
- */
-export const saveLessonTranscript = async (lessonId: string,
-    saveTranscriptRequest: SaveTranscriptRequest, options?: RequestInit): Promise<saveLessonTranscriptResponse> => {
+export const changePassword = async (changePasswordRequest: ChangePasswordRequest, options?: RequestInit): Promise<changePasswordResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -5673,78 +3779,456 @@ export const saveLessonTranscript = async (lessonId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getSaveLessonTranscriptUrl(lessonId),
+const res = await fetch(getChangePasswordUrl(),
   {
     ...options,
-    method: 'PUT',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(saveTranscriptRequest)
+    body: JSON.stringify(changePasswordRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: saveLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as saveLessonTranscriptResponse
+  const data: changePasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as changePasswordResponse
 }
 
 
 
-export type getLessonDraftResponse200 = {
-  data: LessonDraft
+export type requestPasswordResetResponse200 = {
+  data: void
   status: 200
 }
 
-export type getLessonDraftResponse400 = {
+export type requestPasswordResetResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type getLessonDraftResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
+export type requestPasswordResetResponse429 = {
+  data: RateLimitedResponse
+  status: 429
 }
 
-export type getLessonDraftResponse403 = {
-  data: ForbiddenResponse
-  status: 403
+export type requestPasswordResetResponseSuccess = (requestPasswordResetResponse200) & {
+  headers: Headers;
+};
+export type requestPasswordResetResponseError = (requestPasswordResetResponse400 | requestPasswordResetResponse429) & {
+  headers: Headers;
+};
+
+export type requestPasswordResetResponse = (requestPasswordResetResponseSuccess | requestPasswordResetResponseError)
+
+export const getRequestPasswordResetUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/forgot`
 }
 
-export type getLessonDraftResponse404 = {
-  data: LessonNotFoundResponse
-  status: 404
+/**
+ * Returns 200 whether or not the email identifies an account.
+ */
+export const requestPasswordReset = async (emailRequest: EmailRequest, options?: RequestInit): Promise<requestPasswordResetResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRequestPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(emailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: requestPasswordResetResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as requestPasswordResetResponse
 }
 
-export type getLessonDraftResponse503 = {
+
+
+export type resetPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetPasswordResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type resetPasswordResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type resetPasswordResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type resetPasswordResponseSuccess = (resetPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetPasswordResponseError = (resetPasswordResponse400 | resetPasswordResponse410 | resetPasswordResponse422) & {
+  headers: Headers;
+};
+
+export type resetPasswordResponse = (resetPasswordResponseSuccess | resetPasswordResponseError)
+
+export const getResetPasswordUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/password/reset`
+}
+
+export const resetPassword = async (resetPasswordRequest: ResetPasswordRequest, options?: RequestInit): Promise<resetPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resetPasswordRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resetPasswordResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resetPasswordResponse
+}
+
+
+
+export type registerResponse201 = {
+  data: AuthenticatedUser
+  status: 201
+}
+
+export type registerResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type registerResponse409 = {
+  data: EmailTakenResponse
+  status: 409
+}
+
+export type registerResponse422 = {
+  data: AccountValidationFailedResponse
+  status: 422
+}
+
+export type registerResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type registerResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getLessonDraftResponseSuccess = (getLessonDraftResponse200) & {
+export type registerResponseSuccess = (registerResponse201) & {
   headers: Headers;
 };
-export type getLessonDraftResponseError = (getLessonDraftResponse400 | getLessonDraftResponse401 | getLessonDraftResponse403 | getLessonDraftResponse404 | getLessonDraftResponse503) & {
+export type registerResponseError = (registerResponse400 | registerResponse409 | registerResponse422 | registerResponse429 | registerResponse503) & {
   headers: Headers;
 };
 
-export type getLessonDraftResponse = (getLessonDraftResponseSuccess | getLessonDraftResponseError)
+export type registerResponse = (registerResponseSuccess | registerResponseError)
 
-export const getGetLessonDraftUrl = (lessonId: string,) => {
-
-
+export const getRegisterUrl = () => {
 
 
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft`
+
+
+  return `${apiOrigin()}/api/v1/auth/register`
 }
 
 /**
- * Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached.
- * @summary Get a lesson recognition draft
+ * @summary Register and start a session
  */
-export const getLessonDraft = async (lessonId: string, options?: RequestInit): Promise<getLessonDraftResponse> => {
+export const register = async (registerRequest: RegisterRequest, options?: RequestInit): Promise<registerResponse> => {
 
-  const res = await fetch(getGetLessonDraftUrl(lessonId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRegisterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(registerRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as registerResponse
+}
+
+
+
+export type resendVerificationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resendVerificationResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type resendVerificationResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type resendVerificationResponse429 = {
+  data: RateLimitedResponse
+  status: 429
+}
+
+export type resendVerificationResponseSuccess = (resendVerificationResponse204) & {
+  headers: Headers;
+};
+export type resendVerificationResponseError = (resendVerificationResponse400 | resendVerificationResponse401 | resendVerificationResponse429) & {
+  headers: Headers;
+};
+
+export type resendVerificationResponse = (resendVerificationResponseSuccess | resendVerificationResponseError)
+
+export const getResendVerificationUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/resend-verification`
+}
+
+/**
+ * Returns 204 whether or not the email identifies an account.
+ */
+export const resendVerification = async (optionalEmailRequest: OptionalEmailRequest, options?: RequestInit): Promise<resendVerificationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getResendVerificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(optionalEmailRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resendVerificationResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as resendVerificationResponse
+}
+
+
+
+export type verifyEmailResponse204 = {
+  data: void
+  status: 204
+}
+
+export type verifyEmailResponse400 = {
+  data: InvalidAccountTokenResponse
+  status: 400
+}
+
+export type verifyEmailResponse410 = {
+  data: TokenUsedResponse
+  status: 410
+}
+
+export type verifyEmailResponseSuccess = (verifyEmailResponse204) & {
+  headers: Headers;
+};
+export type verifyEmailResponseError = (verifyEmailResponse400 | verifyEmailResponse410) & {
+  headers: Headers;
+};
+
+export type verifyEmailResponse = (verifyEmailResponseSuccess | verifyEmailResponseError)
+
+export const getVerifyEmailUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/auth/verify-email`
+}
+
+export const verifyEmail = async (tokenRequest: TokenRequest, options?: RequestInit): Promise<verifyEmailResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getVerifyEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tokenRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: verifyEmailResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as verifyEmailResponse
+}
+
+
+
+export type ingestClientLogResponse204 = {
+  data: void
+  status: 204
+}
+
+export type ingestClientLogResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type ingestClientLogResponseSuccess = (ingestClientLogResponse204) & {
+  headers: Headers;
+};
+export type ingestClientLogResponseError = (ingestClientLogResponse400) & {
+  headers: Headers;
+};
+
+export type ingestClientLogResponse = (ingestClientLogResponseSuccess | ingestClientLogResponseError)
+
+export const getIngestClientLogUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/client-logs`
+}
+
+/**
+ * Unauthenticated by design so a pre-auth client error can still report. The body is one event; the server validates, redacts the §17 set and emits a structured log line. No body is returned. The endpoint is rate-limited by the nginx clientlog zone.
+ * @summary Ingest one browser-captured log event
+ */
+export const ingestClientLog = async (clientLogRequest: ClientLogRequest, options?: RequestInit): Promise<ingestClientLogResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getIngestClientLogUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(clientLogRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: ingestClientLogResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as ingestClientLogResponse
+}
+
+
+
+export type listPublishedCoursesResponse200 = {
+  data: CoursePage
+  status: 200
+}
+
+export type listPublishedCoursesResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listPublishedCoursesResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listPublishedCoursesResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listPublishedCoursesResponseSuccess = (listPublishedCoursesResponse200) & {
+  headers: Headers;
+};
+export type listPublishedCoursesResponseError = (listPublishedCoursesResponse400 | listPublishedCoursesResponse500 | listPublishedCoursesResponse503) & {
+  headers: Headers;
+};
+
+export type listPublishedCoursesResponse = (listPublishedCoursesResponseSuccess | listPublishedCoursesResponseError)
+
+export const getListPublishedCoursesUrl = (params?: ListPublishedCoursesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/courses?${stringifiedParams}` : `${apiOrigin()}/api/v1/courses`
+}
+
+/**
+ * Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
+ * @summary List published courses
+ */
+export const listPublishedCourses = async (params?: ListPublishedCoursesParams, options?: RequestInit): Promise<listPublishedCoursesResponse> => {
+
+  const res = await fetch(getListPublishedCoursesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -5756,174 +4240,74 @@ export const getLessonDraft = async (lessonId: string, options?: RequestInit): P
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLessonDraftResponse
+  const data: listPublishedCoursesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listPublishedCoursesResponse
 }
 
 
 
-export type regenerateLessonDraftResponse202 = {
-  data: void
-  status: 202
-}
-
-export type regenerateLessonDraftResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type regenerateLessonDraftResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type regenerateLessonDraftResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type regenerateLessonDraftResponse404 = {
-  data: LessonNotFoundResponse
-  status: 404
-}
-
-export type regenerateLessonDraftResponse409 = {
-  data: DraftConflictResponse
-  status: 409
-}
-
-export type regenerateLessonDraftResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type regenerateLessonDraftResponseSuccess = (regenerateLessonDraftResponse202) & {
-  headers: Headers;
-};
-export type regenerateLessonDraftResponseError = (regenerateLessonDraftResponse400 | regenerateLessonDraftResponse401 | regenerateLessonDraftResponse403 | regenerateLessonDraftResponse404 | regenerateLessonDraftResponse409 | regenerateLessonDraftResponse503) & {
-  headers: Headers;
-};
-
-export type regenerateLessonDraftResponse = (regenerateLessonDraftResponseSuccess | regenerateLessonDraftResponseError)
-
-export const getRegenerateLessonDraftUrl = (lessonId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/regenerate`
-}
-
-/**
- * Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
- * @summary Queue lesson speech recognition
- */
-export const regenerateLessonDraft = async (lessonId: string,
-    regenerateLessonDraftRequest?: RegenerateLessonDraftRequest, options?: RequestInit): Promise<regenerateLessonDraftResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getRegenerateLessonDraftUrl(lessonId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(regenerateLessonDraftRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: regenerateLessonDraftResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as regenerateLessonDraftResponse
-}
-
-
-
-export type publishLessonDraftResponse200 = {
-  data: PublishLessonDraft200
+export type getPublishedCourseResponse200 = {
+  data: CourseDetail
   status: 200
 }
 
-export type publishLessonDraftResponse400 = {
-  data: InvalidRequestResponse
+export type getPublishedCourseResponse400 = {
+  data: BadRequestResponse
   status: 400
 }
 
-export type publishLessonDraftResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type publishLessonDraftResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type publishLessonDraftResponse404 = {
-  data: LessonNotFoundResponse
+export type getPublishedCourseResponse404 = {
+  data: NotFoundResponse
   status: 404
 }
 
-export type publishLessonDraftResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
+export type getPublishedCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
 }
 
-export type publishLessonDraftResponse503 = {
+export type getPublishedCourseResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type publishLessonDraftResponseSuccess = (publishLessonDraftResponse200) & {
+export type getPublishedCourseResponseSuccess = (getPublishedCourseResponse200) & {
   headers: Headers;
 };
-export type publishLessonDraftResponseError = (publishLessonDraftResponse400 | publishLessonDraftResponse401 | publishLessonDraftResponse403 | publishLessonDraftResponse404 | publishLessonDraftResponse409 | publishLessonDraftResponse503) & {
+export type getPublishedCourseResponseError = (getPublishedCourseResponse400 | getPublishedCourseResponse404 | getPublishedCourseResponse500 | getPublishedCourseResponse503) & {
   headers: Headers;
 };
 
-export type publishLessonDraftResponse = (publishLessonDraftResponseSuccess | publishLessonDraftResponseError)
+export type getPublishedCourseResponse = (getPublishedCourseResponseSuccess | getPublishedCourseResponseError)
 
-export const getPublishLessonDraftUrl = (lessonId: string,) => {
-
-
+export const getGetPublishedCourseUrl = (slug: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/publish`
+
+
+  return `${apiOrigin()}/api/v1/courses/${slug}`
 }
 
 /**
- * Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
- * @summary Publish a lesson recognition draft
+ * Draft, archived and unknown courses all return the same 404 response. The program contains ordered module titles and ordered lesson titles only; it exposes no ids, positions or ownership. Query parameters are not supported.
+ * @summary Get a published course
  */
-export const publishLessonDraft = async (lessonId: string,
-    publishLessonDraftRequest?: PublishLessonDraftRequest, options?: RequestInit): Promise<publishLessonDraftResponse> => {
+export const getPublishedCourse = async (slug: string, options?: RequestInit): Promise<getPublishedCourseResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getPublishLessonDraftUrl(lessonId),
+  const res = await fetch(getGetPublishedCourseUrl(slug),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(publishLessonDraftRequest)
+    method: 'GET'
+
+
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: publishLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as publishLessonDraftResponse
+  const data: getPublishedCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getPublishedCourseResponse
 }
 
 
@@ -5994,65 +4378,361 @@ export const listCourseReviews = async (slug: string,
 
 
 
-export type listLearningCourseReviewsResponse200 = {
-  data: PublicReviewPage
-  status: 200
+export type removeLessonCommentResponse204 = {
+  data: void
+  status: 204
 }
 
-export type listLearningCourseReviewsResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type listLearningCourseReviewsResponse401 = {
+export type removeLessonCommentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type listLearningCourseReviewsResponse403 = {
+export type removeLessonCommentResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type listLearningCourseReviewsResponse404 = {
+export type removeLessonCommentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type listLearningCourseReviewsResponse503 = {
+export type removeLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type removeLessonCommentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type listLearningCourseReviewsResponseSuccess = (listLearningCourseReviewsResponse200) & {
+export type removeLessonCommentResponseSuccess = (removeLessonCommentResponse204) & {
   headers: Headers;
 };
-export type listLearningCourseReviewsResponseError = (listLearningCourseReviewsResponse400 | listLearningCourseReviewsResponse401 | listLearningCourseReviewsResponse403 | listLearningCourseReviewsResponse404 | listLearningCourseReviewsResponse503) & {
+export type removeLessonCommentResponseError = (removeLessonCommentResponse401 | removeLessonCommentResponse403 | removeLessonCommentResponse404 | removeLessonCommentResponse500 | removeLessonCommentResponse503) & {
   headers: Headers;
 };
 
-export type listLearningCourseReviewsResponse = (listLearningCourseReviewsResponseSuccess | listLearningCourseReviewsResponseError)
+export type removeLessonCommentResponse = (removeLessonCommentResponseSuccess | removeLessonCommentResponseError)
 
-export const getListLearningCourseReviewsUrl = (courseId: string,
-    params?: ListLearningCourseReviewsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getRemoveLessonCommentUrl = (commentId: string,) => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews`
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
 }
 
-export const listLearningCourseReviews = async (courseId: string,
-    params?: ListLearningCourseReviewsParams, options?: RequestInit): Promise<listLearningCourseReviewsResponse> => {
+/**
+ * @summary Remove a lesson comment
+ */
+export const removeLessonComment = async (commentId: string, options?: RequestInit): Promise<removeLessonCommentResponse> => {
 
-  const res = await fetch(getListLearningCourseReviewsUrl(courseId,params),
+  const res = await fetch(getRemoveLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeLessonCommentResponse
+}
+
+
+
+export type updateLessonCommentResponse200 = {
+  data: Comment
+  status: 200
+}
+
+export type updateLessonCommentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type updateLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type updateLessonCommentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type updateLessonCommentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type updateLessonCommentResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type updateLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type updateLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type updateLessonCommentResponseSuccess = (updateLessonCommentResponse200) & {
+  headers: Headers;
+};
+export type updateLessonCommentResponseError = (updateLessonCommentResponse400 | updateLessonCommentResponse401 | updateLessonCommentResponse403 | updateLessonCommentResponse404 | updateLessonCommentResponse409 | updateLessonCommentResponse500 | updateLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type updateLessonCommentResponse = (updateLessonCommentResponseSuccess | updateLessonCommentResponseError)
+
+export const getUpdateLessonCommentUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
+}
+
+/**
+ * @summary Edit an authored lesson comment
+ */
+export const updateLessonComment = async (commentId: string,
+    updateCommentRequest: UpdateCommentRequest, options?: RequestInit): Promise<updateLessonCommentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getUpdateLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateCommentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateLessonCommentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as updateLessonCommentResponse
+}
+
+
+
+export type reportLessonCommentResponse201 = {
+  data: void
+  status: 201
+}
+
+export type reportLessonCommentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportLessonCommentResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportLessonCommentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportLessonCommentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type reportLessonCommentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportLessonCommentResponseSuccess = (reportLessonCommentResponse201) & {
+  headers: Headers;
+};
+export type reportLessonCommentResponseError = (reportLessonCommentResponse401 | reportLessonCommentResponse403 | reportLessonCommentResponse404 | reportLessonCommentResponse500 | reportLessonCommentResponse503) & {
+  headers: Headers;
+};
+
+export type reportLessonCommentResponse = (reportLessonCommentResponseSuccess | reportLessonCommentResponseError)
+
+export const getReportLessonCommentUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/comments/${commentId}/reports`
+}
+
+/**
+ * @summary Report a lesson comment
+ */
+export const reportLessonComment = async (commentId: string, options?: RequestInit): Promise<reportLessonCommentResponse> => {
+
+  const res = await fetch(getReportLessonCommentUrl(commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as reportLessonCommentResponse
+}
+
+
+
+export type enrollInCourseResponse201 = {
+  data: MembershipGrant
+  status: 201
+}
+
+export type enrollInCourseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type enrollInCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type enrollInCourseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type enrollInCourseResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type enrollInCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type enrollInCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type enrollInCourseResponseSuccess = (enrollInCourseResponse201) & {
+  headers: Headers;
+};
+export type enrollInCourseResponseError = (enrollInCourseResponse400 | enrollInCourseResponse401 | enrollInCourseResponse403 | enrollInCourseResponse409 | enrollInCourseResponse500 | enrollInCourseResponse503) & {
+  headers: Headers;
+};
+
+export type enrollInCourseResponse = (enrollInCourseResponseSuccess | enrollInCourseResponseError)
+
+export const getEnrollInCourseUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/enroll`
+}
+
+/**
+ * @summary Enroll the authenticated account in a free published course
+ */
+export const enrollInCourse = async (courseId: string, options?: RequestInit): Promise<enrollInCourseResponse> => {
+
+  const res = await fetch(getEnrollInCourseUrl(courseId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollInCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as enrollInCourseResponse
+}
+
+
+
+export type getMyCourseMembershipResponse200 = {
+  data: MembershipState
+  status: 200
+}
+
+export type getMyCourseMembershipResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipResponseSuccess = (getMyCourseMembershipResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipResponseError = (getMyCourseMembershipResponse400 | getMyCourseMembershipResponse401 | getMyCourseMembershipResponse403 | getMyCourseMembershipResponse500 | getMyCourseMembershipResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipResponse = (getMyCourseMembershipResponseSuccess | getMyCourseMembershipResponseError)
+
+export const getGetMyCourseMembershipUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/membership`
+}
+
+/**
+ * @summary Read the authenticated account membership state
+ */
+export const getMyCourseMembership = async (courseId: string, options?: RequestInit): Promise<getMyCourseMembershipResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipUrl(courseId),
   {
     ...options,
     method: 'GET'
@@ -6064,8 +4744,225 @@ export const listLearningCourseReviews = async (courseId: string,
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: listLearningCourseReviewsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listLearningCourseReviewsResponse
+  const data: getMyCourseMembershipResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipResponse
+}
+
+
+
+export type startCoursePurchaseResponse201 = {
+  data: PurchaseOrder
+  status: 201
+}
+
+export type startCoursePurchaseResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type startCoursePurchaseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type startCoursePurchaseResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type startCoursePurchaseResponse409 = {
+  data: PurchaseConflictResponse
+  status: 409
+}
+
+export type startCoursePurchaseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type startCoursePurchaseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type startCoursePurchaseResponseSuccess = (startCoursePurchaseResponse201) & {
+  headers: Headers;
+};
+export type startCoursePurchaseResponseError = (startCoursePurchaseResponse400 | startCoursePurchaseResponse401 | startCoursePurchaseResponse403 | startCoursePurchaseResponse409 | startCoursePurchaseResponse500 | startCoursePurchaseResponse503) & {
+  headers: Headers;
+};
+
+export type startCoursePurchaseResponse = (startCoursePurchaseResponseSuccess | startCoursePurchaseResponseError)
+
+export const getStartCoursePurchaseUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/purchase`
+}
+
+/**
+ * Authenticated same-origin mutation. The order snapshots the published course price.
+ * @summary Start an idempotent course purchase
+ */
+export const startCoursePurchase = async (courseId: string, options?: RequestInit): Promise<startCoursePurchaseResponse> => {
+
+  const res = await fetch(getStartCoursePurchaseUrl(courseId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startCoursePurchaseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as startCoursePurchaseResponse
+}
+
+
+
+export type reportCourseLecturerResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseLecturerResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseLecturerResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseLecturerResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseLecturerResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseLecturerResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseLecturerResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseLecturerResponseSuccess = (reportCourseLecturerResponse201) & {
+  headers: Headers;
+};
+export type reportCourseLecturerResponseError = (reportCourseLecturerResponse400 | reportCourseLecturerResponse401 | reportCourseLecturerResponse403 | reportCourseLecturerResponse404 | reportCourseLecturerResponse409 | reportCourseLecturerResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseLecturerResponse = (reportCourseLecturerResponseSuccess | reportCourseLecturerResponseError)
+
+export const getReportCourseLecturerUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/report-lecturer`
+}
+
+export const reportCourseLecturer = async (courseId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseLecturerResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getReportCourseLecturerUrl(courseId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseLecturerResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseLecturerResponse
+}
+
+
+
+export type deleteCourseReviewResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteCourseReviewResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type deleteCourseReviewResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type deleteCourseReviewResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type deleteCourseReviewResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type deleteCourseReviewResponseSuccess = (deleteCourseReviewResponse204) & {
+  headers: Headers;
+};
+export type deleteCourseReviewResponseError = (deleteCourseReviewResponse401 | deleteCourseReviewResponse404 | deleteCourseReviewResponse409 | deleteCourseReviewResponse503) & {
+  headers: Headers;
+};
+
+export type deleteCourseReviewResponse = (deleteCourseReviewResponseSuccess | deleteCourseReviewResponseError)
+
+export const getDeleteCourseReviewUrl = (courseId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/review`
+}
+
+export const deleteCourseReview = async (courseId: string, options?: RequestInit): Promise<deleteCourseReviewResponse> => {
+
+  const res = await fetch(getDeleteCourseReviewUrl(courseId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteCourseReviewResponse
 }
 
 
@@ -6211,116 +5108,68 @@ const res = await fetch(getPutCourseReviewUrl(courseId),
 
 
 
-export type deleteCourseReviewResponse204 = {
-  data: void
-  status: 204
+export type listLearningCourseReviewsResponse200 = {
+  data: PublicReviewPage
+  status: 200
 }
 
-export type deleteCourseReviewResponse401 = {
+export type listLearningCourseReviewsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listLearningCourseReviewsResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type deleteCourseReviewResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type deleteCourseReviewResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type deleteCourseReviewResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type deleteCourseReviewResponseSuccess = (deleteCourseReviewResponse204) & {
-  headers: Headers;
-};
-export type deleteCourseReviewResponseError = (deleteCourseReviewResponse401 | deleteCourseReviewResponse404 | deleteCourseReviewResponse409 | deleteCourseReviewResponse503) & {
-  headers: Headers;
-};
-
-export type deleteCourseReviewResponse = (deleteCourseReviewResponseSuccess | deleteCourseReviewResponseError)
-
-export const getDeleteCourseReviewUrl = (courseId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/courses/${courseId}/review`
-}
-
-export const deleteCourseReview = async (courseId: string, options?: RequestInit): Promise<deleteCourseReviewResponse> => {
-
-  const res = await fetch(getDeleteCourseReviewUrl(courseId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as deleteCourseReviewResponse
-}
-
-
-
-export type reportCourseReviewResponse204 = {
-  data: void
-  status: 204
-}
-
-export type reportCourseReviewResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type reportCourseReviewResponse403 = {
+export type listLearningCourseReviewsResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type reportCourseReviewResponse404 = {
+export type listLearningCourseReviewsResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type reportCourseReviewResponse503 = {
+export type listLearningCourseReviewsResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type reportCourseReviewResponseSuccess = (reportCourseReviewResponse204) & {
+export type listLearningCourseReviewsResponseSuccess = (listLearningCourseReviewsResponse200) & {
   headers: Headers;
 };
-export type reportCourseReviewResponseError = (reportCourseReviewResponse401 | reportCourseReviewResponse403 | reportCourseReviewResponse404 | reportCourseReviewResponse503) & {
+export type listLearningCourseReviewsResponseError = (listLearningCourseReviewsResponse400 | listLearningCourseReviewsResponse401 | listLearningCourseReviewsResponse403 | listLearningCourseReviewsResponse404 | listLearningCourseReviewsResponse503) & {
   headers: Headers;
 };
 
-export type reportCourseReviewResponse = (reportCourseReviewResponseSuccess | reportCourseReviewResponseError)
+export type listLearningCourseReviewsResponse = (listLearningCourseReviewsResponseSuccess | listLearningCourseReviewsResponseError)
 
-export const getReportCourseReviewUrl = (reviewId: string,) => {
+export const getListLearningCourseReviewsUrl = (courseId: string,
+    params?: ListLearningCourseReviewsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/learn/reviews/${reviewId}/reports`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/courses/${courseId}/reviews`
 }
 
-export const reportCourseReview = async (reviewId: string, options?: RequestInit): Promise<reportCourseReviewResponse> => {
+export const listLearningCourseReviews = async (courseId: string,
+    params?: ListLearningCourseReviewsParams, options?: RequestInit): Promise<listLearningCourseReviewsResponse> => {
 
-  const res = await fetch(getReportCourseReviewUrl(reviewId),
+  const res = await fetch(getListLearningCourseReviewsUrl(courseId,params),
   {
     ...options,
-    method: 'POST'
+    method: 'GET'
 
 
   }
@@ -6329,8 +5178,84 @@ export const reportCourseReview = async (reviewId: string, options?: RequestInit
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: reportCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as reportCourseReviewResponse
+  const data: listLearningCourseReviewsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listLearningCourseReviewsResponse
+}
+
+
+
+export type getLearningCourseResponse200 = {
+  data: LearningCourse
+  status: 200
+}
+
+export type getLearningCourseResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getLearningCourseResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLearningCourseResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getLearningCourseResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getLearningCourseResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getLearningCourseResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLearningCourseResponseSuccess = (getLearningCourseResponse200) & {
+  headers: Headers;
+};
+export type getLearningCourseResponseError = (getLearningCourseResponse400 | getLearningCourseResponse401 | getLearningCourseResponse403 | getLearningCourseResponse404 | getLearningCourseResponse500 | getLearningCourseResponse503) & {
+  headers: Headers;
+};
+
+export type getLearningCourseResponse = (getLearningCourseResponseSuccess | getLearningCourseResponseError)
+
+export const getGetLearningCourseUrl = (slug: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/courses/${slug}`
+}
+
+/**
+ * Returns the ordered course program with module and lesson ids, the currently playable video state, and caller-specific progress. Missing progress is represented by concrete zero values. Draft and archived courses are visible only to their owner or an admin.
+ * @summary Get an authenticated course learning model
+ */
+export const getLearningCourse = async (slug: string, options?: RequestInit): Promise<getLearningCourseResponse> => {
+
+  const res = await fetch(getGetLearningCourseUrl(slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLearningCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLearningCourseResponse
 }
 
 
@@ -6506,68 +5431,367 @@ const res = await fetch(getPublishLessonCommentUrl(lessonId),
 
 
 
-export type updateLessonCommentResponse200 = {
-  data: Comment
+export type getLearnLessonDocumentResponse200 = {
+  data: LessonDocument
   status: 200
 }
 
-export type updateLessonCommentResponse400 = {
+export type getLearnLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type updateLessonCommentResponse401 = {
+export type getLearnLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type updateLessonCommentResponse403 = {
-  data: ForbiddenResponse
+export type getLearnLessonDocumentResponse403 = {
+  data: LearningForbiddenResponse
   status: 403
 }
 
-export type updateLessonCommentResponse404 = {
+export type getLearnLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type updateLessonCommentResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type updateLessonCommentResponse500 = {
+export type getLearnLessonDocumentResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type updateLessonCommentResponse503 = {
+export type getLearnLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type updateLessonCommentResponseSuccess = (updateLessonCommentResponse200) & {
+export type getLearnLessonDocumentResponseSuccess = (getLearnLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type updateLessonCommentResponseError = (updateLessonCommentResponse400 | updateLessonCommentResponse401 | updateLessonCommentResponse403 | updateLessonCommentResponse404 | updateLessonCommentResponse409 | updateLessonCommentResponse500 | updateLessonCommentResponse503) & {
+export type getLearnLessonDocumentResponseError = (getLearnLessonDocumentResponse400 | getLearnLessonDocumentResponse401 | getLearnLessonDocumentResponse403 | getLearnLessonDocumentResponse404 | getLearnLessonDocumentResponse500 | getLearnLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type updateLessonCommentResponse = (updateLessonCommentResponseSuccess | updateLessonCommentResponseError)
+export type getLearnLessonDocumentResponse = (getLearnLessonDocumentResponseSuccess | getLearnLessonDocumentResponseError)
 
-export const getUpdateLessonCommentUrl = (commentId: string,) => {
+export const getGetLearnLessonDocumentUrl = (lessonId: string,
+    params?: GetLearnLessonDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/document`
 }
 
 /**
- * @summary Edit an authored lesson comment
+ * Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
  */
-export const updateLessonComment = async (commentId: string,
-    updateCommentRequest: UpdateCommentRequest, options?: RequestInit): Promise<updateLessonCommentResponse> => {
+export const getLearnLessonDocument = async (lessonId: string,
+    params?: GetLearnLessonDocumentParams, options?: RequestInit): Promise<getLearnLessonDocumentResponse> => {
+
+  const res = await fetch(getGetLearnLessonDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLearnLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLearnLessonDocumentResponse
+}
+
+
+
+export type getLessonTranscriptResponse200 = {
+  data: LessonTranscript
+  status: 200
+}
+
+export type getLessonTranscriptResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getLessonTranscriptResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getLessonTranscriptResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getLessonTranscriptResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getLessonTranscriptResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getLessonTranscriptResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getLessonTranscriptResponseSuccess = (getLessonTranscriptResponse200) & {
+  headers: Headers;
+};
+export type getLessonTranscriptResponseError = (getLessonTranscriptResponse400 | getLessonTranscriptResponse401 | getLessonTranscriptResponse403 | getLessonTranscriptResponse404 | getLessonTranscriptResponse500 | getLessonTranscriptResponse503) & {
+  headers: Headers;
+};
+
+export type getLessonTranscriptResponse = (getLessonTranscriptResponseSuccess | getLessonTranscriptResponseError)
+
+export const getGetLessonTranscriptUrl = (lessonId: string,
+    params?: GetLessonTranscriptParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript?${stringifiedParams}` : `${apiOrigin()}/api/v1/learn/lessons/${lessonId}/transcript`
+}
+
+/**
+ * Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do.
+ * @summary Get a lesson transcript
+ */
+export const getLessonTranscript = async (lessonId: string,
+    params?: GetLessonTranscriptParams, options?: RequestInit): Promise<getLessonTranscriptResponse> => {
+
+  const res = await fetch(getGetLessonTranscriptUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLessonTranscriptResponse
+}
+
+
+
+export type getMyCourseMembershipsResponse200 = {
+  data: MyMembershipsPage
+  status: 200
+}
+
+export type getMyCourseMembershipsResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getMyCourseMembershipsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getMyCourseMembershipsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getMyCourseMembershipsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getMyCourseMembershipsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getMyCourseMembershipsResponseSuccess = (getMyCourseMembershipsResponse200) & {
+  headers: Headers;
+};
+export type getMyCourseMembershipsResponseError = (getMyCourseMembershipsResponse400 | getMyCourseMembershipsResponse401 | getMyCourseMembershipsResponse403 | getMyCourseMembershipsResponse500 | getMyCourseMembershipsResponse503) & {
+  headers: Headers;
+};
+
+export type getMyCourseMembershipsResponse = (getMyCourseMembershipsResponseSuccess | getMyCourseMembershipsResponseError)
+
+export const getGetMyCourseMembershipsUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/memberships`
+}
+
+/**
+ * @summary List the authenticated account course memberships
+ */
+export const getMyCourseMemberships = async ( options?: RequestInit): Promise<getMyCourseMembershipsResponse> => {
+
+  const res = await fetch(getGetMyCourseMembershipsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyCourseMembershipsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMyCourseMembershipsResponse
+}
+
+
+
+export type getPurchaseStatusResponse200 = {
+  data: PurchaseOrder
+  status: 200
+}
+
+export type getPurchaseStatusResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getPurchaseStatusResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getPurchaseStatusResponse404 = {
+  data: OrderNotFoundResponse
+  status: 404
+}
+
+export type getPurchaseStatusResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getPurchaseStatusResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getPurchaseStatusResponseSuccess = (getPurchaseStatusResponse200) & {
+  headers: Headers;
+};
+export type getPurchaseStatusResponseError = (getPurchaseStatusResponse400 | getPurchaseStatusResponse401 | getPurchaseStatusResponse404 | getPurchaseStatusResponse500 | getPurchaseStatusResponse503) & {
+  headers: Headers;
+};
+
+export type getPurchaseStatusResponse = (getPurchaseStatusResponseSuccess | getPurchaseStatusResponseError)
+
+export const getGetPurchaseStatusUrl = (orderId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/orders/${orderId}`
+}
+
+/**
+ * @summary Read the authenticated account's purchase status
+ */
+export const getPurchaseStatus = async (orderId: string, options?: RequestInit): Promise<getPurchaseStatusResponse> => {
+
+  const res = await fetch(getGetPurchaseStatusUrl(orderId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getPurchaseStatusResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getPurchaseStatusResponse
+}
+
+
+
+export type createPurchaseCheckoutResponse200 = {
+  data: CheckoutForm
+  status: 200
+}
+
+export type createPurchaseCheckoutResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type createPurchaseCheckoutResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type createPurchaseCheckoutResponse404 = {
+  data: OrderNotFoundResponse
+  status: 404
+}
+
+export type createPurchaseCheckoutResponse409 = {
+  data: PurchaseConflictResponse
+  status: 409
+}
+
+export type createPurchaseCheckoutResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type createPurchaseCheckoutResponseSuccess = (createPurchaseCheckoutResponse200) & {
+  headers: Headers;
+};
+export type createPurchaseCheckoutResponseError = (createPurchaseCheckoutResponse400 | createPurchaseCheckoutResponse401 | createPurchaseCheckoutResponse404 | createPurchaseCheckoutResponse409 | createPurchaseCheckoutResponse503) & {
+  headers: Headers;
+};
+
+export type createPurchaseCheckoutResponse = (createPurchaseCheckoutResponseSuccess | createPurchaseCheckoutResponseError)
+
+export const getCreatePurchaseCheckoutUrl = (orderId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/learn/orders/${orderId}/checkout`
+}
+
+/**
+ * @summary Create the hosted WayForPay checkout form for the authenticated order owner
+ */
+export const createPurchaseCheckout = async (orderId: string,
+    checkoutRequest?: CheckoutRequest, options?: RequestInit): Promise<createPurchaseCheckoutResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -6575,147 +5799,69 @@ export const updateLessonComment = async (commentId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getUpdateLessonCommentUrl(commentId),
+const res = await fetch(getCreatePurchaseCheckoutUrl(orderId),
   {
     ...options,
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updateCommentRequest)
+    body: JSON.stringify(checkoutRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: updateLessonCommentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateLessonCommentResponse
+  const data: createPurchaseCheckoutResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createPurchaseCheckoutResponse
 }
 
 
 
-export type removeLessonCommentResponse204 = {
+export type reportCourseReviewResponse204 = {
   data: void
   status: 204
 }
 
-export type removeLessonCommentResponse401 = {
+export type reportCourseReviewResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type removeLessonCommentResponse403 = {
+export type reportCourseReviewResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type removeLessonCommentResponse404 = {
+export type reportCourseReviewResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type removeLessonCommentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type removeLessonCommentResponse503 = {
+export type reportCourseReviewResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type removeLessonCommentResponseSuccess = (removeLessonCommentResponse204) & {
+export type reportCourseReviewResponseSuccess = (reportCourseReviewResponse204) & {
   headers: Headers;
 };
-export type removeLessonCommentResponseError = (removeLessonCommentResponse401 | removeLessonCommentResponse403 | removeLessonCommentResponse404 | removeLessonCommentResponse500 | removeLessonCommentResponse503) & {
-  headers: Headers;
-};
-
-export type removeLessonCommentResponse = (removeLessonCommentResponseSuccess | removeLessonCommentResponseError)
-
-export const getRemoveLessonCommentUrl = (commentId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/learn/comments/${commentId}`
-}
-
-/**
- * @summary Remove a lesson comment
- */
-export const removeLessonComment = async (commentId: string, options?: RequestInit): Promise<removeLessonCommentResponse> => {
-
-  const res = await fetch(getRemoveLessonCommentUrl(commentId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as removeLessonCommentResponse
-}
-
-
-
-export type reportLessonCommentResponse201 = {
-  data: void
-  status: 201
-}
-
-export type reportLessonCommentResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type reportLessonCommentResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type reportLessonCommentResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type reportLessonCommentResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type reportLessonCommentResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type reportLessonCommentResponseSuccess = (reportLessonCommentResponse201) & {
-  headers: Headers;
-};
-export type reportLessonCommentResponseError = (reportLessonCommentResponse401 | reportLessonCommentResponse403 | reportLessonCommentResponse404 | reportLessonCommentResponse500 | reportLessonCommentResponse503) & {
+export type reportCourseReviewResponseError = (reportCourseReviewResponse401 | reportCourseReviewResponse403 | reportCourseReviewResponse404 | reportCourseReviewResponse503) & {
   headers: Headers;
 };
 
-export type reportLessonCommentResponse = (reportLessonCommentResponseSuccess | reportLessonCommentResponseError)
+export type reportCourseReviewResponse = (reportCourseReviewResponseSuccess | reportCourseReviewResponseError)
 
-export const getReportLessonCommentUrl = (commentId: string,) => {
-
-
+export const getReportCourseReviewUrl = (reviewId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/learn/comments/${commentId}/reports`
+
+
+  return `${apiOrigin()}/api/v1/learn/reviews/${reviewId}/reports`
 }
 
-/**
- * @summary Report a lesson comment
- */
-export const reportLessonComment = async (commentId: string, options?: RequestInit): Promise<reportLessonCommentResponse> => {
+export const reportCourseReview = async (reviewId: string, options?: RequestInit): Promise<reportCourseReviewResponse> => {
 
-  const res = await fetch(getReportLessonCommentUrl(commentId),
+  const res = await fetch(getReportCourseReviewUrl(reviewId),
   {
     ...options,
     method: 'POST'
@@ -6727,61 +5873,48 @@ export const reportLessonComment = async (commentId: string, options?: RequestIn
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: reportLessonCommentResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as reportLessonCommentResponse
+  const data: reportCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as reportCourseReviewResponse
 }
 
 
 
-export type removeCourseReviewResponse204 = {
-  data: void
-  status: 204
+export type receiveWayForPayCallbackResponse200 = {
+  data: WayForPayAcknowledgement
+  status: 200
 }
 
-export type removeCourseReviewResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type removeCourseReviewResponse401 = {
+export type receiveWayForPayCallbackResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type removeCourseReviewResponse403 = {
-  data: ForbiddenResponse
-  status: 403
-}
-
-export type removeCourseReviewResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type removeCourseReviewResponse503 = {
+export type receiveWayForPayCallbackResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type removeCourseReviewResponseSuccess = (removeCourseReviewResponse204) & {
+export type receiveWayForPayCallbackResponseSuccess = (receiveWayForPayCallbackResponse200) & {
   headers: Headers;
 };
-export type removeCourseReviewResponseError = (removeCourseReviewResponse400 | removeCourseReviewResponse401 | removeCourseReviewResponse403 | removeCourseReviewResponse404 | removeCourseReviewResponse503) & {
+export type receiveWayForPayCallbackResponseError = (receiveWayForPayCallbackResponse401 | receiveWayForPayCallbackResponse503) & {
   headers: Headers;
 };
 
-export type removeCourseReviewResponse = (removeCourseReviewResponseSuccess | removeCourseReviewResponseError)
+export type receiveWayForPayCallbackResponse = (receiveWayForPayCallbackResponseSuccess | receiveWayForPayCallbackResponseError)
 
-export const getRemoveCourseReviewUrl = (reviewId: string,) => {
-
-
+export const getReceiveWayForPayCallbackUrl = () => {
 
 
-  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/remove`
+
+
+  return `${apiOrigin()}/api/v1/payments/wayforpay/callback`
 }
 
-export const removeCourseReview = async (reviewId: string,
-    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<removeCourseReviewResponse> => {
+/**
+ * @summary Receive a signed WayForPay service callback
+ */
+export const receiveWayForPayCallback = async (receiveWayForPayCallbackBody: ReceiveWayForPayCallbackBody, options?: RequestInit): Promise<receiveWayForPayCallbackResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -6789,7 +5922,343 @@ export const removeCourseReview = async (reviewId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getRemoveCourseReviewUrl(reviewId),
+const res = await fetch(getReceiveWayForPayCallbackUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(receiveWayForPayCallbackBody)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: receiveWayForPayCallbackResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as receiveWayForPayCallbackResponse
+}
+
+
+
+export type heartbeatPlaybackResponse204 = {
+  data: void
+  status: 204
+}
+
+export type heartbeatPlaybackResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type heartbeatPlaybackResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type heartbeatPlaybackResponse403 = {
+  data: PlaybackForbiddenResponse
+  status: 403
+}
+
+export type heartbeatPlaybackResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type heartbeatPlaybackResponse409 = {
+  data: PlaybackTakenOverResponse
+  status: 409
+}
+
+export type heartbeatPlaybackResponse410 = {
+  data: PlaybackExpiredResponse
+  status: 410
+}
+
+export type heartbeatPlaybackResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type heartbeatPlaybackResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type heartbeatPlaybackResponseSuccess = (heartbeatPlaybackResponse204) & {
+  headers: Headers;
+};
+export type heartbeatPlaybackResponseError = (heartbeatPlaybackResponse400 | heartbeatPlaybackResponse401 | heartbeatPlaybackResponse403 | heartbeatPlaybackResponse404 | heartbeatPlaybackResponse409 | heartbeatPlaybackResponse410 | heartbeatPlaybackResponse500 | heartbeatPlaybackResponse503) & {
+  headers: Headers;
+};
+
+export type heartbeatPlaybackResponse = (heartbeatPlaybackResponseSuccess | heartbeatPlaybackResponseError)
+
+export const getHeartbeatPlaybackUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/playback/heartbeat`
+}
+
+/**
+ * Authenticated same-origin mutation. Only the current owner renews the slot and writes progress. A taken-over session and an expired session are distinct outcomes. Positions above the current video duration are accepted and clamped by the server. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+ * @summary Renew playback ownership and save lesson progress
+ */
+export const heartbeatPlayback = async (playbackHeartbeatRequest: PlaybackHeartbeatRequest, options?: RequestInit): Promise<heartbeatPlaybackResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getHeartbeatPlaybackUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(playbackHeartbeatRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: heartbeatPlaybackResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as heartbeatPlaybackResponse
+}
+
+
+
+export type createPlaybackSessionResponse201 = {
+  data: PlaybackSession
+  status: 201
+}
+
+export type createPlaybackSessionResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type createPlaybackSessionResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type createPlaybackSessionResponse403 = {
+  data: PlaybackForbiddenResponse
+  status: 403
+}
+
+export type createPlaybackSessionResponse404 = {
+  data: PlaybackNotFoundResponse
+  status: 404
+}
+
+export type createPlaybackSessionResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type createPlaybackSessionResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type createPlaybackSessionResponseSuccess = (createPlaybackSessionResponse201) & {
+  headers: Headers;
+};
+export type createPlaybackSessionResponseError = (createPlaybackSessionResponse400 | createPlaybackSessionResponse401 | createPlaybackSessionResponse403 | createPlaybackSessionResponse404 | createPlaybackSessionResponse500 | createPlaybackSessionResponse503) & {
+  headers: Headers;
+};
+
+export type createPlaybackSessionResponse = (createPlaybackSessionResponseSuccess | createPlaybackSessionResponseError)
+
+export const getCreatePlaybackSessionUrl = () => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/playback/sessions`
+}
+
+/**
+ * Authenticated same-origin mutation. The server selects the current highest-generation ready video for the lesson, checks course visibility before taking ownership, and always replaces the caller's previous playback slot on success. The client cannot name a video. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+ * @summary Mint a playback session for one lesson
+ */
+export const createPlaybackSession = async (playbackSessionRequest: PlaybackSessionRequest, options?: RequestInit): Promise<createPlaybackSessionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getCreatePlaybackSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(playbackSessionRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createPlaybackSessionResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as createPlaybackSessionResponse
+}
+
+
+
+export type blockCommentAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockCommentAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockCommentAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockCommentAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockCommentAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type blockCommentAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockCommentAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockCommentAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockCommentAuthorResponseSuccess = (blockCommentAuthorResponse200) & {
+  headers: Headers;
+};
+export type blockCommentAuthorResponseError = (blockCommentAuthorResponse400 | blockCommentAuthorResponse401 | blockCommentAuthorResponse403 | blockCommentAuthorResponse404 | blockCommentAuthorResponse409 | blockCommentAuthorResponse500 | blockCommentAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type blockCommentAuthorResponse = (blockCommentAuthorResponseSuccess | blockCommentAuthorResponseError)
+
+export const getBlockCommentAuthorUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/block-author`
+}
+
+/**
+ * @summary Block the author of a comment from course communication (owner or administrator)
+ */
+export const blockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<blockCommentAuthorResponse> => {
+
+  const res = await fetch(getBlockCommentAuthorUrl(commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockCommentAuthorResponse
+}
+
+
+
+export type dismissCommentReportsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissCommentReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type dismissCommentReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type dismissCommentReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type dismissCommentReportsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type dismissCommentReportsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type dismissCommentReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type dismissCommentReportsResponseSuccess = (dismissCommentReportsResponse204) & {
+  headers: Headers;
+};
+export type dismissCommentReportsResponseError = (dismissCommentReportsResponse400 | dismissCommentReportsResponse401 | dismissCommentReportsResponse403 | dismissCommentReportsResponse404 | dismissCommentReportsResponse500 | dismissCommentReportsResponse503) & {
+  headers: Headers;
+};
+
+export type dismissCommentReportsResponse = (dismissCommentReportsResponseSuccess | dismissCommentReportsResponseError)
+
+export const getDismissCommentReportsUrl = (commentId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/dismiss-report`
+}
+
+/**
+ * @summary Dismiss all open reports for a comment
+ */
+export const dismissCommentReports = async (commentId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCommentReportsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDismissCommentReportsUrl(commentId),
   {
     ...options,
     method: 'POST',
@@ -6801,82 +6270,88 @@ const res = await fetch(getRemoveCourseReviewUrl(reviewId),
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: removeCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as removeCourseReviewResponse
+  const data: dismissCommentReportsResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as dismissCommentReportsResponse
 }
 
 
 
-export type dismissCourseReviewReportsResponse204 = {
-  data: void
-  status: 204
+export type unblockCommentAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
 }
 
-export type dismissCourseReviewReportsResponse400 = {
-  data: BadRequestResponse
+export type unblockCommentAuthorResponse400 = {
+  data: InvalidRequestResponse
   status: 400
 }
 
-export type dismissCourseReviewReportsResponse401 = {
+export type unblockCommentAuthorResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type dismissCourseReviewReportsResponse403 = {
+export type unblockCommentAuthorResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type dismissCourseReviewReportsResponse404 = {
+export type unblockCommentAuthorResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type dismissCourseReviewReportsResponse503 = {
+export type unblockCommentAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockCommentAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockCommentAuthorResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type dismissCourseReviewReportsResponseSuccess = (dismissCourseReviewReportsResponse204) & {
+export type unblockCommentAuthorResponseSuccess = (unblockCommentAuthorResponse200) & {
   headers: Headers;
 };
-export type dismissCourseReviewReportsResponseError = (dismissCourseReviewReportsResponse400 | dismissCourseReviewReportsResponse401 | dismissCourseReviewReportsResponse403 | dismissCourseReviewReportsResponse404 | dismissCourseReviewReportsResponse503) & {
+export type unblockCommentAuthorResponseError = (unblockCommentAuthorResponse400 | unblockCommentAuthorResponse401 | unblockCommentAuthorResponse403 | unblockCommentAuthorResponse404 | unblockCommentAuthorResponse409 | unblockCommentAuthorResponse500 | unblockCommentAuthorResponse503) & {
   headers: Headers;
 };
 
-export type dismissCourseReviewReportsResponse = (dismissCourseReviewReportsResponseSuccess | dismissCourseReviewReportsResponseError)
+export type unblockCommentAuthorResponse = (unblockCommentAuthorResponseSuccess | unblockCommentAuthorResponseError)
 
-export const getDismissCourseReviewReportsUrl = (reviewId: string,) => {
-
-
+export const getUnblockCommentAuthorUrl = (commentId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/dismiss-report`
+
+
+  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/unblock-author`
 }
 
-export const dismissCourseReviewReports = async (reviewId: string,
-    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCourseReviewReportsResponse> => {
+/**
+ * @summary Restore the comment author's course communication (owner or administrator)
+ */
+export const unblockCommentAuthor = async (commentId: string, options?: RequestInit): Promise<unblockCommentAuthorResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getDismissCourseReviewReportsUrl(reviewId),
+  const res = await fetch(getUnblockCommentAuthorUrl(commentId),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(dismissReportsRequest)
+    method: 'POST'
+
+
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: dismissCourseReviewReportsResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as dismissCourseReviewReportsResponse
+  const data: unblockCommentAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockCommentAuthorResponse
 }
 
 
@@ -7049,63 +6524,139 @@ export const listTeachModerationQueue = async (courseId: string,
 
 
 
-export type dismissCommentReportsResponse204 = {
-  data: void
-  status: 204
+export type blockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
 }
 
-export type dismissCommentReportsResponse400 = {
-  data: BadRequestResponse
+export type blockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
   status: 400
 }
 
-export type dismissCommentReportsResponse401 = {
+export type blockCourseParticipantResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type dismissCommentReportsResponse403 = {
+export type blockCourseParticipantResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type dismissCommentReportsResponse404 = {
-  data: NotFoundResponse
-  status: 404
+export type blockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
 }
 
-export type dismissCommentReportsResponse500 = {
+export type blockCourseParticipantResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type dismissCommentReportsResponse503 = {
+export type blockCourseParticipantResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type dismissCommentReportsResponseSuccess = (dismissCommentReportsResponse204) & {
+export type blockCourseParticipantResponseSuccess = (blockCourseParticipantResponse200) & {
   headers: Headers;
 };
-export type dismissCommentReportsResponseError = (dismissCommentReportsResponse400 | dismissCommentReportsResponse401 | dismissCommentReportsResponse403 | dismissCommentReportsResponse404 | dismissCommentReportsResponse500 | dismissCommentReportsResponse503) & {
+export type blockCourseParticipantResponseError = (blockCourseParticipantResponse400 | blockCourseParticipantResponse401 | blockCourseParticipantResponse403 | blockCourseParticipantResponse409 | blockCourseParticipantResponse500 | blockCourseParticipantResponse503) & {
   headers: Headers;
 };
 
-export type dismissCommentReportsResponse = (dismissCommentReportsResponseSuccess | dismissCommentReportsResponseError)
+export type blockCourseParticipantResponse = (blockCourseParticipantResponseSuccess | blockCourseParticipantResponseError)
 
-export const getDismissCommentReportsUrl = (commentId: string,) => {
+export const getBlockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
 
 
 
 
-  return `${apiOrigin()}/api/v1/teach/comments/${commentId}/dismiss-report`
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/block`
 }
 
 /**
- * @summary Dismiss all open reports for a comment
+ * @summary Block a participant from course communication
  */
-export const dismissCommentReports = async (commentId: string,
-    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCommentReportsResponse> => {
+export const blockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<blockCourseParticipantResponse> => {
+
+  const res = await fetch(getBlockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockCourseParticipantResponse
+}
+
+
+
+export type reportCourseParticipantResponse201 = {
+  data: ParticipantReport
+  status: 201
+}
+
+export type reportCourseParticipantResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type reportCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type reportCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type reportCourseParticipantResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type reportCourseParticipantResponse409 = {
+  data: TranscriptConflictResponse
+  status: 409
+}
+
+export type reportCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type reportCourseParticipantResponseSuccess = (reportCourseParticipantResponse201) & {
+  headers: Headers;
+};
+export type reportCourseParticipantResponseError = (reportCourseParticipantResponse400 | reportCourseParticipantResponse401 | reportCourseParticipantResponse403 | reportCourseParticipantResponse404 | reportCourseParticipantResponse409 | reportCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type reportCourseParticipantResponse = (reportCourseParticipantResponseSuccess | reportCourseParticipantResponseError)
+
+export const getReportCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/report`
+}
+
+export const reportCourseParticipant = async (courseId: string,
+    userId: string,
+    participantReportRequest: ParticipantReportRequest, options?: RequestInit): Promise<reportCourseParticipantResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -7113,7 +6664,394 @@ export const dismissCommentReports = async (commentId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getDismissCommentReportsUrl(commentId),
+const res = await fetch(getReportCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(participantReportRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as reportCourseParticipantResponse
+}
+
+
+
+export type unblockCourseParticipantResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockCourseParticipantResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockCourseParticipantResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockCourseParticipantResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockCourseParticipantResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockCourseParticipantResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockCourseParticipantResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockCourseParticipantResponseSuccess = (unblockCourseParticipantResponse200) & {
+  headers: Headers;
+};
+export type unblockCourseParticipantResponseError = (unblockCourseParticipantResponse400 | unblockCourseParticipantResponse401 | unblockCourseParticipantResponse403 | unblockCourseParticipantResponse409 | unblockCourseParticipantResponse500 | unblockCourseParticipantResponse503) & {
+  headers: Headers;
+};
+
+export type unblockCourseParticipantResponse = (unblockCourseParticipantResponseSuccess | unblockCourseParticipantResponseError)
+
+export const getUnblockCourseParticipantUrl = (courseId: string,
+    userId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${courseId}/participants/${userId}/unblock`
+}
+
+/**
+ * @summary Restore a participant's course communication
+ */
+export const unblockCourseParticipant = async (courseId: string,
+    userId: string, options?: RequestInit): Promise<unblockCourseParticipantResponse> => {
+
+  const res = await fetch(getUnblockCourseParticipantUrl(courseId,userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockCourseParticipantResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockCourseParticipantResponse
+}
+
+
+
+export type getCourseRosterResponse200 = {
+  data: RosterPage
+  status: 200
+}
+
+export type getCourseRosterResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getCourseRosterResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getCourseRosterResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getCourseRosterResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getCourseRosterResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getCourseRosterResponseSuccess = (getCourseRosterResponse200) & {
+  headers: Headers;
+};
+export type getCourseRosterResponseError = (getCourseRosterResponse400 | getCourseRosterResponse401 | getCourseRosterResponse403 | getCourseRosterResponse500 | getCourseRosterResponse503) & {
+  headers: Headers;
+};
+
+export type getCourseRosterResponse = (getCourseRosterResponseSuccess | getCourseRosterResponseError)
+
+export const getGetCourseRosterUrl = (courseId: string,
+    params?: GetCourseRosterParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/courses/${courseId}/roster`
+}
+
+/**
+ * @summary List course members for the instructor or administrator
+ */
+export const getCourseRoster = async (courseId: string,
+    params?: GetCourseRosterParams, options?: RequestInit): Promise<getCourseRosterResponse> => {
+
+  const res = await fetch(getGetCourseRosterUrl(courseId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCourseRosterResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getCourseRosterResponse
+}
+
+
+
+export type listTeachLearnersResponse200 = {
+  data: LearnerPage
+  status: 200
+}
+
+export type listTeachLearnersResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listTeachLearnersResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listTeachLearnersResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type listTeachLearnersResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listTeachLearnersResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listTeachLearnersResponseSuccess = (listTeachLearnersResponse200) & {
+  headers: Headers;
+};
+export type listTeachLearnersResponseError = (listTeachLearnersResponse400 | listTeachLearnersResponse401 | listTeachLearnersResponse403 | listTeachLearnersResponse500 | listTeachLearnersResponse503) & {
+  headers: Headers;
+};
+
+export type listTeachLearnersResponse = (listTeachLearnersResponseSuccess | listTeachLearnersResponseError)
+
+export const getListTeachLearnersUrl = (params?: ListTeachLearnersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/learners?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/learners`
+}
+
+/**
+ * @summary List learners across the instructor's own courses
+ */
+export const listTeachLearners = async (params?: ListTeachLearnersParams, options?: RequestInit): Promise<listTeachLearnersResponse> => {
+
+  const res = await fetch(getListTeachLearnersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeachLearnersResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listTeachLearnersResponse
+}
+
+
+
+export type blockReviewAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type blockReviewAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type blockReviewAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type blockReviewAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type blockReviewAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type blockReviewAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type blockReviewAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type blockReviewAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type blockReviewAuthorResponseSuccess = (blockReviewAuthorResponse200) & {
+  headers: Headers;
+};
+export type blockReviewAuthorResponseError = (blockReviewAuthorResponse400 | blockReviewAuthorResponse401 | blockReviewAuthorResponse403 | blockReviewAuthorResponse404 | blockReviewAuthorResponse409 | blockReviewAuthorResponse500 | blockReviewAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type blockReviewAuthorResponse = (blockReviewAuthorResponseSuccess | blockReviewAuthorResponseError)
+
+export const getBlockReviewAuthorUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/block-author`
+}
+
+/**
+ * @summary Block the author of a review from course communication (owner or administrator)
+ */
+export const blockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<blockReviewAuthorResponse> => {
+
+  const res = await fetch(getBlockReviewAuthorUrl(reviewId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: blockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as blockReviewAuthorResponse
+}
+
+
+
+export type dismissCourseReviewReportsResponse204 = {
+  data: void
+  status: 204
+}
+
+export type dismissCourseReviewReportsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type dismissCourseReviewReportsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type dismissCourseReviewReportsResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type dismissCourseReviewReportsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type dismissCourseReviewReportsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type dismissCourseReviewReportsResponseSuccess = (dismissCourseReviewReportsResponse204) & {
+  headers: Headers;
+};
+export type dismissCourseReviewReportsResponseError = (dismissCourseReviewReportsResponse400 | dismissCourseReviewReportsResponse401 | dismissCourseReviewReportsResponse403 | dismissCourseReviewReportsResponse404 | dismissCourseReviewReportsResponse503) & {
+  headers: Headers;
+};
+
+export type dismissCourseReviewReportsResponse = (dismissCourseReviewReportsResponseSuccess | dismissCourseReviewReportsResponseError)
+
+export const getDismissCourseReviewReportsUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/dismiss-report`
+}
+
+export const dismissCourseReviewReports = async (reviewId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<dismissCourseReviewReportsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getDismissCourseReviewReportsUrl(reviewId),
   {
     ...options,
     method: 'POST',
@@ -7125,79 +7063,61 @@ const res = await fetch(getDismissCommentReportsUrl(commentId),
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: dismissCommentReportsResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as dismissCommentReportsResponse
+  const data: dismissCourseReviewReportsResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as dismissCourseReviewReportsResponse
 }
 
 
 
-export type heartbeatPlaybackResponse204 = {
+export type removeCourseReviewResponse204 = {
   data: void
   status: 204
 }
 
-export type heartbeatPlaybackResponse400 = {
-  data: InvalidRequestResponse
+export type removeCourseReviewResponse400 = {
+  data: BadRequestResponse
   status: 400
 }
 
-export type heartbeatPlaybackResponse401 = {
+export type removeCourseReviewResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type heartbeatPlaybackResponse403 = {
-  data: PlaybackForbiddenResponse
+export type removeCourseReviewResponse403 = {
+  data: ForbiddenResponse
   status: 403
 }
 
-export type heartbeatPlaybackResponse404 = {
-  data: LessonNotFoundResponse
+export type removeCourseReviewResponse404 = {
+  data: NotFoundResponse
   status: 404
 }
 
-export type heartbeatPlaybackResponse409 = {
-  data: PlaybackTakenOverResponse
-  status: 409
-}
-
-export type heartbeatPlaybackResponse410 = {
-  data: PlaybackExpiredResponse
-  status: 410
-}
-
-export type heartbeatPlaybackResponse500 = {
-  data: InternalErrorResponse
-  status: 500
-}
-
-export type heartbeatPlaybackResponse503 = {
+export type removeCourseReviewResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type heartbeatPlaybackResponseSuccess = (heartbeatPlaybackResponse204) & {
+export type removeCourseReviewResponseSuccess = (removeCourseReviewResponse204) & {
   headers: Headers;
 };
-export type heartbeatPlaybackResponseError = (heartbeatPlaybackResponse400 | heartbeatPlaybackResponse401 | heartbeatPlaybackResponse403 | heartbeatPlaybackResponse404 | heartbeatPlaybackResponse409 | heartbeatPlaybackResponse410 | heartbeatPlaybackResponse500 | heartbeatPlaybackResponse503) & {
+export type removeCourseReviewResponseError = (removeCourseReviewResponse400 | removeCourseReviewResponse401 | removeCourseReviewResponse403 | removeCourseReviewResponse404 | removeCourseReviewResponse503) & {
   headers: Headers;
 };
 
-export type heartbeatPlaybackResponse = (heartbeatPlaybackResponseSuccess | heartbeatPlaybackResponseError)
+export type removeCourseReviewResponse = (removeCourseReviewResponseSuccess | removeCourseReviewResponseError)
 
-export const getHeartbeatPlaybackUrl = () => {
-
-
+export const getRemoveCourseReviewUrl = (reviewId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/playback/heartbeat`
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/remove`
 }
 
-/**
- * Authenticated same-origin mutation. Only the current owner renews the slot and writes progress. A taken-over session and an expired session are distinct outcomes. Positions above the current video duration are accepted and clamped by the server. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
- * @summary Renew playback ownership and save lesson progress
- */
-export const heartbeatPlayback = async (playbackHeartbeatRequest: PlaybackHeartbeatRequest, options?: RequestInit): Promise<heartbeatPlaybackResponse> => {
+export const removeCourseReview = async (reviewId: string,
+    dismissReportsRequest: DismissReportsRequest, options?: RequestInit): Promise<removeCourseReviewResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -7205,20 +7125,100 @@ export const heartbeatPlayback = async (playbackHeartbeatRequest: PlaybackHeartb
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getHeartbeatPlaybackUrl(),
+const res = await fetch(getRemoveCourseReviewUrl(reviewId),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(playbackHeartbeatRequest)
+    body: JSON.stringify(dismissReportsRequest)
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: heartbeatPlaybackResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as heartbeatPlaybackResponse
+  const data: removeCourseReviewResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as removeCourseReviewResponse
+}
+
+
+
+export type unblockReviewAuthorResponse200 = {
+  data: MembershipGrant
+  status: 200
+}
+
+export type unblockReviewAuthorResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type unblockReviewAuthorResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type unblockReviewAuthorResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type unblockReviewAuthorResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type unblockReviewAuthorResponse409 = {
+  data: MembershipConflictResponse
+  status: 409
+}
+
+export type unblockReviewAuthorResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type unblockReviewAuthorResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type unblockReviewAuthorResponseSuccess = (unblockReviewAuthorResponse200) & {
+  headers: Headers;
+};
+export type unblockReviewAuthorResponseError = (unblockReviewAuthorResponse400 | unblockReviewAuthorResponse401 | unblockReviewAuthorResponse403 | unblockReviewAuthorResponse404 | unblockReviewAuthorResponse409 | unblockReviewAuthorResponse500 | unblockReviewAuthorResponse503) & {
+  headers: Headers;
+};
+
+export type unblockReviewAuthorResponse = (unblockReviewAuthorResponseSuccess | unblockReviewAuthorResponseError)
+
+export const getUnblockReviewAuthorUrl = (reviewId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/reviews/${reviewId}/unblock-author`
+}
+
+/**
+ * @summary Restore the review author's course communication (owner or administrator)
+ */
+export const unblockReviewAuthor = async (reviewId: string, options?: RequestInit): Promise<unblockReviewAuthorResponse> => {
+
+  const res = await fetch(getUnblockReviewAuthorUrl(reviewId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unblockReviewAuthorResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as unblockReviewAuthorResponse
 }
 
 

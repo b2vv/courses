@@ -10,8 +10,8 @@ import type { AdminModule } from './adminModule.ts';
 import type { AdminTimestamp } from './adminTimestamp.ts';
 
 export interface AdminCourseSaveRequest {
-  expectedUpdatedAt: AdminTimestamp;
   course: AdminCourseWrite;
+  expectedUpdatedAt: AdminTimestamp;
   /**
      * At most 40 modules, and at most 120 lessons across all of them together. The per-module maxItems of 120 is the single-module case, not a per-module allowance: JSON Schema cannot bound a sum over sibling arrays, so the course-wide ceiling is stated here and enforced by the server, which refuses a breach with lesson_limit.
      * @maxItems 40

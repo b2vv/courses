@@ -7,7 +7,7 @@
  */
 
 export interface AdminStatsCourses {
+  archived: number;
   draft: number;
   published: number;
-  archived: number;
 }

@@ -7,9 +7,9 @@
  */
 
 export interface AdminStatsInstructor {
-  instructorId: string;
-  displayName: string;
-  publishedCourses: number;
   activeEnrollments: number;
+  displayName: string;
+  instructorId: string;
+  publishedCourses: number;
   revenueMinorUAH: number;
 }

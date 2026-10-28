@@ -11,10 +11,10 @@ export interface CompleteTwoFactorRequest {
      * @minLength 1
      * @maxLength 128
      */
-  pendingId: string;
+  code: string;
   /**
      * @minLength 1
      * @maxLength 128
      */
-  code: string;
+  pendingId: string;
 }

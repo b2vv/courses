@@ -7,7 +7,7 @@
  */
 
 export interface AdminStatsRole {
-  student: number;
-  instructor: number;
   admin: number;
+  instructor: number;
+  student: number;
 }

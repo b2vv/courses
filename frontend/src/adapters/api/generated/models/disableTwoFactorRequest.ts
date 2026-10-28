@@ -9,12 +9,12 @@
 export interface DisableTwoFactorRequest {
   /**
      * @minLength 1
-     * @maxLength 1024
-     */
-  password: string;
-  /**
-     * @minLength 1
      * @maxLength 128
      */
   code: string;
+  /**
+     * @minLength 1
+     * @maxLength 1024
+     */
+  password: string;
 }

@@ -7,10 +7,6 @@
  */
 
 export interface PlaybackSession {
-  /** @pattern ^[0-9a-f]{32}$ */
-  playbackId: string;
-  /** @pattern ^/media/p/[0-9a-f]{32}/hls/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/master\.m3u8$ */
-  mediaPath: string;
   /**
      * @minimum 0
      * @maximum 2147483647
@@ -18,6 +14,10 @@ export interface PlaybackSession {
   clientSeq: number;
   /** @minimum 1 */
   heartbeatSeconds: number;
+  /** @pattern ^/media/p/[0-9a-f]{32}/hls/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/master\.m3u8$ */
+  mediaPath: string;
   /** @minimum 3 */
   ownershipTtlSeconds: number;
+  /** @pattern ^[0-9a-f]{32}$ */
+  playbackId: string;
 }

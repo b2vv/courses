@@ -8,6 +8,6 @@
 import type { Comment } from './comment.ts';
 
 export interface CommentThread {
-  root: Comment;
   replies: Comment[];
+  root: Comment;
 }
