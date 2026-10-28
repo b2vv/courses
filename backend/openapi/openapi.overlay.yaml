@@ -732,6 +732,36 @@ components:
                 title:
                     maxLength: 200
                     minLength: 1
+        LearningCourse:
+            properties:
+                id: { format: uuid }
+                slug: { minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+                title: { minLength: 1, maxLength: 200 }
+                summary: { minLength: 1, maxLength: 500 }
+                description: { minLength: 1, maxLength: 20000 }
+                price: { $ref: '#/components/schemas/NullablePrice' }
+                rating:
+                    $ref: null
+                    properties:
+                        average: { maximum: 5, minimum: 1 }
+                        count: { minimum: 3 }
+                lessonCount: { minimum: 0 }
+                modules: { maxItems: 40 }
+                continueLessonId: { format: uuid }
+                canPurchase: { description: "True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy." }
+        LearningModule:
+            properties:
+                id: { format: uuid }
+                title: { minLength: 1, maxLength: 200 }
+                lessons: { maxItems: 120 }
+        LearningLesson:
+            properties:
+                id: { format: uuid }
+                title: { minLength: 1, maxLength: 200 }
+                position: { minimum: 0 }
+                clientSeq: { minimum: 0, maximum: 2147483647 }
+                isPreview: { description: "The lesson is open to anyone who can see a published course, without a purchase." }
+                locked: { description: "For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it." }
         CourseDetail:
             properties:
                 description:
@@ -820,6 +850,23 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/learn/courses/{slug}:
+        get:
+            operationId: getLearningCourse
+            summary: Get an authenticated course learning model
+            description: >-
+                Returns the ordered course program with module and lesson ids, the currently playable
+                video state, and caller-specific progress. Missing progress is represented by concrete
+                zero values. Draft and archived courses are visible only to their owner or an admin.
+            parameters:
+                slug:
+                    schema: { minLength: 1, maxLength: 120, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+            responses:
+                '200':
+                    description: Ordered learning content and caller-specific progress.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
     /api/v1/client-logs:
       post:
         operationId: ingestClientLog

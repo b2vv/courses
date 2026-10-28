@@ -1459,6 +1459,162 @@ components:
                 - lastActivityAt
                 - userId
             type: object
+        LearningCourse:
+            additionalProperties: false
+            properties:
+                canPurchase:
+                    description: 'True when this actor can buy this published paid course: no active grant and neither its owner nor an administrator. An administrator is not a learner (G8) and cannot buy.'
+                    type: boolean
+                continueLessonId:
+                    format: uuid
+                    nullable: true
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                description:
+                    maxLength: 20000
+                    minLength: 1
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                lessonCount:
+                    minimum: 0
+                    type: integer
+                modules:
+                    items:
+                        $ref: '#/components/schemas/LearningModule'
+                    maxItems: 40
+                    type: array
+                paid:
+                    type: boolean
+                price:
+                    $ref: '#/components/schemas/NullablePrice'
+                publishedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                rating:
+                    additionalProperties: false
+                    nullable: true
+                    properties:
+                        average:
+                            format: double
+                            maximum: 5
+                            minimum: 1
+                            type: number
+                        count:
+                            minimum: 3
+                            type: integer
+                    required:
+                        - average
+                        - count
+                    type: object
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                status:
+                    enum:
+                        - draft
+                        - published
+                        - archived
+                    type: string
+                summary:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                updatedAt:
+                    format: date-time
+                    type: string
+            required:
+                - canPurchase
+                - continueLessonId
+                - createdAt
+                - description
+                - id
+                - lessonCount
+                - modules
+                - paid
+                - price
+                - publishedAt
+                - rating
+                - slug
+                - status
+                - summary
+                - title
+                - updatedAt
+            type: object
+        LearningLesson:
+            additionalProperties: false
+            properties:
+                clientSeq:
+                    format: int64
+                    maximum: 2147483647
+                    minimum: 0
+                    type: integer
+                completed:
+                    type: boolean
+                id:
+                    format: uuid
+                    type: string
+                isPreview:
+                    description: The lesson is open to anyone who can see a published course, without a purchase.
+                    type: boolean
+                locked:
+                    description: For this viewer, the lesson needs a purchase. Computed by the server from the shared access rule; the client never re-derives it.
+                    type: boolean
+                position:
+                    format: double
+                    minimum: 0
+                    type: number
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                videoState:
+                    enum:
+                        - processing
+                        - ready
+                        - failed
+                    nullable: true
+                    type: string
+            required:
+                - clientSeq
+                - completed
+                - id
+                - isPreview
+                - locked
+                - position
+                - title
+                - videoState
+            type: object
+        LearningModule:
+            additionalProperties: false
+            properties:
+                id:
+                    format: uuid
+                    type: string
+                lessons:
+                    items:
+                        $ref: '#/components/schemas/LearningLesson'
+                    maxItems: 120
+                    type: array
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - id
+                - lessons
+                - title
+            type: object
         LessonDraft:
             additionalProperties: false
             properties:
@@ -4607,6 +4763,44 @@ paths:
                     $ref: '#/components/responses/NotFound'
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/learn/courses/{slug}:
+        get:
+            description: Returns the ordered course program with module and lesson ids, the currently playable video state, and caller-specific progress. Missing progress is represented by concrete zero values. Draft and archived courses are visible only to their owner or an admin.
+            operationId: getLearningCourse
+            parameters:
+                - in: path
+                  name: slug
+                  required: true
+                  schema:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LearningCourse'
+                    description: Ordered learning content and caller-specific progress.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Get an authenticated course learning model
     /api/v1/learn/lessons/{lessonId}/comments:
         get:
             operationId: listLessonComments

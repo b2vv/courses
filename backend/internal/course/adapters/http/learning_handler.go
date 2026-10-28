@@ -21,14 +21,14 @@ func (handler *LearningHandler) Register(mux *http.ServeMux, authenticate func(h
 }
 
 type learningLessonDTO struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	VideoState *string `json:"videoState"`
-	Position   float64 `json:"position"`
-	Completed  bool    `json:"completed"`
-	ClientSeq  int64   `json:"clientSeq"`
-	IsPreview  bool    `json:"isPreview"`
-	Locked     bool    `json:"locked"`
+	ID         string                     `json:"id"`
+	Title      string                     `json:"title"`
+	VideoState *domain.LearningVideoState `json:"videoState"`
+	Position   float64                    `json:"position"`
+	Completed  bool                       `json:"completed"`
+	ClientSeq  int64                      `json:"clientSeq"`
+	IsPreview  bool                       `json:"isPreview"`
+	Locked     bool                       `json:"locked"`
 }
 
 type learningModuleDTO struct {
@@ -84,9 +84,9 @@ func mapLearningCourse(course domain.LearningCourse, actor domain.Actor) learnin
 	for _, module := range course.Modules {
 		lessons := make([]learningLessonDTO, 0, len(module.Lessons))
 		for _, lesson := range module.Lessons {
-			var videoState *string
+			var videoState *domain.LearningVideoState
 			if lesson.VideoState != domain.VideoAbsent {
-				value := string(lesson.VideoState)
+				value := lesson.VideoState
 				videoState = &value
 			}
 			lessons = append(lessons, learningLessonDTO{
