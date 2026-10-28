@@ -5,6 +5,8 @@
 # Null deletes a key; $ref: null expands the generated schema before metadata merge.
 # CourseDetail publishedAt/status narrowing is the published endpoint contract.
 components:
+    parameters:
+        "IdempotencyKey": {"description": "User-scoped replay key for starting a course purchase.", "schema": {"minLength": 1, "maxLength": 128}}
     headers:
         SessionCookie:
           description: Opaque session cookie; HttpOnly and SameSite=Lax, Secure when configured.
@@ -20,6 +22,9 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        "OrderNotFound": {"description": "The order is unknown or belongs to another account.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
+        "MembershipConflict": {"description": "Enrollment is unavailable or changed concurrently.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
+        "PurchaseConflict": {"description": "The course is already owned or the price operation conflicted.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
         EmailTaken:
           description: The email is already registered.
         AccountValidationFailed:
@@ -197,6 +202,19 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        "PurchaseOrder": {"properties": {"id": {"format": "uuid"}, "courseId": {"format": "uuid"}, "createdAt": {"format": "date-time"}, "paidAt": {"format": "date-time"}}}
+        "MembershipGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}}}
+        "CourseGrant": {"properties": {"id": {"format": "uuid"}, "userId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "grantedAt": {"format": "date-time"}, "grantedBy": {"format": "uuid"}, "source": {"enum": ["admin"]}, "state": {"enum": ["active"]}}}
+        "MembershipCard": {"properties": {"courseId": {"format": "uuid"}, "slug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}, "title": {"minLength": 1, "maxLength": 200}, "progressPercent": {"minimum": 0, "maximum": 100}, "enrolledAt": {"format": "date-time"}}}
+        "RosterEntry": {"properties": {"userId": {"format": "uuid"}, "displayName": {"minLength": 1, "maxLength": 120}, "enrolledAt": {"format": "date-time"}, "progressPercent": {"minimum": 0, "maximum": 100}}}
+        "LearnerCourse": {"properties": {"courseId": {"format": "uuid"}, "slug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}, "title": {"minLength": 1, "maxLength": 200}, "progressPercent": {"minimum": 0, "maximum": 100}, "enrolledAt": {"format": "date-time"}}}
+        "LearnerRow": {"properties": {"userId": {"format": "uuid"}, "displayName": {"maxLength": 120}, "lastActivityAt": {"format": "date-time"}, "courses": {"minItems": 1}}}
+        "LearnerPage": {"properties": {"entries": {"maxItems": 100}}}
+        "RefundQueueItem": {"properties": {"orderId": {"format": "uuid"}, "courseId": {"format": "uuid"}, "userId": {"format": "uuid"}, "orderAmountMinor": {"format": "int64", "minimum": 1}, "chargedAmountMinor": {"format": "int64"}, "receivedAt": {"format": "date-time"}}}
+        "CheckoutRequest": {"properties": {"courseSlug": {"minLength": 1, "maxLength": 120, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}}}
+        "AdminGrantRequest": {"properties": {"userId": {"format": "uuid"}, "reason": {"minLength": 1, "maxLength": 500}}}
+        "CheckoutForm": {"properties": {"action": {"format": "uri"}, "fields": {"minItems": 1, "items": {"properties": {"name": {"minLength": 1}}, "$ref": null}}}}
+        "WayForPayAcknowledgement": {"properties": {"orderReference": {"minLength": 1}, "time": {"format": "int64"}, "signature": {"minLength": 32, "maxLength": 32}}}
         AuthenticatedUser:
           properties:
             id:
@@ -801,6 +819,28 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    "/api/v1/learn/courses/{courseId}/purchase": {"post": {"operationId": "startCoursePurchase", "summary": "Start an idempotent course purchase", "description": "Authenticated same-origin mutation. The order snapshots the published course price.", "responses": {"201": {"description": "The new or replayed pending order.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/courses/{courseId}/enroll": {"post": {"operationId": "enrollInCourse", "summary": "Enroll the authenticated account in a free published course", "responses": {"201": {"description": "Active membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/courses/{courseId}/membership": {"get": {"operationId": "getMyCourseMembership", "summary": "Read the authenticated account membership state", "responses": {"200": {"description": "Membership state, or no membership.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/memberships": {"get": {"operationId": "getMyCourseMemberships", "summary": "List the authenticated account course memberships", "responses": {"200": {"description": "Active and blocked memberships, newest enrollment first.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}}}
+    "/api/v1/learn/orders/{orderId}/checkout": {"post": {"operationId": "createPurchaseCheckout", "summary": "Create the hosted WayForPay checkout form for the authenticated order owner", "requestBody": {"required": false}, "responses": {"200": {"description": "Ordered fields to POST to the hosted payment page.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/learn/orders/{orderId}": {"get": {"operationId": "getPurchaseStatus", "summary": "Read the authenticated account's purchase status", "responses": {"200": {"description": "Current order status.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/payments/wayforpay/callback": {"post": {"operationId": "receiveWayForPayCallback", "summary": "Receive a signed WayForPay service callback", "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": true}}}}, "responses": {"200": {"description": "Signed acknowledgement, including duplicate and ignored statuses."}}}}
+    "/api/v1/admin/courses/{courseId}/grants": {"post": {"operationId": "grantCourseAccess", "summary": "Grant course access as an administrator", "description": "Admin-only same-origin mutation. Creates an active admin grant and its audit record.", "requestBody": {"required": true}, "responses": {"201": {"description": "Active administrative grant.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/courses/{courseId}/participants/{userId}/revoke": {"post": {"operationId": "revokeCourseParticipant", "summary": "Revoke a participant membership as an administrator", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/learners": {"get": {"operationId": "listAdminLearners", "summary": "List learners across every course for an administrator", "responses": {"200": {"description": "A cursor page of learners; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "q": {"schema": {"minLength": 1, "maxLength": 80}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/admin/refunds": {"get": {"operationId": "listRefundQueue", "summary": "List orders flagged for refund attention", "responses": {"200": {"description": "Orders needing refund attention."}}, "parameters": {"state": {"description": "Narrows the list. Absent defaults to pending."}}}}
+    "/api/v1/admin/refunds/{orderId}/refund": {"post": {"operationId": "refundOrder", "summary": "Record a refund-queue order as refunded", "responses": {"204": {"description": "Refund-queue row settled as refunded"}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/refunds/{orderId}/decline": {"post": {"operationId": "declineRefund", "summary": "Record a refund-queue order as declined", "responses": {"204": {"description": "Refund-queue row settled as declined"}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/admin/refunds/{orderId}/revoke": {"post": {"operationId": "revokeRefundGrant", "summary": "Revoke the grant of a refund-queue order", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"orderId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/courses/{courseId}/roster": {"get": {"operationId": "getCourseRoster", "summary": "List course members for the instructor or administrator", "responses": {"200": {"description": "A cursor page of members; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/teach/learners": {"get": {"operationId": "listTeachLearners", "summary": "List learners across the instructor's own courses", "responses": {"200": {"description": "A cursor page of learners; email addresses are not exposed.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "q": {"schema": {"minLength": 1, "maxLength": 80}}, "limit": {"schema": {"minimum": 1, "maximum": 100, "default": 20}}}}}
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/block": {"post": {"operationId": "blockCourseParticipant", "summary": "Block a participant from course communication", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/unblock": {"post": {"operationId": "unblockCourseParticipant", "summary": "Restore a participant's course communication", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"courseId": {"schema": {"format": "uuid"}}, "userId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/comments/{commentId}/block-author": {"post": {"operationId": "blockCommentAuthor", "summary": "Block the author of a comment from course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"commentId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/comments/{commentId}/unblock-author": {"post": {"operationId": "unblockCommentAuthor", "summary": "Restore the comment author's course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"commentId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/reviews/{reviewId}/block-author": {"post": {"operationId": "blockReviewAuthor", "summary": "Block the author of a review from course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"reviewId": {"schema": {"format": "uuid"}}}}}
+    "/api/v1/teach/reviews/{reviewId}/unblock-author": {"post": {"operationId": "unblockReviewAuthor", "summary": "Restore the review author's course communication (owner or administrator)", "responses": {"200": {"description": "Updated membership."}}, "parameters": {"reviewId": {"schema": {"format": "uuid"}}}}}
     "/api/v1/auth/login":
       post:
         operationId: login

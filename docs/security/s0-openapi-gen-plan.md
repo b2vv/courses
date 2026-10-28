@@ -866,3 +866,31 @@ oneOf and Rating STOPs.
   product/contract change, hand spec untouched, nothing merges. Unblocks S0.1j orders (purchase
   Idempotency-Key). Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 /
   S0.1h-gen / S0.1i-gen).
+
+**16.22 orders module-ownership test adapted for the contributor pattern (writer decision, Courses 13,
+2026-10-28, S0.1j).** `platform/architecture/orders_ownership_test.go` enforced a stricter isolation for the
+payment module than ADR 013's generic module rule: nothing may import `courses/internal/orders/...`, and
+orders may import nothing under `courses/internal/` except itself and `contracts/`. Making orders the ninth
+OpenAPI contributor — the same pattern the other eight already follow — needs two things the old rules
+forbade: the collector `openapispec/contributions.go` must import orders' http `OpenAPIContribution`, and
+orders' `openapi_contract.go` must import `courses/internal/platform/openapigen` to name its contribution
+type.
+- **Decision — two surgical exemptions that preserve the real intent.** (1) The OpenAPI collector (the one
+  leaf composition root, `internal/openapispec`) is exempt from "no module imports orders": it registers
+  every module's contribution and imports the http adapter, not orders' domain/application/ports — it is not
+  a business module consuming payment facts, which is exactly what the rule guards. (2) orders may import
+  `courses/internal/platform/*`: platform infrastructure (the OpenAPI generator, used to DESCRIBE its own
+  contract) is not another business module; it is the `internal/`-tree sibling of `courses/platform/*`
+  (`httpserver`) that orders already depended on and the rule always allowed. The rule still forbids a
+  business module importing orders, and orders importing any OTHER business module — the payment-isolation
+  guarantee is intact, only the generate-from-Go wiring is admitted.
+- **Why adapt the test, not route around it.** Every other module is a direct contributor (collector import +
+  openapigen import); an orders-only indirection (e.g. a port exposing the contribution) would be a bespoke
+  divergence with no behavioural benefit, and the contribution type lives in `platform/openapigen`, so the
+  import is unavoidable. The honest move is to align the stricter orders guard with the pattern the codebase
+  already uses, keeping its business-isolation teeth.
+- **Named check:** `TestOrdersModuleOwnership` still fails if a business module imports orders or orders
+  imports another business module; it now passes for the collector and for `internal/platform/*`.
+- **Surfaced by:** full `go test ./...` on S0.1j (the targeted orders/openapispec/openapigen suites Codex ran
+  do not include `platform/architecture`) — the AGENTS.md lesson that shared-state changes need the full set.
+  Courses 2 review gates this as an architecture-boundary change (higher stakes than a plain contributor).
