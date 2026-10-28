@@ -26,6 +26,11 @@ type Field struct {
 
 type Response struct {
 	Body any
+	// OneOf declares a response whose body is exactly one of several alternative shapes
+	// (OpenAPI oneOf), e.g. login 200 is AuthenticatedUser or TwoFactorRequired. Each member is
+	// reflected like a Body (named members emit as $ref); members are emitted in slice order.
+	// Mutually exclusive with Body and Empty; needs at least two members.
+	OneOf []any
 	// Component optionally names a reusable response (not a schema).
 	Component string
 	// Empty declares an intentional bodyless response (e.g. 201/202/204). A nil Body without
@@ -214,13 +219,29 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 			response := r.Responses[status]
 			desc := ""
 			value := &openapi3.Response{Description: &desc}
-			// A bodyless response must be declared explicitly (Empty); a nil Body without Empty is
-			// a forgotten body and fails closed, whatever the status.
+			// A body is declared exactly one way: a single Body, a OneOf alternative set, or Empty
+			// (an intentional bodyless response). A nil Body with none of these set is a forgotten
+			// body and fails closed, whatever the status.
 			switch {
-			case response.Empty && response.Body != nil:
-				return nil, fmt.Errorf("response %d declares both a body and Empty", status)
+			case response.Empty && (response.Body != nil || len(response.OneOf) > 0):
+				return nil, fmt.Errorf("response %d declares Empty together with a body", status)
+			case response.Body != nil && len(response.OneOf) > 0:
+				return nil, fmt.Errorf("response %d declares both Body and OneOf", status)
 			case response.Empty:
 				// no content schema
+			case len(response.OneOf) > 0:
+				if len(response.OneOf) < 2 {
+					return nil, fmt.Errorf("response %d OneOf needs at least two alternatives", status)
+				}
+				refs := make(openapi3.SchemaRefs, 0, len(response.OneOf))
+				for _, member := range response.OneOf {
+					ref, err := g.reflectBody(doc, member, false)
+					if err != nil {
+						return nil, err
+					}
+					refs = append(refs, ref)
+				}
+				value.Content = openapi3.Content{"application/json": &openapi3.MediaType{Schema: &openapi3.SchemaRef{Value: &openapi3.Schema{OneOf: refs}}}}
 			case response.Body == nil:
 				return nil, fmt.Errorf("nil response body for status %d; set Empty for an intentional bodyless response", status)
 			default:
