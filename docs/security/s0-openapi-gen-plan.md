@@ -807,3 +807,29 @@ like `Rating` is expressed.
 - **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18); no product/contract
   change, hand spec untouched, nothing merges. Unblocks S0.1h discussion, which maps `reviewRatingDTO` →
   `Rating` like course. Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2).
+
+**16.20 oneOf response body — generator capability (writer decision, Courses 13, 2026-10-28, S0.1i identity
+STOP).** identity `POST /api/v1/auth/login` answers `200` with one of two shapes: the Go handler writes
+`mapUser(result.User)` (→ `AuthenticatedUser`) on success, or `twoFactorRequiredDTO` (→ `TwoFactorRequired`)
+when `ErrTwoFactorRequired`. The frozen hand spec expresses this as `schema.oneOf: [AuthenticatedUser,
+TwoFactorRequired]` (openapi.yaml:1158-1160) — the ONLY `oneOf` in the frozen contract. The generator's
+`Response` carried a single `Body any`, so a union response had no Go anchor; Codex STOPped at 0/22 rather
+than work around it (generator, frozen spec and git untouched), the same discipline as the §16.19 Rating STOP.
+- **Decision — a union response is declared with `Response.OneOf []any`.** Each member is reflected exactly
+  like a `Body` (a `NameMap`-named member emits as a `$ref` to its component) and the members are emitted as
+  `schema.oneOf` in SLICE ORDER, because `oneOf` order is contract-significant (the fidelity comparison does
+  not sort it). `OneOf` is mutually exclusive with `Body` and `Empty`, and needs at least two members: a
+  single alternative is a plain `Body` and fails closed (`OneOf needs at least two alternatives`); `Body` +
+  `OneOf` fails closed (`both Body and OneOf`); `Empty` + `OneOf` fails closed (`Empty together with a body`).
+  No behaviour change for any existing single-`Body` or `Empty` response.
+- **Why a member list, not a synthetic wrapper type.** The two alternatives are independent frozen components
+  referenced elsewhere; a wrapper Go struct would either invent a component the hand spec does not have or
+  force a cross-module import. A member list maps one-to-one onto `oneOf` and reuses the existing
+  `reflectBody` path (named members → `$ref`, order preserved), so the emission is the frozen shape exactly.
+- **Test (prove non-vacuous, all directions):** `TestOneOfResponseEmitsAlternatives` — a `200 {OneOf:
+  [authUser, twoFactor]}` emits `oneOf` with two component `$ref`s in that order and both components present;
+  a single-member `OneOf`, a `Body`+`OneOf`, and an `Empty`+`OneOf` each fail closed with their own message.
+  `TestOpenAPIArtifact` stays byte-identical (no contributor uses `OneOf` until identity lands).
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18 / §16.19); no
+  product/contract change, hand spec untouched, nothing merges. Unblocks S0.1i identity (login 200).
+  Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 / S0.1h-gen).

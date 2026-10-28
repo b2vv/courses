@@ -222,8 +222,53 @@ func TestBodylessResponseEmitsNoContent(t *testing.T) {
 	}
 	// Fail closed: declaring both a body and Empty is contradictory.
 	both := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/both", Responses: map[int]Response{200: {Body: child{}, Empty: true}}}}}
-	if _, err := Generate([]ModuleContribution{both}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "both a body and Empty") {
+	if _, err := Generate([]ModuleContribution{both}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "Empty together with a body") {
 		t.Fatalf("body+Empty should fail closed, got %v", err)
+	}
+}
+
+func TestOneOfResponseEmitsAlternatives(t *testing.T) {
+	// A 200 whose body is exactly one of two named shapes (login: AuthenticatedUser | TwoFactorRequired).
+	type authUser struct {
+		ID string `json:"id"`
+	}
+	type twoFactor struct {
+		PendingID string `json:"pendingId"`
+	}
+	names := map[reflect.Type]string{reflect.TypeFor[authUser](): "AuthenticatedUser", reflect.TypeFor[twoFactor](): "TwoFactorRequired"}
+	c := ModuleContribution{
+		Routes:  []RouteBinding{{Method: "POST", Path: "/login", Responses: map[int]Response{200: {OneOf: []any{authUser{}, twoFactor{}}}}}},
+		NameMap: names,
+	}
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := doc.Paths.Value("/login").Post.Responses.Value("200").Value.Content["application/json"].Schema.Value
+	if len(schema.OneOf) != 2 {
+		t.Fatalf("expected two oneOf members, got %+v", schema.OneOf)
+	}
+	// Named members emit as component refs, in slice order (order is contract-significant).
+	if schema.OneOf[0].Ref != "#/components/schemas/AuthenticatedUser" || schema.OneOf[1].Ref != "#/components/schemas/TwoFactorRequired" {
+		t.Fatalf("oneOf members/order wrong: %q, %q", schema.OneOf[0].Ref, schema.OneOf[1].Ref)
+	}
+	if doc.Components.Schemas["AuthenticatedUser"] == nil || doc.Components.Schemas["TwoFactorRequired"] == nil {
+		t.Fatal("oneOf member components missing")
+	}
+	// Fail closed: a single alternative is a Body, not a OneOf.
+	one := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/one", Responses: map[int]Response{200: {OneOf: []any{authUser{}}}}}}, NameMap: names}
+	if _, err := Generate([]ModuleContribution{one}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "at least two") {
+		t.Fatalf("single-member OneOf should fail closed, got %v", err)
+	}
+	// Fail closed: Body and OneOf together are contradictory.
+	bodyAndOneOf := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/mix", Responses: map[int]Response{200: {Body: authUser{}, OneOf: []any{authUser{}, twoFactor{}}}}}}, NameMap: names}
+	if _, err := Generate([]ModuleContribution{bodyAndOneOf}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "both Body and OneOf") {
+		t.Fatalf("Body+OneOf should fail closed, got %v", err)
+	}
+	// Fail closed: Empty and OneOf together are contradictory.
+	emptyAndOneOf := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/e", Responses: map[int]Response{200: {Empty: true, OneOf: []any{authUser{}, twoFactor{}}}}}}, NameMap: names}
+	if _, err := Generate([]ModuleContribution{emptyAndOneOf}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "Empty together with a body") {
+		t.Fatalf("Empty+OneOf should fail closed, got %v", err)
 	}
 }
 
