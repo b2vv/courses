@@ -8,6 +8,6 @@
 import type { PlaybackSessionRequestAv1Support } from './playbackSessionRequestAv1Support.ts';
 
 export interface PlaybackSessionRequest {
-  lessonId: string;
   av1Support?: PlaybackSessionRequestAv1Support;
+  lessonId: string;
 }

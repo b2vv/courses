@@ -8,10 +8,10 @@
 import type { TwoFactorRequiredStatus } from './twoFactorRequiredStatus.ts';
 
 export interface TwoFactorRequired {
-  status: TwoFactorRequiredStatus;
   /**
      * @minLength 1
      * @maxLength 128
      */
   pendingId: string;
+  status: TwoFactorRequiredStatus;
 }

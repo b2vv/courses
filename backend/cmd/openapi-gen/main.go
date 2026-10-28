@@ -16,7 +16,7 @@ import (
 func main() {
 	overlay := flag.String("overlay", "openapi/openapi.overlay.yaml", "path to the OpenAPI overlay")
 	root := flag.String("root", ".", "backend root the generator resolves Go sources against")
-	out := flag.String("out", "openapi/openapi.generated.yaml", "path to write the generated artifact")
+	out := flag.String("out", "openapi/openapi.yaml", "path to write the generated artifact")
 	flag.Parse()
 
 	if err := generate(*overlay, *root, *out); err != nil {

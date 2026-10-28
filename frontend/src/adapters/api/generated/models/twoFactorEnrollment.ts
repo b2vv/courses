@@ -7,7 +7,7 @@
  */
 
 export interface TwoFactorEnrollment {
+  otpauthUri: string;
   /** @minLength 16 */
   secret: string;
-  otpauthUri: string;
 }

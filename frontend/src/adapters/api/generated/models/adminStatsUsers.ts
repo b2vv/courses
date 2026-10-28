@@ -10,8 +10,8 @@ import type { AdminStatsRole } from './adminStatsRole.ts';
 export interface AdminStatsUsers {
   active: number;
   blocked: number;
-  deleted: number;
   byRole: AdminStatsRole;
-  verified: number;
+  deleted: number;
   twoFactor: number;
+  verified: number;
 }

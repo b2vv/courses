@@ -8,7 +8,7 @@
 import type { MembershipStateState } from './membershipStateState.ts';
 
 export interface MembershipState {
+  member: boolean;
   /** @nullable */
   state: MembershipStateState;
-  member: boolean;
 }

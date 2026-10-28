@@ -9,11 +9,11 @@ import type { AdminLesson } from './adminLesson.ts';
 
 export interface AdminModule {
   id: string;
+  /** @maxItems 120 */
+  lessons: AdminLesson[];
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  /** @maxItems 120 */
-  lessons: AdminLesson[];
 }

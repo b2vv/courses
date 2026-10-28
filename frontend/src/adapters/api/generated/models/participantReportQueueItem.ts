@@ -9,21 +9,21 @@ import type { ParticipantReportQueueItemKind } from './participantReportQueueIte
 import type { ParticipantReportQueueItemState } from './participantReportQueueItemState.ts';
 
 export interface ParticipantReportQueueItem {
-  id: string;
   courseId: string;
-  reporterId: string;
-  targetId: string;
+  courseTitle: string;
+  createdAt: string;
+  id: string;
   kind: ParticipantReportQueueItemKind;
   /**
      * @minLength 1
      * @maxLength 500
      */
   reason: string;
-  state: ParticipantReportQueueItemState;
-  createdAt: string;
+  reporterId: string;
   /** @nullable */
   reporterName: string | null;
+  state: ParticipantReportQueueItemState;
+  targetId: string;
   /** @nullable */
   targetName: string | null;
-  courseTitle: string;
 }

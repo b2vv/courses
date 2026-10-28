@@ -10,18 +10,30 @@ import type { CourseStatus } from './courseStatus.ts';
 import type { NullablePrice } from './nullablePrice.ts';
 
 export interface Course {
+  createdAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  description: string;
   id: string;
+  /** @minimum 0 */
+  lessonCount: number;
+  /** True when the course has a price; this is display metadata, not an access decision. */
+  paid: boolean;
+  price: NullablePrice | null;
+  /** @nullable */
+  publishedAt: string | null;
+  /** @nullable */
+  rating: CourseRating;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  title: string;
+  /** Foundation public operations only return published. */
+  status: CourseStatus;
   /**
      * @minLength 1
      * @maxLength 500
@@ -29,20 +41,8 @@ export interface Course {
   summary: string;
   /**
      * @minLength 1
-     * @maxLength 20000
+     * @maxLength 200
      */
-  description: string;
-  /** Foundation public operations only return published. */
-  status: CourseStatus;
-  createdAt: string;
+  title: string;
   updatedAt: string;
-  /** @nullable */
-  publishedAt: string | null;
-  price: NullablePrice | null;
-  /** True when the course has a price; this is display metadata, not an access decision. */
-  paid: boolean;
-  /** @nullable */
-  rating: CourseRating;
-  /** @minimum 0 */
-  lessonCount: number;
 }

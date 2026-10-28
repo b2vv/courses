@@ -8,15 +8,15 @@
 import type { PlaybackHeartbeatRequestReason } from './playbackHeartbeatRequestReason.ts';
 
 export interface PlaybackHeartbeatRequest {
-  /** @pattern ^[0-9a-f]{32}$ */
-  playbackId: string;
-  lessonId: string;
-  /** @minimum 0 */
-  positionSeconds: number;
   /**
      * @minimum 0
      * @maximum 2147483647
      */
   clientSeq: number;
+  lessonId: string;
+  /** @pattern ^[0-9a-f]{32}$ */
+  playbackId: string;
+  /** @minimum 0 */
+  positionSeconds: number;
   reason: PlaybackHeartbeatRequestReason;
 }

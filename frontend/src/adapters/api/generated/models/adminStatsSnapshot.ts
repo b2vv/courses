@@ -16,13 +16,13 @@ import type { AdminStatsReports } from './adminStatsReports.ts';
 import type { AdminStatsUsers } from './adminStatsUsers.ts';
 
 export interface AdminStatsSnapshot {
-  users: AdminStatsUsers;
   courses: AdminStatsCourses;
-  grants: AdminStatsGrants;
-  orders: AdminStatsOrders;
-  reports: AdminStatsReports;
-  media: AdminStatsMedia;
   engagement: AdminStatsEngagement;
+  grants: AdminStatsGrants;
   instructors: AdminStatsInstructor[];
+  media: AdminStatsMedia;
+  orders: AdminStatsOrders;
   platform: AdminStatsPlatform;
+  reports: AdminStatsReports;
+  users: AdminStatsUsers;
 }

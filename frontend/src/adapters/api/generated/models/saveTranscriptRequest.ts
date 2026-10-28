@@ -8,13 +8,13 @@
 import type { SaveTranscriptRequestSegmentsItem } from './saveTranscriptRequestSegmentsItem.ts';
 
 export interface SaveTranscriptRequest {
+  expectedUpdatedAt?: string;
   /**
      * @minLength 2
      * @maxLength 35
      * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
      */
   language: string;
-  expectedUpdatedAt?: string;
   /** @maxItems 5000 */
   segments: SaveTranscriptRequestSegmentsItem[];
 }

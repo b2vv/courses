@@ -8,19 +8,19 @@
 import type { AuthenticatedUserRole } from './authenticatedUserRole.ts';
 
 export interface AuthenticatedUser {
-  id: string;
-  /**
-     * @minLength 3
-     * @maxLength 254
-     */
-  email: string;
   /**
      * @minLength 1
      * @maxLength 120
      */
   displayName: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     */
+  email: string;
   emailVerified: boolean;
-  twoFactorEnabled: boolean;
+  id: string;
   /** student may learn; instructor and admin may enter the administration shell. */
   role: AuthenticatedUserRole;
+  twoFactorEnabled: boolean;
 }

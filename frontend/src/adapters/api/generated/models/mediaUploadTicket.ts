@@ -10,10 +10,10 @@ import type { MediaUploadTicketChunkBytes } from './mediaUploadTicketChunkBytes.
 import type { MediaUploadTicketMaxBytes } from './mediaUploadTicketMaxBytes.ts';
 
 export interface MediaUploadTicket {
-  videoId: string;
+  chunkBytes: MediaUploadTicketChunkBytes;
+  expiresAt: AdminTimestamp;
+  maxBytes: MediaUploadTicketMaxBytes;
   /** @pattern ^/uploads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ */
   uploadUrl: string;
-  chunkBytes: MediaUploadTicketChunkBytes;
-  maxBytes: MediaUploadTicketMaxBytes;
-  expiresAt: AdminTimestamp;
+  videoId: string;
 }

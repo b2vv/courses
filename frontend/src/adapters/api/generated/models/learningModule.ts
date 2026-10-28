@@ -9,11 +9,11 @@ import type { LearningLesson } from './learningLesson.ts';
 
 export interface LearningModule {
   id: string;
+  /** @maxItems 120 */
+  lessons: LearningLesson[];
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  /** @maxItems 120 */
-  lessons: LearningLesson[];
 }

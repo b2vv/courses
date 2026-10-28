@@ -11,23 +11,23 @@ import type { NullablePrice } from './nullablePrice.ts';
 
 export interface AdminCourse {
   id: string;
+  instructorId: string;
+  /** @minimum 0 */
+  lessonCount: number;
+  price: NullablePrice | null;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
+  status: AdminCourseStatus;
+  /** @minimum 0 */
+  studentCount: number;
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  status: AdminCourseStatus;
-  instructorId: string;
   updatedAt: AdminTimestamp;
-  /** @minimum 0 */
-  lessonCount: number;
-  /** @minimum 0 */
-  studentCount: number;
-  price: NullablePrice | null;
 }

@@ -9,9 +9,9 @@ import type { LessonBlockType } from './lessonBlockType.ts';
 import type { LessonSpan } from './lessonSpan.ts';
 
 export interface LessonBlock {
-  type: LessonBlockType;
+  items?: (LessonSpan[] | null)[];
   level?: number;
   ordered?: boolean;
   spans?: LessonSpan[];
-  items?: (LessonSpan[] | null)[];
+  type: LessonBlockType;
 }

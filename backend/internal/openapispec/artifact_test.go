@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestOpenAPIArtifact is the sole writer of the parallel artifact.
+// TestOpenAPIArtifact is the sole writer of the authoritative openapi.yaml.
 func TestOpenAPIArtifact(t *testing.T) {
 	generate := func() []byte {
 		t.Helper()
@@ -33,7 +33,7 @@ func TestOpenAPIArtifact(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("regeneration is not byte-identical")
 	}
-	const artifact = "../../openapi/openapi.generated.yaml"
+	const artifact = "../../openapi/openapi.yaml"
 	if os.Getenv("UPDATE_OPENAPI_GENERATED") == "1" {
 		if err := os.WriteFile(artifact, first, 0644); err != nil {
 			t.Fatal(err)
@@ -44,7 +44,7 @@ func TestOpenAPIArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(checked, first) {
-		t.Fatal("parallel artifact stale; run UPDATE_OPENAPI_GENERATED=1 go test -run TestOpenAPIArtifact ./internal/openapispec")
+		t.Fatal("openapi.yaml stale; run UPDATE_OPENAPI_GENERATED=1 go test -run TestOpenAPIArtifact ./internal/openapispec")
 	}
 	t.Log("all contributions present; two generations byte-identical; checked artifact matches")
 }

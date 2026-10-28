@@ -10,18 +10,18 @@ import type { RefundQueueItemOutcome } from './refundQueueItemOutcome.ts';
 import type { RefundQueueItemReason } from './refundQueueItemReason.ts';
 
 export interface RefundQueueItem {
-  orderId: string;
-  courseId: string;
-  userId: string;
-  /** @minimum 1 */
-  orderAmountMinor: number;
   /** @nullable */
   chargedAmountMinor: number | null;
-  /** @nullable */
-  receivedAt: string | null;
-  reason: RefundQueueItemReason;
+  courseId: string;
   /** @nullable */
   membershipState: RefundQueueItemMembershipState;
+  /** @minimum 1 */
+  orderAmountMinor: number;
+  orderId: string;
   /** @nullable */
   outcome: RefundQueueItemOutcome;
+  reason: RefundQueueItemReason;
+  /** @nullable */
+  receivedAt: string | null;
+  userId: string;
 }

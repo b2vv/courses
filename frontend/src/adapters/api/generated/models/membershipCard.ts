@@ -9,22 +9,22 @@ import type { MembershipCardState } from './membershipCardState.ts';
 
 export interface MembershipCard {
   courseId: string;
+  enrolledAt: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progressPercent: number;
   /**
      * @minLength 1
      * @maxLength 120
      * @pattern ^[a-z0-9]+(-[a-z0-9]+)*$
      */
   slug: string;
+  state: MembershipCardState;
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  state: MembershipCardState;
-  /**
-     * @minimum 0
-     * @maximum 100
-     */
-  progressPercent: number;
-  enrolledAt: string;
 }

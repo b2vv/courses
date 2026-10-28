@@ -8,11 +8,11 @@
 import type { ProgramLesson } from './programLesson.ts';
 
 export interface ProgramModule {
+  /** @maxItems 120 */
+  lessons: ProgramLesson[];
   /**
      * @minLength 1
      * @maxLength 200
      */
   title: string;
-  /** @maxItems 120 */
-  lessons: ProgramLesson[];
 }

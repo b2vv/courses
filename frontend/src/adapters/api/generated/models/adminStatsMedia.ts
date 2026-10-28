@@ -7,11 +7,11 @@
  */
 
 export interface AdminStatsMedia {
-  inProgress: number;
-  ready: number;
-  failed: number;
-  totalDurationSeconds: number;
   /** @nullable */
   avgDurationSeconds: number | null;
+  failed: number;
+  inProgress: number;
+  ready: number;
+  totalDurationSeconds: number;
   withDurationCount: number;
 }

@@ -9,16 +9,16 @@ import type { ListTeachLearnersState } from './listTeachLearnersState.ts';
 
 export type ListTeachLearnersParams = {
 courseId?: string;
-state?: ListTeachLearnersState;
-/**
- * @minLength 1
- * @maxLength 80
- */
-q?: string;
 cursor?: string;
 /**
  * @minimum 1
  * @maximum 100
  */
 limit?: number;
+/**
+ * @minLength 1
+ * @maxLength 80
+ */
+q?: string;
+state?: ListTeachLearnersState;
 };
