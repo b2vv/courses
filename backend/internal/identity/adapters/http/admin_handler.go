@@ -20,13 +20,23 @@ import (
 
 const administrationTimeLayout = "2006-01-02T15:04:05.000000Z07:00"
 
+// mutableAccountStatus excludes the delete-only account state.
+type mutableAccountStatus string
+
+type adminUserStatusRequest struct {
+	Status mutableAccountStatus `json:"status"`
+}
+type adminUserPasswordRequest struct {
+	Password string `json:"password"`
+}
+
 type adminUserDTO struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"displayName"`
-	Role        string `json:"role"`
-	Status      string `json:"status"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string               `json:"id"`
+	Email       string               `json:"email"`
+	DisplayName string               `json:"displayName"`
+	Role        domain.Role          `json:"role"`
+	Status      domain.AccountStatus `json:"status"`
+	UpdatedAt   string               `json:"updatedAt"`
 }
 
 type adminUserPaginationDTO struct {
@@ -79,11 +89,12 @@ func (handler *Handler) setUserStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status, err := decodeAdministrationString(w, r, "status")
+	request := adminUserStatusRequest{Status: mutableAccountStatus(status)}
 	if err != nil || status != string(domain.AccountActive) && status != string(domain.AccountBlocked) {
 		writeError(w, r, domain.ErrInvalidUser, "invalid_request")
 		return
 	}
-	if err := handler.administration.SetStatus(r.Context(), actor, id, domain.AccountStatus(status)); err != nil {
+	if err := handler.administration.SetStatus(r.Context(), actor, id, domain.AccountStatus(request.Status)); err != nil {
 		writeError(w, r, err, "")
 		return
 	}
@@ -119,11 +130,12 @@ func (handler *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 	password, err := decodeAdministrationString(w, r, "password")
+	request := adminUserPasswordRequest{Password: password}
 	if err != nil || !domain.ValidPassword(password) {
 		writeError(w, r, domain.ErrInvalidUser, "invalid_request")
 		return
 	}
-	if err := handler.administration.ResetPassword(r.Context(), id, password); err != nil {
+	if err := handler.administration.ResetPassword(r.Context(), id, request.Password); err != nil {
 		writeError(w, r, err, "")
 		return
 	}
@@ -286,7 +298,7 @@ func emptyAdministrationQuery(raw string) bool {
 
 func mapAdminUser(user domain.User) adminUserDTO {
 	return adminUserDTO{
-		ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role),
-		Status: string(user.AccountStatus()), UpdatedAt: user.UpdatedAt.UTC().Truncate(time.Microsecond).Format(administrationTimeLayout),
+		ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role,
+		Status: user.AccountStatus(), UpdatedAt: user.UpdatedAt.UTC().Truncate(time.Microsecond).Format(administrationTimeLayout),
 	}
 }

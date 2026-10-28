@@ -68,24 +68,30 @@ type Handler struct {
 type userKey struct{}
 
 type loginRequest struct {
-	Email      string
-	Password   string
-	RememberMe bool
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	RememberMe bool   `json:"rememberMe,omitempty"`
 }
 
 type userDTO struct {
-	ID               string `json:"id"`
-	Email            string `json:"email"`
-	DisplayName      string `json:"displayName"`
-	Role             string `json:"role"`
-	EmailVerified    bool   `json:"emailVerified"`
-	TwoFactorEnabled bool   `json:"twoFactorEnabled"`
+	ID               string      `json:"id"`
+	Email            string      `json:"email"`
+	DisplayName      string      `json:"displayName"`
+	Role             domain.Role `json:"role"`
+	EmailVerified    bool        `json:"emailVerified"`
+	TwoFactorEnabled bool        `json:"twoFactorEnabled"`
 }
 
+// instructorRole is the eligible-owner subset of identity roles.
+type instructorRole string
+
+// twoFactorStatus identifies the pending-login response variant.
+type twoFactorStatus string
+
 type instructorDTO struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
-	Role        string `json:"role"`
+	ID          string         `json:"id"`
+	DisplayName string         `json:"displayName"`
+	Role        instructorRole `json:"role"`
 }
 
 func NewHandler(identity identityService, instructors instructorLister, administration administrationService, config Config, accountServices ...accountsService) *Handler {
@@ -142,7 +148,7 @@ func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := handler.identity.Login(r.Context(), application.LoginInput{Email: input.Email, Password: input.Password, RememberMe: input.RememberMe, PresentedToken: presented, IP: clientIP(r)})
 	if errors.Is(err, domain.ErrTwoFactorRequired) {
-		httpserver.WriteJSON(w, http.StatusOK, twoFactorRequiredDTO{Status: string(domain.ErrTwoFactorRequired), PendingID: result.PendingID})
+		httpserver.WriteJSON(w, http.StatusOK, twoFactorRequiredDTO{Status: twoFactorStatus(domain.ErrTwoFactorRequired), PendingID: result.PendingID})
 		return
 	}
 	if err != nil {
@@ -154,8 +160,8 @@ func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 type twoFactorRequiredDTO struct {
-	Status    string `json:"status"`
-	PendingID string `json:"pendingId"`
+	Status    twoFactorStatus `json:"status"`
+	PendingID string          `json:"pendingId"`
 }
 type enrollTwoFactorDTO struct {
 	Secret     string `json:"secret"`
@@ -164,14 +170,16 @@ type enrollTwoFactorDTO struct {
 type recoveryCodesDTO struct {
 	RecoveryCodes []string `json:"recoveryCodes"`
 }
-type twoFactorCodeRequest struct{ Code string }
+type twoFactorCodeRequest struct {
+	Code string `json:"code"`
+}
 type completeTwoFactorRequest struct {
-	PendingID string
-	Code      string
+	PendingID string `json:"pendingId"`
+	Code      string `json:"code"`
 }
 type disableTwoFactorRequest struct {
-	Password string
-	Code     string
+	Password string `json:"password"`
+	Code     string `json:"code"`
 }
 
 func (handler *Handler) twoFactorUnavailable(w http.ResponseWriter, r *http.Request) bool {
@@ -542,7 +550,7 @@ func (handler *Handler) listInstructors(w http.ResponseWriter, r *http.Request) 
 	}
 	instructors := make([]instructorDTO, 0, len(users))
 	for _, user := range users {
-		instructors = append(instructors, instructorDTO{ID: user.ID, DisplayName: user.DisplayName, Role: string(user.Role)})
+		instructors = append(instructors, instructorDTO{ID: user.ID, DisplayName: user.DisplayName, Role: instructorRole(user.Role)})
 	}
 	httpserver.WriteJSON(w, http.StatusOK, instructors)
 }
@@ -624,21 +632,31 @@ func decodeLogin(w http.ResponseWriter, r *http.Request) (loginRequest, error) {
 }
 
 type registerRequest struct {
-	Email       string
-	Password    string
-	DisplayName string
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName"`
 }
-type tokenRequest struct{ Token string }
-type emailRequest struct{ Email string }
+type tokenRequest struct {
+	Token string `json:"token"`
+}
+type optionalEmailRequest struct {
+	Email string `json:"email,omitempty"`
+}
+
+type emailRequest struct {
+	Email string `json:"email"`
+}
 type resetPasswordRequest struct {
-	Token    string
-	Password string
+	Token    string `json:"token"`
+	Password string `json:"password"`
 }
 type changePasswordRequest struct {
-	OldPassword string
-	NewPassword string
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }
-type newEmailRequest struct{ NewEmail string }
+type newEmailRequest struct {
+	NewEmail string `json:"newEmail"`
+}
 
 func decodeRegister(w http.ResponseWriter, r *http.Request) (registerRequest, error) {
 	var result registerRequest
@@ -659,8 +677,8 @@ func decodeEmail(w http.ResponseWriter, r *http.Request) (emailRequest, error) {
 	err := decodeObject(w, r, map[string]func(json.RawMessage) error{"email": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Email) }}, "email")
 	return result, err
 }
-func decodeOptionalEmail(w http.ResponseWriter, r *http.Request) (emailRequest, error) {
-	var result emailRequest
+func decodeOptionalEmail(w http.ResponseWriter, r *http.Request) (optionalEmailRequest, error) {
+	var result optionalEmailRequest
 	err := decodeObject(w, r, map[string]func(json.RawMessage) error{"email": func(raw json.RawMessage) error { return json.Unmarshal(raw, &result.Email) }})
 	return result, err
 }
@@ -785,7 +803,7 @@ func identityHeaders(w http.ResponseWriter) {
 }
 
 func mapUser(user domain.User) userDTO {
-	return userDTO{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: string(user.Role), EmailVerified: user.EmailVerified, TwoFactorEnabled: user.TwoFactorEnabled}
+	return userDTO{ID: user.ID, Email: user.Email, DisplayName: user.DisplayName, Role: user.Role, EmailVerified: user.EmailVerified, TwoFactorEnabled: user.TwoFactorEnabled}
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error, override string) {
