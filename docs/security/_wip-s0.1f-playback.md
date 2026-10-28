@@ -112,3 +112,7 @@ FAIL
 ФАКТ: safe-boundary checkpoint залишається BLOCKED на створенні external receipt (Operation not permitted); exact current root/client policy знайдено, native identity підтверджена, native checkpoint не заявляється виконаним. Durable evidence — цей append-only journal.
 STOP: потрібен writer-owned дозвіл/зміна генератора для bodyless Response; frozen openapi.yaml не редагувався, git mutations не виконувалися.
 ДАЛІ: leave for writer host-verify.
+
+## S0.1f-1 — fail-closed tightening (2026-10-28, Courses 2 non-blocking adopted)
+ФАКТ: Courses 2 PASS на S0.1f @5bf8bd1 (0 blocking, 1 non-blocking). Адоптовано: nil-body дозволено лише для no-content статусів (204/304); для content-bearing статусу nil-body → fail-closed `nil response body for content-bearing status N`. `TestBodylessResponseEmitsNoContent` розширено: 200{} має помилятися. Host: gofmt/build 0, повний `go test ./...` exit 0; `TestOpenAPIArtifact` PASS БЕЗ регенерації (204-вихід незмінний, generated.yaml не брудний). §16.18 оновлено.
+ДАЛІ: коміт S0.1f-1 + tasks.md SA10; знімок Courses 2 для протоколу; НЕ стартувати transcript без owner-рішення темпу.

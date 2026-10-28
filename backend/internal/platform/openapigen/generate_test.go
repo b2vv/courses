@@ -209,6 +209,11 @@ func TestBodylessResponseEmitsNoContent(t *testing.T) {
 	if bodied := responses.Value("200").Value; bodied.Content["application/json"] == nil {
 		t.Fatal("a bodied response lost its content schema")
 	}
+	// Fail closed: a nil body on a content-bearing status is a mistake, not a bodyless response.
+	bad := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/oops", Responses: map[int]Response{200: {}}}}}
+	if _, err := Generate([]ModuleContribution{bad}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "content-bearing status 200") {
+		t.Fatalf("nil body on 200 should fail closed, got %v", err)
+	}
 }
 
 func paramContribution() ModuleContribution {
