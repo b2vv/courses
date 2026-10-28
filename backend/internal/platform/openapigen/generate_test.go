@@ -740,3 +740,53 @@ func TestNamedRootSlicePreservesPointerAndStructRoots(t *testing.T) {
 		})
 	}
 }
+
+// §16.23: changing the NameMap alone must turn recursive generation from reject to ref.
+type recursiveSection struct {
+	Text    string             `json:"text"`
+	Columns []recursiveSection `json:"columns"`
+}
+type recursiveParent struct {
+	Child *recursiveChild `json:"child"`
+}
+type recursiveChild struct {
+	Parent *recursiveParent `json:"parent"`
+}
+
+func TestRecursiveNameMappedSchemas(t *testing.T) {
+	path := overlay(t, "{}")
+	c := contribution(recursiveSection{})
+	c.NullableFields = map[Field]bool{{reflect.TypeFor[recursiveSection](), "Columns"}: false}
+	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "requires a NameMap entry") {
+		t.Fatalf("unnamed recursion must fail closed: %v", err)
+	}
+	c.NameMap = map[reflect.Type]string{reflect.TypeFor[recursiveSection](): "Section"}
+	doc, err := Generate([]ModuleContribution{c}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := doc.Components.Schemas["Section"].Value
+	if section.Properties["text"] == nil || section.Properties["columns"].Value.Items.Ref != "#/components/schemas/Section" {
+		t.Fatalf("recursive component lost its fields or self ref: %#v", section)
+	}
+	// The same source graph, now missing its explicit name, must still fail.
+	delete(c.NameMap, reflect.TypeFor[recursiveSection]())
+	if _, err := Generate([]ModuleContribution{c}, path); err == nil {
+		t.Fatal("removing recursive name escaped guard")
+	}
+
+	c = contribution(recursiveParent{})
+	c.NameMap = map[reflect.Type]string{reflect.TypeFor[recursiveParent](): "Parent", reflect.TypeFor[recursiveChild](): "Child"}
+	doc, err = Generate([]ModuleContribution{c}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentRef := doc.Components.Schemas["Child"].Value.Properties["parent"]
+	if parentRef.Ref != "#/components/schemas/Parent" && (parentRef.Value == nil || len(parentRef.Value.AllOf) != 1 || parentRef.Value.AllOf[0].Ref != "#/components/schemas/Parent") {
+		t.Fatalf("transitive cycle did not refer to Parent: %#v", parentRef)
+	}
+	delete(c.NameMap, reflect.TypeFor[recursiveChild]())
+	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "requires a NameMap entry") {
+		t.Fatalf("partly unnamed cycle must fail closed: %v", err)
+	}
+}

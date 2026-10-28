@@ -29,8 +29,42 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 	learn[401] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "Unauthenticated"}
 	learn[403] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "LearningForbidden"}
 	learn[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "NotFound"}
+	documentResponses := func(success openapigen.Response, conflict bool) map[int]openapigen.Response {
+		responses := errors()
+		responses[200] = success
+		responses[401] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "Unauthenticated"}
+		responses[403] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "LearningForbidden"}
+		responses[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "NotFound"}
+		if conflict {
+			responses[409] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "LessonDocumentConflict"}
+		}
+		return responses
+	}
+	lessonParam := openapigen.Param{Name: "lessonId", In: "path", Type: "string", Required: true}
+	localeParam := openapigen.Param{Name: "locale", In: "query", Type: "string", Enum: []string{"uk", "en"}}
+	// Block has a custom marshaler; preserve the frozen permissive union explicitly.
+	blockType := openapi3.NewStringSchema()
+	for _, value := range domain.BlockTypes {
+		blockType.Enum = append(blockType.Enum, string(value))
+	}
+	spanArray := func(nullable bool) *openapi3.Schema {
+		schema := openapi3.NewArraySchema()
+		schema.Items = &openapi3.SchemaRef{Ref: "#/components/schemas/LessonSpan"}
+		schema.Nullable = nullable
+		return schema
+	}
+	block := openapi3.NewObjectSchema().WithProperty("type", blockType).
+		WithProperty("level", openapi3.NewIntegerSchema()).
+		WithProperty("ordered", openapi3.NewBoolSchema()).
+		WithProperty("spans", spanArray(false)).
+		WithProperty("items", openapi3.NewArraySchema().WithItems(spanArray(true)))
+	block.Required = []string{"type"}
 	return openapigen.ModuleContribution{
 		Routes: []openapigen.RouteBinding{
+			{Method: "GET", Path: "/api/v1/admin/lessons/{lessonId}/document", Responses: documentResponses(openapigen.Response{Body: lessonDocumentDraftResponse{}}, false), Params: []openapigen.Param{lessonParam, localeParam}},
+			{Method: "PUT", Path: "/api/v1/admin/lessons/{lessonId}/document", Request: saveLessonDocumentRequest{}, Responses: documentResponses(openapigen.Response{Body: lessonDocumentUpdatedResponse{}}, true), Params: []openapigen.Param{lessonParam}},
+			{Method: "POST", Path: "/api/v1/admin/lessons/{lessonId}/document/publish", Request: lessonDocumentUpdatedRequest{}, Responses: documentResponses(openapigen.Response{Empty: true}, true), Params: []openapigen.Param{lessonParam, localeParam}},
+			{Method: "GET", Path: "/api/v1/learn/lessons/{lessonId}/document", Responses: documentResponses(openapigen.Response{Body: domain.LessonDocument{}}, false), Params: []openapigen.Param{lessonParam, localeParam}},
 			{Method: "POST", Path: "/api/v1/admin/courses/{id}/status", Request: transitionAdminCourseRequest{}, Params: []openapigen.Param{
 				{Name: "id", In: "path", Type: "string", Required: true},
 			}},
@@ -48,11 +82,23 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			}},
 		},
 		Enums: map[reflect.Type][]string{
+			reflect.TypeFor[domain.SectionType]():        enumStrings(domain.SectionTypes),
+			reflect.TypeFor[domain.Mark]():               enumStrings(domain.Marks),
 			reflect.TypeFor[domain.LearningVideoState](): enumStrings(domain.LearningVideoStates),
 			reflect.TypeFor[domain.Status]():             enumStrings(domain.CourseStatuses),
 			reflect.TypeFor[domain.BlockType]():          enumStrings(domain.BlockTypes),
 		},
 		NameMap: map[reflect.Type]string{
+			reflect.TypeFor[domain.LessonDocument]():         "LessonDocument",
+			reflect.TypeFor[domain.Section]():                "LessonSection",
+			reflect.TypeFor[domain.RichText]():               "LessonRichText",
+			reflect.TypeFor[domain.Block]():                  "LessonBlock",
+			reflect.TypeFor[domain.Span]():                   "LessonSpan",
+			reflect.TypeFor[lessonDocumentDraftResponse]():   "LessonDocumentDraft",
+			reflect.TypeFor[lessonDocumentUpdatedResponse](): "LessonDocumentUpdated",
+			reflect.TypeFor[saveLessonDocumentRequest]():     "SaveLessonDocumentRequest",
+			reflect.TypeFor[lessonDocumentUpdatedRequest]():  "PublishLessonDocumentRequest",
+
 			reflect.TypeFor[learningCourseDTO]():            "LearningCourse",
 			reflect.TypeFor[learningModuleDTO]():            "LearningModule",
 			reflect.TypeFor[learningLessonDTO]():            "LearningLesson",
@@ -63,12 +109,22 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			reflect.TypeFor[paginationDTO](): "Pagination", reflect.TypeFor[pageDTO](): "CoursePage",
 		},
 		Overrides: map[reflect.Type]*openapi3.Schema{
-			reflect.TypeFor[time.Time](): openapi3.NewDateTimeSchema(),
+			reflect.TypeFor[domain.Block](): block,
+			reflect.TypeFor[time.Time]():    openapi3.NewDateTimeSchema(),
 		},
 		FieldRefs: map[openapigen.Field]string{
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "ExpectedUpdatedAt"}: "AdminTimestamp",
 		},
 		NullableFields: map[openapigen.Field]bool{
+			{Type: reflect.TypeFor[domain.LessonDocument](), Name: "Sections"}:              true,
+			{Type: reflect.TypeFor[domain.RichText](), Name: "Blocks"}:                      true,
+			{Type: reflect.TypeFor[domain.Section](), Name: "Columns"}:                      false,
+			{Type: reflect.TypeFor[domain.Section](), Name: "Content"}:                      true,
+			{Type: reflect.TypeFor[domain.Block](), Name: "Spans"}:                          false,
+			{Type: reflect.TypeFor[domain.Block](), Name: "Items"}:                          false,
+			{Type: reflect.TypeFor[domain.Span](), Name: "Marks"}:                           false,
+			{Type: reflect.TypeFor[saveLessonDocumentRequest](), Name: "ExpectedUpdatedAt"}: true,
+
 			{Type: reflect.TypeFor[learningCourseDTO](), Name: "Modules"}:                      false,
 			{Type: reflect.TypeFor[learningModuleDTO](), Name: "Lessons"}:                      false,
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "Status"}:            false,

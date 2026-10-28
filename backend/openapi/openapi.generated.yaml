@@ -155,6 +155,17 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        LessonDocumentConflict:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The lesson document changed since it was loaded.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         LessonNotFound:
             content:
                 application/json:
@@ -1615,6 +1626,77 @@ components:
                 - lessons
                 - title
             type: object
+        LessonBlock:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        items:
+                            $ref: '#/components/schemas/LessonSpan'
+                        nullable: true
+                        type: array
+                    type: array
+                level:
+                    type: integer
+                ordered:
+                    type: boolean
+                spans:
+                    items:
+                        $ref: '#/components/schemas/LessonSpan'
+                    type: array
+                type:
+                    enum:
+                        - paragraph
+                        - heading
+                        - list
+                    type: string
+            required:
+                - type
+            type: object
+        LessonDocument:
+            additionalProperties: false
+            properties:
+                locale:
+                    enum:
+                        - uk
+                        - en
+                    type: string
+                schemaVersion:
+                    enum:
+                        - 1
+                    type: integer
+                sections:
+                    items:
+                        $ref: '#/components/schemas/LessonSection'
+                    nullable: true
+                    type: array
+            required:
+                - locale
+                - schemaVersion
+                - sections
+            type: object
+        LessonDocumentDraft:
+            additionalProperties: false
+            properties:
+                document:
+                    $ref: '#/components/schemas/LessonDocument'
+                updatedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+            required:
+                - document
+                - updatedAt
+            type: object
+        LessonDocumentUpdated:
+            additionalProperties: false
+            properties:
+                updatedAt:
+                    format: date-time
+                    type: string
+            required:
+                - updatedAt
+            type: object
         LessonDraft:
             additionalProperties: false
             properties:
@@ -1673,6 +1755,70 @@ components:
                 - stale
                 - state
                 - updatedAt
+            type: object
+        LessonRichText:
+            additionalProperties: false
+            properties:
+                blocks:
+                    items:
+                        $ref: '#/components/schemas/LessonBlock'
+                    nullable: true
+                    type: array
+            required:
+                - blocks
+            type: object
+        LessonSection:
+            additionalProperties: false
+            properties:
+                alt:
+                    type: string
+                columns:
+                    items:
+                        $ref: '#/components/schemas/LessonSection'
+                    type: array
+                content:
+                    allOf:
+                        - $ref: '#/components/schemas/LessonRichText'
+                    nullable: true
+                    type: object
+                contentType:
+                    enum:
+                        - image/jpeg
+                        - image/png
+                        - image/webp
+                    type: string
+                id:
+                    type: string
+                imageId:
+                    type: string
+                type:
+                    enum:
+                        - video
+                        - text
+                        - image
+                        - row
+                        - task
+                    type: string
+            required:
+                - id
+                - type
+            type: object
+        LessonSpan:
+            additionalProperties: false
+            properties:
+                href:
+                    type: string
+                marks:
+                    items:
+                        enum:
+                            - bold
+                            - italic
+                        type: string
+                    type: array
+                text:
+                    type: string
+            required:
+                - text
             type: object
         LessonTranscript:
             additionalProperties: false
@@ -2306,6 +2452,15 @@ components:
             required:
                 - body
             type: object
+        PublishLessonDocumentRequest:
+            additionalProperties: false
+            properties:
+                expectedUpdatedAt:
+                    format: date-time
+                    type: string
+            required:
+                - expectedUpdatedAt
+            type: object
         PublishLessonDraftRequest:
             additionalProperties: false
             properties:
@@ -2576,6 +2731,18 @@ components:
             required:
                 - entries
                 - nextCursor
+            type: object
+        SaveLessonDocumentRequest:
+            additionalProperties: false
+            properties:
+                document:
+                    $ref: '#/components/schemas/LessonDocument'
+                expectedUpdatedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+            required:
+                - document
             type: object
         SaveTranscriptRequest:
             additionalProperties: false
@@ -3236,6 +3403,138 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
                     description: Image format is not supported.
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/admin/lessons/{lessonId}/document:
+        get:
+            description: Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
+            operationId: getAdminLessonDocument
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: locale
+                  schema:
+                    default: uk
+                    enum:
+                        - uk
+                        - en
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonDocumentDraft'
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+        put:
+            description: Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+            operationId: saveAdminLessonDocument
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SaveLessonDocumentRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonDocumentUpdated'
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/LessonDocumentConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/admin/lessons/{lessonId}/document/publish:
+        post:
+            description: Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+            operationId: publishAdminLessonDocument
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: locale
+                  schema:
+                    default: uk
+                    enum:
+                        - uk
+                        - en
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PublishLessonDocumentRequest'
+                required: true
+            responses:
+                "200":
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/LessonDocumentConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
                 "503":
                     $ref: '#/components/responses/Unavailable'
     /api/v1/admin/lessons/{lessonId}/draft:
@@ -4883,6 +5182,49 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Publish a lesson comment or reply
+    /api/v1/learn/lessons/{lessonId}/document:
+        get:
+            description: Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
+            operationId: getLearnLessonDocument
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: locale
+                  schema:
+                    default: uk
+                    enum:
+                        - uk
+                        - en
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonDocument'
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/learn/lessons/{lessonId}/transcript:
         get:
             description: 'Returns the whole transcript of one lesson in a single response. It is deliberately not paginated: search runs on the client over what it was given, so a partial payload would make a miss indistinguishable from an absent word. The visibility rule is the one that governs watching the lesson - a transcript is not a second way into a course. Staleness is derived, not stored: the response says whether the text was written against a video the player would no longer pick. Omitting the language returns the only transcript when one exists, and the first by normalised code when several do.'

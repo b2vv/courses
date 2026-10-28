@@ -22,6 +22,11 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        LessonDocumentConflict:
+            description: The lesson document changed since it was loaded.
+            headers:
+                X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                Cache-Control: { $ref: '#/components/headers/NoStore' }
         "OrderNotFound": {"description": "The order is unknown or belongs to another account.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
         "MembershipConflict": {"description": "Enrollment is unavailable or changed concurrently.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
         "PurchaseConflict": {"description": "The course is already owned or the price operation conflicted.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}, "Cache-Control": {"$ref": "#/components/headers/NoStore"}}}
@@ -732,6 +737,34 @@ components:
                 title:
                     maxLength: 200
                     minLength: 1
+        LessonDocument:
+            properties:
+                schemaVersion: { enum: [1] }
+                locale: { enum: [uk, en] }
+        LessonSection:
+            properties:
+                contentType: { enum: [image/jpeg, image/png, image/webp] }
+                content:
+                    $ref: null
+                    properties: null
+                    required: null
+                    additionalProperties: null
+                    type: object
+                    nullable: true
+                    allOf:
+                        - $ref: '#/components/schemas/LessonRichText'
+        LessonDocumentDraft:
+            properties:
+                updatedAt: { format: date-time }
+        LessonDocumentUpdated:
+            properties:
+                updatedAt: { format: date-time }
+        SaveLessonDocumentRequest:
+            properties:
+                expectedUpdatedAt: { format: date-time }
+        PublishLessonDocumentRequest:
+            properties:
+                expectedUpdatedAt: { format: date-time }
         LearningCourse:
             properties:
                 id: { format: uuid }
@@ -1802,5 +1835,57 @@ paths:
             responses:
                 "204":
                     description: "Participant report resolved"
+    /api/v1/admin/lessons/{lessonId}/document:
+        get:
+            operationId: getAdminLessonDocument
+            description: Read the draft and its optimistic-lock token. An absent draft has updatedAt null.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+        put:
+            operationId: saveAdminLessonDocument
+            description: Same-origin owner/admin write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/lessons/{lessonId}/document/publish:
+        post:
+            operationId: publishAdminLessonDocument
+            description: Same-origin owner/admin publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/learn/lessons/{lessonId}/document:
+        get:
+            operationId: getLearnLessonDocument
+            description: Requires authentication, verified email and CanConsume. An absent publication returns an empty valid document, never a content-absence 404.
+            parameters:
+                lessonId: { schema: { format: uuid } }
+                locale: { schema: { default: uk } }
+            responses:
+                '200':
+                    description: Success.
+                    headers:
+                        X-Request-ID: { $ref: '#/components/headers/RequestID' }
+                        Cache-Control: { $ref: '#/components/headers/NoStore' }
 servers:
     - url: /
