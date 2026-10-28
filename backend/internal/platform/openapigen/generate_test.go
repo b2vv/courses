@@ -455,6 +455,40 @@ func TestParameterMetadataFailsClosed(t *testing.T) {
 	})
 }
 
+func TestParameterMetadataToleratesRefSibling(t *testing.T) {
+	// An operation mixing an inline path parameter with a $ref header component: enriching the
+	// inline one via the overlay must not trip over the ref sibling (which has no inline name).
+	c := ModuleContribution{
+		Routes: []RouteBinding{{
+			Method: "POST", Path: "/courses/{slug}/buy", Request: child{},
+			Params: []Param{
+				{Name: "slug", In: "path", Type: "string", Required: true},
+				{Name: "Idempotency-Key", In: "header", Type: "string", Required: true, Component: "IdempotencyKey"},
+			},
+			Responses: map[int]Response{201: {Body: child{}}},
+		}},
+	}
+	patch := overlay(t, `paths:
+  /courses/{slug}/buy:
+    post:
+      parameters:
+        slug:
+          schema: {format: uuid}
+`)
+	doc, err := Generate([]ModuleContribution{c}, patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Paths.Value("/courses/{slug}/buy").Post.Parameters {
+		if p.Value != nil && p.Value.Name == "slug" && p.Value.Schema.Value.Format != "uuid" {
+			t.Fatalf("inline parameter metadata not applied alongside a $ref sibling: %+v", p.Value)
+		}
+	}
+	if doc.Components.Parameters["IdempotencyKey"] == nil {
+		t.Fatal("ref parameter component missing")
+	}
+}
+
 func TestInvalidGoParameters(t *testing.T) {
 	for _, p := range []Param{
 		{In: "query", Type: "string"},
