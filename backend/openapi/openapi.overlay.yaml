@@ -16,6 +16,21 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        VideoNotRetryable:
+          description: The video state is not retryable, its processing claim is still live, or its source never landed.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        VideoNotFound:
+          description: The video is unknown or evicted.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        UploadConflict:
+          description: The lesson already has a non-terminal, unexpired video asset.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
         MediaBadRequest:
           description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
           headers:
@@ -79,6 +94,25 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        MediaTicketRequest:
+            properties:
+                declaredBytes: { minimum: 1, maximum: 2147483648 }
+                originalName: { minLength: 1, maxLength: 255 }
+        MediaUploadTicket:
+            properties:
+                videoId: { format: uuid }
+                uploadUrl:
+                    pattern: '^/uploads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                chunkBytes: { enum: [8388608] }
+                maxBytes: { enum: [2147483648] }
+        MediaVideo:
+            properties:
+                lessonId: { format: uuid }
+                videoId: { format: uuid }
+                generation: { minimum: 1 }
+                originalName: { minLength: 1, maxLength: 255 }
+                receivedBytes: { minimum: 0, maximum: 2147483648 }
+                declaredBytes: { minimum: 1, maximum: 2147483648 }
         ImageUploadResponse:
             properties:
                 id:
@@ -340,5 +374,64 @@ paths:
                         X-Request-ID:
                             $ref: '#/components/headers/RequestID'
             summary: Get a published course
+
+    /api/v1/admin/lessons/{lessonId}/video:
+      post:
+        operationId: mintAdminVideoTicket
+        summary: Mint a video upload ticket
+        description: >-
+          Admins may mint for any saved lesson; instructors may mint only for lessons in courses
+          they own. The minted video asset ID is also the single-use upload ticket ID. Requires
+          one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown
+          members, and responses are never cached. The API records metadata only and does not
+          access media storage.
+        parameters:
+          lessonId:
+            schema: { format: uuid }
+        responses:
+          '201':
+            description: A created asset and its resumable upload ticket.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/courses/{courseId}/videos:
+      get:
+        operationId: listAdminCourseVideos
+        summary: List a course's video assets
+        description: >-
+          Admins may read any course; instructors may read only courses they own. Returns one
+          item per non-evicted asset, including multiple generations for a lesson. Storage keys
+          and filesystem paths are never exposed. Query parameters are not supported and
+          responses are never cached.
+        parameters:
+          courseId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The course's non-evicted video assets, or an empty items array.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+
+    /api/v1/admin/videos/{videoId}/retry:
+      post:
+        operationId: retryAdminVideo
+        summary: Retry video transcoding
+        description: >-
+          Admins may retry any owned asset; instructors may retry only assets in courses they
+          own. A failed or queued asset may be retried, as may a processing asset whose claim is
+          older than 40 minutes, but only after the complete source landed. Success clears any
+          claim, increments the attempt and enqueues the asset. Requires one matching Origin
+          header, accepts no query parameters, and responses are never cached.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The asset is queued for another transcoding attempt.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
 servers:
     - url: /

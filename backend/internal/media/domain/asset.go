@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,6 +24,9 @@ const (
 	Ready      State = "ready"
 	Failed     State = "failed"
 )
+
+// States is the ordered set used by transition validation and the HTTP contract.
+var States = []State{Created, Uploading, Queued, Processing, Ready, Failed}
 
 type ClaimToken string
 
@@ -121,6 +125,9 @@ func (transition Transition) Writers() []TransitionWriter {
 }
 
 func ValidateTransition(transition Transition, from, to State) error {
+	if !slices.Contains(States, to) || (from != "" && !slices.Contains(States, from)) {
+		return ErrInvalidStateTransition
+	}
 	legal := false
 	switch transition {
 	case T1:

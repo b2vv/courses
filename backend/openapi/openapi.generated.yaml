@@ -122,6 +122,39 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        UploadConflict:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The lesson already has a non-terminal, unexpired video asset.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        VideoNotFound:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The video is unknown or evicted.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        VideoNotRetryable:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The video state is not retryable, its processing claim is still live, or its source never landed.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
     schemas:
         AdminCourseStatusRequest:
             additionalProperties: false
@@ -530,6 +563,16 @@ components:
                 - items
                 - pagination
             type: object
+        CourseVideos:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/MediaVideo'
+                    type: array
+            required:
+                - items
+            type: object
         ErrorResponse:
             additionalProperties: false
             properties:
@@ -683,6 +726,106 @@ components:
                 - id
                 - width
             type: object
+        MediaTicketRequest:
+            additionalProperties: false
+            properties:
+                declaredBytes:
+                    format: int64
+                    maximum: 2147483648
+                    minimum: 1
+                    type: integer
+                originalName:
+                    maxLength: 255
+                    minLength: 1
+                    type: string
+            required:
+                - declaredBytes
+                - originalName
+            type: object
+        MediaUploadTicket:
+            additionalProperties: false
+            properties:
+                chunkBytes:
+                    enum:
+                        - 8388608
+                    format: int64
+                    type: integer
+                expiresAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                maxBytes:
+                    enum:
+                        - 2147483648
+                    format: int64
+                    type: integer
+                uploadUrl:
+                    pattern: ^/uploads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                    type: string
+                videoId:
+                    format: uuid
+                    type: string
+            required:
+                - chunkBytes
+                - expiresAt
+                - maxBytes
+                - uploadUrl
+                - videoId
+            type: object
+        MediaVideo:
+            additionalProperties: false
+            properties:
+                declaredBytes:
+                    format: int64
+                    maximum: 2147483648
+                    minimum: 1
+                    type: integer
+                failureReason:
+                    enum:
+                        - unsupported_source
+                        - probe_failed
+                        - render_failed
+                        - publish_failed
+                        - storage_unavailable
+                    type: string
+                generation:
+                    format: int32
+                    minimum: 1
+                    type: integer
+                lessonId:
+                    format: uuid
+                    type: string
+                originalName:
+                    maxLength: 255
+                    minLength: 1
+                    type: string
+                receivedBytes:
+                    format: int64
+                    maximum: 2147483648
+                    minimum: 0
+                    type: integer
+                state:
+                    enum:
+                        - created
+                        - uploading
+                        - queued
+                        - processing
+                        - ready
+                        - failed
+                    type: string
+                updatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                videoId:
+                    format: uuid
+                    type: string
+            required:
+                - declaredBytes
+                - generation
+                - lessonId
+                - originalName
+                - receivedBytes
+                - state
+                - updatedAt
+                - videoId
+            type: object
         NullablePrice:
             allOf:
                 - $ref: '#/components/schemas/Price'
@@ -767,6 +910,40 @@ info:
     version: 1.0.0
 openapi: 3.0.3
 paths:
+    /api/v1/admin/courses/{courseId}/videos:
+        get:
+            description: Admins may read any course; instructors may read only courses they own. Returns one item per non-evicted asset, including multiple generations for a lesson. Storage keys and filesystem paths are never exposed. Query parameters are not supported and responses are never cached.
+            operationId: listAdminCourseVideos
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CourseVideos'
+                    description: The course's non-evicted video assets, or an empty items array.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List a course's video assets
     /api/v1/admin/courses/{id}/status:
         post:
             parameters:
@@ -837,6 +1014,50 @@ paths:
                     description: Image format is not supported.
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/admin/lessons/{lessonId}/video:
+        post:
+            description: Admins may mint for any saved lesson; instructors may mint only for lessons in courses they own. The minted video asset ID is also the single-use upload ticket ID. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. The API records metadata only and does not access media storage.
+            operationId: mintAdminVideoTicket
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MediaTicketRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaUploadTicket'
+                    description: A created asset and its resumable upload ticket.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/MediaBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/LessonNotFound'
+                "409":
+                    $ref: '#/components/responses/UploadConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Mint a video upload ticket
     /api/v1/admin/stats:
         get:
             description: Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
@@ -920,6 +1141,44 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Platform statistics timeseries
+    /api/v1/admin/videos/{videoId}/retry:
+        post:
+            description: Admins may retry any owned asset; instructors may retry only assets in courses they own. A failed or queued asset may be retried, as may a processing asset whose claim is older than 40 minutes, but only after the complete source landed. Success clears any claim, increments the attempt and enqueues the asset. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
+            operationId: retryAdminVideo
+            parameters:
+                - in: path
+                  name: videoId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaVideo'
+                    description: The asset is queued for another transcoding attempt.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/VideoNotFound'
+                "409":
+                    $ref: '#/components/responses/VideoNotRetryable'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Retry video transcoding
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
