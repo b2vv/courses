@@ -149,6 +149,137 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        PublicReviewPage:
+            properties:
+                items:
+                    maxItems: 20
+        Review:
+            properties:
+                completedLessons:
+                    minimum: 0
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                stars:
+                    maximum: 5
+                    minimum: 1
+                totalLessons:
+                    minimum: 0
+        PutReviewRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 20
+                stars:
+                    maximum: 5
+                    minimum: 1
+        Comment:
+            properties:
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        CommentPage:
+            properties:
+                threads:
+                    maxItems: 50
+        PublishCommentRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+                parentId:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        UpdateCommentRequest:
+            properties:
+                body:
+                    maxLength: 2000
+                    minLength: 1
+        DismissReportsRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+        ParticipantReportRequest:
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+        ParticipantReport:
+            properties:
+                courseId:
+                    format: "uuid"
+                createdAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                reporterId:
+                    format: "uuid"
+                targetId:
+                    format: "uuid"
+        ParticipantReportQueueItem:
+            properties:
+                courseId:
+                    format: "uuid"
+                createdAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                reporterId:
+                    format: "uuid"
+                targetId:
+                    format: "uuid"
+        ParticipantReportQueuePage:
+            properties:
+                items:
+                    maxItems: 20
+        TeachComment:
+            properties:
+                createdAt:
+                    format: "date-time"
+                editedAt:
+                    format: "date-time"
+                id:
+                    format: "uuid"
+                lessonId:
+                    format: "uuid"
+                lessonTitle:
+                    maxLength: 200
+                    minLength: 1
+                parentId:
+                    format: "uuid"
+                positionMs:
+                    format: "int64"
+                    minimum: 0
+        TeachCourseCommentPage:
+            properties:
+                comments:
+                    maxItems: 50
+        ModerationQueueItem:
+            properties:
+                openReports:
+                    minimum: 1
+        ModerationQueuePage:
+            properties:
+                items:
+                    maxItems: 50
         LessonTranscript:
             properties:
                 documents:
@@ -855,5 +986,269 @@ paths:
             headers:
               X-Request-ID: { $ref: '#/components/headers/RequestID' }
               Cache-Control: { $ref: '#/components/headers/NoStore' }
+    # Discussion transport metadata (S0.1h); structure and enums come from Go.
+    "/api/v1/courses/{slug}/reviews":
+        get:
+            operationId: "listCourseReviews"
+            parameters:
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "Public reviews"
+    "/api/v1/learn/courses/{courseId}/reviews":
+        get:
+            operationId: "listLearningCourseReviews"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "Reviews visible to the learner"
+    "/api/v1/learn/courses/{courseId}/review":
+        get:
+            operationId: "getOwnCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "Own review and current eligibility"
+        put:
+            operationId: "putCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "Updated review"
+                "201":
+                    description: "Created review"
+        delete:
+            operationId: "deleteCourseReview"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review deleted"
+    "/api/v1/learn/reviews/{reviewId}/reports":
+        post:
+            operationId: "reportCourseReview"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Report accepted"
+    "/api/v1/learn/lessons/{lessonId}/comments":
+        get:
+            operationId: "listLessonComments"
+            summary: "List lesson discussion threads"
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The lesson's discussion threads."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+        post:
+            operationId: "publishLessonComment"
+            summary: "Publish a lesson comment or reply"
+            parameters:
+                lessonId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The comment was published."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/comments/{commentId}":
+        patch:
+            operationId: "updateLessonComment"
+            summary: "Edit an authored lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "200":
+                    description: "The comment was updated."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+        delete:
+            operationId: "removeLessonComment"
+            summary: "Remove a lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The comment was removed, or was already removed."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/comments/{commentId}/reports":
+        post:
+            operationId: "reportLessonComment"
+            summary: "Report a lesson comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "The report was accepted, or was already present for this reporter."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/learn/courses/{courseId}/report-lecturer":
+        post:
+            operationId: "reportCourseLecturer"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "Participant report created"
+    "/api/v1/teach/courses/{courseId}/comments":
+        get:
+            operationId: "listTeachCourseComments"
+            summary: "List all comments in an instructor course workspace"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The course-wide comment list."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/courses/{courseId}/moderation-queue":
+        get:
+            operationId: "listTeachModerationQueue"
+            summary: "List the open moderation queue for an instructor course"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                cursor:
+                    schema:
+                        minLength: 1
+            responses:
+                "200":
+                    description: "The open moderation queue."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/comments/{commentId}/dismiss-report":
+        post:
+            operationId: "dismissCommentReports"
+            summary: "Dismiss all open reports for a comment"
+            parameters:
+                commentId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "The open reports were dismissed."
+                    headers:
+                        Cache-Control:
+                            "$ref": "#/components/headers/NoStore"
+                        X-Request-ID:
+                            "$ref": "#/components/headers/RequestID"
+    "/api/v1/teach/reviews/{reviewId}/remove":
+        post:
+            operationId: "removeCourseReview"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review removed"
+    "/api/v1/teach/reviews/{reviewId}/dismiss-report":
+        post:
+            operationId: "dismissCourseReviewReports"
+            parameters:
+                reviewId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Review reports dismissed"
+    "/api/v1/teach/courses/{courseId}/participants/{userId}/report":
+        post:
+            operationId: "reportCourseParticipant"
+            parameters:
+                courseId:
+                    schema:
+                        format: "uuid"
+                userId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "201":
+                    description: "Participant report created"
+    "/api/v1/admin/participant-reports":
+        get:
+            operationId: "listParticipantReports"
+            parameters:
+                cursor:
+                    schema:
+                        minLength: 1
+                state:
+                    description: "Filter by report state; absent means open."
+            responses:
+                "200":
+                    description: "Participant reports for the requested state"
+    "/api/v1/admin/participant-reports/{reportId}/resolve":
+        post:
+            operationId: "resolveParticipantReport"
+            parameters:
+                reportId:
+                    schema:
+                        format: "uuid"
+            responses:
+                "204":
+                    description: "Participant report resolved"
 servers:
     - url: /

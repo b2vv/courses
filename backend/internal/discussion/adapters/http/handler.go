@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"courses/internal/discussion/application"
@@ -78,8 +79,8 @@ type pageDTO struct {
 
 type publishRequest struct {
 	Body       string  `json:"body"`
-	PositionMs *int64  `json:"positionMs"`
-	ParentID   *string `json:"parentId"`
+	PositionMs *int64  `json:"positionMs,omitempty"`
+	ParentID   *string `json:"parentId,omitempty"`
 }
 
 type updateRequest struct {
@@ -95,14 +96,14 @@ type participantReportRequest struct {
 }
 
 type participantReportDTO struct {
-	ID         string    `json:"id"`
-	CourseID   string    `json:"courseId"`
-	ReporterID string    `json:"reporterId"`
-	TargetID   string    `json:"targetId"`
-	Kind       string    `json:"kind"`
-	Reason     string    `json:"reason"`
-	State      string    `json:"state"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         string             `json:"id"`
+	CourseID   string             `json:"courseId"`
+	ReporterID string             `json:"reporterId"`
+	TargetID   string             `json:"targetId"`
+	Kind       domain.ReportKind  `json:"kind"`
+	Reason     string             `json:"reason"`
+	State      domain.ReportState `json:"state"`
+	CreatedAt  time.Time          `json:"createdAt"`
 }
 
 type participantReportQueueItemDTO struct {
@@ -135,8 +136,19 @@ type courseCommentsDTO struct {
 	NextCursor *string                `json:"nextCursor"`
 }
 
+type moderationKind string
+
+const (
+	moderationComment          moderationKind = "comment"
+	moderationReview           moderationKind = "review"
+	participantReportAllStates                = "all"
+)
+
+// moderationKinds is the ordered set of item variants emitted by the queue.
+var moderationKinds = []moderationKind{moderationComment, moderationReview}
+
 type queueItemDTO struct {
-	Kind          string                `json:"kind"`
+	Kind          moderationKind        `json:"kind"`
 	Comment       *moderationCommentDTO `json:"comment"`
 	Review        *reviewDTO            `json:"review"`
 	OpenReports   int                   `json:"openReports"`
@@ -309,7 +321,7 @@ func (handler *Handler) queue(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]queueItemDTO, len(page.Items))
 	for i, item := range page.Items {
-		items[i] = queueItemDTO{Kind: item.Kind, OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
+		items[i] = queueItemDTO{Kind: moderationKind(item.Kind), OpenReports: item.OpenReports, AuthorBlocked: item.AuthorBlocked}
 		if item.Comment != nil {
 			comment := mapModerationComment(*item.Comment)
 			items[i].Comment = &comment
@@ -481,18 +493,19 @@ func (handler *Handler) participantReportQueue(w http.ResponseWriter, r *http.Re
 		return
 	}
 	// Absent state defaults to the open queue; "all" clears the repository filter.
-	stateFilter := "open"
-	switch query.Get("state") {
-	case "", "open":
-		stateFilter = "open"
-	case "resolved":
-		stateFilter = "resolved"
-	case "all":
+	stateFilter := query.Get("state")
+	switch {
+	case stateFilter == "":
+		stateFilter = string(domain.ReportOpen)
+	case stateFilter == participantReportAllStates:
 		stateFilter = ""
+	case slices.Contains(domain.ReportStates, domain.ReportState(stateFilter)):
+		// Preserve a recognized state as the repository filter.
 	default:
 		writeError(w, r, http.StatusBadRequest, domain.ErrInvalidCursor)
 		return
 	}
+
 	actor, ok := actorFromRequest(w, r)
 	if !ok {
 		return
@@ -619,7 +632,7 @@ func mapReview(review application.Review) reviewDTO {
 	return reviewDTO{ID: review.ID, AuthorDisplayName: review.AuthorDisplayName, Stars: review.Stars, Body: review.Body, CompletedLessons: review.CompletedLessons, TotalLessons: review.TotalLessons, CreatedAt: review.CreatedAt, EditedAt: review.EditedAt}
 }
 func mapParticipantReport(report domain.ParticipantReport) participantReportDTO {
-	return participantReportDTO{ID: report.ID, CourseID: report.CourseID, ReporterID: report.ReporterID, TargetID: report.TargetID, Kind: string(report.Kind), Reason: report.Reason, State: string(report.State), CreatedAt: report.CreatedAt}
+	return participantReportDTO{ID: report.ID, CourseID: report.CourseID, ReporterID: report.ReporterID, TargetID: report.TargetID, Kind: report.Kind, Reason: report.Reason, State: report.State, CreatedAt: report.CreatedAt}
 }
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
