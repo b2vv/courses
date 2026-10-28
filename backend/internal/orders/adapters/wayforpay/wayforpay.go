@@ -161,8 +161,8 @@ func (provider *Provider) VerifyCallback(body []byte, receivedAt time.Time) (por
 
 func (provider *Provider) Acknowledge(orderReference string, now time.Time) []byte {
 	timestamp := strconv.FormatInt(now.Unix(), 10)
-	response := acknowledgement{OrderReference: orderReference, Status: "accept", Time: now.Unix()}
-	response.Signature = provider.signature(orderReference, response.Status, timestamp)
+	response := Acknowledgement{OrderReference: orderReference, Status: AcknowledgementAccept, Time: now.Unix()}
+	response.Signature = provider.signature(orderReference, string(response.Status), timestamp)
 	encoded, _ := json.Marshal(response)
 	return encoded
 }
@@ -186,11 +186,13 @@ type statusRequest struct {
 	MerchantSignature string `json:"merchantSignature"`
 	APIVersion        int    `json:"apiVersion"`
 }
-type acknowledgement struct {
-	OrderReference string `json:"orderReference"`
-	Status         string `json:"status"`
-	Time           int64  `json:"time"`
-	Signature      string `json:"signature"`
+
+// Acknowledgement is the signed JSON response emitted by Acknowledge.
+type Acknowledgement struct {
+	OrderReference string                `json:"orderReference"`
+	Status         AcknowledgementStatus `json:"status"`
+	Time           int64                 `json:"time"`
+	Signature      string                `json:"signature"`
 }
 
 func (provider *Provider) event(payload callbackPayload, receivedAt time.Time) (domain.PaymentEvent, error) {
@@ -264,3 +266,8 @@ func parseAmount(value, currency string) (domain.Money, error) {
 
 var _ ports.PaymentProvider = (*Provider)(nil)
 var _ ports.CallbackVerifier = (*Provider)(nil)
+
+// AcknowledgementStatus is the provider protocol response status.
+type AcknowledgementStatus string
+
+const AcknowledgementAccept AcknowledgementStatus = "accept"

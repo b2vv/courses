@@ -18,6 +18,16 @@ components:
             required: true
             schema:
                 type: string
+    parameters:
+        IdempotencyKey:
+            description: User-scoped replay key for starting a course purchase.
+            in: header
+            name: Idempotency-Key
+            required: true
+            schema:
+                maxLength: 128
+                minLength: 1
+                type: string
     responses:
         AccountValidationFailed:
             content:
@@ -178,12 +188,34 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        MembershipConflict:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: Enrollment is unavailable or changed concurrently.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         NotFound:
             content:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
             description: Course was not found.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        OrderNotFound:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The order is unknown or belongs to another account.
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/NoStore'
@@ -239,6 +271,17 @@ components:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
             description: Another playback session currently owns the account's playback slot.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        PurchaseConflict:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The course is already owned or the price operation conflicted.
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/NoStore'
@@ -360,6 +403,20 @@ components:
             required:
                 - expectedUpdatedAt
                 - status
+            type: object
+        AdminGrantRequest:
+            additionalProperties: false
+            properties:
+                reason:
+                    maxLength: 500
+                    minLength: 1
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - reason
+                - userId
             type: object
         AdminStatsCourses:
             additionalProperties: false
@@ -699,6 +756,51 @@ components:
                 - newPassword
                 - oldPassword
             type: object
+        CheckoutField:
+            additionalProperties: false
+            properties:
+                name:
+                    type: string
+                value:
+                    type: string
+            required:
+                - name
+                - value
+            type: object
+        CheckoutForm:
+            additionalProperties: false
+            properties:
+                action:
+                    format: uri
+                    type: string
+                fields:
+                    items:
+                        additionalProperties: false
+                        properties:
+                            name:
+                                minLength: 1
+                                type: string
+                            value:
+                                type: string
+                        required:
+                            - name
+                            - value
+                        type: object
+                    minItems: 1
+                    type: array
+            required:
+                - action
+                - fields
+            type: object
+        CheckoutRequest:
+            additionalProperties: false
+            properties:
+                courseSlug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+            type: object
         Comment:
             additionalProperties: false
             properties:
@@ -950,6 +1052,42 @@ components:
                 - summary
                 - title
                 - updatedAt
+            type: object
+        CourseGrant:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                grantedAt:
+                    format: date-time
+                    type: string
+                grantedBy:
+                    format: uuid
+                    nullable: true
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                source:
+                    enum:
+                        - admin
+                    type: string
+                state:
+                    enum:
+                        - active
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - courseId
+                - grantedAt
+                - grantedBy
+                - id
+                - source
+                - state
+                - userId
             type: object
         CoursePage:
             additionalProperties: false
@@ -1217,6 +1355,80 @@ components:
                 - id
                 - role
             type: object
+        LearnerCourse:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                enrolledAt:
+                    format: date-time
+                    type: string
+                progressPercent:
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                state:
+                    enum:
+                        - active
+                        - blocked
+                    type: string
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - courseId
+                - enrolledAt
+                - progressPercent
+                - slug
+                - state
+                - title
+            type: object
+        LearnerPage:
+            additionalProperties: false
+            properties:
+                entries:
+                    items:
+                        $ref: '#/components/schemas/LearnerRow'
+                    maxItems: 100
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+            required:
+                - entries
+                - nextCursor
+            type: object
+        LearnerRow:
+            additionalProperties: false
+            properties:
+                courses:
+                    items:
+                        $ref: '#/components/schemas/LearnerCourse'
+                    minItems: 1
+                    type: array
+                displayName:
+                    maxLength: 120
+                    type: string
+                lastActivityAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - courses
+                - displayName
+                - lastActivityAt
+                - userId
+            type: object
         LessonDraft:
             additionalProperties: false
             properties:
@@ -1432,6 +1644,98 @@ components:
                 - updatedAt
                 - videoId
             type: object
+        MembershipCard:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                enrolledAt:
+                    format: date-time
+                    type: string
+                progressPercent:
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                slug:
+                    maxLength: 120
+                    minLength: 1
+                    pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+                    type: string
+                state:
+                    enum:
+                        - active
+                        - blocked
+                    type: string
+                title:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+            required:
+                - courseId
+                - enrolledAt
+                - progressPercent
+                - slug
+                - state
+                - title
+            type: object
+        MembershipGrant:
+            additionalProperties: false
+            properties:
+                courseId:
+                    format: uuid
+                    type: string
+                grantedAt:
+                    format: date-time
+                    type: string
+                grantedBy:
+                    format: uuid
+                    nullable: true
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                source:
+                    enum:
+                        - purchase
+                        - admin
+                        - grandfather
+                        - self
+                    type: string
+                state:
+                    enum:
+                        - active
+                        - blocked
+                        - revoked
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - courseId
+                - grantedAt
+                - grantedBy
+                - id
+                - source
+                - state
+                - userId
+            type: object
+        MembershipState:
+            additionalProperties: false
+            properties:
+                member:
+                    type: boolean
+                state:
+                    enum:
+                        - active
+                        - blocked
+                        - revoked
+                    nullable: true
+                    type: string
+            required:
+                - member
+                - state
+            type: object
         ModerationQueueItem:
             additionalProperties: false
             properties:
@@ -1474,6 +1778,16 @@ components:
             required:
                 - items
                 - nextCursor
+            type: object
+        MyMembershipsPage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/MembershipCard'
+                    type: array
+            required:
+                - items
             type: object
         NewEmailRequest:
             additionalProperties: false
@@ -1813,6 +2127,38 @@ components:
                     format: date-time
                     type: string
             type: object
+        PurchaseOrder:
+            additionalProperties: false
+            properties:
+                amount:
+                    $ref: '#/components/schemas/Price'
+                courseId:
+                    format: uuid
+                    type: string
+                createdAt:
+                    format: date-time
+                    type: string
+                id:
+                    format: uuid
+                    type: string
+                paidAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                status:
+                    enum:
+                        - pending
+                        - paid
+                        - failed
+                    type: string
+            required:
+                - amount
+                - courseId
+                - createdAt
+                - id
+                - paidAt
+                - status
+            type: object
         PutReviewRequest:
             additionalProperties: false
             properties:
@@ -1854,6 +2200,70 @@ components:
                     type: array
             required:
                 - recoveryCodes
+            type: object
+        RefundQueueItem:
+            additionalProperties: false
+            properties:
+                chargedAmountMinor:
+                    format: int64
+                    nullable: true
+                    type: integer
+                courseId:
+                    format: uuid
+                    type: string
+                membershipState:
+                    enum:
+                        - active
+                        - blocked
+                        - revoked
+                    nullable: true
+                    type: string
+                orderAmountMinor:
+                    format: int64
+                    minimum: 1
+                    type: integer
+                orderId:
+                    format: uuid
+                    type: string
+                outcome:
+                    enum:
+                        - refunded
+                        - declined
+                    nullable: true
+                    type: string
+                reason:
+                    enum:
+                        - ""
+                        - settlement_rejected
+                        - grant_conflict
+                    type: string
+                receivedAt:
+                    format: date-time
+                    nullable: true
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - chargedAmountMinor
+                - courseId
+                - membershipState
+                - orderAmountMinor
+                - orderId
+                - outcome
+                - reason
+                - receivedAt
+                - userId
+            type: object
+        RefundQueuePage:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/RefundQueueItem'
+                    type: array
+            required:
+                - items
             type: object
         RegenerateLessonDraftRequest:
             additionalProperties: false
@@ -1936,6 +2346,50 @@ components:
                 - id
                 - stars
                 - totalLessons
+            type: object
+        RosterEntry:
+            additionalProperties: false
+            properties:
+                displayName:
+                    maxLength: 120
+                    minLength: 1
+                    type: string
+                enrolledAt:
+                    format: date-time
+                    type: string
+                progressPercent:
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                state:
+                    enum:
+                        - active
+                        - blocked
+                        - revoked
+                    type: string
+                userId:
+                    format: uuid
+                    type: string
+            required:
+                - displayName
+                - enrolledAt
+                - progressPercent
+                - state
+                - userId
+            type: object
+        RosterPage:
+            additionalProperties: false
+            properties:
+                entries:
+                    items:
+                        $ref: '#/components/schemas/RosterEntry'
+                    type: array
+                nextCursor:
+                    nullable: true
+                    type: string
+            required:
+                - entries
+                - nextCursor
             type: object
         SaveTranscriptRequest:
             additionalProperties: false
@@ -2179,6 +2633,29 @@ components:
             required:
                 - body
             type: object
+        WayForPayAcknowledgement:
+            additionalProperties: false
+            properties:
+                orderReference:
+                    minLength: 1
+                    type: string
+                signature:
+                    maxLength: 32
+                    minLength: 32
+                    type: string
+                status:
+                    enum:
+                        - accept
+                    type: string
+                time:
+                    format: int64
+                    type: integer
+            required:
+                - orderReference
+                - signature
+                - status
+                - time
+            type: object
 info:
     description: Public catalog, session authentication, protected administration, learning purchases and playback-session control.
     title: Courses API
@@ -2309,6 +2786,84 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Remove a document from the course library
+    /api/v1/admin/courses/{courseId}/grants:
+        post:
+            description: Admin-only same-origin mutation. Creates an active admin grant and its audit record.
+            operationId: grantCourseAccess
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminGrantRequest'
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CourseGrant'
+                    description: Active administrative grant.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/GrantForbidden'
+                "409":
+                    $ref: '#/components/responses/PurchaseConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Grant course access as an administrator
+    /api/v1/admin/courses/{courseId}/participants/{userId}/revoke:
+        post:
+            operationId: revokeCourseParticipant
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: userId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Revoke a participant membership as an administrator
     /api/v1/admin/courses/{courseId}/videos:
         get:
             description: Admins may read any course; instructors may read only courses they own. Returns one item per non-evicted asset, including multiple generations for a lesson. Storage keys and filesystem paths are never exposed. Query parameters are not supported and responses are never cached.
@@ -2389,6 +2944,62 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List eligible course owners
+    /api/v1/admin/learners:
+        get:
+            operationId: listAdminLearners
+            parameters:
+                - in: query
+                  name: courseId
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    type: string
+                - in: query
+                  name: limit
+                  schema:
+                    default: 20
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                - in: query
+                  name: q
+                  schema:
+                    maxLength: 80
+                    minLength: 1
+                    type: string
+                - in: query
+                  name: state
+                  schema:
+                    enum:
+                        - active
+                        - blocked
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LearnerPage'
+                    description: A cursor page of learners; email addresses are not exposed.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List learners across every course for an administrator
     /api/v1/admin/lessons/{id}/images:
         post:
             operationId: uploadAdminLessonImage
@@ -2707,6 +3318,118 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/admin/refunds:
+        get:
+            operationId: listRefundQueue
+            parameters:
+                - description: Narrows the list. Absent defaults to pending.
+                  in: query
+                  name: state
+                  schema:
+                    enum:
+                        - all
+                        - pending
+                        - refunded
+                        - declined
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefundQueuePage'
+                    description: Orders needing refund attention.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List orders flagged for refund attention
+    /api/v1/admin/refunds/{orderId}/decline:
+        post:
+            operationId: declineRefund
+            parameters:
+                - in: path
+                  name: orderId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: Refund-queue row settled as declined
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Record a refund-queue order as declined
+    /api/v1/admin/refunds/{orderId}/refund:
+        post:
+            operationId: refundOrder
+            parameters:
+                - in: path
+                  name: orderId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: Refund-queue row settled as refunded
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Record a refund-queue order as refunded
+    /api/v1/admin/refunds/{orderId}/revoke:
+        post:
+            operationId: revokeRefundGrant
+            parameters:
+                - in: path
+                  name: orderId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/OrderNotFound'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Revoke the grant of a refund-queue order
     /api/v1/admin/stats:
         get:
             description: Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
@@ -3583,6 +4306,111 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Report a lesson comment
+    /api/v1/learn/courses/{courseId}/enroll:
+        post:
+            operationId: enrollInCourse
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Active membership.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Enroll the authenticated account in a free published course
+    /api/v1/learn/courses/{courseId}/membership:
+        get:
+            operationId: getMyCourseMembership
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipState'
+                    description: Membership state, or no membership.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Read the authenticated account membership state
+    /api/v1/learn/courses/{courseId}/purchase:
+        post:
+            description: Authenticated same-origin mutation. The order snapshots the published course price.
+            operationId: startCoursePurchase
+            parameters:
+                - $ref: '#/components/parameters/IdempotencyKey'
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PurchaseOrder'
+                    description: The new or replayed pending order.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "409":
+                    $ref: '#/components/responses/PurchaseConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Start an idempotent course purchase
     /api/v1/learn/courses/{courseId}/report-lecturer:
         post:
             operationId: reportCourseLecturer
@@ -3858,6 +4686,103 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Get a lesson transcript
+    /api/v1/learn/memberships:
+        get:
+            operationId: getMyCourseMemberships
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MyMembershipsPage'
+                    description: Active and blocked memberships, newest enrollment first.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List the authenticated account course memberships
+    /api/v1/learn/orders/{orderId}:
+        get:
+            operationId: getPurchaseStatus
+            parameters:
+                - in: path
+                  name: orderId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PurchaseOrder'
+                    description: Current order status.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "404":
+                    $ref: '#/components/responses/OrderNotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Read the authenticated account's purchase status
+    /api/v1/learn/orders/{orderId}/checkout:
+        post:
+            operationId: createPurchaseCheckout
+            parameters:
+                - in: path
+                  name: orderId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckoutRequest'
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckoutForm'
+                    description: Ordered fields to POST to the hosted payment page.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "404":
+                    $ref: '#/components/responses/OrderNotFound'
+                "409":
+                    $ref: '#/components/responses/PurchaseConflict'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Create the hosted WayForPay checkout form for the authenticated order owner
     /api/v1/learn/reviews/{reviewId}/reports:
         post:
             operationId: reportCourseReview
@@ -3879,6 +4804,28 @@ paths:
                     $ref: '#/components/responses/NotFound'
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/payments/wayforpay/callback:
+        post:
+            operationId: receiveWayForPayCallback
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            additionalProperties: true
+                            type: object
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WayForPayAcknowledgement'
+                    description: Signed acknowledgement, including duplicate and ignored statuses.
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Receive a signed WayForPay service callback
     /api/v1/playback/heartbeat:
         post:
             description: Authenticated same-origin mutation. Only the current owner renews the slot and writes progress. A taken-over session and an expired session are distinct outcomes. Positions above the current video duration are accepted and clamped by the server. Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
@@ -3949,6 +4896,38 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Mint a playback session for one lesson
+    /api/v1/teach/comments/{commentId}/block-author:
+        post:
+            operationId: blockCommentAuthor
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Block the author of a comment from course communication (owner or administrator)
     /api/v1/teach/comments/{commentId}/dismiss-report:
         post:
             operationId: dismissCommentReports
@@ -3986,6 +4965,38 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Dismiss all open reports for a comment
+    /api/v1/teach/comments/{commentId}/unblock-author:
+        post:
+            operationId: unblockCommentAuthor
+            parameters:
+                - in: path
+                  name: commentId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Restore the comment author's course communication (owner or administrator)
     /api/v1/teach/courses/{courseId}/comments:
         get:
             operationId: listTeachCourseComments
@@ -4066,6 +5077,42 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List the open moderation queue for an instructor course
+    /api/v1/teach/courses/{courseId}/participants/{userId}/block:
+        post:
+            operationId: blockCourseParticipant
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: userId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Block a participant from course communication
     /api/v1/teach/courses/{courseId}/participants/{userId}/report:
         post:
             operationId: reportCourseParticipant
@@ -4107,6 +5154,174 @@ paths:
                     $ref: '#/components/responses/TranscriptConflict'
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/teach/courses/{courseId}/participants/{userId}/unblock:
+        post:
+            operationId: unblockCourseParticipant
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: userId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Restore a participant's course communication
+    /api/v1/teach/courses/{courseId}/roster:
+        get:
+            operationId: getCourseRoster
+            parameters:
+                - in: path
+                  name: courseId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    type: string
+                - in: query
+                  name: limit
+                  schema:
+                    default: 20
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RosterPage'
+                    description: A cursor page of members; email addresses are not exposed.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List course members for the instructor or administrator
+    /api/v1/teach/learners:
+        get:
+            operationId: listTeachLearners
+            parameters:
+                - in: query
+                  name: courseId
+                  schema:
+                    format: uuid
+                    type: string
+                - in: query
+                  name: cursor
+                  schema:
+                    type: string
+                - in: query
+                  name: limit
+                  schema:
+                    default: 20
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                - in: query
+                  name: q
+                  schema:
+                    maxLength: 80
+                    minLength: 1
+                    type: string
+                - in: query
+                  name: state
+                  schema:
+                    enum:
+                        - active
+                        - blocked
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LearnerPage'
+                    description: A cursor page of learners; email addresses are not exposed.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List learners across the instructor's own courses
+    /api/v1/teach/reviews/{reviewId}/block-author:
+        post:
+            operationId: blockReviewAuthor
+            parameters:
+                - in: path
+                  name: reviewId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Block the author of a review from course communication (owner or administrator)
     /api/v1/teach/reviews/{reviewId}/dismiss-report:
         post:
             operationId: dismissCourseReviewReports
@@ -4165,5 +5380,37 @@ paths:
                     $ref: '#/components/responses/NotFound'
                 "503":
                     $ref: '#/components/responses/Unavailable'
+    /api/v1/teach/reviews/{reviewId}/unblock-author:
+        post:
+            operationId: unblockReviewAuthor
+            parameters:
+                - in: path
+                  name: reviewId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MembershipGrant'
+                    description: Updated membership.
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/MembershipConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Restore the review author's course communication (owner or administrator)
 servers:
     - url: /
