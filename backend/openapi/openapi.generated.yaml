@@ -3737,6 +3737,8 @@ paths:
             summary: Replace an authored course tree
     /api/v1/admin/courses/{id}/status:
         post:
+            description: 'Performs one legal lifecycle transition: draft to published, published to archived, or archived to published. expectedUpdatedAt must be the exact RFC 3339 microsecond token returned by a read, and every accepted transition returns a new token. Instructors may transition only their own course; admins may transition any course. Requires one matching Origin header, accepts no duplicate or unknown body members, and responses are never cached.'
+            operationId: transitionAdminCourse
             parameters:
                 - in: path
                   name: id
@@ -3751,8 +3753,32 @@ paths:
                             $ref: '#/components/schemas/AdminCourseStatusRequest'
                 required: true
             responses:
-                default:
-                    description: Response schemas are not generated for this request-only binding.
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCourseTree'
+                    description: The transitioned course tree with a new updatedAt token.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/AdminWriteBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/AdminMutationForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/TranscriptConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Publish, archive or restore a course
     /api/v1/admin/instructors:
         get:
             description: Admin-only, unpaginated and bounded to 200 active instructor or admin accounts. Email, password data and account status are never exposed. Responses are never cached.
