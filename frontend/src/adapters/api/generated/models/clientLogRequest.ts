@@ -8,17 +8,17 @@
 import type { ClientLogRequestLevel } from './clientLogRequestLevel.ts';
 
 export interface ClientLogRequest {
-  level?: ClientLogRequestLevel;
-  /** @maxLength 2000 */
-  message: string;
-  /** @maxLength 512 */
-  route?: string;
-  /** @maxLength 128 */
-  release?: string;
-  /** @maxLength 256 */
-  userAgent?: string;
   /** @maxLength 256 */
   errorName?: string;
   /** @maxLength 8000 */
   errorStack?: string;
+  level?: ClientLogRequestLevel;
+  /** @maxLength 2000 */
+  message: string;
+  /** @maxLength 128 */
+  release?: string;
+  /** @maxLength 512 */
+  route?: string;
+  /** @maxLength 256 */
+  userAgent?: string;
 }

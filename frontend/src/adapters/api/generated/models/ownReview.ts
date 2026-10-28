@@ -8,6 +8,6 @@
 import type { Review } from './review.ts';
 
 export interface OwnReview {
-  review: Review | null;
   eligibility: string;
+  review: Review | null;
 }

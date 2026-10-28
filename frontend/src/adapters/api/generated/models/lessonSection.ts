@@ -10,12 +10,12 @@ import type { LessonSectionContentType } from './lessonSectionContentType.ts';
 import type { LessonSectionType } from './lessonSectionType.ts';
 
 export interface LessonSection {
-  id: string;
-  type: LessonSectionType;
-  /** @nullable */
-  content?: LessonRichText | null;
-  imageId?: string;
-  contentType?: LessonSectionContentType;
   alt?: string;
   columns?: LessonSection[];
+  /** @nullable */
+  content?: LessonRichText | null;
+  contentType?: LessonSectionContentType;
+  id: string;
+  imageId?: string;
+  type: LessonSectionType;
 }

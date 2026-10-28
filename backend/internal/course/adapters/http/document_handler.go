@@ -35,7 +35,7 @@ type lessonDocumentDraftResponse struct {
 }
 
 type saveLessonDocumentRequest struct {
-	ExpectedUpdatedAt *string               `json:"expectedUpdatedAt"`
+	ExpectedUpdatedAt *string               `json:"expectedUpdatedAt,omitempty"`
 	Document          domain.LessonDocument `json:"document"`
 }
 

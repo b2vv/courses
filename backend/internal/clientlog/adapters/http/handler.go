@@ -39,13 +39,13 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 }
 
 type clientLogRequest struct {
-	Level      string `json:"level"`
-	Message    string `json:"message"`
-	Route      string `json:"route"`
-	Release    string `json:"release"`
-	UserAgent  string `json:"userAgent"`
-	ErrorName  string `json:"errorName"`
-	ErrorStack string `json:"errorStack"`
+	Level      domain.Level `json:"level,omitempty"`
+	Message    string       `json:"message"`
+	Route      string       `json:"route,omitempty"`
+	Release    string       `json:"release,omitempty"`
+	UserAgent  string       `json:"userAgent,omitempty"`
+	ErrorName  string       `json:"errorName,omitempty"`
+	ErrorStack string       `json:"errorStack,omitempty"`
 }
 
 func (handler *Handler) ingest(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func (handler *Handler) ingest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	event, err := domain.NewClientEvent(domain.Input{
-		Level:      request.Level,
+		Level:      string(request.Level),
 		Message:    request.Message,
 		Route:      request.Route,
 		Release:    request.Release,

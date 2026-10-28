@@ -7,22 +7,6 @@
  */
 
 export interface TranscriptSegment {
-  id: string;
-  /** @minimum 0 */
-  startMs: number;
-  /** @minimum 0 */
-  endMs: number;
-  /**
-     * @minLength 1
-     * @maxLength 1000
-     */
-  text: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     * @nullable
-     */
-  speaker?: string | null;
   /**
      * @minimum 0
      * @maximum 1
@@ -31,4 +15,20 @@ export interface TranscriptSegment {
   confidence?: number | null;
   /** @maxItems 3 */
   documentIds: string[];
+  /** @minimum 0 */
+  endMs: number;
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     * @nullable
+     */
+  speaker?: string | null;
+  /** @minimum 0 */
+  startMs: number;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  text: string;
 }

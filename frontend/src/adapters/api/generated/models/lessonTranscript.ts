@@ -9,7 +9,11 @@ import type { TranscriptDocumentLink } from './transcriptDocumentLink.ts';
 import type { TranscriptSegment } from './transcriptSegment.ts';
 
 export interface LessonTranscript {
-  lessonId: string;
+  /**
+     * Every document referenced by any segment, carried once. A document belongs to the course library and is stored once per course, so inlining it into each of up to 5000 segments would send the same bytes back up to 15000 times: measured on the declared maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id.
+     * @maxItems 200
+     */
+  documents: TranscriptDocumentLink[];
   /**
      * Null when the lesson has no transcript. An absent transcript is a state of the lesson, not a missing resource, so the read answers 200 with an empty body rather than 404 — 404 would be answered identically for a lesson that does not exist, which is the one thing this read must not leak.
      * @minLength 2
@@ -17,18 +21,14 @@ export interface LessonTranscript {
      * @nullable
      */
   language: string | null;
+  lessonId: string;
+  /** @maxItems 5000 */
+  segments: TranscriptSegment[];
+  /** Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale. */
+  stale: boolean;
   /**
      * The optimistic-lock token to send back when saving, null when the lesson has no transcript. Without it on the read an author could never obtain the token the write demands, and the editing loop could not close.
      * @nullable
      */
   updatedAt: string | null;
-  /** Derived at read time by comparing the generation the text was written against with the generation the player would pick now. A lesson with no ready video is never stale. */
-  stale: boolean;
-  /** @maxItems 5000 */
-  segments: TranscriptSegment[];
-  /**
-     * Every document referenced by any segment, carried once. A document belongs to the course library and is stored once per course, so inlining it into each of up to 5000 segments would send the same bytes back up to 15000 times: measured on the declared maxima, that is 75 MiB against 13 MiB for the same content. Segments reference by id.
-     * @maxItems 200
-     */
-  documents: TranscriptDocumentLink[];
 }

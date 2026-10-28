@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"slices"
 
 	"courses/internal/contracts/access"
 )
@@ -16,6 +17,9 @@ const (
 	VideoReady      LearningVideoState = "ready"
 	VideoFailed     LearningVideoState = "failed"
 )
+
+// LearningVideoStates contains the ordered non-absent states emitted to clients.
+var LearningVideoStates = []LearningVideoState{VideoProcessing, VideoReady, VideoFailed}
 
 type LearningLesson struct {
 	ID             string
@@ -111,7 +115,7 @@ func (course LearningCourse) CanPurchaseBy(actor Actor) bool {
 }
 
 func (state LearningVideoState) Valid() bool {
-	return state == VideoAbsent || state == VideoProcessing || state == VideoReady || state == VideoFailed
+	return state == VideoAbsent || slices.Contains(LearningVideoStates, state)
 }
 
 func validLearningNode(id, title string, seen map[string]struct{}) bool {

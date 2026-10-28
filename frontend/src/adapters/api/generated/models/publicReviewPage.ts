@@ -9,9 +9,9 @@ import type { Rating } from './rating.ts';
 import type { Review } from './review.ts';
 
 export interface PublicReviewPage {
-  rating: Rating | null;
   /** @maxItems 20 */
   items: Review[];
   /** @nullable */
   nextCursor: string | null;
+  rating: Rating | null;
 }

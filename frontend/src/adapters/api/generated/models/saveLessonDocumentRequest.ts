@@ -8,7 +8,7 @@
 import type { LessonDocument } from './lessonDocument.ts';
 
 export interface SaveLessonDocumentRequest {
+  document: LessonDocument;
   /** @nullable */
   expectedUpdatedAt?: string | null;
-  document: LessonDocument;
 }

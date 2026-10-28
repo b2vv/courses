@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/hex"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -24,6 +25,9 @@ const (
 	Failed     State = "failed"
 )
 
+// States is the ordered set used by transition validation and the HTTP contract.
+var States = []State{Created, Uploading, Queued, Processing, Ready, Failed}
+
 type ClaimToken string
 
 type Generation int32
@@ -37,6 +41,9 @@ const (
 	PublishFailed      FailureReason = "publish_failed"
 	StorageUnavailable FailureReason = "storage_unavailable"
 )
+
+// FailureReasons is the ordered set used by the HTTP contract.
+var FailureReasons = []FailureReason{UnsupportedSource, ProbeFailed, RenderFailed, PublishFailed, StorageUnavailable}
 
 func (reason FailureReason) Permanent() bool {
 	return reason == UnsupportedSource
@@ -121,6 +128,9 @@ func (transition Transition) Writers() []TransitionWriter {
 }
 
 func ValidateTransition(transition Transition, from, to State) error {
+	if !slices.Contains(States, to) || (from != "" && !slices.Contains(States, from)) {
+		return ErrInvalidStateTransition
+	}
 	legal := false
 	switch transition {
 	case T1:

@@ -8,13 +8,13 @@
 
 export interface PutReviewRequest {
   /**
-     * @minimum 1
-     * @maximum 5
-     */
-  stars: number;
-  /**
      * @minLength 20
      * @maxLength 2000
      */
   body: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  stars: number;
 }

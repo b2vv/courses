@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -18,6 +19,12 @@ const (
 	ReportResolved   ReportState = "resolved"
 )
 
+// ReportKinds is the ordered set used by validation and the HTTP contract.
+var ReportKinds = []ReportKind{ReportOnLecturer, ReportOnStudent}
+
+// ReportStates is the ordered set used by queue filtering and the HTTP contract.
+var ReportStates = []ReportState{ReportOpen, ReportResolved}
+
 type ParticipantReport struct {
 	ID         string
 	CourseID   string
@@ -33,7 +40,7 @@ func NewParticipantReport(id, courseID, reporterID, targetID string, kind Report
 	if reporterID == targetID {
 		return ParticipantReport{}, ErrReportSelf
 	}
-	if courseID == "" || reporterID == "" || targetID == "" || (kind != ReportOnLecturer && kind != ReportOnStudent) {
+	if courseID == "" || reporterID == "" || targetID == "" || !slices.Contains(ReportKinds, kind) {
 		return ParticipantReport{}, ErrReportInvalid
 	}
 	reason = strings.TrimSpace(reason)

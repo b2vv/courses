@@ -10,17 +10,17 @@ import type { AdminUserRole } from './adminUserRole.ts';
 import type { AdminUserStatus } from './adminUserStatus.ts';
 
 export interface AdminUser {
-  id: string;
-  /**
-     * @minLength 3
-     * @maxLength 254
-     */
-  email: string;
   /**
      * @minLength 1
      * @maxLength 120
      */
   displayName: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     */
+  email: string;
+  id: string;
   role: AdminUserRole;
   status: AdminUserStatus;
   updatedAt: AdminTimestamp;

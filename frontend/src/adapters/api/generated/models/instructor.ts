@@ -8,11 +8,11 @@
 import type { InstructorRole } from './instructorRole.ts';
 
 export interface Instructor {
-  id: string;
   /**
      * @minLength 1
      * @maxLength 120
      */
   displayName: string;
+  id: string;
   role: InstructorRole;
 }

@@ -12,11 +12,11 @@ export interface PublishCommentRequest {
      * @maxLength 2000
      */
   body: string;
+  /** @nullable */
+  parentId?: string | null;
   /**
      * @minimum 0
      * @nullable
      */
   positionMs?: number | null;
-  /** @nullable */
-  parentId?: string | null;
 }

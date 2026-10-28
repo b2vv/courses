@@ -16,9 +16,15 @@ func TestOrdersModuleOwnership(t *testing.T) {
 	internalRoot := filepath.Join("..", "..", "internal")
 	ordersRoot := filepath.Join(internalRoot, "orders")
 
+	// The OpenAPI collector is the one leaf composition root that registers every module's
+	// contribution (openapispec/contributions.go imports each module's http OpenAPIContribution,
+	// orders' included — see §16.22). It is not a business module consuming payment facts, so it
+	// is exempt from the "no module imports orders" rule, which guards exactly that business coupling.
+	collectorRoot := filepath.Join(internalRoot, "openapispec")
+
 	t.Run("other modules do not import orders", func(t *testing.T) {
 		walkProductionImports(t, internalRoot, func(path, imported string) {
-			if pathWithin(path, ordersRoot) {
+			if pathWithin(path, ordersRoot) || pathWithin(path, collectorRoot) {
 				return
 			}
 			if imported == "courses/internal/orders" || strings.HasPrefix(imported, "courses/internal/orders/") {
@@ -29,9 +35,14 @@ func TestOrdersModuleOwnership(t *testing.T) {
 
 	t.Run("orders does not import another module", func(t *testing.T) {
 		walkProductionImports(t, ordersRoot, func(path, imported string) {
+			// Platform infrastructure under internal/platform (e.g. the OpenAPI generator orders uses
+			// to describe its own contract, like every other module) is not another business module;
+			// it is the internal-tree sibling of courses/platform/* (httpserver) which was always
+			// allowed. The rule still forbids reading any OTHER business module's packages.
 			if !strings.HasPrefix(imported, "courses/internal/") ||
 				imported == "courses/internal/orders" || strings.HasPrefix(imported, "courses/internal/orders/") ||
-				strings.HasPrefix(imported, "courses/internal/contracts/") {
+				strings.HasPrefix(imported, "courses/internal/contracts/") ||
+				strings.HasPrefix(imported, "courses/internal/platform/") {
 				return
 			}
 			t.Errorf("%s imports another module %s; orders owns its external reads", path, imported)

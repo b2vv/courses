@@ -7,10 +7,10 @@
  */
 
 export interface AdminGrantRequest {
-  userId: string;
   /**
      * @minLength 1
      * @maxLength 500
      */
   reason: string;
+  userId: string;
 }

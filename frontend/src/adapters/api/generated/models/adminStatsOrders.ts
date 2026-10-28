@@ -7,8 +7,8 @@
  */
 
 export interface AdminStatsOrders {
-  pending: number;
-  paid: number;
   failed: number;
+  paid: number;
+  pending: number;
   revenueMinorUAH: number;
 }

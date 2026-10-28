@@ -9,12 +9,19 @@ import type { DraftSegment } from './draftSegment.ts';
 import type { LessonDraftState } from './lessonDraftState.ts';
 
 export interface LessonDraft {
-  lessonId: string;
+  /** @nullable */
+  assetId: string | null;
   /**
-     * Null when recognition has not created a draft row yet.
+     * @minLength 1
+     * @maxLength 200
      * @nullable
      */
-  state: LessonDraftState;
+  failure: string | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  generation: number | null;
   /**
      * @minLength 2
      * @maxLength 35
@@ -22,23 +29,16 @@ export interface LessonDraft {
      * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
      */
   language: string | null;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     * @nullable
-     */
-  failure: string | null;
-  /** True when the draft was made from a previous ready video generation. */
-  stale: boolean;
-  /** @nullable */
-  updatedAt: string | null;
-  /** @nullable */
-  assetId: string | null;
-  /**
-     * @minimum 1
-     * @nullable
-     */
-  generation: number | null;
+  lessonId: string;
   /** @maxItems 5000 */
   segments: DraftSegment[];
+  /** True when the draft was made from a previous ready video generation. */
+  stale: boolean;
+  /**
+     * Null when recognition has not created a draft row yet.
+     * @nullable
+     */
+  state: LessonDraftState;
+  /** @nullable */
+  updatedAt: string | null;
 }

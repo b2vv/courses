@@ -315,3 +315,600 @@ non-blocking fold-ins. Absorbed here; supersedes §11.1/§11.2/§11.3/§11.5 whe
 
 **Open blocking after plan-review: 0** once B1(a)+(b) land in §11.1/§11.2 and the overlay is narrowed
 (N1). Re-send the plan delta to Courses 2, then owner-approval, then S0.0.
+
+## 14. S0.0 expressiveness spike — outcome (2026-10-27, owner-approved go)
+
+Spike code (throwaway, `//go:build s0spike`): `backend/internal/course/adapters/http/s0_spike_test.go`
++ `s0_spike_errcode_test.go`. Run `go test -tags s0spike -run TestS0Spike -v ./internal/course/adapters/http/`.
+**4/4 tests green.** Resolves the §7↔§8 open question: fidelity is achievable, and the override surface
+is measured, not assumed. Evidence per claim below.
+
+**14.1 Reproducible from Go (Layer A, no override) — confirmed green.**
+- Reflection (openapi3gen v0.149.0) emits the 13 `courseDTO` properties with correct base types.
+- `*T` → `nullable:true` is the library default (`publishedAt`/`price`/`rating`); non-pointer →
+  non-nullable. Pins §11.2 pointer row **without custom config**.
+- `time.Time` → `format:date-time`, `int64` → `format:int64` — library defaults.
+- **`required` is NOT emitted by openapi3gen at all** — the generator owns it. Rule "required unless
+  json tag has `,omitempty`" reproduces hand-spec `Course.required` (all 13) **exactly**. Confirms
+  §11.2 and that required-derivation is our code.
+
+**14.2 Override surface — measured census (matches §11.2, two refinements).** Each class below is NOT
+derivable by reflection and needs its §11.2 mechanism: `format:uuid` (bare string), status `enum`
+(plain `string` field, not `type X string` — enum lives in overlay/registry), validation keywords
+(minLength/pattern/minimum — in domain validators, not DTO types → overlay per N1), `additionalProperties:false`
+(library leaves unset), name-map (`Block`→`LessonBlock`, `Span`→`LessonSpan`), string-enum `BlockType`
+(const-set registry). Two **new** findings refine the plan:
+- **F1 — the §2 Block premise is imprecise.** The *published* `LessonBlock` schema is **permissive**
+  (`ordered` is an optional bool allowed on any block); reflecting the `Block` **struct** reproduces it
+  *modulo the `BlockType` enum*. The custom `MarshalJSON` (ordered-as-pointer) does **not** change the
+  published component — H2/SA02 lived in a **stricter reader schema**, not this published schema. So the
+  Block *override-registry* entry (§11.2 row 1) is **not required for the published schema**; only the
+  **string-enum mechanism** for `BlockType` is. The `json.Marshaler` fail-closed assertion stays valuable
+  as a guard, but its stated justification ("the one type reflection gets wrong") is wrong for the
+  published surface. **Plan edit:** reclassify Block under string-enum, keep the marshaler assertion as a
+  defensive guard not a correctness mechanism.
+- **F2 — DTOs are unexported; §4-A central registry cannot reflect them cross-package.** `courseDTO`,
+  `priceDTO`, … are package-private. A single registry file in a `openapigen` package **cannot**
+  reference them. The generator must therefore run **per-module** (each adapter package exports its
+  route→type bindings / contributes its reflected schemas) rather than from one central typed registry.
+  This supersedes §4 approach-A's "one Go file lists all 85 routes": the route→type binding lives
+  **inside each module's adapter package**, and a thin central collector aggregates + the mux cross-check
+  stays. **Plan edit:** §4/§11 registry is per-module-contributed, not central-typed.
+
+**14.3 B1 (error-code source) — proven green.** `go/parser` extracts all **21** `errors.New("…")` codes
+from `discussion/domain/errors.go` (incl. `review_already_exists`, `report_already_open`,
+`course_forbidden`). Confirms B1(a): the call-site literal scan yields **0** of these (discussion passes
+`code := err.Error()`, a variable), so the enum **must** union domain/errors.go consts + direct
+`WriteError` literals + per-module `writeError` wrappers, with a coverage test asserting every
+domain/errors.go code ∈ emitted enum. Error-code fidelity stays **single-layer (Layer A parser)** per §13.
+
+**14.4 N3 (non-JSON route) — proven green.** `orders/adapters/http/handler.go` has exactly **1** raw
+`w.Write` (the WayForPay `Acknowledge()` callback) vs 13 `WriteJSON`. The callback route goes on a
+**declared** non-JSON exclusion list so the Layer-B coverage-gate does not fail on it.
+
+**S0.0 verdict:** fidelity achievable; override surface = §11.2 with F1/F2 refinements. **Next: Courses 2
+review of this outcome (existing_session), then S0.1 (course end-to-end behind parallel file).** The
+spike tests are throwaway (build-tagged, no build wired) — delete or evolve into the real generator's
+fidelity test in S0.1.
+
+## 15. F2 generator-architecture options (owner-requested +/− + pitfalls, 2026-10-27)
+
+Owner chose: Courses 2 reviews §14 first; direction not fixed until their verdict. This is the decision
+input. **Key de-escalation found while writing it:** the constraint is NOT "reflection can't see
+unexported types." openapi3gen reflects a `reflect.Type`/`any` **value**; exportedness of the type
+*identifier* is a compile-time source concern, not a runtime reflection one, and `courseDTO`'s **fields**
+are all exported (`ID`, `Slug`, …). So any package handed a `courseDTO{}` value reflects it fine. The
+real constraint is only that a central registry **cannot name `courseDTO` in its own source** — it must
+**receive values** built inside the owning package. That difference is what separates the two options.
+
+**Option 1 — per-module contribution (each adapter package hands values to a thin central collector).**
+Each `*/adapters/http` package gets a small `openapi_contract.go` that builds its route→type bindings
+(it can construct its own unexported DTOs) and registers them with a `platform/openapigen` collector it
+is given. A top-level generator (cmd or test) runs every module's contribution, aggregates, applies the
+override surface (§11.2), and emits. The mux cross-check runs **per module**.
+- **+** DTOs stay unexported — encapsulation and the M8 isolation rule (just merged in #80) are
+  untouched; no module can reach another's transport types. `platform/openapigen` is infra (like
+  `httpserver`); modules may import it, it imports no module → no cycle, no ADR-013 breach.
+- **+** Each module owns its contract next to its handlers; a route and its schema binding live together.
+- **−** Touches all ~8 modules (one contract file each) and adds a per-handler/`Register` seam — the
+  enlarged-signature cost the plan disliked about approach-B, in a milder form (a separate file, not a
+  changed `Register`).
+- **−** The "one Go file lists all 85 routes" simplicity of §4-A is gone; the route list is distributed.
+- **Pitfalls:** (1) a new route added with no contract entry must **fail** the per-module mux cross-check
+  — a global-only cross-check would let a module under-report silently (this is the §11.1 Layer-B
+  coverage-gate's job; it must be scoped per module, not just per document). (2) The collector takes
+  `any`/`reflect.Type`; a module passing the wrong value (pointer vs value, `*priceDTO` vs `priceDTO`)
+  shifts nullability — needs a typed helper so the binding is checked at compile time where possible.
+  (3) ordering: aggregation across modules must sort by (path, method) or the diff is unstable (§11.4).
+
+**Option 3 — export the DTOs, keep the central §4-A registry.** Rename `courseDTO`→`CourseDTO` across
+modules; one registry file imports every `adapters/http` package and lists the exported types.
+- **+** §4-A as originally planned: a single central file, no per-module seam, the simplest collector.
+- **−** Exporting transport DTOs widens each module's public API for no domain reason, and **directly
+  invites the cross-module coupling M8 (#80) exists to forbid**: another module could now import
+  `course/adapters/http.CourseDTO`. We'd have to add a boundaries_test rule banning exactly that — fighting
+  our own just-merged isolation gate.
+- **−** Large mechanical rename diff across all modules; exported names are now a maintenance contract.
+- **Pitfalls:** (1) a central `openapigen` registry importing all 8 `adapters/http` packages is a package
+  that depends on every module — fine only if it is a **leaf tool** (cmd/), never imported back by a
+  module, or it cycles. (2) Export makes misuse compile cleanly, so the only guard is a test — strictly
+  weaker than "unexported, cannot be named."
+
+**Recommendation (pending Courses 2):** Option 1. It preserves the M8 isolation we just shipped, keeps
+DTOs encapsulated, and the de-escalation above makes its collector thin (values in, not a type rewrite).
+Its real cost is a per-module contract file + a per-module coverage-gate scope — both proportionate.
+Option 3's central-file simplicity is bought by weakening module isolation, which is the wrong trade a
+week after M8. **Not fixed until Courses 2's §14 verdict.**
+
+## 16. Courses 2 verdict on S0.0 — CHANGES (2026-10-27), absorbed as S0.1 entry conditions
+
+Owner confirmed FULL GENERATOR (2026-10-27, serves "stop hand-editing the spec"; reuse-path does not).
+Courses 2 reran the spike (4/4, tests non-vacuous, §14 census exact) and returned **CHANGES**: F2→Option 1
+**approved**; Q3 clean; but 1 blocking-as-stated + a systemic gap + a Q2 over-claim must land before S0.1.
+These do not retract the spike measurement — they correct its *conclusions*. S0.0 is **not** merged as
+"B1/override closed." Resolutions:
+
+**16.1 Q2 (error-code resolve rule) — ACCEPTED (verified).** The spike proved only the `errors.New("…")`
+form (discussion, 21 codes). The dominant form is a typed const `ErrX Error = "literal"` — confirmed in
+adminstats, clientlog, identity, orders, playback, transcript, media, image. **clientlog** emits
+`httpserver.WriteError(w, r, status, string(domain.ErrInvalidEvent), …)` (handler.go:55,68) — a
+`string(domain.ErrX)` **cast argument**, neither a bare literal nor `err.Error()`, and clientlog has **no**
+`writeError` wrapper (so §13's 5-wrapper list doesn't cover it). The enum **source** stays complete via the
+`*/domain/errors.go` glob (it parses both `errors.New("…")` and `Error = "…"` const decls). But the Layer-A
+**call-site fail-closed RESOLVE rule** must accept four arg shapes — bare literal, `err.Error()` variable
+(discussion), `string(domain.ErrX)` cast (clientlog), and a direct `domain.ErrX` of kind `Error` — else S0.1
+reddens legitimate coded calls. **S0.1 entry: the error-code parser handles const-decl + the three
+non-literal call forms, with a test that every `*/domain/errors.go` code ∈ emitted enum AND every WriteError
+call resolves.**
+
+**16.2 Systemic — Layer B is responses-only; request-body schemas are single-layer — ACCEPTED.** §11.1's
+"two-layer fail-closed" holds for responses (`openapi3filter.ValidateResponse`) but **request-body schemas
+have no conformance backstop**: Layer A reflection+override is the only check (~10+ request bodies). This is
+recorded, like the error-code enum, as **single-layer (Layer A)** honestly — not claimed drift-proof.
+**S0.1 options (pick in S0.1):** (b) add `openapi3filter.ValidateRequest` coverage to Layer B for
+request-carrying routes (makes it genuinely two-layer), or (c) record request schemas as Layer-A-only with
+mechanism. Leaning (b) where a request fixture already exists; (c) otherwise with a named limitation.
+
+**16.3 F1 (Block request-side) — PARTIALLY ACCEPTED; blocking-as-stated DISPUTED with evidence.** Courses 2:
+dropping the Block override revives H2 on the request side, because `SaveLessonDocumentRequest` carries
+`LessonDocument`(RichText/Block) under a strict reader contract and Layer B validates only responses.
+**Verified against the hand spec:** `SaveLessonDocumentRequest` (openapi.yaml:1427/2208) → `LessonDocument`
+(2130) → `LessonSection` → `LessonRichText` → `LessonBlock` (2167) — the **same permissive** `LessonBlock`
+(`ordered: {type:boolean}`, optional). **There is no strict block schema anywhere in the hand spec, on
+either the request or the response side.** So a generated permissive request schema is **faithful to the
+current contract, not a regression**: it cannot "revive H2" relative to a strictness the openapi contract
+never had. H2/SA02 was a **response-serialization** defect (bullet-list `ordered:false` dropped), fixed in
+`Block.MarshalJSON` and covered by Layer-B ValidateResponse; the strict document invariant (ordered
+required-on-list, forbidden elsewhere) lives in Go's `validateDocumentSection`, never in openapi.
+**Therefore F1 stands for both request and response: the Block *override* is not required for fidelity to
+the current spec; reclass Block under the `BlockType` string-enum; keep the `json.Marshaler` assertion as a
+defensive guard.** The *valid kernel* of Courses 2's finding is 16.2 (requests are single-layer) — accepted
+there. Making the generated schema **stricter than today** (a discriminated `oneOf` by block type) is a
+**new capability**, not a fidelity requirement; if wanted, it is a scoped follow-up with its own override.
+**Re-verdict requested from Courses 2 on whether F1 remains blocking given the permissive-request evidence.**
+
+**16.4 Q1 (required rule on request DTOs) — ACCEPTED.** Proven only on `courseDTO` (response, all-13,
+0 omitempty). **S0.1 fidelity test must cover ≥1 request DTO** (optional-pointer + null semantics), since
+request-required divergence is single-layer per 16.2.
+
+**16.5 F2 — Option 1 APPROVED by Courses 2.** Per-module contribution + thin `platform/openapigen`
+collector keeps DTOs unexported, respects M8/ADR-013 (platform imports no module; aggregator is a leaf),
+with the coverage-gate scoped **per module** (global-only would let a module under-report). This is the
+S0.1 architecture.
+
+**Status:** S0.0 measurement sound; conclusions corrected (16.1–16.4). F2 settled (Option 1). One open
+discussion: F1 re-verdict (16.3). S0.1 entry conditions = 16.1 parser forms + 16.2 request-layer decision
++ 16.4 request-DTO fidelity coverage.
+
+**16.6 Final verdict (Courses 2, 2026-10-27): S0.0 PASS, 0 blocking.** F1 withdrawn after line-by-line
+hand-spec check (`SaveLessonDocumentRequest`:2208 and `LessonDocumentDraft`:2195 both `$ref` the one
+`LessonDocument`:2130 → the single permissive `LessonBlock`:2168; no strict/oneOf block schema exists
+request or response). Accepted: 16.1, 16.2 (systemic request single-layer survives independently of Block),
+16.3 (Block → `BlockType` string-enum + `json.Marshaler` assertion as guard), 16.4, 16.5/F2 Option 1. Q3
+clean. **Cleared for S0.1 under the 16.1/16.2/16.4/16.5/16.3 entry conditions + owner go.** Per-slice code
+review returns to Courses 2. Future-only note: if S0.1 ever makes the spec stricter than the document's Go
+validator (discriminated `oneOf` by block type), that strict schema becomes a new surface and 16.2's
+request-conformance must cover it — not now.
+
+**16.7 S0.1 staging clarification (2026-10-27, Codex STOP on brief↔plan conflict).** Codex (Run 1) stopped
+pre-code: the brief scoped Run 1 to the course **catalog** (GET /courses, GET /courses/{slug}), but §16's
+"S0.1 entry conditions" wording reads as *preconditions to start*. **Clarified:** 16.1 (error-code parser),
+16.2 (request-layer), 16.4 (≥1 request DTO in fidelity) are **S0.1 completion-gate conditions, verified by
+Courses 2's per-slice review across S0.1's staged runs (N2: course → S0.1b…S0.1n) before the S0.2 cutover —
+not line-1 preconditions of the first run.** This changes no *what*: every condition stays mandatory before
+S0.1 closes. Run 1 = catalog-only (response surface) is in-scope. Consistent with Courses 2's own framing
+("checklist for S0.1") and N2's staged slices.
+Also adopted (Codex ARGUE channel, correct): the brief's "no nullable slices in catalog" was imprecise —
+§11.2 needs an **explicit** nil/non-nil decision per `[]T` field. Catalog has three
+(`pageDTO.Items`→CoursePage.items, `courseDetailDTO.Program`, `programModuleDTO.Lessons`); all are
+**non-nullable, required** in the hand spec (no `nullable:true`; handler builds with `make([]T,0)`), so each
+is encoded as an **explicit non-null** decision, and the generator fail-closes on a `[]T` with no decision.
+
+## 16.8 S0.1 Run 1 (catalog) — Courses 2 verdict PASS + dispositions (2026-10-27)
+
+Run 1 @ `7d5fff1` (slice `bc49613`+`534542e`): **PASS as a staged parallel-artifact slice, 0 blocking**
+(nothing ships — `openapi.yaml` untouched). Courses 2 confirmed independently: openapigen imports 0 internal
+modules (M8 ✓), DTOs stay unexported (Option 1 ✓), fidelity non-vacuous, Layer-B real. Five non-blocking
+findings, dispositioned:
+- **Q2b (params) — the key one; blocking-for-S0.2-cutover, not for Run 1.** `RouteBinding` has no params
+  field; catalog query/path params (limit/offset/q/sort, slug) live **entirely in the overlay** — structural
+  AND Go-sourceable, contradicting §4-A ("registry carries path/query params"). Headers were split correctly
+  (structure in Go Components, validation/prose in overlay); params must get the same split. **Before S0.2:**
+  add `Params` to `RouteBinding` (existence/type/enum from Go; validation+prose in overlay), or record params
+  as an explicit named limitation. Un-fixed, cutover would ship hand-maintained param specs → handler↔param
+  drift ungated (the exact class S0 exists to close). **Resolution chosen: add `Params` to `RouteBinding`**
+  in the next S0.1 run (Go-structural), matching the header split.
+- **Q2a (error-enum in overlay) — temporary, must exit in 16.1.** Run 1's overlay carries
+  `ErrorResponse.error.code` enum, marked temporary. **§16.7 condition added:** the 16.1 error-code parser run
+  MUST remove the error-enum from the overlay (else it stays a hand-maintained drift source). Tracked.
+- **Q1 (fidelity normalization blind spot) — non-blocking, dormant for catalog.** Both hand and generated
+  round-trip through kin-openapi `openapi3.T` in `normalizedDocument`, so any keyword kin-openapi does not
+  preserve vanishes from BOTH sides invisibly. Catalog uses only modelled keywords. **For richer surfaces
+  (later runs):** add a raw-YAML subset-diff (hand vs generated) OR assert the spec contains no
+  kin-openapi-unsupported keywords. Added as a later-run condition.
+- **Q3 (open-map fail-closed) — non-blocking, dormant.** No fail-closed test for the `additionalProperties`
+  open-map whitelist (no maps in catalog). **Add this fail-closed case in the slice that first touches an open
+  map (ClientLogRequest).**
+- **Q5-depth (nullable fixture) — non-blocking.** Add a catalog fixture with null price/publishedAt/rating so
+  Layer-B ValidateResponse actually exercises the nullable branches. Cheap; fold into the next course touch.
+
+Run 1 closed PASS. These are S0.1-completion / S0.2-cutover conditions, not Run-1 blockers.
+
+**16.9 S0.1b-1 (Params Go-ward) — Courses 2 PASS, Q2b resolved + Q3 generalization (2026-10-27).**
+Slice `ac970b7` (HEAD `cb2e9b5`): **PASS**, Q2b closed. Courses 2 re-ran fidelity fresh (green), confirmed
+the watch-point: overlay param structure deleted same commit, fidelity green after deletion, generated.yaml
+byte-identical → Params-from-Go reproduce the same param surface. Merge discipline (delete overlay structure
++ green fidelity in the same commit) is the template for the error-enum removal at 16.1.
+- **Q1 honest framing (record it):** "drift gated" = declared-Params vs the **spec** (fidelity reddens if a
+  param is added/removed/retyped in `RouteBinding`). Declared-Params vs the handler's actual `r.URL.Query()`
+  reads stays **single-layer** (request-conformance not wired) — the accepted 16.2 limit, not a regression.
+- **Q3 (non-blocking) — string-enum single-source, generalize with 16.1.** The catalog `sort` Enum in the
+  contribution ({SortRecent,SortTitle}) is correct today but is a **second** hand-maintained list of public
+  sorts (the first is the variadic in `NewQuery`, query.go:33; SortStudents/SortPrice are admin-only via
+  NewAuthoringQuery). A 3rd public sort added to `NewQuery` without updating the contribution → generated enum
+  misses it → fidelity green (hand unchanged) → Layer-B (responses-only) blind → **undetected drift**. Fix:
+  export a single `domain.PublicCatalogSorts = []Sort{SortRecent,SortTitle}`, consumed by both `NewQuery` and
+  `contribution.Enum`, with a test. **This is the string-enum generalization of 16.1's "domain-set ∈ emitted
+  enum" discipline; apply it to ALL const-set enums (sort, status, BlockType), not only error-codes.** Folded
+  into the S0.1b-3 (16.1 / const-set-enum) run. Non-blocking (sorts rarely change; correct now).
+
+**16.10 Request-body nullability is NOT pointer-derived (Codex STOP, S0.1b-2, 2026-10-27).** Codex stopped
+pre-code on a real §11.2 contradiction, verified: `transitionAdminCourseRequest` (admin_handler.go:125) has
+`Status *string` and `ExpectedUpdatedAt *string`, **no omitempty**; the §11.2 rule says `*T → nullable:true`,
+but the hand spec `AdminCourseStatusRequest` **requires** both and forbids null (`status` is a non-null enum,
+`expectedUpdatedAt`→`AdminTimestamp` non-null), and the handler (`:268`) rejects `nil` for both. So the
+pointer here is a **decode-presence idiom** (distinguish "absent" from "present"), not a nullable wire value.
+This is exactly the request-side risk Courses 2 raised in the Run-1 review (Q1). **Decision (plan owner):**
+- The `*T → nullable:true` rule is **RESPONSE-only** — a response `*T` genuinely serializes `null` (e.g.
+  `publishedAt`), proven for catalog. It does **not** hold for request bodies.
+- For **request** bodies, a pointer field's nullability is an **explicit per-field decision** in the
+  contribution (extend the `NullableFields` mechanism to request fields), and the generator **fail-closes on a
+  request pointer field with no explicit decision** — so request null-semantics can never be silently wrong.
+  `required` still follows the hand contract / omitempty. The generator already knows req-vs-resp context from
+  `RouteBinding.Request` vs `Responses`, so the split is clean. (A type shared between request and response
+  with different nullability would be caught by the fail-closed rule and need a per-use override — no such type
+  in course today; note for later modules.)
+- For `transitionAdminCourseRequest`: both pointer fields = **explicit non-null, required**; `status`'s enum
+  [draft,published,archived] goes to the overlay like the response `status` enum.
+- 16.4's "optional-pointer" case: the transition route proves the **non-null required** pointer path; add a
+  generator **unit test** for the genuine-optional path (a request `*T` with omitempty → nullable+optional), so
+  both request-pointer meanings are covered before the document route (16.3) exercises a real optional one.
+Supersedes §11.2's pointer row for request bodies. Courses 2 will verify the request-nullability handling in
+the S0.1b-2 review.
+
+**16.11 Error-enum = emitted-set, hand spec corrected now (owner decision, 2026-10-27).** S0.1b-3a Codex
+STOP (verified by Courses 13): generate-from-Go found the hand `ErrorResponse` enum (`openapi.yaml:3409`) is
+incomplete relative to codes the API actually returns — `image/adapters/http/handler.go:110–118`
+(`writeUploadError`) emits `unsupported_image`, `image_too_large`, `image_too_many_pixels`, `invalid_image`
+via `httpserver.WriteError`, none present in the hand enum (census: 99 domain codes, 20 absent from hand).
+"Full domain enum from Go" + "hand unchanged" + "green exact fidelity" are mutually incompatible on HEAD —
+a real contract bug, exactly what the migration exists to catch.
+- **Decision (owner):** the generated `ErrorResponse.code` enum = the **emitted set** — codes that actually
+  RESOLVE at a `WriteError` call-site — not the full 99 domain constants (internal codes a client never sees
+  stay out). The hand `openapi.yaml` enum is **corrected now** to equal the emitted set exactly: add the
+  genuinely-emitted-but-missing codes, remove any hand code that is never emitted. This edits the
+  source-of-truth before the S0.2 cutover — a **deliberate, owner-approved exception** justified because it
+  fixes a real contract incompleteness the migration surfaced.
+- **Safety:** the hand *removals* are only trustworthy if the RESOLVE parser is complete. The parser MUST
+  handle the four call forms (§16.1) and **fail-closed on any unrecognized form** — an unresolved call errors
+  the build, never silently under-counts the emitted set (which would wrongly drop a real code from hand).
+  So: build + verify the 4-form resolver first; the emitted-set census drives hand edits only after the
+  resolver proves every `WriteError` call resolves.
+- **Audit:** Codex records the exact emitted set and the precise hand additions/removals in the work file
+  BEFORE editing `openapi.yaml`; hand edits are limited to the `ErrorResponse.code` enum. Overlay error-enum
+  removed in the same commit; fidelity generated↔hand green + byte-identical regen = proof.
+- **Check:** `go test` coverage gate — every `WriteError` call resolves (fail-closed) AND generated enum ==
+  hand enum (fidelity) AND every resolved code ∈ `*/domain/errors.go` source universe. Courses 2 per-slice
+  review before any merge; this slice now touches `openapi.yaml`, so flag the contract change explicitly.
+
+**16.12 Source universe = all domain error declarations + a named transport-literal allowlist (writer
+decision, Courses 13, 2026-10-27).** S0.1b-3a Codex STOP #2 (verified by Courses 13): the §16.1 source
+universe `*/domain/errors.go` glob is too narrow. Codes are declared across many domain files, not only
+`errors.go` — verified: `ErrInvalidQuery Error = "invalid_query"` in `course/domain/course.go:16`; the
+discussion comment codes (`comment_body_invalid`…`comment_cursor_invalid`) via `errors.New(...)` in
+`discussion/domain/comment.go:16–20`; further `Error = "..."` consts in `course/domain/{authoring,document,
+document_access}.go`. A few resolved codes are pure **transport literals** with no domain const at all —
+`method_not_allowed` is a bare literal in `media/adapters/tus/server.go:56`.
+- **This is a mechanism refinement, not a product/contract change** — the owner's §16.11 emitted-set
+  semantics stand. The emitted set (what drives the enum + hand) is computed by the RESOLVE census and is
+  unaffected: a bare literal like `method_not_allowed` is already one of the four accepted call forms. Only
+  the secondary cross-check "every resolved code ∈ source universe" needs a correct universe.
+- **Decision (writer):** the source universe = all `Error = "..."` const decls AND `errors.New("...")` calls
+  found under `internal/*/domain/**` (both forms, every file, not just `errors.go`), PLUS a small, explicit,
+  documented transport-literal allowlist (each entry named with its emit site, e.g. `method_not_allowed →
+  media/adapters/tus/server.go`). A resolved code matching neither the broadened domain universe nor the
+  named allowlist → build/test error (fail-closed; catches a typo'd emitted literal).
+- **RESOLVE call-form fail-close is unchanged** — an unrecognized *call form* at a `WriteError` site still
+  errors (a different axis from the declaration site). **Check:** coverage test asserts every resolved code
+  has provenance (domain decl or named allowlist) and the allowlist has no unused entries.
+
+**16.13 Error boundary normalization — a prerequisite security slice S0.1b-sec (owner decision,
+2026-10-27).** S0.1b-3a Codex STOP #3 (verified by Courses 13): `discussion/adapters/http/handler.go:711–712`
+`writeError` sets `code := err.Error()` and passes it to `httpserver.WriteError`; `statusFor` defaults to
+400. An unknown/infrastructure error (a wrapped pgx `ConnectError` carrying `Config.User`/`Database`) is
+returned to the client as the raw string in `error.code` with HTTP 400. Verified real (probe: two DB names →
+two distinct codes); already flagged in the S0.0 spike (`course/adapters/http/s0_spike_errcode_test.go`, B1).
+This is an **info-disclosure defect + wrong status + an unbounded `error.code`** that makes a finite enum
+impossible. Only discussion has the literal `code := err.Error()`; the other modules' own `writeError`
+wrappers (course/admin/document/learning, adminstats, identity, orders, media, image, playback) are
+**unaudited** for the same raw-err / default-400 class.
+- **Decision (owner): audit + fix ALL module HTTP boundaries now**, as a distinct prerequisite slice
+  **S0.1b-sec**, before resuming the enum work (3a). Normalize: an error that is **not** a recognized
+  domain/application business error → a stable `dependency_unavailable` code + **503**, preserving every
+  recognized business code and its current status unchanged. Recognized business errors keep their exact
+  code/status — only the unknown/default path changes.
+- **Blast radius: this changes runtime error responses across modules**, so per the shared/persisted-state
+  rule it is gated by the **FULL ordered suite (make test + make integration + make e2e)**, not targeted
+  tests — an existing contract/e2e assertion on a now-changed status/code must surface. (CI is broken
+  account-wide; local gates authoritative.) Courses 13 runs `make e2e` itself at writer-verify (never trusts
+  the agent's claim on the cross-module safety net).
+- **Guardrail:** if normalization would alter a *recognized business* code/status (ambiguous recognized vs
+  unknown), STOP and ask — do not silently reclassify a business error. Each module gets a test: an
+  unknown/infra error → `dependency_unavailable`/503 (not a raw string / 400).
+- Courses 2 per-slice review (security-sensitive: flag every behavior change). After S0.1b-sec PASS + merge
+  discipline, resume S0.1b-3a on the now-bounded emitted set.
+- **Refinement (owner 2026-10-27, after writer diff review + two Codex STOPs):** the only module that leaked
+  a raw string was discussion (`code := err.Error()`); every other module already had a bounded, safe
+  unknown-error default, but NOT a uniform one — most emit `internal_error/500`, **image** emits
+  `dependency_unavailable/503` (upload module), **transcript** emits `invalid_request/400`. Decision: **fix
+  only discussion** — its unknown/default routes to `internal_error/500` (matching the majority), and its
+  recognized business codes keep their exact values via an explicit switch (removes the raw-string path).
+  **Every other module is restored to its exact baseline** (Codex's first pass wrongly flipped eight modules'
+  `internal_error/500` → `503` and changed transcript; all reverted). Net runtime change of the slice =
+  discussion only. The pre-existing cross-module inconsistency (500/503/400 for unknown) predates this slice
+  and is a **non-blocking tracked note**, not fixed here. Per-module `error_boundary_test.go` guards each
+  module's actual unknown-error contract (no raw string anywhere) as a regression guard.
+
+**16.14 Multi-module aggregation seam (S0.1c adminstats STOP, 2026-10-27).** Adding any second module hit
+the expected seam: there is no multi-module aggregator yet — only `course`'s fidelity test passes
+`{OpenAPIContribution()}` and writes the shared `openapi.generated.yaml`. §16.5 (F2 Option 1) already fixed
+the architecture: per-module contribution + a thin collector whose aggregator is a **leaf composition root**
+(ADR-013: `platform/openapigen` imports no module; the composition root does the importing).
+- **Approach (writer, faithful to §16.5) — interim, defers the cutover:** introduce one composition-level
+  aggregation point (a package the composition root owns, allowed to import every module) that collects
+  `[]ModuleContribution` from each module's `OpenAPIContribution()` and feeds `openapigen.Generate`. Each
+  module keeps its OWN per-module fidelity test (validates its slice of the aggregated doc against hand) and
+  its own per-module coverage-gate (every route it registers ∈ its contribution). The single
+  `openapi.generated.yaml` writer moves behind this aggregation (one writer over ALL contributions), not per
+  test. **The full `make generate` CLI + `check-generated` gate + Orval rewire stay in S0.2 cutover** (owner
+  paused before cutover) — this interim seam only unblocks module-by-module migration without pulling the
+  merge/cutover forward.
+- Each subsequent module slice: add its `OpenAPIContribution()`, register it in the aggregation point, add
+  its per-module fidelity + coverage-gate, remove any hand/overlay duplication now Go-sourced, keep deliberate
+  narrowings explicit. generated↔hand fidelity green + byte-identical regen = proof. Courses 2 per-slice.
+
+**16.15 Named root-slice response component — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1c adminstats STOP #2).** adminstats `GET /api/v1/admin/stats/timeseries` returns a bare JSON
+array `[]timeseriesPointDTO` whose hand contract names the array component `AdminStatsTimeseries`
+(openapi.yaml:611, :2890-closure). Codex mapped `reflect.TypeFor[[]timeseriesPointDTO]() → "AdminStatsTimeseries"`
+in NameMap and STOPPED correctly: `openapigen.reflectBody` does not honour NameMap for a **root** slice — the
+library returns the array schema inline, so the component is never emitted and per-module fidelity fails
+("missing DTO in reference closure: AdminStatsTimeseries"). Verified by Courses 13 against generate.go:233-274
+(no root-slice lift) and the fidelity FAIL in the work journal.
+- **Decision — Option A (minimal generator extension), faithful to generate-from-Go.** When the root body
+  type carries an explicit NameMap entry and the reflected root ref is an inline (non-`$ref`) array schema,
+  `reflectBody` lifts it into `doc.Components.Schemas[name]` and returns a `$ref`, with the existing
+  `sameJSON` collision guard and the two-generation byte-identity proof. A bare-array 200 is a standard REST
+  shape; a FULL generate-from-Go generator must emit it from Go, hand unchanged.
+- **Alternatives closed:** (B) wrapping the array in a struct changes the wire contract (the endpoint returns a
+  top-level array) — rejected; (C) declaring `AdminStatsTimeseries` structurally in the overlay duplicates a
+  shape that is now Go-sourced, against §16.14 — rejected; (D) editing the hand spec to inline the array fits
+  the contract to a generator gap instead of the reverse — rejected.
+- **Scope:** writer-level mechanism inside the owner-confirmed FULL generate-from-Go S0; no product/contract
+  change, nothing merges. Courses 2 per-slice review still gates S0.1c. The `make generate` CLI +
+  `check-generated` + Orval rewire remain in the S0.2 cutover.
+
+**16.16 Hand-spec defect policy during S0.1 migration (owner decision, 2026-10-28, S0.1d image STOP).**
+Generate-from-Go surfaces genuine hand-spec defects module by module (the first after §16.11: image
+`ImageUploadResponse` has no `additionalProperties: false` though the Go `uploadResponse` struct emits exactly
+four fields and all 124 other object schemas in the hand spec are closed — verified by Courses 13 via
+`sed`/`grep` and Codex's 21/21 sibling audit). **Decision:** the writer (Courses 13) MAY fix a CLEAR,
+zero-behavior-risk hand defect in `openapi.yaml` NOW — autonomously, without a per-defect owner question —
+provided each fix is (a) recorded as a dated decision citing the §16.11 precedent, (b) proven zero-behaviour
+(the generated shape equals what the production handler already emits, so the fix only makes the contract
+match reality), and (c) sent to Courses 2 in the per-slice review. The writer MUST still STOP and surface to
+the owner any hand change that is ambiguous or could change observable behaviour (a status code, an enum
+member a client may send, a required/optional flip a client relies on). This generalises §16.11 from a
+one-off to a bounded standing authority for the migration; it does not touch the S0.2 cutover gates (CI green
+or owner-waiver + owner go still required to merge to main). First application: add `additionalProperties:
+false` to `ImageUploadResponse` (S0.1d).
+
+**16.17 Overlay-owned request body (non-reflectable multipart) — merge capability (writer decision,
+Courses 13, 2026-10-28, S0.1d image STOP #2).** image `POST /api/v1/admin/lessons/{id}/images` takes a
+`multipart/form-data` upload (handler reads `r.FormFile("file")`, no Go DTO). The generator reflects JSON
+bodies only, so the request body has no Go anchor and must live in the overlay. But `applyOverlay`'s
+fail-closed orphan guard treats `properties`/`responses` as always Go-mirrored (`anchored()`,
+overlay.go:142), so the overlay's `requestBody/content/multipart~1form-data/schema/properties/file`
+is rejected as `orphan overlay key …/properties/file`. Verified by Courses 13 against overlay.go:100-102,132-146
+and Codex's STOP #2.
+- **Decision — bounded merge capability, no guard weakening.** The overlay MAY introduce a `requestBody`
+  subtree on an operation the contribution declares ONLY when the generator emitted NO `requestBody` for that
+  operation (i.e. the route has no JSON `Request`). Within that overlay-owned subtree the orphan-key guard is
+  suspended (the whole subtree is legitimately overlay-sourced — a non-reflectable multipart form). Everywhere
+  else — response schemas, component schemas, and the request body of any route that DOES declare a JSON
+  `Request` (there `requestBody` already exists, so the flag never trips) — the orphan guard stays fully
+  intact. Implement by threading an `overlayOwned` flag through `mergeOverlay`, set when descending into a
+  newly-created operation `requestBody`, and skipping the `anchored && !exists` rejection only while it holds.
+- **Tests (prove bounded, non-vacuous):** overlay introduces a multipart requestBody on a no-JSON-Request route
+  → accepted and present in the merged doc; an orphan key under a Go-sourced schema `properties` → STILL
+  rejected; a route that declares a JSON `Request` → overlay CANNOT add an extra property under its requestBody
+  (guard still fires). 
+- **Scope:** generate-from-Go overlay mechanism (same class as §16.15); no product/contract change, hand
+  untouched beyond the §16.16 one-liner, nothing merges. Courses 2 per-slice review gates it.
+- **Named limitation (Courses 2 S0.1d tracking, 2026-10-28), same single-layer class as §16.2/N1.** An
+  overlay-owned multipart `requestBody` is hand-written with no Go source and no request-conformance backstop
+  (`ValidateRequest` on a `multipart/form-data` binary upload is impractical), so it is **drift-prone** — the
+  overlay's declared form can diverge from what the handler's `r.FormFile` actually reads, and nothing fails.
+  Mechanism of the gap: it is single-layer (overlay only), exactly like params and validation keywords (§16.2,
+  N1). Minor theoretical edge: the `overlayOwned` flag trusts the generator's `!exists`, so a generator bug
+  that dropped a reflected JSON `requestBody` could let the overlay mask it; the per-route Layer-B conformance
+  (present for JSON routes) is the backstop. Low risk, recorded for completeness — not fixed now.
+
+**16.18 Bodyless response (204 No Content) — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1f playback STOP).** playback `POST /api/v1/playback/heartbeat` answers `204 No Content`
+— the first response across all contributors with no body. The generator's response loop
+(`generate.go`, response iteration) unconditionally called `reflectBody(response.Body, false)` and wrapped
+the result in an `application/json` content block; a `204` carries `Response{}` (nil `Body`), so
+`reflectBody` rejected it with `nil response body`. A `204` must also carry no content block at all, by
+OpenAPI semantics. Verified by Courses 13 on the host against `generate.go` and `artifact_test.go:32`, and
+Codex's narrow STOP (it did not hand-fix the generator, edit the frozen spec, or touch the artifact).
+- **Decision — a bodyless response is declared explicitly with `Response.Empty`.** In the response loop,
+  build the `openapi3.Response` with its description (and component ref / headers) first, then: if `Empty` is
+  set, emit no content schema (and reject `Empty` set together with a non-nil `Body` as contradictory); if
+  `Body != nil`, reflect the content schema as before; if `Body == nil` and `Empty` is NOT set, fail closed
+  with `nil response body for status N; set Empty for an intentional bodyless response`, whatever the status.
+  Bodied responses are unchanged. One new field (`Empty bool`), no behaviour change for any existing bodied
+  response.
+- **Why an explicit marker, not a status heuristic (supersedes the first S0.1f-1 attempt).** S0.1f-1 first
+  restricted the nil-body branch to no-content statuses (`204`/`304`), per Courses 2's non-blocking. The
+  transcript module then showed that legitimate bodyless responses also occur on content-bearing statuses —
+  `POST …/documents` returns a bodyless `201`, `POST …/draft/regenerate` a bodyless `202` (both in the frozen
+  hand spec). A status heuristic cannot tell a forgotten body on a `201`/`202` from an intentional one, so it
+  would silently accept the mistake there — the very failure it was meant to prevent. The explicit `Empty`
+  marker makes a nil body ALWAYS fail closed unless the contributor states the response is bodyless, uniform
+  across statuses. playback's heartbeat `204` is declared `Empty: true`; its emitted artifact is unchanged.
+- **Test (prove non-vacuous, all directions):** `TestBodylessResponseEmitsNoContent` — a route with a
+  `202 {Empty:true}` and a `200` with a body: the `202` emits a response with a description and zero content
+  entries, the `200` keeps its schema; a separate `200 {}` (nil body, no `Empty`) fails closed with
+  `nil response body for status 200`; and `200 {Body, Empty:true}` fails closed as contradictory. The
+  end-to-end `TestOpenAPIArtifact` also exercises the real playback `204`.
+- **Scope:** generate-from-Go generator capability (same class as §16.15 named-root-slice lift); no
+  product/contract change, hand spec untouched, nothing merges. Courses 2 per-slice review gates it.
+
+**16.19 Shared component name across modules — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1h discussion STOP).** discussion's review rating DTO (`reviewRatingDTO`) shares the frozen
+component name `Rating` with course (`course.ratingDTO`), and the two are an identical schema
+(`{average float64/double, count int}`; `minimum:3` is an overlay keyword, §16.2). The generator rejected
+this a priori: it kept a `names map[string]reflect.Type` and errored `component name collision` whenever two
+distinct Go types mapped to one component name (an eager loop over `NameMap` and a second check in
+`check()`). That is strictly stronger than correctness requires — two different Go structs that serialise to
+the *same* JSON schema are a legitimate shared component, which is exactly how a frozen cross-module schema
+like `Rating` is expressed.
+- **Decision — a shared component name is allowed iff the schemas are identical; this supersedes the strict
+  NameMap injectivity.** The two eager collision rejections and the now-unused `generator.names` field (and
+  its init) are removed. Reconciliation moves to the EXISTING emission-time `sameJSON` guard
+  (`generate.go` ~273-285): a component name first seen is emitted; a name seen again with a byte-identical
+  JSON schema is accepted (one shared component); a name seen again with a differing schema still fails closed
+  with `conflicting schema NAME`. So injectivity is replaced by schema-equality, not dropped — a real
+  divergence (a module silently reusing `Rating` for a different shape) is still rejected, now at the schema
+  level where the actual contract lives.
+- **Why schema-equality, not name-injectivity.** Name-injectivity answers "do two types share a name?" when
+  the contract question is "do two types share a *schema*?". The frozen hand spec has exactly one `Rating`
+  component referenced from both course and discussion, so the generated artifact must emit one `Rating` too;
+  injectivity made that impossible without a cross-module Go import (forbidden by architecture) or a second
+  name (forbidden by the frozen contract). `sameJSON` was already the authority for shared `Response`
+  components (`generate.go:203`) and named-root slices (§16.15, line 284) — this extends the same authority to
+  named struct schemas, so the whole generator now uses one rule for "same name" everywhere.
+- **Test (prove non-vacuous, both directions):** `TestSharedComponentNameAllowsIdenticalSchemaOnly` — two
+  distinct Go types mapped to `Rating` with an identical shape → accepted, one `Rating` component present; the
+  same two names with a differing field type (`int64` vs `int`) → fails closed with `conflicting schema`.
+  `TestOpenAPIArtifact` stays byte-identical (no current contributor shared a name before discussion lands),
+  and `TestNamedRootSlice` + `TestGenerateTwice` still pass.
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18); no product/contract
+  change, hand spec untouched, nothing merges. Unblocks S0.1h discussion, which maps `reviewRatingDTO` →
+  `Rating` like course. Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2).
+
+**16.20 oneOf response body — generator capability (writer decision, Courses 13, 2026-10-28, S0.1i identity
+STOP).** identity `POST /api/v1/auth/login` answers `200` with one of two shapes: the Go handler writes
+`mapUser(result.User)` (→ `AuthenticatedUser`) on success, or `twoFactorRequiredDTO` (→ `TwoFactorRequired`)
+when `ErrTwoFactorRequired`. The frozen hand spec expresses this as `schema.oneOf: [AuthenticatedUser,
+TwoFactorRequired]` (openapi.yaml:1158-1160) — the ONLY `oneOf` in the frozen contract. The generator's
+`Response` carried a single `Body any`, so a union response had no Go anchor; Codex STOPped at 0/22 rather
+than work around it (generator, frozen spec and git untouched), the same discipline as the §16.19 Rating STOP.
+- **Decision — a union response is declared with `Response.OneOf []any`.** Each member is reflected exactly
+  like a `Body` (a `NameMap`-named member emits as a `$ref` to its component) and the members are emitted as
+  `schema.oneOf` in SLICE ORDER, because `oneOf` order is contract-significant (the fidelity comparison does
+  not sort it). `OneOf` is mutually exclusive with `Body` and `Empty`, and needs at least two members: a
+  single alternative is a plain `Body` and fails closed (`OneOf needs at least two alternatives`); `Body` +
+  `OneOf` fails closed (`both Body and OneOf`); `Empty` + `OneOf` fails closed (`Empty together with a body`).
+  No behaviour change for any existing single-`Body` or `Empty` response.
+- **Why a member list, not a synthetic wrapper type.** The two alternatives are independent frozen components
+  referenced elsewhere; a wrapper Go struct would either invent a component the hand spec does not have or
+  force a cross-module import. A member list maps one-to-one onto `oneOf` and reuses the existing
+  `reflectBody` path (named members → `$ref`, order preserved), so the emission is the frozen shape exactly.
+- **Test (prove non-vacuous, all directions):** `TestOneOfResponseEmitsAlternatives` — a `200 {OneOf:
+  [authUser, twoFactor]}` emits `oneOf` with two component `$ref`s in that order and both components present;
+  a single-member `OneOf`, a `Body`+`OneOf`, and an `Empty`+`OneOf` each fail closed with their own message.
+  `TestOpenAPIArtifact` stays byte-identical (no contributor uses `OneOf` until identity lands).
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18 / §16.19); no
+  product/contract change, hand spec untouched, nothing merges. Unblocks S0.1i identity (login 200).
+  Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 / S0.1h-gen).
+
+**16.21 Header parameter + reusable parameter component — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1j orders STOP).** orders `POST /api/v1/learn/courses/{courseId}/purchase` carries the
+`Idempotency-Key` request header, declared in the frozen spec as `$ref:
+'#/components/parameters/IdempotencyKey'` → `components.parameters.IdempotencyKey` (`name: Idempotency-Key,
+in: header, required, schema: {string, minLength 1, maxLength 128}`; openapi.yaml:102, 2110-2115). It is the
+only header parameter and the only reusable parameter component in the frozen contract. The generator
+accepted only `in: query`/`path` and emitted every parameter inline (no `components.parameters`), and the
+overlay cannot ADD a parameter (orphan guard, overlay.go:227), so Codex STOPped — same discipline as the
+oneOf and Rating STOPs.
+- **Decision — `Param.In: "header"` is allowed, and `Param.Component` emits a reusable parameter.** Header is
+  added to the accepted locations (no path-template rule; type rules unchanged). When `Param.Component` is set
+  the generator emits the parameter once under `components.parameters[Component]` (name, in, required, schema
+  type/enum) and references it from the operation as `$ref: '#/components/parameters/<Component>'`; a reuse
+  with a differing definition fails closed (`conflicting parameter`), mirroring shared response components.
+  Hand-only keywords (`description`, `minLength`/`maxLength`) enrich the EMITTED component via the overlay —
+  the component now exists, so the orphan guard permits enrichment; the overlay's parameter special-case is
+  scoped to `paths/*` (overlay.go:91), so `components.parameters` merges normally. No change for existing
+  inline query/path parameters.
+- **Why a component + overlay enrichment, not a fuller Go parameter.** The frozen spec references one shared
+  `IdempotencyKey` component from the operation; emitting it inline would diverge from that shape, and putting
+  `description`/min-max on the Go `Param` would move hand-only keywords into Go against §16.2. The generator
+  emits the structural skeleton; the overlay owns the prose and bounds — the same single-source split used
+  everywhere else.
+- **Test (prove non-vacuous):** `TestHeaderParameterComponent` — a `Component` header emits a
+  `components.parameters` entry (in: header, required) and the operation `$ref`s it, while a plain header stays
+  inline; the same `Component` reused with a differing definition fails closed with `conflicting parameter`.
+  `TestInvalidGoParameters` updated: `in: header` is now valid, `in: cookie` and a header with an unsupported
+  type still fail. `TestOpenAPIArtifact` byte-identical (no contributor uses header params until orders lands).
+- **Scope:** generate-from-Go generator capability (same class as §16.15 / §16.18 / §16.19 / §16.20); no
+  product/contract change, hand spec untouched, nothing merges. Unblocks S0.1j orders (purchase
+  Idempotency-Key). Courses 2 per-slice review gates it (shared generator change, same class as S0.1f-2 /
+  S0.1h-gen / S0.1i-gen).
+
+**16.22 orders module-ownership test adapted for the contributor pattern (writer decision, Courses 13,
+2026-10-28, S0.1j).** `platform/architecture/orders_ownership_test.go` enforced a stricter isolation for the
+payment module than ADR 013's generic module rule: nothing may import `courses/internal/orders/...`, and
+orders may import nothing under `courses/internal/` except itself and `contracts/`. Making orders the ninth
+OpenAPI contributor — the same pattern the other eight already follow — needs two things the old rules
+forbade: the collector `openapispec/contributions.go` must import orders' http `OpenAPIContribution`, and
+orders' `openapi_contract.go` must import `courses/internal/platform/openapigen` to name its contribution
+type.
+- **Decision — two surgical exemptions that preserve the real intent.** (1) The OpenAPI collector (the one
+  leaf composition root, `internal/openapispec`) is exempt from "no module imports orders": it registers
+  every module's contribution and imports the http adapter, not orders' domain/application/ports — it is not
+  a business module consuming payment facts, which is exactly what the rule guards. (2) orders may import
+  `courses/internal/platform/*`: platform infrastructure (the OpenAPI generator, used to DESCRIBE its own
+  contract) is not another business module; it is the `internal/`-tree sibling of `courses/platform/*`
+  (`httpserver`) that orders already depended on and the rule always allowed. The rule still forbids a
+  business module importing orders, and orders importing any OTHER business module — the payment-isolation
+  guarantee is intact, only the generate-from-Go wiring is admitted.
+- **Why adapt the test, not route around it.** Every other module is a direct contributor (collector import +
+  openapigen import); an orders-only indirection (e.g. a port exposing the contribution) would be a bespoke
+  divergence with no behavioural benefit, and the contribution type lives in `platform/openapigen`, so the
+  import is unavoidable. The honest move is to align the stricter orders guard with the pattern the codebase
+  already uses, keeping its business-isolation teeth.
+- **Named check:** `TestOrdersModuleOwnership` still fails if a business module imports orders or orders
+  imports another business module; it now passes for the collector and for `internal/platform/*`.
+- **Surfaced by:** full `go test ./...` on S0.1j (the targeted orders/openapispec/openapigen suites Codex ran
+  do not include `platform/architecture`) — the AGENTS.md lesson that shared-state changes need the full set.
+  Courses 2 review gates this as an architecture-boundary change (higher stakes than a plain contributor).
+
+**16.23 Non-blocking review follow-ups (independent gate-reviewer, fresh Opus 4.8, 2026-10-28).** The
+independent review of the seven S0.1h–S0.1j commits (53ef56d..234c835) returned all PASS / PASS-WITH-CONCERNS,
+no blocking findings, gate green, branch safe toward S0.2 (report: docs/security/_wip-s0.1-review.md). Two
+follow-ups were raised; neither holds the S0.2 merge, both should land as a small reviewed slice:
+- **F1 (§16.19 fallback-name collisions).** The eager `canonicalSchema` check iterates only `NameMap`; the
+  removed `check()`-time registry also caught collisions between fallback-named (`t.Name()`) struct types.
+  Residual gap: two distinct Go types with the same SIMPLE name reachable within one reflection graph, neither
+  in `NameMap`, are collapsed silently by the reflector and now caught by nobody (emission-time `sameJSON`
+  only sees cross-call reuse). Narrow — all current DTOs are module-local, the artifact is byte-identical, the
+  full suite is green — but it is the silently-wrong-artifact class. Resolve by restoring a check-time registry
+  for fallback names, or by documenting that a type reachable in more than one graph must carry an explicit
+  `NameMap` name (and asserting it).
+- **F2 (§16.22 prefix-width).** The two `orders_ownership_test.go` exemptions are prefix-based
+  (`courses/internal/platform/*`, the whole `openapispec` collector), wider than today's need (only
+  `openapigen`, only the collector's http import). Narrow them to the specific packages, or add a cautionary
+  comment, so a future `internal/platform` package or business logic added to the collector cannot slip the
+  guard unnoticed.
