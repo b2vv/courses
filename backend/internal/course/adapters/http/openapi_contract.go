@@ -10,7 +10,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-// OpenAPIContribution owns catalog responses and the admin status request without exporting DTOs.
+// OpenAPIContribution owns catalog and learning responses and the admin status request without exporting DTOs.
 func OpenAPIContribution() openapigen.ModuleContribution {
 	errors := func() map[int]openapigen.Response {
 		return map[int]openapigen.Response{
@@ -24,6 +24,11 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 	detail := errors()
 	detail[200] = openapigen.Response{Body: courseDetailDTO{}}
 	detail[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "NotFound"}
+	learn := errors()
+	learn[200] = openapigen.Response{Body: learningCourseDTO{}}
+	learn[401] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "Unauthenticated"}
+	learn[403] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "LearningForbidden"}
+	learn[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "NotFound"}
 	return openapigen.ModuleContribution{
 		Routes: []openapigen.RouteBinding{
 			{Method: "POST", Path: "/api/v1/admin/courses/{id}/status", Request: transitionAdminCourseRequest{}, Params: []openapigen.Param{
@@ -38,12 +43,19 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			{Method: "GET", Path: "/api/v1/courses/{slug}", Responses: detail, Params: []openapigen.Param{
 				{Name: "slug", In: "path", Type: "string", Required: true},
 			}},
+			{Method: "GET", Path: "/api/v1/learn/courses/{slug}", Responses: learn, Params: []openapigen.Param{
+				{Name: "slug", In: "path", Type: "string", Required: true},
+			}},
 		},
 		Enums: map[reflect.Type][]string{
-			reflect.TypeFor[domain.Status]():    enumStrings(domain.CourseStatuses),
-			reflect.TypeFor[domain.BlockType](): enumStrings(domain.BlockTypes),
+			reflect.TypeFor[domain.LearningVideoState](): enumStrings(domain.LearningVideoStates),
+			reflect.TypeFor[domain.Status]():             enumStrings(domain.CourseStatuses),
+			reflect.TypeFor[domain.BlockType]():          enumStrings(domain.BlockTypes),
 		},
 		NameMap: map[reflect.Type]string{
+			reflect.TypeFor[learningCourseDTO]():            "LearningCourse",
+			reflect.TypeFor[learningModuleDTO]():            "LearningModule",
+			reflect.TypeFor[learningLessonDTO]():            "LearningLesson",
 			reflect.TypeFor[transitionAdminCourseRequest](): "AdminCourseStatusRequest",
 			reflect.TypeFor[courseDTO]():                    "Course", reflect.TypeFor[courseDetailDTO](): "CourseDetail",
 			reflect.TypeFor[priceDTO](): "Price", reflect.TypeFor[ratingDTO](): "Rating",
@@ -57,6 +69,8 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "ExpectedUpdatedAt"}: "AdminTimestamp",
 		},
 		NullableFields: map[openapigen.Field]bool{
+			{Type: reflect.TypeFor[learningCourseDTO](), Name: "Modules"}:                      false,
+			{Type: reflect.TypeFor[learningModuleDTO](), Name: "Lessons"}:                      false,
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "Status"}:            false,
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "ExpectedUpdatedAt"}: false,
 			{Type: reflect.TypeFor[pageDTO](), Name: "Items"}:                                  false,

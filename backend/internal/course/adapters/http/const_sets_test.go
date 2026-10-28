@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ import (
 )
 
 // Census reads typed production constants, not a second list of their values.
-// Sort's two admin-only names are deliberate exclusions; new names fail closed.
+// Sort's admin-only names and the non-emitted VideoAbsent are deliberate exclusions; new names fail closed.
 func missingConsts(scope *types.Scope, typeName string, emitted []string) []string {
 	var missing []string
 	for _, name := range scope.Names() {
@@ -24,6 +25,9 @@ func missingConsts(scope *types.Scope, typeName string, emitted []string) []stri
 			continue
 		}
 		if typeName == "Sort" && (name == "SortStudents" || name == "SortPrice") {
+			continue
+		}
+		if typeName == "LearningVideoState" && name == "VideoAbsent" {
 			continue
 		}
 		if !slices.Contains(emitted, constant.StringVal(c.Val())) {
@@ -78,10 +82,36 @@ func TestDomainConstSetCensus(t *testing.T) {
 		{"Sort", enumStrings(domain.PublicCatalogSorts)},
 		{"Status", enumStrings(domain.CourseStatuses)},
 		{"BlockType", enumStrings(domain.BlockTypes)},
+		{"LearningVideoState", enumStrings(domain.LearningVideoStates)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if missing := missingConsts(scope, tc.name, tc.values); len(missing) != 0 {
 				t.Fatalf("domain constants absent from authoritative set: %v", missing)
+			}
+			if tc.name == "LearningVideoState" {
+				if len(tc.values) == 0 || slices.Contains(tc.values, string(domain.VideoAbsent)) {
+					t.Fatal("video state set must be non-empty and exclude VideoAbsent")
+				}
+				var declared []string
+				for _, name := range scope.Names() {
+					c, ok := scope.Lookup(name).(*types.Const)
+					if ok && c.Type() == scope.Lookup(tc.name).Type() && name != "VideoAbsent" {
+						declared = append(declared, constant.StringVal(c.Val()))
+					}
+				}
+				values := slices.Clone(tc.values)
+				slices.Sort(declared)
+				slices.Sort(values)
+				if !slices.Equal(declared, values) {
+					t.Fatalf("declared video states %v != authoritative set %v", declared, values)
+				}
+				emitted := OpenAPIContribution().Enums[reflect.TypeFor[domain.LearningVideoState]()]
+				if !slices.Equal(emitted, tc.values) {
+					t.Fatalf("emitted video states %v != authoritative ordered set %v", emitted, tc.values)
+				}
+				if !domain.VideoAbsent.Valid() {
+					t.Fatal("non-emitted VideoAbsent must remain valid")
+				}
 			}
 			// A typed declaration added without updating the set must be detected.
 			name := "CensusAdded" + tc.name
