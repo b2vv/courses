@@ -33,8 +33,8 @@ type uploadService interface {
 type Handler struct{ upload uploadService }
 
 type mintVideoRequest struct {
-	DeclaredBytes int64
-	OriginalName  string
+	DeclaredBytes int64  `json:"declaredBytes"`
+	OriginalName  string `json:"originalName"`
 }
 
 type uploadTicketDTO struct {
@@ -46,15 +46,15 @@ type uploadTicketDTO struct {
 }
 
 type videoDTO struct {
-	LessonID      string `json:"lessonId"`
-	VideoID       string `json:"videoId"`
-	State         string `json:"state"`
-	Generation    int32  `json:"generation"`
-	OriginalName  string `json:"originalName"`
-	ReceivedBytes int64  `json:"receivedBytes"`
-	DeclaredBytes int64  `json:"declaredBytes"`
-	UpdatedAt     string `json:"updatedAt"`
-	FailureReason string `json:"failureReason,omitempty"`
+	LessonID      string               `json:"lessonId"`
+	VideoID       string               `json:"videoId"`
+	State         domain.State         `json:"state"`
+	Generation    int32                `json:"generation"`
+	OriginalName  string               `json:"originalName"`
+	ReceivedBytes int64                `json:"receivedBytes"`
+	DeclaredBytes int64                `json:"declaredBytes"`
+	UpdatedAt     string               `json:"updatedAt"`
+	FailureReason domain.FailureReason `json:"failureReason,omitempty"`
 }
 
 type courseVideosDTO struct {
@@ -208,10 +208,10 @@ func decodeMintVideo(w http.ResponseWriter, r *http.Request) (mintVideoRequest, 
 
 func mapVideo(asset domain.VideoAsset) videoDTO {
 	return videoDTO{
-		LessonID: asset.LessonID, VideoID: asset.ID, State: string(asset.State),
+		LessonID: asset.LessonID, VideoID: asset.ID, State: asset.State,
 		Generation: int32(asset.Generation), OriginalName: asset.OriginalName,
 		ReceivedBytes: asset.ReceivedBytes, DeclaredBytes: asset.DeclaredBytes,
-		UpdatedAt: formatMediaTime(asset.UpdatedAt), FailureReason: string(asset.FailureReason),
+		UpdatedAt: formatMediaTime(asset.UpdatedAt), FailureReason: asset.FailureReason,
 	}
 }
 
