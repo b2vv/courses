@@ -184,13 +184,16 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 			response := r.Responses[status]
 			desc := ""
 			value := &openapi3.Response{Description: &desc}
-			// A nil body is a bodyless response (e.g. 204 No Content): emit no content schema.
+			// A nil body is only legitimate for a no-content status (204/304): emit no content
+			// schema. For any content-bearing status a nil body is a mistake and fails closed.
 			if response.Body != nil {
 				ref, err := g.reflectBody(doc, response.Body, false)
 				if err != nil {
 					return nil, err
 				}
 				value.Content = openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}
+			} else if status != 204 && status != 304 {
+				return nil, fmt.Errorf("nil response body for content-bearing status %d", status)
 			}
 			resp := &openapi3.ResponseRef{Value: value}
 			if response.Component != "" {
