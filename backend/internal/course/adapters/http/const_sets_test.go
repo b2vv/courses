@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"courses/internal/course/domain"
+	"courses/internal/platform/openapigen"
+	"path/filepath"
 )
 
 // Census reads typed production constants, not a second list of their values.
@@ -150,4 +152,51 @@ func TestPublicSortSingleSource(t *testing.T) {
 		}
 	}
 	t.Fatal("public sort parameter missing")
+}
+
+func TestAdminSortSingleSource(t *testing.T) {
+	original := domain.AdminCourseSorts
+	t.Cleanup(func() { domain.AdminCourseSorts = original })
+	if len(original) != 4 {
+		t.Fatalf("admin sort census = %d, want 4", len(original))
+	}
+	// Mutation proves both the validator and actual generator consume the ordered set.
+	domain.AdminCourseSorts = append(slices.Clone(original), domain.Sort("future_admin_sort"))
+	for _, value := range domain.AdminCourseSorts {
+		if _, err := domain.NewAuthoringQuery(20, 0, "", string(value)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := OpenAPIContribution()
+	for _, route := range c.Routes {
+		if route.Path != "/api/v1/admin/courses" || route.Method != "GET" {
+			continue
+		}
+		// Retain the production params on a bodyless probe to isolate this census
+		// from unrelated modules and metadata, while exercising generator emission.
+		c = openapigen.ModuleContribution{Routes: []openapigen.RouteBinding{{Method: route.Method, Path: route.Path, Params: route.Params, Responses: map[int]openapigen.Response{204: {Empty: true}}}}}
+		path := filepath.Join(t.TempDir(), "overlay.yaml")
+		if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		doc, err := openapigen.Generate([]openapigen.ModuleContribution{c}, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range doc.Paths.Value(route.Path).Get.Parameters {
+			if p.Value.Name != "sort" {
+				continue
+			}
+			var emitted []string
+			for _, v := range p.Value.Schema.Value.Enum {
+				emitted = append(emitted, v.(string))
+			}
+			if !slices.Equal(emitted, enumStrings(domain.AdminCourseSorts)) {
+				t.Fatalf("emitted %v != AdminCourseSorts %v", emitted, domain.AdminCourseSorts)
+			}
+			return
+		}
+		t.Fatal("generated admin sort parameter missing")
+	}
+	t.Fatal("admin list binding missing")
 }

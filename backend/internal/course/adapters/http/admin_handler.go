@@ -79,8 +79,8 @@ type adminCourseWriteRequest struct {
 	Title        *string          `json:"title"`
 	Summary      *string          `json:"summary"`
 	Description  *string          `json:"description"`
-	InstructorID *string          `json:"instructorId"`
-	Price        optionalPriceDTO `json:"price"`
+	InstructorID *string          `json:"instructorId,omitempty"`
+	Price        optionalPriceDTO `json:"price,omitempty"`
 }
 
 type optionalPriceDTO struct {

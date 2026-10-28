@@ -30,7 +30,22 @@ func TestCatalogOpenAPIFidelity(t *testing.T) {
 	source := normalizedDocument(t, hand)
 	want := fidelitySurface(t, source)
 	if diff := firstDifference("$", got, want); diff != "" {
-		t.Fatal(diff)
+		t.Error(diff)
+		// Report each component independently so one missing metadata block does
+		// not hide unrelated shape mismatches in this growing surface.
+		for group, entries := range got["components"].(map[string]any) {
+			for name, value := range entries.(map[string]any) {
+				if d := firstDifference(group+"/"+name, value, want["components"].(map[string]any)[group].(map[string]any)[name]); d != "" {
+					t.Error(d)
+				}
+			}
+		}
+		for path, value := range got["paths"].(map[string]any) {
+			if d := firstDifference(path, value, want["paths"].(map[string]any)[path]); d != "" {
+				t.Error(d)
+			}
+		}
+		t.FailNow()
 	}
 	// Prove that the comparison includes the error enum through the response ref
 	// closure. Removing any emitted member must make this exact fidelity gate red.
@@ -93,7 +108,7 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 	t.Helper()
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
-	for _, path := range []string{"/api/v1/courses", "/api/v1/courses/{slug}", "/api/v1/learn/courses/{slug}", "/api/v1/admin/lessons/{lessonId}/document", "/api/v1/admin/lessons/{lessonId}/document/publish", "/api/v1/learn/lessons/{lessonId}/document"} {
+	for _, path := range []string{"/api/v1/admin/courses", "/api/v1/admin/courses/{id}", "/api/v1/courses", "/api/v1/courses/{slug}", "/api/v1/learn/courses/{slug}", "/api/v1/admin/lessons/{lessonId}/document", "/api/v1/admin/lessons/{lessonId}/document/publish", "/api/v1/learn/lessons/{lessonId}/document"} {
 		value, ok := source["paths"].(map[string]any)[path]
 		if !ok || value == nil {
 			t.Fatalf("missing path %s", path)
@@ -163,6 +178,15 @@ func normalizedDocument(t *testing.T, doc *openapi3.T) map[string]any {
 		switch x := v.(type) {
 		case map[string]any:
 			for k, v := range x {
+				// Parameters are identified by (in, name); generator sorts them.
+				if k == "parameters" {
+					if a, ok := v.([]any); ok {
+						sort.Slice(a, func(i, j int) bool {
+							x, y := a[i].(map[string]any), a[j].(map[string]any)
+							return fmt.Sprint(x["in"], ":", x["name"]) < fmt.Sprint(y["in"], ":", y["name"])
+						})
+					}
+				}
 				if k == "required" {
 					if a, ok := v.([]any); ok {
 						sort.Slice(a, func(i, j int) bool { return a[i].(string) < a[j].(string) })
@@ -205,4 +229,41 @@ func firstDifference(path string, a, b any) string {
 		}
 	}
 	return fmt.Sprintf("%s: generated=%v; hand=%v", path, a, b)
+}
+
+// Keep schema proof independent of path/response metadata so a missing error
+// description cannot prevent the per-field non-vacuity check from running.
+func TestAdminCourseSchemaFidelity(t *testing.T) {
+	generated, err := openapigen.GenerateFromSource(openapispec.AllOpenAPIContributions(), "../../../../openapi/openapi.overlay.yaml", "../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hand, err := openapi3.NewLoader().LoadFromFile("../../../../openapi/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := normalizedDocument(t, generated)["components"].(map[string]any)["schemas"].(map[string]any)
+	want := normalizedDocument(t, hand)["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"AdminCoursePage", "AdminCourse", "AdminCourseStatusCounts", "AdminCourseTree", "AdminCourseWrite", "AdminCourseSaveRequest", "AdminCourseDeleteRequest", "AdminModule", "AdminLesson"} {
+		t.Run(name, func(t *testing.T) {
+			component, ok := got[name].(map[string]any)
+			if !ok {
+				t.Fatalf("missing admin fidelity component %s", name)
+			}
+			if diff := firstDifference(name, component, want[name]); diff != "" {
+				t.Fatal(diff)
+			}
+			properties := component["properties"].(map[string]any)
+			if len(properties) == 0 {
+				t.Fatalf("vacuous admin fidelity %s", name)
+			}
+			for field, value := range properties {
+				delete(properties, field)
+				if firstDifference(name, component, want[name]) == "" {
+					t.Fatalf("%s.%s deletion escaped fidelity", name, field)
+				}
+				properties[field] = value
+			}
+		})
+	}
 }
