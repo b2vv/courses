@@ -3219,6 +3219,7 @@ components:
         expectedUpdatedAt: { $ref: '#/components/schemas/AdminTimestamp' }
     ImageUploadResponse:
       type: object
+      additionalProperties: false
       required: [id, contentType, width, height]
       properties:
         id: { type: string, format: uuid }

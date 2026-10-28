@@ -697,3 +697,41 @@ library returns the array schema inline, so the component is never emitted and p
 - **Scope:** writer-level mechanism inside the owner-confirmed FULL generate-from-Go S0; no product/contract
   change, nothing merges. Courses 2 per-slice review still gates S0.1c. The `make generate` CLI +
   `check-generated` + Orval rewire remain in the S0.2 cutover.
+
+**16.16 Hand-spec defect policy during S0.1 migration (owner decision, 2026-10-28, S0.1d image STOP).**
+Generate-from-Go surfaces genuine hand-spec defects module by module (the first after §16.11: image
+`ImageUploadResponse` has no `additionalProperties: false` though the Go `uploadResponse` struct emits exactly
+four fields and all 124 other object schemas in the hand spec are closed — verified by Courses 13 via
+`sed`/`grep` and Codex's 21/21 sibling audit). **Decision:** the writer (Courses 13) MAY fix a CLEAR,
+zero-behavior-risk hand defect in `openapi.yaml` NOW — autonomously, without a per-defect owner question —
+provided each fix is (a) recorded as a dated decision citing the §16.11 precedent, (b) proven zero-behaviour
+(the generated shape equals what the production handler already emits, so the fix only makes the contract
+match reality), and (c) sent to Courses 2 in the per-slice review. The writer MUST still STOP and surface to
+the owner any hand change that is ambiguous or could change observable behaviour (a status code, an enum
+member a client may send, a required/optional flip a client relies on). This generalises §16.11 from a
+one-off to a bounded standing authority for the migration; it does not touch the S0.2 cutover gates (CI green
+or owner-waiver + owner go still required to merge to main). First application: add `additionalProperties:
+false` to `ImageUploadResponse` (S0.1d).
+
+**16.17 Overlay-owned request body (non-reflectable multipart) — merge capability (writer decision,
+Courses 13, 2026-10-28, S0.1d image STOP #2).** image `POST /api/v1/admin/lessons/{id}/images` takes a
+`multipart/form-data` upload (handler reads `r.FormFile("file")`, no Go DTO). The generator reflects JSON
+bodies only, so the request body has no Go anchor and must live in the overlay. But `applyOverlay`'s
+fail-closed orphan guard treats `properties`/`responses` as always Go-mirrored (`anchored()`,
+overlay.go:142), so the overlay's `requestBody/content/multipart~1form-data/schema/properties/file`
+is rejected as `orphan overlay key …/properties/file`. Verified by Courses 13 against overlay.go:100-102,132-146
+and Codex's STOP #2.
+- **Decision — bounded merge capability, no guard weakening.** The overlay MAY introduce a `requestBody`
+  subtree on an operation the contribution declares ONLY when the generator emitted NO `requestBody` for that
+  operation (i.e. the route has no JSON `Request`). Within that overlay-owned subtree the orphan-key guard is
+  suspended (the whole subtree is legitimately overlay-sourced — a non-reflectable multipart form). Everywhere
+  else — response schemas, component schemas, and the request body of any route that DOES declare a JSON
+  `Request` (there `requestBody` already exists, so the flag never trips) — the orphan guard stays fully
+  intact. Implement by threading an `overlayOwned` flag through `mergeOverlay`, set when descending into a
+  newly-created operation `requestBody`, and skipping the `anchored && !exists` rejection only while it holds.
+- **Tests (prove bounded, non-vacuous):** overlay introduces a multipart requestBody on a no-JSON-Request route
+  → accepted and present in the merged doc; an orphan key under a Go-sourced schema `properties` → STILL
+  rejected; a route that declares a JSON `Request` → overlay CANNOT add an extra property under its requestBody
+  (guard still fires). 
+- **Scope:** generate-from-Go overlay mechanism (same class as §16.15); no product/contract change, hand
+  untouched beyond the §16.16 one-liner, nothing merges. Courses 2 per-slice review gates it.

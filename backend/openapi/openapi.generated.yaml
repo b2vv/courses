@@ -56,6 +56,39 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        LessonNotFound:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The lesson is unknown.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        MediaBadRequest:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        MediaForbidden:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The Origin is not allowed, the actor is not staff, or the instructor does not own the course.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         NotFound:
             content:
                 application/json:
@@ -628,6 +661,28 @@ components:
             required:
                 - error
             type: object
+        ImageUploadResponse:
+            additionalProperties: false
+            properties:
+                contentType:
+                    enum:
+                        - image/jpeg
+                        - image/png
+                        - image/webp
+                    type: string
+                height:
+                    type: integer
+                id:
+                    format: uuid
+                    type: string
+                width:
+                    type: integer
+            required:
+                - contentType
+                - height
+                - id
+                - width
+            type: object
         NullablePrice:
             allOf:
                 - $ref: '#/components/schemas/Price'
@@ -730,6 +785,58 @@ paths:
             responses:
                 default:
                     description: Response schemas are not generated for this request-only binding.
+    /api/v1/admin/lessons/{id}/images:
+        post:
+            operationId: uploadAdminLessonImage
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    multipart/form-data:
+                        schema:
+                            properties:
+                                file:
+                                    description: The image file (JPEG, PNG or WebP; up to 5 MiB; max 40 megapixels).
+                                    format: binary
+                                    type: string
+                            required:
+                                - file
+                            type: object
+                required: true
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ImageUploadResponse'
+                    description: Image stored.
+                "400":
+                    $ref: '#/components/responses/MediaBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/LessonNotFound'
+                "413":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Image is too large.
+                "415":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Image format is not supported.
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/admin/stats:
         get:
             description: Admin-only. A point-in-time aggregate across people, content, access and sales, moderation and media, plus the per-instructor leaderboard and the single-instructor flag. Accepts no query parameters and responses are never cached.
