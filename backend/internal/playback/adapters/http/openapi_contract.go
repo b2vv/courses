@@ -22,7 +22,7 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 	play, heartbeat := errors(), errors()
 	play[201] = openapigen.Response{Body: playResponse{}}
 	play[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "PlaybackNotFound"}
-	heartbeat[204] = openapigen.Response{}
+	heartbeat[204] = openapigen.Response{Empty: true}
 	heartbeat[404] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "LessonNotFound"}
 	heartbeat[409] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "PlaybackTakenOver"}
 	heartbeat[410] = openapigen.Response{Body: httpserver.ErrorResponse{}, Component: "PlaybackExpired"}

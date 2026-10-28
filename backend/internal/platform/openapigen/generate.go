@@ -28,6 +28,9 @@ type Response struct {
 	Body any
 	// Component optionally names a reusable response (not a schema).
 	Component string
+	// Empty declares an intentional bodyless response (e.g. 201/202/204). A nil Body without
+	// Empty is a forgotten body and fails closed, whatever the status.
+	Empty bool
 }
 
 // Param declares parameter structure; validation and prose belong to the overlay.
@@ -184,16 +187,21 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 			response := r.Responses[status]
 			desc := ""
 			value := &openapi3.Response{Description: &desc}
-			// A nil body is only legitimate for a no-content status (204/304): emit no content
-			// schema. For any content-bearing status a nil body is a mistake and fails closed.
-			if response.Body != nil {
+			// A bodyless response must be declared explicitly (Empty); a nil Body without Empty is
+			// a forgotten body and fails closed, whatever the status.
+			switch {
+			case response.Empty && response.Body != nil:
+				return nil, fmt.Errorf("response %d declares both a body and Empty", status)
+			case response.Empty:
+				// no content schema
+			case response.Body == nil:
+				return nil, fmt.Errorf("nil response body for status %d; set Empty for an intentional bodyless response", status)
+			default:
 				ref, err := g.reflectBody(doc, response.Body, false)
 				if err != nil {
 					return nil, err
 				}
 				value.Content = openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}
-			} else if status != 204 && status != 304 {
-				return nil, fmt.Errorf("nil response body for content-bearing status %d", status)
 			}
 			resp := &openapi3.ResponseRef{Value: value}
 			if response.Component != "" {

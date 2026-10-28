@@ -190,8 +190,9 @@ func TestUntaggedJSONFieldsAndIgnoredFields(t *testing.T) {
 }
 
 func TestBodylessResponseEmitsNoContent(t *testing.T) {
+	// A 202 declares Empty (intentional bodyless on a content-bearing status); a 200 has a body.
 	c := ModuleContribution{Routes: []RouteBinding{{Method: "POST", Path: "/ping", Request: child{}, Responses: map[int]Response{
-		204: {},
+		202: {Empty: true},
 		200: {Body: child{}},
 	}}}}
 	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
@@ -199,20 +200,25 @@ func TestBodylessResponseEmitsNoContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	responses := doc.Paths.Value("/ping").Post.Responses
-	noContent := responses.Value("204").Value
+	noContent := responses.Value("202").Value
 	if noContent == nil || len(noContent.Content) != 0 {
-		t.Fatalf("204 must carry no content: %+v", noContent)
+		t.Fatalf("202 Empty must carry no content: %+v", noContent)
 	}
 	if noContent.Description == nil {
-		t.Fatal("204 must keep a description")
+		t.Fatal("202 must keep a description")
 	}
 	if bodied := responses.Value("200").Value; bodied.Content["application/json"] == nil {
 		t.Fatal("a bodied response lost its content schema")
 	}
-	// Fail closed: a nil body on a content-bearing status is a mistake, not a bodyless response.
+	// Fail closed: a nil body without Empty is a forgotten body, whatever the status.
 	bad := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/oops", Responses: map[int]Response{200: {}}}}}
-	if _, err := Generate([]ModuleContribution{bad}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "content-bearing status 200") {
-		t.Fatalf("nil body on 200 should fail closed, got %v", err)
+	if _, err := Generate([]ModuleContribution{bad}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "nil response body for status 200") {
+		t.Fatalf("nil body without Empty should fail closed, got %v", err)
+	}
+	// Fail closed: declaring both a body and Empty is contradictory.
+	both := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/both", Responses: map[int]Response{200: {Body: child{}, Empty: true}}}}}
+	if _, err := Generate([]ModuleContribution{both}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "both a body and Empty") {
+		t.Fatalf("body+Empty should fail closed, got %v", err)
 	}
 }
 
