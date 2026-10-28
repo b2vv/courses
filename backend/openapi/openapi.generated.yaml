@@ -801,6 +801,36 @@ components:
                     pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
                     type: string
             type: object
+        ClientLogRequest:
+            additionalProperties: false
+            properties:
+                errorName:
+                    maxLength: 256
+                    type: string
+                errorStack:
+                    maxLength: 8000
+                    type: string
+                level:
+                    enum:
+                        - error
+                        - warn
+                        - info
+                    type: string
+                message:
+                    maxLength: 2000
+                    type: string
+                release:
+                    maxLength: 128
+                    type: string
+                route:
+                    maxLength: 512
+                    type: string
+                userAgent:
+                    maxLength: 256
+                    type: string
+            required:
+                - message
+            type: object
         Comment:
             additionalProperties: false
             properties:
@@ -4096,6 +4126,22 @@ paths:
                     $ref: '#/components/responses/InvalidAccountToken'
                 "410":
                     $ref: '#/components/responses/TokenUsed'
+    /api/v1/client-logs:
+        post:
+            description: Unauthenticated by design so a pre-auth client error can still report. The body is one event; the server validates, redacts the §17 set and emits a structured log line. No body is returned. The endpoint is rate-limited by the nginx clientlog zone.
+            operationId: ingestClientLog
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ClientLogRequest'
+                required: true
+            responses:
+                "204":
+                    description: Event accepted; nothing is returned.
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+            summary: Ingest one browser-captured log event
     /api/v1/courses:
         get:
             description: Only published courses are visible. Search is PostgreSQL full-text match over title and summary (case-insensitive, word-based, space-separated terms ANDed, word order ignored); an empty search matches every published course. Query parameters must occur at most once; unknown parameters are rejected. Limit and offset accept decimal digits only. Search is trimmed before validating a maximum of 100 Unicode code points; NUL is rejected. List and total share one database snapshot.
