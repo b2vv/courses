@@ -189,6 +189,28 @@ func TestUntaggedJSONFieldsAndIgnoredFields(t *testing.T) {
 	}
 }
 
+func TestBodylessResponseEmitsNoContent(t *testing.T) {
+	c := ModuleContribution{Routes: []RouteBinding{{Method: "POST", Path: "/ping", Request: child{}, Responses: map[int]Response{
+		204: {},
+		200: {Body: child{}},
+	}}}}
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	responses := doc.Paths.Value("/ping").Post.Responses
+	noContent := responses.Value("204").Value
+	if noContent == nil || len(noContent.Content) != 0 {
+		t.Fatalf("204 must carry no content: %+v", noContent)
+	}
+	if noContent.Description == nil {
+		t.Fatal("204 must keep a description")
+	}
+	if bodied := responses.Value("200").Value; bodied.Content["application/json"] == nil {
+		t.Fatal("a bodied response lost its content schema")
+	}
+}
+
 func paramContribution() ModuleContribution {
 	c := contribution(child{})
 	c.Routes[0].Path = "/examples/{slug}"
