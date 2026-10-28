@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -49,17 +50,28 @@ func (handler *Handler) Register(mux *http.ServeMux, authenticate, requireSameOr
 	mux.Handle("POST /api/v1/playback/heartbeat", requireSameOrigin(authenticate(http.HandlerFunc(handler.heartbeat))))
 }
 
+type av1Support string
+
+const (
+	av1Supported   av1Support = "supported"
+	av1Unsupported av1Support = "unsupported"
+	av1ProbeFailed av1Support = "probe_failed"
+)
+
+// av1SupportValues is the ordered set used by validation and the HTTP contract.
+var av1SupportValues = []av1Support{av1Supported, av1Unsupported, av1ProbeFailed}
+
 type playRequest struct {
-	LessonID   string
-	AV1Support *string
+	LessonID   string      `json:"lessonId"`
+	AV1Support *av1Support `json:"av1Support,omitempty"`
 }
 
 type heartbeatRequest struct {
-	PlaybackID      string
-	LessonID        string
-	PositionSeconds float64
-	ClientSequence  int64
-	Reason          string
+	PlaybackID      string                `json:"playbackId"`
+	LessonID        string                `json:"lessonId"`
+	PositionSeconds float64               `json:"positionSeconds"`
+	ClientSequence  int64                 `json:"clientSeq"`
+	Reason          domain.ProgressReason `json:"reason"`
 }
 
 type playResponse struct {
@@ -87,7 +99,7 @@ func (handler *Handler) play(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.AV1Support != nil {
-		handler.observeAV1(*request.AV1Support)
+		handler.observeAV1(string(*request.AV1Support))
 	}
 	playbackID, err := freshPlaybackID()
 	if err != nil {
@@ -124,7 +136,7 @@ func (handler *Handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 		writePlaybackError(w, r, errInvalidRequest)
 		return
 	}
-	update, err := domain.NewProgressUpdate(request.PositionSeconds, request.ClientSequence, request.Reason)
+	update, err := domain.NewProgressUpdate(request.PositionSeconds, request.ClientSequence, string(request.Reason))
 	if err != nil {
 		writePlaybackError(w, r, err)
 		return
@@ -178,7 +190,7 @@ func decodePlay(w http.ResponseWriter, r *http.Request) (playRequest, error) {
 		"lessonId": func(decoder *json.Decoder) error { return decoder.Decode(&result.LessonID) },
 	}, map[string]func(*json.Decoder) error{
 		"av1Support": func(decoder *json.Decoder) error {
-			var value *string
+			var value *av1Support
 			if err := decoder.Decode(&value); err != nil || value == nil {
 				return errInvalidRequest
 			}
@@ -212,8 +224,8 @@ func decodeHeartbeat(w http.ResponseWriter, r *http.Request) (heartbeatRequest, 
 	return result, nil
 }
 
-func validAV1Support(value *string) bool {
-	return value == nil || *value == "supported" || *value == "unsupported" || *value == "probe_failed"
+func validAV1Support(value *av1Support) bool {
+	return value == nil || slices.Contains(av1SupportValues, *value)
 }
 
 func decodePlaybackObject(w http.ResponseWriter, r *http.Request, required, optional map[string]func(*json.Decoder) error) error {

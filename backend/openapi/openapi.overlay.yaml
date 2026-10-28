@@ -16,6 +16,26 @@ components:
             schema:
                 pattern: ^[a-f0-9]{32}$
     responses:
+        PlaybackForbidden:
+          description: The Origin is not allowed or the authenticated actor cannot view the lesson's course.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackNotFound:
+          description: The lesson is unknown or has no current ready video.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackTakenOver:
+          description: Another playback session currently owns the account's playback slot.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+        PlaybackExpired:
+          description: The playback ownership record is unknown or expired.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
         VideoNotRetryable:
           description: The video state is not retryable, its processing claim is still live, or its source never landed.
           headers:
@@ -94,6 +114,23 @@ components:
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
     schemas:
+        PlaybackSessionRequest:
+            properties:
+                lessonId: { format: uuid }
+        PlaybackSession:
+            properties:
+                playbackId: { pattern: '^[0-9a-f]{32}$' }
+                mediaPath:
+                    pattern: '^/media/p/[0-9a-f]{32}/hls/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/master\.m3u8$'
+                clientSeq: { format: int64, minimum: 0, maximum: 2147483647 }
+                heartbeatSeconds: { minimum: 1 }
+                ownershipTtlSeconds: { minimum: 3 }
+        PlaybackHeartbeatRequest:
+            properties:
+                playbackId: { pattern: '^[0-9a-f]{32}$' }
+                lessonId: { format: uuid }
+                positionSeconds: { format: double, minimum: 0 }
+                clientSeq: { format: int64, minimum: 0, maximum: 2147483647 }
         MediaTicketRequest:
             properties:
                 declaredBytes: { minimum: 1, maximum: 2147483648 }
@@ -263,6 +300,36 @@ info:
     title: Courses API
     version: 1.0.0
 paths:
+    /api/v1/playback/sessions:
+      post:
+        operationId: createPlaybackSession
+        summary: Mint a playback session for one lesson
+        description: >-
+          Authenticated same-origin mutation. The server selects the current highest-generation
+          ready video for the lesson, checks course visibility before taking ownership, and always
+          replaces the caller's previous playback slot on success. The client cannot name a video.
+          Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+        responses:
+          '201':
+            description: A new playback session owns the account's single playback slot.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/playback/heartbeat:
+      post:
+        operationId: heartbeatPlayback
+        summary: Renew playback ownership and save lesson progress
+        description: >-
+          Authenticated same-origin mutation. Only the current owner renews the slot and writes
+          progress. A taken-over session and an expired session are distinct outcomes. Positions
+          above the current video duration are accepted and clamped by the server.
+          Bodies are limited to 8 KiB and reject duplicate keys, unknown members and trailing content.
+        responses:
+          '204':
+            description: Ownership was renewed and the progress update was processed.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
     /api/v1/admin/lessons/{id}/images:
         post:
             operationId: uploadAdminLessonImage

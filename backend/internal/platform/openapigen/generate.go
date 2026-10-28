@@ -182,12 +182,17 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 				return nil, fmt.Errorf("invalid response status %d", status)
 			}
 			response := r.Responses[status]
-			ref, err := g.reflectBody(doc, response.Body, false)
-			if err != nil {
-				return nil, err
-			}
 			desc := ""
-			resp := &openapi3.ResponseRef{Value: &openapi3.Response{Description: &desc, Content: openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}}}
+			value := &openapi3.Response{Description: &desc}
+			// A nil body is a bodyless response (e.g. 204 No Content): emit no content schema.
+			if response.Body != nil {
+				ref, err := g.reflectBody(doc, response.Body, false)
+				if err != nil {
+					return nil, err
+				}
+				value.Content = openapi3.Content{"application/json": &openapi3.MediaType{Schema: ref}}
+			}
+			resp := &openapi3.ResponseRef{Value: value}
 			if response.Component != "" {
 				if old, ok := doc.Components.Responses[response.Component]; ok && !sameJSON(old, resp) {
 					return nil, fmt.Errorf("conflicting response %s", response.Component)

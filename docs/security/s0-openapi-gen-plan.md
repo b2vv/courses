@@ -743,3 +743,23 @@ and Codex's STOP #2.
   N1). Minor theoretical edge: the `overlayOwned` flag trusts the generator's `!exists`, so a generator bug
   that dropped a reflected JSON `requestBody` could let the overlay mask it; the per-route Layer-B conformance
   (present for JSON routes) is the backstop. Low risk, recorded for completeness — not fixed now.
+
+**16.18 Bodyless response (204 No Content) — generator capability (writer decision, Courses 13,
+2026-10-28, S0.1f playback STOP).** playback `POST /api/v1/playback/heartbeat` answers `204 No Content`
+— the first response across all contributors with no body. The generator's response loop
+(`generate.go`, response iteration) unconditionally called `reflectBody(response.Body, false)` and wrapped
+the result in an `application/json` content block; a `204` carries `Response{}` (nil `Body`), so
+`reflectBody` rejected it with `nil response body`. A `204` must also carry no content block at all, by
+OpenAPI semantics. Verified by Courses 13 on the host against `generate.go` and `artifact_test.go:32`, and
+Codex's narrow STOP (it did not hand-fix the generator, edit the frozen spec, or touch the artifact).
+- **Decision — emit a content-less response when `Response.Body == nil`.** In the response loop, build the
+  `openapi3.Response` with its description (and component ref / headers) first, and attach the
+  `application/json` content schema ONLY when `response.Body != nil`. A nil body is a bodyless response
+  (e.g. `204`). Bodied responses are unchanged (the content block is built exactly as before). No new field,
+  no behaviour change for any existing contributor (all their responses have bodies).
+- **Test (prove non-vacuous):** `TestBodylessResponseEmitsNoContent` — a route with a `204 {}` and a `200`
+  with a body: the `204` emits a response with a description and zero content entries, the `200` keeps its
+  `application/json` schema. Without the branch, `Generate` returns `nil response body` and the test fails at
+  its first assertion. The end-to-end `TestOpenAPIArtifact` also exercises it through the real playback 204.
+- **Scope:** generate-from-Go generator capability (same class as §16.15 named-root-slice lift); no
+  product/contract change, hand spec untouched, nothing merges. Courses 2 per-slice review gates it.
