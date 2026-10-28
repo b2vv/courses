@@ -40,11 +40,15 @@ type Response struct {
 
 // Param declares parameter structure; validation and prose belong to the overlay.
 type Param struct {
-	Name     string
-	In       string
-	Type     string
-	Enum     []string
-	Required bool
+	Name string
+	In   string
+	Type string
+	Enum []string
+	// Component, when set, emits this parameter as a reusable components.parameters entry and
+	// references it from the operation ($ref), e.g. the shared Idempotency-Key header. Hand-only
+	// keywords (description, min/maxLength) enrich the emitted component via the overlay.
+	Component string
+	Required  bool
 }
 type RouteBinding struct {
 	Method, Path string
@@ -90,7 +94,7 @@ func GenerateFromSource(contribs []ModuleContribution, overlayPath, backendRoot 
 
 func generate(contribs []ModuleContribution, overlayPath string, errorCodes []string) (*openapi3.T, error) {
 	g := generator{errorCodes: errorCodes, config: ModuleContribution{Enums: map[reflect.Type][]string{}, Overrides: map[reflect.Type]*openapi3.Schema{}, NameMap: map[reflect.Type]string{}, NullableFields: map[Field]bool{}, FieldRefs: map[Field]string{}}, seen: map[reflect.Type]bool{}}
-	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "API", Version: "1.0.0"}, Paths: openapi3.NewPaths(), Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}}}
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "API", Version: "1.0.0"}, Paths: openapi3.NewPaths(), Components: &openapi3.Components{Schemas: openapi3.Schemas{}, Responses: openapi3.ResponseBodies{}, Headers: openapi3.Headers{}, Parameters: openapi3.ParametersMap{}}}
 	for _, c := range contribs {
 		if err := mergeRegistry(g.config.Enums, c.Enums); err != nil {
 			return nil, err
@@ -177,7 +181,7 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 		for i, p := range params {
 			if p.Name == "" || (i > 0 && params[i-1].Name == p.Name) ||
-				!slices.Contains([]string{"query", "path"}, p.In) ||
+				!slices.Contains([]string{"query", "path", "header"}, p.In) ||
 				!slices.Contains([]string{"integer", "string"}, p.Type) ||
 				(p.In == "path" && (!p.Required || !strings.Contains(r.Path, "{"+p.Name+"}"))) ||
 				(len(p.Enum) > 0 && p.Type != "string") {
@@ -187,9 +191,19 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 			for _, value := range p.Enum {
 				schema.Enum = append(schema.Enum, value)
 			}
-			op.Parameters = append(op.Parameters, &openapi3.ParameterRef{Value: &openapi3.Parameter{
-				Name: p.Name, In: p.In, Required: p.Required, Schema: &openapi3.SchemaRef{Value: schema},
-			}})
+			parameter := &openapi3.Parameter{Name: p.Name, In: p.In, Required: p.Required, Schema: &openapi3.SchemaRef{Value: schema}}
+			if p.Component != "" {
+				// A reusable parameter is emitted once under components.parameters and referenced; a
+				// reuse with a differing definition fails closed, like shared response components.
+				ref := &openapi3.ParameterRef{Value: parameter}
+				if old, ok := doc.Components.Parameters[p.Component]; ok && !sameJSON(old, ref) {
+					return nil, fmt.Errorf("conflicting parameter %s", p.Component)
+				}
+				doc.Components.Parameters[p.Component] = ref
+				op.Parameters = append(op.Parameters, &openapi3.ParameterRef{Ref: "#/components/parameters/" + p.Component})
+			} else {
+				op.Parameters = append(op.Parameters, &openapi3.ParameterRef{Value: parameter})
+			}
 		}
 		if r.Request != nil {
 			ref, err := g.reflectBody(doc, r.Request, true)
