@@ -71,6 +71,20 @@ const (
 	ImageContentTypeWebP = "image/webp"
 )
 
+// ImageContentTypes is the complete image-section content-type allowlist, in the order the
+// contract publishes it. validImageContentType and the overlay enum both read it so neither drifts
+// (TestDocumentEnumCensus, §16.22 follow-up, 2026-10-29).
+var ImageContentTypes = []string{ImageContentTypeJPEG, ImageContentTypePNG, ImageContentTypeWebP}
+
+const (
+	LocaleUk = "uk"
+	LocaleEn = "en"
+)
+
+// LessonDocumentLocales is the complete lesson-document locale set, in contract order; it is the
+// one source shared by ValidateLessonDocument and the overlay enum (TestDocumentEnumCensus).
+var LessonDocumentLocales = []string{LocaleUk, LocaleEn}
+
 type LessonDocument struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	Locale        string    `json:"locale"`
@@ -127,7 +141,7 @@ type Span struct {
 }
 
 func ValidateLessonDocument(document LessonDocument) error {
-	if document.SchemaVersion != CurrentLessonDocumentSchemaVersion || document.Locale != "uk" && document.Locale != "en" {
+	if document.SchemaVersion != CurrentLessonDocumentSchemaVersion || !slices.Contains(LessonDocumentLocales, document.Locale) {
 		return ErrInvalidLessonDocument
 	}
 	sectionCount, videoCount, textCount := len(document.Sections), 0, 0
@@ -258,10 +272,5 @@ func validDocumentHref(href string) bool {
 }
 
 func validImageContentType(contentType string) bool {
-	switch contentType {
-	case ImageContentTypeJPEG, ImageContentTypePNG, ImageContentTypeWebP:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(ImageContentTypes, contentType)
 }
