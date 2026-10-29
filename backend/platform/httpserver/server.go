@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -27,7 +28,12 @@ type Options struct {
 	Register func(*http.ServeMux)
 	Logger   *slog.Logger
 	Metrics  *observability.Metrics
-	Tracer   trace.Tracer
+	// MetricsToken, when non-empty, requires `Authorization: Bearer <token>` on
+	// GET /metrics; an absent or wrong token is answered 404 (as if the endpoint
+	// did not exist). Empty leaves /metrics unauthenticated, which is the default
+	// for local and test runs where Prometheus scrapes the service port directly.
+	MetricsToken string
+	Tracer       trace.Tracer
 }
 
 func RequestID(ctx context.Context) string {
@@ -77,7 +83,11 @@ func NewHandler(options Options) http.Handler {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ready", "service": options.Service})
 	})
 	if options.Metrics != nil {
-		mux.Handle("GET /metrics", options.Metrics.Handler())
+		metricsHandler := options.Metrics.Handler()
+		if options.MetricsToken != "" {
+			metricsHandler = requireMetricsToken(options.MetricsToken, metricsHandler)
+		}
+		mux.Handle("GET /metrics", metricsHandler)
 	}
 	if options.Register != nil {
 		options.Register(mux)
@@ -131,6 +141,22 @@ func NewHandler(options Options) http.Handler {
 			return
 		}
 		mux.ServeHTTP(response, r)
+	})
+}
+
+// requireMetricsToken gates next behind a bearer token. A missing or mismatched
+// token is answered 404 (constant-time compared) so the endpoint's existence is
+// not revealed to an unauthenticated caller — the same posture nginx takes for
+// /metrics from outside.
+func requireMetricsToken(token string, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := []byte(r.Header.Get("Authorization"))
+		if subtle.ConstantTimeCompare(got, want) != 1 {
+			WriteError(w, r, http.StatusNotFound, "not_found", "Resource was not found")
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
