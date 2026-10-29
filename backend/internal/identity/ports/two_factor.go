@@ -16,6 +16,11 @@ type TwoFactorStore interface {
 	SetTotpSecret(context.Context, string, string) error
 	EnableTotp(context.Context, string) error
 	DisableTotp(context.Context, string) error
+	// AdvanceTotpCounter records that the given TOTP step was consumed, returning true only if it
+	// was strictly newer than the account's previously recorded step. A false result means the step
+	// (and therefore the code) was already used — a replay — and must be rejected. The update is
+	// atomic, so two concurrent submissions of the same code see exactly one true (SA13-B / I-F5).
+	AdvanceTotpCounter(ctx context.Context, userID string, counter int64) (bool, error)
 }
 
 type RecoveryCodeStore interface {

@@ -388,6 +388,28 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   baseURL,
 }) => {
   if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  // The server now consumes each TOTP step: a code is accepted only once, and only when its
+  // 30-second step is strictly greater than the last one accepted for the account (SA13-B / I-F5).
+  // This scenario drives several real 2FA actions within seconds; freshTotp waits just long enough
+  // for the wall clock to enter a step the account has not consumed and returns that step's code, so
+  // each successful proof lands on its own step. Only successful TOTP proofs advance the server's
+  // counter — a failed proof and a recovery-code login do not — so only those are tracked here. The
+  // waiting can add up to ~30s per proof, so this test gets a wider budget than the file default.
+  test.setTimeout(240_000);
+  const totpPeriodMs = 30_000;
+  let consumedTotpStep = -1;
+  const freshTotp = async (secret: string): Promise<string> => {
+    let step = Math.floor(Date.now() / totpPeriodMs);
+    if (step <= consumedTotpStep) {
+      // Land ~0.5s inside the next unused step, clear of its boundary, so the server — reading the
+      // same host clock — matches the code at the step we computed rather than an adjacent one.
+      const nextStepStart = (consumedTotpStep + 1) * totpPeriodMs;
+      await new Promise((resolve) => setTimeout(resolve, nextStepStart - Date.now() + 500));
+      step = Math.floor(Date.now() / totpPeriodMs);
+    }
+    consumedTotpStep = step;
+    return totp(secret, step * totpPeriodMs);
+  };
   await login(page, changedEmail, changedPassword);
   const me = await page.request.get('/api/v1/auth/me');
   expect(me.status()).toBe(200);
@@ -403,7 +425,7 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   const secret = await twoFactor.getByLabel('Секрет для ручного налаштування').inputValue();
   await expect(twoFactor.getByLabel('Секрет для ручного налаштування')).toHaveValue(secret);
   await axeClean(page);
-  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(totp(secret));
+  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(await freshTotp(secret));
   await twoFactor.getByRole('button', { name: 'Підтвердити 2FA' }).click();
   const recoveryList = twoFactor.getByRole('list', {
     name: 'Збережіть ці резервні коди: вдруге їх не буде показано.',
@@ -426,7 +448,7 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await expect(page.getByRole('alert')).toContainText('Код автентифікатора неправильний.');
   // A failed proof consumes the one-time pending challenge, so begin a fresh login.
   await startTwoFactorLogin(page);
-  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByLabel('Шестизначний код').fill(await freshTotp(secret));
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 
@@ -444,12 +466,15 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
   await expect(page.getByRole('alert')).toContainText('Резервний код неправильний.');
   await startTwoFactorLogin(page);
-  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByLabel('Шестизначний код').fill(await freshTotp(secret));
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
   await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 
   await page.goto('/settings/account');
-  await twoFactor.getByLabel('Код автентифікатора або резервний код').last().fill(totp(secret));
+  await twoFactor
+    .getByLabel('Код автентифікатора або резервний код')
+    .last()
+    .fill(await freshTotp(secret));
   await twoFactor.getByRole('button', { name: 'Перегенерувати резервні коди' }).click();
   await expect(recoveryList).toHaveCount(1);
   await page.request.post('/api/v1/auth/logout', { headers: origin(baseURL) });
@@ -459,20 +484,29 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
   await expect(page.getByRole('alert')).toContainText('Резервний код неправильний.');
   await startTwoFactorLogin(page);
-  await page.getByLabel('Шестизначний код').fill(totp(secret));
+  await page.getByLabel('Шестизначний код').fill(await freshTotp(secret));
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
 
   await page.goto('/settings/account');
   await twoFactor.getByLabel('Поточний пароль').last().fill(changedPassword);
-  await twoFactor.getByLabel('Код автентифікатора або резервний код').first().fill(totp(secret));
+  await twoFactor
+    .getByLabel('Код автентифікатора або резервний код')
+    .first()
+    .fill(await freshTotp(secret));
   await twoFactor.getByRole('button', { name: 'Вимкнути 2FA' }).click();
   await expect(twoFactor.getByText('Захист 2FA ще не ввімкнено.')).toBeVisible();
 
+  // Disabling resets the server's consumed-step counter to 0 (DisableUserTotp), and re-enrolment
+  // below mints a fresh secret, so the next proof need only clear 0. Drop the local high-water mark
+  // to mirror that and avoid a needless wait for a step the old secret already consumed.
+  consumedTotpStep = -1;
   await twoFactor.getByRole('button', { name: 'Увімкнути 2FA' }).click();
   const adminResetSecret = await twoFactor
     .getByLabel('Секрет для ручного налаштування')
     .inputValue();
-  await twoFactor.getByLabel('Код автентифікатора або резервний код').fill(totp(adminResetSecret));
+  await twoFactor
+    .getByLabel('Код автентифікатора або резервний код')
+    .fill(await freshTotp(adminResetSecret));
   await twoFactor.getByRole('button', { name: 'Підтвердити 2FA' }).click();
   const admin = await openAs(browser, baseURL, 'admin');
   try {
