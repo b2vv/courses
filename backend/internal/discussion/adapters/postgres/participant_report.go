@@ -122,7 +122,7 @@ func decodeParticipantReportCursor(value string) (*time.Time, *string, error) {
 		return nil, nil, domain.ErrInvalidCursor
 	}
 	parts := strings.Split(string(decoded), "|")
-	if len(parts) != 2 || parts[1] == "" {
+	if len(parts) != 2 || !cursorUUIDValid(parts[1]) {
 		return nil, nil, domain.ErrInvalidCursor
 	}
 	stamp, err := time.Parse(time.RFC3339Nano, parts[0])
