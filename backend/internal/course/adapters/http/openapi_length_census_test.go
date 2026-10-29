@@ -26,7 +26,7 @@ func TestAdminCourseLengthCensus(t *testing.T) {
 	// Each schema exposes the subset of text fields it carries; the census checks every maxLength
 	// present and then requires each field to have been found at least once (non-vacuous).
 	seen := map[string]int{}
-	for _, name := range []string{"AdminCourse", "AdminCourseTree", "AdminCourseWrite"} {
+	for _, name := range []string{"Course", "AdminCourse", "AdminCourseTree", "AdminCourseWrite"} {
 		schema := doc.Components.Schemas[name]
 		if schema == nil || schema.Value == nil {
 			t.Fatalf("schema %s missing", name)
