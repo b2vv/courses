@@ -265,7 +265,7 @@ func decodeModerationQueueCursor(value string) (moderationQueueCursor, error) {
 		return moderationQueueCursor{}, domain.ErrInvalidCursor
 	}
 	p := strings.Split(string(b), "|")
-	if len(p) != 4 || p[2] == "" || p[3] == "" {
+	if len(p) != 4 || p[2] == "" || !cursorUUIDValid(p[3]) {
 		return moderationQueueCursor{}, domain.ErrInvalidCursor
 	}
 	c, err := strconv.Atoi(p[0])
