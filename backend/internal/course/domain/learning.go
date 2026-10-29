@@ -119,7 +119,7 @@ func (state LearningVideoState) Valid() bool {
 }
 
 func validLearningNode(id, title string, seen map[string]struct{}) bool {
-	if !validID(id) || !validText(title, 200) {
+	if !validID(id) || !validText(title, MaximumTitle) {
 		return false
 	}
 	if _, exists := seen[id]; exists {
