@@ -1025,17 +1025,6 @@ components:
                 - newPassword
                 - oldPassword
             type: object
-        CheckoutField:
-            additionalProperties: false
-            properties:
-                name:
-                    type: string
-                value:
-                    type: string
-            required:
-                - name
-                - value
-            type: object
         CheckoutForm:
             additionalProperties: false
             properties:

@@ -20,11 +20,18 @@ func TestOrdersModuleOwnership(t *testing.T) {
 	// contribution (openapispec/contributions.go imports each module's http OpenAPIContribution,
 	// orders' included — see §16.22). It is not a business module consuming payment facts, so it
 	// is exempt from the "no module imports orders" rule, which guards exactly that business coupling.
+	// The exemption is scoped to the single contribution package the collector actually needs, not
+	// to the whole openapispec tree (§16.22 follow-up F2): the collector reaching into any deeper
+	// orders internals (domain or application) still fails.
 	collectorRoot := filepath.Join(internalRoot, "openapispec")
+	const ordersContribution = "courses/internal/orders/adapters/http"
 
 	t.Run("other modules do not import orders", func(t *testing.T) {
 		walkProductionImports(t, internalRoot, func(path, imported string) {
-			if pathWithin(path, ordersRoot) || pathWithin(path, collectorRoot) {
+			if pathWithin(path, ordersRoot) {
+				return
+			}
+			if pathWithin(path, collectorRoot) && imported == ordersContribution {
 				return
 			}
 			if imported == "courses/internal/orders" || strings.HasPrefix(imported, "courses/internal/orders/") {
@@ -35,14 +42,17 @@ func TestOrdersModuleOwnership(t *testing.T) {
 
 	t.Run("orders does not import another module", func(t *testing.T) {
 		walkProductionImports(t, ordersRoot, func(path, imported string) {
-			// Platform infrastructure under internal/platform (e.g. the OpenAPI generator orders uses
-			// to describe its own contract, like every other module) is not another business module;
-			// it is the internal-tree sibling of courses/platform/* (httpserver) which was always
-			// allowed. The rule still forbids reading any OTHER business module's packages.
+			// The OpenAPI generator under internal/platform/openapigen (which orders uses to describe
+			// its own contract, like every other module) is not another business module; it is the
+			// internal-tree sibling of courses/platform/* (httpserver) which was always allowed. The
+			// exemption names that one package rather than the whole internal/platform prefix (§16.22
+			// follow-up F2), so pulling any other platform package in would surface for review. The
+			// rule still forbids reading any OTHER business module's packages.
 			if !strings.HasPrefix(imported, "courses/internal/") ||
 				imported == "courses/internal/orders" || strings.HasPrefix(imported, "courses/internal/orders/") ||
 				strings.HasPrefix(imported, "courses/internal/contracts/") ||
-				strings.HasPrefix(imported, "courses/internal/platform/") {
+				imported == "courses/internal/platform/openapigen" ||
+				strings.HasPrefix(imported, "courses/internal/platform/openapigen/") {
 				return
 			}
 			t.Errorf("%s imports another module %s; orders owns its external reads", path, imported)

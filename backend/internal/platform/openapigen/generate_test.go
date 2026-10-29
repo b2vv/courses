@@ -359,6 +359,49 @@ func TestSharedComponentNameAllowsIdenticalSchemaOnly(t *testing.T) {
 	}
 }
 
+// §16.23 follow-up: two distinct Go types that share a simple name collapse silently when both
+// appear in one reflection graph — the reflector keys components by name and the emission-time
+// sameJSON guard only compares across reflectBody calls, never within one. The pre-reflection graph
+// check rejects the accidental collision and an explicit NameMap entry per type disambiguates it.
+func collideAlpha() reflect.Type {
+	type collide struct {
+		Alpha string `json:"alpha"`
+	}
+	return reflect.TypeOf(collide{})
+}
+func collideBeta() reflect.Type {
+	type collide struct {
+		Beta int `json:"beta"`
+	}
+	return reflect.TypeOf(collide{})
+}
+func TestGraphNameCollisionFailsClosed(t *testing.T) {
+	ta, tb := collideAlpha(), collideBeta()
+	if ta == tb || ta.Name() != tb.Name() {
+		t.Fatalf("test needs two distinct types sharing a simple name, got %v / %v", ta, tb)
+	}
+	parent := reflect.StructOf([]reflect.StructField{
+		{Name: "A", Type: ta, Tag: `json:"a"`},
+		{Name: "B", Type: tb, Tag: `json:"b"`},
+	})
+	body := reflect.New(parent).Elem().Interface()
+	c := ModuleContribution{Routes: []RouteBinding{{Method: "GET", Path: "/x", Responses: map[int]Response{200: {Body: body}}}}}
+	// Without disambiguation the two 'collide' shapes claim one component name and collapse; the
+	// pre-reflection check must reject rather than emit one shape and silently drop the other.
+	if _, err := Generate([]ModuleContribution{c}, overlay(t, "{}")); err == nil || !strings.Contains(err.Error(), "conflicting schema") {
+		t.Fatalf("within-graph fallback name collision must fail closed, got %v", err)
+	}
+	// An explicit NameMap entry per type disambiguates the component names and generation proceeds.
+	c.NameMap = map[reflect.Type]string{ta: "CollideAlpha", tb: "CollideBeta"}
+	doc, err := Generate([]ModuleContribution{c}, overlay(t, "{}"))
+	if err != nil {
+		t.Fatalf("explicit disambiguating names must be accepted: %v", err)
+	}
+	if doc.Components.Schemas["CollideAlpha"] == nil || doc.Components.Schemas["CollideBeta"] == nil {
+		t.Fatal("disambiguated components missing")
+	}
+}
+
 func paramContribution() ModuleContribution {
 	c := contribution(child{})
 	c.Routes[0].Path = "/examples/{slug}"
@@ -775,15 +818,14 @@ func TestRecursiveNameMappedSchemas(t *testing.T) {
 		t.Fatal("removing recursive name escaped guard")
 	}
 
+	// Mutual recursion between two distinct named types is rejected: the reflector resolves it
+	// non-deterministically, collapsing one type's schema onto the other's component name, so the
+	// artifact would be order-dependent and silently wrong (§16.23 follow-up, 2026-10-29).
+	// Single-type self-recursion above is the only cycle shape the generator emits faithfully.
 	c = contribution(recursiveParent{})
 	c.NameMap = map[reflect.Type]string{reflect.TypeFor[recursiveParent](): "Parent", reflect.TypeFor[recursiveChild](): "Child"}
-	doc, err = Generate([]ModuleContribution{c}, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parentRef := doc.Components.Schemas["Child"].Value.Properties["parent"]
-	if parentRef.Ref != "#/components/schemas/Parent" && (parentRef.Value == nil || len(parentRef.Value.AllOf) != 1 || parentRef.Value.AllOf[0].Ref != "#/components/schemas/Parent") {
-		t.Fatalf("transitive cycle did not refer to Parent: %#v", parentRef)
+	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "mutual recursion") {
+		t.Fatalf("mutual recursion must fail closed, got %v", err)
 	}
 	delete(c.NameMap, reflect.TypeFor[recursiveChild]())
 	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "requires a NameMap entry") {
