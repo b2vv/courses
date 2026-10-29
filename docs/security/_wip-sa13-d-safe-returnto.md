@@ -1,0 +1,16 @@
+# SA13-D — T-F1 safeReturnTo allowlist
+
+## Pre-code checkpoint (2026-10-29)
+- **Задача / готовність:** SA13-батч, наступний за T-F2 (AGENDA). Джерело: `audit-2026-10-24.md:135` «T-F1 `safeReturnTo` allowlist misses /teach,/settings,/orders → post-login lands /learn (UX, safe fallback)». READY (standing-auth «Го»; окремий PR + незалежне рев'ю). Клас: UX-коректність (не вразливість — fallback безпечний), але частина security-батчу.
+- **Дефект (механізм, звірено):** `frontend/src/modules/identity/domain/identity.ts:131` — allowlist `^\/(learn|admin)(\/|$)`. Користувач на `/teach*`, `/settings*`, `/orders*`, якого вибило на `/login`, після входу потрапляє на fallback `/learn` замість назад, бо ці префікси не в allowlist. Усі три — реальні захищені маршрути (`routes/teach.tsx`, `teach.courses.$courseId`, `teach.learners`; `settings.account`; `orders.$orderId`).
+- **Фікс (план):** розширити allowlist-регекс до `^\/(learn|admin|teach|settings|orders)(\/|$)`. Решта захистів незмінна (leading-`/`, scheme-relative `//`/`\`/`%2f`, control-chars, `.`/`..`, trailing-slash нормалізація, search-збереження). Публічні шляхи (`/courses`) і `/login` лишаються refused.
+- **Чому саме ці три й не ширше:** allowlist — свідомо вузький (redirect-target має бути захищеною областю застосунку). Додаємо рівно те, що named аудитом і має маршрут. Не додаю bare-index, якого нема (`/settings`,`/orders` без сабшляху 404-нули б, але це не security і малоймовірне як captured returnTo — регекс `(\/|$)` їх допускає, нешкідливо).
+- **Доказ (production path):** доменна pure-функція під rstest (`src/**`). Додати keep-кейси: `/teach/courses/x`, `/settings/account`, `/orders/<id>` → повертаються як є; і ре-підтвердити, що `/courses` (public) і `/login` ще refused. `make test` (frontend rstest) ганяє їх реально. Ordered `make check` цілком (регресії allowlist ловить повний gate).
+- **Поза scope:** бекенд (returnTo — суто клієнтський redirect; бекенд safeReturnTo нема). Інші SA13-зрізи.
+- **Impact / гейти:** лише `identity.ts` + `identity.test.ts`. format(oxfmt)/lint/typecheck/test/ordered `make check`. Малий слайс.
+- **Review:** `review_mode=existing_session`; reviewer `courses-96 [557618]`; writer Courses13 [c49267]; contact SendMessage; обов'язкове незалежне рев'ю перед merge.
+- **Transfer (SA13-D review):** snapshot = commit `e896e52` на гілці `sa13-safe-returnto` (НЕ запушено; спільне дерево). Стан: **`verdict_received` — PASS, 0 blocking** від `courses-96 [557618]` (2026-10-29), на прочитанні коду (3 фокуси: open-redirect не відкривається — anchored `^/`+`(/|$)` ловить `/teachx`; bare `/settings`,`/orders` → self-inflicted 404, нешкідливо, не blocking; tail не конфліктує). Гейт EXIT=0, e2e 127.
+- **✅ MERGED PR #86** (`b879067`, 2026-10-29, свіжа сесія): передумови звірено (HEAD=`e896e52`, діф лише `identity.ts`+`identity.test.ts`, код-дерево чисте → verdict PASS чинний, рев'ю не повторювалось); `git push` → `gh pr create` (#86) → `gh pr merge 86 --squash --admin --delete-branch` → main fast-forward до `b879067`, гілку видалено. `work/tasks.md` оновлено (T-F1 done, **P-F3** next). Наступна дія: **P-F3** (/metrics in-app guard) за AGENDA.
+
+## Журнал
+- 2026-10-29: investigation T-F1 завершено (allowlist-регекс; три маршрути існують; frontend-only). Гілка `sa13-safe-returnto` off main @6c0e041.
