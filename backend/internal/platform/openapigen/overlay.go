@@ -203,6 +203,74 @@ func expand(site, original map[string]any, seen map[string]bool) (map[string]any
 	return nil, fmt.Errorf("expected generated ref or single allOf wrapper")
 }
 
+// pruneUnreferencedSchemas removes component schemas unreachable from any $ref outside the
+// components.schemas subtree, transitively through the schemas that are reachable. The cutover
+// makes the generated document the authoritative contract, so a schema that reflection names but
+// the overlay then inlines at every use (CheckoutForm.fields inlines its CheckoutField element via
+// `$ref: null`) must not linger as a dead component. Reachability — not a one-pass 0-$ref scan —
+// keeps a recursive schema that only a reachable schema points at and drops a dead ref chain whole.
+func pruneUnreferencedSchemas(doc map[string]any) {
+	components, _ := doc["components"].(map[string]any)
+	schemas, _ := components["schemas"].(map[string]any)
+	if len(schemas) == 0 {
+		return
+	}
+	reachable := map[string]bool{}
+	var queue []string
+	// Seed with every schema ref anywhere except the schemas subtree itself.
+	for key, value := range doc {
+		if key != "components" {
+			queue = append(queue, schemaRefs(value)...)
+			continue
+		}
+		for group, groupValue := range components {
+			if group != "schemas" {
+				queue = append(queue, schemaRefs(groupValue)...)
+			}
+		}
+	}
+	// Close over the refs each reachable schema makes.
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if reachable[name] {
+			continue
+		}
+		reachable[name] = true
+		if definition, ok := schemas[name]; ok {
+			queue = append(queue, schemaRefs(definition)...)
+		}
+	}
+	for name := range schemas {
+		if !reachable[name] {
+			delete(schemas, name)
+		}
+	}
+}
+
+// schemaRefs collects every #/components/schemas/NAME target reachable within v.
+func schemaRefs(v any) []string {
+	var out []string
+	const prefix = "#/components/schemas/"
+	switch x := v.(type) {
+	case map[string]any:
+		for key, value := range x {
+			if key == "$ref" {
+				if ref, ok := value.(string); ok && strings.HasPrefix(ref, prefix) {
+					out = append(out, strings.TrimPrefix(ref, prefix))
+				}
+				continue
+			}
+			out = append(out, schemaRefs(value)...)
+		}
+	case []any:
+		for _, value := range x {
+			out = append(out, schemaRefs(value)...)
+		}
+	}
+	return out
+}
+
 // Parameter metadata is keyed by name within a path/method. Arrays and structural
 // keywords are rejected so the overlay cannot replace Go-declared parameters.
 func mergeParamMetadata(old, patch any, path []string) error {

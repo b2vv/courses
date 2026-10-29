@@ -294,6 +294,7 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 	if err != nil {
 		return nil, err
 	}
+	pruneUnreferencedSchemas(merged)
 	raw, err = json.Marshal(merged)
 	if err != nil {
 		return nil, err
