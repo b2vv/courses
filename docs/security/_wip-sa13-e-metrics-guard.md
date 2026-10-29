@@ -1,0 +1,31 @@
+# SA13-E — P-F3 /metrics in-app guard
+
+## Pre-code checkpoint (2026-10-29)
+- **Задача / готовність:** SA13-батч, наступний за T-F1 (AGENDA). Джерело: `audit-2026-10-24.md:137` «P-F3 /metrics unauthenticated on app mux (nginx-blocked)». READY (standing-auth: власник «Так давай» 2026-10-29; окремий PR + незалежне рев'ю). Клас: defense-in-depth (LOW — зовні вже закрито nginx; це другий шар на випадок обходу nginx / доступу всередині мережі).
+- **Дефект (механізм, звірено):** `backend/platform/httpserver/server.go:79-81` — `mux.Handle("GET /metrics", options.Metrics.Handler())` віддає Prometheus-метрики без автентифікації на спільному app-mux усіх 4 сервісів (api 8080, media-worker 8081, asr-worker 8083, upload 8082). Зовні закрито: `infrastructure/nginx/nginx.conf:159` `location = /metrics { return 404; }`. Але всередині compose-мережі порт сервісу відповідає будь-кому.
+- **Поточний скрейп (звірено):** `infrastructure/monitoring/prometheus.yml` скрейпить `api:8080`, `media-worker:8081`, `asr-worker:8083` НАПРЯМУ (не через nginx), шлях `/metrics` за замовчуванням, **без авторизації**. `upload:8082` не скрейпиться. Отже guard, що завжди вимагає токен, зламав би скрейп у test-mode і e2e.
+- **Фікс (план):** env-gated bearer-guard у спільному `httpserver`, дзеркалить ідіому dev-default (як COOKIE_SECURE).
+  1. `Options.MetricsToken string` у `httpserver.Options`.
+  2. У `NewHandler`, гілка `options.Metrics != nil`:
+     - `MetricsToken == ""` → поведінка як зараз (віддає без авторизації) — зберігає test-mode/Prometheus/e2e незмінними.
+     - `MetricsToken != ""` → обгортка: вимагає `Authorization: Bearer <token>`, порівняння `crypto/subtle.ConstantTimeCompare` (вже в репо), розбіжність/відсутність → **404** (дзеркалить nginx, ховає існування ендпойнта; не 401, щоб не підтверджувати наявність).
+  3. Усі 4 composition roots читають `os.Getenv("METRICS_TOKEN")` → `Options.MetricsToken` (api/media-worker/asr-worker/upload main.go).
+- **Рішення (закриває альтернативу), 2026-10-29, Courses 1, звірено кодом:**
+  - *default-open коли env порожній*, не default-closed — бо default-closed вимагав би токен у `prometheus.yml` + compose-env інакше скрейп і e2e червоніють; prod виставляє `METRICS_TOKEN`. Перевірка: unit-тест (token unset → 200; token set+нема/хибний → 404; token set+правильний → 200).
+  - *404 на розбіжність*, не 401 — консистентно з nginx `return 404`, ховає існування. Перевірка: той самий unit-тест.
+  - *bearer-token*, не source-IP allowlist — IP-allowlist крихкий у контейнер-мережах (NAT/overlay). Механізм: bearer тривіально вмикається на боці Prometheus (`authorization.credentials`).
+- **Prod-хвіст (не в цьому зрізі, prod не задеплоєно):** `prometheus.yml` отримає `authorization: { credentials_file: ... }` + `METRICS_TOKEN` у сервіс-env — разом із Grafana pw / COOKIE_SECURE=true до deploy. Записати в report §prod-tail.
+- **Доказ (production path):** unit-тест у `backend/platform/httpserver/server_test.go` проти справжнього `NewHandler` (не мок): три кейси вище + що healthz/readyz не зачеплені. Shared httpserver → **повний ordered `make check` + e2e** (зміна спільного компонента всіх 4 сервісів; таргетний тест пропустив би регресію поза дифом — див. gotcha integration-tag).
+- **Поза scope:** prometheus.yml prod-авторизація; інші SA13-зрізи; guard на healthz/readyz (не в audit).
+- **Impact / гейти:** `server.go` + `server_test.go` + 4× `main.go` (одна лінія кожен). format(gofmt)/vet/`go test -race ./...`/повний ordered `make check` + e2e (shared-зміна).
+- **Review:** `review_mode=existing_session`; reviewer `courses-96 [557618]`; writer Courses13; contact SendMessage; обов'язкове незалежне рев'ю перед merge.
+- **Transfer:** `62a7ba8` → **verdict_received PASS, 0 blocking** від `courses-96 [557618]` (2026-10-29, read-only `git show`). 1 non-blocking **N1 (timing length-leak)** — нова знахідка (не було в checkpoint): `subtle.ConstantTimeCompare` повертає 0 негайно при різній довжині → час на заголовок неправильної довжини ≠ правильної → витікає `len("Bearer "+token)`; LOW (лише in-network, зовні nginx 404, high-entropy токен робить витік довжини марним). Рев'ювер лишив на розсуд: датований accepted-bar або дешевий hash-фікс.
+  - **Рішення по N1 (Courses 1, 2026-10-29): застосувати hash-фікс, не accepted-bar.** Механізм: `sha256.Sum256` обох сторін перед `ConstantTimeCompare` → вхід компаратора завжди 32 байти, ні довжина, ні вміст не витікають. Чому не accepted-bar: фікс дешевший (3 рядки) за обґрунтування уникнення, і це security-зріз. Поведінка незмінна (ті самі 200/404), тест без змін зелений. Новий commit `1c6eec3` поверх `62a7ba8`.
+  - **Re-review дельти:** `1c6eec3` → **verdict_received PASS** від `courses-96` (2026-10-29): «length-leak закрито коректно; want прехешований раз, got щозапиту; хешування нового leak'у не вносить; без HMAC-overkill». Заперечень нема; self-merge схвалено `62a7ba8+1c6eec3` на зелений гейт.
+  - **✅ MERGED PR #87** (`3c4c258`, 2026-10-30): другий повний ordered `make check` `GATE_EXIT=0`, e2e 127 passed (16.2m); рев'ю PASS на `62a7ba8`+`1c6eec3`. `git push` → `gh pr create` (#87) → `gh pr merge 87 --squash --admin --delete-branch` → main fast-forward `3c4c258`, гілку видалено. P-F3 закрито.
+- **Prod-хвіст (до deploy):** `prometheus.yml` → `authorization.credentials(_file)` + `METRICS_TOKEN` у сервіс-env — разом із Grafana pw / `COOKIE_SECURE=true`.
+- **Наступне за AGENDA:** P-F6 (PostgresDSN `sslmode` env) → P-F5 (panic value/stack лог) → M7 (HLS umask 0027); I-F6 (totp_secret-шифрування) окремо.
+
+## Журнал
+- 2026-10-29: investigation P-F3 завершено. Механізм звірено (server.go:79-81, nginx:159, prometheus.yml напряму без auth). Гілка `sa13-metrics-guard` off main @9ccefc2. Рішення default-open/404/bearer зафіксовано.
+- 2026-10-29: реалізація. `httpserver.Options.MetricsToken` + `requireMetricsToken` (subtle.ConstantTimeCompare, mismatch→404 JSON not_found-envelope); 4 composition roots читають `os.Getenv("METRICS_TOKEN")`. Тест `TestMetricsTokenGuard` (unset→200; set+нема/хибний/без Bearer→404; set+правильний→200; healthz незачеплений). gofmt/vet чисті; httpserver-пакет зелений. Запущено повний ordered `make check` + e2e (лог `scratchpad/gate-sa13e-1.log`, читати `GATE_EXIT`).
