@@ -166,7 +166,7 @@ func (actor Actor) CanTransition(instructorID string, from, to Status) error {
 }
 
 func ValidateCourseDraft(draft CourseDraft) error {
-	if ValidateSlug(draft.Slug) != nil || !validText(draft.Title, 200) || !validText(draft.Summary, 500) || !validText(draft.Description, 20000) {
+	if ValidateSlug(draft.Slug) != nil || !validText(draft.Title, MaximumTitle) || !validText(draft.Summary, MaximumSummary) || !validText(draft.Description, MaximumDescription) {
 		return ErrInvalidRequest
 	}
 	if !validID(draft.InstructorID) {
@@ -264,7 +264,7 @@ func ValidateDelete(status Status) error {
 }
 
 func validNode(id, title string, position, expectedPosition int, seenIDs map[string]struct{}) bool {
-	if !validID(id) || !validText(title, 200) || position != expectedPosition {
+	if !validID(id) || !validText(title, MaximumTitle) || position != expectedPosition {
 		return false
 	}
 	if _, duplicate := seenIDs[id]; duplicate {

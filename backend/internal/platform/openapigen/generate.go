@@ -294,6 +294,7 @@ func generate(contribs []ModuleContribution, overlayPath string, errorCodes []st
 	if err != nil {
 		return nil, err
 	}
+	pruneUnreferencedSchemas(merged)
 	raw, err = json.Marshal(merged)
 	if err != nil {
 		return nil, err
@@ -343,6 +344,9 @@ func (g *generator) reflectBody(doc *openapi3.T, body any, request bool) (*opena
 		return nil, err
 	}
 	if err := g.check(t); err != nil {
+		return nil, err
+	}
+	if err := g.checkGraphNameCollisions(t); err != nil {
 		return nil, err
 	}
 	schemas := openapi3.Schemas{}
@@ -467,6 +471,7 @@ func fields(t reflect.Type) ([]jsonField, error) {
 func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
 	t = base(t)
 	if index := slices.Index(parents, t); index >= 0 {
+		named := 0
 		for _, member := range parents[index:] {
 			// Unnamed containers carry the edge; the component types own the cycle.
 			if member.Name() == "" {
@@ -475,6 +480,17 @@ func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
 			if g.cycleNames[member] == "" {
 				return fmt.Errorf("recursive type %v requires a NameMap entry", member)
 			}
+			named++
+		}
+		// A cycle through two or more distinct named types is mutual recursion, which the reflector
+		// resolves non-deterministically: it collapses one type's schema onto the other's component
+		// name, so the artifact is order-dependent and silently wrong (§16.23 follow-up, 2026-10-29 —
+		// a prune that drops the orphaned twin turned the long-latent wrong output into a flaky
+		// panic). Only single-type self-recursion (Section.Columns) is emitted faithfully; reject
+		// mutual recursion rather than emit a wrong contract. No production schema is mutually
+		// recursive, so this closes an unreliable path, not a used one.
+		if named > 1 {
+			return fmt.Errorf("mutual recursion among named types is not supported: %v", parents[index:])
 		}
 		return nil
 	}
@@ -492,6 +508,79 @@ func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
 		}
 	case reflect.Slice, reflect.Array, reflect.Map:
 		return g.checkCycles(t.Elem(), parents)
+	}
+	return nil
+}
+
+// checkGraphNameCollisions walks one body's reflection graph and fails closed when two distinct Go
+// types would claim the same component name. Inside a single graph the reflector collapses such a
+// pair into one schema silently and drops the other shape; the emission-time sameJSON guard never
+// sees it, because that guard only compares a name against components emitted by EARLIER reflectBody
+// calls, not within one call (§16.23 follow-up, 2026-10-29). A deliberate shared name is declared
+// through NameMap and already proven to be one identical schema by generate's eager check, so a
+// collision whose every claimant is NameMapped is left to that check; only an accidental fallback
+// collision — unrelated types that happen to share t.Name() — is rejected here, pointing the author
+// at an explicit NameMap decision.
+func (g *generator) checkGraphNameCollisions(root reflect.Type) error {
+	claimants := map[string]map[reflect.Type]bool{}
+	seen := map[reflect.Type]bool{}
+	var walk func(reflect.Type) error
+	walk = func(t reflect.Type) error {
+		t = base(t)
+		if seen[t] {
+			return nil
+		}
+		seen[t] = true
+		if t.Name() != "" {
+			name := g.name(t)
+			if claimants[name] == nil {
+				claimants[name] = map[reflect.Type]bool{}
+			}
+			claimants[name][t] = true
+		}
+		// An overridden type's reflected fields are discarded for the hand-supplied schema, so the
+		// graph does not descend into them; the type still occupies its component name above.
+		if _, overridden := g.config.Overrides[t]; overridden {
+			return nil
+		}
+		switch t.Kind() {
+		case reflect.Struct:
+			fs, err := fields(t)
+			if err != nil {
+				return err
+			}
+			for _, f := range fs {
+				if err := walk(f.field.Type); err != nil {
+					return err
+				}
+			}
+		case reflect.Slice, reflect.Array, reflect.Map:
+			return walk(t.Elem())
+		}
+		return nil
+	}
+	if err := walk(root); err != nil {
+		return err
+	}
+	var collisions []string
+	for name, types := range claimants {
+		if len(types) < 2 {
+			continue
+		}
+		allNamed := true
+		for t := range types {
+			if _, ok := g.config.NameMap[t]; !ok {
+				allNamed = false
+				break
+			}
+		}
+		if !allNamed {
+			collisions = append(collisions, name)
+		}
+	}
+	if len(collisions) > 0 {
+		sort.Strings(collisions)
+		return fmt.Errorf("conflicting schema %s: distinct types share one fallback component name; add an explicit NameMap entry", collisions[0])
 	}
 	return nil
 }
