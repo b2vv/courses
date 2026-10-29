@@ -4,8 +4,19 @@ import { staticMiddleware } from 'srvx/static';
 import entry from './dist/server/index.js';
 import { ssrRenderFailedLine, ssrRequestLine } from './server-log.mjs';
 
+// form-action does NOT fall back to default-src, so without it a native <form> submit is
+// unrestricted (T-F2). The checkout posts a native cross-origin form to WayForPay
+// (purchase OrderStatusView.submitCheckoutForm); the allowed origins mirror the client-side
+// checkout validator (modules/purchase/adapters/purchase-repository.ts): the production pay host is
+// always allowed, and the offline e2e/stub host is added only when PUBLIC_WAYFORPAY_PAY_HOST is set
+// — an unset value (production) cannot widen the allowlist. The port is '*' because it lives in the
+// api's WAYFORPAY_PAY_URL, not here, and the validator matches on hostname alone.
+const wayforpayPayHost = process.env.PUBLIC_WAYFORPAY_PAY_HOST?.trim() ?? '';
+const formAction = wayforpayPayHost
+  ? `form-action 'self' https://secure.wayforpay.com http://${wayforpayPayHost}:*`
+  : `form-action 'self' https://secure.wayforpay.com`;
 const contentSecurityPolicy = (nonce) =>
-  `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`;
+  `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; ${formAction}; frame-ancestors 'none'`;
 // CSP enforces in production. Both app entries configure Zod jitless before schemas
 // load, avoiding its new Function probe under script-src 'self' 'nonce-…'. The
 // 2026-10-19 runtime close-out found that violation despite clean report-only runs.
