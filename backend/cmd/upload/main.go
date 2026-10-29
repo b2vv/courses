@@ -52,7 +52,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	upload := mediaapplication.NewUpload(repository, storage, queue, time.Now)
 	server := tus.NewServer(upload)
 	handler := httpserver.NewHandler(httpserver.Options{
-		Service: "upload", Logger: logger, Metrics: dependencies.Metrics,
+		Service: "upload", Logger: logger, Metrics: dependencies.Metrics, MetricsToken: os.Getenv("METRICS_TOKEN"),
 		Tracer: dependencies.Tracing.Tracer("http"),
 		Ready: func(request context.Context) error {
 			return errors.Join(dependencies.Ready(request), storage.Ready(request))

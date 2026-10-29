@@ -72,6 +72,59 @@ func TestRequestObservabilityExcludesSecrets(t *testing.T) {
 	}
 }
 
+func TestMetricsTokenGuard(t *testing.T) {
+	// Token unset: /metrics stays open, as local and test runs expect (Prometheus
+	// scrapes the service port directly with no credentials).
+	open := httpserver.NewHandler(httpserver.Options{Service: "api", Metrics: observability.NewMetrics()})
+	openResponse := httptest.NewRecorder()
+	open.ServeHTTP(openResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if openResponse.Code != http.StatusOK || openResponse.Body.Len() == 0 {
+		t.Fatalf("token unset: got %d, %d bytes", openResponse.Code, openResponse.Body.Len())
+	}
+
+	// Token set: the endpoint demands a matching bearer and hides behind 404 otherwise.
+	guarded := httpserver.NewHandler(httpserver.Options{Service: "api", Metrics: observability.NewMetrics(), MetricsToken: "scrape-secret"})
+	for _, tc := range []struct {
+		name, authorization string
+		status              int
+	}{
+		{"no header", "", http.StatusNotFound},
+		{"wrong token", "Bearer wrong", http.StatusNotFound},
+		{"missing bearer scheme", "scrape-secret", http.StatusNotFound},
+		{"correct token", "Bearer scrape-secret", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+			if tc.authorization != "" {
+				r.Header.Set("Authorization", tc.authorization)
+			}
+			w := httptest.NewRecorder()
+			guarded.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("got %d: %s", w.Code, w.Body.String())
+			}
+			if tc.status == http.StatusNotFound {
+				var body httpserver.ErrorResponse
+				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+					t.Fatalf("not JSON envelope: %v", err)
+				}
+				if body.Error.Code != "not_found" {
+					t.Fatalf("code=%q", body.Error.Code)
+				}
+			} else if w.Body.Len() == 0 {
+				t.Fatal("metrics body empty on authorized scrape")
+			}
+		})
+	}
+
+	// The guard is scoped to /metrics; health probes stay open with a token set.
+	healthz := httptest.NewRecorder()
+	guarded.ServeHTTP(healthz, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if healthz.Code != http.StatusOK {
+		t.Fatalf("healthz guarded: %d", healthz.Code)
+	}
+}
+
 func TestSafeErrorsAndCorrelation(t *testing.T) {
 	handler := httpserver.NewHandler(httpserver.Options{
 		Service: "api", Ready: func(context.Context) error { return errors.New("password=private") },

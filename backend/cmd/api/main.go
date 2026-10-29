@@ -195,7 +195,7 @@ func main() {
 		adminStatsHandler := adminstatshttp.NewHandler(adminstatsapplication.New(adminStatsRepository, adminStatsConfig.SingleInstructor, time.Now))
 		clientLogHandler := clientloghttp.NewHandler(logger)
 		handler := httpserver.NewHandler(httpserver.Options{
-			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics,
+			Service: "api", Ready: dependencies.Ready, Logger: logger, Metrics: dependencies.Metrics, MetricsToken: os.Getenv("METRICS_TOKEN"),
 			Tracer: dependencies.Tracing.Tracer("http"),
 			Register: func(mux *http.ServeMux) {
 				courseHandler.Register(mux)

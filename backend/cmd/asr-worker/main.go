@@ -104,7 +104,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	defer func() { stopPoll(); <-pollDone }()
 
 	handler := httpserver.NewHandler(httpserver.Options{
-		Service: "asr-worker", Logger: logger, Metrics: dependencies.Metrics,
+		Service: "asr-worker", Logger: logger, Metrics: dependencies.Metrics, MetricsToken: os.Getenv("METRICS_TOKEN"),
 		Tracer: dependencies.Tracing.Tracer("http"),
 		Ready: func(request context.Context) error {
 			if ctx.Err() != nil || !queueHealthy.Load() {
