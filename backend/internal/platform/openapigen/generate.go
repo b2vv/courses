@@ -471,6 +471,7 @@ func fields(t reflect.Type) ([]jsonField, error) {
 func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
 	t = base(t)
 	if index := slices.Index(parents, t); index >= 0 {
+		named := 0
 		for _, member := range parents[index:] {
 			// Unnamed containers carry the edge; the component types own the cycle.
 			if member.Name() == "" {
@@ -479,6 +480,17 @@ func (g *generator) checkCycles(t reflect.Type, parents []reflect.Type) error {
 			if g.cycleNames[member] == "" {
 				return fmt.Errorf("recursive type %v requires a NameMap entry", member)
 			}
+			named++
+		}
+		// A cycle through two or more distinct named types is mutual recursion, which the reflector
+		// resolves non-deterministically: it collapses one type's schema onto the other's component
+		// name, so the artifact is order-dependent and silently wrong (§16.23 follow-up, 2026-10-29 —
+		// a prune that drops the orphaned twin turned the long-latent wrong output into a flaky
+		// panic). Only single-type self-recursion (Section.Columns) is emitted faithfully; reject
+		// mutual recursion rather than emit a wrong contract. No production schema is mutually
+		// recursive, so this closes an unreliable path, not a used one.
+		if named > 1 {
+			return fmt.Errorf("mutual recursion among named types is not supported: %v", parents[index:])
 		}
 		return nil
 	}

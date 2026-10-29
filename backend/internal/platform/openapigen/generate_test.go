@@ -818,15 +818,14 @@ func TestRecursiveNameMappedSchemas(t *testing.T) {
 		t.Fatal("removing recursive name escaped guard")
 	}
 
+	// Mutual recursion between two distinct named types is rejected: the reflector resolves it
+	// non-deterministically, collapsing one type's schema onto the other's component name, so the
+	// artifact would be order-dependent and silently wrong (§16.23 follow-up, 2026-10-29).
+	// Single-type self-recursion above is the only cycle shape the generator emits faithfully.
 	c = contribution(recursiveParent{})
 	c.NameMap = map[reflect.Type]string{reflect.TypeFor[recursiveParent](): "Parent", reflect.TypeFor[recursiveChild](): "Child"}
-	doc, err = Generate([]ModuleContribution{c}, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parentRef := doc.Components.Schemas["Child"].Value.Properties["parent"]
-	if parentRef.Ref != "#/components/schemas/Parent" && (parentRef.Value == nil || len(parentRef.Value.AllOf) != 1 || parentRef.Value.AllOf[0].Ref != "#/components/schemas/Parent") {
-		t.Fatalf("transitive cycle did not refer to Parent: %#v", parentRef)
+	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "mutual recursion") {
+		t.Fatalf("mutual recursion must fail closed, got %v", err)
 	}
 	delete(c.NameMap, reflect.TypeFor[recursiveChild]())
 	if _, err := Generate([]ModuleContribution{c}, path); err == nil || !strings.Contains(err.Error(), "requires a NameMap entry") {
