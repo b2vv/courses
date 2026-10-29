@@ -34,20 +34,29 @@ func GenerateTOTPSecret() (string, error) {
 
 // VerifyTOTP accepts a six-digit RFC 6238 SHA-1 code from one adjacent 30-second period.
 func VerifyTOTP(secret, code string, now time.Time) bool {
-	key, ok := decodeTOTPSecret(secret)
-	if !ok || !validTOTPCode(code) || now.Unix() < 0 {
-		return false
+	_, ok := VerifyTOTPAt(secret, code, now)
+	return ok
+}
+
+// VerifyTOTPAt is VerifyTOTP that also reports which 30-second step (counter) the code matched, so a
+// caller can record it and refuse the same step again. When ok is false counter is 0. The counter is
+// unix-time/30, so it is monotonic in wall-clock time and strictly comparable across attempts (SA13-B
+// / I-F5 consumed-step replay guard).
+func VerifyTOTPAt(secret, code string, now time.Time) (counter int64, ok bool) {
+	key, decoded := decodeTOTPSecret(secret)
+	if !decoded || !validTOTPCode(code) || now.Unix() < 0 {
+		return 0, false
 	}
 	for offset := int64(-1); offset <= 1; offset++ {
-		counter := now.Unix()/int64(totpPeriod/time.Second) + offset
-		if counter < 0 {
+		step := now.Unix()/int64(totpPeriod/time.Second) + offset
+		if step < 0 {
 			continue
 		}
-		if subtle.ConstantTimeCompare([]byte(totpCode(key, uint64(counter))), []byte(code)) == 1 {
-			return true
+		if subtle.ConstantTimeCompare([]byte(totpCode(key, uint64(step))), []byte(code)) == 1 {
+			return step, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 // TOTPURI produces the otpauth URI consumed by authenticator applications.
@@ -99,27 +108,10 @@ func ValidateRecoveryCode(matched, consumed bool) error {
 	return nil
 }
 
-// ValidateTwoFactorEnrollment requires a proof from the secret before it can be enabled.
-func ValidateTwoFactorEnrollment(enabled bool, secret, code string, now time.Time) error {
-	if enabled {
-		return ErrTwoFactorAlreadyEnabled
-	}
-	if !VerifyTOTP(secret, code, now) {
-		return ErrInvalidTOTP
-	}
-	return nil
-}
-
-// ValidateTwoFactorDisable requires either a valid TOTP proof or an available recovery code.
-func ValidateTwoFactorDisable(enabled bool, secret, code string, recoveryCodeAvailable bool, now time.Time) error {
-	if !enabled {
-		return ErrTwoFactorNotEnabled
-	}
-	if VerifyTOTP(secret, code, now) || recoveryCodeAvailable {
-		return nil
-	}
-	return ErrRecoveryCodeInvalid
-}
+// The enrolment and disable policies (enabled/already-enabled guards, TOTP-or-recovery) live in the
+// application service, which pairs the TOTP match with an atomic step-consume (AdvanceTotpCounter)
+// so a code can never authorize two actions. A pure VerifyTOTP helper here could not express that
+// consume and would reopen the I-F5 replay window, so it is deliberately not re-added.
 
 func decodeTOTPSecret(secret string) ([]byte, bool) {
 	if secret == "" || strings.ToUpper(secret) != secret || strings.Contains(secret, "=") {

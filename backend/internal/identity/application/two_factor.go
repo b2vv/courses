@@ -87,8 +87,17 @@ func (service *TwoFactor) ConfirmTwoFactor(ctx context.Context, userID, code str
 	if err != nil {
 		return ConfirmTwoFactorResult{}, err
 	}
-	if err := domain.ValidateTwoFactorEnrollment(state.Enabled, state.Secret, code, service.now()); err != nil {
+	if state.Enabled {
+		return ConfirmTwoFactorResult{}, domain.ErrTwoFactorAlreadyEnabled
+	}
+	// Consume the enrolment code's step as well, so the very code that proved enrolment cannot be
+	// immediately replayed as the first login (SA13-B / I-F5).
+	proven, err := service.verifyAndConsumeTOTP(ctx, userID, state.Secret, code)
+	if err != nil {
 		return ConfirmTwoFactorResult{}, err
+	}
+	if !proven {
+		return ConfirmTwoFactorResult{}, domain.ErrInvalidTOTP
 	}
 	if err := service.store.EnableTotp(ctx, userID); err != nil {
 		return ConfirmTwoFactorResult{}, err
@@ -144,7 +153,16 @@ func (service *TwoFactor) CompleteTwoFactor(ctx context.Context, input CompleteT
 	if err != nil {
 		return CompleteTwoFactorResult{}, err
 	}
-	valid := state.Enabled && domain.VerifyTOTP(state.Secret, input.Code, service.now())
+	valid := false
+	if state.Enabled {
+		// A matched TOTP is accepted only if its step was not already consumed; a replay yields
+		// valid=false and falls through to the recovery-code check, so it surfaces as a plain
+		// ErrInvalidTOTP with no replay-versus-wrong-code oracle (SA13-B / I-F5).
+		valid, err = service.verifyAndConsumeTOTP(ctx, pending.UserID, state.Secret, input.Code)
+		if err != nil {
+			return CompleteTwoFactorResult{}, err
+		}
+	}
 	if !valid {
 		valid, err = service.recovery.ConsumeCode(ctx, pending.UserID, recoveryDigest(input.Code))
 		if err != nil {
@@ -246,14 +264,36 @@ func (service *TwoFactor) authorizeFactor(ctx context.Context, userID, code stri
 	if !state.Enabled {
 		return domain.ErrTwoFactorNotEnabled
 	}
-	if domain.VerifyTOTP(state.Secret, code, service.now()) {
-		return nil
-	}
-	consumed, err := service.recovery.ConsumeCode(ctx, userID, recoveryDigest(code))
+	// A fresh TOTP proof authorizes the change; a replay of an already-used step does not and
+	// falls through to the recovery-code check (SA13-B / I-F5).
+	proven, err := service.verifyAndConsumeTOTP(ctx, userID, state.Secret, code)
 	if err != nil {
 		return err
 	}
-	return domain.ValidateTwoFactorDisable(true, state.Secret, code, consumed, service.now())
+	if proven {
+		return nil
+	}
+	used, err := service.recovery.ConsumeCode(ctx, userID, recoveryDigest(code))
+	if err != nil {
+		return err
+	}
+	if !used {
+		return domain.ErrRecoveryCodeInvalid
+	}
+	return nil
+}
+
+// verifyAndConsumeTOTP reports whether code is a currently-valid TOTP proof for the account whose
+// step has not been used before. On a match it atomically advances the stored step (via
+// AdvanceTotpCounter), so the same code can never authorize two actions — the core of the I-F5
+// replay fix. A wrong code or a replay both return false (no error), letting callers fall back to a
+// recovery code and surface a uniform failure.
+func (service *TwoFactor) verifyAndConsumeTOTP(ctx context.Context, userID, secret, code string) (bool, error) {
+	counter, ok := domain.VerifyTOTPAt(secret, code, service.now())
+	if !ok {
+		return false, nil
+	}
+	return service.store.AdvanceTotpCounter(ctx, userID, counter)
 }
 func (service *TwoFactor) allow(ctx context.Context, key string) error {
 	if service.limiter == nil {
