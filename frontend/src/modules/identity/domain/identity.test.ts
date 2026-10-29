@@ -83,6 +83,10 @@ describe('identity domain', () => {
     ['a deep protected path with search', '/learn/go/intro?lesson=3', '/learn/go/intro?lesson=3'],
     ['an administration path with a trailing slash', '/admin/', '/admin'],
     ['a protected path with empty search', '/learn?', '/learn'],
+    ['an instructor path', '/teach/courses/abc', '/teach/courses/abc'],
+    ['the instructor root', '/teach', '/teach'],
+    ['an account settings path', '/settings/account', '/settings/account'],
+    ['an order path', '/orders/7f3a', '/orders/7f3a'],
   ])('keeps %s', (_name, value, expected) => {
     expect(safeReturnTo(value)).toBe(expected);
   });

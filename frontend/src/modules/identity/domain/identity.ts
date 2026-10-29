@@ -128,7 +128,7 @@ export function safeReturnTo(value: string | undefined, fallback = '/learn'): st
   let path = searchIndex === -1 ? value : value.slice(0, searchIndex);
   const search = searchIndex === -1 ? '' : value.slice(searchIndex);
   if (path.endsWith('/')) path = path.slice(0, -1);
-  if (!/^\/(learn|admin)(\/|$)/.test(path)) return fallback;
+  if (!/^\/(learn|admin|teach|settings|orders)(\/|$)/.test(path)) return fallback;
   if (path.split('/').some((segment) => segment === '.' || segment === '..')) return fallback;
   return path + (search === '?' ? '' : search);
 }
