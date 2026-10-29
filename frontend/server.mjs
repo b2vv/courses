@@ -11,7 +11,12 @@ import { ssrRenderFailedLine, ssrRequestLine } from './server-log.mjs';
 // always allowed, and the offline e2e/stub host is added only when PUBLIC_WAYFORPAY_PAY_HOST is set
 // — an unset value (production) cannot widen the allowlist. The port is '*' because it lives in the
 // api's WAYFORPAY_PAY_URL, not here, and the validator matches on hostname alone.
-const wayforpayPayHost = process.env.PUBLIC_WAYFORPAY_PAY_HOST?.trim() ?? '';
+const rawWayforpayPayHost = process.env.PUBLIC_WAYFORPAY_PAY_HOST?.trim() ?? '';
+// Only a bare hostname may be interpolated into the policy: a stray space or ';' in a
+// misconfigured deploy env would otherwise split the CSP into bogus directives. A value that is not
+// a hostname is ignored (prod branch), so a bad env fails safe-closed — the e2e host is simply not
+// added — rather than widening or corrupting the policy (SA13-C review N2).
+const wayforpayPayHost = /^[a-z0-9.-]+$/i.test(rawWayforpayPayHost) ? rawWayforpayPayHost : '';
 const formAction = wayforpayPayHost
   ? `form-action 'self' https://secure.wayforpay.com http://${wayforpayPayHost}:*`
   : `form-action 'self' https://secure.wayforpay.com`;
