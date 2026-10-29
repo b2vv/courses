@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -83,6 +84,35 @@ func TestDiscussionPostgres(t *testing.T) {
 	defer pool.Close()
 	seedDiscussion(t, pool)
 	repository := NewRepository(pool)
+
+	t.Run("SA13-A non-UUID cursor id is a 400 not a 503 (D-F2)", func(t *testing.T) {
+		// A cursor that decodes cleanly (valid base64, valid RFC3339 stamp) but whose id is not a
+		// UUID must be rejected as ErrInvalidCursor (→400) at decode, never forwarded to the
+		// ::uuid cast where Postgres raises 22P02 and persistenceError maps it to
+		// ErrDependencyUnavailable (→503). Covers all four discussion cursor decoders.
+		anyCourse := "10000000-0000-4000-8000-0000000000d2"
+		anyLesson := "40000000-0000-4000-8000-0000000000b1"
+		enc := func(parts ...string) string {
+			return base64.RawURLEncoding.EncodeToString([]byte(strings.Join(parts, "|")))
+		}
+		stamp := "2026-01-02T03:04:05Z"
+		cases := []struct {
+			name string
+			cur  string
+			call func(cursor string) error
+		}{
+			{"List/decodeCursor", enc(stamp, "not-a-uuid"), func(c string) error { _, err := repository.List(ctx, anyLesson, c, 1); return err }},
+			{"ListByCourse/decodeCursor", enc(stamp, "not-a-uuid"), func(c string) error { _, err := repository.ListByCourse(ctx, anyCourse, c, 1); return err }},
+			{"ListQueue/decodeQueueCursor", enc("3", stamp, "not-a-uuid"), func(c string) error { _, err := repository.ListQueue(ctx, anyCourse, c, 1); return err }},
+			{"ListModerationQueue/decodeModerationQueueCursor", enc("3", stamp, "comment", "not-a-uuid"), func(c string) error { _, err := repository.ListModerationQueue(ctx, anyCourse, c, 1); return err }},
+			{"ParticipantReportQueue/decodeParticipantReportCursor", enc(stamp, "not-a-uuid"), func(c string) error { _, err := repository.ParticipantReportQueue(ctx, c, "", 1); return err }},
+		}
+		for _, tc := range cases {
+			if err := tc.call(tc.cur); !errors.Is(err, domain.ErrInvalidCursor) {
+				t.Errorf("%s: got err=%v, want ErrInvalidCursor", tc.name, err)
+			}
+		}
+	})
 
 	t.Run("L5 participant reports use isolated course membership and admin queue", func(t *testing.T) {
 		// This fixture intentionally has no lesson and does not reuse the globally counted d1/b1 fixtures.

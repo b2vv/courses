@@ -179,7 +179,7 @@ func decodeQueueCursor(value string) (queueCursor, error) {
 		return queueCursor{}, domain.ErrInvalidCursor
 	}
 	parts := strings.Split(string(decodedBytes), "|")
-	if len(parts) != 3 || parts[2] == "" {
+	if len(parts) != 3 || !cursorUUIDValid(parts[2]) {
 		return queueCursor{}, domain.ErrInvalidCursor
 	}
 	count, err := strconv.Atoi(parts[0])

@@ -358,10 +358,19 @@ func decodeCursor(value string) (*time.Time, *string, error) {
 		return nil, nil, domain.ErrInvalidCursor
 	}
 	at, err := time.Parse(time.RFC3339Nano, parts[0])
-	if err != nil || parts[1] == "" {
+	if err != nil || !cursorUUIDValid(parts[1]) {
 		return nil, nil, domain.ErrInvalidCursor
 	}
 	return &at, &parts[1], nil
+}
+
+// cursorUUIDValid reports whether s is a syntactically valid UUID. A cursor whose id is not a
+// UUID would otherwise reach a ::uuid cast in SQL and surface as Postgres 22P02 →
+// ErrDependencyUnavailable (HTTP 503); rejecting it here makes it ErrInvalidCursor (HTTP 400).
+// SA13-A (audit-2026-10-24 §LOW D-F2); mirrors the orders cursor decoders.
+func cursorUUIDValid(s string) bool {
+	var id pgtype.UUID
+	return id.Scan(s) == nil
 }
 
 func persistenceError(err error) error {
