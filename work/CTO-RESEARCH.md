@@ -2,9 +2,10 @@
 
 | | |
 |---|---|
-| Дата | 2026-10-13 (re-sync під catalog-search + refund + lesson-builder; повний rebuild — 2026-10-11 на `25d520f`; попередній прогін — 2026-10-07 на `9c0e64f`) |
-| Базовий коміт | `63b26bf` (docs(agenda) після merge PR #20 lesson-builder у `main`) |
-| Всього комітів у репо | **779** на `63b26bf` (736 на `25d520f`) |
+| Дата | 2026-10-29 (re-sync під security-audit SA01–SA13 + frontend feature-modules + generate-OpenAPI-from-Go; попередній re-sync — 2026-10-13 на `25d520f`; повний rebuild — 2026-10-11) |
+| Базовий коміт | `169c0fc` (docs(tasks) після close SA10/S0, merge PR #81+#82 у `main`) |
+| Всього комітів у репо | **950** на `169c0fc` (779 на `63b26bf`) |
+| Гейт свіжості 2026-10-29 | **171 комітів** від `63b26bf` (база 2026-10-13). Зачепили межі, інфру, залежності й ризики — чотири блоки: **security-audit SA01–SA13** (`docs/security/audit-2026-10-24.md`; SA01–SA12 + SA09-T1 merged #66–#80, S0 закрито; жива лишилась **SA13** LOW/hardening-батч + S01/S02 блоковані TLS); **frontend feature-modules** (A-batch PR1–PR11 #45–#55: `frontend/src/modules/{admin,catalog,discussion,document,enrollment,identity,media,observability,playback,purchase,teach,transcript}` + shared course-домен у contracts/); **TanStack Start upgrade** (TSSTART-01/02 #56/#57: Start 1.169.3 / Router 1.170.45 / Query 5.102.8, zod 4.6.7 jitless під enforcing-CSP); **observability** (B-1, PR #62 `0b69d04`: FE error-capture + SSR/API log-aggregation promtail→loki + Grafana `infrastructure/monitoring/`). **Головне архітектурне — generate-OpenAPI-from-Go (SA10/S0):** `openapi.yaml` тепер **генерується з Go transport-типів** і є authoritative (S0.2b cutover PR #81, follow-up PR #82); backend += 10-й модуль `clientlog`, новий build-time seam `internal/openapispec` (leaf-агрегатор) + `internal/platform/openapigen` (рефлектор kin-openapi) + `cmd/openapi-gen`. Перезібрано: шапку, §1 (10 модулів, +clientlog, архітектурний факт №1 = generated-authoritative contract), §3 (openapigen/openapispec seam + frontend feature-modules), §4 (observability + openapi-gen у make generate/check-generated), §5 (kin-openapi, Tiptap, TanStack bump), §6 (SA13 жива security-черга, B-1 знято). Детальні доменні розділи нижче — кеш, точний для доменних модулів; головна дельта — S0-seam. Історія re-sync'ів збережена. |
 | Гейт свіжості 2026-10-13 | **43 коміти** від `25d520f` (база 2026-10-11). Зачепили продукт, межі, інфру — три блоки: **catalog full-text search** (`9178c04` — міграція 00016, `search_vector` tsvector GENERATED + GIN, config `simple` бо PG не має укр-словника, замінив ILIKE), **refund** (PR #19: міграція 00017, домен `PaymentRefunded` + refund-гілка в `DecidePaymentEvent`, WayForPay `Refunded`/`Voided`→подія, order-scoped revoke гранту в `Apply`, адмін-черга рефандів `/admin/refunds`; `make check` exit 0, e2e 115), **lesson-builder** (PR #20 `ddd459f`, LB00–LB15: структурований документ уроку — reader + lazy Tiptap editor під `/admin`, **новий 9-й доменний модуль `image`** з filesystem+postgres адаптерами й nginx image-serve гейтом під `/media/i/`, міграції 00018 (lesson_documents) / 00019 (drop flat lesson.description); `make check` exit 0, frontend 720 unit, e2e 118). Дефект, спійманий лише повним e2e на LB15: LB06-хвіст — lesson-level `description` у playback-фікстурах → 400. Перезібрано: шапку, §1 (9 модулів, +image, catalog/refund/lesson-builder закриті, +архітектурні факти №9 два media-гейти / №10 документ у `course`), §2 (продукт += документи уроку/зображення/full-text пошук/refund-черга), §3 (9-й модуль `image` seam + nginx image gate + lesson-documents у `course` + Tiptap), §4 (міграції 00016–00019, nginx image serve), §5 (**Tiptap — нова runtime-залежність**), §6 (refund-ризик знято, +ліміти lesson-builder). Історія re-sync'ів нижче збережена. |
 | Гейт свіжості 2026-10-11 | **76 комітів** від `9c0e64f` (база 2026-10-07). Зачепили продукт, межі, інфру: фаза **learning** (LR0–LR6, огляд учнів інструктора/адміна + блок автора з черги, G8 «адмін — не учень»; merge PR #16 `066bef9`), **admin-реконструкція** (NorthWind shell S0 `98fc79f`, /admin/users Fleet-таблиця S2 `53a0476`), **admin-stats** (новий 8-й доменний модуль `adminstats`, T1–T11, /admin/analytics; merge PR #17 `f88cf96`), **рев'ю-фікси** (role+sort фільтр /admin/users end-to-end, hex→токени, formatLocale; PR #18 `25d520f`), **CI-перебудова K10→K12→K13** (CI знову гейт; легкий per-PR + e2e на тегах; Go-кеш; свіжа e2e-БД), nginx e2e-burst. Перезібрано: шапку, §1 (8 модулів, learning/admin закриті, P0 нема, +факти adminstats і G8), §2 (продукт += analytics/learner-overview/roster-filter), §3 (8-й модуль `adminstats` seam, roster role/sort, learner overview у `course`), §4 (CI K12/K13), §5 (Storybook dev-dep), §6 (CI-ризик знято, +ліміти admin-stats). Історія re-sync'ів нижче збережена. |
 | Гейт свіжості (архів) | **38 комітів** від `2c0d29f` (база оплати). Зачепили продукт, межі й ризики: уся фаза **оплати, зрізи O01–O06a** (`e8ecd56`…`aeff91c`), дизайн-прохід клієнта й адмінки до мокапу (`9031e2f`, `1c90bfc`, `311ceb5`, `32c8a1d`, `22eead4`, `5e4ddb4`, `016de03`, `1b54c10`), чернетка спеки рейтингів (`d5543fd`), інструмент `visual-compare` (`1fe6cef`, `24381b2`). Перезібрано: шапку, §1 (оплата O01–O06a закрита, O06b/O06c/O07 відкриті; живий P0 лишається оплата), §2 (продукт += ціна/гранти/замовлення), §3 (новий модуль `orders`, ADR 014, розширений контракт доступу, дизайн-токени), §4 (без змін у гейтах, крім нового покриття), §5 (дві нові фронт-залежності — шрифти), §6 (два нові відкриті ризики — тестові флейки R23 і identity-інтеграція; старі ризики перенесено). Історія — у git. **Re-sync 2026-10-03:** точково оновлено під закриття фази оплати (хвіст O06b/O06c/O07, B-25, Pay25-live; `aeff91c`→`df5b380`) — §1, шапка, таблиці статусу та ризик 4; не повний rebuild. **Re-sync 2026-10-04:** точково оновлено під закриття фази рейтингів (spec-flow GATE 1/2, Rt01–Rt30, PR #5 `14aeb3b`, e2e 98 passed; 4 дефекти знайдено й закрито) та хвостів B-28/B-23 (PR #6 `83c5142`); `df5b380`→`83c5142` — §1, шапка, ризики; не повний rebuild. **Re-sync 2026-10-06:** точково оновлено під закриття фази **accounts** (self-service identity: реєстрація/верифікація/reset/зміна пароля-email/TOTP 2FA/CSP; GATE 1 G1–G14, GATE 2, Acc01–Acc31, PR #7 `d263045`, e2e 101; email-інфра Mailpit, міграція 00014, крос-модульний гейт верифікації через `access.CanStream`); `83c5142`→`d263045` — §1, шапка; не повний rebuild. **Re-sync 2026-10-07:** точково оновлено під закриття фази **enrollment** (членство як авторитетний факт доступу: один рядок `course_grants` на (user,course), стан active/blocked/revoked, free-контент вимагає членства; self-enrol/block/unblock/revoke, ростер із прогресом, скарги на учасників з адмін-чергою, предикати `CanConsume`/`CanCommunicate`, media-bytes гейт на nginx, backfill 00015 доведений на populated-даних; L1–L9, En01–En15, PR #8 `9c0e64f`, ordered `make check` green, e2e 107); `d263045`→`9c0e64f` — §1, шапка, таблиці статусу; не повний rebuild. |
@@ -16,11 +17,21 @@
 
 ## 1. Вердикт на один екран
 
-`courses` — навчальна платформа: модульний Go-моноліт (**дев'ять** доменних модулів:
-`adminstats`, `course`, `discussion`, `identity`, **`image`**, `media`, `orders`, `playback`, `transcript`; плюс
-допоміжний `testsupport` і крос-модульний шар `contracts/`) і **п'ять** окремих виконуваних файлів (`api`,
-`media-worker`, `upload`, `asr-worker`, `migrate`), SSR-фронт на TanStack Start, усе в одному
-Compose-стеку за nginx.
+`courses` — навчальна платформа: модульний Go-моноліт (**десять** доменних модулів:
+`adminstats`, `clientlog`, `course`, `discussion`, `identity`, **`image`**, `media`, `orders`, `playback`,
+`transcript`; плюс допоміжний `testsupport`, крос-модульний шар `contracts/` і **build-time seam
+`openapispec`+`platform/openapigen`** — генерація OpenAPI з Go) і **шість** окремих виконуваних файлів
+(`api`, `media-worker`, `upload`, `asr-worker`, `migrate`, **`openapi-gen`**), SSR-фронт на TanStack Start
+(розбитий на feature-модулі `frontend/src/modules/*`), усе в одному Compose-стеку за nginx.
+
+**Архітектурний факт №1 (найчастіше зрозуміють неправильно).** `backend/openapi/openapi.yaml` більше
+**не редагується руками** — з 2026-10-29 (SA10/S0.2b cutover, PR #81) він **генерується рефлексією з Go
+transport-типів** (`cmd/openapi-gen` → `openapispec.AllOpenAPIContributions()` → `openapigen.GenerateFromSource`,
+kin-openapi) плюс prose-overlay `openapi/openapi.overlay.yaml`, і цей згенерований файл — **authoritative
+контракт**, з якого Orval будує фронт-клієнт. Правка форми API йде в Go-тип або в overlay (multipart-тіла,
+проза, деяка метадата) — **не в yaml**; `make generate` регенерує між sqlc і Orval, `check-generated` валить
+гейт на дрейфі. Рефлектор не бачить custom `MarshalJSON` (форма H2 Block) — такі місця override-яться через
+overlay й census-яться проти домену; **взаємна рекурсія named-типів fail-closed** (owner-рішення 2026-10-29).
 
 **Поточний стан.** Фази 1–9, 7a/7b, робоче місце інструктора **та оплата** закриті (деталі нижче
 в §2). **Фаза оплати закрита 2026-10-03** (merge PR #3 `df5b3802`), усі зрізи O01–O07: O01 (контракт
@@ -40,11 +51,11 @@ self-service **accounts**, **enrollment** (членство як авторит�
 учнів + блок автора), **admin** (shell + /admin/users + /admin/analytics, поза §24), **refund** (PR #19,
 2026-10-11) і **lesson-builder** (PR #20, 2026-10-13, поза §24: структурований документ уроку + reader +
 Tiptap editor + модуль `image`) — усі закриті; каталог отримав **full-text пошук** (міграція 00016,
-tsvector замість ILIKE). **Наступного продуктового ходу немає.** lecturer-initiated revoke —
-**відхилено власником 2026-10-13** (revoke лишається адмінським; лектор діє через block + report). B-20
-(ASR draft-контракт) — **виявлено вже закритим** `e8c238d` (2026-09-28); backlog просто не позначили.
-Лишаються дрібні код-хвости (B-18/B-21/B-22/B-28res) і блоковані (S01/S02/B-27/B-26/деплой). Деплой —
-рішення власника (відкладено 2026-10-03). Деталі — `work/AGENDA.md` (ребілд 2026-10-13).
+tsvector замість ILIKE). **Наступного ПРОДУКТОВОГО ходу немає** — роадмап §24 пройдено. **Жива черга з 2026-10-24 — security-audit:**
+SA01–SA12 + SA09-T1 змерджено (#66–#80), **SA10/S0 закрито повністю**, лишилась тільки **SA13**
+(LOW/hardening-батч, не блокована); S01/S02 блоковані TLS/deploy. lecturer-initiated revoke —
+**відхилено власником 2026-10-13** (revoke лишається адмінським; лектор діє через block + report).
+Деплой — рішення власника (відкладено 2026-10-03, test-mode). Деталі — `work/AGENDA.md` (ребілд 2026-10-29).
 
 **Фаза рейтингів і відгуків закрита 2026-10-04** (PR #5 `14aeb3b`). Пройдено повним spec-flow: GATE 1
 (R1–R6 + 11 рішень власника), GATE 2 (критика/захист свіжою 4.8-сесією), приймальна таблиця Rt01–Rt30,
