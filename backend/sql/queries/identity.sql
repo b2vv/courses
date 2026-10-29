@@ -30,8 +30,20 @@ WHERE id = sqlc.arg(user_id)::text::uuid
 UPDATE users
 SET totp_secret = NULL,
     totp_enabled = false,
+    totp_last_counter = 0,
     updated_at = now()
 WHERE id = sqlc.arg(user_id)::text::uuid
+  AND deleted_at IS NULL;
+
+-- name: AdvanceUserTotpCounter :execrows
+-- Consumes a TOTP step: succeeds (rows = 1) only when the account's recorded step is strictly below
+-- the matched one, so the same code can never be accepted twice. The strict comparison makes the
+-- check atomic against a concurrent replay of the same code (SA13-B / I-F5).
+UPDATE users
+SET totp_last_counter = sqlc.arg(counter)::bigint,
+    updated_at = now()
+WHERE id = sqlc.arg(user_id)::text::uuid
+  AND totp_last_counter < sqlc.arg(counter)::bigint
   AND deleted_at IS NULL;
 
 -- name: InsertRecoveryCode :exec

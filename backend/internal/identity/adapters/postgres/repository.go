@@ -370,6 +370,18 @@ func (repository *Repository) DisableTotp(ctx context.Context, userID string) er
 	return nil
 }
 
+// AdvanceTotpCounter consumes a TOTP step. The conditional UPDATE (totp_last_counter < counter) only
+// touches a row when the step is strictly newer than the one already recorded, so RowsAffected == 1
+// means the step was accepted and 0 means it was a replay (or the account no longer exists). The
+// strict comparison makes concurrent submissions of the same code race-safe: exactly one wins.
+func (repository *Repository) AdvanceTotpCounter(ctx context.Context, userID string, counter int64) (bool, error) {
+	rows, err := generated.New(repository.pool).AdvanceUserTotpCounter(ctx, generated.AdvanceUserTotpCounterParams{Counter: counter, UserID: userID})
+	if err != nil {
+		return false, persistenceError(err)
+	}
+	return rows == 1, nil
+}
+
 func (repository *Repository) InsertCodes(ctx context.Context, userID string, digests [][32]byte) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {

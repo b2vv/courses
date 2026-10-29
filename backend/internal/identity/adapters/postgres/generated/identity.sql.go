@@ -11,6 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceUserTotpCounter = `-- name: AdvanceUserTotpCounter :execrows
+UPDATE users
+SET totp_last_counter = $1::bigint,
+    updated_at = now()
+WHERE id = $2::text::uuid
+  AND totp_last_counter < $1::bigint
+  AND deleted_at IS NULL
+`
+
+type AdvanceUserTotpCounterParams struct {
+	Counter int64
+	UserID  string
+}
+
+// Consumes a TOTP step: succeeds (rows = 1) only when the account's recorded step is strictly below
+// the matched one, so the same code can never be accepted twice. The strict comparison makes the
+// check atomic against a concurrent replay of the same code (SA13-B / I-F5).
+func (q *Queries) AdvanceUserTotpCounter(ctx context.Context, arg AdvanceUserTotpCounterParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceUserTotpCounter, arg.Counter, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const consumeAccountToken = `-- name: ConsumeAccountToken :one
 UPDATE account_tokens
 SET consumed_at = now()
@@ -276,6 +301,7 @@ const disableUserTotp = `-- name: DisableUserTotp :execrows
 UPDATE users
 SET totp_secret = NULL,
     totp_enabled = false,
+    totp_last_counter = 0,
     updated_at = now()
 WHERE id = $1::text::uuid
   AND deleted_at IS NULL

@@ -22,10 +22,21 @@ const twoFactorSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 type twoFactorStore struct {
 	state                  ports.TwoFactor
 	set, enabled, disabled int
+	lastCounter            int64
 }
 
 func (s *twoFactorStore) GetTwoFactor(context.Context, string) (ports.TwoFactor, error) {
 	return s.state, nil
+}
+
+// AdvanceTotpCounter mirrors the repository's conditional UPDATE: a step is consumed (true) only when
+// it is strictly newer than the last recorded one, so a replayed code returns false.
+func (s *twoFactorStore) AdvanceTotpCounter(_ context.Context, _ string, counter int64) (bool, error) {
+	if counter <= s.lastCounter {
+		return false, nil
+	}
+	s.lastCounter = counter
+	return true, nil
 }
 func (s *twoFactorStore) SetTotpSecret(_ context.Context, _ string, secret string) error {
 	s.set++
@@ -41,6 +52,7 @@ func (s *twoFactorStore) EnableTotp(context.Context, string) error {
 func (s *twoFactorStore) DisableTotp(context.Context, string) error {
 	s.disabled++
 	s.state = ports.TwoFactor{}
+	s.lastCounter = 0 // mirrors DisableUserTotp resetting totp_last_counter
 	return nil
 }
 
@@ -137,6 +149,34 @@ func TestCompleteTwoFactorConsumesPendingAndCanUseTOTP(t *testing.T) {
 	}
 	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "pending", Code: totp(twoFactorSecret, now)}); !errors.Is(err, domain.ErrAuthenticationRequired) {
 		t.Fatalf("reused pending: %v", err)
+	}
+}
+
+// TestCompleteTwoFactorRejectsReplayedTOTP pins SA13-B / I-F5: a TOTP code valid within its window
+// is accepted once and then refused on a second login (fresh pending, same clock), because its step
+// was consumed. Without the consume the same code would log in repeatedly for ~90s.
+func TestCompleteTwoFactorRejectsReplayedTOTP(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &twoFactorStore{state: ports.TwoFactor{Secret: twoFactorSecret, Enabled: true}}
+	pending := &pendingStore{}
+	// RememberMe is left false, so the completed session must carry the 12-hour ordinary lifetime;
+	// a 72-hour issued session here would fail validTwoFactorIssuedSession as dependency_unavailable.
+	issued := ports.IssuedSession{Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: twoFactorUserID, CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: validToken('A')}
+	service := application.NewTwoFactor(store, &recoveryStore{}, pending, &sessions{issued: issued}, func() time.Time { return now })
+	code := totp(twoFactorSecret, now)
+	if err := pending.Put(context.Background(), "p1", ports.PendingTwoFactor{UserID: twoFactorUserID}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "p1", Code: code}); err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+	// A brand-new pending (as a real attacker replaying the captured code would mint) with the same
+	// still-in-window code must now fail: the step is already consumed.
+	if err := pending.Put(context.Background(), "p2", ports.PendingTwoFactor{UserID: twoFactorUserID}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "p2", Code: code}); !errors.Is(err, domain.ErrInvalidTOTP) {
+		t.Fatalf("replayed TOTP = %v, want ErrInvalidTOTP", err)
 	}
 }
 

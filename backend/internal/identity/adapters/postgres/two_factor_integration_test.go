@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,6 +97,61 @@ func TestTwoFactorRepositoryAgainstPostgreSQL(t *testing.T) {
 		state, err = repository.GetTwoFactor(ctx, twoFactorUserID)
 		if err != nil || state.Secret != "" || state.Enabled {
 			t.Fatalf("disabled state=%+v err=%v", state, err)
+		}
+	})
+
+	t.Run("AdvanceTotpCounter consumes each step at most once (I-F5)", func(t *testing.T) {
+		// Baseline the recorded step so the assertions do not depend on earlier subtests.
+		if _, err := pool.Exec(ctx, `UPDATE users SET totp_last_counter=100 WHERE id=$1`, twoFactorUserID); err != nil {
+			t.Fatal(err)
+		}
+		cases := []struct {
+			name    string
+			counter int64
+			want    bool
+		}{
+			{"replay of the recorded step", 100, false},
+			{"older step", 99, false},
+			{"newer step advances", 101, true},
+			{"replay of the just-consumed step", 101, false},
+		}
+		for _, tc := range cases {
+			advanced, err := repository.AdvanceTotpCounter(ctx, twoFactorUserID, tc.counter)
+			if err != nil || advanced != tc.want {
+				t.Fatalf("%s: advanced=%t err=%v, want %t", tc.name, advanced, err, tc.want)
+			}
+		}
+		// Concurrent replay: two submissions of the same fresh step must yield exactly one success,
+		// which is what stops a captured code being used twice in the same instant.
+		if _, err := pool.Exec(ctx, `UPDATE users SET totp_last_counter=0 WHERE id=$1`, twoFactorUserID); err != nil {
+			t.Fatal(err)
+		}
+		const racers = 8
+		var wg sync.WaitGroup
+		results := make([]bool, racers)
+		errs := make([]error, racers)
+		start := make(chan struct{})
+		for i := 0; i < racers; i++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				<-start
+				results[index], errs[index] = repository.AdvanceTotpCounter(ctx, twoFactorUserID, 500)
+			}(i)
+		}
+		close(start)
+		wg.Wait()
+		wins := 0
+		for i := 0; i < racers; i++ {
+			if errs[i] != nil {
+				t.Fatalf("racer %d: %v", i, errs[i])
+			}
+			if results[i] {
+				wins++
+			}
+		}
+		if wins != 1 {
+			t.Fatalf("concurrent advance of the same step: %d winners, want exactly 1", wins)
 		}
 	})
 

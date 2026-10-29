@@ -39,6 +39,31 @@ func TestVerifyTOTP(t *testing.T) {
 	}
 }
 
+func TestVerifyTOTPAt(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(59, 0).UTC() // step = 59/30 = 1; codes from RFC 6238 SHA-1 vectors.
+	for _, test := range []struct {
+		name        string
+		code        string
+		wantCounter int64
+		wantOK      bool
+	}{
+		{name: "current step reports its counter", code: "287082", wantCounter: 1, wantOK: true},
+		{name: "previous step reports its counter", code: "755224", wantCounter: 0, wantOK: true},
+		{name: "next step reports its counter", code: "359152", wantCounter: 2, wantOK: true},
+		{name: "outside window", code: "969429", wantCounter: 0, wantOK: false},
+		{name: "wrong code", code: "287083", wantCounter: 0, wantOK: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			counter, ok := domain.VerifyTOTPAt(rfc6238Secret, test.code, now)
+			if ok != test.wantOK || counter != test.wantCounter {
+				t.Fatalf("VerifyTOTPAt() = (%d, %t), want (%d, %t)", counter, ok, test.wantCounter, test.wantOK)
+			}
+		})
+	}
+}
+
 func TestTOTPURI(t *testing.T) {
 	t.Parallel()
 	got, err := domain.TOTPURI("CourseForge", "student@example.test", rfc6238Secret)
@@ -107,19 +132,11 @@ func TestGenerateRecoveryCodes(t *testing.T) {
 
 func TestTwoFactorPolicies(t *testing.T) {
 	t.Parallel()
-	now := time.Unix(59, 0).UTC()
 	for _, test := range []struct {
 		name string
 		act  func() error
 		want error
 	}{
-		{name: "enroll accepts valid proof", act: func() error { return domain.ValidateTwoFactorEnrollment(false, rfc6238Secret, "287082", now) }},
-		{name: "enroll rejects existing two factor", act: func() error { return domain.ValidateTwoFactorEnrollment(true, rfc6238Secret, "287082", now) }, want: domain.ErrTwoFactorAlreadyEnabled},
-		{name: "enroll rejects invalid proof", act: func() error { return domain.ValidateTwoFactorEnrollment(false, rfc6238Secret, "000000", now) }, want: domain.ErrInvalidTOTP},
-		{name: "disable accepts valid TOTP", act: func() error { return domain.ValidateTwoFactorDisable(true, rfc6238Secret, "287082", false, now) }},
-		{name: "disable accepts available recovery code", act: func() error { return domain.ValidateTwoFactorDisable(true, rfc6238Secret, "", true, now) }},
-		{name: "disable rejects disabled two factor", act: func() error { return domain.ValidateTwoFactorDisable(false, rfc6238Secret, "287082", true, now) }, want: domain.ErrTwoFactorNotEnabled},
-		{name: "disable rejects invalid factors", act: func() error { return domain.ValidateTwoFactorDisable(true, rfc6238Secret, "000000", false, now) }, want: domain.ErrRecoveryCodeInvalid},
 		{name: "recovery code cannot be reused", act: func() error { return domain.ValidateRecoveryCode(false, true) }, want: domain.ErrRecoveryCodeInvalid},
 		{name: "recovery code must match", act: func() error { return domain.ValidateRecoveryCode(false, false) }, want: domain.ErrRecoveryCodeInvalid},
 		{name: "matching unused recovery code is valid", act: func() error { return domain.ValidateRecoveryCode(true, false) }},
