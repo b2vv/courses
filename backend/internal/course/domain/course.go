@@ -28,6 +28,19 @@ const (
 	Archived  Status = "archived"
 )
 
+// Length ceilings for course text fields. Title, summary and description count Unicode code
+// points (validText uses utf8.RuneCountInString); slug is ASCII-only so bytes, runes and
+// characters coincide. These are the one source shared by the validators here and in
+// authoring.go and the maxLength the overlay publishes — TestAdminCourseLengthCensus pins the
+// domain constant and the emitted maxLength together so neither drifts (§16.22 follow-up,
+// 2026-10-29).
+const (
+	MaximumTitle       = 200
+	MaximumSummary     = 500
+	MaximumDescription = 20000
+	MaximumSlug        = 120
+)
+
 // CourseStatuses is the complete course status set.
 var CourseStatuses = []Status{Draft, Published, Archived}
 
@@ -72,7 +85,7 @@ type CourseDetail struct {
 }
 
 func NewCourse(course Course) (Course, error) {
-	if !validID(course.ID) || ValidateSlug(course.Slug) != nil || !validText(course.Title, 200) || !validText(course.Summary, 500) || !validText(course.Description, 20000) {
+	if !validID(course.ID) || ValidateSlug(course.Slug) != nil || !validText(course.Title, MaximumTitle) || !validText(course.Summary, MaximumSummary) || !validText(course.Description, MaximumDescription) {
 		return Course{}, ErrInvalidCourse
 	}
 	if !slices.Contains(CourseStatuses, course.Status) {
@@ -106,7 +119,7 @@ func validText(value string, maximum int) bool {
 }
 
 func ValidateSlug(slug string) error {
-	if len(slug) == 0 || len(slug) > 120 || slug[0] == '-' || slug[len(slug)-1] == '-' {
+	if len(slug) == 0 || len(slug) > MaximumSlug || slug[0] == '-' || slug[len(slug)-1] == '-' {
 		return ErrInvalidSlug
 	}
 	previousHyphen := false
