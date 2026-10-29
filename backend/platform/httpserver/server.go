@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -145,14 +146,16 @@ func NewHandler(options Options) http.Handler {
 }
 
 // requireMetricsToken gates next behind a bearer token. A missing or mismatched
-// token is answered 404 (constant-time compared) so the endpoint's existence is
-// not revealed to an unauthenticated caller — the same posture nginx takes for
-// /metrics from outside.
+// token is answered 404 so the endpoint's existence is not revealed to an
+// unauthenticated caller — the same posture nginx takes for /metrics from
+// outside. Both sides are hashed to a fixed 32 bytes before the constant-time
+// compare so neither the length of the expected token nor its content leaks
+// through timing (ConstantTimeCompare returns early on a length mismatch).
 func requireMetricsToken(token string, next http.Handler) http.Handler {
-	want := []byte("Bearer " + token)
+	want := sha256.Sum256([]byte("Bearer " + token))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := []byte(r.Header.Get("Authorization"))
-		if subtle.ConstantTimeCompare(got, want) != 1 {
+		got := sha256.Sum256([]byte(r.Header.Get("Authorization")))
+		if subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 			WriteError(w, r, http.StatusNotFound, "not_found", "Resource was not found")
 			return
 		}
