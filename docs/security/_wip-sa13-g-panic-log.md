@@ -1,0 +1,18 @@
+# SA13-G — P-F5 panic value/stack logging
+
+## Pre-code checkpoint (2026-10-30)
+- **Задача / готовність:** SA13-батч, наступний за P-F6 (AGENDA). Джерело: `audit-2026-10-24.md:138` «P-F5 panic value/stack not logged». READY (власник «Так» 2026-10-30; окремий PR + незалежне рев'ю). Клас: observability/diagnostics (LOW).
+- **Дефект (механізм, звірено):** `backend/platform/httpserver/server.go:122-129` — recovering-defer робить `if recover() != nil`, тобто відновлене значення ВІДКИДАЄТЬСЯ, і стек не знімається. Лог `"request panicked"` несе лише requestId/traceId → паніку неможливо діагностувати (ні значення, ні місце).
+- **Фікс (план):** захопити значення (`recovered := recover()`) і додати до Error-логу поля `panic` (саме значення як slog-any) та `stack` (`string(debug.Stack())`). Ідіома net/http: `runtime.Stack`/`debug.Stack`, викликаний у recovering-defer, знімає стек панік-сайту (стек ще не розкручено під час deferred). Повідомлення, 500-envelope і span-статус незмінні.
+- **Secrets-дисципліна (ADR/no-secrets-in-logs):** стек = кадри коду (func/file:line/goroutine), не request-дані; panic value developer-set (`panic("...")`). Request query/cookie у panic-лог НЕ потрапляють. `TestRequestObservabilityExcludesSecrets` не панікує → не зачеплений; додам окрему перевірку, що panic-шлях не відлунює cookie/query-секрет.
+- **Доказ (production path):** unit-тест у `server_test.go` проти справжнього `NewHandler` з `Register`, що додає маршрут, який панікує: 500 + `internal_error`-envelope; лог містить `request panicked`, значення паніки (sentinel) і непорожній `stack`; і НЕ містить переданих cookie/query-секретів. Shared httpserver → **повний ordered `make check` + e2e**.
+- **Поза scope:** інші recover-сайти (їх нема); зміна формату логу решти полів; інші SA13-зрізи.
+- **Impact / гейти:** лише `server.go` (+import `runtime/debug`) + `server_test.go`. gofmt/vet/`go test -race`/повний ordered `make check` + e2e (shared-зміна).
+- **Review:** `review_mode=existing_session`; reviewer `courses-96 [557618]`; writer Courses13; contact SendMessage; обов'язкове незалежне рев'ю перед merge.
+- **Transfer:** `478b70f` → **verdict_received PASS, 0 blocking** від `courses-96 [557618]` (2026-10-30, read-only). Валідовано: debug.Stack знімає панік-сайт (стандартний net/http-патерн), стек = hex-аргументи не plaintext → секрети не течуть, slog-any безпечне для error/struct/string. **Merge лишилась gate-нутою на зелений GATE_EXIT=0** (shared-зміна).
+- **✅ MERGED PR #88** (`3ccf257`, 2026-10-30): повний ordered `make check` `GATE_EXIT=0`, e2e 127 passed (17.2m); рев'ю PASS на `478b70f`. push→PR #88→squash-merge→main fast-forward `3ccf257`, гілку видалено. P-F5 закрито. Далі за AGENDA: **M7** (HLS umask 0027).
+- **§Limitations (residual R, non-blocking):** no-secrets-in-logs тепер залежить також від того, щоб майбутні `panic()`-сайти не вшивали секрет у значення паніки (воно логується). Зараз у проді лише 2 panic()-сайти (`cmd/api/main.go` generate-uuid, `server.go` entropy) — жоден не несе request-даних; рантайм-паніки несуть лише рантайм-меседж. Витоку немає; це інваріант для майбутніх panic()-сайтів. Caveat (inherent Go, поза scope): паніка в дочірній горутині хендлера крешить процес і цим defer не ловиться.
+
+## Журнал
+- 2026-10-30: investigation P-F5 завершено. Механізм звірено (server.go:122-129, recover() відкидає значення). Гілка `sa13-panic-log` off main @5c7b961.
+- 2026-10-30: реалізація `478b70f` — `recovered := recover()`, лог `panic`+`stack` (debug.Stack). gofmt/vet/httpserver-пакет зелені (новий panic-тест + наявний secrets-тест). Повний ordered `make check` запущено (`scratchpad/gate-sa13g-1.log`). Рев'ю надіслано паралельно.
