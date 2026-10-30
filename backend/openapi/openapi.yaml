@@ -6315,6 +6315,33 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List course members for the instructor or administrator
+    /api/v1/teach/courses/{id}:
+        get:
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminCourseTree'
+                    description: ""
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/Forbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/teach/learners:
         get:
             operationId: listTeachLearners
@@ -6371,6 +6398,43 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List learners across the instructor's own courses
+    /api/v1/teach/lessons/{id}/images:
+        post:
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "201":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ImageUploadResponse'
+                    description: ""
+                "400":
+                    $ref: '#/components/responses/MediaBadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/LessonNotFound'
+                "413":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: ""
+                "415":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: ""
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/teach/lessons/{lessonId}/document:
         get:
             parameters:

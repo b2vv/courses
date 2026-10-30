@@ -6840,6 +6840,78 @@ export const getCourseRoster = async (courseId: string,
 
 
 
+export type getApiV1TeachCoursesIdResponse200 = {
+  data: AdminCourseTree
+  status: 200
+}
+
+export type getApiV1TeachCoursesIdResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type getApiV1TeachCoursesIdResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getApiV1TeachCoursesIdResponse403 = {
+  data: ForbiddenResponse
+  status: 403
+}
+
+export type getApiV1TeachCoursesIdResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getApiV1TeachCoursesIdResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getApiV1TeachCoursesIdResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getApiV1TeachCoursesIdResponseSuccess = (getApiV1TeachCoursesIdResponse200) & {
+  headers: Headers;
+};
+export type getApiV1TeachCoursesIdResponseError = (getApiV1TeachCoursesIdResponse400 | getApiV1TeachCoursesIdResponse401 | getApiV1TeachCoursesIdResponse403 | getApiV1TeachCoursesIdResponse404 | getApiV1TeachCoursesIdResponse500 | getApiV1TeachCoursesIdResponse503) & {
+  headers: Headers;
+};
+
+export type getApiV1TeachCoursesIdResponse = (getApiV1TeachCoursesIdResponseSuccess | getApiV1TeachCoursesIdResponseError)
+
+export const getGetApiV1TeachCoursesIdUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/courses/${id}`
+}
+
+export const getApiV1TeachCoursesId = async (id: string, options?: RequestInit): Promise<getApiV1TeachCoursesIdResponse> => {
+
+  const res = await fetch(getGetApiV1TeachCoursesIdUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApiV1TeachCoursesIdResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getApiV1TeachCoursesIdResponse
+}
+
+
+
 export type listTeachLearnersResponse200 = {
   data: LearnerPage
   status: 200
@@ -6913,6 +6985,83 @@ export const listTeachLearners = async (params?: ListTeachLearnersParams, option
 
   const data: listTeachLearnersResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listTeachLearnersResponse
+}
+
+
+
+export type postApiV1TeachLessonsIdImagesResponse201 = {
+  data: ImageUploadResponse
+  status: 201
+}
+
+export type postApiV1TeachLessonsIdImagesResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type postApiV1TeachLessonsIdImagesResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type postApiV1TeachLessonsIdImagesResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type postApiV1TeachLessonsIdImagesResponse404 = {
+  data: LessonNotFoundResponse
+  status: 404
+}
+
+export type postApiV1TeachLessonsIdImagesResponse413 = {
+  data: ErrorResponse
+  status: 413
+}
+
+export type postApiV1TeachLessonsIdImagesResponse415 = {
+  data: ErrorResponse
+  status: 415
+}
+
+export type postApiV1TeachLessonsIdImagesResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type postApiV1TeachLessonsIdImagesResponseSuccess = (postApiV1TeachLessonsIdImagesResponse201) & {
+  headers: Headers;
+};
+export type postApiV1TeachLessonsIdImagesResponseError = (postApiV1TeachLessonsIdImagesResponse400 | postApiV1TeachLessonsIdImagesResponse401 | postApiV1TeachLessonsIdImagesResponse403 | postApiV1TeachLessonsIdImagesResponse404 | postApiV1TeachLessonsIdImagesResponse413 | postApiV1TeachLessonsIdImagesResponse415 | postApiV1TeachLessonsIdImagesResponse503) & {
+  headers: Headers;
+};
+
+export type postApiV1TeachLessonsIdImagesResponse = (postApiV1TeachLessonsIdImagesResponseSuccess | postApiV1TeachLessonsIdImagesResponseError)
+
+export const getPostApiV1TeachLessonsIdImagesUrl = (id: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/lessons/${id}/images`
+}
+
+export const postApiV1TeachLessonsIdImages = async (id: string, options?: RequestInit): Promise<postApiV1TeachLessonsIdImagesResponse> => {
+
+  const res = await fetch(getPostApiV1TeachLessonsIdImagesUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: postApiV1TeachLessonsIdImagesResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postApiV1TeachLessonsIdImagesResponse
 }
 
 

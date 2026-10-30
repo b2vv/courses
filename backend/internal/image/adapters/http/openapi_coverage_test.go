@@ -13,22 +13,22 @@ import (
 // it is an nginx auth_request endpoint, not part of the public contract.
 // Fail closed on changes to the registration grammar as well as missing routes.
 // No separately maintained expected route list can hide a new mux.Handle call.
-func TestOpenAPIContributionCoversRegisterAdmin(t *testing.T) {
+func TestOpenAPIContributionCoversPublicRegistrations(t *testing.T) {
 	file, err := parser.ParseFile(token.NewFileSet(), "handler.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wired := map[string]bool{}
-	found := false
+	found := map[string]bool{}
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "RegisterAdmin" {
+		if !ok || (fn.Name.Name != "RegisterAdmin" && fn.Name.Name != "RegisterTeach") {
 			continue
 		}
-		if found || fn.Body == nil {
-			t.Fatal("ambiguous RegisterAdmin")
+		if found[fn.Name.Name] || fn.Body == nil {
+			t.Fatalf("ambiguous %s", fn.Name.Name)
 		}
-		found = true
+		found[fn.Name.Name] = true
 		for _, stmt := range fn.Body.List {
 			expression, ok := stmt.(*ast.ExprStmt)
 			if !ok {
@@ -60,8 +60,8 @@ func TestOpenAPIContributionCoversRegisterAdmin(t *testing.T) {
 			wired[pattern] = true
 		}
 	}
-	if !found || len(wired) == 0 {
-		t.Fatal("no RegisterAdmin routes found")
+	if !found["RegisterAdmin"] || !found["RegisterTeach"] || len(wired) != 2 {
+		t.Fatal("expected both RegisterAdmin and RegisterTeach image routes")
 	}
 	declared := map[string]bool{}
 	for _, route := range OpenAPIContribution().Routes {

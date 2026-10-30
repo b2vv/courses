@@ -376,6 +376,43 @@ func TestAdminReadHTTPMatchesOpenAPI(t *testing.T) {
 	}
 }
 
+func TestTeachCourseTreeRead(t *testing.T) {
+	for _, test := range []struct {
+		name, ownerID, code string
+		role                identitydomain.Role
+		status              int
+	}{
+		{name: "owner reads unpublished lessons", ownerID: instructorUserID, role: identitydomain.Instructor, status: http.StatusOK},
+		{name: "non-owner instructor refused", ownerID: otherOwnerID, role: identitydomain.Instructor, status: http.StatusForbidden, code: "course_forbidden"},
+		{name: "student refused", ownerID: instructorUserID, role: identitydomain.Student, status: http.StatusForbidden, code: "forbidden"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &adminRepository{ownerID: test.ownerID}
+			identity := &adminIdentity{}
+			handler := adminReadHandler(t, repository, identity)
+			response := serveAdminRead(handler, identity, identityUser(test.role), "/api/v1/teach/courses/"+adminCourseID)
+			if response.Code != test.status {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if test.code != "" {
+				assertAdminError(t, response, test.code)
+				return
+			}
+			tree := decodeAdminTree(t, response)
+			if tree.ID != adminCourseID || tree.Title != "Go foundations" || tree.InstructorID != instructorUserID || tree.Status != "draft" || tree.PublishedAt != nil {
+				t.Fatalf("tree=%+v", tree)
+			}
+			if len(tree.Modules) != 1 || tree.Modules[0].ID != "20000000-0000-4000-8000-000000000001" || tree.Modules[0].Title != "First module" {
+				t.Fatalf("modules=%+v", tree.Modules)
+			}
+			lessons := tree.Modules[0].Lessons
+			if len(lessons) != 1 || lessons[0].ID != "30000000-0000-4000-8000-000000000001" || lessons[0].Title != "First lesson" {
+				t.Fatalf("lessons=%+v", lessons)
+			}
+		})
+	}
+}
+
 func TestAdminCreateContract(t *testing.T) {
 	t.Run("P02 P03 R29 admin creates one invisible draft and replay is refused", func(t *testing.T) {
 		repository := newAdminWriteRepository()
@@ -1593,6 +1630,7 @@ func adminReadHandler(t *testing.T, repository *adminRepository, identity *admin
 		identityHandler.Register(mux)
 		courseHandler.Register(mux)
 		courseHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+		courseHandler.RegisterTeach(mux, identityHandler.Authenticate)
 	}})
 }
 

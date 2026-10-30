@@ -39,6 +39,10 @@ func (handler *Handler) RegisterAdmin(mux *http.ServeMux, authenticate, requireS
 	mux.Handle("POST /api/v1/admin/lessons/{id}/images", requireSameOrigin(authenticate(http.HandlerFunc(handler.upload))))
 }
 
+func (handler *Handler) RegisterTeach(mux *http.ServeMux, authenticate, requireSameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/teach/lessons/{id}/images", requireSameOrigin(authenticate(http.HandlerFunc(handler.upload))))
+}
+
 func (handler *Handler) RegisterInternal(mux *http.ServeMux, authenticate func(http.Handler) http.Handler) {
 	mux.Handle("GET /internal/image/authorize", normalizeAuthenticationDenial(authenticate(http.HandlerFunc(handler.authorize))))
 }
