@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
@@ -22,6 +23,7 @@ import (
 const (
 	processWaitDelay = 2 * time.Second
 	directoryMode    = 0o750
+	fileMode         = 0o640
 )
 
 var errInvalidTranscodeInput = errors.New("invalid transcoder input")
@@ -67,6 +69,12 @@ func (transcoder *Transcoder) Render(ctx context.Context, source, work domain.St
 	if err := runCommand(ctx, "ffmpeg", arguments, io.Discard, nil); err != nil {
 		return fmt.Errorf("ffmpeg render failed: %w", err)
 	}
+	// ffmpeg writes segments, init and playlists with its own mode, which under a
+	// default umask is world-readable; re-enforce 0750/0640 so HLS bytes honour the
+	// not-world-readable invariant independent of the process umask.
+	if err := enforceTreeModes(workPath); err != nil {
+		return fmt.Errorf("secure transcode output: %w", err)
+	}
 	return nil
 }
 
@@ -85,7 +93,26 @@ func (transcoder *Transcoder) Thumbnail(ctx context.Context, source, destination
 	if err := runCommand(ctx, "ffmpeg", arguments, io.Discard, nil); err != nil {
 		return fmt.Errorf("ffmpeg thumbnail failed: %w", err)
 	}
+	if err := os.Chmod(destinationPath, fileMode); err != nil {
+		return fmt.Errorf("secure thumbnail output: %w", err)
+	}
 	return nil
+}
+
+// enforceTreeModes re-applies 0750 to directories and 0640 to files beneath root,
+// so output written by ffmpeg under an arbitrary process umask cannot stay
+// world-readable. It is idempotent and independent of the ambient umask.
+func enforceTreeModes(root string) error {
+	return filepath.WalkDir(root, func(target string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		mode := fs.FileMode(fileMode)
+		if entry.IsDir() {
+			mode = fs.FileMode(directoryMode)
+		}
+		return os.Chmod(target, mode)
+	})
 }
 
 func (transcoder *Transcoder) probeArguments(source domain.StorageKey) ([]string, error) {
