@@ -1,6 +1,6 @@
 # LB09a — orphaned-image compensating delete
 
-**Status:** pre-code → implementing. **Branch:** `lb09a-orphan-delete` off `main` @ `5a671d5`.
+**Status: DONE — merged PR #91 (`9a2756e`, 2026-10-30).** Незалежне рев'ю `courses-96 [557618]` **PASS 0 blocking** на `6b94c52` (7/7 чеклиста звірено read-only). 1 non-blocking **N1** (cancelled-ctx робить компенсацію no-op — найімовірніший реальний тригер, у межах named-residual) — записано в report §Lim3 з точним механізмом; опційний майбутній close через `context.WithoutCancel`. Повний ordered `make check` GATE_EXIT=0 (integration image-fs + e2e 127 passed). **Branch:** `lb09a-orphan-delete` off `main` @ `5a671d5`.
 **Review:** `review_mode=existing_session`, reviewer `courses-96 [557618]` (mandatory per task).
 
 ## Pre-code checkpoint (2026-10-30)
