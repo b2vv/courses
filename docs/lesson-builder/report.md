@@ -695,9 +695,24 @@ grep, not the handoff assumption.
    `(lesson_id, locale)`), but the editor and reader work in one locale (the
    document's own); a second locale is a future INSERT, with no editor affordance
    to switch yet.
-3. **No orphaned-image sweep.** An image whose upload stored bytes but whose row
-   insert then failed leaves bytes on disk (named in LB09a); there is no sweeper
-   in v1.
+3. **Orphaned-image: compensating delete closes the insert-failure window; a
+   narrowed residual remains (LB09a).** An image whose upload stored bytes and
+   whose row insert then failed used to leave the bytes on disk. Closed
+   2026-10-30 (PR #91, `9a2756e`): on insert failure the uploader deletes the
+   just-stored object (`Storage.Delete`, joined with the insert error). Owner
+   decision 2026-10-30: a compensating delete, not a background scanning sweeper
+   (heavier, and risks deleting live bytes racing an in-flight upload).
+   **Residual (named, strictly smaller than before — mechanism):** the
+   compensating `Delete(ctx, …)` reuses the request context. When the insert
+   fails *because* that context was cancelled or timed out (e.g. the client
+   disconnected after `Put`+`Sync`), `filesystem.Delete` returns `ctx.Err()`
+   before `Remove` runs, so the bytes are not deleted — this cancelled-context
+   path, not only a process crash between `Put` and `Insert`, is the likely real
+   trigger. A delete that itself fails for another reason also orphans. Surfaced
+   as reviewer non-blocking N1 (PR #91); optional future close: compensate on a
+   detached context (`context.WithoutCancel` + short timeout). Before this change
+   *every* insert failure orphaned; now only the cancelled-context / crash /
+   delete-failure paths do.
 4. **Scenario 7 (migrated flat description) render is proven at the integration/
    domain layer, not e2e.** Migration 00018's backfill → a valid single-text
    document that passes `ValidateLessonDocument` and renders was proven in LB02's

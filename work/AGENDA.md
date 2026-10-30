@@ -44,10 +44,10 @@
 
 **Рішення власника 2026-10-30: послідовність (1) deploy-readiness → (3) orphaned-image sweep → (2) `/teach`-редактор.**
 
-- **(1) У РОБОТІ — deploy-readiness checklist** → [work/DEPLOY-READINESS.md](DEPLOY-READINESS.md). Зведено всі deploy-gated хвости (A TLS/S01/S02 · B SA13 prod-хвости · C I-F6 ключ/ротація · D payment live · E observability) в один gate з джерелом+перевіркою+власник/агент на кожен. Сам деплій лишається owner-gated (потрібен prod-сервер + секрети); цей артефакт робить його обсяг конкретним.
-- **(3) Далі — orphaned-image sweep (LB09a)** — `docs/lesson-builder/report.md:698`. Малий зворотний gardening-хід: байти зображення лишаються на диску при fail-after-upload.
-- **(2) Потім — `/teach`-редактор** (owner-initiated фіча, поза §24) — повний `cto-research` → `spec-flow`.
+- **(1) ✅ ЗАКРИТО — deploy-readiness checklist** → [work/DEPLOY-READINESS.md](DEPLOY-READINESS.md) (`5a671d5`). Зведено всі deploy-gated хвости (A TLS/S01/S02 · B SA13 prod-хвости · C I-F6 ключ/ротація · D payment live · E observability) в один gate з джерелом+перевіркою+власник/агент на кожен.
+- **(3) ✅ ЗАКРИТО — orphaned-image compensating delete (LB09a)** — PR #91 (`9a2756e`). Компенсаційне видалення при збої Insert (owner choice, не sweeper); повний `make check` EXIT=0, e2e 127; незалежне рев'ю Courses 2 PASS 0 blocking. 1 non-blocking N1 (cancelled-ctx робить компенсацію no-op — у report §Lim3 з механізмом; опційний майбутній close через `context.WithoutCancel`).
+- **(2) ⬜ ДАЛІ — `/teach`-редактор** (owner-initiated фіча, поза §24; `docs/lesson-builder/report.md` §Lim1) — повний `cto-research` → `spec-flow`. Потребує owner-go на старт (значуща фіча, не gardening).
 
-Чому не паралельно / не в іншому порядку: власник задав саме цей порядок. deploy-readiness перший, бо лише документація (зворотний, нічого не ламає) і одразу дає власнику перевірюваний обсяг для рішення про деплій.
+Чому не паралельно / не в іншому порядку: власник задав саме цей порядок.
 
 Відкладено (не в цій послідовності): друга мова контенту, мультивалюта (продуктові розвилки без сигналу); B-27 (upstream #3868); limit_req verify (investigation без сигналу).
