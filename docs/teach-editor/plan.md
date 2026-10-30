@@ -139,8 +139,11 @@ that is functionally already authorized.
 ## 6. Design decision (resolved) — teach lesson-list / course-tree data source
 
 **Decision (owner, 2026-10-30): option (a).** Verify by: the lesson-list on the teach course view and
-the editor title block are fed by a new owner-scoped `GET /api/v1/teach/courses/{courseId}`, with no
-`/admin/*` call from the teach UI.
+the editor title block are fed by a new owner-scoped `GET /api/v1/teach/courses/{id}`, with no
+`/admin/*` call from the teach UI. Implemented in TE3 by reusing `getAdminCourse` + `authoring.Load`
+unchanged (owner-scoped). Refusal codes here, unlike the document editor endpoints, are **`course_forbidden`
+for a non-owner instructor** (`authoring.Load` returns `CanManage`'s `ErrCourseForbidden` directly) and
+`forbidden` for a student (`CanCreate` fails first) — code-verified, asserted by `TestTeachCourseTreeRead`.
 
 AC4 ("owner opens and edits their own lessons") requires listing a course's lessons on the teach side,
 plus lesson meta (title/module) for the editor title block (the admin route resolves this from

@@ -62,7 +62,7 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 	t.Helper()
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
-	for _, path := range []string{"/api/v1/admin/lessons/{id}/images"} {
+	for _, path := range []string{"/api/v1/admin/lessons/{id}/images", "/api/v1/teach/lessons/{id}/images"} {
 		value, ok := source["paths"].(map[string]any)[path]
 		if !ok || value == nil {
 			t.Fatalf("missing path %s", path)

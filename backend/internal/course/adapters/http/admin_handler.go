@@ -144,6 +144,14 @@ func (h *Handler) RegisterAdmin(
 	mux.Handle("DELETE /api/v1/admin/courses/{id}", requireSameOrigin(authenticate(http.HandlerFunc(h.deleteAdminCourse))))
 }
 
+// RegisterTeach exposes the owner-scoped course-tree read under /teach so an instructor-owner can
+// list and navigate their own course's lessons without touching /admin. Read-only: no requireSameOrigin.
+// Reuses getAdminCourse unchanged — its adminActor admits instructors and authoring.Load is owner-scoped
+// (a non-owner instructor is refused with course_forbidden).
+func (h *Handler) RegisterTeach(mux *http.ServeMux, authenticate func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/teach/courses/{id}", authenticate(http.HandlerFunc(h.getAdminCourse)))
+}
+
 func (h *Handler) listAdminCourses(w http.ResponseWriter, r *http.Request) {
 	adminHeaders(w)
 	actor, ok := adminActor(w, r)

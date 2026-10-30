@@ -158,6 +158,51 @@ func TestUpload(t *testing.T) {
 	}
 }
 
+func TestTeachUpload(t *testing.T) {
+	t.Parallel()
+	var fixture bytes.Buffer
+	if err := png.Encode(&fixture, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name       string
+		userID     string
+		failure    error
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "T4 owner success", userID: "owner-1", wantStatus: http.StatusCreated, wantBody: `{"id":"img-1","contentType":"image/png","width":1,"height":1}`},
+		{name: "T5 non-owner instructor forbidden", userID: "other-instructor", failure: domain.ErrForbidden, wantStatus: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			actor := httpserver.Actor{UserID: test.userID, Role: "lecturer", EmailVerified: true}
+			service := &fakeUploader{image: domain.Image{ID: "img-1", ContentType: "image/png", Width: 1, Height: 1}, err: test.failure}
+			adapter := imagehttp.NewHandler(service, &fakeAuthorizer{})
+			handler := httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+				adapter.RegisterTeach(mux, authenticated(actor), passThrough)
+			}})
+			request := uploadRequest(t, fixture.Bytes(), false)
+			request.URL.Path = "/api/v1/teach/lessons/lesson-1/images"
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus || service.calls != 1 {
+				t.Fatalf("status=%d calls=%d body=%q, want %d and 1", response.Code, service.calls, response.Body.String(), test.wantStatus)
+			}
+			if test.wantBody != "" && strings.TrimSpace(response.Body.String()) != test.wantBody {
+				t.Fatalf("body=%q, want %q", response.Body.String(), test.wantBody)
+			}
+			if test.failure != nil && !strings.Contains(response.Body.String(), `"code":"forbidden"`) {
+				t.Fatalf("body=%q, want forbidden", response.Body.String())
+			}
+			wantActor := domain.Actor{UserID: actor.UserID, EmailVerified: true}
+			if service.actor != wantActor || service.lessonID != "lesson-1" || service.contentType != "image/png" || service.width != 1 || service.height != 1 || !bytes.Equal(service.data, fixture.Bytes()) {
+				t.Fatalf("unexpected upload arguments: actor=%+v lesson=%q type=%q dimensions=%dx%d bytes=%d", service.actor, service.lessonID, service.contentType, service.width, service.height, len(service.data))
+			}
+		})
+	}
+}
+
 func TestAuthorize(t *testing.T) {
 	t.Parallel()
 	actor := httpserver.Actor{UserID: "student-1", Role: "student", EmailVerified: true}
