@@ -18,7 +18,11 @@ export type { AdminStatsRepository } from './ports/AdminStatsRepository';
 export type { AdminUserRepository } from './ports/AdminUserRepository';
 
 // Adapters: the HTTP implementations wired by the composition roots.
-export { createApiAdminCourseRepository } from './adapters/admin-course-repository';
+export {
+  createApiAdminCourseRepository,
+  mapAuthoringCourseTree,
+  mapAuthoringError,
+} from './adapters/admin-course-repository';
 export { createApiAdminStatsRepository } from './adapters/admin-stats-repository';
 export { createApiAdminUserRepository } from './adapters/admin-user-repository';
 

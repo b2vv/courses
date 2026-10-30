@@ -435,6 +435,10 @@ export const uk = {
       },
     },
     teach: {
+      lessons: {
+        empty: 'Уроків ще немає.',
+        loadError: 'Не вдалося завантажити уроки.',
+      },
       reviewReports_one: 'Скарг: {{count}}',
       reviewReports_few: 'Скарг: {{count}}',
       reviewReports_many: 'Скарг: {{count}}',

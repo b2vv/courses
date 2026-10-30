@@ -42,9 +42,9 @@ export function createTeachDocumentQueries(documents: DocumentAuthoringRepositor
   return createDocumentQueries(documents, 'teach');
 }
 
-function createDocumentQueries<Prefix extends 'admin' | 'teach'>(
+function createDocumentQueries(
   documents: DocumentAuthoringRepository,
-  keyPrefix: Prefix,
+  keyPrefix: 'admin' | 'teach',
 ) {
   const documentQueryKey = (lessonId: string, locale?: 'uk' | 'en') =>
     [keyPrefix, 'document', lessonId, locale ?? null] as const;

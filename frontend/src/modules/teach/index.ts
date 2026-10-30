@@ -16,3 +16,4 @@ export { createApiTeachRepository } from './adapters/teach-repository';
 export { CourseRoster } from './ui/CourseRoster';
 export { LearnerOverview } from './ui/LearnerOverview';
 export { ReviewModerationRow } from './ui/ReviewModerationRow';
+export { TeachLessonList } from './ui/TeachLessonList';

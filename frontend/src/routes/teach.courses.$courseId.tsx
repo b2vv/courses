@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, notFound, type ErrorComponentProps } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { TeachQueryError } from '../app/composition/teach-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
-import { validEntityId } from '../contracts/course';
+import { asBrandedId, validEntityId } from '../contracts/course';
 import type { ModerationQueueItem, TeachComment } from '../modules/teach';
 import { formatTimestamp } from '../presentation/format-timestamp';
 import { ReviewModerationRow } from '../modules/teach';
-import { CourseRoster } from '../modules/teach';
+import { CourseRoster, TeachLessonList } from '../modules/teach';
 import { Button } from '../presentation/ui';
+import { ErrorState, Skeleton } from '../presentation/ui/states';
 
 const moderationReason = 'moderation_reviewed';
 
@@ -35,6 +36,7 @@ export const Route = createFileRoute('/teach/courses/$courseId')({
   loader: async ({ context, params }) => {
     const id = courseId(params.courseId);
     await Promise.all([
+      context.queryClient.prefetchQuery(context.teach.detail(asBrandedId(id, 'course'))),
       context.queryClient.prefetchInfiniteQuery(context.teach.courseComments(id)),
       context.queryClient.prefetchInfiniteQuery(context.teach.moderationQueue(id)),
       context.queryClient.prefetchInfiniteQuery(context.enrollment.roster(id)),
@@ -85,6 +87,7 @@ function TeachCourseRoute() {
   const { identity } = Route.useRouteContext();
   const { courseId: id } = Route.useLoaderData();
   const queryClient = useQueryClient();
+  const tree = useQuery(teach.detail(asBrandedId(id, 'course')));
   const comments = useInfiniteQuery(teach.courseComments(id));
   const queue = useInfiniteQuery(teach.moderationQueue(id));
   const roster = useInfiniteQuery(enrollment.roster(id));
@@ -148,6 +151,18 @@ function TeachCourseRoute() {
   return (
     <div className="teach-workspace">
       <h1>Робоче місце інструктора</h1>
+      <section aria-labelledby="teach-lessons-heading" className="teach-section">
+        <h2 id="teach-lessons-heading">{t('administration.program')}</h2>
+        {tree.isPending ? (
+          <Skeleton label={t('administration.document.loading')} lines={3} />
+        ) : tree.isError ? (
+          <ErrorState title={t('teach.lessons.loadError')}>
+            <Button onPress={() => void tree.refetch()}>{t('common.retry')}</Button>
+          </ErrorState>
+        ) : (
+          <TeachLessonList courseId={id} title={tree.data.title} modules={tree.data.modules} />
+        )}
+      </section>
       <section aria-labelledby="teach-comments-heading" className="teach-section">
         <h2 id="teach-comments-heading">Коментарі курсу</h2>
         {comments.isLoading ? <output>Завантажуємо коментарі…</output> : null}
