@@ -147,6 +147,63 @@ func TestPutRemovesPartialFile(t *testing.T) {
 	}
 }
 
+func TestDelete(t *testing.T) {
+	storage, directory := newTestStorage(t)
+	if _, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader([]byte("image bytes"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Delete(context.Background(), imageID, imageExt); err != nil {
+		t.Fatalf("Delete = %v; want nil", err)
+	}
+	assertEmpty(t, directory)
+}
+
+func TestDeleteMissingFileErrors(t *testing.T) {
+	storage, _ := newTestStorage(t)
+	if err := storage.Delete(context.Background(), imageID, imageExt); err == nil {
+		t.Fatal("Delete of a missing file returned nil; want an error the caller can join")
+	}
+}
+
+func TestDeleteInvalidKey(t *testing.T) {
+	for _, tc := range []struct{ id, ext string }{
+		{"../escape", imageExt},
+		{"not-a-uuid", imageExt},
+		{"00000000-0000-0000-0000-000000000000", imageExt},
+		{imageID, "gif"},
+		{imageID, "png/../escape"},
+	} {
+		t.Run(tc.id+"."+tc.ext, func(t *testing.T) {
+			storage, directory := newTestStorage(t)
+			// A real file sits beside the invalid key; a rejected Delete must not touch it.
+			if _, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader([]byte("keep"))); err != nil {
+				t.Fatal(err)
+			}
+			if err := storage.Delete(context.Background(), tc.id, tc.ext); !errors.Is(err, errInvalidImageKey) {
+				t.Fatalf("Delete = %v; want invalid image key", err)
+			}
+			if _, err := os.Stat(filepath.Join(directory, imageKey)); err != nil {
+				t.Fatalf("existing file disturbed by rejected Delete: %v", err)
+			}
+		})
+	}
+}
+
+func TestDeleteCancelledContext(t *testing.T) {
+	storage, directory := newTestStorage(t)
+	if _, err := storage.Put(context.Background(), imageID, imageExt, bytes.NewReader([]byte("keep"))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := storage.Delete(ctx, imageID, imageExt); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Delete = %v; want context canceled", err)
+	}
+	if _, err := os.Stat(filepath.Join(directory, imageKey)); err != nil {
+		t.Fatalf("file removed despite cancelled context: %v", err)
+	}
+}
+
 type readerFunc func([]byte) (int, error)
 
 func (r readerFunc) Read(p []byte) (int, error) { return r(p) }

@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+	"errors"
 	"time"
 
 	"courses/internal/image/domain"
@@ -43,9 +44,14 @@ func (u *Uploader) Upload(ctx context.Context, actor domain.Actor, lessonID, con
 	if _, err := u.storage.Put(ctx, image.ID, extension, bytes.NewReader(data)); err != nil {
 		return domain.Image{}, err
 	}
-	// Insert failure orphans stored bytes in this tiny window after a successful write; v1 has no image sweeper.
 	if err := u.repository.Insert(ctx, image); err != nil {
-		return domain.Image{}, err
+		// The bytes were written but no row references them (the id was just minted here and the
+		// insert failed). Remove them so a failed upload does not orphan bytes (LB09a). Join the
+		// delete outcome with the insert error, mirroring the storage adapter's own compensation
+		// idiom: a delete failure then surfaces without masking the insert error, and errors.Is
+		// still sees the insert error so the handler maps it unchanged. A crash between Put and
+		// Insert, or a delete that itself fails, still orphans — the strictly smaller residual.
+		return domain.Image{}, errors.Join(err, u.storage.Delete(ctx, image.ID, extension))
 	}
 	return image, nil
 }

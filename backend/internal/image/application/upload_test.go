@@ -28,9 +28,12 @@ func TestUpload(t *testing.T) {
 		data        []byte
 		storageErr  error
 		insertErr   error
+		deleteErr   error
 		wantErr     error
+		wantErrAlso error
 		wantPut     int
 		wantInsert  int
+		wantDelete  int
 	}{
 		{name: "owner", actor: domain.Actor{UserID: "owner"}, wantPut: 1, wantInsert: 1},
 		{name: "admin non-owner", actor: domain.Actor{UserID: "admin", Administrator: true}, wantPut: 1, wantInsert: 1},
@@ -44,7 +47,12 @@ func TestUpload(t *testing.T) {
 		{name: "invalid dimensions", actor: domain.Actor{UserID: "owner"}, width: -1, wantErr: domain.ErrInvalidImage},
 		{name: "empty data", actor: domain.Actor{UserID: "owner"}, data: []byte{}, wantErr: domain.ErrInvalidImage},
 		{name: "storage failure", actor: domain.Actor{UserID: "owner"}, storageErr: dependencyErr, wantErr: dependencyErr, wantPut: 1},
-		{name: "insert failure", actor: domain.Actor{UserID: "owner"}, insertErr: dependencyErr, wantErr: dependencyErr, wantPut: 1, wantInsert: 1},
+		// Insert failed after a successful Put: the uploader compensates by deleting the just-stored
+		// bytes so a failed upload does not orphan them (LB09a).
+		{name: "insert failure deletes bytes", actor: domain.Actor{UserID: "owner"}, insertErr: dependencyErr, wantErr: dependencyErr, wantPut: 1, wantInsert: 1, wantDelete: 1},
+		// When the compensating delete itself fails, both errors surface (joined) and neither masks
+		// the other; the strictly smaller residual (bytes still orphaned) is the only cost.
+		{name: "insert and delete failure surface both", actor: domain.Actor{UserID: "owner"}, insertErr: dependencyErr, deleteErr: errDeleteFailed, wantErr: dependencyErr, wantErrAlso: errDeleteFailed, wantPut: 1, wantInsert: 1, wantDelete: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ownerID := "owner"
@@ -67,18 +75,33 @@ func TestUpload(t *testing.T) {
 				data = []byte("image bytes")
 			}
 			authoring := &fakeAuthoringReader{ownerID: ownerID, found: !tt.missing, err: tt.authorErr}
-			storage := &fakeStorage{err: tt.storageErr}
+			storage := &fakeStorage{err: tt.storageErr, deleteErr: tt.deleteErr}
 			repository := &fakeRepository{err: tt.insertErr, storage: storage, t: t}
 			uploader := NewUploader(repository, storage, authoring, newID, now)
 			got, err := uploader.Upload(context.Background(), tt.actor, "lesson", contentType, width, height, data)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Upload error = %v, want %v", err, tt.wantErr)
 			}
+			if tt.wantErrAlso != nil && !errors.Is(err, tt.wantErrAlso) {
+				t.Fatalf("Upload error = %v, want it to also wrap %v", err, tt.wantErrAlso)
+			}
 			if authoring.calls != 1 || authoring.lessonID != "lesson" {
 				t.Fatalf("authoring lookup = %+v", authoring)
 			}
 			if storage.calls != tt.wantPut || repository.calls != tt.wantInsert {
 				t.Fatalf("Put/Insert calls = %d/%d, want %d/%d", storage.calls, repository.calls, tt.wantPut, tt.wantInsert)
+			}
+			if storage.deleteCalls != tt.wantDelete {
+				t.Fatalf("Delete calls = %d, want %d", storage.deleteCalls, tt.wantDelete)
+			}
+			if tt.wantDelete == 1 {
+				wantExt, err := domain.ExtensionFor(contentType)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if storage.deletedID != newID() || storage.deletedExt != wantExt {
+					t.Fatalf("Delete received id=%q ext=%q; want id=%q ext=%q", storage.deletedID, storage.deletedExt, newID(), wantExt)
+				}
 			}
 			want := domain.Image{ID: newID(), LessonID: "lesson", ContentType: contentType, Width: width, Height: height, ByteSize: int64(len(data)), CreatedBy: tt.actor.UserID, CreatedAt: fixedTime}
 			if tt.wantErr != nil {
@@ -117,12 +140,18 @@ func (f *fakeAuthoringReader) LoadLessonOwner(_ context.Context, lessonID string
 	return f.ownerID, f.found, f.err
 }
 
+var errDeleteFailed = errors.New("delete failed")
+
 type fakeStorage struct {
-	id        string
-	extension string
-	data      []byte
-	err       error
-	calls     int
+	id          string
+	extension   string
+	data        []byte
+	err         error
+	calls       int
+	deleteErr   error
+	deletedID   string
+	deletedExt  string
+	deleteCalls int
 }
 
 func (f *fakeStorage) Put(_ context.Context, id, extension string, r io.Reader) (int64, error) {
@@ -135,6 +164,13 @@ func (f *fakeStorage) Put(_ context.Context, id, extension string, r io.Reader) 
 	}
 	f.data = data
 	return int64(len(data)), f.err
+}
+
+func (f *fakeStorage) Delete(_ context.Context, id, extension string) error {
+	f.deleteCalls++
+	f.deletedID = id
+	f.deletedExt = extension
+	return f.deleteErr
 }
 
 type fakeRepository struct {
