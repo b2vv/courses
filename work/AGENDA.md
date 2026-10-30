@@ -45,7 +45,8 @@
 **Рішення власника 2026-10-30: послідовність (1) deploy-readiness → (3) orphaned-image sweep → (2) `/teach`-редактор.**
 
 - **(1) ✅ ЗАКРИТО — deploy-readiness checklist** → [work/DEPLOY-READINESS.md](DEPLOY-READINESS.md) (`5a671d5`). Зведено всі deploy-gated хвости (A TLS/S01/S02 · B SA13 prod-хвости · C I-F6 ключ/ротація · D payment live · E observability) в один gate з джерелом+перевіркою+власник/агент на кожен.
-- **(3) ✅ ЗАКРИТО — orphaned-image compensating delete (LB09a)** — PR #91 (`9a2756e`). Компенсаційне видалення при збої Insert (owner choice, не sweeper); повний `make check` EXIT=0, e2e 127; незалежне рев'ю Courses 2 PASS 0 blocking. 1 non-blocking N1 (cancelled-ctx робить компенсацію no-op — у report §Lim3 з механізмом; опційний майбутній close через `context.WithoutCancel`).
+- **(3) ✅ ЗАКРИТО — orphaned-image compensating delete (LB09a)** — PR #91 (`9a2756e`). Компенсаційне видалення при збої Insert (owner choice, не sweeper); повний `make check` EXIT=0, e2e 127; незалежне рев'ю Courses 2 PASS 0 blocking.
+- **(N1) ✅ ЗАКРИТО — detached-ctx компенсація** — PR #92 (`bc9ec3c`, owner go «спершу N1»). `context.WithoutCancel`+5s → закриває домінантний residual-тригер (Insert падає через скасований ctx). Повний `make check` EXIT=0, e2e 127; Courses 2 PASS 0 blocking/0 non-blocking. Залишок тепер мінімальний (crash між Put/Insert / delete-fail — sweeper-територія, out of scope).
 - **(2) ⬜ ДАЛІ — `/teach`-редактор** (owner-initiated фіча, поза §24; `docs/lesson-builder/report.md` §Lim1) — повний `cto-research` → `spec-flow`. Потребує owner-go на старт (значуща фіча, не gardening).
 
 Чому не паралельно / не в іншому порядку: власник задав саме цей порядок.

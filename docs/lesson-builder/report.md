@@ -702,17 +702,17 @@ grep, not the handoff assumption.
    just-stored object (`Storage.Delete`, joined with the insert error). Owner
    decision 2026-10-30: a compensating delete, not a background scanning sweeper
    (heavier, and risks deleting live bytes racing an in-flight upload).
-   **Residual (named, strictly smaller than before — mechanism):** the
-   compensating `Delete(ctx, …)` reuses the request context. When the insert
-   fails *because* that context was cancelled or timed out (e.g. the client
-   disconnected after `Put`+`Sync`), `filesystem.Delete` returns `ctx.Err()`
-   before `Remove` runs, so the bytes are not deleted — this cancelled-context
-   path, not only a process crash between `Put` and `Insert`, is the likely real
-   trigger. A delete that itself fails for another reason also orphans. Surfaced
-   as reviewer non-blocking N1 (PR #91); optional future close: compensate on a
-   detached context (`context.WithoutCancel` + short timeout). Before this change
-   *every* insert failure orphaned; now only the cancelled-context / crash /
-   delete-failure paths do.
+   **N1 (reviewer non-blocking, PR #91) closed 2026-10-30 (PR #92, `bc9ec3c`):**
+   the compensating delete first reused the request context, so an insert that
+   failed *because* the context was cancelled (client disconnect after `Put`)
+   made `filesystem.Delete` return `ctx.Err()` before `Remove` — the dominant
+   residual trigger. It now runs on `context.WithTimeout(context.WithoutCancel(
+   ctx), 5s)`, so a cancelled request no longer makes the cleanup a no-op.
+   **Residual (named, now minimal — mechanism):** only a process crash between
+   `Put` and `Insert`, or a delete that itself fails for another reason, still
+   orphans bytes; both are background-sweeper territory, deliberately out of
+   scope for a pre-launch product with KB-sized objects. Before any of this
+   *every* insert failure orphaned.
 4. **Scenario 7 (migrated flat description) render is proven at the integration/
    domain layer, not e2e.** Migration 00018's backfill → a valid single-text
    document that passes `ValidateLessonDocument` and renders was proven in LB02's
