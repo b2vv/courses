@@ -1,0 +1,28 @@
+СТАН: DONE — merged PR #83 (`a83d72e`, 29.10). Незалежне рев'ю (subagent) PASS 0 blocking. Residual SA13-A-R (pgtype non-canonical UUID → ще 503 на крафті; LOW, repo-wide з orders) — **ЗАКРИТО 2026-10-30 рішенням власника: ACCEPTED as dated limitation, без коду** (магнітуда+механізм+revisit-trigger у `audit-2026-10-24.md` §SA13-A-R decision). Батч SA13 закрито повністю.
+
+# SA13-A — D-F2 cursor decoders validate UUID (503→400)
+
+## Pre-code checkpoint (2026-10-29)
+- **Задача / готовність:** SA13, перший зріз (AGENDA 2026-10-29 "Наступний хід"). READY — джерело cite `docs/security/audit-2026-10-24.md §LOW` D-F2. Один незалежний зріз, зворотний (git revert, без міграції/даних).
+- **Дефект (механізм, звірено в коді):** курсор-декодери discussion декодують base64→timestamp|id, але **не** валідують, що `id` — UUID. Невалідний id потрапляє в SQL як `$N::text::uuid` → Postgres `22P02 invalid_text_representation` → `persistenceError` → `domain.ErrDependencyUnavailable` → HTTP 503. Має бути 400 (`ErrInvalidCursor`, "comment_cursor_invalid").
+- **Scope (4 незахищені декодери, усі package `postgres` discussion):**
+  1. `repository.go:348 decodeCursor` — id → `rootsQuery`/`courseCommentsQuery` `::uuid`. Викликають `List`, `ListByCourse`.
+  2. `moderation.go:176 decodeQueueCursor` — parts[2]=id → `queueQuery` `$4::text::uuid`. Викликає `ListQueue`.
+  3. `review.go:262 decodeModerationQueueCursor` — p[3]=id → `moderationQueueQuery` `$5::text::uuid` (kind=p[2] лишається text, не uuid — не чіпаю). Викликає `ListModerationQueue`.
+  4. `participant_report.go:116 decodeParticipantReportCursor` — parts[1]=id → `$2::text::uuid`. Викликає `ParticipantReportQueue`.
+- **Поза scope (вже захищені — НЕ чіпати):** orders `decodeRosterCursor`/`decodeLearnerCursor` уже валідують через `pgtype.UUID.Scan` (audit лістить orders як fixed; звірено 458–548). Це й дає ідіому фіксу.
+- **Фікс (single-source, уникнути 4× дрейфу):** helper `cursorUUIDValid(s string) bool { var id pgtype.UUID; return id.Scan(s) == nil }` у repository.go (пакет `postgres`, доступний усім 4 файлам → moderation.go НЕ потребує нового pgtype-імпорту). Кожен декодер: `if !cursorUUIDValid(id) { return …, domain.ErrInvalidCursor }` одразу після наявних перевірок.
+- **Доказ (production path):** integration-тест (`//go:build integration`, testcontainers Postgres) — для кожного з 4 методів подати курсор base64("<valid RFC3339>|not-a-uuid") і assert `errors.Is(err, domain.ErrInvalidCursor)`. RED до фіксу = ErrDependencyUnavailable (бо id дійшов до ::uuid). GREEN після.
+- **Impact / гейти:** лише backend Go (discussion adapter + тест). Не shared/persisted state, не контракт, не фронт. Ordered gate за впливом: format-check(gofmt) · lint(go vet) · test · **integration (авторитет)** · build. e2e: malformed-cursor шлях e2e не шле — не зачеплено; але прожену повний `make check` перед PR (owner-норма ordered make check).
+- **Review:** review_mode=existing_session; writer Courses 1, reviewer Courses 2 [557618]. Обов'язкове незалежне рев'ю перед merge.
+
+## Передача (transfer state)
+- **state: ACKNOWLEDGED → verdict pending** — `courses-96 [557618]` підтвердив пакет PR #83 (2026-10-29), це ACK не verdict. Його поточну сесію харнес відправив на обов'язкову передачу (транскрипт ~4 МБ); рев'ю виконає **свіжа Courses 2 CLI-сесія по handoff** — роль Courses 2 стала, маршрут existing_session (та сама роль, нова сесія), не дубль. Verdict прийде звідти.
+- **review_mode:** existing_session → **independent_subagent** (власник авторизував 2026-10-29 «пінгуй або запусти саб агента», бо existing_session courses-96 заблокований обов'язковим handoff'ом). writer = ця сесія `Courses13 [c49267]`. reviewer = незалежний subagent (general-purpose, model opus), запущено у фоні; **courses-96 підтвердив stand-down** як reviewer-of-record (2026-10-29), свіжу Courses 2-сесію під #83 не відкриватиме. Його 2 умови якості (незалежний контекст; звірка 400→HTTP-рендер проти реального хендлера на всіх call-site'ах — пастка sentinels-vs-handler) переслано субагенту. Робочий файл рев'ю: `scratchpad/sa13a-independent-review.md`. Verdict очікується з нотифікації про завершення субагента.
+- **next action (WAITING):** чекати verdict PASS/FAIL від Courses 2 (нова сесія). НЕ надсилати повторно.
+- **STANDING AUTH (власник 2026-10-29): «коли закінчиться перевірка — роби мердж і переходь до задач».** На **PASS**: звірити, що verdict від ролі Courses 2, стосується PR #83 / commit `e73c255`, явний PASS → `gh pr merge 83 --squash` → допис PASS-ноти в `§Remediation` + оновити `work/tasks.md` + AGENDA → **без нового питання** стартувати I-F5-код (план `_wip-sa13-b-totp-replay.md`), далі SA13 за AGENDA (T-F2→T-F1→P-F3→P-F6→P-F5→M7; I-F6 окремо). На **FAIL/зміни**: відпрацювати на гілці `sa13-cursor-uuid`, повторити рев'ю — merge лише після PASS. ACK/файл/hook ≠ verdict. Merge PR #83 лише після verdict_received **PASS**. Після merge: оновити §Remediation (PASS-нота), work/tasks.md, AGENDA; тоді наступний зріз SA13 (I-F5 TOTP consumed-counter / T-F2 CSP form-action / T-F1 safeReturnTo / P-F3 /metrics guard / P-F6 sslmode / P-F5 panic-log / M7 HLS umask; I-F6 totp_secret-шифрування — окремо, обережно).
+
+## Журнал
+- 2026-10-29: checkpoint записано; investigation завершено (4 vs 6 декодерів, orders уже fixed, helper-підхід, ErrInvalidCursor→400 через handler.go:717/737).
+- 2026-10-29: фікс застосовано; RED→GREEN integration (SA13-A); gofmt/vet/unit/discussion-integration зелені; §Remediation SA13-A дописано; commit `e73c255`, push, PR #83.
+- 2026-10-29: BLOCKED — ідентичність рев'ювера неоднозначна (AGENDA `[557618]`=live "courses-96" vs live "Courses 2" `[e6a45d]`); питаю власника, не вгадую.
