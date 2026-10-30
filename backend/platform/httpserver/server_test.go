@@ -125,6 +125,58 @@ func TestMetricsTokenGuard(t *testing.T) {
 	}
 }
 
+func TestPanicLogsValueAndStackWithoutSecrets(t *testing.T) {
+	var logs bytes.Buffer
+	handler := httpserver.NewHandler(httpserver.Options{
+		Service: "api",
+		Logger:  slog.New(slog.NewJSONHandler(&logs, nil)),
+		Register: func(mux *http.ServeMux) {
+			mux.HandleFunc("GET /boom", func(http.ResponseWriter, *http.Request) {
+				panic("boom-sentinel-7f3a")
+			})
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/boom?token=query-secret", nil)
+	r.Header.Set("Cookie", "session=cookie-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d: %s", w.Code, w.Body.String())
+	}
+	var body httpserver.ErrorResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("not JSON envelope: %v", err)
+	}
+	if body.Error.Code != "internal_error" {
+		t.Fatalf("code=%q", body.Error.Code)
+	}
+
+	var panicEntry map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		var entry map[string]any
+		if json.Unmarshal([]byte(line), &entry) == nil && entry["msg"] == "request panicked" {
+			panicEntry = entry
+			break
+		}
+	}
+	if panicEntry == nil {
+		t.Fatalf("no panic log entry: %s", logs.String())
+	}
+	if panicEntry["panic"] != "boom-sentinel-7f3a" {
+		t.Fatalf("panic value not logged: %v", panicEntry["panic"])
+	}
+	stack, _ := panicEntry["stack"].(string)
+	if !strings.Contains(stack, "goroutine") || !strings.Contains(stack, "server_test.go") {
+		t.Fatalf("stack did not reach the panic site: %q", stack)
+	}
+	for _, secret := range []string{"query-secret", "cookie-secret"} {
+		if strings.Contains(logs.String(), secret) {
+			t.Fatalf("secret leaked into panic logs: %s", logs.String())
+		}
+	}
+}
+
 func TestSafeErrorsAndCorrelation(t *testing.T) {
 	handler := httpserver.NewHandler(httpserver.Options{
 		Service: "api", Ready: func(context.Context) error { return errors.New("password=private") },

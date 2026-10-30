@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -120,12 +121,15 @@ func NewHandler(options Options) http.Handler {
 		r = r.WithContext(ctx)
 		response := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		defer func() {
-			if recover() != nil {
+			if recovered := recover(); recovered != nil {
 				if !response.written {
 					WriteError(response, r, http.StatusInternalServerError, "internal_error", "Unexpected server error")
 				}
 				span.SetStatus(codes.Error, "request panicked")
-				options.Logger.Error("request panicked", "requestId", id, "traceId", span.SpanContext().TraceID().String())
+				// The recovered value and the stack of the panic site (captured here while
+				// the stack is still unwinding) are logged so a panic can be diagnosed;
+				// the stack is code frames, not request data, so it carries no secrets.
+				options.Logger.Error("request panicked", "requestId", id, "traceId", span.SpanContext().TraceID().String(), "panic", recovered, "stack", string(debug.Stack()))
 			}
 			span.SetAttributes(attribute.Int("http.response.status_code", response.status))
 			if response.status >= 500 {
