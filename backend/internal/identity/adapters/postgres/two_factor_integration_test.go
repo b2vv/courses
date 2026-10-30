@@ -4,7 +4,6 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -66,7 +65,7 @@ func TestTwoFactorRepositoryAgainstPostgreSQL(t *testing.T) {
 	}
 	defer pool.Close()
 
-	repository := NewRepository(pool, passwords.NewVerifier())
+	repository := NewRepository(pool, passwords.NewVerifier(), testKeys())
 	if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,display_name,role,password_hash,created_at,updated_at)
 		VALUES($1, 'two-factor@example.test', 'Two Factor User', 'student', '$argon2id$v=19$m=65536,t=3,p=2$c3R1ZGVudC1kZW1vLXNsdA$5S1MhXX3wgDMnIKuygFRfUNVvTtRktPECxV3ZUBg0is', now(), now())`, twoFactorUserID); err != nil {
 		t.Fatal(err)
@@ -79,6 +78,18 @@ func TestTwoFactorRepositoryAgainstPostgreSQL(t *testing.T) {
 		}
 		if err := repository.SetTotpSecret(ctx, twoFactorUserID, "JBSWY3DPEHPK3PXP"); err != nil {
 			t.Fatal(err)
+		}
+		// The secret is encrypted at rest: the stored column must not be the plaintext, but must decrypt
+		// back to it (SA13-I / I-F6a).
+		var storedSecret string
+		if err := pool.QueryRow(ctx, `SELECT totp_secret FROM users WHERE id=$1`, twoFactorUserID).Scan(&storedSecret); err != nil {
+			t.Fatal(err)
+		}
+		if storedSecret == "JBSWY3DPEHPK3PXP" {
+			t.Fatal("totp_secret stored as plaintext")
+		}
+		if decrypted, err := testKeys().DecryptSecret(storedSecret); err != nil || decrypted != "JBSWY3DPEHPK3PXP" {
+			t.Fatalf("stored ciphertext did not decrypt: got %q err=%v", decrypted, err)
 		}
 		state, err = repository.GetTwoFactor(ctx, twoFactorUserID)
 		if err != nil || state.Secret != "JBSWY3DPEHPK3PXP" || state.Enabled {
@@ -156,23 +167,31 @@ func TestTwoFactorRepositoryAgainstPostgreSQL(t *testing.T) {
 	})
 
 	t.Run("recovery codes are consumed once and can be deleted", func(t *testing.T) {
-		digests := make([][32]byte, 10)
-		for index := range digests {
-			digests[index] = sha256.Sum256([]byte{byte(index)})
+		codes := make([]string, 10)
+		for index := range codes {
+			codes[index] = "CODE" + string(rune('A'+index)) + "-0000"
 		}
-		if err := repository.InsertCodes(ctx, twoFactorUserID, digests); err != nil {
+		if err := repository.InsertCodes(ctx, twoFactorUserID, codes); err != nil {
 			t.Fatal(err)
 		}
-		consumed, err := repository.ConsumeCode(ctx, twoFactorUserID, digests[0])
+		// Codes are stored as a keyed HMAC, not reversible and not the plaintext: the row must equal the
+		// keyed hash of the code (SA13-I / I-F6b).
+		var storedHash string
+		if err := pool.QueryRow(ctx, `SELECT code_hash FROM recovery_codes WHERE user_id=$1 ORDER BY created_at LIMIT 1`, twoFactorUserID).Scan(&storedHash); err != nil {
+			t.Fatal(err)
+		}
+		if storedHash == codes[0] || storedHash != testKeys().RecoveryHash(codes[0]) {
+			t.Fatalf("recovery code not stored as keyed HMAC: %q", storedHash)
+		}
+		consumed, err := repository.ConsumeCode(ctx, twoFactorUserID, codes[0])
 		if err != nil || !consumed {
 			t.Fatalf("first consume consumed=%t err=%v", consumed, err)
 		}
-		consumed, err = repository.ConsumeCode(ctx, twoFactorUserID, digests[0])
+		consumed, err = repository.ConsumeCode(ctx, twoFactorUserID, codes[0])
 		if err != nil || consumed {
 			t.Fatalf("replayed consume consumed=%t err=%v", consumed, err)
 		}
-		unknown := sha256.Sum256([]byte("unknown"))
-		consumed, err = repository.ConsumeCode(ctx, twoFactorUserID, unknown)
+		consumed, err = repository.ConsumeCode(ctx, twoFactorUserID, "UNKN-OWN0")
 		if err != nil || consumed {
 			t.Fatalf("unknown consume consumed=%t err=%v", consumed, err)
 		}

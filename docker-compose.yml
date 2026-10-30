@@ -70,6 +70,10 @@ services:
       APP_ENV: ${APP_ENV:-development}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Master key for 2FA at-rest protection (HKDF → AES-256-GCM for the TOTP secret, keyed HMAC for
+      # recovery codes). The default is a non-secret dev value; production MUST override it with a real
+      # base64 secret of >=32 random bytes (like COOKIE_SECURE, this dev default is not for prod).
+      IDENTITY_2FA_SECRET_KEY: ${IDENTITY_2FA_SECRET_KEY:-ZGV2LW9ubHktMmZhLW1hc3Rlci1rZXktbm90LWEtc2VjcmV0}
       PLAYBACK_HEARTBEAT_SECONDS: ${PLAYBACK_HEARTBEAT_SECONDS:-30}
       PLAYBACK_OWNERSHIP_TTL_SECONDS: ${PLAYBACK_OWNERSHIP_TTL_SECONDS:-180}
       PLATFORM_SINGLE_INSTRUCTOR: ${PLATFORM_SINGLE_INSTRUCTOR:-true}

@@ -89,7 +89,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			t.Fatal("the identity seed must serialize concurrent fixture reconciliation")
 		}
 
-		repository := NewRepository(pool, passwords.NewVerifier())
+		repository := NewRepository(pool, passwords.NewVerifier(), testKeys())
 		config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
 		if err != nil {
 			t.Fatal(err)
@@ -309,7 +309,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	})
 	t.Run("credential verification hides unknown and disabled users", func(t *testing.T) {
 		passwords := &passwordVerifier{matched: true}
-		repository := NewRepository(pool, passwords)
+		repository := NewRepository(pool, passwords, testKeys())
 		user, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "demo-password")
 		if err != nil || user.Email != "student@courseforge.local" || passwords.verifyCalls != 1 || passwords.dummyCalls != 0 {
 			t.Fatalf("user=%+v err=%v verifier=%+v", user, err, passwords)
@@ -339,7 +339,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE email='student@courseforge.local'`, hash); err != nil {
 			t.Fatal(err)
 		}
-		repository := NewRepository(pool, passwords.NewVerifier())
+		repository := NewRepository(pool, passwords.NewVerifier(), testKeys())
 		if user, err := repository.VerifyCredentials(ctx, "student@courseforge.local", "courseforge-student-demo"); err != nil || user.Role != domain.Student {
 			t.Fatalf("user=%+v err=%v", user, err)
 		}
@@ -369,7 +369,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 			}
 		}()
 
-		repository := NewRepository(pool, passwords.NewVerifier())
+		repository := NewRepository(pool, passwords.NewVerifier(), testKeys())
 		identity := application.NewIdentity(repository, repository, func() time.Time {
 			return time.Date(2026, 9, 3, 13, 0, 0, 0, time.UTC)
 		})
@@ -393,7 +393,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		freshRaw := bytes.Repeat([]byte{0x33}, 32)
 		freshToken := base64.RawURLEncoding.EncodeToString(freshRaw)
 		random := bytes.NewReader(bytes.Join([][]byte{collisionRaw, bytes.Repeat([]byte{0x44}, 16), freshRaw, bytes.Repeat([]byte{0x55}, 16)}, nil))
-		repository := newRepository(pool, &passwordVerifier{matched: true}, random)
+		repository := newRepository(pool, &passwordVerifier{matched: true}, random, testKeys())
 		now := time.Date(2026, 9, 3, 13, 0, 0, 0, time.UTC)
 		issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", previousToken, now, now.Add(12*time.Hour))
 		if err != nil {
@@ -439,7 +439,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		for attempt := range rotationAttempts {
 			material = append(material, collisionRaw, bytes.Repeat([]byte{byte(0x80 + attempt)}, 16))
 		}
-		repository := newRepository(pool, &passwordVerifier{matched: true}, bytes.NewReader(bytes.Join(material, nil)))
+		repository := newRepository(pool, &passwordVerifier{matched: true}, bytes.NewReader(bytes.Join(material, nil)), testKeys())
 		if _, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", presentedToken, now, now.Add(12*time.Hour)); !errors.Is(err, domain.ErrDependencyUnavailable) {
 			t.Fatalf("rotation exhaustion: %v", err)
 		}
@@ -456,7 +456,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000008','40000000-0000-4000-8000-000000000002',$1,$2,$3)`, otherDigest[:], now.Add(-time.Hour), now.Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
-		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		repository := NewRepository(pool, &passwordVerifier{matched: true}, testKeys())
 		issued, err := repository.Rotate(ctx, "40000000-0000-4000-8000-000000000001", otherToken, now, now.Add(12*time.Hour))
 		if err != nil {
 			t.Fatal(err)
@@ -470,7 +470,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	})
 
 	t.Run("concurrent rotations issue distinct sessions", func(t *testing.T) {
-		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		repository := NewRepository(pool, &passwordVerifier{matched: true}, testKeys())
 		now := time.Date(2026, 9, 3, 14, 0, 0, 0, time.UTC)
 		const count = 6
 		results := make(chan string, count)
@@ -511,7 +511,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('50000000-0000-4000-8000-000000000006','40000000-0000-4000-8000-000000000001',$1,$2,$3)`, digest[:], now.Add(-time.Hour), now); err != nil {
 			t.Fatal(err)
 		}
-		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		repository := NewRepository(pool, &passwordVerifier{matched: true}, testKeys())
 		if _, err := repository.Resolve(ctx, token, now); !errors.Is(err, domain.ErrAuthenticationRequired) {
 			t.Fatalf("resolve at expiry: %v", err)
 		}
@@ -530,7 +530,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 		if _, err := lock.Exec(ctx, `SELECT id FROM users WHERE id='40000000-0000-4000-8000-000000000001' FOR UPDATE`); err != nil {
 			t.Fatal(err)
 		}
-		repository := NewRepository(pool, &passwordVerifier{matched: true})
+		repository := NewRepository(pool, &passwordVerifier{matched: true}, testKeys())
 		now := time.Date(2026, 9, 3, 16, 0, 0, 0, time.UTC)
 		request, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
@@ -553,7 +553,7 @@ func TestIdentitySchemaAgainstPostgreSQL(t *testing.T) {
 	})
 
 	t.Run("session timestamps round trip at microsecond resolution", func(t *testing.T) {
-		repository := newRepository(pool, &passwordVerifier{matched: true}, cryptorand.Reader)
+		repository := newRepository(pool, &passwordVerifier{matched: true}, cryptorand.Reader, testKeys())
 		wall := time.Now().UTC()
 		if wall.Nanosecond()%int(time.Microsecond) == 0 {
 			wall = wall.Add(321 * time.Nanosecond)

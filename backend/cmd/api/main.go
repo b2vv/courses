@@ -24,6 +24,7 @@ import (
 	discussionapplication "courses/internal/discussion/application"
 	passwords "courses/internal/identity/adapters/argon2id"
 	identityhttp "courses/internal/identity/adapters/http"
+	identitycrypto "courses/internal/identity/adapters/identitycrypto"
 	identitymail "courses/internal/identity/adapters/mail"
 	identitypostgres "courses/internal/identity/adapters/postgres"
 	identityredis "courses/internal/identity/adapters/redis"
@@ -87,6 +88,18 @@ func main() {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
 	}
+	// Fail closed: without the 2FA master key the service would store TOTP secrets unprotected, so it
+	// refuses to start rather than run degraded (SA13-I / I-F6).
+	identity2FAKey, err := config.Identity2FAKey(os.Getenv)
+	if err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
+	identityCrypto, err := identitycrypto.New(identity2FAKey)
+	if err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
 	dependencies, err := runtime.Open(ctx, "api", logger)
 	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())
@@ -128,7 +141,7 @@ func main() {
 		recognitionQueue := transcriptasynq.NewQueue(dependencies.Redis)
 		drafting := transcriptapplication.NewDrafting(transcriptRepository, transcriptRepository, transcriptRepository, recognitionQueue, time.Now, logger)
 		draftHandler := transcripthttp.NewDraftHandler(drafting)
-		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier())
+		identityRepository := identitypostgres.NewRepository(dependencies.Database, passwords.NewVerifier(), identityCrypto)
 		loginLimiter, err := identityredis.NewRateLimiter(dependencies.Redis, 5, 15*time.Minute, logger)
 		if err != nil {
 			return err
