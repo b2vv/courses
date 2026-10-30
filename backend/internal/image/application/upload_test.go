@@ -29,6 +29,7 @@ func TestUpload(t *testing.T) {
 		storageErr  error
 		insertErr   error
 		deleteErr   error
+		cancelCtx   bool
 		wantErr     error
 		wantErrAlso error
 		wantPut     int
@@ -53,6 +54,10 @@ func TestUpload(t *testing.T) {
 		// When the compensating delete itself fails, both errors surface (joined) and neither masks
 		// the other; the strictly smaller residual (bytes still orphaned) is the only cost.
 		{name: "insert and delete failure surface both", actor: domain.Actor{UserID: "owner"}, insertErr: dependencyErr, deleteErr: errDeleteFailed, wantErr: dependencyErr, wantErrAlso: errDeleteFailed, wantPut: 1, wantInsert: 1, wantDelete: 1},
+		// The compensating delete runs even when the insert failed because the request context was
+		// cancelled (client disconnect after Put): it is detached, so it still removes the bytes
+		// (LB09a residual N1).
+		{name: "insert failure with cancelled request still deletes", actor: domain.Actor{UserID: "owner"}, insertErr: dependencyErr, cancelCtx: true, wantErr: dependencyErr, wantPut: 1, wantInsert: 1, wantDelete: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ownerID := "owner"
@@ -78,7 +83,13 @@ func TestUpload(t *testing.T) {
 			storage := &fakeStorage{err: tt.storageErr, deleteErr: tt.deleteErr}
 			repository := &fakeRepository{err: tt.insertErr, storage: storage, t: t}
 			uploader := NewUploader(repository, storage, authoring, newID, now)
-			got, err := uploader.Upload(context.Background(), tt.actor, "lesson", contentType, width, height, data)
+			ctx := context.Background()
+			if tt.cancelCtx {
+				cancelled, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = cancelled
+			}
+			got, err := uploader.Upload(ctx, tt.actor, "lesson", contentType, width, height, data)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Upload error = %v, want %v", err, tt.wantErr)
 			}
@@ -101,6 +112,11 @@ func TestUpload(t *testing.T) {
 				}
 				if storage.deletedID != newID() || storage.deletedExt != wantExt {
 					t.Fatalf("Delete received id=%q ext=%q; want id=%q ext=%q", storage.deletedID, storage.deletedExt, newID(), wantExt)
+				}
+				// The compensating delete must run on a context detached from the request, so a
+				// cancelled request does not make it a no-op (LB09a residual N1).
+				if storage.deletedCtxErr != nil {
+					t.Fatalf("Delete ran on a cancelled context (%v); want a detached, live context", storage.deletedCtxErr)
 				}
 			}
 			want := domain.Image{ID: newID(), LessonID: "lesson", ContentType: contentType, Width: width, Height: height, ByteSize: int64(len(data)), CreatedBy: tt.actor.UserID, CreatedAt: fixedTime}
@@ -143,15 +159,16 @@ func (f *fakeAuthoringReader) LoadLessonOwner(_ context.Context, lessonID string
 var errDeleteFailed = errors.New("delete failed")
 
 type fakeStorage struct {
-	id          string
-	extension   string
-	data        []byte
-	err         error
-	calls       int
-	deleteErr   error
-	deletedID   string
-	deletedExt  string
-	deleteCalls int
+	id            string
+	extension     string
+	data          []byte
+	err           error
+	calls         int
+	deleteErr     error
+	deletedID     string
+	deletedExt    string
+	deleteCalls   int
+	deletedCtxErr error
 }
 
 func (f *fakeStorage) Put(_ context.Context, id, extension string, r io.Reader) (int64, error) {
@@ -166,10 +183,11 @@ func (f *fakeStorage) Put(_ context.Context, id, extension string, r io.Reader) 
 	return int64(len(data)), f.err
 }
 
-func (f *fakeStorage) Delete(_ context.Context, id, extension string) error {
+func (f *fakeStorage) Delete(ctx context.Context, id, extension string) error {
 	f.deleteCalls++
 	f.deletedID = id
 	f.deletedExt = extension
+	f.deletedCtxErr = ctx.Err()
 	return f.deleteErr
 }
 

@@ -46,4 +46,13 @@
 - 2026-10-30: pre-code checkpoint; механізм вікна звірено в коді; owner обрав компенсаційне видалення.
 - 2026-10-30: реалізовано. `ports.Storage`+=`Delete`; filesystem adapter `Delete` (guard+Remove, ctx-cancel не чіпає файл); `upload.go` join-компенсація при збої Insert (+errors import). Тести: upload_test 2 нові кейси (insert-failure→Delete 1× з (id,ext); insert+delete-failure→join surфейсить обидва), storage_test 4 нові (Delete happy, missing-file errors, invalid-key не чіпає сусідній файл, ctx-cancel). gofmt/vet clean, image unit зелені.
 - 2026-10-30: **RED→GREEN непорожність доведено** — stash upload.go до main: `insert_failure_deletes_bytes` (Delete calls=0 want 1) + `insert_and_delete_failure_surface_both` (join не wrap-ить delete err) падають; з фіксом зелено.
-- 2026-10-30: запущено повний ordered `make check` (gate-lb09a-1.log, GATE_EXIT) — не таргетний, бо чіпає persisted on-disk стан. Чекаю.
+- 2026-10-30: запущено повний ordered `make check` (gate-lb09a-1.log, GATE_EXIT) — не таргетний, бо чіпає persisted on-disk стан. **GATE_EXIT=0, e2e 127.**
+- 2026-10-30: commit `6b94c52`, push, **PR #91**, пакет рев'ю `courses-96` (7 пунктів). **PR #91 merged `9a2756e`** після Courses 2 **PASS 0 blocking** на `6b94c52`. N1 → report §Lim3; bookkeeping `bb45fc2`.
+
+## N1 follow-up — compensate on detached context (owner go 2026-10-30: «спершу N1, потім #2»)
+- **Гілка:** `lb09a-n1-detached-ctx` off `main` @ `bb45fc2`. Review: existing_session, `courses-96 [557618]`.
+- **Що:** компенсаційний Delete біг на request-ctx → коли Insert падає *через* скасований ctx, `filesystem.Delete` повертає `ctx.Err()` до Remove → байти лишаються (домінантний residual-тригер N1). Фікс: `cleanupCtx := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout=5s)`; Delete на `cleanupCtx`. Решта (join, error-code, guard) незмінні.
+- **Чому timeout:** detached-ctx без власного дедлайну → завислий FS міг би тримати return хендлера; локальний Remove потребує лише короткого вікна.
+- **Докази:** `upload_test` новий кейс «insert failure with cancelled request still deletes» (cancelCtx+insertErr → Delete 1×, `deletedCtxErr==nil`); + загальний асерт: усі wantDelete-кейси йдуть на detached ctx. RED→GREEN доведено (stash upload.go: «Delete ran on a cancelled context»). gofmt/vet/image-unit зелені.
+- **Залишок (ще менший):** краш процесу між Put і Insert, або Delete падає з іншої причини — суто sweeper-територія, не беремо.
+- **Гейт:** повний ordered `make check` — запущено (gate-lb09a-n1.log).
