@@ -10,6 +10,11 @@ import (
 	"courses/internal/image/ports"
 )
 
+// cleanupTimeout bounds the compensating delete after a failed insert. It runs on a context
+// detached from the request, so without its own deadline a wedged filesystem could block the
+// handler's return; a local Remove needs only a short window.
+const cleanupTimeout = 5 * time.Second
+
 type Uploader struct {
 	repository ports.Repository
 	storage    ports.Storage
@@ -46,12 +51,18 @@ func (u *Uploader) Upload(ctx context.Context, actor domain.Actor, lessonID, con
 	}
 	if err := u.repository.Insert(ctx, image); err != nil {
 		// The bytes were written but no row references them (the id was just minted here and the
-		// insert failed). Remove them so a failed upload does not orphan bytes (LB09a). Join the
-		// delete outcome with the insert error, mirroring the storage adapter's own compensation
-		// idiom: a delete failure then surfaces without masking the insert error, and errors.Is
-		// still sees the insert error so the handler maps it unchanged. A crash between Put and
-		// Insert, or a delete that itself fails, still orphans — the strictly smaller residual.
-		return domain.Image{}, errors.Join(err, u.storage.Delete(ctx, image.ID, extension))
+		// insert failed). Remove them so a failed upload does not orphan bytes (LB09a). Compensate
+		// on a context detached from the request's cancellation: the insert often fails precisely
+		// because the request context was cancelled (a client disconnect after Put+Sync), and
+		// reusing it would make Delete return ctx.Err() before removing anything — leaving the
+		// bytes orphaned, which was the dominant residual trigger. Give the cleanup its own short
+		// bound. Join the delete outcome with the insert error, mirroring the storage adapter's own
+		// compensation idiom: a delete failure then surfaces without masking the insert error, and
+		// errors.Is still sees the insert error so the handler maps it unchanged. A crash between
+		// Put and Insert, or a delete that itself fails, still orphans — the strictly smaller residual.
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		return domain.Image{}, errors.Join(err, u.storage.Delete(cleanupCtx, image.ID, extension))
 	}
 	return image, nil
 }
