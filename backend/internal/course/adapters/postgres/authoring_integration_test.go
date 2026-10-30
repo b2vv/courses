@@ -15,6 +15,7 @@ import (
 	coursepostgres "courses/internal/course/adapters/postgres"
 	"courses/internal/course/domain"
 	passwords "courses/internal/identity/adapters/argon2id"
+	identitycrypto "courses/internal/identity/adapters/identitycrypto"
 	identitypostgres "courses/internal/identity/adapters/postgres"
 	identitydomain "courses/internal/identity/domain"
 	containers "courses/internal/testsupport/containers"
@@ -109,7 +110,11 @@ func TestAuthoringRepositoryAgainstPostgreSQL(t *testing.T) {
 func (h *authoringHarness) testBlockedOwnerFreeze(t *testing.T) {
 	h.reset(t)
 	stored := h.createCourse(t, "blocked-owner-freeze", authoringInstructorID)
-	identities := identitypostgres.NewRepository(h.pool, passwords.NewVerifier())
+	identityKeys, err := identitycrypto.New([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	identities := identitypostgres.NewRepository(h.pool, passwords.NewVerifier(), identityKeys)
 	if err := identities.SetStatus(h.ctx, authoringInstructorID, identitydomain.AccountBlocked, time.Now().UTC().Truncate(time.Microsecond), func(identitydomain.User, int) error {
 		return nil
 	}); err != nil {

@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"log/slog"
 	"time"
@@ -106,7 +105,7 @@ func (service *TwoFactor) ConfirmTwoFactor(ctx context.Context, userID, code str
 	if err != nil {
 		return ConfirmTwoFactorResult{}, domain.ErrDependencyUnavailable
 	}
-	if err := service.recovery.InsertCodes(ctx, userID, recoveryDigests(codes)); err != nil {
+	if err := service.recovery.InsertCodes(ctx, userID, codes); err != nil {
 		return ConfirmTwoFactorResult{}, err
 	}
 	return ConfirmTwoFactorResult{RecoveryCodes: codes}, nil
@@ -164,7 +163,7 @@ func (service *TwoFactor) CompleteTwoFactor(ctx context.Context, input CompleteT
 		}
 	}
 	if !valid {
-		valid, err = service.recovery.ConsumeCode(ctx, pending.UserID, recoveryDigest(input.Code))
+		valid, err = service.recovery.ConsumeCode(ctx, pending.UserID, input.Code)
 		if err != nil {
 			return CompleteTwoFactorResult{}, err
 		}
@@ -236,7 +235,7 @@ func (service *TwoFactor) RegenerateRecoveryCodes(ctx context.Context, userID, c
 	if err != nil {
 		return ConfirmTwoFactorResult{}, domain.ErrDependencyUnavailable
 	}
-	if err := service.recovery.InsertCodes(ctx, userID, recoveryDigests(codes)); err != nil {
+	if err := service.recovery.InsertCodes(ctx, userID, codes); err != nil {
 		return ConfirmTwoFactorResult{}, err
 	}
 	return ConfirmTwoFactorResult{RecoveryCodes: codes}, nil
@@ -273,7 +272,7 @@ func (service *TwoFactor) authorizeFactor(ctx context.Context, userID, code stri
 	if proven {
 		return nil
 	}
-	used, err := service.recovery.ConsumeCode(ctx, userID, recoveryDigest(code))
+	used, err := service.recovery.ConsumeCode(ctx, userID, code)
 	if err != nil {
 		return err
 	}
@@ -307,14 +306,6 @@ func (service *TwoFactor) allow(ctx context.Context, key string) error {
 		return domain.ErrRateLimited
 	}
 	return nil
-}
-func recoveryDigest(code string) [32]byte { return sha256.Sum256([]byte(code)) }
-func recoveryDigests(codes []string) [][32]byte {
-	digests := make([][32]byte, len(codes))
-	for i, code := range codes {
-		digests[i] = recoveryDigest(code)
-	}
-	return digests
 }
 func newPendingID() (string, error) {
 	bytes := make([]byte, 32)

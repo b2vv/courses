@@ -23,9 +23,13 @@ type TwoFactorStore interface {
 	AdvanceTotpCounter(ctx context.Context, userID string, counter int64) (bool, error)
 }
 
+// RecoveryCodeStore persists and consumes one-time recovery codes. It takes the plaintext codes: the
+// store hashes them (a keyed HMAC) so the hashing choice stays an adapter concern, like the password
+// verifier. ConsumeCode reports whether the presented code matched a live code and, as a side effect,
+// consumes it; the match is atomic against a concurrent replay of the same code.
 type RecoveryCodeStore interface {
-	InsertCodes(context.Context, string, [][32]byte) error
-	ConsumeCode(context.Context, string, [32]byte) (bool, error)
+	InsertCodes(context.Context, string, []string) error
+	ConsumeCode(context.Context, string, string) (bool, error)
 	DeleteCodes(context.Context, string) error
 }
 
