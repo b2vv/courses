@@ -220,6 +220,7 @@ func main() {
 				learningHandler.Register(mux, identityHandler.Authenticate)
 				documentHandler.Register(mux, identityHandler.Authenticate)
 				documentHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
+				documentHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				transcriptHandler.Register(mux, identityHandler.Authenticate)
 				discussionHandler.Register(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 				discussionHandler.RegisterTeach(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

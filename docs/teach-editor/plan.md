@@ -194,10 +194,9 @@ delegated, this table is not a gate).
 | T2 | Owner saves draft | as T1 | `PUT /api/v1/teach/lessons/L/document` (sameOrigin) | 200, updatedAt advanced | contract test + e2e | AC1, AC7 |
 | T3 | Owner publishes | as T1 | `POST /api/v1/teach/lessons/L/document/publish` (sameOrigin) | 200/204; published path reflects it | contract test + e2e | AC1, AC7 |
 | T4 | Owner uploads image | as T1 | `POST /api/v1/teach/lessons/L/images` (sameOrigin) | 201 image created, owner-scoped | contract test + e2e | AC1(image), AC7 |
-| T5a | Non-owner instructor refused (document ops) | Instructor does NOT own course of lesson L | GET/PUT/POST-publish teach document op on L | `course_forbidden` (403), per endpoint independently | contract test (each endpoint) + e2e | AC2 |
-| T5b | Non-owner instructor refused (image) | as T5a | `POST /teach/lessons/L/images` | `forbidden` (403) — image module emits `ErrForbidden`, NOT `course_forbidden` (no handler change) | contract test | AC2 |
+| T5 | Non-owner instructor refused (all endpoints) | Instructor does NOT own course of lesson L | each teach op on L (GET/PUT/POST-publish document + POST images) | `forbidden` (403) on every endpoint — `requireEditor`→`ErrForbidden` (document) and `CanEditLesson`→`ErrForbidden` (image); NOT `course_forbidden` (code-verified, no handler change) | contract test (each endpoint) + e2e | AC2 |
 | T6 | Student refused | role=student | any teach op | `forbidden` (403) | contract test | AC2 |
-| T7 | No sibling widening | teach mount active | request a non-mounted path under `/teach/lessons/{id}/…` | 404 (not reachable) | contract-census test | AC3 |
+| T7 | No sibling widening | teach mount active | request an UNKNOWN (non-mounted) sibling path under `/teach/lessons/{id}/…` (not DELETE on a mounted path — Go ServeMux returns 405 there, not 404) | 404 (not reachable) | contract-census test | AC3 |
 | T8 | Admin + learn unchanged | — | existing admin/learn document suites | byte-for-byte pass, unchanged | existing contract tests re-run | AC3 |
 | T9 | Owner edits via UI | owner-instructor signed in | open `/teach` course → lesson → edit → save → publish | editor works; no path to another owner's content | e2e | AC4 |
 | T10 | sameOrigin parity | teach mount active | inspect middleware chain per route | sameOrigin on PUT/POST only, absent on GET | mount test | AC7 |
@@ -221,6 +220,17 @@ race/re-entry) — both verified against the real handlers and closed by plan/sp
 change), committed `7164f31`. Round 2 (delta) = PASS: zero blocking, zero unclosed defense rows, all
 five pinned facts (P1–P5) confirmed, both auth must-checks (AC7, AC3) sound. §6 option (a) reuse
 confirmed owner-scoped (`authoring.go:78` `CanManage(InstructorID)`). Cleared to tasks.
+
+**Post-gate correction (2026-10-30, during TE1 implementation).** B1's resolution was itself partly
+wrong and is superseded: the GATE 2 reviewer (and the earlier B1 check) traced `CanManage →
+ErrCourseForbidden`, but `CanBeEditedBy` collapses that to a boolean and `requireEditor`
+(`application/document.go:92`) returns `domain.ErrForbidden` for every non-editor — so the document
+editor endpoints emit **`forbidden`**, not `course_forbidden`, for a non-owner instructor (proven by the
+existing passing test `TestDocumentNonEditor`, which Codex surfaced when refusing to assert a false code).
+AC2/T5 corrected: all endpoints → `forbidden`. This is an error-code-string fact only; the
+owner-enforcement security property and the plan's design/reuse/side-effects/rollback are unchanged, so
+it is handled as a dated correction (like B1) rather than a re-gate. The per-slice independent review
+before merge verifies the actual test assertions against the handlers.
 
 Three checks, all mandatory (two delegated to a FRESH subagent, one inline):
 

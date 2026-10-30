@@ -6371,6 +6371,112 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: List learners across the instructor's own courses
+    /api/v1/teach/lessons/{lessonId}/document:
+        get:
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    type: string
+                - in: query
+                  name: locale
+                  schema:
+                    enum:
+                        - uk
+                        - en
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonDocumentDraft'
+                    description: ""
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+        put:
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SaveLessonDocumentRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonDocumentUpdated'
+                    description: ""
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/LessonDocumentConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+    /api/v1/teach/lessons/{lessonId}/document/publish:
+        post:
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    type: string
+                - in: query
+                  name: locale
+                  schema:
+                    enum:
+                        - uk
+                        - en
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PublishLessonDocumentRequest'
+                required: true
+            responses:
+                "200":
+                    description: ""
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "409":
+                    $ref: '#/components/responses/LessonDocumentConflict'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
     /api/v1/teach/reviews/{reviewId}/block-author:
         post:
             operationId: blockReviewAuthor

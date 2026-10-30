@@ -29,6 +29,12 @@ func (h *DocumentHandler) RegisterAdmin(mux *http.ServeMux, authenticate, requir
 	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/document/publish", requireSameOrigin(authenticate(http.HandlerFunc(h.publish))))
 }
 
+func (h *DocumentHandler) RegisterTeach(mux *http.ServeMux, authenticate, requireSameOrigin func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/teach/lessons/{lessonId}/document", authenticate(http.HandlerFunc(h.getDraft)))
+	mux.Handle("PUT /api/v1/teach/lessons/{lessonId}/document", requireSameOrigin(authenticate(http.HandlerFunc(h.saveDraft))))
+	mux.Handle("POST /api/v1/teach/lessons/{lessonId}/document/publish", requireSameOrigin(authenticate(http.HandlerFunc(h.publish))))
+}
+
 type lessonDocumentDraftResponse struct {
 	Document  domain.LessonDocument `json:"document"`
 	UpdatedAt *string               `json:"updatedAt"`
