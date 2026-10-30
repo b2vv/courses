@@ -12,6 +12,8 @@ export type { DocumentRepository } from './ports/DocumentRepository';
 // Application: query/mutation factories and their error types.
 export {
   createAdminDocumentQueries,
+  createTeachDocumentQueries,
+  teachLessonDocumentQueryKey,
   adminLessonDocumentQueryKey,
   DocumentAuthoringError,
   ImageUploadError,
@@ -23,7 +25,10 @@ export {
 } from './application/document-queries';
 
 // Adapters: the HTTP implementations wired by the composition roots.
-export { createApiDocumentAuthoringRepository } from './adapters/admin-document-repository';
+export {
+  createApiDocumentAuthoringRepository,
+  createApiTeachDocumentAuthoringRepository,
+} from './adapters/admin-document-repository';
 export { createApiDocumentRepository } from './adapters/document-repository';
 
 // UI. `LessonDocumentEditor` is deliberately NOT value-exported here: it pulls in Tiptap, and the

@@ -6317,11 +6317,14 @@ paths:
             summary: List course members for the instructor or administrator
     /api/v1/teach/courses/{id}:
         get:
+            description: Owner-instructor read of an authored course tree they own, including unpublished lessons, for teach-side navigation. A non-owner instructor is refused; unknown IDs are distinguished from ownership refusals. Query parameters are not supported. Responses are never cached.
+            operationId: getTeachCourse
             parameters:
                 - in: path
                   name: id
                   required: true
                   schema:
+                    format: uuid
                     type: string
             responses:
                 "200":
@@ -6329,7 +6332,12 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AdminCourseTree'
-                    description: ""
+                    description: The complete authored course tree in module and lesson order.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
                 "400":
                     $ref: '#/components/responses/InvalidRequest'
                 "401":
@@ -6400,19 +6408,34 @@ paths:
             summary: List learners across the instructor's own courses
     /api/v1/teach/lessons/{id}/images:
         post:
+            operationId: uploadTeachLessonImage
             parameters:
                 - in: path
                   name: id
                   required: true
                   schema:
+                    format: uuid
                     type: string
+            requestBody:
+                content:
+                    multipart/form-data:
+                        schema:
+                            properties:
+                                file:
+                                    description: The image file (JPEG, PNG or WebP; up to 5 MiB; max 40 megapixels).
+                                    format: binary
+                                    type: string
+                            required:
+                                - file
+                            type: object
+                required: true
             responses:
                 "201":
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ImageUploadResponse'
-                    description: ""
+                    description: Image stored.
                 "400":
                     $ref: '#/components/responses/MediaBadRequest'
                 "401":
@@ -6426,7 +6449,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ErrorResponse'
-                    description: ""
+                    description: Image is too large.
                 "415":
                     content:
                         application/json:
@@ -6437,15 +6460,19 @@ paths:
                     $ref: '#/components/responses/Unavailable'
     /api/v1/teach/lessons/{lessonId}/document:
         get:
+            description: Owner-instructor read of the draft and its optimistic-lock token, scoped to the lesson's course owner. An absent draft has updatedAt null.
+            operationId: getTeachLessonDocument
             parameters:
                 - in: path
                   name: lessonId
                   required: true
                   schema:
+                    format: uuid
                     type: string
                 - in: query
                   name: locale
                   schema:
+                    default: uk
                     enum:
                         - uk
                         - en
@@ -6456,7 +6483,12 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LessonDocumentDraft'
-                    description: ""
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
                 "400":
                     $ref: '#/components/responses/BadRequest'
                 "401":
@@ -6470,11 +6502,14 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
         put:
+            description: Same-origin owner write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+            operationId: saveTeachLessonDocument
             parameters:
                 - in: path
                   name: lessonId
                   required: true
                   schema:
+                    format: uuid
                     type: string
             requestBody:
                 content:
@@ -6488,7 +6523,12 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LessonDocumentUpdated'
-                    description: ""
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
                 "400":
                     $ref: '#/components/responses/BadRequest'
                 "401":
@@ -6505,15 +6545,19 @@ paths:
                     $ref: '#/components/responses/Unavailable'
     /api/v1/teach/lessons/{lessonId}/document/publish:
         post:
+            description: Same-origin owner publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+            operationId: publishTeachLessonDocument
             parameters:
                 - in: path
                   name: lessonId
                   required: true
                   schema:
+                    format: uuid
                     type: string
                 - in: query
                   name: locale
                   schema:
+                    default: uk
                     enum:
                         - uk
                         - en
@@ -6526,7 +6570,12 @@ paths:
                 required: true
             responses:
                 "200":
-                    description: ""
+                    description: Success.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
                 "400":
                     $ref: '#/components/responses/BadRequest'
                 "401":

@@ -5,8 +5,8 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
-import type { GetApiV1TeachLessonsLessonIdDocumentLocale } from './getApiV1TeachLessonsLessonIdDocumentLocale.ts';
 
-export type GetApiV1TeachLessonsLessonIdDocumentParams = {
-locale?: GetApiV1TeachLessonsLessonIdDocumentLocale;
+export type UploadTeachLessonImageBody = {
+  /** The image file (JPEG, PNG or WebP; up to 5 MiB; max 40 megapixels). */
+  file: Blob;
 };

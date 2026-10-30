@@ -6,10 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PostApiV1TeachLessonsLessonIdDocumentPublishLocale = typeof PostApiV1TeachLessonsLessonIdDocumentPublishLocale[keyof typeof PostApiV1TeachLessonsLessonIdDocumentPublishLocale];
+export type PublishTeachLessonDocumentLocale = typeof PublishTeachLessonDocumentLocale[keyof typeof PublishTeachLessonDocumentLocale];
 
 
-export const PostApiV1TeachLessonsLessonIdDocumentPublishLocale = {
+export const PublishTeachLessonDocumentLocale = {
   uk: 'uk',
   en: 'en',
 } as const;
