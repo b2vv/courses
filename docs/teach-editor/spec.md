@@ -32,7 +32,11 @@ instructor-facing API path or UI surface, so the capability is unreachable for a
   serve draft-get / draft-save / publish to an authenticated instructor, routed through the **same
   owner-scoped application path** (`Documents` + `requireEditor`). No new authorization logic.
 - **AC2** Each teach endpoint **independently** enforces owner-of-THIS-lesson (not merely
-  role=instructor): a non-owner instructor → `course_forbidden`; a student → `forbidden`.
+  role=instructor). The refusal code is per-endpoint, reflecting the reused handlers (no code change):
+  on the **document** endpoints a non-owner instructor → `course_forbidden` (course module
+  `ErrCourseForbidden`), on the **image** endpoint a non-owner instructor → `forbidden` (image module
+  `ErrForbidden`); a student → `forbidden` on all. The owner-enforcement property is identical across
+  all four endpoints; only the error-code string differs by module.
 - **AC3** Mounting the teach endpoints (`RegisterTeach`) widens **nothing** beyond exactly those three
   document ops — no sibling path under the new prefix becomes reachable, and the `/admin` and `/learn`
   document endpoints are byte-unchanged.

@@ -93,7 +93,7 @@ that is functionally already authorized.
 | New | Why existing did not fit |
 |---|---|
 | Teach `DocumentAuthoringRepository` adapter calling `/api/v1/teach/...` via Orval | the admin repository targets `/admin/*` endpoints; the teach UI must hit `/teach/*` (Option B). |
-| `createTeachDocumentQueries` (or parameterize the factory by repository + query-key prefix so `admin`/`teach` share one factory) | the current factory hard-codes the `['admin', …]` query key; generalizing avoids a copy that drifts (constitution: DRY, but not at the cost of the admin key — see §7). |
+| Generalize the one factory by (repository + query-key prefix) so `admin`/`teach` share it — **decided: parameterize, do not copy** (NB1, 2026-10-30) | the current factory hard-codes the `['admin', …]` query key; a copy would drift. Parameterizing keeps the admin key byte-identical (prefix `'admin'`) while adding a `'teach'` prefix — DRY without regressing admin (constitution §7). |
 | Teach composition root exposing `documents` + the teach course-tree query | request-scoped wiring lives in `app/composition/`. |
 | Route `teach.courses.$courseId_.lessons.$lessonId.tsx` (editor) mirroring the admin editor route | new file; under the `/teach` layout guard, lazy-loads `LessonDocumentEditor`, passes the teach `documents`. |
 | Lesson-list entry on `teach.courses.$courseId.tsx` (course → lessons → editor) | P5: no lesson list on the teach course view today. |
@@ -118,6 +118,13 @@ that is functionally already authorized.
   edits+publishes own lesson; non-owner instructor refused.
 - **Image bytes / nginx.** No change to the media/image byte path or nginx `auth_request`; the teach
   image upload reuses the same `upload` application and storage. No new byte-reachability surface.
+- **Concurrency & re-entry (editing feature — concurrent save, double-publish, two tabs on one lesson).**
+  The defense already exists in the reused-as-is `saveDraft` / `publish`: optimistic concurrency on
+  `expectedUpdatedAt`, so a stale write returns `ErrDocumentConflict` → HTTP 409 `document_conflict`
+  (`course/adapters/http/document_handler.go:38,85-93,117-122,185-186`). The teach mount reuses these
+  handler bodies unchanged, so the teach editor inherits the same 409 behavior; the UI reuses the admin
+  editor's existing conflict handling. No new concurrency logic. Image upload is idempotent-safe (each
+  upload is a fresh image id; LB09a/N1 already compensate orphaned bytes on insert failure).
 
 ## 5. Migration plan
 
@@ -187,14 +194,16 @@ delegated, this table is not a gate).
 | T2 | Owner saves draft | as T1 | `PUT /api/v1/teach/lessons/L/document` (sameOrigin) | 200, updatedAt advanced | contract test + e2e | AC1, AC7 |
 | T3 | Owner publishes | as T1 | `POST /api/v1/teach/lessons/L/document/publish` (sameOrigin) | 200/204; published path reflects it | contract test + e2e | AC1, AC7 |
 | T4 | Owner uploads image | as T1 | `POST /api/v1/teach/lessons/L/images` (sameOrigin) | 201 image created, owner-scoped | contract test + e2e | AC1(image), AC7 |
-| T5 | Non-owner instructor refused | Instructor does NOT own course of lesson L | any teach op on L | `course_forbidden` (403), per endpoint independently | contract test (each endpoint) + e2e | AC2 |
-| T6 | Student refused | role=student | any teach op | `forbidden` | contract test | AC2 |
+| T5a | Non-owner instructor refused (document ops) | Instructor does NOT own course of lesson L | GET/PUT/POST-publish teach document op on L | `course_forbidden` (403), per endpoint independently | contract test (each endpoint) + e2e | AC2 |
+| T5b | Non-owner instructor refused (image) | as T5a | `POST /teach/lessons/L/images` | `forbidden` (403) — image module emits `ErrForbidden`, NOT `course_forbidden` (no handler change) | contract test | AC2 |
+| T6 | Student refused | role=student | any teach op | `forbidden` (403) | contract test | AC2 |
 | T7 | No sibling widening | teach mount active | request a non-mounted path under `/teach/lessons/{id}/…` | 404 (not reachable) | contract-census test | AC3 |
 | T8 | Admin + learn unchanged | — | existing admin/learn document suites | byte-for-byte pass, unchanged | existing contract tests re-run | AC3 |
 | T9 | Owner edits via UI | owner-instructor signed in | open `/teach` course → lesson → edit → save → publish | editor works; no path to another owner's content | e2e | AC4 |
 | T10 | sameOrigin parity | teach mount active | inspect middleware chain per route | sameOrigin on PUT/POST only, absent on GET | mount test | AC7 |
 | T11 | Contract regenerates | endpoints added | `make check-generated` | no drift; teach routes in OpenAPI; Orval client updated | gate | AC5 |
 | T12 | Full ordered gate green | all slices merged | `make check` (through e2e) | green incl. new e2e | gate | AC6 |
+| T13 | Empty states render | owner with a course of 0 lessons, or a lesson with no draft | open teach course / lesson | empty lesson list and empty-draft editor render benignly (no crash/invention), reusing admin editor empty-state handling | component test | AC4 |
 
 ## 10. Verification (machine gates, `.claude/standards.md` §Машинні гейти)
 
