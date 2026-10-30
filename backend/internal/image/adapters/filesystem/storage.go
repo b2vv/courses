@@ -58,6 +58,20 @@ func (s *Storage) Put(ctx context.Context, id, extension string, r io.Reader) (w
 	return written, nil
 }
 
+// Delete removes the object named <id>.<extension>. It applies the same key guards as Put so the
+// traversal guard is complete on this path too, then removes through the rooted FS. Used by the
+// uploader to compensate a failed insert after a successful Put (LB09a); a missing file surfaces as
+// an error to the caller, which joins it with the original insert error rather than masking it.
+func (s *Storage) Delete(ctx context.Context, id, extension string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !validUUID(id) || !validExtension(extension) {
+		return errInvalidImageKey
+	}
+	return s.root.Remove(id + "." + extension)
+}
+
 // validExtension gates the filename suffix to the served image allowlist; nginx maps each to its
 // Content-Type by extension. Kept here (not just the caller) so the traversal guard is complete.
 func validExtension(extension string) bool {
