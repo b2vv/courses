@@ -212,9 +212,17 @@ seed-identities → seed → smoke → e2e`. `lint` includes the frontend archit
 `check-generated` catches OpenAPI/Orval drift. Measured results → `docs/teach-editor/report.md`.
 Per-slice: `npm run format` on touched frontend (gotcha: Codex/format skip trips format-check first).
 
-## 11. GATE 2 — critique & defense (next, before any code)
+## 11. GATE 2 — critique & defense — **PASS** (2026-10-30)
 
-Three checks, all mandatory (two delegated to FRESH subagents, one inline):
+**Verdict: PASS.** Reviewer: independent fresh-context subagent (review_mode `independent_subagent`,
+owner-authorized 2026-10-30; `gate-reviewer` agent avoided — known to trip a safeguard on
+critique/defense). Round 1 = RED on two closable items (B1 per-endpoint refusal codes; defense Q3
+race/re-entry) — both verified against the real handlers and closed by plan/spec edits (no code
+change), committed `7164f31`. Round 2 (delta) = PASS: zero blocking, zero unclosed defense rows, all
+five pinned facts (P1–P5) confirmed, both auth must-checks (AC7, AC3) sound. §6 option (a) reuse
+confirmed owner-scoped (`authoring.go:78` `CanManage(InstructorID)`). Cleared to tasks.
+
+Three checks, all mandatory (two delegated to a FRESH subagent, one inline):
 
 - **plan-critique** on this plan — red if any blocking item open or a lens didn't return.
 - **plan-defense** on this plan — red if any of the 5 questions has an unclosed row.
