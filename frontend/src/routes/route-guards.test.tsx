@@ -22,6 +22,7 @@ import { createMemoryTranscriptHistory } from '../modules/transcript';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import {
   createAdminDocumentQueries,
+  createTeachDocumentQueries,
   createDocumentQueries,
   type DocumentRepository,
 } from '../modules/document';
@@ -300,7 +301,15 @@ function createTestRouter(
             destroy: () => undefined,
           })),
       },
-      teach: createTeachQueries(teachStub),
+      teach: {
+        ...createTeachQueries(teachStub),
+        documents: createTeachDocumentQueries({
+          getDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          saveDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          publish: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+          uploadImage: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+        }),
+      },
       enrollment: createEnrollmentQueries({
         membership: async () => ({ ok: true, value: { member: false, state: null } }),
         enroll: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),

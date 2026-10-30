@@ -6,10 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type GetApiV1TeachLessonsLessonIdDocumentLocale = typeof GetApiV1TeachLessonsLessonIdDocumentLocale[keyof typeof GetApiV1TeachLessonsLessonIdDocumentLocale];
+export type GetTeachLessonDocumentLocale = typeof GetTeachLessonDocumentLocale[keyof typeof GetTeachLessonDocumentLocale];
 
 
-export const GetApiV1TeachLessonsLessonIdDocumentLocale = {
+export const GetTeachLessonDocumentLocale = {
   uk: 'uk',
   en: 'en',
 } as const;

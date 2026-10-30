@@ -12,6 +12,10 @@ import {
   publishAdminLessonDocument,
   saveAdminLessonDocument,
   uploadAdminLessonImage,
+  getTeachLessonDocument,
+  saveTeachLessonDocument,
+  publishTeachLessonDocument,
+  uploadTeachLessonImage,
 } from '../../../adapters/api/generated/courses';
 import { documentErrorSchema } from './document-schema';
 import {
@@ -66,17 +70,55 @@ const uploadRefusals: Readonly<Record<number, readonly ImageUploadErrorCode[]>> 
   503: ['dependency_unavailable'],
 };
 
-/** One repository per browser/SSR request scope; generated transport never escapes this adapter. */
+type DocumentOperations = {
+  readonly get: typeof getAdminLessonDocument;
+  readonly save: typeof saveAdminLessonDocument;
+  readonly publish: typeof publishAdminLessonDocument;
+  readonly uploadImage: typeof uploadAdminLessonImage;
+};
+
 export function createApiDocumentAuthoringRepository(
   options: TransportOptions = {},
+): DocumentAuthoringRepository {
+  return createDocumentAuthoringRepository(
+    options,
+    {
+      get: getAdminLessonDocument,
+      save: saveAdminLessonDocument,
+      publish: publishAdminLessonDocument,
+      uploadImage: uploadAdminLessonImage,
+    },
+    'admin',
+  );
+}
+
+export function createApiTeachDocumentAuthoringRepository(
+  options: TransportOptions = {},
+): DocumentAuthoringRepository {
+  return createDocumentAuthoringRepository(
+    options,
+    {
+      get: getTeachLessonDocument,
+      save: saveTeachLessonDocument,
+      publish: publishTeachLessonDocument,
+      uploadImage: uploadTeachLessonImage,
+    },
+    'teach',
+  );
+}
+
+/** One repository per browser/SSR request scope; generated transport never escapes this adapter. */
+function createDocumentAuthoringRepository(
+  options: TransportOptions,
+  operations: DocumentOperations,
+  labelPrefix: 'admin' | 'teach',
 ): DocumentAuthoringRepository {
   const send = createApiTransport(options);
   return {
     async getDraft(lessonId, locale, signal) {
       const outcome = await send(
-        'admin.document',
-        (init) =>
-          getAdminLessonDocument(lessonId, locale === undefined ? undefined : { locale }, init),
+        `${labelPrefix}.document`,
+        (init) => operations.get(lessonId, locale === undefined ? undefined : { locale }, init),
         200,
         signal,
       );
@@ -94,9 +136,9 @@ export function createApiDocumentAuthoringRepository(
     async saveDraft(lessonId, document: LessonDocument, expectedUpdatedAt, _locale, signal) {
       // The save takes no locale query: the row is chosen by the document's own locale.
       const outcome = await send(
-        'admin.document.save',
+        `${labelPrefix}.document.save`,
         (init) =>
-          saveAdminLessonDocument(
+          operations.save(
             lessonId,
             {
               ...(expectedUpdatedAt === null ? {} : { expectedUpdatedAt }),
@@ -116,9 +158,9 @@ export function createApiDocumentAuthoringRepository(
 
     async publish(lessonId, expectedUpdatedAt, locale, signal) {
       const outcome = await send(
-        'admin.document.publish',
+        `${labelPrefix}.document.publish`,
         (init) =>
-          publishAdminLessonDocument(
+          operations.publish(
             lessonId,
             { expectedUpdatedAt },
             locale === undefined ? undefined : { locale },
@@ -136,8 +178,8 @@ export function createApiDocumentAuthoringRepository(
 
     async uploadImage(lessonId, file, signal) {
       const outcome = await send(
-        'admin.image.upload',
-        (init) => uploadAdminLessonImage(lessonId, { file }, init),
+        `${labelPrefix}.image.upload`,
+        (init) => operations.uploadImage(lessonId, { file }, init),
         201,
         signal,
       );

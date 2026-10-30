@@ -49,10 +49,10 @@ import type {
   ForbiddenResponse,
   GetAdminLessonDocumentParams,
   GetAdminStatsTimeseriesParams,
-  GetApiV1TeachLessonsLessonIdDocumentParams,
   GetCourseRosterParams,
   GetLearnLessonDocumentParams,
   GetLessonTranscriptParams,
+  GetTeachLessonDocumentParams,
   GrantForbiddenResponse,
   ImageUploadResponse,
   Instructor,
@@ -109,13 +109,13 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
-  PostApiV1TeachLessonsLessonIdDocumentPublishParams,
   PublicReviewPage,
   PublishAdminLessonDocumentParams,
   PublishCommentRequest,
   PublishLessonDocumentRequest,
   PublishLessonDraft200,
   PublishLessonDraftRequest,
+  PublishTeachLessonDocumentParams,
   PurchaseConflictResponse,
   PurchaseOrder,
   PutReviewRequest,
@@ -146,6 +146,7 @@ import type {
   UpdateCommentRequest,
   UploadAdminLessonImageBody,
   UploadConflictResponse,
+  UploadTeachLessonImageBody,
   UserNotFoundResponse,
   VideoNotFoundResponse,
   VideoNotRetryableResponse,
@@ -6840,51 +6841,51 @@ export const getCourseRoster = async (courseId: string,
 
 
 
-export type getApiV1TeachCoursesIdResponse200 = {
+export type getTeachCourseResponse200 = {
   data: AdminCourseTree
   status: 200
 }
 
-export type getApiV1TeachCoursesIdResponse400 = {
+export type getTeachCourseResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type getApiV1TeachCoursesIdResponse401 = {
+export type getTeachCourseResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type getApiV1TeachCoursesIdResponse403 = {
+export type getTeachCourseResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type getApiV1TeachCoursesIdResponse404 = {
+export type getTeachCourseResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type getApiV1TeachCoursesIdResponse500 = {
+export type getTeachCourseResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type getApiV1TeachCoursesIdResponse503 = {
+export type getTeachCourseResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getApiV1TeachCoursesIdResponseSuccess = (getApiV1TeachCoursesIdResponse200) & {
+export type getTeachCourseResponseSuccess = (getTeachCourseResponse200) & {
   headers: Headers;
 };
-export type getApiV1TeachCoursesIdResponseError = (getApiV1TeachCoursesIdResponse400 | getApiV1TeachCoursesIdResponse401 | getApiV1TeachCoursesIdResponse403 | getApiV1TeachCoursesIdResponse404 | getApiV1TeachCoursesIdResponse500 | getApiV1TeachCoursesIdResponse503) & {
+export type getTeachCourseResponseError = (getTeachCourseResponse400 | getTeachCourseResponse401 | getTeachCourseResponse403 | getTeachCourseResponse404 | getTeachCourseResponse500 | getTeachCourseResponse503) & {
   headers: Headers;
 };
 
-export type getApiV1TeachCoursesIdResponse = (getApiV1TeachCoursesIdResponseSuccess | getApiV1TeachCoursesIdResponseError)
+export type getTeachCourseResponse = (getTeachCourseResponseSuccess | getTeachCourseResponseError)
 
-export const getGetApiV1TeachCoursesIdUrl = (id: string,) => {
+export const getGetTeachCourseUrl = (id: string,) => {
 
 
 
@@ -6892,9 +6893,12 @@ export const getGetApiV1TeachCoursesIdUrl = (id: string,) => {
   return `${apiOrigin()}/api/v1/teach/courses/${id}`
 }
 
-export const getApiV1TeachCoursesId = async (id: string, options?: RequestInit): Promise<getApiV1TeachCoursesIdResponse> => {
+/**
+ * Owner-instructor read of an authored course tree they own, including unpublished lessons, for teach-side navigation. A non-owner instructor is refused; unknown IDs are distinguished from ownership refusals. Query parameters are not supported. Responses are never cached.
+ */
+export const getTeachCourse = async (id: string, options?: RequestInit): Promise<getTeachCourseResponse> => {
 
-  const res = await fetch(getGetApiV1TeachCoursesIdUrl(id),
+  const res = await fetch(getGetTeachCourseUrl(id),
   {
     ...options,
     method: 'GET'
@@ -6906,8 +6910,8 @@ export const getApiV1TeachCoursesId = async (id: string, options?: RequestInit):
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getApiV1TeachCoursesIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getApiV1TeachCoursesIdResponse
+  const data: getTeachCourseResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getTeachCourseResponse
 }
 
 
@@ -6989,56 +6993,56 @@ export const listTeachLearners = async (params?: ListTeachLearnersParams, option
 
 
 
-export type postApiV1TeachLessonsIdImagesResponse201 = {
+export type uploadTeachLessonImageResponse201 = {
   data: ImageUploadResponse
   status: 201
 }
 
-export type postApiV1TeachLessonsIdImagesResponse400 = {
+export type uploadTeachLessonImageResponse400 = {
   data: MediaBadRequestResponse
   status: 400
 }
 
-export type postApiV1TeachLessonsIdImagesResponse401 = {
+export type uploadTeachLessonImageResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type postApiV1TeachLessonsIdImagesResponse403 = {
+export type uploadTeachLessonImageResponse403 = {
   data: MediaForbiddenResponse
   status: 403
 }
 
-export type postApiV1TeachLessonsIdImagesResponse404 = {
+export type uploadTeachLessonImageResponse404 = {
   data: LessonNotFoundResponse
   status: 404
 }
 
-export type postApiV1TeachLessonsIdImagesResponse413 = {
+export type uploadTeachLessonImageResponse413 = {
   data: ErrorResponse
   status: 413
 }
 
-export type postApiV1TeachLessonsIdImagesResponse415 = {
+export type uploadTeachLessonImageResponse415 = {
   data: ErrorResponse
   status: 415
 }
 
-export type postApiV1TeachLessonsIdImagesResponse503 = {
+export type uploadTeachLessonImageResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type postApiV1TeachLessonsIdImagesResponseSuccess = (postApiV1TeachLessonsIdImagesResponse201) & {
+export type uploadTeachLessonImageResponseSuccess = (uploadTeachLessonImageResponse201) & {
   headers: Headers;
 };
-export type postApiV1TeachLessonsIdImagesResponseError = (postApiV1TeachLessonsIdImagesResponse400 | postApiV1TeachLessonsIdImagesResponse401 | postApiV1TeachLessonsIdImagesResponse403 | postApiV1TeachLessonsIdImagesResponse404 | postApiV1TeachLessonsIdImagesResponse413 | postApiV1TeachLessonsIdImagesResponse415 | postApiV1TeachLessonsIdImagesResponse503) & {
+export type uploadTeachLessonImageResponseError = (uploadTeachLessonImageResponse400 | uploadTeachLessonImageResponse401 | uploadTeachLessonImageResponse403 | uploadTeachLessonImageResponse404 | uploadTeachLessonImageResponse413 | uploadTeachLessonImageResponse415 | uploadTeachLessonImageResponse503) & {
   headers: Headers;
 };
 
-export type postApiV1TeachLessonsIdImagesResponse = (postApiV1TeachLessonsIdImagesResponseSuccess | postApiV1TeachLessonsIdImagesResponseError)
+export type uploadTeachLessonImageResponse = (uploadTeachLessonImageResponseSuccess | uploadTeachLessonImageResponseError)
 
-export const getPostApiV1TeachLessonsIdImagesUrl = (id: string,) => {
+export const getUploadTeachLessonImageUrl = (id: string,) => {
 
 
 
@@ -7046,72 +7050,75 @@ export const getPostApiV1TeachLessonsIdImagesUrl = (id: string,) => {
   return `${apiOrigin()}/api/v1/teach/lessons/${id}/images`
 }
 
-export const postApiV1TeachLessonsIdImages = async (id: string, options?: RequestInit): Promise<postApiV1TeachLessonsIdImagesResponse> => {
+export const uploadTeachLessonImage = async (id: string,
+    uploadTeachLessonImageBody: UploadTeachLessonImageBody, options?: RequestInit): Promise<uploadTeachLessonImageResponse> => {
+    const formData = new FormData();
+formData.append(`file`, uploadTeachLessonImageBody.file);
 
-  const res = await fetch(getPostApiV1TeachLessonsIdImagesUrl(id),
+  const res = await fetch(getUploadTeachLessonImageUrl(id),
   {
     ...options,
     method: 'POST'
-
-
+    ,
+    body: formData
   }
 )
 
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: postApiV1TeachLessonsIdImagesResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postApiV1TeachLessonsIdImagesResponse
+  const data: uploadTeachLessonImageResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as uploadTeachLessonImageResponse
 }
 
 
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse200 = {
+export type getTeachLessonDocumentResponse200 = {
   data: LessonDocumentDraft
   status: 200
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse400 = {
+export type getTeachLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse401 = {
+export type getTeachLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse403 = {
+export type getTeachLessonDocumentResponse403 = {
   data: LearningForbiddenResponse
   status: 403
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse404 = {
+export type getTeachLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse500 = {
+export type getTeachLessonDocumentResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse503 = {
+export type getTeachLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getApiV1TeachLessonsLessonIdDocumentResponseSuccess = (getApiV1TeachLessonsLessonIdDocumentResponse200) & {
+export type getTeachLessonDocumentResponseSuccess = (getTeachLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type getApiV1TeachLessonsLessonIdDocumentResponseError = (getApiV1TeachLessonsLessonIdDocumentResponse400 | getApiV1TeachLessonsLessonIdDocumentResponse401 | getApiV1TeachLessonsLessonIdDocumentResponse403 | getApiV1TeachLessonsLessonIdDocumentResponse404 | getApiV1TeachLessonsLessonIdDocumentResponse500 | getApiV1TeachLessonsLessonIdDocumentResponse503) & {
+export type getTeachLessonDocumentResponseError = (getTeachLessonDocumentResponse400 | getTeachLessonDocumentResponse401 | getTeachLessonDocumentResponse403 | getTeachLessonDocumentResponse404 | getTeachLessonDocumentResponse500 | getTeachLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type getApiV1TeachLessonsLessonIdDocumentResponse = (getApiV1TeachLessonsLessonIdDocumentResponseSuccess | getApiV1TeachLessonsLessonIdDocumentResponseError)
+export type getTeachLessonDocumentResponse = (getTeachLessonDocumentResponseSuccess | getTeachLessonDocumentResponseError)
 
-export const getGetApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,
-    params?: GetApiV1TeachLessonsLessonIdDocumentParams,) => {
+export const getGetTeachLessonDocumentUrl = (lessonId: string,
+    params?: GetTeachLessonDocumentParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -7126,10 +7133,13 @@ export const getGetApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,
   return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document`
 }
 
-export const getApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
-    params?: GetApiV1TeachLessonsLessonIdDocumentParams, options?: RequestInit): Promise<getApiV1TeachLessonsLessonIdDocumentResponse> => {
+/**
+ * Owner-instructor read of the draft and its optimistic-lock token, scoped to the lesson's course owner. An absent draft has updatedAt null.
+ */
+export const getTeachLessonDocument = async (lessonId: string,
+    params?: GetTeachLessonDocumentParams, options?: RequestInit): Promise<getTeachLessonDocumentResponse> => {
 
-  const res = await fetch(getGetApiV1TeachLessonsLessonIdDocumentUrl(lessonId,params),
+  const res = await fetch(getGetTeachLessonDocumentUrl(lessonId,params),
   {
     ...options,
     method: 'GET'
@@ -7141,62 +7151,62 @@ export const getApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getApiV1TeachLessonsLessonIdDocumentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getApiV1TeachLessonsLessonIdDocumentResponse
+  const data: getTeachLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getTeachLessonDocumentResponse
 }
 
 
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse200 = {
+export type saveTeachLessonDocumentResponse200 = {
   data: LessonDocumentUpdated
   status: 200
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse400 = {
+export type saveTeachLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse401 = {
+export type saveTeachLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse403 = {
+export type saveTeachLessonDocumentResponse403 = {
   data: LearningForbiddenResponse
   status: 403
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse404 = {
+export type saveTeachLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse409 = {
+export type saveTeachLessonDocumentResponse409 = {
   data: LessonDocumentConflictResponse
   status: 409
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse500 = {
+export type saveTeachLessonDocumentResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse503 = {
+export type saveTeachLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type putApiV1TeachLessonsLessonIdDocumentResponseSuccess = (putApiV1TeachLessonsLessonIdDocumentResponse200) & {
+export type saveTeachLessonDocumentResponseSuccess = (saveTeachLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type putApiV1TeachLessonsLessonIdDocumentResponseError = (putApiV1TeachLessonsLessonIdDocumentResponse400 | putApiV1TeachLessonsLessonIdDocumentResponse401 | putApiV1TeachLessonsLessonIdDocumentResponse403 | putApiV1TeachLessonsLessonIdDocumentResponse404 | putApiV1TeachLessonsLessonIdDocumentResponse409 | putApiV1TeachLessonsLessonIdDocumentResponse500 | putApiV1TeachLessonsLessonIdDocumentResponse503) & {
+export type saveTeachLessonDocumentResponseError = (saveTeachLessonDocumentResponse400 | saveTeachLessonDocumentResponse401 | saveTeachLessonDocumentResponse403 | saveTeachLessonDocumentResponse404 | saveTeachLessonDocumentResponse409 | saveTeachLessonDocumentResponse500 | saveTeachLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type putApiV1TeachLessonsLessonIdDocumentResponse = (putApiV1TeachLessonsLessonIdDocumentResponseSuccess | putApiV1TeachLessonsLessonIdDocumentResponseError)
+export type saveTeachLessonDocumentResponse = (saveTeachLessonDocumentResponseSuccess | saveTeachLessonDocumentResponseError)
 
-export const getPutApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,) => {
+export const getSaveTeachLessonDocumentUrl = (lessonId: string,) => {
 
 
 
@@ -7204,8 +7214,11 @@ export const getPutApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,) =>
   return `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document`
 }
 
-export const putApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
-    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<putApiV1TeachLessonsLessonIdDocumentResponse> => {
+/**
+ * Same-origin owner write. Locale comes from the document; query parameters are forbidden. Null or absent expectedUpdatedAt means first write. Timestamps require six fractional digits. Maximum request body is 2 MiB.
+ */
+export const saveTeachLessonDocument = async (lessonId: string,
+    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<saveTeachLessonDocumentResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -7213,7 +7226,7 @@ export const putApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getPutApiV1TeachLessonsLessonIdDocumentUrl(lessonId),
+const res = await fetch(getSaveTeachLessonDocumentUrl(lessonId),
   {
     ...options,
     method: 'PUT',
@@ -7225,63 +7238,63 @@ const res = await fetch(getPutApiV1TeachLessonsLessonIdDocumentUrl(lessonId),
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: putApiV1TeachLessonsLessonIdDocumentResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as putApiV1TeachLessonsLessonIdDocumentResponse
+  const data: saveTeachLessonDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as saveTeachLessonDocumentResponse
 }
 
 
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse200 = {
+export type publishTeachLessonDocumentResponse200 = {
   data: void
   status: 200
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse400 = {
+export type publishTeachLessonDocumentResponse400 = {
   data: BadRequestResponse
   status: 400
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse401 = {
+export type publishTeachLessonDocumentResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse403 = {
+export type publishTeachLessonDocumentResponse403 = {
   data: LearningForbiddenResponse
   status: 403
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse404 = {
+export type publishTeachLessonDocumentResponse404 = {
   data: NotFoundResponse
   status: 404
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse409 = {
+export type publishTeachLessonDocumentResponse409 = {
   data: LessonDocumentConflictResponse
   status: 409
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse500 = {
+export type publishTeachLessonDocumentResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse503 = {
+export type publishTeachLessonDocumentResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponseSuccess = (postApiV1TeachLessonsLessonIdDocumentPublishResponse200) & {
+export type publishTeachLessonDocumentResponseSuccess = (publishTeachLessonDocumentResponse200) & {
   headers: Headers;
 };
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponseError = (postApiV1TeachLessonsLessonIdDocumentPublishResponse400 | postApiV1TeachLessonsLessonIdDocumentPublishResponse401 | postApiV1TeachLessonsLessonIdDocumentPublishResponse403 | postApiV1TeachLessonsLessonIdDocumentPublishResponse404 | postApiV1TeachLessonsLessonIdDocumentPublishResponse409 | postApiV1TeachLessonsLessonIdDocumentPublishResponse500 | postApiV1TeachLessonsLessonIdDocumentPublishResponse503) & {
+export type publishTeachLessonDocumentResponseError = (publishTeachLessonDocumentResponse400 | publishTeachLessonDocumentResponse401 | publishTeachLessonDocumentResponse403 | publishTeachLessonDocumentResponse404 | publishTeachLessonDocumentResponse409 | publishTeachLessonDocumentResponse500 | publishTeachLessonDocumentResponse503) & {
   headers: Headers;
 };
 
-export type postApiV1TeachLessonsLessonIdDocumentPublishResponse = (postApiV1TeachLessonsLessonIdDocumentPublishResponseSuccess | postApiV1TeachLessonsLessonIdDocumentPublishResponseError)
+export type publishTeachLessonDocumentResponse = (publishTeachLessonDocumentResponseSuccess | publishTeachLessonDocumentResponseError)
 
-export const getPostApiV1TeachLessonsLessonIdDocumentPublishUrl = (lessonId: string,
-    params?: PostApiV1TeachLessonsLessonIdDocumentPublishParams,) => {
+export const getPublishTeachLessonDocumentUrl = (lessonId: string,
+    params?: PublishTeachLessonDocumentParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -7296,9 +7309,12 @@ export const getPostApiV1TeachLessonsLessonIdDocumentPublishUrl = (lessonId: str
   return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document/publish?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document/publish`
 }
 
-export const postApiV1TeachLessonsLessonIdDocumentPublish = async (lessonId: string,
+/**
+ * Same-origin owner publish. Maximum request body is 1 KiB. Timestamps require six fractional digits. Publication advances updatedAt; re-read the draft for the new token.
+ */
+export const publishTeachLessonDocument = async (lessonId: string,
     publishLessonDocumentRequest: PublishLessonDocumentRequest,
-    params?: PostApiV1TeachLessonsLessonIdDocumentPublishParams, options?: RequestInit): Promise<postApiV1TeachLessonsLessonIdDocumentPublishResponse> => {
+    params?: PublishTeachLessonDocumentParams, options?: RequestInit): Promise<publishTeachLessonDocumentResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -7306,7 +7322,7 @@ export const postApiV1TeachLessonsLessonIdDocumentPublish = async (lessonId: str
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getPostApiV1TeachLessonsLessonIdDocumentPublishUrl(lessonId,params),
+const res = await fetch(getPublishTeachLessonDocumentUrl(lessonId,params),
   {
     ...options,
     method: 'POST',
@@ -7318,8 +7334,8 @@ const res = await fetch(getPostApiV1TeachLessonsLessonIdDocumentPublishUrl(lesso
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: postApiV1TeachLessonsLessonIdDocumentPublishResponse['data'] = body ? JSON.parse(body) : undefined
-  return { data, status: res.status, headers: res.headers } as postApiV1TeachLessonsLessonIdDocumentPublishResponse
+  const data: publishTeachLessonDocumentResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as publishTeachLessonDocumentResponse
 }
 
 

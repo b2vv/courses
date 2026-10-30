@@ -161,3 +161,54 @@ lives in the image domain (tested there); worth keeping in mind on a future chan
 lacks an AST coverage test like the image module's — an asymmetry, not a gap (the teach course GET is
 covered by a contract test + the OpenAPI fidelity tests). Merge of PR #93 awaits owner confirmation
 (feature PR, not an A-batch self-merge).
+
+## TE4 — 2026-10-30 (Codex), pre-code checkpoint
+
+READY for the user-requested document data-layer slice. Owner/writer: Codex; root
+`/Users/strelia/projects/courses`, branch `feat/teach-editor`, base
+`e82aa4052e3b276e9962bc11dde7762285ec49d1`. Small implementation slice of the
+approved phase plan (§11); no new planning decision or additional critique needed.
+Acceptance: shared parameterized repository/query factories, unchanged admin API/keys,
+teach operations and request-scoped composition; query and wire tests. Course-tree
+and editor UI are outside this specific user brief. Existing generated-client staged
+changes are inputs; unrelated .gitignore/security WIP is preserved. No generation/commit.
+Inspected admin adapter, query factory/tests, document barrel, admin/teach composition,
+teach queries and generated operations by direct file reads (graph refresh unnecessary).
+Shared authoring factory stays internal because the barrel already exports a learner
+`createDocumentQueries`. TE1–TE3 and generated teach functions are present.
+Pinned Factory release verification: PASS, 447 files. Verification commands authorized
+by the task; on sandbox tooling/cache failure stop and hand back to coordinator.
+Review delivery: coordinator/manual handoff, exact independent reviewer pending; no
+automatic spawn/contact. Author checks are not independent review or phase closure.
+
+### TE4 implementation and verification
+
+Implemented a shared adapter parameterized by the four generated operations and label
+prefix, and an internal generic query factory parameterized by admin/teach. Admin
+public functions, literal query-key helper, refusal maps, mapping and parsing remain
+unchanged. Teach composition exposes request-scoped `documents` using the same options
+as the existing teach repository. Updated the route-guard fixture for this added dependency.
+
+Added `teach-document-queries.test.ts` (7 cases: mirrored admin behavior plus literal
+teach keys and forwarding all four operations) and `teach-document-repository.test.ts`
+(2 node/MSW wire cases: generated teach GET/PUT/publish/multipart requests and named
+403 refusals for all four operations). Run by the coordinator 2026-10-30: PASS (see table).
+
+Requested checks, frontend working directory, against the uncommitted TE4 delta at
+`e82aa4052e3b276e9962bc11dde7762285ec49d1`:
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck` | PASS, exit 0 after adding the missing teach document dependency to the route-guard fixture |
+| `npm run format` | PASS, exit 0; 375 files |
+| `npm run format:check` | PASS, exit 0 |
+| `npm run lint` | PASS, exit 0; architecture checked 229 files |
+| `npm run test` | PASS, exit 0 (coordinator rerun 2026-10-30, non-sandbox listener bind): `src/modules/document` + `src/routes/route-guards.test.tsx` → 100 tests, 0 failed, 0 skipped. Earlier sandbox attempt was BLOCKED, exit 1 before test execution: `listen EPERM: operation not permitted ::1:3000` |
+
+An initial typecheck invocation accidentally ran at repository root and failed ENOENT
+(no package.json); corrected to frontend. The first frontend typecheck identified the
+route-guard fixture dependency, now fixed. No sandbox workaround or escalation used.
+`git diff --exit-code` confirms admin composition and admin query tests unchanged;
+their execution is now unblocked and green (coordinator rerun above). No build, e2e or
+independent review performed yet. TE4 committed with the overlay/generated delta; next:
+independent review before PR #2, and TE5/TE6 remain separate slices.

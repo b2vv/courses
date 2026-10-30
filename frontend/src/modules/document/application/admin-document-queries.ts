@@ -30,12 +30,29 @@ export function adminLessonDocumentQueryKey(lessonId: string, locale?: 'uk' | 'e
   return ['admin', 'document', lessonId, locale ?? null] as const;
 }
 
+export function teachLessonDocumentQueryKey(lessonId: string, locale?: 'uk' | 'en') {
+  return ['teach', 'document', lessonId, locale ?? null] as const;
+}
+
 export function createAdminDocumentQueries(documents: DocumentAuthoringRepository) {
+  return createDocumentQueries(documents, 'admin');
+}
+
+export function createTeachDocumentQueries(documents: DocumentAuthoringRepository) {
+  return createDocumentQueries(documents, 'teach');
+}
+
+function createDocumentQueries<Prefix extends 'admin' | 'teach'>(
+  documents: DocumentAuthoringRepository,
+  keyPrefix: Prefix,
+) {
+  const documentQueryKey = (lessonId: string, locale?: 'uk' | 'en') =>
+    [keyPrefix, 'document', lessonId, locale ?? null] as const;
   return {
     documents,
     document: (lessonId: string, locale?: 'uk' | 'en') =>
       queryOptions({
-        queryKey: adminLessonDocumentQueryKey(lessonId, locale),
+        queryKey: documentQueryKey(lessonId, locale),
         queryFn: async ({ signal }) => {
           const result = await documents.getDraft(lessonId, locale, signal);
           if (!result.ok) throw new DocumentAuthoringError(result.error.code);
@@ -62,7 +79,7 @@ export function createAdminDocumentQueries(documents: DocumentAuthoringRepositor
         // Re-read the draft so the next save carries the fresh optimistic-lock token.
         onSuccess: (_value, { lessonId, locale }) =>
           client.invalidateQueries({
-            queryKey: adminLessonDocumentQueryKey(lessonId, locale),
+            queryKey: documentQueryKey(lessonId, locale),
             exact: true,
           }),
       }),
@@ -81,12 +98,12 @@ export function createAdminDocumentQueries(documents: DocumentAuthoringRepositor
           if (!result.ok) throw new DocumentAuthoringError(result.error.code);
           return result.value;
         },
-        // Publish moves draft into published: the admin draft token changes and every learner's
+        // Publish moves draft into published: the authoring draft token changes and every learner's
         // reader for this lesson is now stale.
         onSuccess: (_value, { lessonId, locale }) =>
           Promise.all([
             client.invalidateQueries({
-              queryKey: adminLessonDocumentQueryKey(lessonId, locale),
+              queryKey: documentQueryKey(lessonId, locale),
               exact: true,
             }),
             // Every locale of the learner's reader for this lesson is now stale, so match by prefix.
