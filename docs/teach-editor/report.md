@@ -139,6 +139,25 @@ From a full-access shell, after `make generate`:
   regenerated; staged; `git diff --exit-code` on generated clean + zero untracked → check-generated satisfied.
 - frontend `typecheck` / `format:check` (373 files) / `lint` (oxlint + architecture 229 files) → all clean.
 
-Deferred to TE6: `make integration` + full ordered `make check` incl. e2e. Independent review of the
-backend batch before merge still pending (mandatory-review-every-task). Batch cadence: 3 PRs (owner,
-2026-10-30) — this is PR #1 (backend TE1-TE3).
+Deferred to TE6: `make integration` + full ordered `make check` incl. e2e. Batch cadence: 3 PRs (owner,
+2026-10-30) — this is PR #1 (backend TE1-TE3), opened as GitHub PR #93.
+
+### Independent review of PR #93 — PASS (independent_subagent, 2026-10-30)
+
+Fresh-context reviewer, read-only, own verdict from the code (review_mode independent_subagent). **PASS,
+zero blocking.** Independently ran `go build ./cmd/api` (exit 0) and `go test ./internal/course/...
+./internal/image/...` (all ok). Verified against the real handlers: RegisterTeach methods are exact
+mirrors of RegisterAdmin (same handlers, no authz/body change); AC7 same-origin parity exact (requireSameOrigin
+on PUT document / POST publish / POST images, absent on both GETs); AC3 no sibling widening + admin/learn
+unchanged; refusal codes correct per handler (document+image → `forbidden`; course-tree non-owner →
+`course_forbidden`, student → `forbidden`); tests assert real observable behavior; generated artifacts
+consistent; the image OpenAPI-coverage AST test was strengthened (asserts both RegisterAdmin+RegisterTeach,
+len==2, fail-closed), not weakened.
+
+Two non-blocking notes, accepted (not regressions): (1) the image teach test drives authorization via an
+injected service error rather than a real access decision, and has no explicit student case — equivalent
+because the image handler does no role-gate itself (identical to the admin path) and the real owner check
+lives in the image domain (tested there); worth keeping in mind on a future change. (2) the course module
+lacks an AST coverage test like the image module's — an asymmetry, not a gap (the teach course GET is
+covered by a contract test + the OpenAPI fidelity tests). Merge of PR #93 awaits owner confirmation
+(feature PR, not an A-batch self-merge).
