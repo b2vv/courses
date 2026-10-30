@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,6 +18,48 @@ const (
 	testAssetID   = "11111111-1111-4111-8111-111111111111"
 	testClaimLeaf = "0123456789abcdef0123456789abcdef"
 )
+
+func TestEnforceTreeModesMakesOutputNotWorldReadable(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "360p")
+	if err := os.MkdirAll(sub, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		filepath.Join(root, "master.m3u8"),
+		filepath.Join(sub, "index.m3u8"),
+		filepath.Join(sub, "init.mp4"),
+		filepath.Join(sub, "segment_00000.m4s"),
+	}
+	for _, file := range files {
+		if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := enforceTreeModes(root); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != fileMode {
+			t.Fatalf("%s mode=%o, want %o", file, info.Mode().Perm(), fileMode)
+		}
+	}
+	for _, directory := range []string{root, sub} {
+		info, err := os.Stat(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != directoryMode {
+			t.Fatalf("%s mode=%o, want %o", directory, info.Mode().Perm(), directoryMode)
+		}
+	}
+}
 
 func TestParseProbeAndAcceptSource(t *testing.T) {
 	t.Parallel()
