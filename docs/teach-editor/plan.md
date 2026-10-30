@@ -129,11 +129,15 @@ that is functionally already authorized.
   same merge); the frontend adapter fails classified (not crash) if an endpoint 404s, because transport
   classifies failures. No separate rollout step — test mode, no prod server (owner decision 2026-10-03).
 
-## 6. Open design decision — teach lesson-list / course-tree data source (for GATE 2 / owner)
+## 6. Design decision (resolved) — teach lesson-list / course-tree data source
+
+**Decision (owner, 2026-10-30): option (a).** Verify by: the lesson-list on the teach course view and
+the editor title block are fed by a new owner-scoped `GET /api/v1/teach/courses/{courseId}`, with no
+`/admin/*` call from the teach UI.
 
 AC4 ("owner opens and edits their own lessons") requires listing a course's lessons on the teach side,
 plus lesson meta (title/module) for the editor title block (the admin route resolves this from
-`admin.detail`'s course tree). P5: no such source exists on teach. Two options — the plan recommends (a):
+`admin.detail`'s course tree). P5: no such source exists on teach. Options considered:
 
 - **(a) Add an owner-scoped teach course-tree read** `GET /api/v1/teach/courses/{courseId}` via
   `courseHandler.RegisterTeach`, returning the authoring tree (incl. unpublished lessons) scoped to the
@@ -142,9 +146,11 @@ plus lesson meta (title/module) for the editor title block (the admin route reso
   Consistent with Option B's "no `/admin` dependency". One new read endpoint beyond the spec's AC1–AC3
   document ops; owner already accepted navigation as a new build at GATE 1.
 - **(b) Reuse `/admin/courses/{id}` from the teach UI.** No new endpoint, but reintroduces the exact
-  `/admin/*` dependency Option B was chosen to remove. Rejected unless owner prefers minimal surface.
+  `/admin/*` dependency Option B was chosen to remove. **Rejected (owner, 2026-10-30)** — product boundary
+  wins over minimal surface.
 
-This is the one genuinely-new backend read beyond the mount aliases; it must be settled at GATE 2.
+This is the one genuinely-new backend read beyond the mount aliases; it adds `courseHandler.RegisterTeach`
+and a teach course-tree query to the frontend §3 "new" lists.
 
 ## 7. Constitution check (`.claude/standards.md` §Конституція → AGENTS.md architecture + TS rules)
 
@@ -206,6 +212,6 @@ Three checks, all mandatory (two delegated to FRESH subagents, one inline):
 - **Constitution** (inline, §7 above) — red on any violation.
 
 Verdict rendered by a fresh-context reviewer, not the author. Red gate stops the move to tasks. Reviewer
-package (this plan + spec.md + `_wip-recon.md`) goes to the current Courses 2 reviewer-of-record (locate
-via `ListAgents`, Courses 2 / `courses-*`, or ask owner). The §6 data-source decision is flagged for the
-owner/reviewer. Code begins only after GATE 2 PASS, on branch `feat/teach-editor`.
+of record: **`courses-96 [557618]`** (owner-authorized, 2026-10-30). Package = this plan + spec.md +
+`_wip-recon.md`, reviewed read-only via `git show` at `613b50d`+ on the shared tree. §6 is resolved (a).
+Code begins only after GATE 2 PASS, on branch `feat/teach-editor`.
