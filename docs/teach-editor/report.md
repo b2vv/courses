@@ -212,3 +212,41 @@ route-guard fixture dependency, now fixed. No sandbox workaround or escalation u
 their execution is now unblocked and green (coordinator rerun above). No build, e2e or
 independent review performed yet. TE4 committed with the overlay/generated delta; next:
 independent review before PR #2, and TE5/TE6 remain separate slices.
+
+## TE5 — 2026-10-30 (Codex impl, coordinator verify)
+
+Frontend teach editor route + nav. Delivered:
+- New route `frontend/src/routes/teach.courses.$courseId_.lessons.$lessonId.tsx` — a near-exact
+  mirror of the admin editor route (`admin.courses.$courseId_.lessons.$lessonId.tsx`): lazy
+  `LessonDocumentEditor`, `ssr:false`, `resolveLessonMeta` from the course tree with a benign
+  null-on-miss title block; differs only in `teach` context (`teach.detail`, `teach.documents`)
+  and the `/teach` path. No `/admin/*` call from the teach flow.
+- `frontend/src/app/composition/teach.ts`: new `detail(id)` query (key `['teach','courses','tree',id]`)
+  over `getTeachCourse` (owner-scoped, from TE3), reusing the admin authoring mappers.
+- `frontend/src/modules/admin/adapters/admin-course-repository.ts` + barrel: `wireError`/`courseTree`
+  renamed to exported `mapAuthoringError`/`mapAuthoringCourseTree` and reused by teach — pure
+  extract+rename, admin runtime unchanged (same logic, same call sites).
+- `frontend/src/modules/document/application/admin-document-queries.ts`: the internal
+  `createDocumentQueries` key-prefix generic widened to a `'admin' | 'teach'` union so both wrappers
+  satisfy one editor props contract. Runtime keys/endpoints/invalidation byte-identical (admin still
+  `['admin',...]`).
+- Lesson-list on the teach course view extracted to a tested presentational component
+  `frontend/src/modules/teach/ui/TeachLessonList.tsx` (the project tests components, not routes):
+  module-grouped lesson links into the editor route, empty modules hidden, `EmptyState` (T13) when
+  zero lessons across all modules (incl. zero modules). The route keeps pending/error/refetch.
+- i18n keys `teach.lessons.empty` / `teach.lessons.loadError` added (uk/en).
+
+Coordinator fix: the R24 route-tree census (`route-guards.test.tsx`) did not list the new editor
+route — added it (globally-counted artefact: whoever adds one cleans up the census).
+
+| Command | Result |
+| --- | --- |
+| `npm run format:check` | PASS, exit 0 |
+| `npm run lint` | PASS, exit 0; architecture 231 files |
+| `npm run typecheck` | PASS, exit 0 |
+| `npm run test` (full) | PASS, exit 0; 95 files, 841 tests, 0 failed, 0 skipped (incl. 4 new `TeachLessonList` cases + R24 census) |
+
+Note (Codex, honest scope): T13's empty-draft **editor** half is already covered by the existing
+`LessonDocumentEditor.test.tsx` (zero sections → EmptyState); this slice adds the empty **lesson-list**
+component test. No build/integration/e2e run here (e2e is TE6). Independent review of the full PR #2
+delta (TE4+TE5) is the next gate before merge.

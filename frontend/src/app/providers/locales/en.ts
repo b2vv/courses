@@ -429,6 +429,10 @@ export const en = {
       },
     },
     teach: {
+      lessons: {
+        empty: 'No lessons yet.',
+        loadError: 'Could not load the lessons.',
+      },
       reviewReports_one: '{{count}} report',
       reviewReports_other: '{{count}} reports',
       dismissReviewReport: 'Dismiss report',

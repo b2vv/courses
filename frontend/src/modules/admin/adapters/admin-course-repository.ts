@@ -33,7 +33,7 @@ const invalid = {
   error: { code: 'invalid_response' },
 } satisfies AuthoringResult<never>;
 
-function wireError(response: WireResponse): AuthoringError {
+export function mapAuthoringError(response: WireResponse): AuthoringError {
   const parsed = errorSchema.safeParse(response.data);
   if (parsed.success) {
     switch (parsed.data.error.code) {
@@ -71,7 +71,10 @@ function wireError(response: WireResponse): AuthoringError {
   return { code: unnamedStatusCode(response.status) };
 }
 
-function courseTree(raw: unknown, expectedId?: CourseId): AuthoringResult<CourseTree> {
+export function mapAuthoringCourseTree(
+  raw: unknown,
+  expectedId?: CourseId,
+): AuthoringResult<CourseTree> {
   const parsed = adminCourseTreeSchema.safeParse(raw);
   if (!parsed.success || (expectedId !== undefined && parsed.data.id !== expectedId))
     return invalid;
@@ -149,7 +152,7 @@ export function createApiAdminCourseRepository(
     const outcome = await send(operation, execute, expected, caller);
     if (!outcome.ok) return { ok: false, error: { code: outcome.code } };
     if (outcome.status === expected) return map(outcome.data);
-    return { ok: false, error: wireError(outcome) };
+    return { ok: false, error: mapAuthoringError(outcome) };
   }
 
   return {
@@ -176,7 +179,7 @@ export function createApiAdminCourseRepository(
         'admin.courses.load',
         (init) => getAdminCourse(id, init),
         200,
-        (raw) => courseTree(raw, id),
+        (raw) => mapAuthoringCourseTree(raw, id),
         signal,
       );
     },
@@ -198,7 +201,7 @@ export function createApiAdminCourseRepository(
         (init) => createAdminCourse(courseWrite(draft), init),
         201,
         (raw) => {
-          const result = courseTree(raw);
+          const result = mapAuthoringCourseTree(raw);
           return result.ok && (result.value.status !== 'draft' || result.value.modules.length > 0)
             ? invalid
             : result;
@@ -211,7 +214,7 @@ export function createApiAdminCourseRepository(
         'admin.courses.save',
         (init) => saveAdminCourse(id, courseSave(edit, expectedUpdatedAt), init),
         200,
-        (raw) => courseTree(raw, id),
+        (raw) => mapAuthoringCourseTree(raw, id),
         signal,
       );
     },
@@ -221,7 +224,7 @@ export function createApiAdminCourseRepository(
         (init) => transitionAdminCourse(id, { status, expectedUpdatedAt }, init),
         200,
         (raw) => {
-          const result = courseTree(raw, id);
+          const result = mapAuthoringCourseTree(raw, id);
           return result.ok && result.value.status !== status ? invalid : result;
         },
         signal,

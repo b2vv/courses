@@ -1,5 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
-import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  focusManager,
+  queryOptions,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -303,6 +308,13 @@ function createTestRouter(
       },
       teach: {
         ...createTeachQueries(teachStub),
+        detail: (id) =>
+          queryOptions({
+            queryKey: ['teach', 'courses', 'tree', id],
+            queryFn: async (): Promise<CourseTree> => {
+              throw new Error('dependency_unavailable');
+            },
+          }),
         documents: createTeachDocumentQueries({
           getDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
           saveDraft: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
@@ -455,6 +467,11 @@ test('R24 keeps the generated route tree equal to the complete expected path lis
         id: '/teach/courses/$courseId',
         path: 'courses/$courseId',
         fullPath: '/teach/courses/$courseId',
+      },
+      {
+        id: '/teach/courses/$courseId_/lessons/$lessonId',
+        path: 'courses/$courseId/lessons/$lessonId',
+        fullPath: '/teach/courses/$courseId/lessons/$lessonId',
       },
       { id: '/teach/learners', path: 'learners', fullPath: '/teach/learners' },
     ].sort((left, right) => left.id.localeCompare(right.id)),
