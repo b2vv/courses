@@ -89,7 +89,7 @@ func TestAdministrationRepositoryAgainstPostgreSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	harness := &administrationHarness{
-		ctx: ctx, pool: pool, repository: NewRepository(pool, passwordVerifier),
+		ctx: ctx, pool: pool, repository: NewRepository(pool, passwordVerifier, testKeys()),
 		passwords: passwordVerifier, passwordHash: passwordHash,
 	}
 
@@ -488,7 +488,7 @@ func (h *administrationHarness) testHasherFailure(t *testing.T) {
 	if err := h.pool.QueryRow(h.ctx, `SELECT password_hash FROM users WHERE id=$1`, administrationStudentID).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	repository := NewRepository(h.pool, failingPasswords{})
+	repository := NewRepository(h.pool, failingPasswords{}, testKeys())
 	if err := repository.SetPassword(h.ctx, administrationStudentID, "new password", time.Now().UTC().Truncate(time.Microsecond)); !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("hash failure: %v", err)
 	}

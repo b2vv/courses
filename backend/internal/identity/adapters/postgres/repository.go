@@ -10,6 +10,7 @@ import (
 	"io"
 	"time"
 
+	"courses/internal/identity/adapters/identitycrypto"
 	"courses/internal/identity/adapters/postgres/generated"
 	"courses/internal/identity/domain"
 	"courses/internal/identity/ports"
@@ -31,6 +32,7 @@ type Repository struct {
 	pool      *pgxpool.Pool
 	passwords Passwords
 	random    io.Reader
+	keys      *identitycrypto.Keys
 }
 
 var _ ports.UserWriter = (*Repository)(nil)
@@ -40,12 +42,12 @@ var _ ports.TwoFactorStore = (*Repository)(nil)
 var _ ports.RecoveryCodeStore = (*Repository)(nil)
 var _ ports.PasswordVerifier = (*Repository)(nil)
 
-func NewRepository(pool *pgxpool.Pool, passwords Passwords) *Repository {
-	return newRepository(pool, passwords, rand.Reader)
+func NewRepository(pool *pgxpool.Pool, passwords Passwords, keys *identitycrypto.Keys) *Repository {
+	return newRepository(pool, passwords, rand.Reader, keys)
 }
 
-func newRepository(pool *pgxpool.Pool, passwords Passwords, random io.Reader) *Repository {
-	return &Repository{pool: pool, passwords: passwords, random: random}
+func newRepository(pool *pgxpool.Pool, passwords Passwords, random io.Reader, keys *identitycrypto.Keys) *Repository {
+	return &Repository{pool: pool, passwords: passwords, random: random, keys: keys}
 }
 
 func (repository *Repository) VerifyCredentials(ctx context.Context, email, password string) (domain.User, error) {
@@ -332,13 +334,24 @@ func (repository *Repository) GetTwoFactor(ctx context.Context, userID string) (
 	}
 	secret := ""
 	if row.TotpSecret.Valid {
-		secret = row.TotpSecret.String
+		// Stored ciphertext is decrypted on read; a NULL secret (not enrolled) is left empty without a
+		// decrypt call. A decryption failure is surfaced, never silently treated as plaintext — the
+		// format is forward-only (SA13-I / I-F6).
+		plaintext, err := repository.keys.DecryptSecret(row.TotpSecret.String)
+		if err != nil {
+			return ports.TwoFactor{}, persistenceError(err)
+		}
+		secret = plaintext
 	}
 	return ports.TwoFactor{Secret: secret, Enabled: row.TotpEnabled}, nil
 }
 
 func (repository *Repository) SetTotpSecret(ctx context.Context, userID, secret string) error {
-	rows, err := generated.New(repository.pool).SetUserTotpSecret(ctx, generated.SetUserTotpSecretParams{UserID: userID, TotpSecret: secret})
+	encrypted, err := repository.keys.EncryptSecret(secret)
+	if err != nil {
+		return persistenceError(err)
+	}
+	rows, err := generated.New(repository.pool).SetUserTotpSecret(ctx, generated.SetUserTotpSecretParams{UserID: userID, TotpSecret: encrypted})
 	if err != nil {
 		return persistenceError(err)
 	}
@@ -382,20 +395,20 @@ func (repository *Repository) AdvanceTotpCounter(ctx context.Context, userID str
 	return rows == 1, nil
 }
 
-func (repository *Repository) InsertCodes(ctx context.Context, userID string, digests [][32]byte) error {
+func (repository *Repository) InsertCodes(ctx context.Context, userID string, codes []string) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return persistenceError(err)
 	}
 	queries := generated.New(tx)
-	for _, digest := range digests {
+	for _, code := range codes {
 		id, err := repository.newUUID()
 		if err != nil {
 			rollback(tx)
 			return domain.ErrDependencyUnavailable
 		}
 		if err := queries.InsertRecoveryCode(ctx, generated.InsertRecoveryCodeParams{
-			ID: id, UserID: userID, CodeHash: hex.EncodeToString(digest[:]),
+			ID: id, UserID: userID, CodeHash: repository.keys.RecoveryHash(code),
 		}); err != nil {
 			rollback(tx)
 			return persistenceError(err)
@@ -407,9 +420,9 @@ func (repository *Repository) InsertCodes(ctx context.Context, userID string, di
 	return nil
 }
 
-func (repository *Repository) ConsumeCode(ctx context.Context, userID string, digest [32]byte) (bool, error) {
+func (repository *Repository) ConsumeCode(ctx context.Context, userID string, code string) (bool, error) {
 	_, err := generated.New(repository.pool).ConsumeRecoveryCode(ctx, generated.ConsumeRecoveryCodeParams{
-		UserID: userID, CodeHash: hex.EncodeToString(digest[:]),
+		UserID: userID, CodeHash: repository.keys.RecoveryHash(code),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil

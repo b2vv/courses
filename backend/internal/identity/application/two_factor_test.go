@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1" // #nosec G505 -- RFC 6238 test vector.
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -57,30 +56,30 @@ func (s *twoFactorStore) DisableTotp(context.Context, string) error {
 }
 
 type recoveryStore struct {
-	codes   map[[32]byte]bool
+	codes   map[string]bool
 	deleted int
 }
 
-func (s *recoveryStore) InsertCodes(_ context.Context, _ string, digests [][32]byte) error {
+func (s *recoveryStore) InsertCodes(_ context.Context, _ string, codes []string) error {
 	if s.codes == nil {
-		s.codes = map[[32]byte]bool{}
+		s.codes = map[string]bool{}
 	}
-	for _, d := range digests {
-		s.codes[d] = false
+	for _, code := range codes {
+		s.codes[code] = false
 	}
 	return nil
 }
-func (s *recoveryStore) ConsumeCode(_ context.Context, _ string, digest [32]byte) (bool, error) {
-	used, ok := s.codes[digest]
+func (s *recoveryStore) ConsumeCode(_ context.Context, _ string, code string) (bool, error) {
+	used, ok := s.codes[code]
 	if !ok || used {
 		return false, nil
 	}
-	s.codes[digest] = true
+	s.codes[code] = true
 	return true, nil
 }
 func (s *recoveryStore) DeleteCodes(context.Context, string) error {
 	s.deleted++
-	s.codes = map[[32]byte]bool{}
+	s.codes = map[string]bool{}
 	return nil
 }
 
@@ -183,7 +182,7 @@ func TestCompleteTwoFactorRejectsReplayedTOTP(t *testing.T) {
 func TestCompleteTwoFactorConsumesARecoveryCode(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	recoveryCode := "ABCD-EFGH"
-	recovery := &recoveryStore{codes: map[[32]byte]bool{sha256.Sum256([]byte(recoveryCode)): false}}
+	recovery := &recoveryStore{codes: map[string]bool{recoveryCode: false}}
 	pending := &pendingStore{}
 	issued := ports.IssuedSession{Session: domain.Session{ID: "50000000-0000-4000-8000-000000000001", UserID: twoFactorUserID, CreatedAt: now, ExpiresAt: now.Add(12 * time.Hour)}, Token: validToken('A')}
 	service := application.NewTwoFactor(&twoFactorStore{state: ports.TwoFactor{Secret: twoFactorSecret, Enabled: true}}, recovery, pending, &sessions{issued: issued}, func() time.Time { return now })
@@ -193,7 +192,7 @@ func TestCompleteTwoFactorConsumesARecoveryCode(t *testing.T) {
 	if _, err := service.CompleteTwoFactor(context.Background(), application.CompleteTwoFactorInput{PendingID: "pending", Code: recoveryCode}); err != nil {
 		t.Fatal(err)
 	}
-	if !recovery.codes[sha256.Sum256([]byte(recoveryCode))] {
+	if !recovery.codes[recoveryCode] {
 		t.Fatal("recovery code was not consumed")
 	}
 }
