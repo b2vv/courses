@@ -32,11 +32,16 @@ instructor-facing API path or UI surface, so the capability is unreachable for a
   serve draft-get / draft-save / publish to an authenticated instructor, routed through the **same
   owner-scoped application path** (`Documents` + `requireEditor`). No new authorization logic.
 - **AC2** Each teach endpoint **independently** enforces owner-of-THIS-lesson (not merely
-  role=instructor). The refusal code is per-endpoint, reflecting the reused handlers (no code change):
-  on the **document** endpoints a non-owner instructor → `course_forbidden` (course module
-  `ErrCourseForbidden`), on the **image** endpoint a non-owner instructor → `forbidden` (image module
-  `ErrForbidden`); a student → `forbidden` on all. The owner-enforcement property is identical across
-  all four endpoints; only the error-code string differs by module.
+  role=instructor). The refusal code, reflecting the reused handlers (no code change), is **`forbidden`
+  (403) on every endpoint** for any non-authorized caller — a non-owner instructor and a student alike.
+  Mechanism (code-verified 2026-10-30): the document ops collapse the owner check to a boolean
+  (`CanBeEditedBy = CanManage(OwnerID)==nil`, `document_access.go:20`) and `requireEditor`
+  (`application/document.go:92`) returns `domain.ErrForbidden` for every non-editor → `forbidden`; the
+  specific `ErrCourseForbidden` from `CanManage` never reaches the handler on the editor path (the
+  handler's `course_forbidden` mapping serves the learn/authoring paths, not the editor). The image
+  endpoint likewise returns `ErrForbidden` → `forbidden`. The owner-enforcement property is identical
+  across all endpoints; the code string is uniformly `forbidden`. (This supersedes the earlier B1
+  resolution, which wrongly claimed `course_forbidden` on the document endpoints — see GATE 2 note.)
 - **AC3** Mounting the teach endpoints (`RegisterTeach`) widens **nothing** beyond exactly those three
   document ops — no sibling path under the new prefix becomes reachable, and the `/admin` and `/learn`
   document endpoints are byte-unchanged.

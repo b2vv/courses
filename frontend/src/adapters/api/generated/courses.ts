@@ -49,6 +49,7 @@ import type {
   ForbiddenResponse,
   GetAdminLessonDocumentParams,
   GetAdminStatsTimeseriesParams,
+  GetApiV1TeachLessonsLessonIdDocumentParams,
   GetCourseRosterParams,
   GetLearnLessonDocumentParams,
   GetLessonTranscriptParams,
@@ -108,6 +109,7 @@ import type {
   PlaybackSession,
   PlaybackSessionRequest,
   PlaybackTakenOverResponse,
+  PostApiV1TeachLessonsLessonIdDocumentPublishParams,
   PublicReviewPage,
   PublishAdminLessonDocumentParams,
   PublishCommentRequest,
@@ -6911,6 +6913,264 @@ export const listTeachLearners = async (params?: ListTeachLearnersParams, option
 
   const data: listTeachLearnersResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listTeachLearnersResponse
+}
+
+
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse200 = {
+  data: LessonDocumentDraft
+  status: 200
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type getApiV1TeachLessonsLessonIdDocumentResponseSuccess = (getApiV1TeachLessonsLessonIdDocumentResponse200) & {
+  headers: Headers;
+};
+export type getApiV1TeachLessonsLessonIdDocumentResponseError = (getApiV1TeachLessonsLessonIdDocumentResponse400 | getApiV1TeachLessonsLessonIdDocumentResponse401 | getApiV1TeachLessonsLessonIdDocumentResponse403 | getApiV1TeachLessonsLessonIdDocumentResponse404 | getApiV1TeachLessonsLessonIdDocumentResponse500 | getApiV1TeachLessonsLessonIdDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type getApiV1TeachLessonsLessonIdDocumentResponse = (getApiV1TeachLessonsLessonIdDocumentResponseSuccess | getApiV1TeachLessonsLessonIdDocumentResponseError)
+
+export const getGetApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,
+    params?: GetApiV1TeachLessonsLessonIdDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document`
+}
+
+export const getApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
+    params?: GetApiV1TeachLessonsLessonIdDocumentParams, options?: RequestInit): Promise<getApiV1TeachLessonsLessonIdDocumentResponse> => {
+
+  const res = await fetch(getGetApiV1TeachLessonsLessonIdDocumentUrl(lessonId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getApiV1TeachLessonsLessonIdDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getApiV1TeachLessonsLessonIdDocumentResponse
+}
+
+
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse200 = {
+  data: LessonDocumentUpdated
+  status: 200
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse409 = {
+  data: LessonDocumentConflictResponse
+  status: 409
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type putApiV1TeachLessonsLessonIdDocumentResponseSuccess = (putApiV1TeachLessonsLessonIdDocumentResponse200) & {
+  headers: Headers;
+};
+export type putApiV1TeachLessonsLessonIdDocumentResponseError = (putApiV1TeachLessonsLessonIdDocumentResponse400 | putApiV1TeachLessonsLessonIdDocumentResponse401 | putApiV1TeachLessonsLessonIdDocumentResponse403 | putApiV1TeachLessonsLessonIdDocumentResponse404 | putApiV1TeachLessonsLessonIdDocumentResponse409 | putApiV1TeachLessonsLessonIdDocumentResponse500 | putApiV1TeachLessonsLessonIdDocumentResponse503) & {
+  headers: Headers;
+};
+
+export type putApiV1TeachLessonsLessonIdDocumentResponse = (putApiV1TeachLessonsLessonIdDocumentResponseSuccess | putApiV1TeachLessonsLessonIdDocumentResponseError)
+
+export const getPutApiV1TeachLessonsLessonIdDocumentUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document`
+}
+
+export const putApiV1TeachLessonsLessonIdDocument = async (lessonId: string,
+    saveLessonDocumentRequest: SaveLessonDocumentRequest, options?: RequestInit): Promise<putApiV1TeachLessonsLessonIdDocumentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPutApiV1TeachLessonsLessonIdDocumentUrl(lessonId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveLessonDocumentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putApiV1TeachLessonsLessonIdDocumentResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as putApiV1TeachLessonsLessonIdDocumentResponse
+}
+
+
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse200 = {
+  data: void
+  status: 200
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse409 = {
+  data: LessonDocumentConflictResponse
+  status: 409
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponseSuccess = (postApiV1TeachLessonsLessonIdDocumentPublishResponse200) & {
+  headers: Headers;
+};
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponseError = (postApiV1TeachLessonsLessonIdDocumentPublishResponse400 | postApiV1TeachLessonsLessonIdDocumentPublishResponse401 | postApiV1TeachLessonsLessonIdDocumentPublishResponse403 | postApiV1TeachLessonsLessonIdDocumentPublishResponse404 | postApiV1TeachLessonsLessonIdDocumentPublishResponse409 | postApiV1TeachLessonsLessonIdDocumentPublishResponse500 | postApiV1TeachLessonsLessonIdDocumentPublishResponse503) & {
+  headers: Headers;
+};
+
+export type postApiV1TeachLessonsLessonIdDocumentPublishResponse = (postApiV1TeachLessonsLessonIdDocumentPublishResponseSuccess | postApiV1TeachLessonsLessonIdDocumentPublishResponseError)
+
+export const getPostApiV1TeachLessonsLessonIdDocumentPublishUrl = (lessonId: string,
+    params?: PostApiV1TeachLessonsLessonIdDocumentPublishParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document/publish?${stringifiedParams}` : `${apiOrigin()}/api/v1/teach/lessons/${lessonId}/document/publish`
+}
+
+export const postApiV1TeachLessonsLessonIdDocumentPublish = async (lessonId: string,
+    publishLessonDocumentRequest: PublishLessonDocumentRequest,
+    params?: PostApiV1TeachLessonsLessonIdDocumentPublishParams, options?: RequestInit): Promise<postApiV1TeachLessonsLessonIdDocumentPublishResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPostApiV1TeachLessonsLessonIdDocumentPublishUrl(lessonId,params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishLessonDocumentRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: postApiV1TeachLessonsLessonIdDocumentPublishResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as postApiV1TeachLessonsLessonIdDocumentPublishResponse
 }
 
 

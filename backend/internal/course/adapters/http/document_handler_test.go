@@ -489,3 +489,97 @@ func TestDocumentRecursiveSchemaRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+const documentTeachPath = "/api/v1/teach/lessons/" + documentLessonID + "/document"
+
+func teachDocumentMux(repo *documentRepositoryFake, reader *documentAccessFake, actor httpserver.Actor, origin func(http.Handler) http.Handler) http.Handler {
+	authenticate := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if actor.UserID != "" {
+				r = r.WithContext(httpserver.WithActor(r.Context(), actor))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+	if origin == nil {
+		origin = func(h http.Handler) http.Handler { return h }
+	}
+	h := NewDocumentHandler(application.NewDocuments(repo, reader))
+	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
+		h.RegisterTeach(mux, authenticate, origin)
+	}})
+}
+
+func TestTeachDocumentEditorAccess(t *testing.T) {
+	for _, role := range []string{"owner", "non-owner", "student"} {
+		for _, method := range []string{"GET", "PUT", "POST"} {
+			t.Run(role+"/"+method, func(t *testing.T) {
+				repo, reader, actor := documentFixture()
+				status, code := http.StatusOK, ""
+				switch role {
+				case "non-owner":
+					actor.UserID = "40000000-0000-4000-8000-000000000099"
+					status, code = http.StatusForbidden, "forbidden"
+				case "student":
+					actor.Role = "student"
+					status, code = http.StatusForbidden, "forbidden"
+				}
+				path, body := documentTeachPath, ""
+				if method == "PUT" {
+					body = `{"document":` + validDocumentJSON + `}`
+				} else if method == "POST" {
+					path += "/publish"
+					body = `{"expectedUpdatedAt":"` + documentToken + `"}`
+				}
+				w := documentRequest(t, teachDocumentMux(repo, reader, actor, nil), method, path, body, status, code)
+				if status == http.StatusForbidden && repo.readCalls+repo.saveCalls+repo.publishCalls != 0 {
+					t.Fatal("non-editor reached repository")
+				}
+				if role == "owner" && method == "POST" && w.Body.Len() != 0 {
+					t.Fatal("publish body must be empty")
+				}
+			})
+		}
+	}
+}
+
+func TestTeachDocumentUnknownSibling(t *testing.T) {
+	repo, reader, actor := documentFixture()
+	w := httptest.NewRecorder()
+	teachDocumentMux(repo, reader, actor, nil).ServeHTTP(w, httptest.NewRequest("GET", documentTeachPath+"/history", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=404 body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestTeachDocumentAuthenticationAndOriginWiring(t *testing.T) {
+	for _, tc := range []struct{ method, path, body string }{
+		{"GET", documentTeachPath, ""},
+		{"PUT", documentTeachPath, `{"document":` + validDocumentJSON + `}`},
+		{"POST", documentTeachPath + "/publish", `{"expectedUpdatedAt":"` + documentToken + `"}`},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			repo, reader, actor := documentFixture()
+			documentRequest(t, teachDocumentMux(repo, reader, httpserver.Actor{}, nil), tc.method, tc.path, tc.body, 401, "authentication_required")
+			if reader.calls != 0 {
+				t.Fatal("anonymous request reached access reader")
+			}
+			originCalls := 0
+			origin := func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { originCalls++; w.WriteHeader(http.StatusForbidden) })
+			}
+			handler := teachDocumentMux(repo, reader, actor, origin)
+			r := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			r.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if tc.method == "GET" {
+				if originCalls != 0 || w.Code != 200 {
+					t.Fatal("read unexpectedly used origin middleware")
+				}
+			} else if originCalls != 1 || w.Code != 403 || repo.saveCalls+repo.publishCalls != 0 {
+				t.Fatal("mutation bypassed origin middleware")
+			}
+		})
+	}
+}
