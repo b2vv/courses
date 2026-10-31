@@ -25,7 +25,7 @@ export interface DocumentAuthoringRepository {
     expectedUpdatedAt: string,
     locale?: 'uk' | 'en',
     signal?: AbortSignal,
-  ): Promise<DocumentAuthoringResult<{ readonly updatedAt: string }>>;
+  ): Promise<DocumentAuthoringResult<void>>;
 
   uploadImage(lessonId: string, file: File, signal?: AbortSignal): Promise<ImageUploadResult>;
 }

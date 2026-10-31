@@ -37,7 +37,7 @@ test('teach generated operations send draft, save, publish and multipart image r
       seen.push('publish');
       expect(new URL(request.url).searchParams.get('locale')).toBe('en');
       expect(await request.json()).toEqual({ expectedUpdatedAt: updatedAt });
-      return HttpResponse.json({ updatedAt });
+      return new HttpResponse(null, { status: 200 });
     }),
     http.post(`${route}/images`, async ({ request }) => {
       seen.push('upload');
@@ -56,7 +56,7 @@ test('teach generated operations send draft, save, publish and multipart image r
     ok: true,
     value: { updatedAt },
   });
-  expect(await repo.publish(lessonId, updatedAt, 'en')).toEqual({ ok: true, value: { updatedAt } });
+  expect(await repo.publish(lessonId, updatedAt, 'en')).toEqual({ ok: true, value: undefined });
   expect(
     await repo.uploadImage(lessonId, new File(['image'], 'x.png', { type: 'image/png' })),
   ).toEqual({

@@ -35,7 +35,7 @@ function setup(
     },
     publish: async (_lessonId, expectedUpdatedAt) => {
       calls.published.push({ expectedUpdatedAt });
-      return { ok: true, value: { updatedAt: '2026-10-13T02:00:00Z' } };
+      return { ok: true, value: undefined };
     },
     uploadImage: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     ...overrides,

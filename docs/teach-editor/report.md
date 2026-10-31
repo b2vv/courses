@@ -250,3 +250,48 @@ Note (Codex, honest scope): T13's empty-draft **editor** half is already covered
 `LessonDocumentEditor.test.tsx` (zero sections → EmptyState); this slice adds the empty **lesson-list**
 component test. No build/integration/e2e run here (e2e is TE6). Independent review of the full PR #2
 delta (TE4+TE5) is the next gate before merge.
+
+## TE6 — 2026-10-31 (e2e + full ordered gate; shared publish-path bug fixed)
+
+New e2e `frontend/e2e/teach-editor.spec.ts` (two scenarios, mirror of `lesson-builder.spec.ts`):
+- **T9** owner opens a lesson from `/teach`, edits and publishes it, and a member reads the
+  published content — drives the real UI Publish, asserts the "Урок опубліковано" toast and zero
+  `role="alert"`, and checks no `/admin/*` request leaks from the teach flow.
+- **T5/T6** a non-owner instructor is refused by every teach write/read op (exact status + code,
+  `forbidden` on document/image ops), and a student gets `course_forbidden` on the teach course tree.
+
+**Defect found behind the green gate (pre-existing, shared admin+teach publish path).** T9 was RED
+on first run and surfaced a real bug, not a test flaw: the publish contract returns **200 with an
+empty body** (intentional — `openapi_contract.go:110,113` declare `Response{Empty:true}` for both the
+admin and teach publish; `document_handler.go:132` writes a bare `WriteHeader(200)`; the OpenAPI
+description says "re-read the draft for the new token"; generated `publishAdminLessonDocumentResponse200.data`
+is `void`), but the frontend repository `publish` parsed `lessonDocumentUpdatedSchema` on that empty
+body, failed, and returned `invalid_request` → the editor showed a **false "save failed" error after a
+successful publish**. Admin's own lesson-builder e2e never caught it (it does not assert the publish
+success toast). The misread was shared by `/admin` (merged, live) and the new `/teach` surface.
+
+Fix (frontend-only; the backend contract was deliberate, so it was left untouched — verdict of an
+independent pre-code critic, `scratchpad/te6-critic-b1.md`, confirmed by code):
+- `DocumentAuthoringRepository.publish` now returns `DocumentAuthoringResult<void>`; the repository
+  stops parsing the empty body and returns success on 200 (`admin-document-repository.ts`); the
+  publish mutation's `mutationFn` returns void (`admin-document-queries.ts`), its invalidation of the
+  draft + learner readers unchanged.
+- `LessonDocumentEditor.onPublish` no longer reads a token from the publish response; it refreshes the
+  optimistic-lock token from the authoritative re-read the publish `onSuccess` invalidation performs
+  (`client.getQueryData(documents.document(lessonId).queryKey)`), **keeping the editor overlay** so
+  edits made during the save→publish round-trip survive — symmetric with `onSave`, rather than dropping
+  the overlay (which would have silently discarded in-flight edits; the omitted guard the critic flagged).
+- Four unit mocks that returned a fabricated `{updatedAt}` body for publish (which the server never
+  sends) were corrected to the real empty response (`teach-document-repository.test.ts`,
+  `LessonDocumentEditor.test.tsx`, admin/teach `*-document-queries.test.ts`). The green-but-fake mock
+  was why the bug hid behind unit tests — recorded as a gotcha.
+
+| Command (full ordered `make check`) | Result |
+| --- | --- |
+| format-check, lint (arch 231), typecheck | PASS, exit 0 |
+| test (frontend rstest + Go), integration, check-generated, build | PASS, exit 0 |
+| e2e (full, not targeted — shared/persisted state) | **129 passed**, 18.5m; incl. `teach-editor.spec.ts` T9 (4.8s) and T5/T6 (1.1s) |
+| GATE_EXIT (read from log, not the hook echo) | **0** |
+
+Verified end-to-end through the production path: T9, RED before the fix, is GREEN after. Independent
+review of PR #3 is the next gate before the owner merges and the phase closes.

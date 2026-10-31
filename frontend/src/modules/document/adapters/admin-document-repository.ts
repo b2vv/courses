@@ -171,9 +171,7 @@ function createDocumentAuthoringRepository(
       );
       if (!outcome.ok) return authoringFailure(outcome.code as DocumentAuthoringErrorCode);
       if (outcome.status !== 200) return authoringFailure(named(outcome, writeRefusals));
-      const parsed = lessonDocumentUpdatedSchema.safeParse(outcome.data);
-      if (!parsed.success) return authoringFailure('invalid_request');
-      return { ok: true, value: { updatedAt: parsed.data.updatedAt } };
+      return { ok: true, value: undefined };
     },
 
     async uploadImage(lessonId, file, signal) {
