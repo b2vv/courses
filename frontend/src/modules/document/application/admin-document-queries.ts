@@ -96,7 +96,6 @@ function createDocumentQueries(
         }) => {
           const result = await documents.publish(lessonId, expectedUpdatedAt, locale);
           if (!result.ok) throw new DocumentAuthoringError(result.error.code);
-          return result.value;
         },
         // Publish moves draft into published: the authoring draft token changes and every learner's
         // reader for this lesson is now stale.

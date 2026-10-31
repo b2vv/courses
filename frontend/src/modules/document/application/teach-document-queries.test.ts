@@ -18,7 +18,7 @@ function repository(
   return {
     getDraft: async () => ({ ok: true, value: { document: emptyDocument, updatedAt: null } }),
     saveDraft: async () => ({ ok: true, value: { updatedAt: '2026-10-13T00:00:00Z' } }),
-    publish: async () => ({ ok: true, value: { updatedAt: '2026-10-13T00:00:00Z' } }),
+    publish: async () => ({ ok: true, value: undefined }),
     uploadImage: async () => ({
       ok: true,
       value: {

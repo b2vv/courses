@@ -343,8 +343,11 @@ export function LessonDocumentEditor({ lessonId, documents, meta }: LessonDocume
       // Save the current edits first, then publish exactly what was saved.
       const saved = await save.mutateAsync({ lessonId, document, expectedUpdatedAt: draft.token });
       setEdited((cur) => ({ ...(cur ?? draft), token: saved.updatedAt }));
-      const published = await publish.mutateAsync({ lessonId, expectedUpdatedAt: saved.updatedAt });
-      setEdited((cur) => ({ ...(cur ?? draft), token: published.updatedAt }));
+      await publish.mutateAsync({ lessonId, expectedUpdatedAt: saved.updatedAt });
+      // Publish returns an empty 200; its onSuccess invalidation re-reads the authoritative token.
+      // Keep the overlay so edits made during the round-trip survive, just as with onSave.
+      const fresh = client.getQueryData(documents.document(lessonId).queryKey);
+      setEdited((cur) => (cur === null ? null : { ...cur, token: fresh?.updatedAt ?? cur.token }));
       setDirty(false);
       setStatus({ kind: 'published' });
     } catch (failure) {
