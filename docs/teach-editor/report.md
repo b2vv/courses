@@ -295,3 +295,29 @@ independent pre-code critic, `scratchpad/te6-critic-b1.md`, confirmed by code):
 
 Verified end-to-end through the production path: T9, RED before the fix, is GREEN after. Independent
 review of PR #3 is the next gate before the owner merges and the phase closes.
+
+### PR #3 independent review — 2026-10-31 (PASS)
+
+Independent review (independent_subagent, neutral brief, fresh context — not the author) of the whole
+PR #3 delta (commit `2e5009b`, opened as GitHub PR #95). Verdict **PASS, 0 blocking**. The reviewer
+ran its own `npm run typecheck` / `npm run lint` / `npm test -- src/modules/document` (all exit 0, 61
+tests) and traced the shared /admin path, confirming: the bug reproduces from the generated `void` 200
+type and the empty-body contract; the repo fix returns success without re-parsing and keeps
+`lessonDocumentUpdatedSchema` for `saveDraft`; `onPublish`'s post-publish `getQueryData` holds the
+re-read token because `mutateAsync` awaits `onSuccess`→`invalidateQueries`→refetch (react-query
+5.102.8), with no stale-token or lost-edits regression on the normal path and `fresh?.updatedAt ??
+cur.token` type-sound; all four corrected mocks now return the real empty response with none left
+fabricating a body; T9 is a genuine RED→GREEN regression test (asserts the success toast in the
+`aria-live` output AND zero `role="alert"`), T5/T6 assert exact 403 + error codes, and the
+users/course_grants fixtures are sound against the current migrations; scope is limited to the document
+module + e2e + report/tasks with no change to refusal maps, query keys, the busy-gate or admin behavior.
+
+Non-blocking (reviewer + the pre-code critic, independently): if the post-publish re-read itself fails,
+the optimistic-lock token falls back to the just-saved token rather than the authoritative post-publish
+token, which could cause a conflict on the next write — a degraded edge, unavoidable given the
+empty-body "re-read" contract, and no worse than the alternatives.
+
+Gate green (GATE_EXIT=0) + independent review PASS satisfy the mandatory pre-merge review. Remaining:
+owner merges PR #3 (ff ref-push `feat/teach-editor:main`) and the teach-editor phase closes. (Account-wide
+GitHub Actions CI currently fails on provisioning/billing, so the authoritative gate is the local
+ordered `make check` above, not CI.)
