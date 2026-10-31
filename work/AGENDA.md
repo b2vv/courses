@@ -2,23 +2,24 @@
 
 | | |
 |---|---|
-| Дата | 2026-10-30 (попередній прогін — 2026-10-29 на `169c0fc`) |
-| Спирається на брифінг | [work/CTO-RESEARCH.md](CTO-RESEARCH.md) **re-sync 2026-10-29** (база `169c0fc`). Доменні §2–§6 — кеш; **перед значущим ПРОДУКТОВИМ ходом — повний `cto-research`** (брифінг відстав на SA13-батч + S0-cutover-наслідки). |
-| HEAD на момент агенди | `6efa393`. gh: **0 відкритих issues, 0 відкритих PR**. |
-| Чи протух попередній вибір | Так — у хорошому сенсі. Агенда 2026-10-29 ставила наступним **SA13**; відтоді **весь SA13-батч змерджено** (D-F2 #83 … I-F6 #90) і **SA13-A-R residual закрито** датованим owner-accepted-bar (`6efa393`). **Жива не-блокована черга агента тепер ПОРОЖНЯ** — рівно як передбачала попередня агенда. |
+| Дата | 2026-10-31 (попередній прогін — 2026-10-30 на `6efa393`) |
+| Спирається на брифінг | [work/CTO-RESEARCH.md](CTO-RESEARCH.md) **re-sync 2026-10-31** (база `5fbaaff`). Доменні §2–§6 — кеш; перед значущим ПРОДУКТОВИМ ходом звір брифінг свіжим `cto-research`. |
+| HEAD на момент агенди | `5fbaaff` (origin/main; локальний `main`-ref відстав — мерджі робилися ff ref-push). gh: **0 відкритих issues, 0 відкритих PR**. |
+| Чи протух попередній вибір | Так — повністю виконано. Агенда 2026-10-30 задала owner-послідовність **(1) deploy-readiness → (3) orphaned-image → (2) /teach-редактор**; **усі три закрито** (останній — teach-editor TE1–TE6, GitHub PR #93/#94/#95, злито сьогодні `5fbaaff`). **Жива не-блокована черга агента знову ПОРОЖНЯ.** |
 
 **Зроблено з попередньої агенди (одним рядком):**
-- **SA13-батч закрито повністю:** D-F2 cursor-UUID #83 · I-F5 TOTP replay #84 · T-F2 CSP form-action #85 · T-F1 safeReturnTo #86 · P-F3 /metrics guard #87 · P-F6 sslmode prod-tail (no-code) · P-F5 panic-log #88 · M7 HLS umask #89 · I-F6 totp_secret-шифрування #90. Кожен — незалежне рев'ю Courses 2 PASS.
-- **SA13-A-R residual** (non-canonical UUID курсор → 503) — owner-ACCEPTED as dated limitation, no code (`6efa393`).
+- **(1) deploy-readiness checklist** → [work/DEPLOY-READINESS.md](DEPLOY-READINESS.md) (`5a671d5`) — усі deploy-gated хвости в одному gate.
+- **(3) orphaned-image compensating delete (LB09a)** → PR #91 (`9a2756e`) + **(N1) detached-ctx компенсація** → PR #92 (`bc9ec3c`). Повний `make check` EXIT=0; Courses 2 PASS.
+- **(2) teach-editor** → GitHub PR #93 (backend TE1–TE3) · #94 (frontend TE4–TE5) · #95 (e2e TE6), злито ff ref-push → `5fbaaff`. Нова `/teach`-поверхня редактора документа уроку для інструктора на власний курс (Option B, реюз admin-редактора). TE6 оголив і закрив пре-існуючий shared admin+teach publish-bug (порожнє 200 vs клієнт очікував `{updatedAt}` → хибна «Не вдалося зберегти»). Повний ordered `make check` GATE_EXIT=0 (129 e2e); незалежне рев'ю кожної партії PASS.
 
 ## Джерела та кількість кандидатів (усі 6 пройдено)
 
 | Джерело | К-сть | Суть |
 |---|---:|---|
-| 1. Відкриті таски `work/` + gh | **0 живих** | SA13 закрито; **S01/S02** блоковані TLS/deploy; gh 0/0. Уся audit-черга вичерпана. |
-| 2. Зафіксований борг (`backlog.md`) | 0 actionable | B-27 **блок upstream** (testcontainers #3868); B-2 DONE; B-3 DONE + format-residual (JSON Schema не виражає суму по модулях — не вирішуване в контракті). |
-| 3. Ризики брифінгу §6 | 2 (низький сигнал) | 2 `⚠️ неперевірено`: витримка `limit_req` під навантаженням; механізм R23/identity-флейку (інструментовано K4/K5, не відтворено). Investigation, не фіча. |
-| 4. `[ ]` + §Limitations | **3** (deferred follow-up) | lesson-builder §Lim (`docs/lesson-builder/report.md`): **`/teach`-редактор** (§Lim1:688), **друга локаль UI** (§Lim2:694), **orphaned-image sweep** (§Lim3:698, LB09a). Усі `[ ]` = 0. |
+| 1. Відкриті таски `work/` + gh | **0 живих** | teach-editor + SA13 закрито; **S01/S02** блоковані TLS/deploy; gh 0/0. Черга вичерпана. |
+| 2. Зафіксований борг (`backlog.md`) | 1 investigation | B-27 **блок upstream** (testcontainers #3868); OpenTelemetry tracing **partial** — end-to-end spans SSR→API→worker не доведені (`backlog.md:143`, investigation, не фіча); B-2/B-3 DONE. |
+| 3. Ризики брифінгу §6 | 2 (низький сигнал) | 2 `⚠️ неперевірено`: витримка `limit_req` під навантаженням; механізм R23/identity-флейку (інструментовано K4/K5, не відтворено). Investigation. |
+| 4. `[ ]` + §Limitations | **1** (deferred) | lesson-builder §Lim2 — **друга локаль UI** (схема/ендпоінти locale-aware, editor/reader single-locale без перемикача). §Lim1 (`/teach`) **ЗАКРИТО** teach-editor; §Lim3 (orphaned) **пом'якшено** LB09a. Усі `[ ]` = 0. |
 | 5. skip/TODO/FIXME/ponytail | 0 | 2 легітимні guard-skip (no-build-info, ffmpeg-absent); 0 боргових якорів у проді. |
 | 6. Продуктові розвилки | 3 (+Р1 deploy) | мультивалюта · друга мова контенту · деплой (Р1, відкладено власником 2026-10-03). |
 
@@ -28,27 +29,27 @@
 
 | Хід | Severity | Розблоковує | Зворотність |
 |---|---|---|---|
-| **orphaned-image sweep** (LB09a) | LOW hardening | нічого; закриває resource-leak байтів на диску при fail-after-upload | **зворотний** — окремий sweeper-job/крок, малий |
-| **`/teach`-поверхня редактора** | feature | інструктор редагує власні документи уроків без admin-доступу | зворотний (нова FE-поверхня + backend-scoping `CanEditLesson`), **середній**; **owner-initiated** |
-| limit_req під-навантаженням verify | — | підтверджує успадковану `⚠️` тезу | зворотний (load-тест); investigation, низький сигнал |
+| OpenTelemetry end-to-end spans verify | investigation | підтверджує/спростовує `partial`-тезу про трасування | зворотний (додати спани + прогнати); низький сигнал, нема споживача |
+| limit_req під-навантаженням verify | investigation | підтверджує успадковану `⚠️` тезу | зворотний (load-тест); низький сигнал |
+| друга локаль у UI редактора/reader | feature | перемикач мови контенту (схема вже locale-aware) | зворотний (FE+нові рядки), середній; **потребує owner-сигналу** |
 
-**Блоковані (не ходи зараз):** S01/S02 (TLS/deploy), B-27 (upstream #3868), деплой (owner), SA13 prod-хвіст (Grafana pw, COOKIE_SECURE, prometheus metrics-auth, POSTGRES_SSLMODE=verify-full+CA — усі потребують реального prod-середовища), I-F6 N1/N2 (key rotation/AAD — deploy/rotation tail).
+**Блоковані (не ходи зараз):** S01/S02 (TLS/deploy), B-27 (upstream #3868), деплой (owner), SA13 prod-хвіст (Grafana pw, COOKIE_SECURE, prometheus metrics-auth, POSTGRES_SSLMODE=verify-full+CA — потребують реального prod-середовища), I-F6 N1/N2 (key rotation/AAD — deploy/rotation tail).
 
 ## Рішення людини (не ходи агента)
 
-1. **Деплой (Р1).** Відкладено власником 2026-10-03 (test-mode). **Що змінилось:** увесь security-audit (SA01–SA13) тепер закрито — головний pre-deploy блокер знято. Розблоковує найбільше: S01/S02 TLS, усі SA13 prod-хвости, фінальний live-payment на новому магазині+ключі. **Рекомендація: винести на перегляд** — деплой тепер набагато захищеніший, ніж коли його відкладали; але це людське рішення й зовнішній незворотний ефект.
-2. **Друга мова контенту** (транскрипт primary є; редактор/reader single-locale — lesson-builder §Lim2 + форк B-21). **Рекомендація: не зараз** — без сигналу попиту.
+1. **Деплой (Р1).** Відкладено власником 2026-10-03 (test-mode). **Що змінилось від попередньої агенди:** нічого в бік блокерів — security (SA01–SA13) уже було закрито; тепер ще й teach-editor + lesson-builder residuals підчищено, тож продукт у test-mode функціонально повніший. Deploy-readiness checklist готовий ([work/DEPLOY-READINESS.md](DEPLOY-READINESS.md)). Розблоковує найбільше: S01/S02 TLS, усі SA13 prod-хвости, фінальний live-payment на новому магазині+ключі. **Рекомендація: винести на перегляд власнику** — pre-deploy блокери зняті, лишилось людське рішення + зовнішній незворотний ефект. Це не хід агента.
+2. **Друга мова контенту** (транскрипт primary є; редактор/reader single-locale — lesson-builder §Lim2). **Рекомендація: не зараз** — без сигналу попиту.
 3. **Мультивалюта** (ціни лише UAH). **Рекомендація: не зараз** — немає попиту, test-mode.
 
 ## Наступний хід
 
-**Рішення власника 2026-10-30: послідовність (1) deploy-readiness → (3) orphaned-image sweep → (2) `/teach`-редактор.**
+**Черга агента порожня — немає gardening-ходу, який варто брати без сигналу.** Роадмап §24 пройдено; security-audit повністю закрито; owner-послідовність з минулої агенди (deploy-readiness → orphaned-image → /teach-редактор) виконана до кінця. Кандидати, що лишились (джерела 2–4), — це або investigation без споживача (OpenTelemetry spans, limit_req endurance), або фіча, що чекає owner-сигналу (друга локаль).
 
-- **(1) ✅ ЗАКРИТО — deploy-readiness checklist** → [work/DEPLOY-READINESS.md](DEPLOY-READINESS.md) (`5a671d5`). Зведено всі deploy-gated хвости (A TLS/S01/S02 · B SA13 prod-хвости · C I-F6 ключ/ротація · D payment live · E observability) в один gate з джерелом+перевіркою+власник/агент на кожен.
-- **(3) ✅ ЗАКРИТО — orphaned-image compensating delete (LB09a)** — PR #91 (`9a2756e`). Компенсаційне видалення при збої Insert (owner choice, не sweeper); повний `make check` EXIT=0, e2e 127; незалежне рев'ю Courses 2 PASS 0 blocking.
-- **(N1) ✅ ЗАКРИТО — detached-ctx компенсація** — PR #92 (`bc9ec3c`, owner go «спершу N1»). `context.WithoutCancel`+5s → закриває домінантний residual-тригер (Insert падає через скасований ctx). Повний `make check` EXIT=0, e2e 127; Courses 2 PASS 0 blocking/0 non-blocking. Залишок тепер мінімальний (crash між Put/Insert / delete-fail — sweeper-територія, out of scope).
-- **(2) ⬜ ДАЛІ — `/teach`-редактор** (owner-initiated фіча, поза §24; `docs/lesson-builder/report.md` §Lim1) — повний `cto-research` → `spec-flow`. Потребує owner-go на старт (значуща фіча, не gardening).
+**Рекомендований наступний хід — рішення людини, не агента: винести на перегляд деплой (Р1).** Pre-deploy блокери зняті (security закрито, readiness-чеклист готовий); це єдиний хід з високим leverage, і він розблоковує S01/S02/SA13-prod-хвости/live-payment. Усе інше чекає на нього або на продуктовий сигнал.
 
-Чому не паралельно / не в іншому порядку: власник задав саме цей порядок.
+Чому не інші кандидати:
+- **OpenTelemetry spans / limit_req verify** — investigation без споживача; підтвердять тезу, але нічого не розблоковують і нічого не вимагає відповіді зараз.
+- **Друга локаль UI** — справжня фіча, але без owner-сигналу попиту (як мультивалюта); брати на свій розсуд = вигадати роботу.
+- **Деплой руками агента** — ні: зовнішній незворотний ефект + явно відкладено власником; агенда лише виносить його на перегляд.
 
-Відкладено (не в цій послідовності): друга мова контенту, мультивалюта (продуктові розвилки без сигналу); B-27 (upstream #3868); limit_req verify (investigation без сигналу).
+Якщо власник лишає test-mode — **актуального ходу агента немає**; агенда чекає продуктового рішення або нового owner-initiated завдання.
