@@ -177,6 +177,14 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("C6 recovery bumps only stale queued attempts", harness.testQueuedRecovery)
 	t.Run("B24 recovery makes a stale publish lose its claim", harness.testRecoveredClaimCannotPublish)
 	t.Run("B29 recovery reclaims processing claims of every age", harness.testThresholdFreeProcessingRecovery)
+	t.Run("S2 audio tracks persist and list in created order", harness.testAudioTracksPersistAndList)
+	t.Run("S2 audio-track schema guards reject bad rows", harness.testAudioTrackSchemaGuards)
+	t.Run("S2 set default swaps atomically and guards the target", harness.testSetDefaultAudioTrack)
+	t.Run("S2 set default swaps onto an earlier-created track", harness.testSetDefaultAdverseOrder)
+	t.Run("S2 concurrent set-default keeps exactly one default", harness.testConcurrentSetDefault)
+	t.Run("S2 delete re-elects a default and guards the last ready", harness.testDeleteAudioTrackReElection)
+	t.Run("S2 create persists a track and rejects an orphan", harness.testCreateAudioTrack)
+	t.Run("S2 migration 00025 down and up round-trips", harness.testMultiAudioMigrationReversible)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {

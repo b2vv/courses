@@ -53,7 +53,38 @@ uploaded `Uploading`/`Queued` у `ValidateAudioTrackState`.
   typecheck+build+test; e2e не може дійти до нового стану. Це **deferred, не passed** — повний
   ordered gate обов'язковий на S2 (persist), першому зрізі зі злитою/персистною поведінкою.
 
-**Наступний крок — S2 (persist):** міграція `audio_tracks` (+ розширення DB CHECK `VideoAsset`
-станів на `awaiting_audio`), repository, storage-ключі `source/<id>/audio-<trackId>`, атомарний
-set-default swap і delete з re-election на рівні транзакцій. Repo-тести проти Postgres + повний
-ordered `make check`.
+## S2 — persist (2026-11-08)
+
+**Що зроблено.** Персист-шар multi-audio, без app/HTTP/транскодера:
+
+- `migrations/00025_multi_audio.sql` — ALTER `video_assets` state-CHECK (+`awaiting_audio`, up/down
+  симетрично до набору 00005) + `CREATE TABLE audio_tracks` з DB-рівневими інваріантами D3/D4:
+  FK `ON DELETE CASCADE`, `embedded⇒ready`, `leaf↔kind` (`original` / `audio-<id>`), `default⇒ready`,
+  partial unique `audio_tracks_one_default_per_asset` (≤1 default/asset).
+- `internal/media/adapters/postgres/audiotrack.go` — raw-tx repo-методи (патерн Mint/Claim):
+  `CreateAudioTrack` (app-minted id + RETURNING), `ListAudioTracks` (порядок (created_at,id)),
+  `SetDefaultAudioTrack` (двоетапний clear→set swap під `FOR UPDATE`), `DeleteAudioTrack`
+  (re-election через `domain.ElectDefault`, guard останньої Ready через `ValidateTrackDeletion`);
+  `mapAudioTrack`; `mapAsset` розширено на `AwaitingAudio`.
+- Integration-тести (Postgres): персист+порядок, schema-guards (включно з прийняттям `awaiting_audio`
+  на `video_assets`), set-default swap +adverse-order +concurrent, delete+re-election+last-ready-guard,
+  create+orphan, міграція 00025 down/up round-trip.
+
+**Незалежне рев'ю (independent_subagent, 2026-11-08).** VERDICT **PASS-WITH-CONCERNS**.
+- #1 [PLAUSIBLE-high] — single-statement swap `is_default=(id=$2)` під НЕ-deferrable partial unique
+  індексом міг дати order-залежний transient 23505 (rank-swap). **Закрито**: двоетапний clear→set
+  swap + `testSetDefaultAdverseOrder` (своп на раніше-створену доріжку, поки пізніша тримає default).
+- #2 [GAP] відсутній concurrency-тест — **закрито** `testConcurrentSetDefault` (дві паралельні SetDefault,
+  інваріант «рівно один default» тримається; подія-керований, без sleep).
+- #3/#4 — не блокери: reversibility CHECK-симетрія доведена кодом (down test-only, §10); evicted-guard
+  на Create/SetDefault — app-політика наступного зрізу (DeleteAudioTrack уже перевіряє `evicted_at IS NULL`).
+
+**Верифікація.** Повний ordered `make check` **зелений**: `CHECK_EXIT=0`, e2e **129 passed** (17.6m),
++ integration (media Postgres, усі S2-підтести), check-generated (sqlc без дрейфу — нові методи raw-tx,
+без нових queries), build. Це перший зріз зі злитою/персистною поведінкою — повний gate обов'язковий і
+виконаний (на відміну від S1, де e2e був deferred).
+
+**Наступний крок — S3 (транскод доріжки + regen master):** розширити payload `media:transcode`;
+ffmpeg пакетує аудіофайл; повна регенерація master під per-asset локом, атомарно; матеріалізація
+embedded; відео-only гілка без `-map 0:a:0` разом із релаксацією video-`AcceptSource` (той самий зріз).
+Передумова S0-борг: захопити реальний master.m3u8. Повний ordered `make check`.
