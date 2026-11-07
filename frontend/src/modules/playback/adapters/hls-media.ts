@@ -40,7 +40,12 @@ function createHlsMedia(video: HTMLVideoElement, callbacks: PlaybackMediaCallbac
       hls.stopLoad();
     },
     selectLevel(level) {
-      hls.currentLevel = level === 'auto' ? -1 : level;
+      // `nextLevel`, not `currentLevel`: currentLevel flushes the buffer and interrupts playback
+      // to re-buffer at the new rendition (a visible stall and audio gap). nextLevel keeps the
+      // already-buffered fragment playing and swaps at the next fragment boundary, once the new
+      // level's data is loaded ahead - a seamless switch for both video and audio, at the cost of
+      // the change taking effect a fragment later rather than instantly.
+      hls.nextLevel = level === 'auto' ? -1 : level;
     },
     destroy() {
       hls.destroy();
