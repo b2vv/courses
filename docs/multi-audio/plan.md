@@ -123,11 +123,20 @@ playback-DTO). Координація зі security-spike — §6.
 
 - **S0 — ресьорч (ЗРОБЛЕНО, без коду):** hls.js `nextAudioTrack`-семантика + ffmpeg-пакетування
   підтверджують D1/D2/D4/D7. Залишковий борг S0→S3: захопити реальний master.m3u8 з тест-прогону.
-- **S1 — домен:** `AudioTrack` + два життєві цикли (D3); послаблення AcceptSource; **повна таблиця
-  переходів VideoAsset × AudioTrack** з `AwaitingAudio` і fail-шляхами (D4); інваріанти «≥1 Ready» та
-  «рівно одна default». Юніт-тести домену. Без транспорту/БД/транскодера.
-- **S2 — persist:** міграція `audio_tracks`, repository, storage-ключі `source/<id>/audio-<trackId>`;
-  set-default атомарний swap, delete з re-election — на рівні транзакцій. Repo-тести проти Postgres.
+- **S1 — домен (ЗАКРИТО 2026-11-07, `80a3df6`; рев'ю PASS; `report.md` S1):** `AudioTrack` + два
+  життєві цикли (D3); **повна таблиця переходів VideoAsset × AudioTrack** з `AwaitingAudio` і
+  fail-шляхами (D4); інваріанти «≥1 Ready» та «рівно одна default». Юніт-тести домену. Без
+  транспорту/БД/транскодера.
+  **Уточнення виконання (фолд лінз S1):** (1) релаксація video-`AcceptSource` НЕ в S1 — їде в S3 разом
+  зі зміною транскодера (правило порядку, S3), тож S1 дав лише `AcceptAudioTrackSource` (строге
+  AAC/MP3, malformed-upload D4/Q1), а live `AcceptSource`/`transcode.go:102` не чіпано; (2)
+  `AwaitingAudio` увійшов у публічний `States` → адитивний enum `awaiting_audio` у згенерованому
+  openapi + Orval уже в S1 (sqlc без змін); DB CHECK станів `VideoAsset` розширюється в S2.
+- **S2 — persist:** міграція `audio_tracks` **+ розширення CHECK-констрейнту станів `VideoAsset` на
+  `awaiting_audio`** (`00005_media.sql`; безпечно — жоден код не пише цей стан до S3), repository,
+  storage-ключі `source/<id>/audio-<trackId>`; set-default атомарний swap, delete з re-election — на
+  рівні транзакцій. Repo-тести проти Postgres **+ повний ordered `make check`** (перший зріз зі
+  злитою/персистною поведінкою — integration+e2e тут обов'язкові, §8).
 - **S3 — транскод доріжки + regen master (D1+D7), включно з embedded (злито S3+S4, crit complexity):**
   розширити payload `media:transcode`; ffmpeg пакетує один аудіофайл; **повна регенерація master під
   per-asset локом, атомарно** з набору Ready-доріжок; матеріалізація embedded-доріжки при відео-
@@ -182,6 +191,15 @@ playback-DTO). Координація зі security-spike — §6.
 кожного зрізу** (правило власника 26.10). Додатково (gaps #1): e2e, що **наявний upload→Ready
 лишається зеленим** після зрізу, який вмикає Ready-ґейт.
 
+**Уточнення обсягу гейту (рішення власника 2026-11-07, із S1).** Зріз, що міняє згенерований контракт
+лише **адитивно й без споживачів** (S1 додав enum-значення `awaiting_audio`, якого ще ніхто не пише),
+гейтиться префіксом `format-check/lint/typecheck/test(-race)/check-generated` + `build`: out-of-diff
+вектори поломки покриті (frontend-exhaustiveness → typecheck; консюмери `States` → build/test), а e2e
+не може дійти до нового значення. Повний `integration`+`e2e` для такого зрізу **відкладається до
+першого зрізу, що його споживає** (для `awaiting_audio` — S2), і фіксується в report як *deferred, не
+passed*. Інваріант §8 (повний ordered gate) лишається обов'язковим для будь-якого зрізу з реальним
+producer/consumer злитої чи персистної поведінки.
+
 ## 9. Результат plan-critique (2026-11-07)
 4/4 лінзи повернулись. **9 blocking** знахідок вбудовано: reuse замість клону машинерії (D3);
 відео-only без `-map 0:a:0` разом з AcceptSource (D4/S3); regen master серіалізовано+атомарно+з-Ready-
@@ -228,16 +246,22 @@ job розширено а не додано, S3+S4 злито, нумераці�
   (`9d42bb9`/`0445184`/`f8377b6`/`c426504`/`0ce4371`), закриття `169c0fc` (PR #81/#82). Гейт фази
   виконано. (Незакомічені `docs/security/_wip-s0.1*`/`_wip-s0.2-cutover.md` — лише робочі журнали піра,
   не код; код злитий.)
-- **Наступний крок — S1 (домен)**, але НЕ в цій сесії: транскрипт >4МБ, потрібна свіжа CLI-сесія.
+- **S1 (домен) ЗАКРИТО 2026-11-07** (`80a3df6`, гілка `multi-audio`; рев'ю PASS; гейт-префікс+build
+  зелені, e2e deferred→S2). **Наступний крок — S2 (persist).** PR для гілки ще не відкрито.
 
 ## Рішення власника
 - **2026-11-07:** план ЗАТВЕРДЖЕНО («Го»), пройшовши plan-critique (0 blocking) і plan-defense (0 gap).
   Що саме закрито: обсяг §1, джерело аудіо §1, 7 архітектурних рішень D1–D7, розбивка S0–S7+backfill §5,
   ліміти §7, rollback §10. Старт кодування лишається гейтнутим на security S0.2 cutover (нижче).
+- **2026-11-07 (S1, обсяг гейту):** повний `integration`+`e2e` для S1 відкладено до S2 — обґрунтування
+  й межа дії в §8 «Уточнення обсягу гейту» (адитивний producer-less enum). S1 закрито за
+  префіксом+`build`; deferred, не passed. Перевірка: `report.md` S1 + коміт `80a3df6`.
 
 ## ДАЛІ
 1. ✅ Затвердження власником — 2026-11-07.
 2. ✅ security S0.2 cutover — завершено й у main (`93690df`+PR #82, закриття `169c0fc`).
-3. **Старт S1 (домен) у СВІЖІЙ сесії** (транскрипт цієї >4МБ): `AudioTrack` + стан-машина (D3/D4),
-   юніт-тести, без транспорту/БД/транскодера; далі leaf-first S2–S7+S-backfill, кожен зріз —
-   незалежне рев'ю + ordered gate.
+3. ✅ **S1 (домен) — ЗАКРИТО 2026-11-07** (`80a3df6`, гілка `multi-audio`; рев'ю PASS; гейт-префікс+
+   build зелені, e2e deferred→S2). Див. `report.md` S1.
+4. **Старт S2 (persist)**: міграція `audio_tracks` + розширення DB CHECK на `awaiting_audio`,
+   repository, storage-ключі, set-default swap, delete з re-election; repo-тести + **повний ordered
+   `make check`**. Далі leaf-first S3–S7+S-backfill, кожен зріз — незалежне рев'ю + ordered gate.
