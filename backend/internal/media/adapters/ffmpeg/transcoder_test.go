@@ -80,9 +80,9 @@ func TestParseProbeAndAcceptSource(t *testing.T) {
 			wantError: domain.ErrUnsupportedSource,
 		},
 		{
-			name:      "video without audio",
-			document:  `{"streams":[{"codec_name":"h264","codec_type":"video","width":640,"height":360}],"format":{"duration":"4.0"}}`,
-			wantError: domain.ErrUnsupportedSource,
+			name:     "video without audio is accepted (D4 video-only)",
+			document: `{"streams":[{"codec_name":"h264","codec_type":"video","width":640,"height":360}],"format":{"duration":"4.0"}}`,
+			want:     domain.SourceProbe{Width: 640, Height: 360, VideoCodec: domain.CodecH264, DurationSeconds: 4.0},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestRenderArgumentsForLandscapeAndPortraitSources(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := transcoder.renderArguments(sourceKey(), workKey(), domain.SelectLadder(test.probe))
+			got, err := transcoder.renderArguments(sourceKey(), workKey(), domain.SelectLadder(test.probe), true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -167,7 +167,7 @@ func TestRenderArgumentsPinAppleConformance(t *testing.T) {
 		domain.Rendition360p,
 		domain.Rendition720p,
 		domain.Rendition1080p,
-	})
+	}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +176,60 @@ func TestRenderArgumentsPinAppleConformance(t *testing.T) {
 	for _, forbidden := range []string{"-level:v:2", "avc3", "frame_rate", "r_frame_rate"} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("argv contains %q: %s", forbidden, joined)
+		}
+	}
+}
+
+func TestRenderArgumentsVideoOnlyOmitAudioMapAndGroup(t *testing.T) {
+	t.Parallel()
+	transcoder := New("/media")
+	got, err := transcoder.renderArguments(sourceKey(), workKey(), []domain.Rendition{domain.Rendition360p, domain.Rendition720p}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertArguments(t, got, expectedVideoOnlyTwoRungRenderArguments())
+	joined := strings.Join(got, " ")
+	for _, forbidden := range []string{"0:a:0", "agroup:aac", "-c:a:0"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("video-only argv contains %q: %s", forbidden, joined)
+		}
+	}
+}
+
+func TestAudioRenderArgumentsPackageSingleTrack(t *testing.T) {
+	t.Parallel()
+	transcoder := New("/media")
+	trackLeaf := domain.AudioLeafPrefix + "22222222-2222-4222-8222-222222222222"
+	got, err := transcoder.audioRenderArguments(
+		domain.StorageKey{Kind: domain.StorageSource, ID: testAssetID, Leaf: trackLeaf},
+		workKey(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+		"-i", "/media/source/11111111-1111-4111-8111-111111111111/" + trackLeaf,
+		"-vn",
+		"-map", "0:a:0",
+		"-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k", "-ac", "2",
+		"-f", "hls", "-hls_time", "6", "-hls_playlist_type", "vod", "-hls_flags", "independent_segments",
+		"-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
+		"-hls_segment_filename", "/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/segment_%05d.m4s",
+		"/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/index.m3u8",
+	}
+	assertArguments(t, got, want)
+}
+
+func TestAudioRenderArgumentsRejectNonAudioLeaf(t *testing.T) {
+	t.Parallel()
+	transcoder := New("/media")
+	for _, leaf := range []string{"original", "audio-not-a-uuid", "audio-", "../escape"} {
+		if _, err := transcoder.audioRenderArguments(
+			domain.StorageKey{Kind: domain.StorageSource, ID: testAssetID, Leaf: leaf},
+			workKey(),
+		); err == nil {
+			t.Fatalf("audio source leaf %q accepted", leaf)
 		}
 	}
 }
@@ -210,6 +264,7 @@ func TestOriginalNameCannotReachRenderOrThumbnailArguments(t *testing.T) {
 		domain.StorageKey{Kind: domain.StorageSource, ID: asset.ID, Leaf: "original"},
 		workKey(),
 		[]domain.Rendition{domain.Rendition360p, domain.Rendition720p},
+		true,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -238,10 +293,11 @@ func TestArgumentsRejectNonFixedStorageKeysAndLadders(t *testing.T) {
 		sourceKey(),
 		domain.StorageKey{Kind: domain.StorageTemporary, ID: testAssetID, Leaf: "../escape"},
 		[]domain.Rendition{domain.Rendition360p},
+		true,
 	); err == nil {
 		t.Fatal("unsafe work key accepted")
 	}
-	if _, err := transcoder.renderArguments(sourceKey(), workKey(), []domain.Rendition{domain.Rendition720p}); err == nil {
+	if _, err := transcoder.renderArguments(sourceKey(), workKey(), []domain.Rendition{domain.Rendition720p}, true); err == nil {
 		t.Fatal("non-prefix ladder accepted")
 	}
 }
@@ -301,6 +357,21 @@ func expectedTwoRungRenderArguments() []string {
 		"-hls_segment_filename", "/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/%v/segment_%05d.m4s",
 		"-master_pl_name", "master.m3u8",
 		"-var_stream_map", "a:0,agroup:aac,name:audio,default:yes v:0,agroup:aac,name:360p v:1,agroup:aac,name:720p",
+		"/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/%v/index.m3u8",
+	}
+}
+
+func expectedVideoOnlyTwoRungRenderArguments() []string {
+	return []string{
+		"-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+		"-i", "/media/source/11111111-1111-4111-8111-111111111111/original",
+		"-filter_complex", "[0:v]split=2[in0][in1];[in0]scale=w='min(640,iw)':h='min(360,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2[v0];[in1]scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2[v1]",
+		"-map", "[v0]", "-c:v:0", "libx264", "-profile:v:0", "high", "-level:v:0", "4.1", "-pix_fmt:v:0", "yuv420p", "-crf:v:0", "21", "-maxrate:v:0", "600k", "-bufsize:v:0", "1200k", "-preset:v:0", "veryfast", "-force_key_frames:v:0", "expr:gte(t,n_forced*2)",
+		"-map", "[v1]", "-c:v:1", "libx264", "-profile:v:1", "high", "-level:v:1", "4.1", "-pix_fmt:v:1", "yuv420p", "-crf:v:1", "21", "-maxrate:v:1", "3000k", "-bufsize:v:1", "6000k", "-preset:v:1", "veryfast", "-force_key_frames:v:1", "expr:gte(t,n_forced*2)",
+		"-f", "hls", "-hls_time", "6", "-hls_playlist_type", "vod", "-hls_flags", "independent_segments", "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4",
+		"-hls_segment_filename", "/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/%v/segment_%05d.m4s",
+		"-master_pl_name", "master.m3u8",
+		"-var_stream_map", "v:0,name:360p v:1,name:720p",
 		"/media/temporary/11111111-1111-4111-8111-111111111111-0123456789abcdef0123456789abcdef/%v/index.m3u8",
 	}
 }

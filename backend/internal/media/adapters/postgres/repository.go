@@ -456,7 +456,7 @@ func mapAsset(
 	}
 	assetState := domain.State(state)
 	switch assetState {
-	case domain.Created, domain.Uploading, domain.Queued, domain.Processing, domain.Ready, domain.Failed:
+	case domain.Created, domain.Uploading, domain.Queued, domain.Processing, domain.AwaitingAudio, domain.Ready, domain.Failed:
 	default:
 		return domain.VideoAsset{}, domain.ErrDependencyUnavailable
 	}

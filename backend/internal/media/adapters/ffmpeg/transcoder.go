@@ -52,8 +52,8 @@ func (transcoder *Transcoder) Probe(ctx context.Context, source domain.StorageKe
 	return probe, nil
 }
 
-func (transcoder *Transcoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition) error {
-	arguments, err := transcoder.renderArguments(source, work, renditions)
+func (transcoder *Transcoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition, hasAudio bool) error {
+	arguments, err := transcoder.renderArguments(source, work, renditions, hasAudio)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,13 @@ func (transcoder *Transcoder) Render(ctx context.Context, source, work domain.St
 	if err != nil {
 		return err
 	}
-	for _, directory := range append([]string{"audio"}, renditionNames(renditions)...) {
+	directories := renditionNames(renditions)
+	if hasAudio {
+		// The embedded audio stream is packaged into its own "audio/" variant
+		// directory; a video-only source (D4) has no such directory.
+		directories = append([]string{"audio"}, directories...)
+	}
+	for _, directory := range directories {
 		if err := os.MkdirAll(filepath.Join(workPath, directory), directoryMode); err != nil {
 			return fmt.Errorf("prepare transcode output: %w", err)
 		}
@@ -123,7 +129,7 @@ func (transcoder *Transcoder) probeArguments(source domain.StorageKey) ([]string
 	return []string{"-v", "error", "-show_streams", "-show_format", "-print_format", "json", "--", sourcePath}, nil
 }
 
-func (transcoder *Transcoder) renderArguments(source, work domain.StorageKey, renditions []domain.Rendition) ([]string, error) {
+func (transcoder *Transcoder) renderArguments(source, work domain.StorageKey, renditions []domain.Rendition, hasAudio bool) ([]string, error) {
 	sourcePath, err := transcoder.resolveSource(source)
 	if err != nil {
 		return nil, err
@@ -161,12 +167,16 @@ func (transcoder *Transcoder) renderArguments(source, work domain.StorageKey, re
 			"-force_key_frames:v:"+stream, "expr:gte(t,n_forced*2)",
 		)
 	}
+	if hasAudio {
+		arguments = append(arguments,
+			"-map", "0:a:0",
+			"-c:a:0", "aac",
+			"-profile:a:0", "aac_low",
+			"-b:a:0", "128k",
+			"-ac", "2",
+		)
+	}
 	arguments = append(arguments,
-		"-map", "0:a:0",
-		"-c:a:0", "aac",
-		"-profile:a:0", "aac_low",
-		"-b:a:0", "128k",
-		"-ac", "2",
 		"-f", "hls",
 		"-hls_time", "6",
 		"-hls_playlist_type", "vod",
@@ -175,10 +185,67 @@ func (transcoder *Transcoder) renderArguments(source, work domain.StorageKey, re
 		"-hls_fmp4_init_filename", "init.mp4",
 		"-hls_segment_filename", filepath.Join(workPath, "%v", "segment_%05d.m4s"),
 		"-master_pl_name", "master.m3u8",
-		"-var_stream_map", variantMap(settings),
+		"-var_stream_map", variantMap(settings, hasAudio),
 		filepath.Join(workPath, "%v", "index.m3u8"),
 	)
 	return arguments, nil
+}
+
+// RenderAudioTrack packages a single uploaded audio-track source file into one
+// fmp4 HLS audio variant (init.mp4 + segments + index.m3u8) written flat into the
+// work directory, using the same audio parameters as the embedded stream
+// (aac_low/128k/stereo, hls_time 6). The work directory is later published under
+// hls/<assetID>/audio-<trackID>/; index.m3u8 names its init and segments
+// relatively, so the directory is rename-safe. No master is produced here — the
+// master is regenerated from the database track set (D7, RegenerateMaster).
+func (transcoder *Transcoder) RenderAudioTrack(ctx context.Context, source, work domain.StorageKey) error {
+	arguments, err := transcoder.audioRenderArguments(source, work)
+	if err != nil {
+		return err
+	}
+	workPath, err := transcoder.resolveWork(work, false)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(workPath, directoryMode); err != nil {
+		return fmt.Errorf("prepare audio transcode output: %w", err)
+	}
+	if err := runCommand(ctx, "ffmpeg", arguments, io.Discard, nil); err != nil {
+		return fmt.Errorf("ffmpeg audio render failed: %w", err)
+	}
+	if err := enforceTreeModes(workPath); err != nil {
+		return fmt.Errorf("secure audio transcode output: %w", err)
+	}
+	return nil
+}
+
+func (transcoder *Transcoder) audioRenderArguments(source, work domain.StorageKey) ([]string, error) {
+	sourcePath, err := transcoder.resolveAudioSource(source)
+	if err != nil {
+		return nil, err
+	}
+	workPath, err := transcoder.resolveWork(work, false)
+	if err != nil || source.ID != work.ID {
+		return nil, errInvalidTranscodeInput
+	}
+	return []string{
+		"-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+		"-i", sourcePath,
+		"-vn",
+		"-map", "0:a:0",
+		"-c:a", "aac",
+		"-profile:a", "aac_low",
+		"-b:a", "128k",
+		"-ac", "2",
+		"-f", "hls",
+		"-hls_time", "6",
+		"-hls_playlist_type", "vod",
+		"-hls_flags", "independent_segments",
+		"-hls_segment_type", "fmp4",
+		"-hls_fmp4_init_filename", "init.mp4",
+		"-hls_segment_filename", filepath.Join(workPath, "segment_%05d.m4s"),
+		filepath.Join(workPath, "index.m3u8"),
+	}, nil
 }
 
 func (transcoder *Transcoder) thumbnailArguments(source, destination domain.StorageKey, probe domain.SourceProbe) ([]string, error) {
@@ -291,10 +358,17 @@ func filterComplex(settings []renditionSetting) string {
 	return filter.String()
 }
 
-func variantMap(settings []renditionSetting) string {
-	variants := []string{"a:0,agroup:aac,name:audio,default:yes"}
+func variantMap(settings []renditionSetting, hasAudio bool) string {
+	var variants []string
+	if hasAudio {
+		variants = append(variants, "a:0,agroup:aac,name:audio,default:yes")
+	}
 	for index, setting := range settings {
-		variants = append(variants, fmt.Sprintf("v:%d,agroup:aac,name:%s", index, setting.name))
+		if hasAudio {
+			variants = append(variants, fmt.Sprintf("v:%d,agroup:aac,name:%s", index, setting.name))
+		} else {
+			variants = append(variants, fmt.Sprintf("v:%d,name:%s", index, setting.name))
+		}
 	}
 	return strings.Join(variants, " ")
 }
@@ -312,6 +386,17 @@ func (transcoder *Transcoder) resolveSource(key domain.StorageKey) (string, erro
 		return "", errInvalidTranscodeInput
 	}
 	return filepath.Join(transcoder.root, string(key.Kind), key.ID, key.Leaf), nil
+}
+
+func (transcoder *Transcoder) resolveAudioSource(key domain.StorageKey) (string, error) {
+	if key.Kind != domain.StorageSource || !validUUID(key.ID) || !validAudioLeaf(key.Leaf) {
+		return "", errInvalidTranscodeInput
+	}
+	return filepath.Join(transcoder.root, string(key.Kind), key.ID, key.Leaf), nil
+}
+
+func validAudioLeaf(leaf string) bool {
+	return strings.HasPrefix(leaf, domain.AudioLeafPrefix) && validUUID(strings.TrimPrefix(leaf, domain.AudioLeafPrefix))
 }
 
 func (transcoder *Transcoder) resolveWork(key domain.StorageKey, thumbnail bool) (string, error) {

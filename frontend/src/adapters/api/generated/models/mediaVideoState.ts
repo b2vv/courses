@@ -14,6 +14,7 @@ export const MediaVideoState = {
   uploading: 'uploading',
   queued: 'queued',
   processing: 'processing',
+  awaiting_audio: 'awaiting_audio',
   ready: 'ready',
   failed: 'failed',
 } as const;

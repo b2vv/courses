@@ -19,6 +19,7 @@ func (repository *Repository) Publish(
 	renditions []domain.Rendition,
 	durationSeconds *float64,
 	now time.Time,
+	embedded *domain.AudioTrack,
 	policy ports.PublishPolicy,
 ) (domain.VideoAsset, *domain.VideoAsset, error) {
 	tx, err := repository.pool.Begin(ctx)
@@ -66,14 +67,41 @@ func (repository *Repository) Publish(
 	for index, rendition := range renditions {
 		storedRenditions[index] = string(rendition)
 	}
+	// D4: a source with an embeddable audio stream goes straight to Ready with its
+	// embedded track; a video-only source waits in AwaitingAudio until an uploaded
+	// track becomes Ready, so silent playback is never published.
+	newState := domain.AwaitingAudio
+	if embedded != nil {
+		newState = domain.Ready
+	}
 	published, err := scanAsset(tx.QueryRow(ctx, `UPDATE video_assets AS assets
-		SET state='ready', claim_token=NULL, failure_reason=NULL, renditions=$3,
+		SET state=$6, claim_token=NULL, failure_reason=NULL, renditions=$3,
 			duration_seconds=$4, updated_at=$5
 		WHERE id=$1::text::uuid AND state='processing'
 		  AND claim_token=$2::text::uuid AND evicted_at IS NULL
-		RETURNING `+mediaAssetColumns, id, token, storedRenditions, durationSeconds, now))
+		RETURNING `+mediaAssetColumns, id, token, storedRenditions, durationSeconds, now, string(newState)))
 	if err != nil {
 		return domain.VideoAsset{}, nil, persistenceError(err)
+	}
+	if embedded != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO audio_tracks(
+			id,video_asset_id,kind,language,label,is_default,state,source_leaf,created_at,updated_at)
+			VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			embedded.ID, embedded.VideoAssetID, string(embedded.Kind), embedded.Language, embedded.Label,
+			embedded.IsDefault, string(embedded.State), embedded.SourceLeaf, storeTime(embedded.CreatedAt), storeTime(embedded.UpdatedAt)); err != nil {
+			if mapped, ok := audioTrackConflict(err); ok {
+				return domain.VideoAsset{}, nil, mapped
+			}
+			return domain.VideoAsset{}, nil, persistenceError(err)
+		}
+	}
+	if embedded == nil {
+		// AwaitingAudio is not Ready, so no eviction pass: the per-lesson Ready set
+		// did not grow.
+		if err := commit(ctx, tx); err != nil {
+			return domain.VideoAsset{}, nil, err
+		}
+		return published, nil, nil
 	}
 
 	var readyCount int

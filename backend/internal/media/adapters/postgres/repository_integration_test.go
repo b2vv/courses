@@ -177,6 +177,21 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("C6 recovery bumps only stale queued attempts", harness.testQueuedRecovery)
 	t.Run("B24 recovery makes a stale publish lose its claim", harness.testRecoveredClaimCannotPublish)
 	t.Run("B29 recovery reclaims processing claims of every age", harness.testThresholdFreeProcessingRecovery)
+	t.Run("S2 audio tracks persist and list in created order", harness.testAudioTracksPersistAndList)
+	t.Run("S2 audio-track schema guards reject bad rows", harness.testAudioTrackSchemaGuards)
+	t.Run("S2 set default swaps atomically and guards the target", harness.testSetDefaultAudioTrack)
+	t.Run("S2 set default swaps onto an earlier-created track", harness.testSetDefaultAdverseOrder)
+	t.Run("S2 concurrent set-default keeps exactly one default", harness.testConcurrentSetDefault)
+	t.Run("S2 delete re-elects a default and guards the last ready", harness.testDeleteAudioTrackReElection)
+	t.Run("S2 create persists a track and rejects an orphan", harness.testCreateAudioTrack)
+	t.Run("S2 migration 00025 down and up round-trips", harness.testMultiAudioMigrationReversible)
+	t.Run("S3 publish embeds a ready default audio track", harness.testPublishEmbedsAudioTrack)
+	t.Run("S3 publish of a video-only source awaits audio", harness.testPublishVideoOnlyAwaitsAudio)
+	t.Run("S3 promote readies a video-only asset and elects a default", harness.testPromoteAudioTrackReadiesVideoOnlyAsset)
+	t.Run("S3 promote keeps the embedded track default", harness.testPromoteAudioTrackKeepsEmbeddedDefault)
+	t.Run("S3 fail of the only track fails the awaiting asset", harness.testFailAudioTrackFailsVideoOnlyAsset)
+	t.Run("S3 fail keeps an asset that still has audio", harness.testFailAudioTrackKeepsAssetWithOtherAudio)
+	t.Run("S3 concurrent promote keeps exactly one default", harness.testConcurrentPromoteAudioTrack)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {
@@ -472,13 +487,35 @@ func (h *mediaHarness) testLifecycleWrites(t *testing.T) {
 	}
 }
 
+// embeddedTrackFor builds the Ready embedded track a successful audio-carrying
+// transcode materialises alongside the asset (D4). Its id is derived from the
+// asset id so each asset gets a distinct, valid track id.
+func embeddedTrackFor(assetID string) *domain.AudioTrack {
+	track, err := domain.NewEmbeddedTrack(domain.AudioTrack{
+		ID:           "a2" + assetID[2:],
+		VideoAssetID: assetID,
+		Kind:         domain.EmbeddedTrack,
+		Language:     "und",
+		Label:        "Original",
+		IsDefault:    true,
+		State:        domain.Ready,
+		SourceLeaf:   domain.EmbeddedAudioLeaf,
+		CreatedAt:    mediaNow,
+		UpdatedAt:    mediaNow,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return &track
+}
+
 func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
 	h.insertAsset(t, mediaAssetTwo, mediaLessonOne, 2, domain.Ready, mediaNow.Add(time.Hour), nil)
 	h.insertAsset(t, mediaAssetThree, mediaLessonOne, 3, domain.Processing, mediaNow.Add(time.Hour), nil)
 	policyFailure := errors.New("publish bytes failed")
-	if _, _, err := h.repository.Publish(h.ctx, mediaAssetThree, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, func(domain.VideoAsset) error {
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetThree, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, embeddedTrackFor(mediaAssetThree), func(domain.VideoAsset) error {
 		return policyFailure
 	}); !errors.Is(err, policyFailure) {
 		t.Fatalf("publish policy error=%v", err)
@@ -500,6 +537,7 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 		[]domain.Rendition{domain.Rendition360p, domain.Rendition720p},
 		nil,
 		mediaNow,
+		embeddedTrackFor(mediaAssetThree),
 		func(locked domain.VideoAsset) error {
 			policyCalls++
 			if locked.ID != mediaAssetThree || locked.State != domain.Processing || locked.ClaimToken != mediaClaimA {
@@ -533,11 +571,58 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 	h.assertAssetCount(t, mediaAssetOne, 0)
 }
 
+func (h *mediaHarness) testPublishEmbedsAudioTrack(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
+	published, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, embeddedTrackFor(mediaAssetOne), func(domain.VideoAsset) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if published.State != domain.Ready {
+		t.Fatalf("asset state=%s want ready", published.State)
+	}
+	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("tracks=%d want 1", len(tracks))
+	}
+	track := tracks[0]
+	if track.Kind != domain.EmbeddedTrack || track.State != domain.Ready || !track.IsDefault ||
+		track.SourceLeaf != domain.EmbeddedAudioLeaf || track.VideoAssetID != mediaAssetOne {
+		t.Fatalf("embedded track=%+v", track)
+	}
+}
+
+func (h *mediaHarness) testPublishVideoOnlyAwaitsAudio(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
+	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, nil, func(domain.VideoAsset) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if published.State != domain.AwaitingAudio || evicted != nil {
+		t.Fatalf("published=%+v evicted=%+v want awaiting_audio, no eviction", published, evicted)
+	}
+	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 0 {
+		t.Fatalf("video-only asset has %d tracks, want 0", len(tracks))
+	}
+}
+
 func (h *mediaHarness) testPublishDuration(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
 	zeroDuration := (domain.SourceProbe{DurationSeconds: 0}).UsableDurationSeconds()
-	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, zeroDuration, mediaNow, func(domain.VideoAsset) error {
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, zeroDuration, mediaNow, embeddedTrackFor(mediaAssetOne), func(domain.VideoAsset) error {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -551,7 +636,7 @@ func (h *mediaHarness) testPublishDuration(t *testing.T) {
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
 	durationSeconds := 125.5
 	policyFailure := errors.New("publish bytes failed")
-	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, func(domain.VideoAsset) error {
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, embeddedTrackFor(mediaAssetOne), func(domain.VideoAsset) error {
 		return policyFailure
 	}); !errors.Is(err, policyFailure) {
 		t.Fatalf("publish policy error=%v", err)
@@ -560,7 +645,7 @@ func (h *mediaHarness) testPublishDuration(t *testing.T) {
 		t.Fatalf("rolled-back duration null=%t err=%v", durationIsNull, err)
 	}
 
-	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, func(domain.VideoAsset) error {
+	if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, &durationSeconds, mediaNow, embeddedTrackFor(mediaAssetOne), func(domain.VideoAsset) error {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -684,7 +769,7 @@ func (h *mediaHarness) testRecoveredClaimCannotPublish(t *testing.T) {
 		t.Fatalf("claimed=%+v ok=%t err=%v", claimed, ok, err)
 	}
 	policyCalled := false
-	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow.Add(2*time.Second), func(domain.VideoAsset) error {
+	published, evicted, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow.Add(2*time.Second), embeddedTrackFor(mediaAssetOne), func(domain.VideoAsset) error {
 		policyCalled = true
 		return nil
 	})
@@ -759,13 +844,16 @@ func (h *mediaHarness) insertAssetAt(t *testing.T, id, lessonID string, generati
 	claimToken := ""
 	failureReason := ""
 	renditions := []string{}
-	if state == domain.Queued || state == domain.Processing || state == domain.Ready || state == domain.Failed {
+	if state == domain.Queued || state == domain.Processing || state == domain.AwaitingAudio || state == domain.Ready || state == domain.Failed {
 		received = 1024
 	}
 	if state == domain.Processing {
 		claimToken = mediaClaimA
 	}
-	if state == domain.Ready {
+	// A video-only asset reaches AwaitingAudio only after Publish has written its
+	// video renditions, so it carries them just like a Ready asset; without them a
+	// later promote to Ready would trip video_assets_ready_has_renditions.
+	if state == domain.AwaitingAudio || state == domain.Ready {
 		renditions = []string{"360p"}
 	}
 	if state == domain.Failed {

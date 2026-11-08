@@ -1,0 +1,160 @@
+# Report — multi-audio (кілька аудіо-доріжок на урок)
+
+Фаза поза роадмапом §24. План і обидві брами — `docs/multi-audio/plan.md` (ЗАТВЕРДЖЕНО
+власником 2026-11-07, plan-critique 4/4 0 blocking, plan-defense 5/5 0 gap).
+
+Гілка `multi-audio` від `main@69d51a8`. Зрізи leaf-first (§5 плану), кожен зелений окремо,
+кожен — незалежне рев'ю + ordered gate.
+
+## S1 — домен (2026-11-07)
+
+**Що зроблено.** Доменна модель multi-audio, без транспорту/БД/транскодера:
+
+- `internal/media/domain/audiotrack.go` — сутність `AudioTrack` із двома життєвими циклами (D3):
+  - `AudioTrackKind` = {`embedded`, `uploaded`}; `NewUploadedTrack` (старт `Created`, ніколи не
+    default до Ready, leaf `audio-<trackID>`) і `NewEmbeddedTrack` (похідний `Ready`, leaf
+    `original`, default дозволено — це аудіо, що веде ассет у Ready).
+  - `ValidateAudioTrackState` — embedded лише `Ready`; uploaded повна дуга мінус `AwaitingAudio`.
+  - `AcceptAudioTrackSource` — приймає лише AAC/MP3; порожній/непідтримуваний кодек =
+    business-помилка (правило malformed-upload D4/Q1); video-only релаксація на нього НЕ поширюється.
+  - Інваріанти D4 чистими функціями: `AssetMayBeReady` (≥1 Ready), `ValidateDefaultInvariant`
+    (≤1 default до Ready; рівно 1 Ready-default у Ready), `ApplyDefault` (атомарний swap, ціль має
+    бути Ready, вхід не мутується), `ElectDefault` (перша Ready за (CreatedAt, ID)),
+    `ValidateTrackDeletion` (відмова прибрати останню Ready-доріжку у Ready-ассеті; missing → not-found).
+- `internal/media/domain/asset.go` — новий стан `VideoAsset` `AwaitingAudio` + переходи (D4):
+  T10 `Processing→AwaitingAudio`, T11 `AwaitingAudio→Ready`, T12 `AwaitingAudio→Failed`, усі
+  пишуться Worker. Прямий T5 `Processing→Ready` (embedded) збережено. `States` розширено.
+- Юніт-тести: `audiotrack_test.go` (конструктори, lifecycle, acceptance, усі інваріанти з
+  межами й tie-break), `asset_test.go` (матриця переходів × 8 станів, writers T10–T12).
+
+**Рішення зрізу (закривають альтернативу).**
+- **Релаксація video-`AcceptSource` ВІДКЛАДЕНА в S3** — за правилом порядку плану (§3 D4: «мердж
+  релаксації заборонено раніше за зміну транскодера»). Live `AcceptSource` і call-site
+  `application/transcode.go:102` — не чіпано. S1 додає лише `AcceptAudioTrackSource`.
+- **`AwaitingAudio` входить у публічний `States`** → адитивна зміна згенерованого контракту:
+  `backend/openapi/openapi.yaml` і `frontend/src/adapters/api/generated/models/mediaVideoState.ts`
+  отримали `awaiting_audio` (sqlc без змін). DB CHECK розшириться в S2 — безпечно, бо жоден код не
+  пише цей стан до S3.
+
+**Незалежне рев'ю (review_mode=independent_subagent, 2026-11-07).** Fresh-context субагент,
+read-only по дифу. **VERDICT PASS**, 0 CONFIRMED-дефектів. Три minor-знахідки закрито в тому ж
+зрізі: (1) `ValidateDefaultInvariant` — незалежний `readyDefaults` замість перезаписуваного
+прапора; (2) коментар про навмисно невільний `IsDefault` у `NewEmbeddedTrack`; (3) покриття
+uploaded `Uploading`/`Queued` у `ValidateAudioTrackState`.
+
+**Верифікація.**
+- `gofmt -l` чисто; `go vet ./internal/media/domain` ок; `go test -race ./internal/media/domain` PASS.
+- Ordered-префікс `make format-check lint typecheck test check-generated` на цілому дереві:
+  format/lint/typecheck/test ✅ (frontend enum-exhaustiveness пройшов із новим значенням;
+  `go test -race ./...`). `check-generated` зелений після staging згенерованих файлів.
+- `make build` (docker compose build) ✅.
+- **Повний `make integration` + `make e2e` ВІДКЛАДЕНО до S2** — рішення власника 2026-11-07:
+  S1 домен-only, нове enum-значення адитивне й без споживачів; усі out-of-diff вектори покриті
+  typecheck+build+test; e2e не може дійти до нового стану. Це **deferred, не passed** — повний
+  ordered gate обов'язковий на S2 (persist), першому зрізі зі злитою/персистною поведінкою.
+
+## S2 — persist (2026-11-08)
+
+**Що зроблено.** Персист-шар multi-audio, без app/HTTP/транскодера:
+
+- `migrations/00025_multi_audio.sql` — ALTER `video_assets` state-CHECK (+`awaiting_audio`, up/down
+  симетрично до набору 00005) + `CREATE TABLE audio_tracks` з DB-рівневими інваріантами D3/D4:
+  FK `ON DELETE CASCADE`, `embedded⇒ready`, `leaf↔kind` (`original` / `audio-<id>`), `default⇒ready`,
+  partial unique `audio_tracks_one_default_per_asset` (≤1 default/asset).
+- `internal/media/adapters/postgres/audiotrack.go` — raw-tx repo-методи (патерн Mint/Claim):
+  `CreateAudioTrack` (app-minted id + RETURNING), `ListAudioTracks` (порядок (created_at,id)),
+  `SetDefaultAudioTrack` (двоетапний clear→set swap під `FOR UPDATE`), `DeleteAudioTrack`
+  (re-election через `domain.ElectDefault`, guard останньої Ready через `ValidateTrackDeletion`);
+  `mapAudioTrack`; `mapAsset` розширено на `AwaitingAudio`.
+- Integration-тести (Postgres): персист+порядок, schema-guards (включно з прийняттям `awaiting_audio`
+  на `video_assets`), set-default swap +adverse-order +concurrent, delete+re-election+last-ready-guard,
+  create+orphan, міграція 00025 down/up round-trip.
+
+**Незалежне рев'ю (independent_subagent, 2026-11-08).** VERDICT **PASS-WITH-CONCERNS**.
+- #1 [PLAUSIBLE-high] — single-statement swap `is_default=(id=$2)` під НЕ-deferrable partial unique
+  індексом міг дати order-залежний transient 23505 (rank-swap). **Закрито**: двоетапний clear→set
+  swap + `testSetDefaultAdverseOrder` (своп на раніше-створену доріжку, поки пізніша тримає default).
+- #2 [GAP] відсутній concurrency-тест — **закрито** `testConcurrentSetDefault` (дві паралельні SetDefault,
+  інваріант «рівно один default» тримається; подія-керований, без sleep).
+- #3/#4 — не блокери: reversibility CHECK-симетрія доведена кодом (down test-only, §10); evicted-guard
+  на Create/SetDefault — app-політика наступного зрізу (DeleteAudioTrack уже перевіряє `evicted_at IS NULL`).
+
+**Верифікація.** Повний ordered `make check` **зелений**: `CHECK_EXIT=0`, e2e **129 passed** (17.6m),
++ integration (media Postgres, усі S2-підтести), check-generated (sqlc без дрейфу — нові методи raw-tx,
+без нових queries), build. Це перший зріз зі злитою/персистною поведінкою — повний gate обов'язковий і
+виконаний (на відміну від S1, де e2e був deferred).
+
+**Наступний крок — S3 (транскод доріжки + regen master):** розширити payload `media:transcode`;
+ffmpeg пакетує аудіофайл; повна регенерація master під per-asset локом, атомарно; матеріалізація
+embedded; відео-only гілка без `-map 0:a:0` разом із релаксацією video-`AcceptSource` (той самий зріз).
+Передумова S0-борг: захопити реальний master.m3u8. Повний ordered `make check`.
+
+## S3 — транскод доріжки + regen master (2026-11-08)
+
+**Що зроблено.** Транскодер, пакування аудіо й повна регенерація master; коміти:
+- `df9a313` **S3a** — video-only render argv-гілка (`Render(…, hasAudio)`), `RenderAudioTrack`,
+  чиста `rewriteMasterText` / атомарний `RegenerateMaster` (D7, single-writer під per-asset локом),
+  релаксація `AcceptSource` (scoped: `AudioCodec==""||aac||mp3`; непідтримуваний кодек досі reject),
+  `validLabel`/`validLanguage` manifest-safe (відмова `"`, CR/LF, 0x7f). Golden-master'и
+  `testdata/master_*.m3u8` реальним ffmpeg — S0-борг (захопити справжній master.m3u8) закрито.
+- `c62f662` **S3b-1** — embedded-матеріалізація + AwaitingAudio: `Publish(embedded *AudioTrack)`
+  (атомарно Ready+track, або AwaitingAudio без eviction-проходу — за D4); координатор
+  `repo.RegenerateMaster`.
+- `f838882` **S3b-2** — uploaded-track transcode-гілка: payload `trackId`, `Job.TrackID`,
+  `EnqueueAudioTrack`; `processAudioTrack`; storage audio-leaf; `LoadAudioTrack` /
+  `PromoteAudioTrack` (T11 + default-election + regen під локом) / `FailAudioTrack` (T12).
+- `133a20f` **gate-fix (test-only)** — integration-seed AwaitingAudio-ассета несе renditions
+  (інакше promote→Ready валив `video_assets_ready_has_renditions`, 23514) + integration-only фейк
+  `tusQueue.EnqueueAudioTrack`. Без змін продакшн-коду.
+
+**Рішення зрізу (закривають альтернативу).**
+- **Lean lifecycle для uploaded-track (рішення власника 2026-11-08).** Uploaded-доріжка йде
+  `Created→(upload)→Queued→processAudioTrack→Promote/Fail` без проміжного `Uploading`-підтвердження
+  tus-callback'ом: мінтимо id, приймаємо байти, ставимо в чергу. Закрита альтернатива — повний
+  upload-handshake як у video — відкладена, бо uploaded-track UI активується лише в S5; механізм
+  доведення: промоут/фейл під per-asset локом із integration-тестами (`testPromoteAudioTrack*`,
+  `testFailAudioTrack*`, `testConcurrentPromoteAudioTrack`).
+- **S0-факти master-регенерації (виміряні реальним ffmpeg, 2026-11-08):** аудіо-група master'а має
+  `GROUP-ID="group_aac"`; `EXT-X-STREAM-INF` несе виміряний `BANDWIDTH` (не оцінку); embedded-доріжка
+  адресується відносним URI під `audio/` (а uploaded — `audio-<trackID>/`). Ці значення зафіксовані
+  в golden-master'ах `testdata/master_*.m3u8`.
+
+**Незалежне рев'ю (independent_subagent, 2026-11-08; повний звіт — `docs/multi-audio/_wip-s3-review.md`).**
+VERDICT **PASS (S3 scope).** Live-шлях S3 — embedded-матеріалізація, video-only→AwaitingAudio,
+атомарність/вибір-стану/eviction `Publish`, повний rewrite master (атомарний, ідемпотентний, video-рядки
+verbatim), path-safety audio-leaf, quoted-string-safety, рівно-один-default — коректний; інваріант D4
+«no silent playback» тримається. Три CONFIRMED-знахідки — у uploaded-track шляху, що **не має
+продакшн-виклику в S3** (активується в S5): недосяжні в S3-as-shipped, блокувальні для S5.
+
+**Обмеження (§S3, усі латентні до S5 — uploaded-track шлях без продакшн-виклика).**
+1. [severe] `processAudioTrack` класифікує ВСІ probe/`RenderAudioTrack`-фейли як transient → після
+   `MaxRetry` asynq кидає задачу, доріжка лишається `Queued`, ассет навіки `AwaitingAudio` (T12
+   `FailAudioTrack` не спрацьовує, бо `Queued` рахується як pending). Video-шлях натомість робить
+   термінальний `Fail` на вичерпанні. **Фікс до S5:** термінальний `FailAudioTrack` при
+   `RetryCount>=MaxRetry`.
+2. `PromoteAudioTrack` піднімає `AwaitingAudio→Ready`, але НЕ ганяє per-lesson eviction-прохід
+   (на відміну від `Publish`) → video-only уроки з повторними аплоадами накопичують Ready-генерації
+   понад cap=2; старі байти не чистяться. Суперечить D4 «eviction при переході ассета в Ready».
+   **Фікс до S5.**
+3. `DeleteAudioTrack` (unwired, S5) міняє БД, але не кличе `RegenerateMaster` → видалення Ready-
+   доріжки з multi-track Ready-ассета лишає stale `EXT-X-MEDIA` URI на видалений каталог.
+   **Фікс при wiring S5.**
+- Minor (4): самотній embedded-Ready ассет тримає ffmpeg-ів master verbatim (`NAME="audio_0"`, без
+  LANGUAGE/AUTOSELECT), поки DB-рядок — `Label="Original"`/`Language="und"`; сходяться до «Original»/«und»
+  на першому regen (коли впаде uploaded-доріжка). Косметика.
+- By-design (5): video-only аплоад тепер ПРИЙМАЄТЬСЯ (був reject до S3) і йде в `AwaitingAudio` без
+  forward-шляху до S5 — за D4-sequencing, але це жива зміна поведінки вже зараз.
+
+**Верифікація.** Повний ordered gate **зелений** (2026-11-08):
+- `make integration` — 64 пакети `ok`, 0 FAIL; media Postgres (усі S3-підтести, включно з
+  `testPromoteAudioTrackReadiesVideoOnlyAsset` і `testConcurrentPromoteAudioTrack`, раніше червоними).
+- `make check-generated` — без дрейфу (S3 raw-tx методи, без нових sqlc-queries).
+- `make build` ✅.
+- `make e2e-local` (reset-volumes + reseed) — **129 passed (18.0m)**, exit 0. e2e поки покриває
+  embedded/video-шлях; upload→Ready (uploaded-track UI) — S5; лічба 129 стабільна від S2.
+- format-check (gofmt чисто на змінених файлах; фронт не чіпано), lint/typecheck/test не зачеплені
+  зміною (integration-tagged Go test-онлі).
+
+**Наступний крок — S5 (wiring uploaded-track) з попереднім закриттям обмежень 1–3** або S-backfill/
+S6/S7 за `plan.md` §5. Мердж гілки `multi-audio` — через PR (код-фаза), після незалежного рев'ю
+дельти й go власника.

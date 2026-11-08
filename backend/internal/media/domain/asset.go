@@ -21,12 +21,15 @@ const (
 	Uploading  State = "uploading"
 	Queued     State = "queued"
 	Processing State = "processing"
-	Ready      State = "ready"
-	Failed     State = "failed"
+	// AwaitingAudio is the video transcode is done but no audio track is Ready
+	// yet, so the asset cannot be Ready without publishing silent playback (D4).
+	AwaitingAudio State = "awaiting_audio"
+	Ready         State = "ready"
+	Failed        State = "failed"
 )
 
 // States is the ordered set used by transition validation and the HTTP contract.
-var States = []State{Created, Uploading, Queued, Processing, Ready, Failed}
+var States = []State{Created, Uploading, Queued, Processing, AwaitingAudio, Ready, Failed}
 
 type ClaimToken string
 
@@ -102,6 +105,12 @@ const (
 	T7 Transition = "T7"
 	T8 Transition = "T8"
 	T9 Transition = "T9"
+	// T10..T12 are the multi-audio additions (D4): the video transcode finishes
+	// without a Ready track (T10), the first Ready audio track promotes the asset
+	// (T11), or every track fails with no embedded audio (T12).
+	T10 Transition = "T10"
+	T11 Transition = "T11"
+	T12 Transition = "T12"
 )
 
 type TransitionWriter string
@@ -118,7 +127,7 @@ func (transition Transition) Writers() []TransitionWriter {
 		return []TransitionWriter{API}
 	case T2, T3:
 		return []TransitionWriter{UploadService}
-	case T4, T5, T6, T7:
+	case T4, T5, T6, T7, T10, T11, T12:
 		return []TransitionWriter{Worker}
 	case T8:
 		return []TransitionWriter{Worker, UploadService}
@@ -149,6 +158,12 @@ func ValidateTransition(transition Transition, from, to State) error {
 		legal = (from == Created || from == Uploading || from == Processing) && to == Failed
 	case T9:
 		legal = (from == Failed || from == Queued || from == Processing) && to == Queued
+	case T10:
+		legal = from == Processing && to == AwaitingAudio
+	case T11:
+		legal = from == AwaitingAudio && to == Ready
+	case T12:
+		legal = from == AwaitingAudio && to == Failed
 	}
 	if !legal {
 		return ErrInvalidStateTransition
