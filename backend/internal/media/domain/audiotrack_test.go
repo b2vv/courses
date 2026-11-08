@@ -67,6 +67,8 @@ func TestNewUploadedTrack(t *testing.T) {
 		{name: "language with space", change: func(tr *domain.AudioTrack) { tr.Language = "uk ua" }},
 		{name: "empty label", change: func(tr *domain.AudioTrack) { tr.Label = "" }},
 		{name: "label too long", change: func(tr *domain.AudioTrack) { tr.Label = strings.Repeat("ї", domain.MaximumLabelLength+1) }},
+		{name: "label with double quote", change: func(tr *domain.AudioTrack) { tr.Label = `Ukr "dub"` }},
+		{name: "label with newline", change: func(tr *domain.AudioTrack) { tr.Label = "Ukr\ndub" }},
 		{name: "zero created", change: func(tr *domain.AudioTrack) { tr.CreatedAt = time.Time{} }},
 		{name: "update after create", change: func(tr *domain.AudioTrack) { tr.UpdatedAt = tr.UpdatedAt.Add(time.Microsecond) }},
 	} {

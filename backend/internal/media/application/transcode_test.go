@@ -13,10 +13,12 @@ import (
 )
 
 type fakeTranscoder struct {
-	calls     []string
-	probe     func(context.Context, domain.StorageKey) (domain.SourceProbe, error)
-	render    func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error
-	thumbnail func(context.Context, domain.StorageKey, domain.StorageKey) error
+	calls            []string
+	probe            func(context.Context, domain.StorageKey) (domain.SourceProbe, error)
+	render           func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error
+	renderAudio      func(context.Context, domain.StorageKey, domain.StorageKey) error
+	regenerateMaster func(context.Context, string, []ports.AudioRendition) error
+	thumbnail        func(context.Context, domain.StorageKey, domain.StorageKey) error
 }
 
 func (transcoder *fakeTranscoder) Probe(ctx context.Context, source domain.StorageKey) (domain.SourceProbe, error) {
@@ -24,9 +26,25 @@ func (transcoder *fakeTranscoder) Probe(ctx context.Context, source domain.Stora
 	return transcoder.probe(ctx, source)
 }
 
-func (transcoder *fakeTranscoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition) error {
+func (transcoder *fakeTranscoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition, hasAudio bool) error {
 	transcoder.calls = append(transcoder.calls, "render")
-	return transcoder.render(ctx, source, work, renditions)
+	return transcoder.render(ctx, source, work, renditions, hasAudio)
+}
+
+func (transcoder *fakeTranscoder) RenderAudioTrack(ctx context.Context, source, work domain.StorageKey) error {
+	transcoder.calls = append(transcoder.calls, "render_audio")
+	if transcoder.renderAudio != nil {
+		return transcoder.renderAudio(ctx, source, work)
+	}
+	return nil
+}
+
+func (transcoder *fakeTranscoder) RegenerateMaster(ctx context.Context, assetID string, audios []ports.AudioRendition) error {
+	transcoder.calls = append(transcoder.calls, "regenerate_master")
+	if transcoder.regenerateMaster != nil {
+		return transcoder.regenerateMaster(ctx, assetID, audios)
+	}
+	return nil
 }
 
 func (transcoder *fakeTranscoder) Thumbnail(ctx context.Context, source, destination domain.StorageKey, probe domain.SourceProbe) error {
@@ -39,7 +57,7 @@ func TestProcessClaimsRendersAndPublishes(t *testing.T) {
 	repository := processingRepository(domain.Queued)
 	storage := defaultStorage()
 	transcoder := defaultTranscoder()
-	transcoder.render = func(_ context.Context, source, work domain.StorageKey, renditions []domain.Rendition) error {
+	transcoder.render = func(_ context.Context, source, work domain.StorageKey, renditions []domain.Rendition, _ bool) error {
 		if source.Kind != domain.StorageSource || source.ID != mediaAssetID || source.Leaf != "original" {
 			t.Fatalf("source=%+v", source)
 		}
@@ -86,7 +104,7 @@ func TestProcessFinalAndNonFinalTransientFailures(t *testing.T) {
 			t.Parallel()
 			repository := processingRepository(domain.Queued)
 			transcoder := defaultTranscoder()
-			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error {
+			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
 				return errors.New("ffmpeg stderr with /private/media/source")
 			}
 			outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{
@@ -202,7 +220,7 @@ func TestCancellationCausesAreHandledSeparately(t *testing.T) {
 			repository := processingRepository(domain.Queued)
 			started := make(chan struct{})
 			transcoder := defaultTranscoder()
-			transcoder.render = func(ctx context.Context, _ domain.StorageKey, _ domain.StorageKey, _ []domain.Rendition) error {
+			transcoder.render = func(ctx context.Context, _ domain.StorageKey, _ domain.StorageKey, _ []domain.Rendition, _ bool) error {
 				close(started)
 				<-ctx.Done()
 				return ctx.Err()
@@ -246,7 +264,7 @@ func TestDiskExhaustionIsRetryableAndCleansWorkingKeys(t *testing.T) {
 			storage.free = func(context.Context) (int64, error) { return 1, nil }
 		}},
 		{name: "render", configure: func(_ *fakeStorage, transcoder *fakeTranscoder) {
-			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error {
+			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
 				return syscall.ENOSPC
 			}
 		}},
@@ -481,7 +499,9 @@ func defaultTranscoder() *fakeTranscoder {
 		probe: func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
 			return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: domain.CodecAAC, DurationSeconds: 125.5}, nil
 		},
-		render:    func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error { return nil },
+		render: func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
+			return nil
+		},
 		thumbnail: func(context.Context, domain.StorageKey, domain.StorageKey) error { return nil },
 	}
 }

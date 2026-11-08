@@ -247,5 +247,17 @@ func validLanguage(value string) bool {
 
 func validLabel(value string) bool {
 	count := utf8.RuneCountInString(value)
-	return utf8.ValidString(value) && !strings.ContainsRune(value, 0) && count >= 1 && count <= MaximumLabelLength
+	if !utf8.ValidString(value) || count < 1 || count > MaximumLabelLength {
+		return false
+	}
+	// The label is rendered verbatim into an HLS EXT-X-MEDIA quoted-string (D7),
+	// which cannot hold a double quote, CR, LF or other control character, and HLS
+	// defines no escape. Reject them here so a track name can never corrupt the
+	// manifest rather than escaping at render time.
+	for _, r := range value {
+		if r == '"' || r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
