@@ -45,7 +45,10 @@ type AssetRepository interface {
 	// asset has none yet, lifts the asset out of AwaitingAudio once a track is Ready
 	// (T11), and regenerates the master from the resulting Ready set — all under the
 	// per-asset lock, in one transaction (D4/D7). rewrite does the atomic file write.
-	PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
+	// When the asset becomes Ready it joins its lesson's Ready set, so the same
+	// per-lesson eviction Publish runs applies: the returned asset is the evicted
+	// oldest generation (nil when nothing was evicted), whose bytes the caller purges.
+	PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (evicted *domain.VideoAsset, err error)
 	// FailAudioTrack marks the track Failed and, when the AwaitingAudio asset is
 	// left with no Ready track and nothing still in flight, fails the asset (T12).
 	FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error

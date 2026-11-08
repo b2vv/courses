@@ -209,7 +209,7 @@ func (h *mediaHarness) testPromoteAudioTrackReadiesVideoOnlyAsset(t *testing.T) 
 	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Queued, mediaNow)
 
 	var rewritten []domain.AudioTrack
-	if err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
+	if _, err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
 		rewritten = ready
 		return nil
 	}); err != nil {
@@ -235,7 +235,7 @@ func (h *mediaHarness) testPromoteAudioTrackKeepsEmbeddedDefault(t *testing.T) {
 	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Processing, mediaNow.Add(time.Minute))
 
 	var readyCount, defaults int
-	if err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
+	if _, err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
 		readyCount = len(ready)
 		for _, track := range ready {
 			if track.IsDefault {
@@ -251,6 +251,47 @@ func (h *mediaHarness) testPromoteAudioTrackKeepsEmbeddedDefault(t *testing.T) {
 	}
 	if id, count := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackOne || count != 1 {
 		t.Fatalf("default=%s count=%d want the embedded track to stay default", id, count)
+	}
+}
+
+func (h *mediaHarness) testPromoteAudioTrackEvictsOldestReady(t *testing.T) {
+	h.reset(t)
+	// Two older Ready generations already fill the lesson's cap; the video-only
+	// generation now gaining its audio makes three, so promoting it must evict the
+	// oldest exactly as the video publish path does (D4).
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertAsset(t, mediaAssetTwo, mediaLessonOne, 2, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertAsset(t, mediaAssetThree, mediaLessonOne, 3, domain.AwaitingAudio, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetThree, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Queued, mediaNow)
+
+	evicted, err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetThree, mediaTrackOne, mediaNow.Add(time.Minute), func([]domain.AudioTrack) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evicted == nil || evicted.ID != mediaAssetOne {
+		t.Fatalf("evicted=%+v want the oldest generation %s", evicted, mediaAssetOne)
+	}
+	for _, want := range []struct {
+		id      string
+		evicted bool
+	}{
+		{mediaAssetOne, true},
+		{mediaAssetTwo, false},
+		{mediaAssetThree, false},
+	} {
+		var isEvicted bool
+		if err := h.pool.QueryRow(h.ctx, `SELECT evicted_at IS NOT NULL FROM video_assets WHERE id=$1`, want.id).Scan(&isEvicted); err != nil {
+			t.Fatal(err)
+		}
+		if isEvicted != want.evicted {
+			t.Fatalf("asset %s evicted=%v want %v", want.id, isEvicted, want.evicted)
+		}
+	}
+	asset, err := h.repository.Load(h.ctx, mediaAssetThree)
+	if err != nil || asset.State != domain.Ready {
+		t.Fatalf("promoted asset=%+v err=%v want ready", asset, err)
 	}
 }
 
@@ -305,7 +346,7 @@ func (h *mediaHarness) testConcurrentPromoteAudioTrack(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			errs[i] = h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, targets[i], mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
+			_, errs[i] = h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, targets[i], mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
 				return nil
 			})
 		}(i)

@@ -195,7 +195,7 @@ func (transcode *Transcode) processAudioTrack(ctx context.Context, job ports.Job
 
 	probe, err := transcode.transcoder.Probe(ctx, source)
 	if err != nil {
-		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+		return transcode.audioTrackTransientFailure(ctx, job, err, domain.ProbeFailed)
 	}
 	if err := domain.AcceptAudioTrackSource(probe); err != nil {
 		if failErr := transcode.repository.FailAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp()); failErr != nil {
@@ -204,25 +204,56 @@ func (transcode *Transcode) processAudioTrack(ctx context.Context, job ports.Job
 		return TranscodeOutcome{Failed: true, Reason: domain.UnsupportedSource, Permanent: true}, nil
 	}
 	if err := transcode.storage.Purge(ctx, work); err != nil {
-		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+		return transcode.audioTrackTransientFailure(ctx, job, err, domain.StorageUnavailable)
 	}
 	if err := transcode.transcoder.RenderAudioTrack(ctx, source, work); err != nil {
 		_ = transcode.storage.Purge(ctx, work)
-		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+		return transcode.audioTrackTransientFailure(ctx, job, err, domain.RenderFailed)
 	}
 	if err := transcode.storage.Publish(ctx, work, audioHLSKey(job.AssetID, job.TrackID)); err != nil {
 		_ = transcode.storage.Purge(ctx, work)
-		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+		return transcode.audioTrackTransientFailure(ctx, job, err, domain.PublishFailed)
 	}
-	if err := transcode.repository.PromoteAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp(), func(ready []domain.AudioTrack) error {
+	evicted, err := transcode.repository.PromoteAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp(), func(ready []domain.AudioTrack) error {
 		return transcode.transcoder.RegenerateMaster(ctx, job.AssetID, audioRenditions(ready))
-	}); err != nil {
-		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	})
+	if err != nil {
+		return transcode.audioTrackTransientFailure(ctx, job, err, domain.RenderFailed)
 	}
 	if err := transcode.storage.Purge(ctx, work); err != nil {
 		return TranscodeOutcome{}, err
 	}
+	// Promoting a video-only asset to Ready can evict an older generation of the
+	// same lesson (D4), exactly as the video publish path does; reclaim its bytes.
+	if evicted != nil {
+		if err := transcode.purgeAsset(ctx, evicted.ID); err != nil {
+			return TranscodeOutcome{}, err
+		}
+		if err := transcode.repository.DeleteSwept(ctx, evicted.ID); err != nil {
+			return TranscodeOutcome{}, err
+		}
+	}
 	return TranscodeOutcome{}, nil
+}
+
+// audioTrackTransientFailure retries a transient audio-transcode fault while asynq
+// attempts remain, but once they are exhausted it fails the track terminally (T12)
+// instead of returning a retryable error. An exhausted asynq task never runs again,
+// so a transient return would strand the track Queued and the asset in AwaitingAudio
+// forever — the gap the video path avoids with its RetryCount>=MaxRetry fail in
+// businessFailure. There is no track-level Recover sweep to fall back on, so
+// exhaustion is always terminal here. finalizationContext detaches cancellation so
+// the fail still commits when the job context is already done.
+func (transcode *Transcode) audioTrackTransientFailure(ctx context.Context, job ports.Job, cause error, reason domain.FailureReason) (TranscodeOutcome, error) {
+	if job.RetryCount < job.MaxRetry {
+		return TranscodeOutcome{}, mediaOperationError(ctx, cause)
+	}
+	finalCtx, cancel := transcode.finalizationContext(ctx)
+	defer cancel()
+	if err := transcode.repository.FailAudioTrack(finalCtx, job.AssetID, job.TrackID, transcode.timestamp()); err != nil {
+		return TranscodeOutcome{}, err
+	}
+	return TranscodeOutcome{Failed: true, Reason: reason}, nil
 }
 
 func audioRenditions(tracks []domain.AudioTrack) []ports.AudioRendition {
