@@ -290,9 +290,16 @@ func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, tr
 		// The asset only now joins its lesson's Ready set, so the per-lesson cap can
 		// be exceeded here exactly as it can in Publish. Mirror Publish's eviction
 		// (D4): when the set is over the cap, evict the oldest generation so a
-		// re-uploaded video-only lesson does not accumulate Ready bytes. The asset
-		// just promoted carries the lesson's highest generation, so ORDER BY
-		// generation never selects it as the victim.
+		// re-uploaded video-only lesson does not accumulate Ready bytes.
+		//
+		// awaiting_audio is NOT in the pending-per-lesson unique index (00005), so a
+		// stale awaiting_audio generation can linger while newer generations are
+		// uploaded and published Ready; when its audio finally lands it is the oldest,
+		// and ORDER BY generation can select the just-promoted asset itself. That
+		// self-eviction is cap-consistent (keeps the newest two) and cannot strand or
+		// corrupt, but it wastes this promotion's master rewrite. The audio-upload
+		// path that makes this reachable is not wired yet (S5-L1); whether a
+		// superseded generation should be promoted at all is decided when it is.
 		var readyCount int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM video_assets
 			WHERE lesson_id=$1::text::uuid AND state='ready' AND evicted_at IS NULL`, lessonID).Scan(&readyCount); err != nil {
