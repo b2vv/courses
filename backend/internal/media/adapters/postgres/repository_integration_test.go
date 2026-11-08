@@ -844,13 +844,16 @@ func (h *mediaHarness) insertAssetAt(t *testing.T, id, lessonID string, generati
 	claimToken := ""
 	failureReason := ""
 	renditions := []string{}
-	if state == domain.Queued || state == domain.Processing || state == domain.Ready || state == domain.Failed {
+	if state == domain.Queued || state == domain.Processing || state == domain.AwaitingAudio || state == domain.Ready || state == domain.Failed {
 		received = 1024
 	}
 	if state == domain.Processing {
 		claimToken = mediaClaimA
 	}
-	if state == domain.Ready {
+	// A video-only asset reaches AwaitingAudio only after Publish has written its
+	// video renditions, so it carries them just like a Ready asset; without them a
+	// later promote to Ready would trip video_assets_ready_has_renditions.
+	if state == domain.AwaitingAudio || state == domain.Ready {
 		renditions = []string{"360p"}
 	}
 	if state == domain.Failed {
