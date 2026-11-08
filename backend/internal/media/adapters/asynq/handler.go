@@ -21,6 +21,7 @@ var errInvalidTaskPayload = errors.New("invalid media task payload")
 
 type taskPayload struct {
 	AssetID string `json:"assetId"`
+	TrackID string `json:"trackId"`
 	Attempt *int   `json:"attempt"`
 }
 
@@ -48,7 +49,7 @@ func (handler *Handler) ProcessTask(ctx context.Context, task *asynqlib.Task) er
 	retryCount, _ := asynqlib.GetRetryCount(ctx)
 	maxRetry, _ := asynqlib.GetMaxRetry(ctx)
 	outcome, err := handler.process(ctx, ports.Job{
-		AssetID: payload.AssetID, Attempt: *payload.Attempt, RetryCount: retryCount, MaxRetry: maxRetry,
+		AssetID: payload.AssetID, TrackID: payload.TrackID, Attempt: *payload.Attempt, RetryCount: retryCount, MaxRetry: maxRetry,
 	})
 	if err != nil {
 		metricOutcome = "failed"
@@ -104,6 +105,9 @@ func NewErrorHandler(logger *slog.Logger) asynqlib.ErrorHandler {
 func decodeTaskPayload(encoded []byte) (taskPayload, error) {
 	var payload taskPayload
 	if err := json.Unmarshal(encoded, &payload); err != nil || !validTaskAssetID(payload.AssetID) || payload.Attempt == nil || *payload.Attempt < 0 {
+		return payload, errInvalidTaskPayload
+	}
+	if payload.TrackID != "" && !validTaskAssetID(payload.TrackID) {
 		return payload, errInvalidTaskPayload
 	}
 	return payload, nil

@@ -187,6 +187,11 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S2 migration 00025 down and up round-trips", harness.testMultiAudioMigrationReversible)
 	t.Run("S3 publish embeds a ready default audio track", harness.testPublishEmbedsAudioTrack)
 	t.Run("S3 publish of a video-only source awaits audio", harness.testPublishVideoOnlyAwaitsAudio)
+	t.Run("S3 promote readies a video-only asset and elects a default", harness.testPromoteAudioTrackReadiesVideoOnlyAsset)
+	t.Run("S3 promote keeps the embedded track default", harness.testPromoteAudioTrackKeepsEmbeddedDefault)
+	t.Run("S3 fail of the only track fails the awaiting asset", harness.testFailAudioTrackFailsVideoOnlyAsset)
+	t.Run("S3 fail keeps an asset that still has audio", harness.testFailAudioTrackKeepsAssetWithOtherAudio)
+	t.Run("S3 concurrent promote keeps exactly one default", harness.testConcurrentPromoteAudioTrack)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {

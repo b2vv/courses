@@ -39,6 +39,16 @@ type AssetRepository interface {
 	// deterministic order while holding the lock, so concurrent audio transcodes
 	// cannot interleave two writers. rewrite performs the atomic file write.
 	RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error
+
+	LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error)
+	// PromoteAudioTrack marks the uploaded track Ready, elects a default when the
+	// asset has none yet, lifts the asset out of AwaitingAudio once a track is Ready
+	// (T11), and regenerates the master from the resulting Ready set — all under the
+	// per-asset lock, in one transaction (D4/D7). rewrite does the atomic file write.
+	PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
+	// FailAudioTrack marks the track Failed and, when the AwaitingAudio asset is
+	// left with no Ready track and nothing still in flight, fails the asset (T12).
+	FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error
 	Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error
 	Fail(ctx context.Context, id string, from domain.State, token domain.ClaimToken,
 		reason domain.FailureReason, now time.Time) error

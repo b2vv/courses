@@ -203,6 +203,141 @@ func (h *mediaHarness) testConcurrentSetDefault(t *testing.T) {
 	}
 }
 
+func (h *mediaHarness) testPromoteAudioTrackReadiesVideoOnlyAsset(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.AwaitingAudio, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Queued, mediaNow)
+
+	var rewritten []domain.AudioTrack
+	if err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
+		rewritten = ready
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := h.repository.Load(h.ctx, mediaAssetOne)
+	if err != nil || asset.State != domain.Ready {
+		t.Fatalf("asset=%+v err=%v want ready (T11)", asset, err)
+	}
+	track, err := h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne)
+	if err != nil || track.State != domain.Ready || !track.IsDefault {
+		t.Fatalf("track=%+v err=%v want ready default", track, err)
+	}
+	if len(rewritten) != 1 || rewritten[0].ID != mediaTrackOne || !rewritten[0].IsDefault {
+		t.Fatalf("rewrite ready set=%+v", rewritten)
+	}
+}
+
+func (h *mediaHarness) testPromoteAudioTrackKeepsEmbeddedDefault(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Processing, mediaNow.Add(time.Minute))
+
+	var readyCount, defaults int
+	if err := h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Minute), func(ready []domain.AudioTrack) error {
+		readyCount = len(ready)
+		for _, track := range ready {
+			if track.IsDefault {
+				defaults++
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if readyCount != 2 || defaults != 1 {
+		t.Fatalf("ready=%d defaults=%d want 2 ready, 1 default", readyCount, defaults)
+	}
+	if id, count := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackOne || count != 1 {
+		t.Fatalf("default=%s count=%d want the embedded track to stay default", id, count)
+	}
+}
+
+func (h *mediaHarness) testFailAudioTrackFailsVideoOnlyAsset(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.AwaitingAudio, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Processing, mediaNow)
+
+	if err := h.repository.FailAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	track, err := h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne)
+	if err != nil || track.State != domain.Failed {
+		t.Fatalf("track=%+v err=%v want failed", track, err)
+	}
+	asset, err := h.repository.Load(h.ctx, mediaAssetOne)
+	if err != nil || asset.State != domain.Failed {
+		t.Fatalf("asset=%+v err=%v want failed (T12)", asset, err)
+	}
+}
+
+func (h *mediaHarness) testFailAudioTrackKeepsAssetWithOtherAudio(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Processing, mediaNow.Add(time.Minute))
+
+	if err := h.repository.FailAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	asset, err := h.repository.Load(h.ctx, mediaAssetOne)
+	if err != nil || asset.State != domain.Ready {
+		t.Fatalf("asset=%+v err=%v want still ready", asset, err)
+	}
+}
+
+func (h *mediaHarness) testConcurrentPromoteAudioTrack(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.AwaitingAudio, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Queued, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "de", "Ger", false, domain.Queued, mediaNow.Add(time.Minute))
+
+	// Two audio transcodes finish at once; the per-asset lock serialises their
+	// master rewrites and default election — the result is both tracks Ready with
+	// exactly one default, never two (D7 single-writer).
+	targets := []string{mediaTrackOne, mediaTrackTwo}
+	errs := make([]error, len(targets))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range targets {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			errs[i] = h.repository.PromoteAudioTrack(h.ctx, mediaAssetOne, targets[i], mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
+				return nil
+			})
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent promote %d: %v", i, err)
+		}
+	}
+	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, defaults := 0, 0
+	for _, track := range tracks {
+		if track.State == domain.Ready {
+			ready++
+		}
+		if track.IsDefault {
+			defaults++
+		}
+	}
+	if ready != 2 || defaults != 1 {
+		t.Fatalf("after concurrent promote ready=%d defaults=%d want 2, 1", ready, defaults)
+	}
+	if asset, err := h.repository.Load(h.ctx, mediaAssetOne); err != nil || asset.State != domain.Ready {
+		t.Fatalf("asset=%+v err=%v want ready", asset, err)
+	}
+}
+
 func (h *mediaHarness) testDeleteAudioTrackReElection(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)

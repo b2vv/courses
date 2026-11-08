@@ -208,6 +208,156 @@ func (repository *Repository) RegenerateMaster(ctx context.Context, assetID stri
 	return commit(ctx, tx)
 }
 
+// LoadAudioTrack returns a single track of an asset, or ErrVideoNotFound.
+func (repository *Repository) LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error) {
+	track, err := scanAudioTrack(repository.pool.QueryRow(ctx, `SELECT `+audioTrackColumns+`
+		FROM audio_tracks WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid`, trackID, assetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	return track, nil
+}
+
+// PromoteAudioTrack marks an uploaded track Ready, elects it the default when the
+// asset has no default yet, lifts the asset from AwaitingAudio to Ready (T11), and
+// regenerates the master from the resulting Ready set — all under the asset +
+// track locks in one transaction (D4/D7).
+func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	var assetState string
+	err = tx.QueryRow(ctx, `SELECT state FROM video_assets
+		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&assetState)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return persistenceError(err)
+	}
+	tracks, err := lockAssetTracks(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
+	index := -1
+	hasDefault := false
+	for position, track := range tracks {
+		if track.ID == trackID {
+			index = position
+		}
+		if track.IsDefault {
+			hasDefault = true
+		}
+	}
+	if index < 0 {
+		return domain.ErrVideoNotFound
+	}
+	if _, err := tx.Exec(ctx, `UPDATE audio_tracks SET state='ready', updated_at=$2
+		WHERE id=$1::text::uuid AND video_asset_id=$3::text::uuid`, trackID, now, assetID); err != nil {
+		if mapped, ok := audioTrackConflict(err); ok {
+			return mapped
+		}
+		return persistenceError(err)
+	}
+	tracks[index].State = domain.Ready
+	// A video-only asset gains its first default here; an asset with an embedded
+	// (already default) track keeps it.
+	if !hasDefault {
+		if elected := domain.ElectDefault(tracks); elected != "" {
+			if _, err := tx.Exec(ctx, `UPDATE audio_tracks SET is_default=true, updated_at=$2
+				WHERE id=$1::text::uuid`, elected, now); err != nil {
+				if mapped, ok := audioTrackConflict(err); ok {
+					return mapped
+				}
+				return persistenceError(err)
+			}
+			for position := range tracks {
+				tracks[position].IsDefault = tracks[position].ID == elected
+			}
+		}
+	}
+	if domain.State(assetState) == domain.AwaitingAudio {
+		if _, err := tx.Exec(ctx, `UPDATE video_assets SET state='ready', updated_at=$2
+			WHERE id=$1::text::uuid AND state='awaiting_audio' AND evicted_at IS NULL`, assetID, now); err != nil {
+			return persistenceError(err)
+		}
+	}
+	ready := make([]domain.AudioTrack, 0, len(tracks))
+	for _, track := range tracks {
+		if track.State == domain.Ready {
+			ready = append(ready, track)
+		}
+	}
+	if err := rewrite(ready); err != nil {
+		return err
+	}
+	return commit(ctx, tx)
+}
+
+// FailAudioTrack marks the track Failed. When the asset is AwaitingAudio and is
+// then left with no Ready track and nothing still in flight, the asset fails too
+// (T12): a video-only lesson whose only audio never arrives cannot stay pending.
+func (repository *Repository) FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	var assetState string
+	err = tx.QueryRow(ctx, `SELECT state FROM video_assets
+		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&assetState)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return persistenceError(err)
+	}
+	tracks, err := lockAssetTracks(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, track := range tracks {
+		if track.ID == trackID {
+			found = true
+		}
+	}
+	if !found {
+		return domain.ErrVideoNotFound
+	}
+	if _, err := tx.Exec(ctx, `UPDATE audio_tracks SET state='failed', is_default=false, updated_at=$2
+		WHERE id=$1::text::uuid AND video_asset_id=$3::text::uuid`, trackID, now, assetID); err != nil {
+		return persistenceError(err)
+	}
+	anyReady, anyPending := false, false
+	for _, track := range tracks {
+		if track.ID == trackID {
+			continue
+		}
+		switch track.State {
+		case domain.Ready:
+			anyReady = true
+		case domain.Failed:
+		default:
+			anyPending = true
+		}
+	}
+	if domain.State(assetState) == domain.AwaitingAudio && !anyReady && !anyPending {
+		if _, err := tx.Exec(ctx, `UPDATE video_assets SET state='failed', failure_reason='render_failed', updated_at=$2
+			WHERE id=$1::text::uuid AND state='awaiting_audio' AND evicted_at IS NULL`, assetID, now); err != nil {
+			return persistenceError(err)
+		}
+	}
+	return commit(ctx, tx)
+}
+
 func lockAssetTracks(ctx context.Context, tx pgx.Tx, assetID string) ([]domain.AudioTrack, error) {
 	rows, err := tx.Query(ctx, `SELECT `+audioTrackColumns+`
 		FROM audio_tracks WHERE video_asset_id=$1::text::uuid

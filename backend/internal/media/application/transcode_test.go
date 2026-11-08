@@ -150,6 +150,108 @@ func TestProcessVideoOnlySourceAwaitsAudio(t *testing.T) {
 	}
 }
 
+func TestProcessAudioTrackPublishesPromotesAndRegenerates(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(_ context.Context, assetID, id string) (domain.AudioTrack, error) {
+		if assetID != mediaAssetID || id != trackID {
+			t.Fatalf("load audio track asset=%s track=%s", assetID, id)
+		}
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	var rewroteWithReady []domain.AudioTrack
+	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) error {
+		rewroteWithReady = []domain.AudioTrack{{ID: trackID, Kind: domain.UploadedTrack, State: domain.Ready, IsDefault: true, Label: "English", Language: "en"}}
+		return rewrite(rewroteWithReady)
+	}
+	transcoder := defaultTranscoder()
+	var regeneratedFor string
+	transcoder.regenerateMaster = func(_ context.Context, assetID string, audios []ports.AudioRendition) error {
+		regeneratedFor = assetID
+		if len(audios) != 1 || audios[0].TrackID != trackID || !audios[0].Default || audios[0].Embedded {
+			t.Fatalf("regenerate audios=%+v", audios)
+		}
+		return nil
+	}
+	var audioSource domain.StorageKey
+	transcoder.renderAudio = func(_ context.Context, source, _ domain.StorageKey) error {
+		audioSource = source
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if audioSource.Kind != domain.StorageSource || audioSource.Leaf != domain.AudioLeafPrefix+trackID {
+		t.Fatalf("audio source key=%+v", audioSource)
+	}
+	if regeneratedFor != mediaAssetID || rewroteWithReady == nil {
+		t.Fatalf("regenerated=%q rewrote=%v", regeneratedFor, rewroteWithReady)
+	}
+	assertStrings(t, transcoder.calls, []string{"probe", "render_audio", "regenerate_master"})
+	if countCall(repository.calls, "promote_audio_track") != 1 || countCall(repository.calls, "fail_audio_track") != 0 {
+		t.Fatalf("repository calls=%v", repository.calls)
+	}
+}
+
+func TestProcessAudioTrackFailsPermanentlyOnUnsupportedSource(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(context.Context, string, string) (domain.AudioTrack, error) {
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	failed := false
+	repository.failAudioTrack = func(_ context.Context, _, id string, _ time.Time) error {
+		failed = id == trackID
+		return nil
+	}
+	transcoder := defaultTranscoder()
+	transcoder.probe = func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
+		return domain.SourceProbe{DurationSeconds: 3}, nil // no audio codec
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.Failed || !outcome.Permanent || outcome.Reason != domain.UnsupportedSource {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+	if !failed {
+		t.Fatal("track was not failed")
+	}
+	if countCall(repository.calls, "promote_audio_track") != 0 {
+		t.Fatalf("promote should not run on unsupported source: %v", repository.calls)
+	}
+}
+
+func TestProcessAudioTrackIsIdempotentOnAReadyTrack(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(context.Context, string, string) (domain.AudioTrack, error) {
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Ready, IsDefault: true, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	transcoder := defaultTranscoder()
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if len(transcoder.calls) != 0 || countCall(repository.calls, "promote_audio_track") != 0 {
+		t.Fatalf("a ready track must not re-transcode: transcoder=%v repo=%v", transcoder.calls, repository.calls)
+	}
+}
+
 func TestProcessFinalAndNonFinalTransientFailures(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {

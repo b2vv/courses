@@ -41,6 +41,9 @@ func NewTranscode(repository ports.AssetRepository, storage ports.MediaStorage, 
 func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (TranscodeOutcome, error) {
 	callCtx, cancel := context.WithTimeout(ctx, transcodeTimeout)
 	defer cancel()
+	if job.TrackID != "" {
+		return transcode.processAudioTrack(callCtx, job)
+	}
 	now := transcode.timestamp()
 	if err := transcode.sweep(callCtx, now); err != nil {
 		return TranscodeOutcome{}, mediaOperationError(ctx, err)
@@ -160,6 +163,80 @@ func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (Transco
 		}
 	}
 	return TranscodeOutcome{}, nil
+}
+
+// processAudioTrack transcodes one uploaded audio track and publishes it into the
+// asset's HLS tree, then promotes the track (and, for a video-only asset, the
+// asset itself) and regenerates the master under the per-asset lock (D1/D4/D7).
+// The lifecycle is lean (owner decision 2026-11-08): no per-track claim token —
+// idempotency rests on the asynq task id and the Ready guard; a transient fault
+// is retried by asynq; only an unsupported source fails the track permanently.
+func (transcode *Transcode) processAudioTrack(ctx context.Context, job ports.Job) (TranscodeOutcome, error) {
+	track, err := transcode.repository.LoadAudioTrack(ctx, job.AssetID, job.TrackID)
+	if errors.Is(err, domain.ErrVideoNotFound) {
+		return TranscodeOutcome{}, nil
+	}
+	if err != nil {
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	// An embedded track never transcodes; a Ready track is already done (idempotent
+	// retry); any state other than Queued/Processing is not ready to run.
+	if track.Kind != domain.UploadedTrack || track.State == domain.Ready ||
+		(track.State != domain.Queued && track.State != domain.Processing) {
+		return TranscodeOutcome{}, nil
+	}
+
+	token, err := freshClaimToken()
+	if err != nil {
+		return TranscodeOutcome{}, err
+	}
+	source := audioSourceKey(job.AssetID, job.TrackID)
+	work := renderWorkKey(job.AssetID, token)
+
+	probe, err := transcode.transcoder.Probe(ctx, source)
+	if err != nil {
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	if err := domain.AcceptAudioTrackSource(probe); err != nil {
+		if failErr := transcode.repository.FailAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp()); failErr != nil {
+			return TranscodeOutcome{}, failErr
+		}
+		return TranscodeOutcome{Failed: true, Reason: domain.UnsupportedSource, Permanent: true}, nil
+	}
+	if err := transcode.storage.Purge(ctx, work); err != nil {
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	if err := transcode.transcoder.RenderAudioTrack(ctx, source, work); err != nil {
+		_ = transcode.storage.Purge(ctx, work)
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	if err := transcode.storage.Publish(ctx, work, audioHLSKey(job.AssetID, job.TrackID)); err != nil {
+		_ = transcode.storage.Purge(ctx, work)
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	if err := transcode.repository.PromoteAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp(), func(ready []domain.AudioTrack) error {
+		return transcode.transcoder.RegenerateMaster(ctx, job.AssetID, audioRenditions(ready))
+	}); err != nil {
+		return TranscodeOutcome{}, mediaOperationError(ctx, err)
+	}
+	if err := transcode.storage.Purge(ctx, work); err != nil {
+		return TranscodeOutcome{}, err
+	}
+	return TranscodeOutcome{}, nil
+}
+
+func audioRenditions(tracks []domain.AudioTrack) []ports.AudioRendition {
+	renditions := make([]ports.AudioRendition, 0, len(tracks))
+	for _, track := range tracks {
+		renditions = append(renditions, ports.AudioRendition{
+			TrackID:  track.ID,
+			Name:     track.Label,
+			Language: track.Language,
+			Default:  track.IsDefault,
+			Embedded: track.Kind == domain.EmbeddedTrack,
+		})
+	}
+	return renditions
 }
 
 func (transcode *Transcode) Sweep(ctx context.Context) error {
@@ -384,6 +461,14 @@ func renderThumbnailKey(id string, token domain.ClaimToken) domain.StorageKey {
 
 func hlsKey(id string) domain.StorageKey {
 	return domain.StorageKey{Kind: domain.StorageHLS, ID: id}
+}
+
+func audioSourceKey(assetID, trackID string) domain.StorageKey {
+	return domain.StorageKey{Kind: domain.StorageSource, ID: assetID, Leaf: domain.AudioLeafPrefix + trackID}
+}
+
+func audioHLSKey(assetID, trackID string) domain.StorageKey {
+	return domain.StorageKey{Kind: domain.StorageHLS, ID: assetID, Leaf: domain.AudioLeafPrefix + trackID}
 }
 
 func thumbnailKey(id string) domain.StorageKey {
