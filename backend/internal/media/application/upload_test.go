@@ -30,7 +30,12 @@ type fakeRepository struct {
 	list              func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
 	load              func(context.Context, string) (domain.VideoAsset, error)
 	claim             func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
-	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publishedEmbedded *domain.AudioTrack
+	regenerateMaster  func(context.Context, string, func([]domain.AudioTrack) error) error
+	loadAudioTrack    func(context.Context, string, string) (domain.AudioTrack, error)
+	promoteAudioTrack func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) error
+	failAudioTrack    func(context.Context, string, string, time.Time) error
 	publishedDuration *float64
 	requeue           func(context.Context, string, domain.ClaimToken, time.Time) error
 	fail              func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
@@ -70,9 +75,33 @@ func (repository *fakeRepository) Claim(ctx context.Context, id string, token do
 	return repository.claim(ctx, id, token, now)
 }
 
-func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, now time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, now time.Time, embedded *domain.AudioTrack, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "publish")
-	return repository.publish(ctx, id, token, renditions, durationSeconds, now, policy)
+	repository.publishedEmbedded = embedded
+	return repository.publish(ctx, id, token, renditions, durationSeconds, now, embedded, policy)
+}
+
+func (repository *fakeRepository) RegenerateMaster(ctx context.Context, assetID string, rewrite func([]domain.AudioTrack) error) error {
+	repository.calls = append(repository.calls, "regenerate_master")
+	if repository.regenerateMaster != nil {
+		return repository.regenerateMaster(ctx, assetID, rewrite)
+	}
+	return nil
+}
+
+func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "load_audio_track")
+	return repository.loadAudioTrack(ctx, assetID, trackID)
+}
+
+func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) error {
+	repository.calls = append(repository.calls, "promote_audio_track")
+	return repository.promoteAudioTrack(ctx, assetID, trackID, now, rewrite)
+}
+
+func (repository *fakeRepository) FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error {
+	repository.calls = append(repository.calls, "fail_audio_track")
+	return repository.failAudioTrack(ctx, assetID, trackID, now)
 }
 
 func (repository *fakeRepository) Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error {
@@ -165,6 +194,11 @@ type fakeQueue struct {
 func (queue *fakeQueue) Enqueue(ctx context.Context, id string, attempt int) error {
 	queue.calls = append(queue.calls, id)
 	return queue.enqueue(ctx, id, attempt)
+}
+
+func (queue *fakeQueue) EnqueueAudioTrack(ctx context.Context, assetID, trackID string, attempt int) error {
+	queue.calls = append(queue.calls, assetID+":"+trackID)
+	return nil
 }
 
 func TestMintTicketValidatesBeforeRepositoryAndBoundsTheCall(t *testing.T) {

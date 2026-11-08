@@ -19,7 +19,7 @@ func TestAcceptSource(t *testing.T) {
 		{name: "HEVC and AAC", probe: domain.SourceProbe{Width: 1920, Height: 1080, VideoCodec: domain.CodecHEVC, AudioCodec: domain.CodecAAC}},
 		{name: "H.264 and MP3", probe: domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: domain.CodecMP3}},
 		{name: "H.264 and Opus", probe: domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: "opus"}, want: domain.ErrUnsupportedSource},
-		{name: "video without audio", probe: domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264}, want: domain.ErrUnsupportedSource},
+		{name: "video without audio is accepted (D4 video-only)", probe: domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264}},
 		{name: "audio without video", probe: domain.SourceProbe{AudioCodec: domain.CodecAAC}, want: domain.ErrUnsupportedSource},
 		{name: "unknown video codec", probe: domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: "vp9", AudioCodec: domain.CodecAAC}, want: domain.ErrUnsupportedSource},
 		{name: "zero dimensions", probe: domain.SourceProbe{VideoCodec: domain.CodecH264, AudioCodec: domain.CodecAAC}, want: domain.ErrUnsupportedSource},
@@ -28,6 +28,28 @@ func TestAcceptSource(t *testing.T) {
 			t.Parallel()
 			if err := domain.AcceptSource(test.probe); !errors.Is(err, test.want) {
 				t.Fatalf("got %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
+func TestSourceHasAudio(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name  string
+		codec string
+		want  bool
+	}{
+		{name: "aac carries audio", codec: domain.CodecAAC, want: true},
+		{name: "mp3 carries audio", codec: domain.CodecMP3, want: true},
+		{name: "empty is video-only", codec: ""},
+		{name: "unsupported codec is not embeddable", codec: "opus"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := domain.SourceHasAudio(domain.SourceProbe{AudioCodec: test.codec}); got != test.want {
+				t.Fatalf("got %v, want %v", got, test.want)
 			}
 		})
 	}

@@ -47,13 +47,28 @@ func AcceptContainer(head []byte) error {
 	}
 }
 
+// AcceptSource validates the video source of an asset. Multi-audio (D4) relaxes
+// the audio requirement: a video source may carry no audio stream at all — audio
+// is then supplied entirely by uploaded tracks and the asset waits in
+// AwaitingAudio. A present-but-unsupported audio codec is still rejected, since it
+// cannot be repackaged into the aac group. The relaxation is scoped to the video
+// source; uploaded audio-track files go through the strict AcceptAudioTrackSource,
+// where an absent audio stream is a business error.
 func AcceptSource(probe SourceProbe) error {
 	videoAccepted := probe.VideoCodec == CodecH264 || probe.VideoCodec == CodecHEVC
-	audioAccepted := probe.AudioCodec == CodecAAC || probe.AudioCodec == CodecMP3
+	audioAccepted := probe.AudioCodec == "" || probe.AudioCodec == CodecAAC || probe.AudioCodec == CodecMP3
 	if probe.Width <= 0 || probe.Height <= 0 || !videoAccepted || !audioAccepted {
 		return ErrUnsupportedSource
 	}
 	return nil
+}
+
+// SourceHasAudio reports whether the accepted video source carries an embeddable
+// audio stream. It is the branch key between the audio-carrying render (embedded
+// track, Processing→Ready) and the video-only render (no audio map, no audio
+// group, Processing→AwaitingAudio) of D4.
+func SourceHasAudio(probe SourceProbe) bool {
+	return probe.AudioCodec == CodecAAC || probe.AudioCodec == CodecMP3
 }
 
 type Rendition string

@@ -35,8 +35,11 @@ func TestTransitionMatrix(t *testing.T) {
 			{domain.Queued, domain.Queued}:     true,
 			{domain.Processing, domain.Queued}: true,
 		},
+		domain.T10: {{domain.Processing, domain.AwaitingAudio}: true},
+		domain.T11: {{domain.AwaitingAudio, domain.Ready}: true},
+		domain.T12: {{domain.AwaitingAudio, domain.Failed}: true},
 	}
-	states := []domain.State{"", domain.Created, domain.Uploading, domain.Queued, domain.Processing, domain.Ready, domain.Failed}
+	states := []domain.State{"", domain.Created, domain.Uploading, domain.Queued, domain.Processing, domain.AwaitingAudio, domain.Ready, domain.Failed}
 
 	for transition, permitted := range legal {
 		transition := transition
@@ -75,6 +78,9 @@ func TestTransitionWriters(t *testing.T) {
 		{transition: domain.T7, want: []domain.TransitionWriter{domain.Worker}},
 		{transition: domain.T8, want: []domain.TransitionWriter{domain.Worker, domain.UploadService}},
 		{transition: domain.T9, want: []domain.TransitionWriter{domain.API}},
+		{transition: domain.T10, want: []domain.TransitionWriter{domain.Worker}},
+		{transition: domain.T11, want: []domain.TransitionWriter{domain.Worker}},
+		{transition: domain.T12, want: []domain.TransitionWriter{domain.Worker}},
 	} {
 		if got := test.transition.Writers(); !sameWriters(got, test.want) {
 			t.Errorf("%s writers = %v, want %v", test.transition, got, test.want)

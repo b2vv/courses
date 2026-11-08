@@ -13,10 +13,12 @@ import (
 )
 
 type fakeTranscoder struct {
-	calls     []string
-	probe     func(context.Context, domain.StorageKey) (domain.SourceProbe, error)
-	render    func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error
-	thumbnail func(context.Context, domain.StorageKey, domain.StorageKey) error
+	calls            []string
+	probe            func(context.Context, domain.StorageKey) (domain.SourceProbe, error)
+	render           func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error
+	renderAudio      func(context.Context, domain.StorageKey, domain.StorageKey) error
+	regenerateMaster func(context.Context, string, []ports.AudioRendition) error
+	thumbnail        func(context.Context, domain.StorageKey, domain.StorageKey) error
 }
 
 func (transcoder *fakeTranscoder) Probe(ctx context.Context, source domain.StorageKey) (domain.SourceProbe, error) {
@@ -24,9 +26,25 @@ func (transcoder *fakeTranscoder) Probe(ctx context.Context, source domain.Stora
 	return transcoder.probe(ctx, source)
 }
 
-func (transcoder *fakeTranscoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition) error {
+func (transcoder *fakeTranscoder) Render(ctx context.Context, source, work domain.StorageKey, renditions []domain.Rendition, hasAudio bool) error {
 	transcoder.calls = append(transcoder.calls, "render")
-	return transcoder.render(ctx, source, work, renditions)
+	return transcoder.render(ctx, source, work, renditions, hasAudio)
+}
+
+func (transcoder *fakeTranscoder) RenderAudioTrack(ctx context.Context, source, work domain.StorageKey) error {
+	transcoder.calls = append(transcoder.calls, "render_audio")
+	if transcoder.renderAudio != nil {
+		return transcoder.renderAudio(ctx, source, work)
+	}
+	return nil
+}
+
+func (transcoder *fakeTranscoder) RegenerateMaster(ctx context.Context, assetID string, audios []ports.AudioRendition) error {
+	transcoder.calls = append(transcoder.calls, "regenerate_master")
+	if transcoder.regenerateMaster != nil {
+		return transcoder.regenerateMaster(ctx, assetID, audios)
+	}
+	return nil
 }
 
 func (transcoder *fakeTranscoder) Thumbnail(ctx context.Context, source, destination domain.StorageKey, probe domain.SourceProbe) error {
@@ -39,7 +57,7 @@ func TestProcessClaimsRendersAndPublishes(t *testing.T) {
 	repository := processingRepository(domain.Queued)
 	storage := defaultStorage()
 	transcoder := defaultTranscoder()
-	transcoder.render = func(_ context.Context, source, work domain.StorageKey, renditions []domain.Rendition) error {
+	transcoder.render = func(_ context.Context, source, work domain.StorageKey, renditions []domain.Rendition, _ bool) error {
 		if source.Kind != domain.StorageSource || source.ID != mediaAssetID || source.Leaf != "original" {
 			t.Fatalf("source=%+v", source)
 		}
@@ -71,6 +89,169 @@ func TestProcessClaimsRendersAndPublishes(t *testing.T) {
 	}
 }
 
+func TestProcessEmbedsAudioTrackWhenSourceHasAudio(t *testing.T) {
+	t.Parallel()
+	repository := processingRepository(domain.Queued)
+	transcoder := defaultTranscoder()
+	var renderedAudio bool
+	transcoder.render = func(_ context.Context, _, _ domain.StorageKey, _ []domain.Rendition, hasAudio bool) error {
+		renderedAudio = hasAudio
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{AssetID: mediaAssetID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if !renderedAudio {
+		t.Fatal("render was told the source has no audio")
+	}
+	if repository.asset.State != domain.Ready {
+		t.Fatalf("asset state=%s want ready", repository.asset.State)
+	}
+	embedded := repository.publishedEmbedded
+	if embedded == nil {
+		t.Fatal("no embedded track materialised for an audio-carrying source")
+	}
+	if embedded.Kind != domain.EmbeddedTrack || embedded.State != domain.Ready || !embedded.IsDefault ||
+		embedded.SourceLeaf != domain.EmbeddedAudioLeaf || embedded.VideoAssetID != mediaAssetID {
+		t.Fatalf("embedded=%+v", embedded)
+	}
+	if _, err := domain.NewEmbeddedTrack(*embedded); err != nil {
+		t.Fatalf("embedded track fails domain validation: %v", err)
+	}
+}
+
+func TestProcessVideoOnlySourceAwaitsAudio(t *testing.T) {
+	t.Parallel()
+	repository := processingRepository(domain.Queued)
+	transcoder := defaultTranscoder()
+	transcoder.probe = func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
+		return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, DurationSeconds: 125.5}, nil
+	}
+	var renderedAudio bool
+	transcoder.render = func(_ context.Context, _, _ domain.StorageKey, _ []domain.Rendition, hasAudio bool) error {
+		renderedAudio = hasAudio
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{AssetID: mediaAssetID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if renderedAudio {
+		t.Fatal("render mapped audio for a video-only source")
+	}
+	if repository.asset.State != domain.AwaitingAudio {
+		t.Fatalf("asset state=%s want awaiting_audio", repository.asset.State)
+	}
+	if repository.publishedEmbedded != nil {
+		t.Fatalf("video-only source materialised an embedded track: %+v", repository.publishedEmbedded)
+	}
+}
+
+func TestProcessAudioTrackPublishesPromotesAndRegenerates(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(_ context.Context, assetID, id string) (domain.AudioTrack, error) {
+		if assetID != mediaAssetID || id != trackID {
+			t.Fatalf("load audio track asset=%s track=%s", assetID, id)
+		}
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	var rewroteWithReady []domain.AudioTrack
+	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) error {
+		rewroteWithReady = []domain.AudioTrack{{ID: trackID, Kind: domain.UploadedTrack, State: domain.Ready, IsDefault: true, Label: "English", Language: "en"}}
+		return rewrite(rewroteWithReady)
+	}
+	transcoder := defaultTranscoder()
+	var regeneratedFor string
+	transcoder.regenerateMaster = func(_ context.Context, assetID string, audios []ports.AudioRendition) error {
+		regeneratedFor = assetID
+		if len(audios) != 1 || audios[0].TrackID != trackID || !audios[0].Default || audios[0].Embedded {
+			t.Fatalf("regenerate audios=%+v", audios)
+		}
+		return nil
+	}
+	var audioSource domain.StorageKey
+	transcoder.renderAudio = func(_ context.Context, source, _ domain.StorageKey) error {
+		audioSource = source
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if audioSource.Kind != domain.StorageSource || audioSource.Leaf != domain.AudioLeafPrefix+trackID {
+		t.Fatalf("audio source key=%+v", audioSource)
+	}
+	if regeneratedFor != mediaAssetID || rewroteWithReady == nil {
+		t.Fatalf("regenerated=%q rewrote=%v", regeneratedFor, rewroteWithReady)
+	}
+	assertStrings(t, transcoder.calls, []string{"probe", "render_audio", "regenerate_master"})
+	if countCall(repository.calls, "promote_audio_track") != 1 || countCall(repository.calls, "fail_audio_track") != 0 {
+		t.Fatalf("repository calls=%v", repository.calls)
+	}
+}
+
+func TestProcessAudioTrackFailsPermanentlyOnUnsupportedSource(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(context.Context, string, string) (domain.AudioTrack, error) {
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	failed := false
+	repository.failAudioTrack = func(_ context.Context, _, id string, _ time.Time) error {
+		failed = id == trackID
+		return nil
+	}
+	transcoder := defaultTranscoder()
+	transcoder.probe = func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
+		return domain.SourceProbe{DurationSeconds: 3}, nil // no audio codec
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.Failed || !outcome.Permanent || outcome.Reason != domain.UnsupportedSource {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+	if !failed {
+		t.Fatal("track was not failed")
+	}
+	if countCall(repository.calls, "promote_audio_track") != 0 {
+		t.Fatalf("promote should not run on unsupported source: %v", repository.calls)
+	}
+}
+
+func TestProcessAudioTrackIsIdempotentOnAReadyTrack(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	repository := &fakeRepository{}
+	repository.loadAudioTrack = func(context.Context, string, string) (domain.AudioTrack, error) {
+		return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+			Language: "en", Label: "English", State: domain.Ready, IsDefault: true, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+	}
+	transcoder := defaultTranscoder()
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+		context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if len(transcoder.calls) != 0 || countCall(repository.calls, "promote_audio_track") != 0 {
+		t.Fatalf("a ready track must not re-transcode: transcoder=%v repo=%v", transcoder.calls, repository.calls)
+	}
+}
+
 func TestProcessFinalAndNonFinalTransientFailures(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -86,7 +267,7 @@ func TestProcessFinalAndNonFinalTransientFailures(t *testing.T) {
 			t.Parallel()
 			repository := processingRepository(domain.Queued)
 			transcoder := defaultTranscoder()
-			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error {
+			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
 				return errors.New("ffmpeg stderr with /private/media/source")
 			}
 			outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{
@@ -202,7 +383,7 @@ func TestCancellationCausesAreHandledSeparately(t *testing.T) {
 			repository := processingRepository(domain.Queued)
 			started := make(chan struct{})
 			transcoder := defaultTranscoder()
-			transcoder.render = func(ctx context.Context, _ domain.StorageKey, _ domain.StorageKey, _ []domain.Rendition) error {
+			transcoder.render = func(ctx context.Context, _ domain.StorageKey, _ domain.StorageKey, _ []domain.Rendition, _ bool) error {
 				close(started)
 				<-ctx.Done()
 				return ctx.Err()
@@ -246,7 +427,7 @@ func TestDiskExhaustionIsRetryableAndCleansWorkingKeys(t *testing.T) {
 			storage.free = func(context.Context) (int64, error) { return 1, nil }
 		}},
 		{name: "render", configure: func(_ *fakeStorage, transcoder *fakeTranscoder) {
-			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error {
+			transcoder.render = func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
 				return syscall.ENOSPC
 			}
 		}},
@@ -305,7 +486,7 @@ func TestDependencyFailurePassesThroughAndDoesNotBecomeBusinessFailure(t *testin
 func TestLostPublishClaimTouchesNoPublishedBytes(t *testing.T) {
 	t.Parallel()
 	repository := processingRepository(domain.Queued)
-	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		return domain.VideoAsset{}, nil, nil
 	}
 	storage := defaultStorage()
@@ -443,14 +624,18 @@ func processingRepository(state domain.State) *fakeRepository {
 		repository.asset.ClaimToken = token
 		return repository.asset, true, nil
 	}
-	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, _ time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, _ time.Time, embedded *domain.AudioTrack, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		if repository.asset.State != domain.Processing || repository.asset.ClaimToken != token {
 			return domain.VideoAsset{}, nil, nil
 		}
 		if err := policy(repository.asset); err != nil {
 			return domain.VideoAsset{}, nil, err
 		}
-		repository.asset.State = domain.Ready
+		if embedded != nil {
+			repository.asset.State = domain.Ready
+		} else {
+			repository.asset.State = domain.AwaitingAudio
+		}
 		repository.asset.ClaimToken = ""
 		repository.asset.Renditions = renditions
 		repository.publishedDuration = durationSeconds
@@ -481,7 +666,9 @@ func defaultTranscoder() *fakeTranscoder {
 		probe: func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
 			return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, AudioCodec: domain.CodecAAC, DurationSeconds: 125.5}, nil
 		},
-		render:    func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition) error { return nil },
+		render: func(context.Context, domain.StorageKey, domain.StorageKey, []domain.Rendition, bool) error {
+			return nil
+		},
 		thumbnail: func(context.Context, domain.StorageKey, domain.StorageKey) error { return nil },
 	}
 }

@@ -65,6 +65,11 @@ func (queue *tusQueue) Enqueue(_ context.Context, assetID string, attempt int) e
 	return nil
 }
 
+func (queue *tusQueue) EnqueueAudioTrack(_ context.Context, assetID, _ string, attempt int) error {
+	queue.jobs = append(queue.jobs, tusJob{assetID: assetID, attempt: attempt})
+	return nil
+}
+
 type tusStorage struct {
 	ports.MediaStorage
 	free       *int64

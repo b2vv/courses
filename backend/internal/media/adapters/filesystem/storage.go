@@ -232,7 +232,7 @@ func (storage *Storage) Publish(ctx context.Context, work, destination domain.St
 		return err
 	}
 	if work.Kind != domain.StorageTemporary || work.ID != destination.ID || work.Leaf == "upload" || strings.HasSuffix(work.Leaf, ".jpg") ||
-		destination.Kind != domain.StorageHLS || destination.Leaf != "" {
+		destination.Kind != domain.StorageHLS || (destination.Leaf != "" && !validAudioLeaf(destination.Leaf)) {
 		return errInvalidStorageKey
 	}
 	workName, err := resolve(work)
@@ -318,12 +318,19 @@ func resolve(key domain.StorageKey) (string, error) {
 		if key.Leaf == "" {
 			return path.Join(string(key.Kind), key.ID), nil
 		}
-		if key.Leaf == "original" {
+		// "original" is the video source; audio-<trackID> is an uploaded audio
+		// track's own source file (D3).
+		if key.Leaf == "original" || validAudioLeaf(key.Leaf) {
 			return path.Join(string(key.Kind), key.ID, key.Leaf), nil
 		}
 	case domain.StorageHLS:
 		if key.Leaf == "" {
 			return path.Join(string(key.Kind), key.ID), nil
+		}
+		// audio-<trackID> is an uploaded track's published HLS variant directory
+		// beneath the asset's hls tree.
+		if validAudioLeaf(key.Leaf) {
+			return path.Join(string(key.Kind), key.ID, key.Leaf), nil
 		}
 	case domain.StorageThumbnail:
 		if key.Leaf == "" {
@@ -343,6 +350,10 @@ func validUUID(value string) bool {
 	}
 	decoded, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
 	return err == nil && len(decoded) == 16 && value != "00000000-0000-0000-0000-000000000000"
+}
+
+func validAudioLeaf(value string) bool {
+	return strings.HasPrefix(value, domain.AudioLeafPrefix) && validUUID(strings.TrimPrefix(value, domain.AudioLeafPrefix))
 }
 
 func validClaimLeaf(value string) bool {

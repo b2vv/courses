@@ -34,8 +34,24 @@ func (queue *Queue) Enqueue(ctx context.Context, assetID string, attempt int) er
 	if err != nil {
 		return domain.ErrInternal
 	}
-	_, err = queue.client.EnqueueContext(ctx, asynqlib.NewTask(TaskTypeTranscode, payload),
-		asynqlib.TaskID(assetID+":"+strconv.Itoa(attempt)),
+	return queue.enqueue(ctx, payload, assetID+":"+strconv.Itoa(attempt))
+}
+
+func (queue *Queue) EnqueueAudioTrack(ctx context.Context, assetID, trackID string, attempt int) error {
+	payload, err := json.Marshal(struct {
+		AssetID string `json:"assetId"`
+		TrackID string `json:"trackId"`
+		Attempt int    `json:"attempt"`
+	}{AssetID: assetID, TrackID: trackID, Attempt: attempt})
+	if err != nil {
+		return domain.ErrInternal
+	}
+	return queue.enqueue(ctx, payload, assetID+":"+trackID+":"+strconv.Itoa(attempt))
+}
+
+func (queue *Queue) enqueue(ctx context.Context, payload []byte, taskID string) error {
+	_, err := queue.client.EnqueueContext(ctx, asynqlib.NewTask(TaskTypeTranscode, payload),
+		asynqlib.TaskID(taskID),
 		asynqlib.Queue("media"),
 		asynqlib.MaxRetry(3),
 		asynqlib.Timeout(30*time.Minute),

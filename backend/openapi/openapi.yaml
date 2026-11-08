@@ -2205,6 +2205,7 @@ components:
                         - uploading
                         - queued
                         - processing
+                        - awaiting_audio
                         - ready
                         - failed
                     type: string

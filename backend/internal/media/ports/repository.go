@@ -27,8 +27,28 @@ type AssetRepository interface {
 	Cancel(ctx context.Context, id string, now time.Time) error
 
 	Claim(ctx context.Context, id string, token domain.ClaimToken, now time.Time) (domain.VideoAsset, bool, error)
+	// Publish finishes a successful video transcode. embedded non-nil materialises
+	// that embedded audio track and takes the asset to Ready in the same
+	// transaction (D4: Ready always has a Ready track); embedded nil means the
+	// source carried no audio, so the asset goes to AwaitingAudio and no eviction
+	// runs. The returned asset is empty when the claim no longer holds.
 	Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition,
-		durationSeconds *float64, now time.Time, policy PublishPolicy) (published domain.VideoAsset, evicted *domain.VideoAsset, err error)
+		durationSeconds *float64, now time.Time, embedded *domain.AudioTrack, policy PublishPolicy) (published domain.VideoAsset, evicted *domain.VideoAsset, err error)
+	// RegenerateMaster serialises a master rewrite per asset (D7): it locks the
+	// asset and its tracks, then calls rewrite with the current Ready track set in
+	// deterministic order while holding the lock, so concurrent audio transcodes
+	// cannot interleave two writers. rewrite performs the atomic file write.
+	RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error
+
+	LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error)
+	// PromoteAudioTrack marks the uploaded track Ready, elects a default when the
+	// asset has none yet, lifts the asset out of AwaitingAudio once a track is Ready
+	// (T11), and regenerates the master from the resulting Ready set — all under the
+	// per-asset lock, in one transaction (D4/D7). rewrite does the atomic file write.
+	PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
+	// FailAudioTrack marks the track Failed and, when the AwaitingAudio asset is
+	// left with no Ready track and nothing still in flight, fails the asset (T12).
+	FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error
 	Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error
 	Fail(ctx context.Context, id string, from domain.State, token domain.ClaimToken,
 		reason domain.FailureReason, now time.Time) error

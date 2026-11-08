@@ -75,8 +75,24 @@ func (*mediaRepository) Claim(context.Context, string, mediadomain.ClaimToken, t
 	panic("unexpected Claim")
 }
 
-func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, *float64, time.Time, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
+func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, *float64, time.Time, *mediadomain.AudioTrack, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
 	panic("unexpected Publish")
+}
+
+func (*mediaRepository) RegenerateMaster(context.Context, string, func([]mediadomain.AudioTrack) error) error {
+	panic("unexpected RegenerateMaster")
+}
+
+func (*mediaRepository) LoadAudioTrack(context.Context, string, string) (mediadomain.AudioTrack, error) {
+	panic("unexpected LoadAudioTrack")
+}
+
+func (*mediaRepository) PromoteAudioTrack(context.Context, string, string, time.Time, func([]mediadomain.AudioTrack) error) error {
+	panic("unexpected PromoteAudioTrack")
+}
+
+func (*mediaRepository) FailAudioTrack(context.Context, string, string, time.Time) error {
+	panic("unexpected FailAudioTrack")
 }
 
 func (*mediaRepository) Requeue(context.Context, string, mediadomain.ClaimToken, time.Time) error {
@@ -112,6 +128,11 @@ type mediaQueue struct {
 }
 
 func (queue *mediaQueue) Enqueue(_ context.Context, assetID string, attempt int) error {
+	queue.calls = append(queue.calls, queuedCall{assetID: assetID, attempt: attempt})
+	return queue.err
+}
+
+func (queue *mediaQueue) EnqueueAudioTrack(_ context.Context, assetID, _ string, attempt int) error {
 	queue.calls = append(queue.calls, queuedCall{assetID: assetID, attempt: attempt})
 	return queue.err
 }
