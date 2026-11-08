@@ -162,9 +162,9 @@ func TestProcessAudioTrackPublishesPromotesAndRegenerates(t *testing.T) {
 			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
 	}
 	var rewroteWithReady []domain.AudioTrack
-	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) error {
+	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) (*domain.VideoAsset, error) {
 		rewroteWithReady = []domain.AudioTrack{{ID: trackID, Kind: domain.UploadedTrack, State: domain.Ready, IsDefault: true, Label: "English", Language: "en"}}
-		return rewrite(rewroteWithReady)
+		return nil, rewrite(rewroteWithReady)
 	}
 	transcoder := defaultTranscoder()
 	var regeneratedFor string
@@ -249,6 +249,51 @@ func TestProcessAudioTrackIsIdempotentOnAReadyTrack(t *testing.T) {
 	}
 	if len(transcoder.calls) != 0 || countCall(repository.calls, "promote_audio_track") != 0 {
 		t.Fatalf("a ready track must not re-transcode: transcoder=%v repo=%v", transcoder.calls, repository.calls)
+	}
+}
+
+func TestProcessAudioTrackFailsTerminallyOnExhaustedRetries(t *testing.T) {
+	t.Parallel()
+	const trackID = "99999999-9999-4999-8999-999999999999"
+	for _, test := range []struct {
+		name       string
+		retryCount int
+		maxRetry   int
+		wantErr    bool
+		wantFailed bool
+		wantCalls  int
+	}{
+		{name: "retries remain stays transient", retryCount: 0, maxRetry: 3, wantErr: true, wantFailed: false, wantCalls: 0},
+		{name: "exhausted fails the track", retryCount: 3, maxRetry: 3, wantErr: false, wantFailed: true, wantCalls: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			repository := &fakeRepository{}
+			repository.loadAudioTrack = func(context.Context, string, string) (domain.AudioTrack, error) {
+				return domain.AudioTrack{ID: trackID, VideoAssetID: mediaAssetID, Kind: domain.UploadedTrack,
+					Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
+			}
+			repository.failAudioTrack = func(context.Context, string, string, time.Time) error { return nil }
+			transcoder := defaultTranscoder()
+			transcoder.renderAudio = func(context.Context, domain.StorageKey, domain.StorageKey) error {
+				return errors.New("ffmpeg could not package the audio")
+			}
+
+			outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(
+				context.Background(), ports.Job{AssetID: mediaAssetID, TrackID: trackID, RetryCount: test.retryCount, MaxRetry: test.maxRetry})
+			if (err != nil) != test.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, test.wantErr)
+			}
+			if outcome.Failed != test.wantFailed || (test.wantFailed && outcome.Reason != domain.RenderFailed) {
+				t.Fatalf("outcome=%+v wantFailed=%v", outcome, test.wantFailed)
+			}
+			if got := countCall(repository.calls, "fail_audio_track"); got != test.wantCalls {
+				t.Fatalf("fail_audio_track calls=%d want=%d (%v)", got, test.wantCalls, repository.calls)
+			}
+			if countCall(repository.calls, "promote_audio_track") != 0 {
+				t.Fatalf("promote must not run after a render fault: %v", repository.calls)
+			}
+		})
 	}
 }
 

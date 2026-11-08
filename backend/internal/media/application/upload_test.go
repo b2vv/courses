@@ -34,7 +34,7 @@ type fakeRepository struct {
 	publishedEmbedded *domain.AudioTrack
 	regenerateMaster  func(context.Context, string, func([]domain.AudioTrack) error) error
 	loadAudioTrack    func(context.Context, string, string) (domain.AudioTrack, error)
-	promoteAudioTrack func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) error
+	promoteAudioTrack func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
 	failAudioTrack    func(context.Context, string, string, time.Time) error
 	publishedDuration *float64
 	requeue           func(context.Context, string, domain.ClaimToken, time.Time) error
@@ -94,7 +94,7 @@ func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, t
 	return repository.loadAudioTrack(ctx, assetID, trackID)
 }
 
-func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) error {
+func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) (*domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "promote_audio_track")
 	return repository.promoteAudioTrack(ctx, assetID, trackID, now, rewrite)
 }
