@@ -11,6 +11,7 @@ const (
 	ErrUploadTooLarge         Error = "upload_too_large"
 	ErrVideoNotFound          Error = "video_not_found"
 	ErrVideoNotRetryable      Error = "video_not_retryable"
+	ErrDuplicateLanguage      Error = "duplicate_language"
 	ErrAuthenticationRequired Error = "authentication_required"
 	ErrForbidden              Error = "forbidden"
 	ErrCourseForbidden        Error = "course_forbidden"

@@ -95,6 +95,22 @@ func (*mediaRepository) FailAudioTrack(context.Context, string, string, time.Tim
 	panic("unexpected FailAudioTrack")
 }
 
+func (*mediaRepository) ListAudioTracks(context.Context, mediadomain.Actor, string) ([]mediadomain.AudioTrack, error) {
+	panic("unexpected ListAudioTracks")
+}
+
+func (*mediaRepository) SetDefaultAudioTrack(context.Context, mediadomain.Actor, string, string, time.Time) error {
+	panic("unexpected SetDefaultAudioTrack")
+}
+
+func (*mediaRepository) UpdateAudioTrackMetadata(context.Context, mediadomain.Actor, string, string, string, string, time.Time) (mediadomain.AudioTrack, error) {
+	panic("unexpected UpdateAudioTrackMetadata")
+}
+
+func (*mediaRepository) DeleteAudioTrack(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error {
+	panic("unexpected DeleteAudioTrack")
+}
+
 func (*mediaRepository) Requeue(context.Context, string, mediadomain.ClaimToken, time.Time) error {
 	panic("unexpected Requeue")
 }

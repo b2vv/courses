@@ -23,6 +23,47 @@ source_leaf,
 created_at,
 updated_at`
 
+// ownedAudioAssetOwner reads the course instructor behind an asset without
+// locking, for read-only authorisation of the track list.
+const ownedAudioAssetOwner = `SELECT courses.instructor_id::text
+FROM video_assets AS assets
+JOIN course_lessons AS lessons ON lessons.id=assets.lesson_id
+JOIN course_modules AS modules ON modules.id=lessons.module_id
+JOIN courses ON courses.id=modules.course_id
+WHERE assets.id=$1::text::uuid AND assets.evicted_at IS NULL`
+
+// authorizeAudioRead refuses a track-list read the actor may not see: a missing or
+// evicted asset is ErrVideoNotFound, a non-owner non-admin is ErrCourseForbidden.
+func (repository *Repository) authorizeAudioRead(ctx context.Context, actor domain.Actor, assetID string) error {
+	var ownerID string
+	err := repository.pool.QueryRow(ctx, ownedAudioAssetOwner, assetID).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return persistenceError(err)
+	}
+	return actor.CanEditLesson(ownerID)
+}
+
+// authorizeAudioEdit locks the owning asset row (FOR UPDATE OF assets, the same
+// lock order promote/publish take) and checks the actor may edit its lesson's
+// course (D-S5L1-3). It returns the locked asset so a caller can read its state
+// without a second query.
+func authorizeAudioEdit(ctx context.Context, tx pgx.Tx, actor domain.Actor, assetID string) (domain.VideoAsset, error) {
+	locked, ownerID, err := scanOwnedAsset(tx.QueryRow(ctx, lockOwnedMediaAsset, assetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.VideoAsset{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.VideoAsset{}, persistenceError(err)
+	}
+	if err := actor.CanEditLesson(ownerID); err != nil {
+		return domain.VideoAsset{}, err
+	}
+	return locked, nil
+}
+
 // CreateAudioTrack persists a track already validated by the domain constructor.
 // The caller mints the id (the uploaded leaf audio-<id> depends on it, D3), so
 // no id is generated here. A missing asset maps to ErrVideoNotFound; a second
@@ -55,7 +96,10 @@ func (repository *Repository) CreateAudioTrack(ctx context.Context, track domain
 
 // ListAudioTracks returns every track of an asset in the deterministic
 // (created_at, id) order the domain's default election relies on.
-func (repository *Repository) ListAudioTracks(ctx context.Context, assetID string) ([]domain.AudioTrack, error) {
+func (repository *Repository) ListAudioTracks(ctx context.Context, actor domain.Actor, assetID string) ([]domain.AudioTrack, error) {
+	if err := repository.authorizeAudioRead(ctx, actor, assetID); err != nil {
+		return nil, err
+	}
 	rows, err := repository.pool.Query(ctx, `SELECT `+audioTrackColumns+`
 		FROM audio_tracks WHERE video_asset_id=$1::text::uuid
 		ORDER BY created_at, id`, assetID)
@@ -81,13 +125,16 @@ func (repository *Repository) ListAudioTracks(ctx context.Context, assetID strin
 // serialized step (D4). The target must exist and be Ready; the swap clears the
 // previous default and sets the new one in a single statement, so the
 // one-default-per-asset index never sees a transient second default.
-func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error {
+func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return persistenceError(err)
 	}
 	defer rollback(tx)
 	now = storeTime(now)
+	if _, err := authorizeAudioEdit(ctx, tx, actor, assetID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM audio_tracks
 		WHERE video_asset_id=$1::text::uuid FOR UPDATE`, assetID); err != nil {
 		return persistenceError(err)
@@ -124,27 +171,22 @@ func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, assetID,
 // DeleteAudioTrack removes a track, refusing to drop the last Ready track of a
 // Ready asset and re-electing a new default when the deleted track was the
 // default (D4). Election is deterministic (first Ready by created_at, id).
-func (repository *Repository) DeleteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error {
+func (repository *Repository) DeleteAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return persistenceError(err)
 	}
 	defer rollback(tx)
 	now = storeTime(now)
-	var assetState string
-	err = tx.QueryRow(ctx, `SELECT state FROM video_assets
-		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&assetState)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.ErrVideoNotFound
-	}
+	locked, err := authorizeAudioEdit(ctx, tx, actor, assetID)
 	if err != nil {
-		return persistenceError(err)
+		return err
 	}
 	tracks, err := lockAssetTracks(ctx, tx, assetID)
 	if err != nil {
 		return err
 	}
-	if err := domain.ValidateTrackDeletion(tracks, trackID, domain.State(assetState)); err != nil {
+	if err := domain.ValidateTrackDeletion(tracks, trackID, locked.State); err != nil {
 		return err
 	}
 	wasDefault := false
@@ -167,9 +209,58 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, assetID, tra
 				WHERE id=$1::text::uuid`, elected, now); err != nil {
 				return persistenceError(err)
 			}
+			for position := range remaining {
+				remaining[position].IsDefault = remaining[position].ID == elected
+			}
 		}
 	}
+	// L3 (closes the S3 limitation): deleting a track changes the Ready set, so the
+	// master must be regenerated under the same lock before commit, exactly as
+	// promote does — otherwise the master keeps a stale EXT-X-MEDIA to the removed
+	// track's directory.
+	ready := make([]domain.AudioTrack, 0, len(remaining))
+	for _, track := range remaining {
+		if track.State == domain.Ready {
+			ready = append(ready, track)
+		}
+	}
+	if err := rewrite(ready); err != nil {
+		return err
+	}
 	return commit(ctx, tx)
+}
+
+// UpdateAudioTrackMetadata renames a track (language and/or label) after the
+// domain has validated the new values. The (language, asset) unique index rejects
+// a clash with another non-failed track as ErrDuplicateLanguage (D6). The target
+// must exist under the asset.
+func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time) (domain.AudioTrack, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	if _, err := authorizeAudioEdit(ctx, tx, actor, assetID); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	updated, err := scanAudioTrack(tx.QueryRow(ctx, `UPDATE audio_tracks
+		SET language=$3, label=$4, updated_at=$5
+		WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid
+		RETURNING `+audioTrackColumns, trackID, assetID, language, label, now))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		if mapped, ok := audioTrackConflict(err); ok {
+			return domain.AudioTrack{}, mapped
+		}
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	if err := commit(ctx, tx); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	return updated, nil
 }
 
 // RegenerateMaster serialises a master rewrite per asset (D7). It locks the asset
@@ -463,7 +554,12 @@ func audioTrackConflict(err error) (error, bool) {
 	switch postgresError.Code {
 	case "23503": // foreign key: the asset does not exist
 		return domain.ErrVideoNotFound, true
-	case "23505", "23514": // unique default index, or a check constraint
+	case "23505": // a unique index
+		if postgresError.ConstraintName == "audio_tracks_language_per_asset" {
+			return domain.ErrDuplicateLanguage, true
+		}
+		return domain.ErrInvalidRequest, true
+	case "23514": // a check constraint
 		return domain.ErrInvalidRequest, true
 	}
 	return nil, false
