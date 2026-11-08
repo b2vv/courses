@@ -116,8 +116,16 @@ func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (Transco
 		return transcode.transcoderFailure(callCtx, job, token, err, domain.RenderFailed)
 	}
 
+	var embedded *domain.AudioTrack
+	if domain.SourceHasAudio(probe) {
+		track, err := embeddedTrack(asset.ID, transcode.timestamp())
+		if err != nil {
+			return TranscodeOutcome{}, err
+		}
+		embedded = &track
+	}
 	var policyErr error
-	published, evicted, err := transcode.repository.Publish(callCtx, asset.ID, token, renditions, probe.UsableDurationSeconds(), transcode.timestamp(), func(domain.VideoAsset) error {
+	published, evicted, err := transcode.repository.Publish(callCtx, asset.ID, token, renditions, probe.UsableDurationSeconds(), transcode.timestamp(), embedded, func(domain.VideoAsset) error {
 		if err := transcode.storage.Publish(callCtx, work, hlsKey(asset.ID)); err != nil {
 			policyErr = err
 			return err
@@ -312,6 +320,46 @@ func dispositionOf(asset domain.VideoAsset) processDisposition {
 	default:
 		return processInvalid
 	}
+}
+
+// embeddedTrackLabel and embeddedTrackLanguage name the derived embedded track
+// until an author renames it. "und" is the ISO 639-2 undetermined-language tag.
+const (
+	embeddedTrackLabel    = "Original"
+	embeddedTrackLanguage = "und"
+)
+
+// embeddedTrack builds the Ready embedded audio track materialised when a video
+// source carries its own audio (D3/D4). Its source leaf is the shared video
+// source ("original"), so the id can be freshly minted here without affecting any
+// storage path.
+func embeddedTrack(assetID string, now time.Time) (domain.AudioTrack, error) {
+	id, err := freshUUID()
+	if err != nil {
+		return domain.AudioTrack{}, err
+	}
+	return domain.NewEmbeddedTrack(domain.AudioTrack{
+		ID:           id,
+		VideoAssetID: assetID,
+		Kind:         domain.EmbeddedTrack,
+		Language:     embeddedTrackLanguage,
+		Label:        embeddedTrackLabel,
+		IsDefault:    true,
+		State:        domain.Ready,
+		SourceLeaf:   domain.EmbeddedAudioLeaf,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+}
+
+func freshUUID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = (value[6] & 0x0f) | 0x40 // version 4
+	value[8] = (value[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%x-%x-%x-%x-%x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:16]), nil
 }
 
 func freshClaimToken() (domain.ClaimToken, error) {

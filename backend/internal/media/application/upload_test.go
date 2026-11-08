@@ -30,7 +30,9 @@ type fakeRepository struct {
 	list              func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
 	load              func(context.Context, string) (domain.VideoAsset, error)
 	claim             func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
-	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publishedEmbedded *domain.AudioTrack
+	regenerateMaster  func(context.Context, string, func([]domain.AudioTrack) error) error
 	publishedDuration *float64
 	requeue           func(context.Context, string, domain.ClaimToken, time.Time) error
 	fail              func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
@@ -70,9 +72,18 @@ func (repository *fakeRepository) Claim(ctx context.Context, id string, token do
 	return repository.claim(ctx, id, token, now)
 }
 
-func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, now time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+func (repository *fakeRepository) Publish(ctx context.Context, id string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, now time.Time, embedded *domain.AudioTrack, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "publish")
-	return repository.publish(ctx, id, token, renditions, durationSeconds, now, policy)
+	repository.publishedEmbedded = embedded
+	return repository.publish(ctx, id, token, renditions, durationSeconds, now, embedded, policy)
+}
+
+func (repository *fakeRepository) RegenerateMaster(ctx context.Context, assetID string, rewrite func([]domain.AudioTrack) error) error {
+	repository.calls = append(repository.calls, "regenerate_master")
+	if repository.regenerateMaster != nil {
+		return repository.regenerateMaster(ctx, assetID, rewrite)
+	}
+	return nil
 }
 
 func (repository *fakeRepository) Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error {

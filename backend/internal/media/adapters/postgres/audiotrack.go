@@ -172,6 +172,42 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, assetID, tra
 	return commit(ctx, tx)
 }
 
+// RegenerateMaster serialises a master rewrite per asset (D7). It locks the asset
+// row, then its tracks, reads the Ready set in deterministic (created_at, id)
+// order and hands it to rewrite while still holding the locks, so two concurrent
+// audio transcodes can never write the master at once. rewrite performs the
+// atomic file write; its error aborts the transaction.
+func (repository *Repository) RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return persistenceError(err)
+	}
+	defer rollback(tx)
+	var exists int
+	err = tx.QueryRow(ctx, `SELECT 1 FROM video_assets
+		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&exists)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return persistenceError(err)
+	}
+	tracks, err := lockAssetTracks(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
+	ready := make([]domain.AudioTrack, 0, len(tracks))
+	for _, track := range tracks {
+		if track.State == domain.Ready {
+			ready = append(ready, track)
+		}
+	}
+	if err := rewrite(ready); err != nil {
+		return err
+	}
+	return commit(ctx, tx)
+}
+
 func lockAssetTracks(ctx context.Context, tx pgx.Tx, assetID string) ([]domain.AudioTrack, error) {
 	rows, err := tx.Query(ctx, `SELECT `+audioTrackColumns+`
 		FROM audio_tracks WHERE video_asset_id=$1::text::uuid

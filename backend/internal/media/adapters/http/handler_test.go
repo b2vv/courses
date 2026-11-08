@@ -75,8 +75,12 @@ func (*mediaRepository) Claim(context.Context, string, mediadomain.ClaimToken, t
 	panic("unexpected Claim")
 }
 
-func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, *float64, time.Time, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
+func (*mediaRepository) Publish(context.Context, string, mediadomain.ClaimToken, []mediadomain.Rendition, *float64, time.Time, *mediadomain.AudioTrack, ports.PublishPolicy) (mediadomain.VideoAsset, *mediadomain.VideoAsset, error) {
 	panic("unexpected Publish")
+}
+
+func (*mediaRepository) RegenerateMaster(context.Context, string, func([]mediadomain.AudioTrack) error) error {
+	panic("unexpected RegenerateMaster")
 }
 
 func (*mediaRepository) Requeue(context.Context, string, mediadomain.ClaimToken, time.Time) error {

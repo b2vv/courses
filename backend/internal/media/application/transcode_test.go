@@ -89,6 +89,67 @@ func TestProcessClaimsRendersAndPublishes(t *testing.T) {
 	}
 }
 
+func TestProcessEmbedsAudioTrackWhenSourceHasAudio(t *testing.T) {
+	t.Parallel()
+	repository := processingRepository(domain.Queued)
+	transcoder := defaultTranscoder()
+	var renderedAudio bool
+	transcoder.render = func(_ context.Context, _, _ domain.StorageKey, _ []domain.Rendition, hasAudio bool) error {
+		renderedAudio = hasAudio
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{AssetID: mediaAssetID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if !renderedAudio {
+		t.Fatal("render was told the source has no audio")
+	}
+	if repository.asset.State != domain.Ready {
+		t.Fatalf("asset state=%s want ready", repository.asset.State)
+	}
+	embedded := repository.publishedEmbedded
+	if embedded == nil {
+		t.Fatal("no embedded track materialised for an audio-carrying source")
+	}
+	if embedded.Kind != domain.EmbeddedTrack || embedded.State != domain.Ready || !embedded.IsDefault ||
+		embedded.SourceLeaf != domain.EmbeddedAudioLeaf || embedded.VideoAssetID != mediaAssetID {
+		t.Fatalf("embedded=%+v", embedded)
+	}
+	if _, err := domain.NewEmbeddedTrack(*embedded); err != nil {
+		t.Fatalf("embedded track fails domain validation: %v", err)
+	}
+}
+
+func TestProcessVideoOnlySourceAwaitsAudio(t *testing.T) {
+	t.Parallel()
+	repository := processingRepository(domain.Queued)
+	transcoder := defaultTranscoder()
+	transcoder.probe = func(context.Context, domain.StorageKey) (domain.SourceProbe, error) {
+		return domain.SourceProbe{Width: 1280, Height: 720, VideoCodec: domain.CodecH264, DurationSeconds: 125.5}, nil
+	}
+	var renderedAudio bool
+	transcoder.render = func(_ context.Context, _, _ domain.StorageKey, _ []domain.Rendition, hasAudio bool) error {
+		renderedAudio = hasAudio
+		return nil
+	}
+
+	outcome, err := newTranscode(repository, defaultStorage(), transcoder, nil).Process(context.Background(), ports.Job{AssetID: mediaAssetID, MaxRetry: 3})
+	if err != nil || outcome != (application.TranscodeOutcome{}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if renderedAudio {
+		t.Fatal("render mapped audio for a video-only source")
+	}
+	if repository.asset.State != domain.AwaitingAudio {
+		t.Fatalf("asset state=%s want awaiting_audio", repository.asset.State)
+	}
+	if repository.publishedEmbedded != nil {
+		t.Fatalf("video-only source materialised an embedded track: %+v", repository.publishedEmbedded)
+	}
+}
+
 func TestProcessFinalAndNonFinalTransientFailures(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -323,7 +384,7 @@ func TestDependencyFailurePassesThroughAndDoesNotBecomeBusinessFailure(t *testin
 func TestLostPublishClaimTouchesNoPublishedBytes(t *testing.T) {
 	t.Parallel()
 	repository := processingRepository(domain.Queued)
-	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		return domain.VideoAsset{}, nil, nil
 	}
 	storage := defaultStorage()
@@ -461,14 +522,18 @@ func processingRepository(state domain.State) *fakeRepository {
 		repository.asset.ClaimToken = token
 		return repository.asset, true, nil
 	}
-	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, _ time.Time, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
+	repository.publish = func(_ context.Context, _ string, token domain.ClaimToken, renditions []domain.Rendition, durationSeconds *float64, _ time.Time, embedded *domain.AudioTrack, policy ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error) {
 		if repository.asset.State != domain.Processing || repository.asset.ClaimToken != token {
 			return domain.VideoAsset{}, nil, nil
 		}
 		if err := policy(repository.asset); err != nil {
 			return domain.VideoAsset{}, nil, err
 		}
-		repository.asset.State = domain.Ready
+		if embedded != nil {
+			repository.asset.State = domain.Ready
+		} else {
+			repository.asset.State = domain.AwaitingAudio
+		}
 		repository.asset.ClaimToken = ""
 		repository.asset.Renditions = renditions
 		repository.publishedDuration = durationSeconds
