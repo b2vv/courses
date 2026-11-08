@@ -225,25 +225,25 @@ func (repository *Repository) LoadAudioTrack(ctx context.Context, assetID, track
 // asset has no default yet, lifts the asset from AwaitingAudio to Ready (T11), and
 // regenerates the master from the resulting Ready set — all under the asset +
 // track locks in one transaction (D4/D7).
-func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error {
+func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (evicted *domain.VideoAsset, err error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
-		return persistenceError(err)
+		return nil, persistenceError(err)
 	}
 	defer rollback(tx)
 	now = storeTime(now)
-	var assetState string
-	err = tx.QueryRow(ctx, `SELECT state FROM video_assets
-		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&assetState)
+	var assetState, lessonID string
+	err = tx.QueryRow(ctx, `SELECT state, lesson_id FROM video_assets
+		WHERE id=$1::text::uuid AND evicted_at IS NULL FOR UPDATE`, assetID).Scan(&assetState, &lessonID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.ErrVideoNotFound
+		return nil, domain.ErrVideoNotFound
 	}
 	if err != nil {
-		return persistenceError(err)
+		return nil, persistenceError(err)
 	}
 	tracks, err := lockAssetTracks(ctx, tx, assetID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	index := -1
 	hasDefault := false
@@ -256,14 +256,14 @@ func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, tr
 		}
 	}
 	if index < 0 {
-		return domain.ErrVideoNotFound
+		return nil, domain.ErrVideoNotFound
 	}
 	if _, err := tx.Exec(ctx, `UPDATE audio_tracks SET state='ready', updated_at=$2
 		WHERE id=$1::text::uuid AND video_asset_id=$3::text::uuid`, trackID, now, assetID); err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
-			return mapped
+			return nil, mapped
 		}
-		return persistenceError(err)
+		return nil, persistenceError(err)
 	}
 	tracks[index].State = domain.Ready
 	// A video-only asset gains its first default here; an asset with an embedded
@@ -273,9 +273,9 @@ func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, tr
 			if _, err := tx.Exec(ctx, `UPDATE audio_tracks SET is_default=true, updated_at=$2
 				WHERE id=$1::text::uuid`, elected, now); err != nil {
 				if mapped, ok := audioTrackConflict(err); ok {
-					return mapped
+					return nil, mapped
 				}
-				return persistenceError(err)
+				return nil, persistenceError(err)
 			}
 			for position := range tracks {
 				tracks[position].IsDefault = tracks[position].ID == elected
@@ -285,7 +285,33 @@ func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, tr
 	if domain.State(assetState) == domain.AwaitingAudio {
 		if _, err := tx.Exec(ctx, `UPDATE video_assets SET state='ready', updated_at=$2
 			WHERE id=$1::text::uuid AND state='awaiting_audio' AND evicted_at IS NULL`, assetID, now); err != nil {
-			return persistenceError(err)
+			return nil, persistenceError(err)
+		}
+		// The asset only now joins its lesson's Ready set, so the per-lesson cap can
+		// be exceeded here exactly as it can in Publish. Mirror Publish's eviction
+		// (D4): when the set is over the cap, evict the oldest generation so a
+		// re-uploaded video-only lesson does not accumulate Ready bytes. The asset
+		// just promoted carries the lesson's highest generation, so ORDER BY
+		// generation never selects it as the victim.
+		var readyCount int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM video_assets
+			WHERE lesson_id=$1::text::uuid AND state='ready' AND evicted_at IS NULL`, lessonID).Scan(&readyCount); err != nil {
+			return nil, persistenceError(err)
+		}
+		if readyCount > 2 {
+			victim, err := scanAsset(tx.QueryRow(ctx, `UPDATE video_assets AS assets
+				SET evicted_at=$2, updated_at=$2
+				WHERE id=(
+					SELECT id FROM video_assets
+					WHERE lesson_id=$1::text::uuid AND state='ready' AND evicted_at IS NULL
+					ORDER BY generation
+					LIMIT 1
+				)
+				RETURNING `+mediaAssetColumns, lessonID, now))
+			if err != nil {
+				return nil, persistenceError(err)
+			}
+			evicted = &victim
 		}
 	}
 	ready := make([]domain.AudioTrack, 0, len(tracks))
@@ -295,9 +321,9 @@ func (repository *Repository) PromoteAudioTrack(ctx context.Context, assetID, tr
 		}
 	}
 	if err := rewrite(ready); err != nil {
-		return err
+		return nil, err
 	}
-	return commit(ctx, tx)
+	return evicted, commit(ctx, tx)
 }
 
 // FailAudioTrack marks the track Failed. When the asset is AwaitingAudio and is

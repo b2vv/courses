@@ -162,9 +162,9 @@ func TestProcessAudioTrackPublishesPromotesAndRegenerates(t *testing.T) {
 			Language: "en", Label: "English", State: domain.Queued, SourceLeaf: domain.AudioLeafPrefix + trackID}, nil
 	}
 	var rewroteWithReady []domain.AudioTrack
-	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) error {
+	repository.promoteAudioTrack = func(_ context.Context, _, _ string, _ time.Time, rewrite func([]domain.AudioTrack) error) (*domain.VideoAsset, error) {
 		rewroteWithReady = []domain.AudioTrack{{ID: trackID, Kind: domain.UploadedTrack, State: domain.Ready, IsDefault: true, Label: "English", Language: "en"}}
-		return rewrite(rewroteWithReady)
+		return nil, rewrite(rewroteWithReady)
 	}
 	transcoder := defaultTranscoder()
 	var regeneratedFor string

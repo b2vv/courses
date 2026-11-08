@@ -214,13 +214,24 @@ func (transcode *Transcode) processAudioTrack(ctx context.Context, job ports.Job
 		_ = transcode.storage.Purge(ctx, work)
 		return transcode.audioTrackTransientFailure(ctx, job, err, domain.PublishFailed)
 	}
-	if err := transcode.repository.PromoteAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp(), func(ready []domain.AudioTrack) error {
+	evicted, err := transcode.repository.PromoteAudioTrack(ctx, job.AssetID, job.TrackID, transcode.timestamp(), func(ready []domain.AudioTrack) error {
 		return transcode.transcoder.RegenerateMaster(ctx, job.AssetID, audioRenditions(ready))
-	}); err != nil {
+	})
+	if err != nil {
 		return transcode.audioTrackTransientFailure(ctx, job, err, domain.RenderFailed)
 	}
 	if err := transcode.storage.Purge(ctx, work); err != nil {
 		return TranscodeOutcome{}, err
+	}
+	// Promoting a video-only asset to Ready can evict an older generation of the
+	// same lesson (D4), exactly as the video publish path does; reclaim its bytes.
+	if evicted != nil {
+		if err := transcode.purgeAsset(ctx, evicted.ID); err != nil {
+			return TranscodeOutcome{}, err
+		}
+		if err := transcode.repository.DeleteSwept(ctx, evicted.ID); err != nil {
+			return TranscodeOutcome{}, err
+		}
 	}
 	return TranscodeOutcome{}, nil
 }
