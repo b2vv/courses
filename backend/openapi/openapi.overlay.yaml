@@ -161,6 +161,11 @@ components:
           headers:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
             Cache-Control: { $ref: '#/components/headers/NoStore' }
+        DuplicateLanguage:
+          description: Another non-failed audio track on the same asset already uses this language tag.
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/RequestID' }
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
         LessonNotFound:
           description: The lesson is unknown.
           headers:
@@ -692,6 +697,16 @@ components:
                 originalName: { minLength: 1, maxLength: 255 }
                 receivedBytes: { minimum: 0, maximum: 2147483648 }
                 declaredBytes: { minimum: 1, maximum: 2147483648 }
+        MediaAudioTrack:
+            properties:
+                trackId: { format: uuid }
+                videoId: { format: uuid }
+                language: { minLength: 1, maxLength: 35 }
+                label: { minLength: 1, maxLength: 64 }
+        MediaAudioRename:
+            properties:
+                language: { minLength: 1, maxLength: 35 }
+                label: { minLength: 1, maxLength: 64 }
         ImageUploadResponse:
             properties:
                 id:
@@ -1604,6 +1619,81 @@ paths:
         responses:
           '200':
             description: The asset is queued for another transcoding attempt.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/admin/videos/{videoId}/audio-tracks:
+      get:
+        operationId: listAdminAudioTracks
+        summary: List audio tracks for a video asset
+        description: >-
+          Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any
+          asset; instructors may read only assets in courses they own. Query parameters are not
+          supported and responses are never cached.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The asset's audio tracks, or an empty items array.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    "/api/v1/admin/videos/{videoId}/audio-tracks/{trackId}":
+      patch:
+        operationId: renameAdminAudioTrack
+        summary: Rename an audio track
+        description: >-
+          Updates the language tag and display label of an audio track. A language clash with
+          another non-failed track on the same asset returns 409. Requires one matching Origin
+          header, accepts no query parameters, and responses are never cached. The master
+          manifest is regenerated under the asset lock.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+          trackId:
+            schema: { format: uuid }
+        responses:
+          '200':
+            description: The updated track.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+      delete:
+        operationId: deleteAdminAudioTrack
+        summary: Delete an audio track
+        description: >-
+          Removes an audio track from the asset. Refuses to drop the last Ready track of a
+          Ready asset. Re-elects a new default when the deleted track was the default, and
+          regenerates the master manifest under the asset lock. Requires one matching Origin
+          header, accepts no query parameters, and responses are never cached.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+          trackId:
+            schema: { format: uuid }
+        responses:
+          '204':
+            description: The track is deleted.
+            headers:
+              X-Request-ID: { $ref: '#/components/headers/RequestID' }
+              Cache-Control: { $ref: '#/components/headers/NoStore' }
+    /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}/default:
+      post:
+        operationId: setDefaultAdminAudioTrack
+        summary: Set an audio track as the default
+        description: >-
+          Makes the target track the sole default for the asset; the target must be Ready.
+          Requires one matching Origin header, accepts no query parameters, and responses are
+          never cached. The master manifest is regenerated under the asset lock.
+        parameters:
+          videoId:
+            schema: { format: uuid }
+          trackId:
+            schema: { format: uuid }
+        responses:
+          '204':
+            description: The track is now the default.
             headers:
               X-Request-ID: { $ref: '#/components/headers/RequestID' }
               Cache-Control: { $ref: '#/components/headers/NoStore' }

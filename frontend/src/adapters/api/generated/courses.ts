@@ -43,6 +43,7 @@ import type {
   DisableTwoFactorRequest,
   DismissReportsRequest,
   DraftConflictResponse,
+  DuplicateLanguageResponse,
   EmailRequest,
   EmailTakenResponse,
   ErrorResponse,
@@ -83,6 +84,9 @@ import type {
   ListTeachLearnersParams,
   ListTeachModerationQueueParams,
   LoginRequest,
+  MediaAudioRename,
+  MediaAudioTrack,
+  MediaAudioTracks,
   MediaBadRequestResponse,
   MediaForbiddenResponse,
   MediaTicketRequest,
@@ -3003,6 +3007,328 @@ const res = await fetch(getSetAdminUserStatusUrl(id),
 
   const data: setAdminUserStatusResponse['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as setAdminUserStatusResponse
+}
+
+
+
+export type listAdminAudioTracksResponse200 = {
+  data: MediaAudioTracks
+  status: 200
+}
+
+export type listAdminAudioTracksResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type listAdminAudioTracksResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listAdminAudioTracksResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type listAdminAudioTracksResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type listAdminAudioTracksResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listAdminAudioTracksResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listAdminAudioTracksResponseSuccess = (listAdminAudioTracksResponse200) & {
+  headers: Headers;
+};
+export type listAdminAudioTracksResponseError = (listAdminAudioTracksResponse400 | listAdminAudioTracksResponse401 | listAdminAudioTracksResponse403 | listAdminAudioTracksResponse404 | listAdminAudioTracksResponse500 | listAdminAudioTracksResponse503) & {
+  headers: Headers;
+};
+
+export type listAdminAudioTracksResponse = (listAdminAudioTracksResponseSuccess | listAdminAudioTracksResponseError)
+
+export const getListAdminAudioTracksUrl = (videoId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks`
+}
+
+/**
+ * Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached.
+ * @summary List audio tracks for a video asset
+ */
+export const listAdminAudioTracks = async (videoId: string, options?: RequestInit): Promise<listAdminAudioTracksResponse> => {
+
+  const res = await fetch(getListAdminAudioTracksUrl(videoId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAdminAudioTracksResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAdminAudioTracksResponse
+}
+
+
+
+export type deleteAdminAudioTrackResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAdminAudioTrackResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type deleteAdminAudioTrackResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type deleteAdminAudioTrackResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type deleteAdminAudioTrackResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type deleteAdminAudioTrackResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type deleteAdminAudioTrackResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type deleteAdminAudioTrackResponseSuccess = (deleteAdminAudioTrackResponse204) & {
+  headers: Headers;
+};
+export type deleteAdminAudioTrackResponseError = (deleteAdminAudioTrackResponse400 | deleteAdminAudioTrackResponse401 | deleteAdminAudioTrackResponse403 | deleteAdminAudioTrackResponse404 | deleteAdminAudioTrackResponse500 | deleteAdminAudioTrackResponse503) & {
+  headers: Headers;
+};
+
+export type deleteAdminAudioTrackResponse = (deleteAdminAudioTrackResponseSuccess | deleteAdminAudioTrackResponseError)
+
+export const getDeleteAdminAudioTrackUrl = (videoId: string,
+    trackId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks/${trackId}`
+}
+
+/**
+ * Removes an audio track from the asset. Refuses to drop the last Ready track of a Ready asset. Re-elects a new default when the deleted track was the default, and regenerates the master manifest under the asset lock. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
+ * @summary Delete an audio track
+ */
+export const deleteAdminAudioTrack = async (videoId: string,
+    trackId: string, options?: RequestInit): Promise<deleteAdminAudioTrackResponse> => {
+
+  const res = await fetch(getDeleteAdminAudioTrackUrl(videoId,trackId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAdminAudioTrackResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteAdminAudioTrackResponse
+}
+
+
+
+export type renameAdminAudioTrackResponse200 = {
+  data: MediaAudioTrack
+  status: 200
+}
+
+export type renameAdminAudioTrackResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type renameAdminAudioTrackResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type renameAdminAudioTrackResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type renameAdminAudioTrackResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type renameAdminAudioTrackResponse409 = {
+  data: DuplicateLanguageResponse
+  status: 409
+}
+
+export type renameAdminAudioTrackResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type renameAdminAudioTrackResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type renameAdminAudioTrackResponseSuccess = (renameAdminAudioTrackResponse200) & {
+  headers: Headers;
+};
+export type renameAdminAudioTrackResponseError = (renameAdminAudioTrackResponse400 | renameAdminAudioTrackResponse401 | renameAdminAudioTrackResponse403 | renameAdminAudioTrackResponse404 | renameAdminAudioTrackResponse409 | renameAdminAudioTrackResponse500 | renameAdminAudioTrackResponse503) & {
+  headers: Headers;
+};
+
+export type renameAdminAudioTrackResponse = (renameAdminAudioTrackResponseSuccess | renameAdminAudioTrackResponseError)
+
+export const getRenameAdminAudioTrackUrl = (videoId: string,
+    trackId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks/${trackId}`
+}
+
+/**
+ * Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+ * @summary Rename an audio track
+ */
+export const renameAdminAudioTrack = async (videoId: string,
+    trackId: string,
+    mediaAudioRename: MediaAudioRename, options?: RequestInit): Promise<renameAdminAudioTrackResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getRenameAdminAudioTrackUrl(videoId,trackId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(mediaAudioRename)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: renameAdminAudioTrackResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as renameAdminAudioTrackResponse
+}
+
+
+
+export type setDefaultAdminAudioTrackResponse204 = {
+  data: void
+  status: 204
+}
+
+export type setDefaultAdminAudioTrackResponse400 = {
+  data: InvalidRequestResponse
+  status: 400
+}
+
+export type setDefaultAdminAudioTrackResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type setDefaultAdminAudioTrackResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type setDefaultAdminAudioTrackResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type setDefaultAdminAudioTrackResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type setDefaultAdminAudioTrackResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type setDefaultAdminAudioTrackResponseSuccess = (setDefaultAdminAudioTrackResponse204) & {
+  headers: Headers;
+};
+export type setDefaultAdminAudioTrackResponseError = (setDefaultAdminAudioTrackResponse400 | setDefaultAdminAudioTrackResponse401 | setDefaultAdminAudioTrackResponse403 | setDefaultAdminAudioTrackResponse404 | setDefaultAdminAudioTrackResponse500 | setDefaultAdminAudioTrackResponse503) & {
+  headers: Headers;
+};
+
+export type setDefaultAdminAudioTrackResponse = (setDefaultAdminAudioTrackResponseSuccess | setDefaultAdminAudioTrackResponseError)
+
+export const getSetDefaultAdminAudioTrackUrl = (videoId: string,
+    trackId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks/${trackId}/default`
+}
+
+/**
+ * Makes the target track the sole default for the asset; the target must be Ready. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+ * @summary Set an audio track as the default
+ */
+export const setDefaultAdminAudioTrack = async (videoId: string,
+    trackId: string, options?: RequestInit): Promise<setDefaultAdminAudioTrackResponse> => {
+
+  const res = await fetch(getSetDefaultAdminAudioTrackUrl(videoId,trackId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setDefaultAdminAudioTrackResponse['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as setDefaultAdminAudioTrackResponse
 }
 
 

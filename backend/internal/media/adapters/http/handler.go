@@ -30,7 +30,17 @@ type uploadService interface {
 	Retry(context.Context, domain.Actor, string) (domain.VideoAsset, error)
 }
 
-type Handler struct{ upload uploadService }
+type audioService interface {
+	List(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
+	SetDefault(context.Context, domain.Actor, string, string) error
+	Rename(context.Context, domain.Actor, string, string, string, string) (domain.AudioTrack, error)
+	Delete(context.Context, domain.Actor, string, string) error
+}
+
+type Handler struct {
+	upload uploadService
+	audio  audioService
+}
 
 type mintVideoRequest struct {
 	DeclaredBytes int64  `json:"declaredBytes"`
@@ -61,7 +71,29 @@ type courseVideosDTO struct {
 	Items []videoDTO `json:"items"`
 }
 
-func NewHandler(upload uploadService) *Handler { return &Handler{upload: upload} }
+type audioTrackDTO struct {
+	TrackID   string                `json:"trackId"`
+	VideoID   string                `json:"videoId"`
+	Kind      domain.AudioTrackKind `json:"kind"`
+	Language  string                `json:"language"`
+	Label     string                `json:"label"`
+	IsDefault bool                  `json:"isDefault"`
+	State     domain.State          `json:"state"`
+	UpdatedAt string                `json:"updatedAt"`
+}
+
+type audioTracksDTO struct {
+	Items []audioTrackDTO `json:"items"`
+}
+
+type renameTrackRequest struct {
+	Language string `json:"language"`
+	Label    string `json:"label"`
+}
+
+func NewHandler(upload uploadService, audio audioService) *Handler {
+	return &Handler{upload: upload, audio: audio}
+}
 
 func (handler *Handler) RegisterAdmin(
 	mux *http.ServeMux,
@@ -71,6 +103,10 @@ func (handler *Handler) RegisterAdmin(
 	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/video", requireSameOrigin(authenticate(http.HandlerFunc(handler.mintTicket))))
 	mux.Handle("GET /api/v1/admin/courses/{courseId}/videos", authenticate(http.HandlerFunc(handler.listCourseVideos)))
 	mux.Handle("POST /api/v1/admin/videos/{videoId}/retry", requireSameOrigin(authenticate(http.HandlerFunc(handler.retry))))
+	mux.Handle("GET /api/v1/admin/videos/{videoId}/audio-tracks", authenticate(http.HandlerFunc(handler.listAudioTracks)))
+	mux.Handle("PATCH /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}", requireSameOrigin(authenticate(http.HandlerFunc(handler.renameAudioTrack))))
+	mux.Handle("POST /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}/default", requireSameOrigin(authenticate(http.HandlerFunc(handler.setDefaultAudioTrack))))
+	mux.Handle("DELETE /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}", requireSameOrigin(authenticate(http.HandlerFunc(handler.deleteAudioTrack))))
 }
 
 func (handler *Handler) mintTicket(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +176,143 @@ func (handler *Handler) retry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, mapVideo(asset))
+}
+
+func (handler *Handler) listAudioTracks(w http.ResponseWriter, r *http.Request) {
+	mediaHeaders(w)
+	actor, ok := mediaActor(w, r)
+	if !ok {
+		return
+	}
+	videoID := r.PathValue("videoId")
+	if !validMediaID(videoID) || !emptyMediaQuery(r.URL.RawQuery) {
+		writeMediaError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	tracks, err := handler.audio.List(r.Context(), actor, videoID)
+	if err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	items := make([]audioTrackDTO, 0, len(tracks))
+	for _, track := range tracks {
+		items = append(items, mapAudioTrack(track))
+	}
+	httpserver.WriteJSON(w, http.StatusOK, audioTracksDTO{Items: items})
+}
+
+func (handler *Handler) renameAudioTrack(w http.ResponseWriter, r *http.Request) {
+	mediaHeaders(w)
+	actor, ok := mediaActor(w, r)
+	if !ok {
+		return
+	}
+	videoID, trackID := r.PathValue("videoId"), r.PathValue("trackId")
+	if !validMediaID(videoID) || !validMediaID(trackID) || !emptyMediaQuery(r.URL.RawQuery) {
+		writeMediaError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	request, err := decodeRenameTrack(w, r)
+	if err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	track, err := handler.audio.Rename(r.Context(), actor, videoID, trackID, request.Language, request.Label)
+	if err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusOK, mapAudioTrack(track))
+}
+
+func (handler *Handler) setDefaultAudioTrack(w http.ResponseWriter, r *http.Request) {
+	mediaHeaders(w)
+	actor, ok := mediaActor(w, r)
+	if !ok {
+		return
+	}
+	videoID, trackID := r.PathValue("videoId"), r.PathValue("trackId")
+	if !validMediaID(videoID) || !validMediaID(trackID) || !emptyMediaQuery(r.URL.RawQuery) {
+		writeMediaError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	if err := handler.audio.SetDefault(r.Context(), actor, videoID, trackID); err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) deleteAudioTrack(w http.ResponseWriter, r *http.Request) {
+	mediaHeaders(w)
+	actor, ok := mediaActor(w, r)
+	if !ok {
+		return
+	}
+	videoID, trackID := r.PathValue("videoId"), r.PathValue("trackId")
+	if !validMediaID(videoID) || !validMediaID(trackID) || !emptyMediaQuery(r.URL.RawQuery) {
+		writeMediaError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	if err := handler.audio.Delete(r.Context(), actor, videoID, trackID); err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func mapAudioTrack(track domain.AudioTrack) audioTrackDTO {
+	return audioTrackDTO{
+		TrackID: track.ID, VideoID: track.VideoAssetID, Kind: track.Kind,
+		Language: track.Language, Label: track.Label, IsDefault: track.IsDefault,
+		State: track.State, UpdatedAt: formatMediaTime(track.UpdatedAt),
+	}
+}
+
+func decodeRenameTrack(w http.ResponseWriter, r *http.Request) (renameTrackRequest, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return renameTrackRequest{}, domain.ErrInvalidRequest
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maximumMediaWriteBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil || !utf8.Valid(body) {
+		return renameTrackRequest{}, domain.ErrInvalidRequest
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return renameTrackRequest{}, domain.ErrInvalidRequest
+	}
+	var language, label *string
+	seen := make(map[string]struct{}, 2)
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return renameTrackRequest{}, domain.ErrInvalidRequest
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return renameTrackRequest{}, domain.ErrInvalidRequest
+		}
+		seen[key] = struct{}{}
+		switch key {
+		case "language":
+			err = decoder.Decode(&language)
+		case "label":
+			err = decoder.Decode(&label)
+		default:
+			return renameTrackRequest{}, domain.ErrInvalidRequest
+		}
+		if err != nil {
+			return renameTrackRequest{}, domain.ErrInvalidRequest
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || language == nil || label == nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return renameTrackRequest{}, domain.ErrInvalidRequest
+	}
+	return renameTrackRequest{Language: *language, Label: *label}, nil
 }
 
 func mediaActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
@@ -254,6 +427,8 @@ func writeMediaError(w http.ResponseWriter, r *http.Request, err error) {
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
 	case errors.Is(err, domain.ErrVideoNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "video_not_found", "Video was not found")
+	case errors.Is(err, domain.ErrDuplicateLanguage):
+		httpserver.WriteError(w, r, http.StatusConflict, "duplicate_language", "Another track already uses this language")
 	case errors.Is(err, domain.ErrUploadInProgress):
 		httpserver.WriteError(w, r, http.StatusConflict, "upload_in_progress", "A video upload is already in progress")
 	case errors.Is(err, domain.ErrVideoNotRetryable):

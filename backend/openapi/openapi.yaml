@@ -99,6 +99,17 @@ components:
                     $ref: '#/components/headers/NoStore'
                 X-Request-ID:
                     $ref: '#/components/headers/RequestID'
+        DuplicateLanguage:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: Another non-failed audio track on the same asset already uses this language tag.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
         EmailTaken:
             content:
                 application/json:
@@ -1501,6 +1512,7 @@ components:
                                 - course_purchase_required
                                 - dependency_unavailable
                                 - document_conflict
+                                - duplicate_language
                                 - email_not_verified
                                 - email_taken
                                 - enrollment_blocked
@@ -2122,6 +2134,77 @@ components:
             required:
                 - email
                 - password
+            type: object
+        MediaAudioRename:
+            additionalProperties: false
+            properties:
+                label:
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                language:
+                    maxLength: 35
+                    minLength: 1
+                    type: string
+            required:
+                - label
+                - language
+            type: object
+        MediaAudioTrack:
+            additionalProperties: false
+            properties:
+                isDefault:
+                    type: boolean
+                kind:
+                    enum:
+                        - embedded
+                        - uploaded
+                    type: string
+                label:
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                language:
+                    maxLength: 35
+                    minLength: 1
+                    type: string
+                state:
+                    enum:
+                        - created
+                        - uploading
+                        - queued
+                        - processing
+                        - awaiting_audio
+                        - ready
+                        - failed
+                    type: string
+                trackId:
+                    format: uuid
+                    type: string
+                updatedAt:
+                    $ref: '#/components/schemas/AdminTimestamp'
+                videoId:
+                    format: uuid
+                    type: string
+            required:
+                - isDefault
+                - kind
+                - label
+                - language
+                - state
+                - trackId
+                - updatedAt
+                - videoId
+            type: object
+        MediaAudioTracks:
+            additionalProperties: false
+            properties:
+                items:
+                    items:
+                        $ref: '#/components/schemas/MediaAudioTrack'
+                    type: array
+            required:
+                - items
             type: object
         MediaTicketRequest:
             additionalProperties: false
@@ -4710,6 +4793,167 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Block or restore an account
+    /api/v1/admin/videos/{videoId}/audio-tracks:
+        get:
+            description: Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached.
+            operationId: listAdminAudioTracks
+            parameters:
+                - in: path
+                  name: videoId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaAudioTracks'
+                    description: The asset's audio tracks, or an empty items array.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/VideoNotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List audio tracks for a video asset
+    /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}:
+        delete:
+            description: Removes an audio track from the asset. Refuses to drop the last Ready track of a Ready asset. Re-elects a new default when the deleted track was the default, and regenerates the master manifest under the asset lock. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
+            operationId: deleteAdminAudioTrack
+            parameters:
+                - in: path
+                  name: trackId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: videoId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: The track is deleted.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/VideoNotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Delete an audio track
+        patch:
+            description: Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+            operationId: renameAdminAudioTrack
+            parameters:
+                - in: path
+                  name: trackId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: videoId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MediaAudioRename'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MediaAudioTrack'
+                    description: The updated track.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/VideoNotFound'
+                "409":
+                    $ref: '#/components/responses/DuplicateLanguage'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Rename an audio track
+    /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}/default:
+        post:
+            description: Makes the target track the sole default for the asset; the target must be Ready. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+            operationId: setDefaultAdminAudioTrack
+            parameters:
+                - in: path
+                  name: trackId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+                - in: path
+                  name: videoId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "204":
+                    description: The track is now the default.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/InvalidRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/MediaForbidden'
+                "404":
+                    $ref: '#/components/responses/VideoNotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: Set an audio track as the default
     /api/v1/admin/videos/{videoId}/retry:
         post:
             description: Admins may retry any owned asset; instructors may retry only assets in courses they own. A failed or queued asset may be retried, as may a processing asset whose claim is older than 40 minutes, but only after the complete source landed. Success clears any claim, increments the attempt and enqueues the asset. Requires one matching Origin header, accepts no query parameters, and responses are never cached.
