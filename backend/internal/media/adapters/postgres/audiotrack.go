@@ -125,7 +125,7 @@ func (repository *Repository) ListAudioTracks(ctx context.Context, actor domain.
 // serialized step (D4). The target must exist and be Ready; the swap clears the
 // previous default and sets the new one in a single statement, so the
 // one-default-per-asset index never sees a transient second default.
-func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time) error {
+func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return persistenceError(err)
@@ -165,7 +165,29 @@ func (repository *Repository) SetDefaultAudioTrack(ctx context.Context, actor do
 		WHERE id=$3::text::uuid AND video_asset_id=$1::text::uuid AND NOT is_default`, assetID, now, trackID); err != nil {
 		return persistenceError(err)
 	}
+	// The default is DEFAULT=YES on its EXT-X-MEDIA line, so the master changes too.
+	if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
+		return err
+	}
 	return commit(ctx, tx)
+}
+
+// rewriteReadyTracks hands the asset's current Ready set, read inside the caller's
+// transaction (so it reflects the caller's uncommitted change), to rewrite while
+// the asset lock is still held (D7). A failing rewrite aborts the transaction, so
+// the database never commits a track change the master does not reflect.
+func rewriteReadyTracks(ctx context.Context, tx pgx.Tx, assetID string, rewrite func(ready []domain.AudioTrack) error) error {
+	tracks, err := lockAssetTracks(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
+	ready := make([]domain.AudioTrack, 0, len(tracks))
+	for _, track := range tracks {
+		if track.State == domain.Ready {
+			ready = append(ready, track)
+		}
+	}
+	return rewrite(ready)
 }
 
 // DeleteAudioTrack removes a track, refusing to drop the last Ready track of a
@@ -209,22 +231,13 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, actor domain
 				WHERE id=$1::text::uuid`, elected, now); err != nil {
 				return persistenceError(err)
 			}
-			for position := range remaining {
-				remaining[position].IsDefault = remaining[position].ID == elected
-			}
 		}
 	}
 	// L3 (closes the S3 limitation): deleting a track changes the Ready set, so the
 	// master must be regenerated under the same lock before commit, exactly as
 	// promote does — otherwise the master keeps a stale EXT-X-MEDIA to the removed
 	// track's directory.
-	ready := make([]domain.AudioTrack, 0, len(remaining))
-	for _, track := range remaining {
-		if track.State == domain.Ready {
-			ready = append(ready, track)
-		}
-	}
-	if err := rewrite(ready); err != nil {
+	if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
 		return err
 	}
 	return commit(ctx, tx)
@@ -234,7 +247,7 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, actor domain
 // domain has validated the new values. The (language, asset) unique index rejects
 // a clash with another non-failed track as ErrDuplicateLanguage (D6). The target
 // must exist under the asset.
-func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time) (domain.AudioTrack, error) {
+func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.AudioTrack{}, persistenceError(err)
@@ -256,6 +269,10 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 			return domain.AudioTrack{}, mapped
 		}
 		return domain.AudioTrack{}, persistenceError(err)
+	}
+	// NAME and LANGUAGE are rendered into the track's EXT-X-MEDIA line (D7).
+	if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
+		return domain.AudioTrack{}, err
 	}
 	if err := commit(ctx, tx); err != nil {
 		return domain.AudioTrack{}, err

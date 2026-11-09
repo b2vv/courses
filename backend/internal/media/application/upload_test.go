@@ -37,8 +37,8 @@ type fakeRepository struct {
 	promoteAudioTrack        func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
 	failAudioTrack           func(context.Context, string, string, time.Time) error
 	listAudioTracks          func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
-	setDefaultAudioTrack     func(context.Context, domain.Actor, string, string, time.Time) error
-	updateAudioTrackMetadata func(context.Context, domain.Actor, string, string, string, string, time.Time) (domain.AudioTrack, error)
+	setDefaultAudioTrack     func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
+	updateAudioTrackMetadata func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
 	deleteAudioTrack         func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
 	publishedDuration        *float64
 	requeue                  func(context.Context, string, domain.ClaimToken, time.Time) error
@@ -116,18 +116,18 @@ func (repository *fakeRepository) ListAudioTracks(ctx context.Context, actor dom
 	return nil, nil
 }
 
-func (repository *fakeRepository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time) error {
+func (repository *fakeRepository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) error {
 	repository.calls = append(repository.calls, "set_default_audio_track")
 	if repository.setDefaultAudioTrack != nil {
-		return repository.setDefaultAudioTrack(ctx, actor, assetID, trackID, now)
+		return repository.setDefaultAudioTrack(ctx, actor, assetID, trackID, now, rewrite)
 	}
 	return nil
 }
 
-func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time) (domain.AudioTrack, error) {
+func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
 	repository.calls = append(repository.calls, "update_audio_track_metadata")
 	if repository.updateAudioTrackMetadata != nil {
-		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, now)
+		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
 	}
 	return domain.AudioTrack{}, nil
 }

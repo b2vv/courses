@@ -11,16 +11,19 @@ import (
 // AudioTracks is the authoring service for a lesson's audio tracks (S5-L1): list,
 // rename, set-default and delete. Ownership is enforced inside the repository (the
 // same course-instructor join the video authoring paths use); this service adds
-// the input validation and, on delete, the master regeneration from the remaining
-// Ready set.
+// input validation and the master regeneration every mutation needs, because the
+// default flag, the label and the language are all rendered into the master's
+// EXT-X-MEDIA lines (D7). The rewrite runs inside the repository's transaction,
+// under the asset lock promote also takes, so the API and the media worker never
+// write one master concurrently.
 type AudioTracks struct {
 	repository ports.AssetRepository
-	transcoder ports.Transcoder
+	master     ports.MasterWriter
 	now        Clock
 }
 
-func NewAudioTracks(repository ports.AssetRepository, transcoder ports.Transcoder, now Clock) *AudioTracks {
-	return &AudioTracks{repository: repository, transcoder: transcoder, now: now}
+func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter, now Clock) *AudioTracks {
+	return &AudioTracks{repository: repository, master: master, now: now}
 }
 
 func (service *AudioTracks) List(ctx context.Context, actor domain.Actor, assetID string) ([]domain.AudioTrack, error) {
@@ -33,7 +36,7 @@ func (service *AudioTracks) List(ctx context.Context, actor domain.Actor, assetI
 func (service *AudioTracks) SetDefault(ctx context.Context, actor domain.Actor, assetID, trackID string) error {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	return mediaOperationError(ctx, service.repository.SetDefaultAudioTrack(callCtx, actor, assetID, trackID, service.timestamp()))
+	return mediaOperationError(ctx, service.repository.SetDefaultAudioTrack(callCtx, actor, assetID, trackID, service.timestamp(), service.rewrite(callCtx, assetID)))
 }
 
 func (service *AudioTracks) Rename(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string) (domain.AudioTrack, error) {
@@ -42,16 +45,27 @@ func (service *AudioTracks) Rename(ctx context.Context, actor domain.Actor, asse
 	}
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	track, err := service.repository.UpdateAudioTrackMetadata(callCtx, actor, assetID, trackID, language, label, service.timestamp())
+	track, err := service.repository.UpdateAudioTrackMetadata(callCtx, actor, assetID, trackID, language, label, service.timestamp(), service.rewrite(callCtx, assetID))
 	return track, mediaOperationError(ctx, err)
 }
 
 func (service *AudioTracks) Delete(ctx context.Context, actor domain.Actor, assetID, trackID string) error {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	return mediaOperationError(ctx, service.repository.DeleteAudioTrack(callCtx, actor, assetID, trackID, service.timestamp(), func(ready []domain.AudioTrack) error {
-		return service.transcoder.RegenerateMaster(callCtx, assetID, audioRenditions(ready))
-	}))
+	return mediaOperationError(ctx, service.repository.DeleteAudioTrack(callCtx, actor, assetID, trackID, service.timestamp(), service.rewrite(callCtx, assetID)))
+}
+
+// rewrite regenerates the master from the Ready set the repository hands it. An
+// empty set means the asset is not Ready (D4 forbids a Ready asset without a Ready
+// track), so there is no audio section to publish and the master is left as is;
+// RegenerateMaster would refuse an empty set anyway.
+func (service *AudioTracks) rewrite(ctx context.Context, assetID string) func([]domain.AudioTrack) error {
+	return func(ready []domain.AudioTrack) error {
+		if len(ready) == 0 {
+			return nil
+		}
+		return service.master.RegenerateMaster(ctx, assetID, audioRenditions(ready))
+	}
 }
 
 func (service *AudioTracks) timestamp() time.Time {

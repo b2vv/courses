@@ -99,11 +99,11 @@ func (*mediaRepository) ListAudioTracks(context.Context, mediadomain.Actor, stri
 	panic("unexpected ListAudioTracks")
 }
 
-func (*mediaRepository) SetDefaultAudioTrack(context.Context, mediadomain.Actor, string, string, time.Time) error {
+func (*mediaRepository) SetDefaultAudioTrack(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error {
 	panic("unexpected SetDefaultAudioTrack")
 }
 
-func (*mediaRepository) UpdateAudioTrackMetadata(context.Context, mediadomain.Actor, string, string, string, string, time.Time) (mediadomain.AudioTrack, error) {
+func (*mediaRepository) UpdateAudioTrackMetadata(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
 	panic("unexpected UpdateAudioTrackMetadata")
 }
 
