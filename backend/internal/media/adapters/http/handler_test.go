@@ -35,6 +35,7 @@ const (
 	mediaCourseID     = "10000000-0000-4000-8000-000000000001"
 	mediaLessonID     = "30000000-0000-4000-8000-000000000001"
 	mediaVideoID      = "50000000-0000-4000-8000-000000000001"
+	mediaTrackID      = "60000000-0000-4000-8000-000000000001"
 )
 
 var mediaNow = time.Date(2026, 9, 6, 12, 0, 0, 123456000, time.UTC)
@@ -44,6 +45,10 @@ type mediaRepository struct {
 	mint                             func(context.Context, mediadomain.Actor, string, int64, string, time.Time, time.Time) (mediadomain.VideoAsset, error)
 	list                             func(context.Context, mediadomain.Actor, string) ([]mediadomain.VideoAsset, error)
 	retry                            func(context.Context, mediadomain.Actor, string, time.Duration, time.Time) (mediadomain.VideoAsset, error)
+	listTracks                       func(context.Context, mediadomain.Actor, string) ([]mediadomain.AudioTrack, error)
+	setDefault                       func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
+	updateMetadata                   func(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error)
+	deleteTrack                      func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
 }
 
 func (repository *mediaRepository) Mint(ctx context.Context, actor mediadomain.Actor, lessonID string, declaredBytes int64, originalName string, expiresAt, now time.Time) (mediadomain.VideoAsset, error) {
@@ -95,6 +100,34 @@ func (*mediaRepository) FailAudioTrack(context.Context, string, string, time.Tim
 	panic("unexpected FailAudioTrack")
 }
 
+func (repository *mediaRepository) ListAudioTracks(ctx context.Context, actor mediadomain.Actor, assetID string) ([]mediadomain.AudioTrack, error) {
+	if repository.listTracks != nil {
+		return repository.listTracks(ctx, actor, assetID)
+	}
+	panic("unexpected ListAudioTracks")
+}
+
+func (repository *mediaRepository) SetDefaultAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID, trackID string, now time.Time, rewrite func([]mediadomain.AudioTrack) error) error {
+	if repository.setDefault != nil {
+		return repository.setDefault(ctx, actor, assetID, trackID, now, rewrite)
+	}
+	panic("unexpected SetDefaultAudioTrack")
+}
+
+func (repository *mediaRepository) UpdateAudioTrackMetadata(ctx context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+	if repository.updateMetadata != nil {
+		return repository.updateMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
+	}
+	panic("unexpected UpdateAudioTrackMetadata")
+}
+
+func (repository *mediaRepository) DeleteAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID, trackID string, now time.Time, rewrite func([]mediadomain.AudioTrack) error) error {
+	if repository.deleteTrack != nil {
+		return repository.deleteTrack(ctx, actor, assetID, trackID, now, rewrite)
+	}
+	panic("unexpected DeleteAudioTrack")
+}
+
 func (*mediaRepository) Requeue(context.Context, string, mediadomain.ClaimToken, time.Time) error {
 	panic("unexpected Requeue")
 }
@@ -135,6 +168,12 @@ func (queue *mediaQueue) Enqueue(_ context.Context, assetID string, attempt int)
 func (queue *mediaQueue) EnqueueAudioTrack(_ context.Context, assetID, _ string, attempt int) error {
 	queue.calls = append(queue.calls, queuedCall{assetID: assetID, attempt: attempt})
 	return queue.err
+}
+
+type mediaMasterWriter struct{}
+
+func (*mediaMasterWriter) RegenerateMaster(_ context.Context, _ string, _ []ports.AudioRendition) error {
+	return nil
 }
 
 type mediaIdentity struct {
@@ -555,7 +594,8 @@ func mediaAPIHandler(t *testing.T, repository *mediaRepository, queue *mediaQueu
 	}
 	identityHandler := identityhttp.NewHandler(identity, nil, nil, config)
 	tickets := mediaapplication.NewTickets(repository, queue, func() time.Time { return mediaNow })
-	mediaHandler := mediahttp.NewHandler(tickets)
+	audio := mediaapplication.NewAudioTracks(repository, &mediaMasterWriter{}, func() time.Time { return mediaNow })
+	mediaHandler := mediahttp.NewHandler(tickets, audio)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
 	}})
@@ -643,4 +683,159 @@ func assertMediaError(t *testing.T, response *httptest.ResponseRecorder, code st
 	if envelope.Error.Code != code || envelope.Error.RequestID == "" || envelope.Error.RequestID != response.Header().Get("X-Request-ID") {
 		t.Fatalf("error=%+v", envelope)
 	}
+}
+
+func audioTrackRepository() *mediaRepository {
+	noRewrite := func([]mediadomain.AudioTrack) error { return nil }
+	repo := defaultMediaRepository()
+	repo.listTracks = func(_ context.Context, actor mediadomain.Actor, assetID string) ([]mediadomain.AudioTrack, error) {
+		if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+			return nil, err
+		}
+		return []mediadomain.AudioTrack{
+			{ID: mediaTrackID, VideoAssetID: assetID, Kind: mediadomain.EmbeddedTrack, Language: "en", Label: "Original", IsDefault: true, State: mediadomain.Ready, UpdatedAt: mediaNow},
+		}, nil
+	}
+	repo.setDefault = func(_ context.Context, actor mediadomain.Actor, assetID, trackID string, _ time.Time, rewrite func([]mediadomain.AudioTrack) error) error {
+		if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+			return err
+		}
+		_ = rewrite(nil)
+		return nil
+	}
+	repo.updateMetadata = func(_ context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, _ time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+		if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+			return mediadomain.AudioTrack{}, err
+		}
+		_ = rewrite(nil)
+		return mediadomain.AudioTrack{ID: trackID, VideoAssetID: assetID, Kind: mediadomain.UploadedTrack, Language: language, Label: label, State: mediadomain.Ready, UpdatedAt: mediaNow}, nil
+	}
+	repo.deleteTrack = func(_ context.Context, actor mediadomain.Actor, assetID, trackID string, _ time.Time, rewrite func([]mediadomain.AudioTrack) error) error {
+		if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+			return err
+		}
+		_ = rewrite(nil)
+		return nil
+	}
+	_ = noRewrite
+	return repo
+}
+
+func TestAudioTrackContracts(t *testing.T) {
+	t.Run("AT01 admin lists audio tracks", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "", http.MethodGet, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", nil, "", true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var page struct {
+			Items []map[string]any `json:"items"`
+		}
+		decodeMediaJSON(t, response, &page)
+		if len(page.Items) != 1 {
+			t.Fatalf("items=%d", len(page.Items))
+		}
+		item := page.Items[0]
+		if item["trackId"] != mediaTrackID || item["kind"] != "embedded" || item["isDefault"] != true {
+			t.Fatalf("item=%+v", item)
+		}
+	})
+
+	t.Run("AT02 admin renames an audio track", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPatch, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID, []byte(`{"language":"uk","label":"Українська"}`), "application/json", true)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var track map[string]any
+		decodeMediaJSON(t, response, &track)
+		if track["language"] != "uk" || track["label"] != "Українська" {
+			t.Fatalf("track=%+v", track)
+		}
+	})
+
+	t.Run("AT03 admin sets default audio track", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID+"/default", nil, "", true)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("AT04 admin deletes an audio track", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodDelete, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID, nil, "", true)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("AT05 non-owner refused", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		for _, op := range []struct{ method, path, body string }{
+			{http.MethodGet, "/api/v1/admin/videos/" + mediaVideoID + "/audio-tracks", ""},
+			{http.MethodPatch, "/api/v1/admin/videos/" + mediaVideoID + "/audio-tracks/" + mediaTrackID, `{"language":"uk","label":"Ukr"}`},
+			{http.MethodPost, "/api/v1/admin/videos/" + mediaVideoID + "/audio-tracks/" + mediaTrackID + "/default", ""},
+			{http.MethodDelete, "/api/v1/admin/videos/" + mediaVideoID + "/audio-tracks/" + mediaTrackID, ""},
+		} {
+			response := serveMedia(t, handler, identity, mediaUser(mediaOtherOwnerID, identitydomain.Instructor), true, "http://localhost:8080", op.method, op.path, []byte(op.body), contentType(op.body), true)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("%s %s status=%d body=%s", op.method, op.path, response.Code, response.Body.String())
+			}
+			assertMediaError(t, response, "course_forbidden")
+		}
+	})
+
+	t.Run("AT06 rename strict body", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		for _, test := range []struct{ name, body string }{
+			{"missing label", `{"language":"uk"}`},
+			{"unknown key", `{"language":"uk","label":"Ukr","extra":1}`},
+			{"duplicate key", `{"language":"uk","language":"de","label":"Ukr"}`},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPatch, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID, []byte(test.body), "application/json", false)
+				if response.Code != http.StatusBadRequest {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+				assertMediaError(t, response, "invalid_request")
+			})
+		}
+	})
+
+	t.Run("AT07 duplicate language returns 409", func(t *testing.T) {
+		repository := audioTrackRepository()
+		repository.updateMetadata = func(_ context.Context, _ mediadomain.Actor, _, _, _, _ string, _ time.Time, _ func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+			return mediadomain.AudioTrack{}, mediadomain.ErrDuplicateLanguage
+		}
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPatch, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID, []byte(`{"language":"en","label":"Clash"}`), "application/json", true)
+		if response.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertMediaError(t, response, "duplicate_language")
+	})
+
+	t.Run("AT08 malformed IDs refused", func(t *testing.T) {
+		repository := audioTrackRepository()
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "", http.MethodGet, "/api/v1/admin/videos/not-a-uuid/audio-tracks", nil, "", false)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
 }

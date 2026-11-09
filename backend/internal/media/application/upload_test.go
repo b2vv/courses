@@ -22,27 +22,31 @@ const (
 )
 
 type fakeRepository struct {
-	calls             []string
-	asset             domain.VideoAsset
-	mint              func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
-	appendChunk       func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
-	cancel            func(context.Context, string, time.Time) error
-	list              func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
-	load              func(context.Context, string) (domain.VideoAsset, error)
-	claim             func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
-	publish           func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
-	publishedEmbedded *domain.AudioTrack
-	regenerateMaster  func(context.Context, string, func([]domain.AudioTrack) error) error
-	loadAudioTrack    func(context.Context, string, string) (domain.AudioTrack, error)
-	promoteAudioTrack func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
-	failAudioTrack    func(context.Context, string, string, time.Time) error
-	publishedDuration *float64
-	requeue           func(context.Context, string, domain.ClaimToken, time.Time) error
-	fail              func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
-	retry             func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
-	sweepCandidates   func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
-	deleteSwept       func(context.Context, string) error
-	recover           func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	calls                    []string
+	asset                    domain.VideoAsset
+	mint                     func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
+	appendChunk              func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
+	cancel                   func(context.Context, string, time.Time) error
+	list                     func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
+	load                     func(context.Context, string) (domain.VideoAsset, error)
+	claim                    func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
+	publish                  func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publishedEmbedded        *domain.AudioTrack
+	regenerateMaster         func(context.Context, string, func([]domain.AudioTrack) error) error
+	loadAudioTrack           func(context.Context, string, string) (domain.AudioTrack, error)
+	promoteAudioTrack        func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
+	failAudioTrack           func(context.Context, string, string, time.Time) error
+	listAudioTracks          func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
+	setDefaultAudioTrack     func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
+	updateAudioTrackMetadata func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
+	deleteAudioTrack         func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
+	publishedDuration        *float64
+	requeue                  func(context.Context, string, domain.ClaimToken, time.Time) error
+	fail                     func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
+	retry                    func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
+	sweepCandidates          func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	deleteSwept              func(context.Context, string) error
+	recover                  func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
 }
 
 func (repository *fakeRepository) Mint(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string, expiresAt, now time.Time) (domain.VideoAsset, error) {
@@ -102,6 +106,38 @@ func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID
 func (repository *fakeRepository) FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error {
 	repository.calls = append(repository.calls, "fail_audio_track")
 	return repository.failAudioTrack(ctx, assetID, trackID, now)
+}
+
+func (repository *fakeRepository) ListAudioTracks(ctx context.Context, actor domain.Actor, assetID string) ([]domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "list_audio_tracks")
+	if repository.listAudioTracks != nil {
+		return repository.listAudioTracks(ctx, actor, assetID)
+	}
+	return nil, nil
+}
+
+func (repository *fakeRepository) SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) error {
+	repository.calls = append(repository.calls, "set_default_audio_track")
+	if repository.setDefaultAudioTrack != nil {
+		return repository.setDefaultAudioTrack(ctx, actor, assetID, trackID, now, rewrite)
+	}
+	return nil
+}
+
+func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "update_audio_track_metadata")
+	if repository.updateAudioTrackMetadata != nil {
+		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
+	}
+	return domain.AudioTrack{}, nil
+}
+
+func (repository *fakeRepository) DeleteAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) error {
+	repository.calls = append(repository.calls, "delete_audio_track")
+	if repository.deleteAudioTrack != nil {
+		return repository.deleteAudioTrack(ctx, actor, assetID, trackID, now, rewrite)
+	}
+	return nil
 }
 
 func (repository *fakeRepository) Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error {

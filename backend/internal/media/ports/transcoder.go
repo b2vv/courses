@@ -33,3 +33,10 @@ type Transcoder interface {
 	// variant lines verbatim (D7). Callers serialise it per asset.
 	RegenerateMaster(context.Context, string, []AudioRendition) error
 }
+
+// MasterWriter is the one Transcoder capability the API's audio-track authoring
+// needs: rewriting an asset's master from its Ready audio set (D7). The API never
+// probes or renders, so it depends on this narrow port rather than Transcoder.
+type MasterWriter interface {
+	RegenerateMaster(context.Context, string, []AudioRendition) error
+}

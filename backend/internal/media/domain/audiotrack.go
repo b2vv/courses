@@ -230,6 +230,12 @@ func validateLanguageLabel(language, label string) error {
 	return nil
 }
 
+// ValidateAudioTrackMetadata checks a rename's new language and label against the
+// same rules the constructors enforce (D6 language format, D7 manifest-safe label).
+func ValidateAudioTrackMetadata(language, label string) error {
+	return validateLanguageLabel(language, label)
+}
+
 func validLanguage(value string) bool {
 	count := utf8.RuneCountInString(value)
 	if count < 1 || count > MaximumLanguageLength {

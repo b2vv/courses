@@ -52,6 +52,22 @@ type AssetRepository interface {
 	// FailAudioTrack marks the track Failed and, when the AwaitingAudio asset is
 	// left with no Ready track and nothing still in flight, fails the asset (T12).
 	FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error
+
+	// The authoring surface (S5-L1): each verifies the actor may edit the asset's
+	// lesson's course before touching a track (ErrCourseForbidden otherwise), a
+	// missing or evicted asset being ErrVideoNotFound.
+	ListAudioTracks(ctx context.Context, actor domain.Actor, assetID string) ([]domain.AudioTrack, error)
+	// SetDefaultAudioTrack makes trackID the sole default; the target must be Ready.
+	// Like every authoring mutation it regenerates the master (rewrite) from the
+	// resulting Ready set under the asset lock before commit (D7).
+	SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
+	// UpdateAudioTrackMetadata renames a track; a language clash with another
+	// non-failed track of the asset is ErrDuplicateLanguage (D6).
+	UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error)
+	// DeleteAudioTrack removes a track, re-electing a default and regenerating the
+	// master from the remaining Ready set (rewrite) under the lock; it refuses to
+	// drop the last Ready track of a Ready asset.
+	DeleteAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
 	Requeue(ctx context.Context, id string, token domain.ClaimToken, now time.Time) error
 	Fail(ctx context.Context, id string, from domain.State, token domain.ClaimToken,
 		reason domain.FailureReason, now time.Time) error

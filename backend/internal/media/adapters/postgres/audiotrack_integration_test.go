@@ -21,6 +21,10 @@ const (
 	mediaTrackThree = "a2000000-0000-4000-8000-000000000003"
 )
 
+// noMasterRewrite is the delete rewrite callback for tests that assert DB state
+// only; L3 master regeneration is covered separately by testDeleteAudioTrackRegeneratesMaster.
+func noMasterRewrite([]domain.AudioTrack) error { return nil }
+
 func (h *mediaHarness) insertTrack(t *testing.T, id, assetID, kind, language, label string, isDefault bool, state domain.State, createdAt time.Time) {
 	t.Helper()
 	leaf := domain.EmbeddedAudioLeaf
@@ -37,7 +41,7 @@ func (h *mediaHarness) insertTrack(t *testing.T, id, assetID, kind, language, la
 
 func (h *mediaHarness) defaultTrackID(t *testing.T, assetID string) (string, int) {
 	t.Helper()
-	tracks, err := h.repository.ListAudioTracks(h.ctx, assetID)
+	tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), assetID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +62,7 @@ func (h *mediaHarness) testAudioTracksPersistAndList(t *testing.T) {
 	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Українська", false, domain.Ready, mediaNow.Add(time.Minute))
 	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
 
-	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,17 +141,36 @@ func (h *mediaHarness) testSetDefaultAudioTrack(t *testing.T) {
 	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
 	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
 
-	if err := h.repository.SetDefaultAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour)); err != nil {
+	var rewrittenWith []domain.AudioTrack
+	if err := h.repository.SetDefaultAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
+		rewrittenWith = ready
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if id, defaults := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackTwo || defaults != 1 {
 		t.Fatalf("after swap default=%s count=%d", id, defaults)
 	}
-	if err := h.repository.SetDefaultAudioTrack(h.ctx, mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour)); !errors.Is(err, domain.ErrVideoNotFound) {
+	// The rewrite must see the NEW default (trackTwo), not the old one — it reads
+	// inside the transaction after the swap, so the master carries the correct
+	// DEFAULT=YES line (D-S5L1-5b).
+	found := false
+	for _, track := range rewrittenWith {
+		if track.ID == mediaTrackTwo && track.IsDefault {
+			found = true
+		}
+		if track.ID == mediaTrackOne && track.IsDefault {
+			t.Fatalf("rewrite still sees trackOne as default: %+v", rewrittenWith)
+		}
+	}
+	if !found {
+		t.Fatalf("rewrite did not see trackTwo as default: %+v", rewrittenWith)
+	}
+	if err := h.repository.SetDefaultAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrVideoNotFound) {
 		t.Fatalf("missing target: %v", err)
 	}
 	h.insertTrack(t, mediaTrackThree, mediaAssetOne, string(domain.UploadedTrack), "de", "Ger", false, domain.Processing, mediaNow.Add(2*time.Minute))
-	if err := h.repository.SetDefaultAudioTrack(h.ctx, mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour)); !errors.Is(err, domain.ErrInvalidRequest) {
+	if err := h.repository.SetDefaultAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("non-ready target: %v", err)
 	}
 	if id, defaults := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackTwo || defaults != 1 {
@@ -163,7 +186,7 @@ func (h *mediaHarness) testSetDefaultAdverseOrder(t *testing.T) {
 	// — the rank-swap that a non-deferrable partial unique index rejects by scan order.
 	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow)
 	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow.Add(time.Minute))
-	if err := h.repository.SetDefaultAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Hour)); err != nil {
+	if err := h.repository.SetDefaultAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Hour), noMasterRewrite); err != nil {
 		t.Fatalf("adverse-order swap: %v", err)
 	}
 	if id, defaults := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackOne || defaults != 1 {
@@ -188,7 +211,7 @@ func (h *mediaHarness) testConcurrentSetDefault(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			errs[i] = h.repository.SetDefaultAudioTrack(h.ctx, mediaAssetOne, targets[i], mediaNow.Add(time.Hour))
+			errs[i] = h.repository.SetDefaultAudioTrack(h.ctx, ownerActor(), mediaAssetOne, targets[i], mediaNow.Add(time.Hour), noMasterRewrite)
 		}(i)
 	}
 	close(start)
@@ -358,7 +381,7 @@ func (h *mediaHarness) testConcurrentPromoteAudioTrack(t *testing.T) {
 			t.Fatalf("concurrent promote %d: %v", i, err)
 		}
 	}
-	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,27 +410,27 @@ func (h *mediaHarness) testDeleteAudioTrackReElection(t *testing.T) {
 	h.insertTrack(t, mediaTrackThree, mediaAssetOne, string(domain.UploadedTrack), "de", "Ger", false, domain.Failed, mediaNow.Add(2*time.Minute))
 
 	// Deleting the default re-elects the earliest remaining Ready track (trackTwo).
-	if err := h.repository.DeleteAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Hour)); err != nil {
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Hour), noMasterRewrite); err != nil {
 		t.Fatal(err)
 	}
 	if id, defaults := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackTwo || defaults != 1 {
 		t.Fatalf("re-elected default=%s count=%d", id, defaults)
 	}
 	// trackTwo is now the only Ready track; a Ready asset refuses to drop it.
-	if err := h.repository.DeleteAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour)); !errors.Is(err, domain.ErrInvalidRequest) {
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("dropping last ready track: %v", err)
 	}
-	if err := h.repository.DeleteAudioTrack(h.ctx, mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour)); err != nil {
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour), noMasterRewrite); err != nil {
 		t.Fatalf("deleting a non-default failed track: %v", err)
 	}
-	if err := h.repository.DeleteAudioTrack(h.ctx, mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour)); !errors.Is(err, domain.ErrVideoNotFound) {
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrVideoNotFound) {
 		t.Fatalf("deleting a missing track: %v", err)
 	}
 
 	// When the asset is not Ready, dropping the last Ready track is allowed.
 	h.insertAsset(t, mediaAssetTwo, mediaLessonTwo, 1, domain.AwaitingAudio, mediaNow.Add(time.Hour), nil)
 	h.insertTrack(t, mediaTrackThree, mediaAssetTwo, string(domain.UploadedTrack), "uk", "Ukr", true, domain.Ready, mediaNow)
-	if err := h.repository.DeleteAudioTrack(h.ctx, mediaAssetTwo, mediaTrackThree, mediaNow.Add(time.Hour)); err != nil {
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetTwo, mediaTrackThree, mediaNow.Add(time.Hour), noMasterRewrite); err != nil {
 		t.Fatalf("awaiting-audio asset may drop last ready: %v", err)
 	}
 }
@@ -447,6 +470,118 @@ func (h *mediaHarness) testCreateAudioTrack(t *testing.T) {
 	orphan.SourceLeaf = domain.AudioLeafPrefix + mediaTrackTwo
 	if _, err := h.repository.CreateAudioTrack(h.ctx, orphan); !errors.Is(err, domain.ErrVideoNotFound) {
 		t.Fatalf("orphan track: %v", err)
+	}
+}
+
+func (h *mediaHarness) testAudioTrackAuthoringOwnership(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
+
+	// mediaInstructorB owns a different course, so every authoring call is refused
+	// before it touches a track (D-S5L1-3).
+	stranger := domain.Actor{UserID: mediaInstructorB}
+	if _, err := h.repository.ListAudioTracks(h.ctx, stranger, mediaAssetOne); !errors.Is(err, domain.ErrCourseForbidden) {
+		t.Fatalf("list by a non-owner: %v", err)
+	}
+	if err := h.repository.SetDefaultAudioTrack(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
+		t.Fatalf("set-default by a non-owner: %v", err)
+	}
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, "de", "Ger", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
+		t.Fatalf("rename by a non-owner: %v", err)
+	}
+	if err := h.repository.DeleteAudioTrack(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
+		t.Fatalf("delete by a non-owner: %v", err)
+	}
+	// Nothing changed under the refused calls.
+	if tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne); err != nil || len(tracks) != 2 {
+		t.Fatalf("tracks=%+v err=%v want 2 untouched", tracks, err)
+	}
+}
+
+func (h *mediaHarness) testUpdateAudioTrackMetadata(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
+
+	// The rename is rendered into the master (NAME/LANGUAGE), so the rewrite must see
+	// the new values inside the transaction, before commit.
+	var rewrittenWith []domain.AudioTrack
+	updated, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk-UA", "Українська", mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
+		rewrittenWith = ready
+		return nil
+	})
+	if err != nil || updated.Language != "uk-UA" || updated.Label != "Українська" {
+		t.Fatalf("renamed=%+v err=%v", updated, err)
+	}
+	if len(rewrittenWith) != 2 || rewrittenWith[1].ID != mediaTrackTwo || rewrittenWith[1].Label != "Українська" || rewrittenWith[1].Language != "uk-UA" {
+		t.Fatalf("rename rewrote the master with %+v, want the renamed uk track", rewrittenWith)
+	}
+	// A failing master rewrite aborts the rename: the database keeps the old label.
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "Rolled back", mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
+		return errors.New("disk full")
+	}); err == nil {
+		t.Fatal("a failing master rewrite must fail the rename")
+	}
+	if track, err := h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo); err != nil || track.Label != "Українська" {
+		t.Fatalf("after aborted rename track=%+v err=%v, want the committed label kept", track, err)
+	}
+	// Renaming to the embedded track's language collides on the (asset, language)
+	// unique index and surfaces as ErrDuplicateLanguage (409), not a generic 400.
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "en", "Clash", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrDuplicateLanguage) {
+		t.Fatalf("duplicate language: %v", err)
+	}
+	// A missing track under the asset is not found.
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, "de", "Ger", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrVideoNotFound) {
+		t.Fatalf("missing track: %v", err)
+	}
+}
+
+func (h *mediaHarness) testDeleteAudioTrackRegeneratesMaster(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
+
+	// L3: deleting the uk track must regenerate the master from the remaining Ready
+	// set (the embedded track only), under the lock, before commit.
+	var rewrittenWith []domain.AudioTrack
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
+		rewrittenWith = ready
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rewrittenWith) != 1 || rewrittenWith[0].ID != mediaTrackOne {
+		t.Fatalf("master rewritten with %+v, want only the embedded track", rewrittenWith)
+	}
+	if tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne); err != nil || len(tracks) != 1 || tracks[0].ID != mediaTrackOne {
+		t.Fatalf("after delete tracks=%+v err=%v", tracks, err)
+	}
+}
+
+func (h *mediaHarness) testDeleteEmbeddedAudioTrack(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
+
+	// Deleting the default embedded track re-elects the remaining Ready uploaded
+	// track and regenerates from it; the embedded track is not special-cased.
+	var rewrittenWith []domain.AudioTrack
+	if err := h.repository.DeleteAudioTrack(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
+		rewrittenWith = ready
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rewrittenWith) != 1 || rewrittenWith[0].ID != mediaTrackTwo || !rewrittenWith[0].IsDefault {
+		t.Fatalf("after embedded delete rewritten=%+v, want uk re-elected default", rewrittenWith)
+	}
+	if id, defaults := h.defaultTrackID(t, mediaAssetOne); id != mediaTrackTwo || defaults != 1 {
+		t.Fatalf("re-elected default=%s count=%d", id, defaults)
 	}
 }
 

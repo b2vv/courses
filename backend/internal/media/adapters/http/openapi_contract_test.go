@@ -65,14 +65,21 @@ func TestMediaOpenAPIFidelity(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("regeneration is not byte-identical")
 	}
-	t.Log("all three media paths and full reference closure equal hand; two generations byte-identical")
+	t.Log("all seven media paths and full reference closure equal hand; two generations byte-identical")
 }
 
 func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 	t.Helper()
 	want := map[string]any{"openapi": source["openapi"], "info": source["info"], "servers": source["servers"], "paths": map[string]any{}, "components": map[string]any{}}
 	paths := want["paths"].(map[string]any)
-	for _, path := range []string{"/api/v1/admin/lessons/{lessonId}/video", "/api/v1/admin/courses/{courseId}/videos", "/api/v1/admin/videos/{videoId}/retry"} {
+	for _, path := range []string{
+		"/api/v1/admin/lessons/{lessonId}/video",
+		"/api/v1/admin/courses/{courseId}/videos",
+		"/api/v1/admin/videos/{videoId}/retry",
+		"/api/v1/admin/videos/{videoId}/audio-tracks",
+		"/api/v1/admin/videos/{videoId}/audio-tracks/{trackId}",
+		"/api/v1/admin/videos/{videoId}/audio-tracks/{trackId}/default",
+	} {
 		value, ok := source["paths"].(map[string]any)[path]
 		if !ok || value == nil {
 			t.Fatalf("missing path %s", path)
@@ -116,7 +123,7 @@ func fidelitySurface(t *testing.T, source map[string]any) map[string]any {
 
 	collect(paths)
 	schemas := want["components"].(map[string]any)["schemas"].(map[string]any)
-	for _, name := range []string{"MediaTicketRequest", "MediaUploadTicket", "MediaVideo", "CourseVideos", "AdminTimestamp", "ErrorResponse"} {
+	for _, name := range []string{"MediaTicketRequest", "MediaUploadTicket", "MediaVideo", "CourseVideos", "MediaAudioTrack", "MediaAudioTracks", "MediaAudioRename", "AdminTimestamp", "ErrorResponse"} {
 		if schemas[name] == nil {
 			t.Fatalf("missing DTO in reference closure: %s", name)
 		}

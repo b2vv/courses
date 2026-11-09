@@ -33,6 +33,7 @@ export const ErrorResponseErrorCode = {
   course_purchase_required: 'course_purchase_required',
   dependency_unavailable: 'dependency_unavailable',
   document_conflict: 'document_conflict',
+  duplicate_language: 'duplicate_language',
   email_not_verified: 'email_not_verified',
   email_taken: 'email_taken',
   enrollment_blocked: 'enrollment_blocked',
