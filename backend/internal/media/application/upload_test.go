@@ -170,6 +170,26 @@ func (repository *fakeRepository) Recover(ctx context.Context, now time.Time, li
 	return repository.recover(ctx, now, limit)
 }
 
+func (repository *fakeRepository) MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, now time.Time) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
+func (repository *fakeRepository) AppendAudioChunk(ctx context.Context, trackID string, offset int64, now time.Time, chunkPolicy ports.AudioChunkPolicy, completePolicy ports.AudioCompletePolicy) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
+func (repository *fakeRepository) CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error {
+	return nil
+}
+
+func (repository *fakeRepository) SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	return nil, nil
+}
+
+func (repository *fakeRepository) DeleteAudioTrackSwept(ctx context.Context, trackID string) error {
+	return nil
+}
+
 type fakeStorage struct {
 	calls    []string
 	free     func(context.Context) (int64, error)

@@ -47,8 +47,15 @@ type AudioTrack struct {
 	IsDefault    bool
 	State        State
 	SourceLeaf   string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+
+	// Upload fields — populated for uploaded tracks, zero for embedded.
+	DeclaredBytes int64
+	ReceivedBytes int64
+	OriginalName  string
+	ExpiresAt     time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewUploadedTrack validates a freshly minted uploaded audio track. It begins in
@@ -58,8 +65,12 @@ func NewUploadedTrack(track AudioTrack) (AudioTrack, error) {
 	if err := validateLanguageLabel(track.Language, track.Label); err != nil {
 		return AudioTrack{}, err
 	}
+	if err := ValidateAudioTicket(track.DeclaredBytes, track.OriginalName); err != nil {
+		return AudioTrack{}, err
+	}
 	if !validID(track.ID) || !validID(track.VideoAssetID) || track.Kind != UploadedTrack ||
 		track.State != Created || track.IsDefault || track.SourceLeaf != AudioLeafPrefix+track.ID ||
+		track.ReceivedBytes != 0 || track.ExpiresAt.IsZero() || !track.ExpiresAt.After(track.CreatedAt) ||
 		track.CreatedAt.IsZero() || !track.UpdatedAt.Equal(track.CreatedAt) {
 		return AudioTrack{}, ErrInvalidRequest
 	}
@@ -234,6 +245,18 @@ func validateLanguageLabel(language, label string) error {
 // same rules the constructors enforce (D6 language format, D7 manifest-safe label).
 func ValidateAudioTrackMetadata(language, label string) error {
 	return validateLanguageLabel(language, label)
+}
+
+const MaximumAudioDeclaredBytes int64 = 500 * 1024 * 1024
+
+func ValidateAudioTicket(declaredBytes int64, originalName string) error {
+	if declaredBytes > MaximumAudioDeclaredBytes {
+		return ErrUploadTooLarge
+	}
+	if declaredBytes < MinimumDeclaredBytes || !validOriginalName(originalName) {
+		return ErrInvalidRequest
+	}
+	return nil
 }
 
 func validLanguage(value string) bool {

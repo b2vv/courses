@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"courses/internal/media/domain"
+	"courses/internal/media/ports"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,6 +21,10 @@ label,
 is_default,
 state,
 source_leaf,
+declared_bytes,
+received_bytes,
+original_name,
+expires_at,
 created_at,
 updated_at`
 
@@ -76,12 +81,20 @@ func (repository *Repository) CreateAudioTrack(ctx context.Context, track domain
 	defer rollback(tx)
 	created := storeTime(track.CreatedAt)
 	updated := storeTime(track.UpdatedAt)
+	var expiresAt *time.Time
+	if !track.ExpiresAt.IsZero() {
+		t := storeTime(track.ExpiresAt)
+		expiresAt = &t
+	}
 	stored, err := scanAudioTrack(tx.QueryRow(ctx, `INSERT INTO audio_tracks(
-		id,video_asset_id,kind,language,label,is_default,state,source_leaf,created_at,updated_at)
-		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
+		id,video_asset_id,kind,language,label,is_default,state,source_leaf,
+		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
+		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		RETURNING `+audioTrackColumns,
 		track.ID, track.VideoAssetID, string(track.Kind), track.Language, track.Label,
-		track.IsDefault, string(track.State), track.SourceLeaf, created, updated))
+		track.IsDefault, string(track.State), track.SourceLeaf,
+		track.DeclaredBytes, track.ReceivedBytes, track.OriginalName, expiresAt,
+		created, updated))
 	if err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
 			return domain.AudioTrack{}, mapped
@@ -525,18 +538,26 @@ func scanAudioTrack(row pgx.Row) (domain.AudioTrack, error) {
 	var (
 		id, videoAssetID, kind, language, label, state, sourceLeaf string
 		isDefault                                                  bool
+		declaredBytes, receivedBytes                               int64
+		originalName                                               string
+		expiresAt                                                  pgtype.Timestamptz
 		createdAt, updatedAt                                       pgtype.Timestamptz
 	)
-	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &state, &sourceLeaf, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &state, &sourceLeaf,
+		&declaredBytes, &receivedBytes, &originalName, &expiresAt, &createdAt, &updatedAt); err != nil {
 		return domain.AudioTrack{}, err
 	}
-	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, state, sourceLeaf, createdAt, updatedAt)
+	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, state, sourceLeaf,
+		declaredBytes, receivedBytes, originalName, expiresAt, createdAt, updatedAt)
 }
 
 func mapAudioTrack(
 	id, videoAssetID, kind, language, label string,
 	isDefault bool,
 	state, sourceLeaf string,
+	declaredBytes, receivedBytes int64,
+	originalName string,
+	expiresAt pgtype.Timestamptz,
 	createdAt, updatedAt pgtype.Timestamptz,
 ) (domain.AudioTrack, error) {
 	trackKind := domain.AudioTrackKind(kind)
@@ -549,18 +570,193 @@ func mapAudioTrack(
 	if err := domain.ValidateAudioTrackState(trackKind, domain.State(state)); err != nil {
 		return domain.AudioTrack{}, domain.ErrDependencyUnavailable
 	}
-	return domain.AudioTrack{
-		ID:           id,
-		VideoAssetID: videoAssetID,
-		Kind:         trackKind,
-		Language:     language,
-		Label:        label,
-		IsDefault:    isDefault,
-		State:        domain.State(state),
-		SourceLeaf:   sourceLeaf,
-		CreatedAt:    createdAt.Time,
-		UpdatedAt:    updatedAt.Time,
-	}, nil
+	track := domain.AudioTrack{
+		ID:            id,
+		VideoAssetID:  videoAssetID,
+		Kind:          trackKind,
+		Language:      language,
+		Label:         label,
+		IsDefault:     isDefault,
+		State:         domain.State(state),
+		SourceLeaf:    sourceLeaf,
+		DeclaredBytes: declaredBytes,
+		ReceivedBytes: receivedBytes,
+		OriginalName:  originalName,
+		CreatedAt:     createdAt.Time,
+		UpdatedAt:     updatedAt.Time,
+	}
+	if expiresAt.Valid {
+		track.ExpiresAt = expiresAt.Time
+	}
+	return track, nil
+}
+
+// MintAudioTrack creates an uploaded audio track attached to the given asset,
+// verifying ownership (D-S5L1-3). It evicts expired Created/Uploading tracks of
+// the same asset before inserting, mirroring video Mint's expired-upload eviction.
+func (repository *Repository) MintAudioTrack(
+	ctx context.Context, actor domain.Actor, assetID string,
+	declaredBytes int64, originalName, language, label string,
+	expiresAt, now time.Time,
+) (domain.AudioTrack, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	expiresAt = storeTime(expiresAt)
+	if _, err := authorizeAudioEdit(ctx, tx, actor, assetID); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE audio_tracks
+		SET state='failed', updated_at=$2
+		WHERE video_asset_id=$1::text::uuid
+		  AND kind='uploaded' AND state IN ('created','uploading')
+		  AND expires_at <= $2`, assetID, now); err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	stored, err := scanAudioTrack(tx.QueryRow(ctx, `
+		WITH new_id AS (SELECT gen_random_uuid() AS id)
+		INSERT INTO audio_tracks(
+			id,video_asset_id,kind,language,label,is_default,state,source_leaf,
+			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
+		SELECT id,$1::text::uuid,'uploaded',$2,$3,false,'created',
+			'audio-'||id::text,$4,0,$5,$6,$7,$7
+		FROM new_id
+		RETURNING `+audioTrackColumns,
+		assetID, language, label, declaredBytes, originalName, expiresAt, now))
+	if err != nil {
+		if mapped, ok := audioTrackConflict(err); ok {
+			return domain.AudioTrack{}, mapped
+		}
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	if _, err := domain.NewUploadedTrack(stored); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	if err := commit(ctx, tx); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	return stored, nil
+}
+
+const lockAudioTrack = `SELECT ` + audioTrackColumns + `
+FROM audio_tracks WHERE id=$1::text::uuid FOR UPDATE`
+
+// AppendAudioChunk mirrors the video AppendChunk for an uploaded audio track.
+func (repository *Repository) AppendAudioChunk(
+	ctx context.Context, trackID string, offset int64, now time.Time,
+	chunkPolicy ports.AudioChunkPolicy, completePolicy ports.AudioCompletePolicy,
+) (domain.AudioTrack, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	defer rollback(tx)
+	now = storeTime(now)
+	locked, err := scanAudioTrack(tx.QueryRow(ctx, lockAudioTrack, trackID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	if locked.Kind != domain.UploadedTrack ||
+		(locked.State != domain.Created && locked.State != domain.Uploading) ||
+		locked.ExpiresAt.IsZero() || !locked.ExpiresAt.After(now) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if locked.ReceivedBytes != offset {
+		return domain.AudioTrack{}, domain.ErrInvalidStateTransition
+	}
+	newReceived, err := chunkPolicy(locked)
+	if err != nil {
+		return domain.AudioTrack{}, err
+	}
+	if newReceived < offset || newReceived > locked.DeclaredBytes {
+		return domain.AudioTrack{}, domain.ErrInvalidRequest
+	}
+	if newReceived == locked.DeclaredBytes {
+		completing := locked
+		completing.State = domain.Uploading
+		completing.ReceivedBytes = newReceived
+		if err := completePolicy(completing); err != nil {
+			return domain.AudioTrack{}, err
+		}
+	}
+	updated, err := scanAudioTrack(tx.QueryRow(ctx, `UPDATE audio_tracks
+		SET received_bytes=$3,
+			state=CASE WHEN $3=declared_bytes THEN 'queued' ELSE 'uploading' END,
+			updated_at=$4
+		WHERE id=$1::text::uuid AND received_bytes=$2
+		  AND kind='uploaded' AND state IN ('created','uploading')
+		  AND expires_at>$4
+		RETURNING `+audioTrackColumns, trackID, offset, newReceived, now))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrInvalidStateTransition
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	if err := commit(ctx, tx); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	return updated, nil
+}
+
+// CancelAudioUpload fails a Created or Uploading uploaded track.
+func (repository *Repository) CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error {
+	now = storeTime(now)
+	result, err := repository.pool.Exec(ctx, `UPDATE audio_tracks
+		SET state='failed', updated_at=$2
+		WHERE id=$1::text::uuid AND kind='uploaded'
+		  AND state IN ('created','uploading')`, trackID, now)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrVideoNotFound
+	}
+	return nil
+}
+
+// SweepAudioTrackCandidates returns uploaded tracks whose upload expired.
+func (repository *Repository) SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	now = storeTime(now)
+	rows, err := repository.pool.Query(ctx, `SELECT `+audioTrackColumns+`
+		FROM audio_tracks
+		WHERE kind='uploaded' AND state IN ('created','uploading')
+		  AND expires_at < $1
+		ORDER BY expires_at LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	var tracks []domain.AudioTrack
+	for rows.Next() {
+		track, err := scanAudioTrack(rows)
+		if err != nil {
+			return nil, persistenceError(err)
+		}
+		tracks = append(tracks, track)
+	}
+	return tracks, persistenceError(rows.Err())
+}
+
+// DeleteAudioTrackSwept removes a swept audio track row.
+func (repository *Repository) DeleteAudioTrackSwept(ctx context.Context, trackID string) error {
+	result, err := repository.pool.Exec(ctx, `DELETE FROM audio_tracks WHERE id=$1::text::uuid`, trackID)
+	if err != nil {
+		return persistenceError(err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrVideoNotFound
+	}
+	return nil
 }
 
 func audioTrackConflict(err error) (error, bool) {

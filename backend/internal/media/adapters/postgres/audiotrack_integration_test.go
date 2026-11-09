@@ -440,15 +440,18 @@ func (h *mediaHarness) testCreateAudioTrack(t *testing.T) {
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
 
 	track, err := domain.NewUploadedTrack(domain.AudioTrack{
-		ID:           mediaTrackOne,
-		VideoAssetID: mediaAssetOne,
-		Kind:         domain.UploadedTrack,
-		Language:     "uk",
-		Label:        "Українська",
-		State:        domain.Created,
-		SourceLeaf:   domain.AudioLeafPrefix + mediaTrackOne,
-		CreatedAt:    mediaNow,
-		UpdatedAt:    mediaNow,
+		ID:            mediaTrackOne,
+		VideoAssetID:  mediaAssetOne,
+		Kind:          domain.UploadedTrack,
+		Language:      "uk",
+		Label:         "Українська",
+		State:         domain.Created,
+		SourceLeaf:    domain.AudioLeafPrefix + mediaTrackOne,
+		DeclaredBytes: 1024 * 1024,
+		OriginalName:  "dubbing.aac",
+		ExpiresAt:     mediaNow.Add(24 * time.Hour),
+		CreatedAt:     mediaNow,
+		UpdatedAt:     mediaNow,
 	})
 	if err != nil {
 		t.Fatal(err)
