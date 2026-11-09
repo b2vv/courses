@@ -47,6 +47,12 @@ const (
 
 var tusNow = time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 
+type tusMasterWriter struct{}
+
+func (*tusMasterWriter) RegenerateMaster(_ context.Context, _ string, _ []ports.AudioRendition) error {
+	return nil
+}
+
 type tusHarness struct {
 	ctx        context.Context
 	pool       *pgxpool.Pool
@@ -556,7 +562,8 @@ func (h *tusHarness) serverConfigured(t *testing.T, configure func(*tusStorage))
 	upload := application.NewUpload(h.repository, mediaStorage, queue, func() time.Time { return tusNow })
 	tickets := application.NewTickets(h.repository, nil, func() time.Time { return tusNow })
 	uploadServer := tus.NewServer(upload)
-	mediaHandler := mediahttp.NewHandler(tickets)
+	audioTracks := application.NewAudioTracks(h.repository, &tusMasterWriter{}, func() time.Time { return tusNow })
+	mediaHandler := mediahttp.NewHandler(tickets, audioTracks)
 	return storage, queue, httpserver.NewHandler(httpserver.Options{Service: "upload", Register: func(mux *http.ServeMux) {
 		uploadServer.Register(mux)
 		mediaHandler.RegisterAdmin(mux, func(next http.Handler) http.Handler {
