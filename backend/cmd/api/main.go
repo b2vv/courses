@@ -34,6 +34,7 @@ import (
 	imagepostgres "courses/internal/image/adapters/postgres"
 	imageapp "courses/internal/image/application"
 	mediaasynq "courses/internal/media/adapters/asynq"
+	mediaffmpeg "courses/internal/media/adapters/ffmpeg"
 	mediahttp "courses/internal/media/adapters/http"
 	mediapostgres "courses/internal/media/adapters/postgres"
 	mediaapplication "courses/internal/media/application"
@@ -165,7 +166,8 @@ func main() {
 		mediaRepository := mediapostgres.NewRepository(dependencies.Database)
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
-		mediaHandler := mediahttp.NewHandler(mediaTickets)
+		audioTracks := mediaapplication.NewAudioTracks(mediaRepository, mediaffmpeg.New("/media"), time.Now)
+		mediaHandler := mediahttp.NewHandler(mediaTickets, audioTracks)
 		imageRepository := imagepostgres.NewRepository(dependencies.Database)
 		// The storage adapter opens an existing root (os.OpenRoot does not create it); the API owns
 		// bootstrapping its own tree inside the shared /media volume. 0750 (re-asserted against the

@@ -193,6 +193,10 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S3 fail of the only track fails the awaiting asset", harness.testFailAudioTrackFailsVideoOnlyAsset)
 	t.Run("S3 fail keeps an asset that still has audio", harness.testFailAudioTrackKeepsAssetWithOtherAudio)
 	t.Run("S3 concurrent promote keeps exactly one default", harness.testConcurrentPromoteAudioTrack)
+	t.Run("S5-L1a authoring refuses a non-owner", harness.testAudioTrackAuthoringOwnership)
+	t.Run("S5-L1a rename updates metadata and 409s a duplicate language", harness.testUpdateAudioTrackMetadata)
+	t.Run("S5-L1a delete regenerates the master from the remaining ready set", harness.testDeleteAudioTrackRegeneratesMaster)
+	t.Run("S5-L1a delete removes an embedded track", harness.testDeleteEmbeddedAudioTrack)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {
@@ -584,7 +588,7 @@ func (h *mediaHarness) testPublishEmbedsAudioTrack(t *testing.T) {
 	if published.State != domain.Ready {
 		t.Fatalf("asset state=%s want ready", published.State)
 	}
-	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +614,7 @@ func (h *mediaHarness) testPublishVideoOnlyAwaitsAudio(t *testing.T) {
 	if published.State != domain.AwaitingAudio || evicted != nil {
 		t.Fatalf("published=%+v evicted=%+v want awaiting_audio, no eviction", published, evicted)
 	}
-	tracks, err := h.repository.ListAudioTracks(h.ctx, mediaAssetOne)
+	tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne)
 	if err != nil {
 		t.Fatal(err)
 	}
