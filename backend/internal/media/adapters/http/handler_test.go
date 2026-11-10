@@ -92,6 +92,10 @@ func (*mediaRepository) LoadAudioTrack(context.Context, string, string) (mediado
 	panic("unexpected LoadAudioTrack")
 }
 
+func (*mediaRepository) LoadAudioTrackUpload(context.Context, string) (mediadomain.AudioTrack, error) {
+	panic("unexpected LoadAudioTrackUpload")
+}
+
 func (*mediaRepository) PromoteAudioTrack(context.Context, string, string, time.Time, func([]mediadomain.AudioTrack) error) (*mediadomain.VideoAsset, error) {
 	panic("unexpected PromoteAudioTrack")
 }
@@ -144,6 +148,26 @@ func (*mediaRepository) DeleteSwept(context.Context, string) error { panic("unex
 
 func (*mediaRepository) Recover(context.Context, time.Time, int) ([]mediadomain.VideoAsset, error) {
 	panic("unexpected Recover")
+}
+
+func (*mediaRepository) MintAudioTrack(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error) {
+	panic("unexpected MintAudioTrack")
+}
+
+func (*mediaRepository) AppendAudioChunk(context.Context, string, int64, time.Time, ports.AudioChunkPolicy, ports.AudioCompletePolicy) (mediadomain.AudioTrack, error) {
+	panic("unexpected AppendAudioChunk")
+}
+
+func (*mediaRepository) CancelAudioUpload(context.Context, string, time.Time) error {
+	panic("unexpected CancelAudioUpload")
+}
+
+func (*mediaRepository) SweepAudioTrackCandidates(context.Context, time.Time, int) ([]mediadomain.AudioTrack, error) {
+	panic("unexpected SweepAudioTrackCandidates")
+}
+
+func (*mediaRepository) DeleteAudioTrackSwept(context.Context, string) error {
+	panic("unexpected DeleteAudioTrackSwept")
 }
 
 func (repository *mediaRepository) calls() int {

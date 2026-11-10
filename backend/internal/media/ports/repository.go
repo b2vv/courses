@@ -16,6 +16,10 @@ type CompletePolicy func(domain.VideoAsset) error
 
 type PublishPolicy func(domain.VideoAsset) error
 
+type AudioChunkPolicy func(domain.AudioTrack) (int64, error)
+
+type AudioCompletePolicy func(domain.AudioTrack) error
+
 type AssetRepository interface {
 	Load(ctx context.Context, id string) (domain.VideoAsset, error)
 	ListCourseVideos(ctx context.Context, actor domain.Actor, courseID string) ([]domain.VideoAsset, error)
@@ -41,6 +45,9 @@ type AssetRepository interface {
 	RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error
 
 	LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error)
+	// LoadAudioTrackUpload loads an uploaded audio track by its id alone (the tus
+	// upload path knows only the track id from the URL, not the asset id).
+	LoadAudioTrackUpload(ctx context.Context, trackID string) (domain.AudioTrack, error)
 	// PromoteAudioTrack marks the uploaded track Ready, elects a default when the
 	// asset has none yet, lifts the asset out of AwaitingAudio once a track is Ready
 	// (T11), and regenerates the master from the resulting Ready set — all under the
@@ -52,6 +59,27 @@ type AssetRepository interface {
 	// FailAudioTrack marks the track Failed and, when the AwaitingAudio asset is
 	// left with no Ready track and nothing still in flight, fails the asset (T12).
 	FailAudioTrack(ctx context.Context, assetID, trackID string, now time.Time) error
+
+	// MintAudioTrack creates an uploaded audio track attached to the asset,
+	// verifying the actor may edit the asset's lesson's course (D-S5L1-3). The
+	// track begins in Created with the declared upload size and expiry.
+	MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string,
+		declaredBytes int64, originalName, language, label string,
+		expiresAt, now time.Time) (domain.AudioTrack, error)
+
+	// AppendAudioChunk mirrors AppendChunk for an uploaded audio track: locks the
+	// track row, calls chunkPolicy (which writes bytes to storage), and when
+	// received==declared transitions to Queued and calls completePolicy (which
+	// moves scratch to source).
+	AppendAudioChunk(ctx context.Context, trackID string, offset int64, now time.Time,
+		chunkPolicy AudioChunkPolicy, completePolicy AudioCompletePolicy) (domain.AudioTrack, error)
+	// CancelAudioUpload fails a Created/Uploading track, freeing the language slot.
+	CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error
+
+	// SweepAudioTrackCandidates returns uploaded tracks in Created/Uploading whose
+	// expires_at has passed, for the caller to purge and delete.
+	SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error)
+	DeleteAudioTrackSwept(ctx context.Context, trackID string) error
 
 	// The authoring surface (S5-L1): each verifies the actor may edit the asset's
 	// lesson's course before touching a track (ErrCourseForbidden otherwise), a
