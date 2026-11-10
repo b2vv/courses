@@ -61,6 +61,7 @@ type tusHarness struct {
 
 type tusJob struct {
 	assetID string
+	trackID string
 	attempt int
 }
 
@@ -71,8 +72,8 @@ func (queue *tusQueue) Enqueue(_ context.Context, assetID string, attempt int) e
 	return nil
 }
 
-func (queue *tusQueue) EnqueueAudioTrack(_ context.Context, assetID, _ string, attempt int) error {
-	queue.jobs = append(queue.jobs, tusJob{assetID: assetID, attempt: attempt})
+func (queue *tusQueue) EnqueueAudioTrack(_ context.Context, assetID, trackID string, attempt int) error {
+	queue.jobs = append(queue.jobs, tusJob{assetID: assetID, trackID: trackID, attempt: attempt})
 	return nil
 }
 
@@ -191,8 +192,8 @@ func (h *tusHarness) testAudioUploadLandsSourceAndQueues(t *testing.T) {
 	if domain.State(state) != domain.Queued {
 		t.Fatalf("track state=%s want queued", state)
 	}
-	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, attempt: 1}) {
-		t.Fatalf("jobs=%v want one audio job", queue.jobs)
+	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, trackID: track.ID, attempt: 1}) {
+		t.Fatalf("jobs=%v want one audio job for track %s", queue.jobs, track.ID)
 	}
 }
 
