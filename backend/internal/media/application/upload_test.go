@@ -98,6 +98,10 @@ func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, t
 	return repository.loadAudioTrack(ctx, assetID, trackID)
 }
 
+func (repository *fakeRepository) LoadAudioTrackUpload(_ context.Context, _ string) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
 func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) (*domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "promote_audio_track")
 	return repository.promoteAudioTrack(ctx, assetID, trackID, now, rewrite)
@@ -168,6 +172,26 @@ func (repository *fakeRepository) DeleteSwept(ctx context.Context, id string) er
 func (repository *fakeRepository) Recover(ctx context.Context, now time.Time, limit int) ([]domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "recover")
 	return repository.recover(ctx, now, limit)
+}
+
+func (repository *fakeRepository) MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, now time.Time) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
+func (repository *fakeRepository) AppendAudioChunk(ctx context.Context, trackID string, offset int64, now time.Time, chunkPolicy ports.AudioChunkPolicy, completePolicy ports.AudioCompletePolicy) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
+func (repository *fakeRepository) CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error {
+	return nil
+}
+
+func (repository *fakeRepository) SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	return nil, nil
+}
+
+func (repository *fakeRepository) DeleteAudioTrackSwept(ctx context.Context, trackID string) error {
+	return nil
 }
 
 type fakeStorage struct {

@@ -28,13 +28,15 @@ func noMasterRewrite([]domain.AudioTrack) error { return nil }
 func (h *mediaHarness) insertTrack(t *testing.T, id, assetID, kind, language, label string, isDefault bool, state domain.State, createdAt time.Time) {
 	t.Helper()
 	leaf := domain.EmbeddedAudioLeaf
+	var declaredBytes int64
 	if kind == string(domain.UploadedTrack) {
 		leaf = domain.AudioLeafPrefix + id
+		declaredBytes = 1024
 	}
 	if _, err := h.pool.Exec(h.ctx, `INSERT INTO audio_tracks(
-		id,video_asset_id,kind,language,label,is_default,state,source_leaf,created_at,updated_at)
-		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$9)`,
-		id, assetID, kind, language, label, isDefault, string(state), leaf, createdAt); err != nil {
+		id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
+		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$10)`,
+		id, assetID, kind, language, label, isDefault, string(state), leaf, declaredBytes, createdAt); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -440,15 +442,18 @@ func (h *mediaHarness) testCreateAudioTrack(t *testing.T) {
 	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
 
 	track, err := domain.NewUploadedTrack(domain.AudioTrack{
-		ID:           mediaTrackOne,
-		VideoAssetID: mediaAssetOne,
-		Kind:         domain.UploadedTrack,
-		Language:     "uk",
-		Label:        "Українська",
-		State:        domain.Created,
-		SourceLeaf:   domain.AudioLeafPrefix + mediaTrackOne,
-		CreatedAt:    mediaNow,
-		UpdatedAt:    mediaNow,
+		ID:            mediaTrackOne,
+		VideoAssetID:  mediaAssetOne,
+		Kind:          domain.UploadedTrack,
+		Language:      "uk",
+		Label:         "Українська",
+		State:         domain.Created,
+		SourceLeaf:    domain.AudioLeafPrefix + mediaTrackOne,
+		DeclaredBytes: 1024 * 1024,
+		OriginalName:  "dubbing.aac",
+		ExpiresAt:     mediaNow.Add(24 * time.Hour),
+		CreatedAt:     mediaNow,
+		UpdatedAt:     mediaNow,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -31,6 +31,7 @@ type uploadService interface {
 }
 
 type audioService interface {
+	MintAudioTicket(context.Context, domain.Actor, string, int64, string, string, string) (domain.AudioTrack, error)
 	List(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
 	SetDefault(context.Context, domain.Actor, string, string) error
 	Rename(context.Context, domain.Actor, string, string, string, string) (domain.AudioTrack, error)
@@ -86,6 +87,21 @@ type audioTracksDTO struct {
 	Items []audioTrackDTO `json:"items"`
 }
 
+type mintAudioRequest struct {
+	DeclaredBytes int64  `json:"declaredBytes"`
+	OriginalName  string `json:"originalName"`
+	Language      string `json:"language"`
+	Label         string `json:"label"`
+}
+
+type audioUploadTicketDTO struct {
+	TrackID    string `json:"trackId"`
+	UploadURL  string `json:"uploadUrl"`
+	ChunkBytes int64  `json:"chunkBytes"`
+	MaxBytes   int64  `json:"maxBytes"`
+	ExpiresAt  string `json:"expiresAt"`
+}
+
 type renameTrackRequest struct {
 	Language string `json:"language"`
 	Label    string `json:"label"`
@@ -103,6 +119,7 @@ func (handler *Handler) RegisterAdmin(
 	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/video", requireSameOrigin(authenticate(http.HandlerFunc(handler.mintTicket))))
 	mux.Handle("GET /api/v1/admin/courses/{courseId}/videos", authenticate(http.HandlerFunc(handler.listCourseVideos)))
 	mux.Handle("POST /api/v1/admin/videos/{videoId}/retry", requireSameOrigin(authenticate(http.HandlerFunc(handler.retry))))
+	mux.Handle("POST /api/v1/admin/videos/{videoId}/audio-tracks", requireSameOrigin(authenticate(http.HandlerFunc(handler.mintAudioTicket))))
 	mux.Handle("GET /api/v1/admin/videos/{videoId}/audio-tracks", authenticate(http.HandlerFunc(handler.listAudioTracks)))
 	mux.Handle("PATCH /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}", requireSameOrigin(authenticate(http.HandlerFunc(handler.renameAudioTrack))))
 	mux.Handle("POST /api/v1/admin/videos/{videoId}/audio-tracks/{trackId}/default", requireSameOrigin(authenticate(http.HandlerFunc(handler.setDefaultAudioTrack))))
@@ -176,6 +193,33 @@ func (handler *Handler) retry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, mapVideo(asset))
+}
+
+func (handler *Handler) mintAudioTicket(w http.ResponseWriter, r *http.Request) {
+	mediaHeaders(w)
+	actor, ok := mediaActor(w, r)
+	if !ok {
+		return
+	}
+	videoID := r.PathValue("videoId")
+	if !validMediaID(videoID) || !emptyMediaQuery(r.URL.RawQuery) {
+		writeMediaError(w, r, domain.ErrInvalidRequest)
+		return
+	}
+	request, err := decodeMintAudio(w, r)
+	if err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	track, err := handler.audio.MintAudioTicket(r.Context(), actor, videoID, request.DeclaredBytes, request.OriginalName, request.Language, request.Label)
+	if err != nil {
+		writeMediaError(w, r, err)
+		return
+	}
+	httpserver.WriteJSON(w, http.StatusCreated, audioUploadTicketDTO{
+		TrackID: track.ID, UploadURL: "/uploads/audio/" + track.ID, ChunkBytes: mediaChunkBytes,
+		MaxBytes: domain.MaximumAudioDeclaredBytes, ExpiresAt: formatMediaTime(track.ExpiresAt),
+	})
 }
 
 func (handler *Handler) listAudioTracks(w http.ResponseWriter, r *http.Request) {
@@ -377,6 +421,57 @@ func decodeMintVideo(w http.ResponseWriter, r *http.Request) (mintVideoRequest, 
 		return mintVideoRequest{}, domain.ErrInvalidRequest
 	}
 	return mintVideoRequest{DeclaredBytes: *declaredBytes, OriginalName: *originalName}, nil
+}
+
+func decodeMintAudio(w http.ResponseWriter, r *http.Request) (mintAudioRequest, error) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return mintAudioRequest{}, domain.ErrInvalidRequest
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maximumMediaWriteBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil || !utf8.Valid(body) {
+		return mintAudioRequest{}, domain.ErrInvalidRequest
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return mintAudioRequest{}, domain.ErrInvalidRequest
+	}
+	var declaredBytes *int64
+	var originalName, language, label *string
+	seen := make(map[string]struct{}, 4)
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return mintAudioRequest{}, domain.ErrInvalidRequest
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return mintAudioRequest{}, domain.ErrInvalidRequest
+		}
+		seen[key] = struct{}{}
+		switch key {
+		case "declaredBytes":
+			err = decoder.Decode(&declaredBytes)
+		case "originalName":
+			err = decoder.Decode(&originalName)
+		case "language":
+			err = decoder.Decode(&language)
+		case "label":
+			err = decoder.Decode(&label)
+		default:
+			return mintAudioRequest{}, domain.ErrInvalidRequest
+		}
+		if err != nil {
+			return mintAudioRequest{}, domain.ErrInvalidRequest
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || declaredBytes == nil || originalName == nil || language == nil || label == nil || decoder.Decode(&struct{}{}) != io.EOF {
+		return mintAudioRequest{}, domain.ErrInvalidRequest
+	}
+	return mintAudioRequest{DeclaredBytes: *declaredBytes, OriginalName: *originalName, Language: *language, Label: *label}, nil
 }
 
 func mapVideo(asset domain.VideoAsset) videoDTO {

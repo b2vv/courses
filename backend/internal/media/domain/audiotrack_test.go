@@ -18,15 +18,18 @@ const (
 func validUploadedTrack() domain.AudioTrack {
 	now := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
 	return domain.AudioTrack{
-		ID:           trackA,
-		VideoAssetID: assetID,
-		Kind:         domain.UploadedTrack,
-		Language:     "uk",
-		Label:        "Українська",
-		State:        domain.Created,
-		SourceLeaf:   domain.AudioLeafPrefix + trackA,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:            trackA,
+		VideoAssetID:  assetID,
+		Kind:          domain.UploadedTrack,
+		Language:      "uk",
+		Label:         "Українська",
+		State:         domain.Created,
+		SourceLeaf:    domain.AudioLeafPrefix + trackA,
+		DeclaredBytes: 1024 * 1024,
+		OriginalName:  "dubbing.aac",
+		ExpiresAt:     now.Add(24 * time.Hour),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 }
 
@@ -69,6 +72,11 @@ func TestNewUploadedTrack(t *testing.T) {
 		{name: "label too long", change: func(tr *domain.AudioTrack) { tr.Label = strings.Repeat("ї", domain.MaximumLabelLength+1) }},
 		{name: "label with double quote", change: func(tr *domain.AudioTrack) { tr.Label = `Ukr "dub"` }},
 		{name: "label with newline", change: func(tr *domain.AudioTrack) { tr.Label = "Ukr\ndub" }},
+		{name: "zero declared bytes", change: func(tr *domain.AudioTrack) { tr.DeclaredBytes = 0 }},
+		{name: "non-zero received", change: func(tr *domain.AudioTrack) { tr.ReceivedBytes = 1 }},
+		{name: "empty original name", change: func(tr *domain.AudioTrack) { tr.OriginalName = "" }},
+		{name: "zero expires", change: func(tr *domain.AudioTrack) { tr.ExpiresAt = time.Time{} }},
+		{name: "expires before created", change: func(tr *domain.AudioTrack) { tr.ExpiresAt = tr.CreatedAt.Add(-time.Second) }},
 		{name: "zero created", change: func(tr *domain.AudioTrack) { tr.CreatedAt = time.Time{} }},
 		{name: "update after create", change: func(tr *domain.AudioTrack) { tr.UpdatedAt = tr.UpdatedAt.Add(time.Microsecond) }},
 	} {
@@ -80,6 +88,34 @@ func TestNewUploadedTrack(t *testing.T) {
 				t.Fatalf("got %v, want %v", err, domain.ErrInvalidRequest)
 			}
 		})
+	}
+}
+
+func TestNewUploadedTrackTooLarge(t *testing.T) {
+	t.Parallel()
+	track := validUploadedTrack()
+	track.DeclaredBytes = domain.MaximumAudioDeclaredBytes + 1
+	if _, err := domain.NewUploadedTrack(track); !errors.Is(err, domain.ErrUploadTooLarge) {
+		t.Fatalf("got %v, want %v", err, domain.ErrUploadTooLarge)
+	}
+}
+
+func TestValidateAudioTicket(t *testing.T) {
+	t.Parallel()
+	if err := domain.ValidateAudioTicket(1024, "track.aac"); err != nil {
+		t.Fatalf("valid ticket refused: %v", err)
+	}
+	if err := domain.ValidateAudioTicket(domain.MaximumAudioDeclaredBytes, "track.aac"); err != nil {
+		t.Fatalf("max-size ticket refused: %v", err)
+	}
+	if err := domain.ValidateAudioTicket(domain.MaximumAudioDeclaredBytes+1, "track.aac"); !errors.Is(err, domain.ErrUploadTooLarge) {
+		t.Fatalf("got %v, want %v", err, domain.ErrUploadTooLarge)
+	}
+	if err := domain.ValidateAudioTicket(0, "track.aac"); !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("got %v, want %v", err, domain.ErrInvalidRequest)
+	}
+	if err := domain.ValidateAudioTicket(1024, ""); !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("got %v, want %v", err, domain.ErrInvalidRequest)
 	}
 }
 

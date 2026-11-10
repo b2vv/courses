@@ -26,6 +26,20 @@ func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter,
 	return &AudioTracks{repository: repository, master: master, now: now}
 }
 
+func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string) (domain.AudioTrack, error) {
+	if err := domain.ValidateAudioTicket(declaredBytes, originalName); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	if err := domain.ValidateAudioTrackMetadata(language, label); err != nil {
+		return domain.AudioTrack{}, err
+	}
+	now := service.timestamp()
+	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+	defer cancel()
+	track, err := service.repository.MintAudioTrack(callCtx, actor, assetID, declaredBytes, originalName, language, label, now.Add(ticketLifetime), now)
+	return track, mediaOperationError(ctx, err)
+}
+
 func (service *AudioTracks) List(ctx context.Context, actor domain.Actor, assetID string) ([]domain.AudioTrack, error) {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
