@@ -200,3 +200,11 @@ mint-eviction — незавершене вивантаження) — upload-ju
 completion→enqueue, enqueue-fail, cancel), `transcode` audio sweep/recover (3), `tus/audioserver_test`
 (7: HEAD/PATCH/DELETE/offset/415/405/412/404), HTTP mint-контракт AT09–AT12, postgres integration
 (sweep-вибірка, locked-delete purge+promote-skip, recover-вибірка). e2e — reset+seed прогін на гілці.
+
+**Відома test-robustness follow-up (non-blocking, SHIP-вердикт):** F1 integration-тест
+`testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted` доводить skip промоутнутого треку за
+eligibility-предикатом, але не ганяє СПРАВЖНЮ конкурентну транзакцію (PATCH, що промоутить у Queued,
+проти sweep). Тож мутація «прибрати `FOR UPDATE`» тест би не завалила. Production-код коректно тримає
+row-lock (підтверджено незалежним рев'ю). Підсилення — детермінований two-transaction race за
+патерном `blockingMintTracer`/`testConcurrentPromoteAudioTrack` — залишено follow-up, щоб не вносити
+флак-ризик наприкінці.
