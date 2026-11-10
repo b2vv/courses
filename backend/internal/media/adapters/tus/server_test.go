@@ -155,6 +155,45 @@ func TestTusServerAgainstPostgreSQL(t *testing.T) {
 	t.Run("R30 DELETE frees the lesson immediately", harness.testDeleteFreesLesson)
 	t.Run("R40 a chunked body cannot pass the server chunk cap", harness.testChunkedBodyCap)
 	t.Run("three-verb tus surface and protocol headers", harness.testProtocolSurface)
+	t.Run("S5-L1b audio upload lands the track source and queues one audio job", harness.testAudioUploadLandsSourceAndQueues)
+}
+
+func (h *tusHarness) testAudioUploadLandsSourceAndQueues(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 64, 0, tusNow.Add(time.Hour), nil)
+	source := []byte("any-audio-bytes-no-container-sniff")
+	track, err := h.repository.MintAudioTrack(h.ctx, domain.Actor{UserID: tusInstructorID}, tusAssetOne, int64(len(source)), "track.aac", "uk", "Українська", tusNow.Add(time.Hour), tusNow)
+	if err != nil {
+		t.Fatalf("MintAudioTrack: %v", err)
+	}
+	storage, queue, handler := h.server(t)
+
+	head := serveTus(handler, http.MethodHead, "/uploads/audio/"+track.ID, 0, nil, false)
+	if head.Code != http.StatusOK || head.Header().Get("Upload-Offset") != "0" || head.Header().Get("Upload-Length") != strconv.Itoa(len(source)) {
+		t.Fatalf("HEAD status=%d headers=%v", head.Code, head.Header())
+	}
+	response := serveTus(handler, http.MethodPatch, "/uploads/audio/"+track.ID, 0, bytes.NewReader(source), false)
+	if response.Code != http.StatusNoContent || response.Header().Get("Upload-Offset") != strconv.Itoa(len(source)) {
+		t.Fatalf("PATCH status=%d offset=%q body=%s", response.Code, response.Header().Get("Upload-Offset"), response.Body.String())
+	}
+
+	audioSource := domain.StorageKey{Kind: domain.StorageSource, ID: tusAssetOne, Leaf: domain.AudioLeafPrefix + track.ID}
+	assertStoredBytes(t, storage, audioSource, source)
+	audioScratch := domain.StorageKey{Kind: domain.StorageTemporary, ID: tusAssetOne, Leaf: domain.AudioUploadLeafPrefix + track.ID}
+	if _, err := storage.Size(h.ctx, audioScratch); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("audio scratch err=%v, want not-exist", err)
+	}
+
+	var state string
+	if err := h.pool.QueryRow(h.ctx, `SELECT state FROM audio_tracks WHERE id=$1::text::uuid`, track.ID).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if domain.State(state) != domain.Queued {
+		t.Fatalf("track state=%s want queued", state)
+	}
+	if len(queue.jobs) != 1 || queue.jobs[0] != (tusJob{assetID: tusAssetOne, attempt: 1}) {
+		t.Fatalf("jobs=%v want one audio job", queue.jobs)
+	}
 }
 
 func (h *tusHarness) testPostRenameCrashRepair(t *testing.T) {
@@ -562,10 +601,13 @@ func (h *tusHarness) serverConfigured(t *testing.T, configure func(*tusStorage))
 	upload := application.NewUpload(h.repository, mediaStorage, queue, func() time.Time { return tusNow })
 	tickets := application.NewTickets(h.repository, nil, func() time.Time { return tusNow })
 	uploadServer := tus.NewServer(upload)
+	audioUpload := application.NewAudioUpload(h.repository, mediaStorage, queue, func() time.Time { return tusNow })
+	audioServer := tus.NewAudioServer(audioUpload)
 	audioTracks := application.NewAudioTracks(h.repository, &tusMasterWriter{}, func() time.Time { return tusNow })
 	mediaHandler := mediahttp.NewHandler(tickets, audioTracks)
 	return storage, queue, httpserver.NewHandler(httpserver.Options{Service: "upload", Register: func(mux *http.ServeMux) {
 		uploadServer.Register(mux)
+		audioServer.Register(mux)
 		mediaHandler.RegisterAdmin(mux, func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				next.ServeHTTP(w, r.WithContext(httpserver.WithActor(r.Context(), httpserver.Actor{UserID: tusInstructorID, Role: "admin"})))
