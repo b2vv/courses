@@ -299,7 +299,12 @@ func (transcode *Transcode) sweep(ctx context.Context, now time.Time) error {
 			if err := transcode.storage.Purge(ctx, audioUploadScratchKey(track.VideoAssetID, track.ID)); err != nil {
 				return err
 			}
-			return transcode.storage.Purge(ctx, audioSourceKey(track.VideoAssetID, track.ID))
+			if err := transcode.storage.Purge(ctx, audioSourceKey(track.VideoAssetID, track.ID)); err != nil {
+				return err
+			}
+			// A completed-then-failed track published its HLS directory before
+			// promotion exhausted its retries; purge it too or the bytes orphan.
+			return transcode.storage.Purge(ctx, audioHLSKey(track.VideoAssetID, track.ID))
 		})
 		if errors.Is(err, domain.ErrInvalidStateTransition) {
 			continue

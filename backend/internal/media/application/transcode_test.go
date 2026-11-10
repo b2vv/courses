@@ -677,7 +677,7 @@ func TestSweepAudioPurgesScratchAndSourceUnderLockedDelete(t *testing.T) {
 	if err := newTranscode(repository, storage, defaultTranscoder(), nil).Sweep(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	assertStrings(t, purged, []string{"temporary", "source"})
+	assertStrings(t, purged, []string{"temporary", "source", "hls"})
 	if countCall(repository.calls, "delete_swept_audio") != 1 {
 		t.Fatalf("calls=%v", repository.calls)
 	}
