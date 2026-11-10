@@ -153,5 +153,5 @@ func (upload *AudioUpload) timestamp() time.Time {
 }
 
 func audioUploadScratchKey(assetID, trackID string) domain.StorageKey {
-	return domain.StorageKey{Kind: domain.StorageTemporary, ID: assetID, Leaf: "audio-upload-" + trackID}
+	return domain.StorageKey{Kind: domain.StorageTemporary, ID: assetID, Leaf: domain.AudioUploadLeafPrefix + trackID}
 }

@@ -188,10 +188,12 @@ mint-eviction — незавершене вивантаження) — upload-ju
 (video має evicted_at) — audio розрізняє незавершене за received<declared.
 
 **Обмеження (магнітуда/механізм за AGENTS.md):**
-1. `Recover` і `Sweep` виконуються **один раз при старті** media-worker (`cmd/media-worker/main.go:61`),
+1. `Recover` виконується **лише один раз при старті** media-worker (`cmd/media-worker/main.go:61`),
    не періодично — ідентично video-шляху. Загублений enqueue, що стався, поки worker працює, не
-   відвідується до наступного рестарту (і лише якщо рядок старший за 10-хв grace). Періодична
-   recovery/sweep — покращення всього worker-а (стосується й video), поза обсягом цього audio-фіксу.
+   відвідується до наступного рестарту (і лише якщо рядок старший за 10-хв grace). `Sweep` натомість
+   НЕ стартовий: крім старту він біжить на початку кожного video-`Process` (`transcode.go:47`), тож
+   F3-cleanup частий. Періодична **recovery** — покращення всього worker-а (стосується й video),
+   поза обсягом цього audio-фіксу.
 
 **Верифікація.** `format-check` / `lint` / `typecheck` / `test` / `check-generated` / `build` /
 `integration` — зелені (2026-11-10). Нові тести: `audioupload_test` (7: head-gating, offset/over-declared,
