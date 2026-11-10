@@ -85,8 +85,10 @@ import type {
   ListTeachModerationQueueParams,
   LoginRequest,
   MediaAudioRename,
+  MediaAudioTicketRequest,
   MediaAudioTrack,
   MediaAudioTracks,
+  MediaAudioUploadTicket,
   MediaBadRequestResponse,
   MediaForbiddenResponse,
   MediaTicketRequest,
@@ -3083,6 +3085,90 @@ export const listAdminAudioTracks = async (videoId: string, options?: RequestIni
 
   const data: listAdminAudioTracksResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as listAdminAudioTracksResponse
+}
+
+
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse201 = {
+  data: MediaAudioUploadTicket
+  status: 201
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse400 = {
+  data: MediaBadRequestResponse
+  status: 400
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse403 = {
+  data: MediaForbiddenResponse
+  status: 403
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse404 = {
+  data: VideoNotFoundResponse
+  status: 404
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse409 = {
+  data: DuplicateLanguageResponse
+  status: 409
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponseSuccess = (postApiV1AdminVideosVideoIdAudioTracksResponse201) & {
+  headers: Headers;
+};
+export type postApiV1AdminVideosVideoIdAudioTracksResponseError = (postApiV1AdminVideosVideoIdAudioTracksResponse400 | postApiV1AdminVideosVideoIdAudioTracksResponse401 | postApiV1AdminVideosVideoIdAudioTracksResponse403 | postApiV1AdminVideosVideoIdAudioTracksResponse404 | postApiV1AdminVideosVideoIdAudioTracksResponse409 | postApiV1AdminVideosVideoIdAudioTracksResponse500 | postApiV1AdminVideosVideoIdAudioTracksResponse503) & {
+  headers: Headers;
+};
+
+export type postApiV1AdminVideosVideoIdAudioTracksResponse = (postApiV1AdminVideosVideoIdAudioTracksResponseSuccess | postApiV1AdminVideosVideoIdAudioTracksResponseError)
+
+export const getPostApiV1AdminVideosVideoIdAudioTracksUrl = (videoId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks`
+}
+
+export const postApiV1AdminVideosVideoIdAudioTracks = async (videoId: string,
+    mediaAudioTicketRequest: MediaAudioTicketRequest, options?: RequestInit): Promise<postApiV1AdminVideosVideoIdAudioTracksResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+const res = await fetch(getPostApiV1AdminVideosVideoIdAudioTracksUrl(videoId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(mediaAudioTicketRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: postApiV1AdminVideosVideoIdAudioTracksResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as postApiV1AdminVideosVideoIdAudioTracksResponse
 }
 
 

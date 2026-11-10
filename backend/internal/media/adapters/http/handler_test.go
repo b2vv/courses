@@ -92,6 +92,10 @@ func (*mediaRepository) LoadAudioTrack(context.Context, string, string) (mediado
 	panic("unexpected LoadAudioTrack")
 }
 
+func (*mediaRepository) LoadAudioTrackUpload(context.Context, string) (mediadomain.AudioTrack, error) {
+	panic("unexpected LoadAudioTrackUpload")
+}
+
 func (*mediaRepository) PromoteAudioTrack(context.Context, string, string, time.Time, func([]mediadomain.AudioTrack) error) (*mediadomain.VideoAsset, error) {
 	panic("unexpected PromoteAudioTrack")
 }

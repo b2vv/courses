@@ -45,6 +45,9 @@ type AssetRepository interface {
 	RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error
 
 	LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error)
+	// LoadAudioTrackUpload loads an uploaded audio track by its id alone (the tus
+	// upload path knows only the track id from the URL, not the asset id).
+	LoadAudioTrackUpload(ctx context.Context, trackID string) (domain.AudioTrack, error)
 	// PromoteAudioTrack marks the uploaded track Ready, elects a default when the
 	// asset has none yet, lifts the asset out of AwaitingAudio once a track is Ready
 	// (T11), and regenerates the master from the resulting Ready set — all under the

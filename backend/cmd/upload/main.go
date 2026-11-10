@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -50,14 +51,19 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	repository := mediapostgres.NewRepository(dependencies.Database)
 	queue := mediaasynq.NewQueue(dependencies.Redis)
 	upload := mediaapplication.NewUpload(repository, storage, queue, time.Now)
+	audioUpload := mediaapplication.NewAudioUpload(repository, storage, queue, time.Now)
 	server := tus.NewServer(upload)
+	audioServer := tus.NewAudioServer(audioUpload)
 	handler := httpserver.NewHandler(httpserver.Options{
 		Service: "upload", Logger: logger, Metrics: dependencies.Metrics, MetricsToken: os.Getenv("METRICS_TOKEN"),
 		Tracer: dependencies.Tracing.Tracer("http"),
 		Ready: func(request context.Context) error {
 			return errors.Join(dependencies.Ready(request), storage.Ready(request))
 		},
-		Register: server.Register,
+		Register: func(mux *http.ServeMux) {
+			server.Register(mux)
+			audioServer.Register(mux)
+		},
 	})
 	logger.Info("upload service starting", "address", runtime.Address(":8082"))
 	return httpserver.Run(ctx, runtime.Address(":8082"), handler)

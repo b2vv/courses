@@ -98,6 +98,10 @@ func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, t
 	return repository.loadAudioTrack(ctx, assetID, trackID)
 }
 
+func (repository *fakeRepository) LoadAudioTrackUpload(_ context.Context, _ string) (domain.AudioTrack, error) {
+	return domain.AudioTrack{}, nil
+}
+
 func (repository *fakeRepository) PromoteAudioTrack(ctx context.Context, assetID, trackID string, now time.Time, rewrite func([]domain.AudioTrack) error) (*domain.VideoAsset, error) {
 	repository.calls = append(repository.calls, "promote_audio_track")
 	return repository.promoteAudioTrack(ctx, assetID, trackID, now, rewrite)

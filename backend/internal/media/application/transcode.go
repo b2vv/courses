@@ -289,6 +289,21 @@ func (transcode *Transcode) sweep(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
+	tracks, err := transcode.repository.SweepAudioTrackCandidates(ctx, now, sweepLimit)
+	if err != nil {
+		return err
+	}
+	for _, track := range tracks {
+		if err := transcode.storage.Purge(ctx, audioUploadScratchKey(track.VideoAssetID, track.ID)); err != nil {
+			return err
+		}
+		if err := transcode.storage.Purge(ctx, audioSourceKey(track.VideoAssetID, track.ID)); err != nil {
+			return err
+		}
+		if err := transcode.repository.DeleteAudioTrackSwept(ctx, track.ID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

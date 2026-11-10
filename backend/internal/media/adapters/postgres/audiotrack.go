@@ -342,6 +342,18 @@ func (repository *Repository) LoadAudioTrack(ctx context.Context, assetID, track
 	return track, nil
 }
 
+func (repository *Repository) LoadAudioTrackUpload(ctx context.Context, trackID string) (domain.AudioTrack, error) {
+	track, err := scanAudioTrack(repository.pool.QueryRow(ctx, `SELECT `+audioTrackColumns+`
+		FROM audio_tracks WHERE id=$1::text::uuid AND kind='uploaded'`, trackID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
+	return track, nil
+}
+
 // PromoteAudioTrack marks an uploaded track Ready, elects it the default when the
 // asset has no default yet, lifts the asset from AwaitingAudio to Ready (T11), and
 // regenerates the master from the resulting Ready set — all under the asset +
@@ -744,7 +756,10 @@ func (repository *Repository) SweepAudioTrackCandidates(ctx context.Context, now
 		}
 		tracks = append(tracks, track)
 	}
-	return tracks, persistenceError(rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return tracks, nil
 }
 
 // DeleteAudioTrackSwept removes a swept audio track row.
