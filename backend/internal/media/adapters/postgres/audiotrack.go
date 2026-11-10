@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"courses/internal/media/domain"
@@ -733,7 +734,20 @@ func (repository *Repository) CancelAudioUpload(ctx context.Context, trackID str
 	return nil
 }
 
-// SweepAudioTrackCandidates returns uploaded tracks whose upload expired.
+// audioSweepEligible is the predicate shared by SweepAudioTrackCandidates and
+// DeleteSweptAudioTrackLocked: a row leaks bytes and carries no live value when it
+// is an expired incomplete upload, a never-completed failed upload (cancel or
+// mint-eviction, received<declared — scratch junk), or a completed-then-failed
+// track past the failed-retention window (received=declared, like the video
+// 30-day failed reap). Both selection and the locked re-check must use it, so a
+// concurrent promote to Queued (received=declared, state!='failed') is excluded.
+const audioSweepEligible = `kind='uploaded' AND (
+	  (state IN ('created','uploading') AND expires_at < $%[1]d::timestamptz)
+	  OR (state='failed' AND received_bytes < declared_bytes)
+	  OR (state='failed' AND received_bytes = declared_bytes AND updated_at < $%[1]d::timestamptz - interval '30 days')
+	)`
+
+// SweepAudioTrackCandidates returns uploaded tracks whose bytes may be reclaimed.
 func (repository *Repository) SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
 	if limit <= 0 {
 		return nil, nil
@@ -741,9 +755,8 @@ func (repository *Repository) SweepAudioTrackCandidates(ctx context.Context, now
 	now = storeTime(now)
 	rows, err := repository.pool.Query(ctx, `SELECT `+audioTrackColumns+`
 		FROM audio_tracks
-		WHERE kind='uploaded' AND state IN ('created','uploading')
-		  AND expires_at < $1
-		ORDER BY expires_at LIMIT $2`, now, limit)
+		WHERE `+fmt.Sprintf(audioSweepEligible, 1)+`
+		ORDER BY updated_at, id LIMIT $2`, now, limit)
 	if err != nil {
 		return nil, persistenceError(err)
 	}
@@ -762,16 +775,72 @@ func (repository *Repository) SweepAudioTrackCandidates(ctx context.Context, now
 	return tracks, nil
 }
 
-// DeleteAudioTrackSwept removes a swept audio track row.
-func (repository *Repository) DeleteAudioTrackSwept(ctx context.Context, trackID string) error {
-	result, err := repository.pool.Exec(ctx, `DELETE FROM audio_tracks WHERE id=$1::text::uuid`, trackID)
+// DeleteSweptAudioTrackLocked purges a swept track's bytes and deletes its row
+// under the row lock, re-checking sweep-eligibility while locked so a PATCH that
+// concurrently completed the upload (promoting it to Queued) is not purged or
+// deleted. purge runs the storage reclaim between the lock and the delete; its
+// error aborts the transaction and leaves the row for a later sweep. A row that
+// no longer qualifies (promoted, or already gone) yields ErrInvalidStateTransition
+// so the caller skips it without purging live bytes.
+func (repository *Repository) DeleteSweptAudioTrackLocked(ctx context.Context, trackID string, now time.Time, purge func() error) error {
+	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return persistenceError(err)
 	}
-	if result.RowsAffected() == 0 {
-		return domain.ErrVideoNotFound
+	defer rollback(tx)
+	now = storeTime(now)
+	var eligible bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM audio_tracks
+		WHERE id=$2::text::uuid AND `+fmt.Sprintf(audioSweepEligible, 1)+`
+		FOR UPDATE)`, now, trackID).Scan(&eligible)
+	if err != nil {
+		return persistenceError(err)
 	}
-	return nil
+	if !eligible {
+		return domain.ErrInvalidStateTransition
+	}
+	if purge != nil {
+		if err := purge(); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM audio_tracks WHERE id=$1::text::uuid`, trackID); err != nil {
+		return persistenceError(err)
+	}
+	return commit(ctx, tx)
+}
+
+// RecoverQueuedAudioTracks returns uploaded tracks stranded in Queued past the
+// recovery grace — their post-commit enqueue was lost (Redis failure or a crash
+// between the Queued commit and EnqueueAudioTrack). The caller re-enqueues them;
+// asynq dedups by task id, so a still-live or recently-completed task is a no-op.
+func (repository *Repository) RecoverQueuedAudioTracks(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	now = storeTime(now)
+	rows, err := repository.pool.Query(ctx, `SELECT `+audioTrackColumns+`
+		FROM audio_tracks
+		WHERE kind='uploaded' AND state='queued'
+		  AND updated_at < $1::timestamptz - interval '10 minutes'
+		ORDER BY updated_at, id LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	var tracks []domain.AudioTrack
+	for rows.Next() {
+		track, err := scanAudioTrack(rows)
+		if err != nil {
+			return nil, persistenceError(err)
+		}
+		tracks = append(tracks, track)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return tracks, nil
 }
 
 func audioTrackConflict(err error) (error, bool) {
