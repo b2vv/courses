@@ -122,6 +122,16 @@ L2a: стан у domain + schema + i18n uk/en (щоб список знову п
 - **Бейдж доріжки — `data-audio-state`, не `data-video-state`.** Закриває спільний атрибут: наявні
   e2e-локатори `field.locator('[data-video-state]')` стали б неоднозначними (strict mode) на кожному
   ready-уроці з embedded-доріжкою. Перевірка: повний e2e media-проєкт.
+- **Заміна, що впала через аудіо, ховається за старшим `ready` — як будь-яка впала заміна (D-12).**
+  Відповідь на Codex-рев'ю L2b (Major #1), 2026-11-13. Механізм: коли падає остання доріжка
+  `awaiting_audio`-ассета, backend ставить ассету `failed/render_failed` (`postgres/audiotrack.go:519`),
+  а worker підвищує стан лише з `awaiting_audio` (`:421`) — аудіо такий ассет уже не відновить; шлях
+  відновлення — «Замінити відео» (видно на ready-уроці). Закриває «показувати failed-заміну з
+  аудіо-контролами»: вони пропонували б дію без ефекту. Обмеження: автор не бачить причини падіння
+  заміни, поки є старше ready — те саме, що для відео-заміни на `main`. Перевірка: тест «D-12 badge order».
+- **Розширення файлу перевіряється до mint** (Codex Major #2, прийнято): `acceptedAudioFileName` у
+  application `mint` → `unsupported_media` без запиту; drag-and-drop обходить фільтр пікера.
+  Перевірка: domain-тест + adapter-тест «refuses a non-audio file name before any request».
 - **Мова в Select не пропонує зайнятих мов** (не-failed доріжки того ж ассета, міграція 00026);
   409 `duplicate_language` все одно мапиться (гонка). Перевірка: component-тести + domain-тест.
 

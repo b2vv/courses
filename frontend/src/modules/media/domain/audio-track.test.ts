@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@rstest/core';
 import {
+  acceptedAudioFileName,
   audioTrackLanguages,
   availableAudioLanguages,
   canDeleteAudioTrack,
@@ -105,5 +106,16 @@ describe('audio track domain', () => {
     expect(isInterruptedAudioTrack(track(a, 'created'))).toBe(true);
     expect(isInterruptedAudioTrack(track(a, 'queued'))).toBe(false);
     expect(isInterruptedAudioTrack({ ...track(a, 'created'), kind: 'embedded' })).toBe(false);
+  });
+
+  test.each([
+    ['dub.m4a', true],
+    ['DUB.MP3', true],
+    ['voice.aac', true],
+    ['voice.wav', false],
+    ['m4a', false],
+    ['lesson.mp4', false],
+  ])('D-L2-5 accepts the audio file name %s: %s', (name, accepted) => {
+    expect(acceptedAudioFileName(name)).toBe(accepted);
   });
 });

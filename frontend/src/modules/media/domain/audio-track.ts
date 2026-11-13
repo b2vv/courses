@@ -104,6 +104,12 @@ export function validAudioLabel(value: string): boolean {
   });
 }
 
+/** D-L2-5: the picker filter is advisory (drag-and-drop bypasses it), so the name is checked too. */
+export function acceptedAudioFileName(originalName: string): boolean {
+  const name = originalName.toLowerCase();
+  return acceptedAudioFileTypes.some((extension) => name.endsWith(extension));
+}
+
 export function validAudioTicketInput(declaredBytes: number, originalName: string): boolean {
   return (
     Number.isSafeInteger(declaredBytes) &&
