@@ -83,7 +83,10 @@ async function publishVideo(page: Page, course: CourseToken, lessonID: string, s
       new URL(response.url()).pathname === `/api/v1/admin/lessons/${lessonID}/video` &&
       response.request().method() === 'POST',
   );
-  await page.locator('input[type="file"]').first().setInputFiles(shortVideo);
+  await page
+    .locator('input[type="file"]:not(.admin-audio-field input)')
+    .first()
+    .setInputFiles(shortVideo);
   expect((await minted).status()).toBe(201);
   await expect
     .poll(

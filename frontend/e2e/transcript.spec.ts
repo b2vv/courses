@@ -293,7 +293,7 @@ test.describe('with a real two-second video', () => {
     await page
       .getByRole('group', { name: 'Модуль 1' })
       .getByRole('group', { name: 'Урок 1' })
-      .locator('input[type="file"]')
+      .locator('input[type="file"]:not(.admin-audio-field input)')
       .setInputFiles(shortVideo);
     expect((await minted).status()).toBe(201);
     await expect

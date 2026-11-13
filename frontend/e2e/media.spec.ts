@@ -186,7 +186,7 @@ async function upload(page: Page, lesson: (typeof lessons)[keyof typeof lessons]
       response.request().method() === 'POST'
     );
   });
-  await field.locator('input[type="file"]').setInputFiles(file);
+  await field.locator('input[type="file"]:not(.admin-audio-field input)').setInputFiles(file);
   const response = await minted;
   expect(response.status()).toBe(201);
   return { field, videoId: videoID(await response.json()) };
