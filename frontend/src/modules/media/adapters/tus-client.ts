@@ -1,27 +1,61 @@
 import { maximumVideoBytes, videoChunkBytes } from '../domain/video';
-import type {
-  VideoErrorCode,
-  VideoResult,
-  VideoTransferProgress,
-  VideoTransferTarget,
-} from '../domain/video';
+import type { VideoTransferProgress, VideoTransferTarget } from '../domain/video';
 import { apiOrigin } from '../../../adapters/api/api-origin';
 import { createRequestControl, unnamedStatusCode } from '../../../adapters/api/transport';
-import type { TransportOptions } from '../../../adapters/api/transport';
+import type { TransportFailureCode, TransportOptions } from '../../../adapters/api/transport';
 
 const tusVersion = '1.0.0';
 const chunkTimeoutMs = 120_000;
 const fingerprintKeyPrefix = 'courses.media.upload-fingerprint.v1.';
 
 type TusMethod = 'HEAD' | 'PATCH' | 'DELETE';
+
+/** Every way a tus exchange can fail; a subset of each media error union that uses it. */
+export type TusErrorCode =
+  | TransportFailureCode
+  | 'invalid_request'
+  | 'unsupported_media'
+  | 'upload_too_large'
+  | 'video_not_found'
+  | 'upload_in_progress'
+  | 'upload_resume_unverified';
+type TusResult =
+  | { readonly ok: true; readonly value: null }
+  | { readonly ok: false; readonly error: { readonly code: TusErrorCode } };
+
+/**
+ * What one kind of tus upload resource looks like on this origin: where its bytes go, how the
+ * resume fingerprint is keyed, and which size/chunk limits the server enforces. The id is the
+ * resource's own id (a video id or an audio track id).
+ */
+export type TusResource = {
+  readonly path: (id: string) => string;
+  readonly fingerprintKey: (id: string) => string;
+  readonly maxBytes: number;
+  readonly chunkBytes: number;
+  /** A resource-specific reading of a tus status, tried before the shared mapping. */
+  readonly statusCode?: (status: number) => TusErrorCode | undefined;
+};
+
+/** A transfer of one resource: start a freshly minted upload, or resume an interrupted one. */
+export type TusTransferTarget =
+  | { readonly kind: 'new'; readonly id: string }
+  | { readonly kind: 'resume'; readonly id: string; readonly declaredBytes: number };
+
+export const videoTusResource: TusResource = {
+  path: (videoId) => `/uploads/${videoId}`,
+  fingerprintKey: (videoId) => `${fingerprintKeyPrefix}${videoId}`,
+  maxBytes: maximumVideoBytes,
+  chunkBytes: videoChunkBytes,
+};
 type TusResponse =
   | { readonly ok: true; readonly response: Response }
-  | { readonly ok: false; readonly code: VideoErrorCode };
+  | { readonly ok: false; readonly code: TusErrorCode };
 
 export type TusTransport = {
   send(
     method: TusMethod,
-    videoId: string,
+    id: string,
     body?: Blob,
     offset?: number,
     caller?: AbortSignal,
@@ -41,14 +75,6 @@ export type FingerprintStorage = {
 };
 
 type FingerprintSource = UploadFingerprint | Pick<File, 'name' | 'size' | 'lastModified'>;
-
-function uploadUrl(videoId: string): string {
-  return `${apiOrigin()}/uploads/${videoId}`;
-}
-
-function fingerprintKey(videoId: string): string {
-  return `${fingerprintKeyPrefix}${videoId}`;
-}
 
 function fingerprint(source: FingerprintSource): UploadFingerprint {
   return 'originalName' in source
@@ -82,9 +108,9 @@ function browserStorage(): FingerprintStorage | undefined {
   }
 }
 
-function readFingerprint(storage: FingerprintStorage, videoId: string): UploadFingerprint | null {
+function readFingerprint(storage: FingerprintStorage, key: string): UploadFingerprint | null {
   try {
-    const encoded = storage.getItem(fingerprintKey(videoId));
+    const encoded = storage.getItem(key);
     if (encoded === null) return null;
     const decoded: unknown = JSON.parse(encoded);
     return isUploadFingerprint(decoded) ? decoded : null;
@@ -93,18 +119,18 @@ function readFingerprint(storage: FingerprintStorage, videoId: string): UploadFi
   }
 }
 
-function storeFingerprint(storage: FingerprintStorage, videoId: string, file: File): boolean {
+function storeFingerprint(storage: FingerprintStorage, key: string, file: File): boolean {
   try {
-    storage.setItem(fingerprintKey(videoId), JSON.stringify(fingerprint(file)));
+    storage.setItem(key, JSON.stringify(fingerprint(file)));
     return true;
   } catch {
     return false;
   }
 }
 
-function removeFingerprint(storage: FingerprintStorage | undefined, videoId: string): void {
+function removeFingerprint(storage: FingerprintStorage | undefined, key: string): void {
   try {
-    storage?.removeItem(fingerprintKey(videoId));
+    storage?.removeItem(key);
   } catch {
     // A successful server-side completion or cancellation must not be masked by storage failure.
   }
@@ -151,7 +177,7 @@ export function parseTusHead(
     : null;
 }
 
-export function tusStatusCode(status: number): VideoErrorCode {
+export function tusStatusCode(status: number): TusErrorCode {
   switch (status) {
     case 400:
       return 'unsupported_media';
@@ -170,6 +196,7 @@ export function tusStatusCode(status: number): VideoErrorCode {
 export function nextTusChunk(
   offset: number,
   declaredBytes: number,
+  chunkBytes: number = videoChunkBytes,
 ): { readonly start: number; readonly end: number } | null {
   if (
     !Number.isSafeInteger(offset) ||
@@ -179,22 +206,25 @@ export function nextTusChunk(
     offset >= declaredBytes
   )
     return null;
-  return { start: offset, end: Math.min(offset + videoChunkBytes, declaredBytes) };
+  return { start: offset, end: Math.min(offset + chunkBytes, declaredBytes) };
 }
 
 /** Binary tus transport: one independent deadline per HEAD, PATCH, or DELETE exchange. */
-export function createTusTransport(options: TransportOptions = {}) {
+export function createTusTransport(
+  options: TransportOptions = {},
+  resource: TusResource = videoTusResource,
+) {
   return {
     async send(
       method: TusMethod,
-      videoId: string,
+      id: string,
       body?: Blob,
       offset = 0,
       caller?: AbortSignal,
     ): Promise<TusResponse> {
       const control = createRequestControl(options, caller, chunkTimeoutMs);
       try {
-        const response = await fetch(uploadUrl(videoId), {
+        const response = await fetch(`${apiOrigin()}${resource.path(id)}`, {
           method,
           headers: buildTusHeaders(method, offset),
           signal: control.signal,
@@ -206,7 +236,10 @@ export function createTusTransport(options: TransportOptions = {}) {
         const expected = method === 'HEAD' ? 200 : 204;
         return response.status === expected
           ? { ok: true, response }
-          : { ok: false, code: tusStatusCode(response.status) };
+          : {
+              ok: false,
+              code: resource.statusCode?.(response.status) ?? tusStatusCode(response.status),
+            };
       } catch (error) {
         return { ok: false, code: control.failureCode(error) };
       }
@@ -214,56 +247,61 @@ export function createTusTransport(options: TransportOptions = {}) {
   };
 }
 
-/** Resumable upload policy layered over the binary tus transport. */
-export function createTusClient(
+/** Resumable upload policy layered over the binary tus transport, for one resource kind. */
+export function createTusUploads(
+  resource: TusResource,
   options: TransportOptions = {},
   storage: FingerprintStorage | undefined = browserStorage(),
-  transport: TusTransport = createTusTransport(options),
+  transport: TusTransport = createTusTransport(options, resource),
 ) {
   return {
     async transfer(
-      target: VideoTransferTarget,
+      target: TusTransferTarget,
       file: File,
       onProgress: (progress: VideoTransferProgress) => void,
       signal?: AbortSignal,
-    ): Promise<VideoResult<null>> {
-      const videoId = target.kind === 'new' ? target.ticket.videoId : target.videoId;
+    ): Promise<TusResult> {
+      const id = target.id;
+      const key = resource.fingerprintKey(id);
       const expectedBytes = target.kind === 'new' ? file.size : target.declaredBytes;
       let existingFingerprint: UploadFingerprint | null = null;
       if (target.kind === 'new') {
-        existingFingerprint = storage === undefined ? null : readFingerprint(storage, videoId);
+        existingFingerprint = storage === undefined ? null : readFingerprint(storage, key);
         if (existingFingerprint !== null && !sameUploadFingerprint(existingFingerprint, file))
           return { ok: false, error: { code: 'upload_resume_unverified' } };
-        if (storage === undefined || !storeFingerprint(storage, videoId, file))
+        if (storage === undefined || !storeFingerprint(storage, key, file))
           return { ok: false, error: { code: 'dependency_unavailable' } };
       } else {
-        const stored = storage === undefined ? null : readFingerprint(storage, videoId);
+        const stored = storage === undefined ? null : readFingerprint(storage, key);
         if (stored === null || !sameUploadFingerprint(stored, file))
           return { ok: false, error: { code: 'upload_resume_unverified' } };
       }
 
-      const head = await transport.send('HEAD', videoId, undefined, 0, signal);
+      const head = await transport.send('HEAD', id, undefined, 0, signal);
       if (!head.ok) return { ok: false, error: { code: head.code } };
       const metadata = parseTusHead(head.response.headers);
       if (metadata === null) return { ok: false, error: { code: 'invalid_response' } };
       if (target.kind === 'new' && existingFingerprint === null && metadata.offset > 0) {
-        removeFingerprint(storage, videoId);
+        removeFingerprint(storage, key);
         return { ok: false, error: { code: 'upload_resume_unverified' } };
       }
       if (
         metadata.declaredBytes !== expectedBytes ||
         metadata.declaredBytes !== file.size ||
         metadata.declaredBytes < 1 ||
-        metadata.declaredBytes > maximumVideoBytes
+        metadata.declaredBytes > resource.maxBytes
       )
         return { ok: false, error: { code: 'invalid_request' } };
 
       let receivedBytes = metadata.offset;
       onProgress({ receivedBytes, declaredBytes: metadata.declaredBytes });
-      for (let chunk = nextTusChunk(receivedBytes, metadata.declaredBytes); chunk !== null;) {
+      for (
+        let chunk = nextTusChunk(receivedBytes, metadata.declaredBytes, resource.chunkBytes);
+        chunk !== null;
+      ) {
         const patched = await transport.send(
           'PATCH',
-          videoId,
+          id,
           file.slice(chunk.start, chunk.end),
           chunk.start,
           signal,
@@ -273,16 +311,45 @@ export function createTusClient(
         if (next !== chunk.end) return { ok: false, error: { code: 'invalid_response' } };
         receivedBytes = next;
         onProgress({ receivedBytes, declaredBytes: metadata.declaredBytes });
-        chunk = nextTusChunk(receivedBytes, metadata.declaredBytes);
+        chunk = nextTusChunk(receivedBytes, metadata.declaredBytes, resource.chunkBytes);
       }
-      removeFingerprint(storage, videoId);
+      removeFingerprint(storage, key);
       return { ok: true, value: null };
     },
-    async cancel(videoId: string, signal?: AbortSignal): Promise<VideoResult<null>> {
-      const response = await transport.send('DELETE', videoId, undefined, 0, signal);
+    async cancel(id: string, signal?: AbortSignal): Promise<TusResult> {
+      const response = await transport.send('DELETE', id, undefined, 0, signal);
       if (!response.ok) return { ok: false, error: { code: response.code } };
-      removeFingerprint(storage, videoId);
+      removeFingerprint(storage, resource.fingerprintKey(id));
       return { ok: true, value: null };
+    },
+  };
+}
+
+/** The lesson-video upload: the tus policy bound to the video resource. */
+export function createTusClient(
+  options: TransportOptions = {},
+  storage: FingerprintStorage | undefined = browserStorage(),
+  transport: TusTransport = createTusTransport(options),
+) {
+  const uploads = createTusUploads(videoTusResource, options, storage, transport);
+  return {
+    transfer(
+      target: VideoTransferTarget,
+      file: File,
+      onProgress: (progress: VideoTransferProgress) => void,
+      signal?: AbortSignal,
+    ): Promise<TusResult> {
+      return uploads.transfer(
+        target.kind === 'new'
+          ? { kind: 'new', id: target.ticket.videoId }
+          : { kind: 'resume', id: target.videoId, declaredBytes: target.declaredBytes },
+        file,
+        onProgress,
+        signal,
+      );
+    },
+    cancel(videoId: string, signal?: AbortSignal): Promise<TusResult> {
+      return uploads.cancel(videoId, signal);
     },
   };
 }

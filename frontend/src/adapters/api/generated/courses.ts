@@ -3089,56 +3089,56 @@ export const listAdminAudioTracks = async (videoId: string, options?: RequestIni
 
 
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse201 = {
+export type mintAdminAudioTicketResponse201 = {
   data: MediaAudioUploadTicket
   status: 201
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse400 = {
+export type mintAdminAudioTicketResponse400 = {
   data: MediaBadRequestResponse
   status: 400
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse401 = {
+export type mintAdminAudioTicketResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse403 = {
+export type mintAdminAudioTicketResponse403 = {
   data: MediaForbiddenResponse
   status: 403
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse404 = {
+export type mintAdminAudioTicketResponse404 = {
   data: VideoNotFoundResponse
   status: 404
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse409 = {
+export type mintAdminAudioTicketResponse409 = {
   data: DuplicateLanguageResponse
   status: 409
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse500 = {
+export type mintAdminAudioTicketResponse500 = {
   data: InternalErrorResponse
   status: 500
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse503 = {
+export type mintAdminAudioTicketResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponseSuccess = (postApiV1AdminVideosVideoIdAudioTracksResponse201) & {
+export type mintAdminAudioTicketResponseSuccess = (mintAdminAudioTicketResponse201) & {
   headers: Headers;
 };
-export type postApiV1AdminVideosVideoIdAudioTracksResponseError = (postApiV1AdminVideosVideoIdAudioTracksResponse400 | postApiV1AdminVideosVideoIdAudioTracksResponse401 | postApiV1AdminVideosVideoIdAudioTracksResponse403 | postApiV1AdminVideosVideoIdAudioTracksResponse404 | postApiV1AdminVideosVideoIdAudioTracksResponse409 | postApiV1AdminVideosVideoIdAudioTracksResponse500 | postApiV1AdminVideosVideoIdAudioTracksResponse503) & {
+export type mintAdminAudioTicketResponseError = (mintAdminAudioTicketResponse400 | mintAdminAudioTicketResponse401 | mintAdminAudioTicketResponse403 | mintAdminAudioTicketResponse404 | mintAdminAudioTicketResponse409 | mintAdminAudioTicketResponse500 | mintAdminAudioTicketResponse503) & {
   headers: Headers;
 };
 
-export type postApiV1AdminVideosVideoIdAudioTracksResponse = (postApiV1AdminVideosVideoIdAudioTracksResponseSuccess | postApiV1AdminVideosVideoIdAudioTracksResponseError)
+export type mintAdminAudioTicketResponse = (mintAdminAudioTicketResponseSuccess | mintAdminAudioTicketResponseError)
 
-export const getPostApiV1AdminVideosVideoIdAudioTracksUrl = (videoId: string,) => {
+export const getMintAdminAudioTicketUrl = (videoId: string,) => {
 
 
 
@@ -3146,8 +3146,12 @@ export const getPostApiV1AdminVideosVideoIdAudioTracksUrl = (videoId: string,) =
   return `${apiOrigin()}/api/v1/admin/videos/${videoId}/audio-tracks`
 }
 
-export const postApiV1AdminVideosVideoIdAudioTracks = async (videoId: string,
-    mediaAudioTicketRequest: MediaAudioTicketRequest, options?: RequestInit): Promise<postApiV1AdminVideosVideoIdAudioTracksResponse> => {
+/**
+ * Creates an uploaded audio track for the asset and returns its tus upload target. Admins may mint for any asset; instructors only for assets in courses they own. The track language must be unique on the asset.
+ * @summary Mint an audio track upload ticket
+ */
+export const mintAdminAudioTicket = async (videoId: string,
+    mediaAudioTicketRequest: MediaAudioTicketRequest, options?: RequestInit): Promise<mintAdminAudioTicketResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -3155,7 +3159,7 @@ export const postApiV1AdminVideosVideoIdAudioTracks = async (videoId: string,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-const res = await fetch(getPostApiV1AdminVideosVideoIdAudioTracksUrl(videoId),
+const res = await fetch(getMintAdminAudioTicketUrl(videoId),
   {
     ...options,
     method: 'POST',
@@ -3167,8 +3171,8 @@ const res = await fetch(getPostApiV1AdminVideosVideoIdAudioTracksUrl(videoId),
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: postApiV1AdminVideosVideoIdAudioTracksResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as postApiV1AdminVideosVideoIdAudioTracksResponse
+  const data: mintAdminAudioTicketResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as mintAdminAudioTicketResponse
 }
 
 

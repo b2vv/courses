@@ -33,7 +33,7 @@ const getLearningCourse = `SELECT
   COALESCE(lessons.title, ''),
   COALESCE(
     CASE
-      WHEN current_video.state IN ('created', 'uploading', 'queued', 'processing') THEN 'processing'
+      WHEN current_video.state IN ('created', 'uploading', 'queued', 'processing', 'awaiting_audio') THEN 'processing'
       ELSE current_video.state
     END,
     ''
