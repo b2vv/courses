@@ -8,6 +8,6 @@
 import type { ErrorResponse } from './errorResponse.ts';
 
 /**
- * The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+ * The mint body is malformed, oversized or outside ticket bounds, including an upload over the per-media size limit (2 GiB for a video, 500 MiB for an audio track).
  */
 export type MediaBadRequestResponse = ErrorResponse;

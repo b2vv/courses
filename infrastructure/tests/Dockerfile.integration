@@ -1,0 +1,8 @@
+# Integration test runner: the Go toolchain plus ffmpeg/ffprobe, so real-adapter
+# tests that shell out to ffmpeg (the audio transcode probe/render path) run in the
+# gate instead of skipping. The apt layer is cached, so only the first build pays
+# the download; later `make integration` runs reuse it.
+FROM golang:1.27.2-bookworm
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ffmpeg \
+	&& rm -rf /var/lib/apt/lists/*

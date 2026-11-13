@@ -294,13 +294,22 @@ func (transcode *Transcode) sweep(ctx context.Context, now time.Time) error {
 		return err
 	}
 	for _, track := range tracks {
-		if err := transcode.storage.Purge(ctx, audioUploadScratchKey(track.VideoAssetID, track.ID)); err != nil {
-			return err
+		track := track
+		err := transcode.repository.DeleteSweptAudioTrackLocked(ctx, track.ID, now, func() error {
+			if err := transcode.storage.Purge(ctx, audioUploadScratchKey(track.VideoAssetID, track.ID)); err != nil {
+				return err
+			}
+			if err := transcode.storage.Purge(ctx, audioSourceKey(track.VideoAssetID, track.ID)); err != nil {
+				return err
+			}
+			// A completed-then-failed track published its HLS directory before
+			// promotion exhausted its retries; purge it too or the bytes orphan.
+			return transcode.storage.Purge(ctx, audioHLSKey(track.VideoAssetID, track.ID))
+		})
+		if errors.Is(err, domain.ErrInvalidStateTransition) {
+			continue
 		}
-		if err := transcode.storage.Purge(ctx, audioSourceKey(track.VideoAssetID, track.ID)); err != nil {
-			return err
-		}
-		if err := transcode.repository.DeleteAudioTrackSwept(ctx, track.ID); err != nil {
+		if err != nil {
 			return err
 		}
 	}
@@ -310,12 +319,22 @@ func (transcode *Transcode) sweep(ctx context.Context, now time.Time) error {
 func (transcode *Transcode) Recover(ctx context.Context) error {
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	assets, err := transcode.repository.Recover(callCtx, transcode.timestamp(), sweepLimit)
+	now := transcode.timestamp()
+	assets, err := transcode.repository.Recover(callCtx, now, sweepLimit)
 	if err != nil {
 		return mediaOperationError(ctx, err)
 	}
 	for _, asset := range assets {
 		if err := transcode.queue.Enqueue(callCtx, asset.ID, asset.Attempt); err != nil {
+			return mediaOperationError(ctx, err)
+		}
+	}
+	tracks, err := transcode.repository.RecoverQueuedAudioTracks(callCtx, now, sweepLimit)
+	if err != nil {
+		return mediaOperationError(ctx, err)
+	}
+	for _, track := range tracks {
+		if err := transcode.queue.EnqueueAudioTrack(callCtx, track.VideoAssetID, track.ID, 1); err != nil {
 			return mediaOperationError(ctx, err)
 		}
 	}

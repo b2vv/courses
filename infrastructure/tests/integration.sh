@@ -247,6 +247,11 @@ done
 log_dir="$task_root/backend/test-results"
 mkdir -p "$log_dir"
 log="$log_dir/integration.log"
+# The runner image adds ffmpeg/ffprobe to the Go toolchain so the real-adapter
+# audio transcode tests run in the gate rather than skipping. The apt layer is
+# cached, so only the first build downloads ffmpeg; later runs reuse the layer.
+runner_image=courses-integration-go:1.27.2-ffmpeg
+docker build -q -t "$runner_image" -f "$task_root/infrastructure/tests/Dockerfile.integration" "$task_root/infrastructure/tests" >&2
 status_file=$(mktemp)
 set +e
 {
@@ -257,7 +262,7 @@ set +e
     -e TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
     -v "${GO_MOD_CACHE:-courses-gomod}:/go/pkg/mod" -v "${GO_BUILD_CACHE:-courses-gobuild}:/root/.cache/go-build" \
     -e GOTOOLCHAIN=local \
-    golang:1.27.2-bookworm go test -count=1 -tags=integration ./...
+    "$runner_image" go test -count=1 -tags=integration ./...
   echo $? > "$status_file"
 } 2>&1 | tee "$log"
 set -e

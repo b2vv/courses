@@ -49,6 +49,7 @@ type mediaRepository struct {
 	setDefault                       func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
 	updateMetadata                   func(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error)
 	deleteTrack                      func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
+	mintAudioTrack                   func(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error)
 }
 
 func (repository *mediaRepository) Mint(ctx context.Context, actor mediadomain.Actor, lessonID string, declaredBytes int64, originalName string, expiresAt, now time.Time) (mediadomain.VideoAsset, error) {
@@ -150,7 +151,10 @@ func (*mediaRepository) Recover(context.Context, time.Time, int) ([]mediadomain.
 	panic("unexpected Recover")
 }
 
-func (*mediaRepository) MintAudioTrack(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error) {
+func (repository *mediaRepository) MintAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, now time.Time) (mediadomain.AudioTrack, error) {
+	if repository.mintAudioTrack != nil {
+		return repository.mintAudioTrack(ctx, actor, assetID, declaredBytes, originalName, language, label, expiresAt, now)
+	}
 	panic("unexpected MintAudioTrack")
 }
 
@@ -166,8 +170,12 @@ func (*mediaRepository) SweepAudioTrackCandidates(context.Context, time.Time, in
 	panic("unexpected SweepAudioTrackCandidates")
 }
 
-func (*mediaRepository) DeleteAudioTrackSwept(context.Context, string) error {
-	panic("unexpected DeleteAudioTrackSwept")
+func (*mediaRepository) DeleteSweptAudioTrackLocked(context.Context, string, time.Time, func() error) error {
+	panic("unexpected DeleteSweptAudioTrackLocked")
+}
+
+func (*mediaRepository) RecoverQueuedAudioTracks(context.Context, time.Time, int) ([]mediadomain.AudioTrack, error) {
+	panic("unexpected RecoverQueuedAudioTracks")
 }
 
 func (repository *mediaRepository) calls() int {
@@ -861,5 +869,94 @@ func TestAudioTrackContracts(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 		}
+	})
+
+	t.Run("AT09 admin mints an audio upload ticket", func(t *testing.T) {
+		repository := audioTrackRepository()
+		expires := mediaNow.Add(24 * time.Hour)
+		repository.mintAudioTrack = func(_ context.Context, actor mediadomain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, _ time.Time) (mediadomain.AudioTrack, error) {
+			if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+				return mediadomain.AudioTrack{}, err
+			}
+			if declaredBytes != 4096 || originalName != "track.aac" || language != "uk" || label != "Українська" {
+				t.Fatalf("mint args bytes=%d name=%q lang=%q label=%q", declaredBytes, originalName, language, label)
+			}
+			return mediadomain.AudioTrack{ID: mediaTrackID, VideoAssetID: assetID, Kind: mediadomain.UploadedTrack, Language: language, Label: label, State: mediadomain.Created, DeclaredBytes: declaredBytes, OriginalName: originalName, ExpiresAt: expires, CreatedAt: mediaNow, UpdatedAt: mediaNow}, nil
+		}
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", []byte(`{"declaredBytes":4096,"originalName":"track.aac","language":"uk","label":"Українська"}`), "application/json", true)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		var ticket map[string]any
+		decodeMediaJSON(t, response, &ticket)
+		if ticket["trackId"] != mediaTrackID || ticket["uploadUrl"] != "/uploads/audio/"+mediaTrackID {
+			t.Fatalf("ticket=%+v", ticket)
+		}
+		if ticket["chunkBytes"].(float64) != float64(8*1024*1024) || ticket["maxBytes"].(float64) != float64(mediadomain.MaximumAudioDeclaredBytes) {
+			t.Fatalf("ticket bounds=%+v", ticket)
+		}
+	})
+
+	t.Run("AT10 duplicate language on mint returns 409", func(t *testing.T) {
+		repository := audioTrackRepository()
+		repository.mintAudioTrack = func(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error) {
+			return mediadomain.AudioTrack{}, mediadomain.ErrDuplicateLanguage
+		}
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", []byte(`{"declaredBytes":4096,"originalName":"track.aac","language":"uk","label":"Українська"}`), "application/json", true)
+		if response.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+		assertMediaError(t, response, "duplicate_language")
+	})
+
+	t.Run("AT11 mint rejects invalid bodies before the repository", func(t *testing.T) {
+		repository := audioTrackRepository()
+		repository.mintAudioTrack = func(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error) {
+			t.Fatal("repository reached for an invalid mint body")
+			return mediadomain.AudioTrack{}, nil
+		}
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		for _, test := range []struct{ name, body, code string }{
+			{"over max bytes", `{"declaredBytes":524288001,"originalName":"track.aac","language":"uk","label":"Ukr"}`, "upload_too_large"},
+			{"zero bytes", `{"declaredBytes":0,"originalName":"track.aac","language":"uk","label":"Ukr"}`, "invalid_request"},
+			{"missing label", `{"declaredBytes":4096,"originalName":"track.aac","language":"uk"}`, "invalid_request"},
+			{"unknown key", `{"declaredBytes":4096,"originalName":"track.aac","language":"uk","label":"Ukr","extra":1}`, "invalid_request"},
+			{"duplicate key", `{"declaredBytes":4096,"declaredBytes":8192,"originalName":"track.aac","language":"uk","label":"Ukr"}`, "invalid_request"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", []byte(test.body), "application/json", false)
+				if response.Code != http.StatusBadRequest {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+				assertMediaError(t, response, test.code)
+			})
+		}
+	})
+
+	t.Run("AT12 mint refused cross-origin and for a non-owner", func(t *testing.T) {
+		repository := audioTrackRepository()
+		repository.mintAudioTrack = func(_ context.Context, actor mediadomain.Actor, assetID string, _ int64, _, _, _ string, _, _ time.Time) (mediadomain.AudioTrack, error) {
+			if err := actor.CanEditLesson(mediaInstructorID); err != nil {
+				return mediadomain.AudioTrack{}, err
+			}
+			return mediadomain.AudioTrack{ID: mediaTrackID, VideoAssetID: assetID}, nil
+		}
+		identity := &mediaIdentity{}
+		handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+		body := []byte(`{"declaredBytes":4096,"originalName":"track.aac","language":"uk","label":"Ukr"}`)
+		crossOrigin := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://evil.example", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", body, "application/json", false)
+		if crossOrigin.Code != http.StatusForbidden {
+			t.Fatalf("cross-origin status=%d body=%s", crossOrigin.Code, crossOrigin.Body.String())
+		}
+		nonOwner := serveMedia(t, handler, identity, mediaUser(mediaOtherOwnerID, identitydomain.Instructor), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", body, "application/json", true)
+		if nonOwner.Code != http.StatusForbidden {
+			t.Fatalf("non-owner status=%d body=%s", nonOwner.Code, nonOwner.Body.String())
+		}
+		assertMediaError(t, nonOwner, "course_forbidden")
 	})
 }

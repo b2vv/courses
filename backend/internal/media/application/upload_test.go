@@ -22,31 +22,37 @@ const (
 )
 
 type fakeRepository struct {
-	calls                    []string
-	asset                    domain.VideoAsset
-	mint                     func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
-	appendChunk              func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
-	cancel                   func(context.Context, string, time.Time) error
-	list                     func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
-	load                     func(context.Context, string) (domain.VideoAsset, error)
-	claim                    func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
-	publish                  func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
-	publishedEmbedded        *domain.AudioTrack
-	regenerateMaster         func(context.Context, string, func([]domain.AudioTrack) error) error
-	loadAudioTrack           func(context.Context, string, string) (domain.AudioTrack, error)
-	promoteAudioTrack        func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
-	failAudioTrack           func(context.Context, string, string, time.Time) error
-	listAudioTracks          func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
-	setDefaultAudioTrack     func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
-	updateAudioTrackMetadata func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
-	deleteAudioTrack         func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
-	publishedDuration        *float64
-	requeue                  func(context.Context, string, domain.ClaimToken, time.Time) error
-	fail                     func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
-	retry                    func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
-	sweepCandidates          func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
-	deleteSwept              func(context.Context, string) error
-	recover                  func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	calls                      []string
+	asset                      domain.VideoAsset
+	mint                       func(context.Context, domain.Actor, string, int64, string, time.Time, time.Time) (domain.VideoAsset, error)
+	appendChunk                func(context.Context, string, int64, time.Time, ports.ChunkPolicy, ports.CompletePolicy) (domain.VideoAsset, error)
+	cancel                     func(context.Context, string, time.Time) error
+	list                       func(context.Context, domain.Actor, string) ([]domain.VideoAsset, error)
+	load                       func(context.Context, string) (domain.VideoAsset, error)
+	claim                      func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
+	publish                    func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
+	publishedEmbedded          *domain.AudioTrack
+	regenerateMaster           func(context.Context, string, func([]domain.AudioTrack) error) error
+	loadAudioTrack             func(context.Context, string, string) (domain.AudioTrack, error)
+	promoteAudioTrack          func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
+	failAudioTrack             func(context.Context, string, string, time.Time) error
+	listAudioTracks            func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
+	setDefaultAudioTrack       func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
+	updateAudioTrackMetadata   func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
+	deleteAudioTrack           func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
+	publishedDuration          *float64
+	requeue                    func(context.Context, string, domain.ClaimToken, time.Time) error
+	fail                       func(context.Context, string, domain.State, domain.ClaimToken, domain.FailureReason, time.Time) error
+	retry                      func(context.Context, domain.Actor, string, time.Duration, time.Time) (domain.VideoAsset, error)
+	sweepCandidates            func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	deleteSwept                func(context.Context, string) error
+	recover                    func(context.Context, time.Time, int) ([]domain.VideoAsset, error)
+	loadAudioTrackUpload       func(context.Context, string) (domain.AudioTrack, error)
+	appendAudioChunk           func(context.Context, string, int64, time.Time, ports.AudioChunkPolicy, ports.AudioCompletePolicy) (domain.AudioTrack, error)
+	cancelAudioUpload          func(context.Context, string, time.Time) error
+	sweepAudioTrackCandidates  func(context.Context, time.Time, int) ([]domain.AudioTrack, error)
+	deleteSweptAudioTrackLockd func(context.Context, string, time.Time, func() error) error
+	recoverQueuedAudioTracks   func(context.Context, time.Time, int) ([]domain.AudioTrack, error)
 }
 
 func (repository *fakeRepository) Mint(ctx context.Context, actor domain.Actor, lessonID string, declaredBytes int64, originalName string, expiresAt, now time.Time) (domain.VideoAsset, error) {
@@ -98,7 +104,10 @@ func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, t
 	return repository.loadAudioTrack(ctx, assetID, trackID)
 }
 
-func (repository *fakeRepository) LoadAudioTrackUpload(_ context.Context, _ string) (domain.AudioTrack, error) {
+func (repository *fakeRepository) LoadAudioTrackUpload(ctx context.Context, trackID string) (domain.AudioTrack, error) {
+	if repository.loadAudioTrackUpload != nil {
+		return repository.loadAudioTrackUpload(ctx, trackID)
+	}
 	return domain.AudioTrack{}, nil
 }
 
@@ -179,19 +188,46 @@ func (repository *fakeRepository) MintAudioTrack(ctx context.Context, actor doma
 }
 
 func (repository *fakeRepository) AppendAudioChunk(ctx context.Context, trackID string, offset int64, now time.Time, chunkPolicy ports.AudioChunkPolicy, completePolicy ports.AudioCompletePolicy) (domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "append_audio_chunk")
+	if repository.appendAudioChunk != nil {
+		return repository.appendAudioChunk(ctx, trackID, offset, now, chunkPolicy, completePolicy)
+	}
 	return domain.AudioTrack{}, nil
 }
 
 func (repository *fakeRepository) CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error {
+	repository.calls = append(repository.calls, "cancel_audio_upload")
+	if repository.cancelAudioUpload != nil {
+		return repository.cancelAudioUpload(ctx, trackID, now)
+	}
 	return nil
 }
 
 func (repository *fakeRepository) SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "sweep_audio")
+	if repository.sweepAudioTrackCandidates != nil {
+		return repository.sweepAudioTrackCandidates(ctx, now, limit)
+	}
 	return nil, nil
 }
 
-func (repository *fakeRepository) DeleteAudioTrackSwept(ctx context.Context, trackID string) error {
+func (repository *fakeRepository) DeleteSweptAudioTrackLocked(ctx context.Context, trackID string, now time.Time, purge func() error) error {
+	repository.calls = append(repository.calls, "delete_swept_audio")
+	if repository.deleteSweptAudioTrackLockd != nil {
+		return repository.deleteSweptAudioTrackLockd(ctx, trackID, now, purge)
+	}
+	if purge != nil {
+		return purge()
+	}
 	return nil
+}
+
+func (repository *fakeRepository) RecoverQueuedAudioTracks(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error) {
+	repository.calls = append(repository.calls, "recover_audio")
+	if repository.recoverQueuedAudioTracks != nil {
+		return repository.recoverQueuedAudioTracks(ctx, now, limit)
+	}
+	return nil, nil
 }
 
 type fakeStorage struct {
@@ -247,8 +283,9 @@ func (storage *fakeStorage) Purge(ctx context.Context, key domain.StorageKey) er
 }
 
 type fakeQueue struct {
-	calls   []string
-	enqueue func(context.Context, string, int) error
+	calls        []string
+	enqueue      func(context.Context, string, int) error
+	enqueueAudio func(context.Context, string, string, int) error
 }
 
 func (queue *fakeQueue) Enqueue(ctx context.Context, id string, attempt int) error {
@@ -258,6 +295,9 @@ func (queue *fakeQueue) Enqueue(ctx context.Context, id string, attempt int) err
 
 func (queue *fakeQueue) EnqueueAudioTrack(ctx context.Context, assetID, trackID string, attempt int) error {
 	queue.calls = append(queue.calls, assetID+":"+trackID)
+	if queue.enqueueAudio != nil {
+		return queue.enqueueAudio(ctx, assetID, trackID, attempt)
+	}
 	return nil
 }
 

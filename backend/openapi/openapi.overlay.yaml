@@ -152,7 +152,7 @@ components:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
             Cache-Control: { $ref: '#/components/headers/NoStore' }
         MediaBadRequest:
-          description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+          description: The mint body is malformed, oversized or outside ticket bounds, including an upload over the per-media size limit (2 GiB for a video, 500 MiB for an audio track).
           headers:
             X-Request-ID: { $ref: '#/components/headers/RequestID' }
             Cache-Control: { $ref: '#/components/headers/NoStore' }

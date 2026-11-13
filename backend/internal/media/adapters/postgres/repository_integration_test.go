@@ -197,6 +197,9 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S5-L1a rename updates metadata and 409s a duplicate language", harness.testUpdateAudioTrackMetadata)
 	t.Run("S5-L1a delete regenerates the master from the remaining ready set", harness.testDeleteAudioTrackRegeneratesMaster)
 	t.Run("S5-L1a delete removes an embedded track", harness.testDeleteEmbeddedAudioTrack)
+	t.Run("S5-L1b sweep selects only reclaimable upload tracks", harness.testSweepAudioSelectsOnlyReclaimableTracks)
+	t.Run("S5-L1b locked delete purges eligible and skips a promoted track", harness.testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted)
+	t.Run("S5-L1b recover selects stranded queued tracks", harness.testRecoverQueuedAudioTracksSelectsStranded)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {

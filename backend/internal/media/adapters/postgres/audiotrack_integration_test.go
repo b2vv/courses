@@ -621,3 +621,131 @@ func (h *mediaHarness) testMultiAudioMigrationReversible(t *testing.T) {
 		t.Fatal("up migration did not restore audio_tracks")
 	}
 }
+
+func (h *mediaHarness) insertUploadTrack(t *testing.T, id, assetID, language string, state domain.State, declared, received int64, expiresAt, updatedAt time.Time) {
+	t.Helper()
+	if _, err := h.pool.Exec(h.ctx, `INSERT INTO audio_tracks(
+		id,video_asset_id,kind,language,label,is_default,state,source_leaf,
+		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
+		VALUES($1::text::uuid,$2::text::uuid,'uploaded',$3,$3,false,$4,$5,$6,$7,'track.aac',$8,$9,$9)`,
+		id, assetID, language, string(state), domain.AudioLeafPrefix+id, declared, received, expiresAt, updatedAt); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (h *mediaHarness) trackExists(t *testing.T, id string) bool {
+	t.Helper()
+	var exists bool
+	if err := h.pool.QueryRow(h.ctx, `SELECT EXISTS(SELECT 1 FROM audio_tracks WHERE id=$1::text::uuid)`, id).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	return exists
+}
+
+// testSweepAudioSelectsOnlyReclaimableTracks proves the broadened sweep predicate
+// (F3): expired incomplete uploads, never-completed failed uploads, and
+// completed-then-failed tracks past the retention window are candidates; a live
+// Queued or Ready track, a still-valid Created upload, and a recently-failed
+// completed track are not.
+func (h *mediaHarness) testSweepAudioSelectsOnlyReclaimableTracks(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	const (
+		expiredCreated = "b5000000-0000-4000-8000-000000000001"
+		failedPartial  = "b5000000-0000-4000-8000-000000000002"
+		failedOldDone  = "b5000000-0000-4000-8000-000000000003"
+		failedNewDone  = "b5000000-0000-4000-8000-000000000004"
+		liveQueued     = "b5000000-0000-4000-8000-000000000005"
+		liveReady      = "b5000000-0000-4000-8000-000000000006"
+		freshCreated   = "b5000000-0000-4000-8000-000000000007"
+	)
+	past := mediaNow.Add(-time.Hour)
+	future := mediaNow.Add(time.Hour)
+	h.insertUploadTrack(t, expiredCreated, mediaAssetOne, "uk", domain.Created, 1024, 512, past, mediaNow)
+	h.insertUploadTrack(t, failedPartial, mediaAssetOne, "de", domain.Failed, 1024, 512, future, mediaNow)
+	h.insertUploadTrack(t, failedOldDone, mediaAssetOne, "fr", domain.Failed, 1024, 1024, future, mediaNow.Add(-31*24*time.Hour))
+	h.insertUploadTrack(t, failedNewDone, mediaAssetOne, "it", domain.Failed, 1024, 1024, future, mediaNow)
+	h.insertUploadTrack(t, liveQueued, mediaAssetOne, "pl", domain.Queued, 1024, 1024, future, mediaNow)
+	h.insertUploadTrack(t, liveReady, mediaAssetOne, "es", domain.Ready, 1024, 1024, future, mediaNow)
+	h.insertUploadTrack(t, freshCreated, mediaAssetOne, "pt", domain.Created, 1024, 0, future, mediaNow)
+
+	tracks, err := h.repository.SweepAudioTrackCandidates(h.ctx, mediaNow, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, track := range tracks {
+		got[track.ID] = true
+	}
+	want := map[string]bool{expiredCreated: true, failedPartial: true, failedOldDone: true}
+	if len(got) != len(want) {
+		t.Fatalf("candidates=%v want %v", got, want)
+	}
+	for id := range want {
+		if !got[id] {
+			t.Fatalf("missing candidate %s (got %v)", id, got)
+		}
+	}
+}
+
+// testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted proves F1: the locked
+// delete reclaims an eligible row (running purge) and refuses a row that has
+// concurrently left the swept state, without purging its live bytes.
+func (h *mediaHarness) testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	const (
+		reclaimable = "b6000000-0000-4000-8000-000000000001"
+		promoted    = "b6000000-0000-4000-8000-000000000002"
+	)
+	h.insertUploadTrack(t, reclaimable, mediaAssetOne, "uk", domain.Failed, 1024, 512, mediaNow.Add(time.Hour), mediaNow)
+	h.insertUploadTrack(t, promoted, mediaAssetOne, "de", domain.Queued, 1024, 1024, mediaNow.Add(time.Hour), mediaNow)
+
+	purged := false
+	if err := h.repository.DeleteSweptAudioTrackLocked(h.ctx, reclaimable, mediaNow, func() error { purged = true; return nil }); err != nil {
+		t.Fatalf("reclaimable delete: %v", err)
+	}
+	if !purged {
+		t.Fatal("purge did not run for an eligible track")
+	}
+	if h.trackExists(t, reclaimable) {
+		t.Fatal("eligible track row survived the locked delete")
+	}
+
+	purgedLive := false
+	err := h.repository.DeleteSweptAudioTrackLocked(h.ctx, promoted, mediaNow, func() error { purgedLive = true; return nil })
+	if !errors.Is(err, domain.ErrInvalidStateTransition) {
+		t.Fatalf("promoted delete err=%v want ErrInvalidStateTransition", err)
+	}
+	if purgedLive {
+		t.Fatal("purge ran for a promoted (Queued) track — live bytes at risk")
+	}
+	if !h.trackExists(t, promoted) {
+		t.Fatal("promoted track row was deleted despite being live")
+	}
+}
+
+// testRecoverQueuedAudioTracksSelectsStranded proves F2: a track stranded in
+// Queued past the grace is returned for re-enqueue, while a freshly-queued track
+// and non-queued tracks are left alone.
+func (h *mediaHarness) testRecoverQueuedAudioTracksSelectsStranded(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	const (
+		strandedQueued = "b7000000-0000-4000-8000-000000000001"
+		freshQueued    = "b7000000-0000-4000-8000-000000000002"
+		readyTrack     = "b7000000-0000-4000-8000-000000000003"
+	)
+	future := mediaNow.Add(time.Hour)
+	h.insertUploadTrack(t, strandedQueued, mediaAssetOne, "uk", domain.Queued, 1024, 1024, future, mediaNow.Add(-11*time.Minute))
+	h.insertUploadTrack(t, freshQueued, mediaAssetOne, "de", domain.Queued, 1024, 1024, future, mediaNow)
+	h.insertUploadTrack(t, readyTrack, mediaAssetOne, "fr", domain.Ready, 1024, 1024, future, mediaNow.Add(-time.Hour))
+
+	tracks, err := h.repository.RecoverQueuedAudioTracks(h.ctx, mediaNow, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tracks) != 1 || tracks[0].ID != strandedQueued {
+		t.Fatalf("recovered=%+v want only %s", tracks, strandedQueued)
+	}
+}

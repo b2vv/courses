@@ -204,7 +204,7 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
-            description: The mint body is malformed, oversized or outside ticket bounds, including an upload over 2 GiB.
+            description: The mint body is malformed, oversized or outside ticket bounds, including an upload over the per-media size limit (2 GiB for a video, 500 MiB for an audio track).
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/NoStore'

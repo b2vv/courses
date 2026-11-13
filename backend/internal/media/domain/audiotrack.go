@@ -16,6 +16,11 @@ const (
 	// has no separate source and reuses the video source leaf "original".
 	AudioLeafPrefix   = "audio-"
 	EmbeddedAudioLeaf = "original"
+
+	// AudioUploadLeafPrefix names an uploaded track's scratch leaf under
+	// temporary/: audio-upload-<trackID>, distinct per track so tracks of one
+	// asset do not collide (the video scratch leaf "upload" is per-asset).
+	AudioUploadLeafPrefix = "audio-upload-"
 )
 
 // AudioTrackKind separates the two lifecycles of an audio track (D3). An
