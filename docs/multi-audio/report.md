@@ -208,3 +208,27 @@ eligibility-предикатом, але не ганяє СПРАВЖНЮ кон
 row-lock (підтверджено незалежним рев'ю). Підсилення — детермінований two-transaction race за
 патерном `blockingMintTracer`/`testConcurrentPromoteAudioTrack` — залишено follow-up, щоб не вносити
 флак-ризик наприкінці.
+
+## S5-L2a — data layer аудіодоріжок + фікс `awaiting_audio` (2026-11-13)
+
+План: `docs/multi-audio/plan-s5l2.md` (plan-critique Codex, 3 раунди → ACCEPTED). Гілка `multi-audio-s5l2a`.
+
+- **Дефект на main (з S3), закрито:** фронтенд `videoStates` не мав `awaiting_audio`, тож strict-схема
+  відкидала **весь** список відео курсу через один video-only рядок — редактор без відео для всіх уроків.
+  Learner-SQL (`course/adapters/postgres/learning.go`) віддавав `awaiting_audio` сирим поза
+  `LearningVideoStates` і playback-схемою; тепер це `processing` (D-L2-9).
+- **tus:** `createTusUploads(resource, …)` — шлях, ключ fingerprint і ліміти задає ресурс; відео-клієнт
+  зв'язаний із тими самими значеннями, відео-tus-тести не змінено.
+- **Аудіо-шар:** domain (стани, ліміт 500 MiB, перелік мов-константа, правила language/label як на сервері,
+  guards default/delete, термінальний підпис), port, application, Orval+zod adapter (resume лише з trackId +
+  fingerprint), Query options; operationId `mintAdminAudioTicket`. Споживачів у UI ще нема (S5-L2b).
+
+**Верифікація.** Повний упорядкований `make check` 2026-11-13 — `GATE_EXIT=0`: frontend unit 884 passed,
+e2e **129 passed** (15.7 хв). Нові тести: domain 21, repository (msw, включно з tus на `/uploads/audio/`) 15,
+queries 6, schema +1, learner integration +1. Мутаційні перевірки: (1) правило «перше термінальне
+спостереження інвалідує список відео» → прибране, падає 3/6 query-тестів; (2) learner-SQL без
+`awaiting_audio` → падає підтест `video-only asset awaiting its audio track reads as processing`
+(прицільний `-v` прогін у runner-образі integration; у повному гейті integration-лог не verbose).
+
+**Обмеження.** `adminstats` `snapshot.go:137` не рахує `awaiting_audio` ні в `in_progress`, ні в `ready`
+(лічильник дашборду, не wire-парсинг) — поза обсягом. e2e-шлях video-only → аудіо → ready — у S5-L2b.
