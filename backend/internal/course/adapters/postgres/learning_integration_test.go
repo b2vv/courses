@@ -363,6 +363,28 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		}
 	})
 
+	t.Run("video-only asset awaiting its audio track reads as processing", func(t *testing.T) {
+		// A source with no audio stream is published as awaiting_audio (multi-audio D4). The
+		// learner contract has no such state; emitting it raw breaks the learner course read.
+		const assetID = "82000000-0000-4000-8000-000000000003"
+		if _, err := pool.Exec(ctx, `UPDATE video_assets SET state='awaiting_audio' WHERE id=$1`, assetID); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if _, err := pool.Exec(context.Background(), `UPDATE video_assets SET state='processing' WHERE id=$1`, assetID); err != nil {
+				t.Error(err)
+			}
+		})
+		course, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-b07")
+		if err != nil {
+			t.Fatal(err)
+		}
+		lesson := course.Modules[0].Lessons[1]
+		if lesson.ID != learningB07ProcessingLesson || lesson.VideoState != domain.VideoProcessing {
+			t.Fatalf("awaiting_audio asset=%+v", lesson)
+		}
+	})
+
 	t.Run("null ready asset duration does not clamp", func(t *testing.T) {
 		course, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-b07")
 		if err != nil {

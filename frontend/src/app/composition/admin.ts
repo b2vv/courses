@@ -3,12 +3,14 @@ import { getRequest, getRequestHeader } from '@tanstack/react-start/server';
 import { createApiAdminCourseRepository } from '../../modules/admin';
 import { createApiAdminUserRepository } from '../../modules/admin';
 import { createApiLessonVideoRepository } from '../../modules/media';
+import { createApiAudioTrackRepository, createAudioTracks } from '../../modules/media';
 import { createAuthoring } from '../../modules/admin';
 import { createLessonVideos } from '../../modules/media';
 import { createUserAdministration } from '../../modules/admin';
 import { createAdminQueries } from './admin-queries';
 import { createAdminUserQueries } from './admin-user-queries';
 import { createAdminVideoQueries } from './admin-video-queries';
+import { createAdminAudioQueries } from './admin-audio-queries';
 import { createApiDraftRepository } from '../../modules/transcript';
 import { createApiTranscriptRepository } from '../../modules/transcript';
 import { createDraftQueries } from './admin-draft-queries';
@@ -35,12 +37,15 @@ export function createAdminDependencies() {
   const videos = createAdminVideoQueries(
     createLessonVideos(createApiLessonVideoRepository(options)),
   );
+  const audioTracks = createAdminAudioQueries(
+    createAudioTracks(createApiAudioTrackRepository(options)),
+  );
   const transcripts = createTranscriptQueries(createApiTranscriptRepository());
   const drafts = createDraftQueries(createApiDraftRepository(options));
   const grants = createAdminGrantQueries(createApiCourseGrantRepository(options));
   const stats = createAdminStatsQueries(createApiAdminStatsRepository(options));
   const documents = createAdminDocumentQueries(createApiDocumentAuthoringRepository(options));
-  return { ...courses, users, videos, transcripts, drafts, grants, stats, documents };
+  return { ...courses, users, videos, audioTracks, transcripts, drafts, grants, stats, documents };
 }
 
 export type AdminDependencies = ReturnType<typeof createAdminDependencies>;

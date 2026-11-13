@@ -788,6 +788,7 @@ export const uk = {
           uploading: 'Завантаження',
           queued: 'У черзі',
           processing: 'Обробка',
+          awaiting_audio: 'Очікує аудіодоріжку',
           ready: 'Готово',
           failed: 'Помилка',
         },

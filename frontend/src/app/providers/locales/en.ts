@@ -779,6 +779,7 @@ export const en = {
           uploading: 'Uploading',
           queued: 'Queued',
           processing: 'Processing',
+          awaiting_audio: 'Waiting for an audio track',
           ready: 'Ready',
           failed: 'Failed',
         },
