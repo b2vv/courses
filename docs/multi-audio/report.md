@@ -230,5 +230,11 @@ queries 6, schema +1, learner integration +1. Мутаційні перевір�
 `awaiting_audio` → падає підтест `video-only asset awaiting its audio track reads as processing`
 (прицільний `-v` прогін у runner-образі integration; у повному гейті integration-лог не verbose).
 
+**Незалежне рев'ю (Codex, свіжий контекст, 2026-11-13):** SHIP на `ea54313` з двома Minor (audio-resume з
+розбіжним `Upload-Length` давав `invalid_request` замість `upload_resume_unverified`; tus 409
+`upload_offset_conflict` губився як `invalid_response`) — обидва виправлено в `b4ee658` лише для аудіо;
+delta-рев'ю — SHIP на `b4ee658`. Повторний повний `make check` на `b4ee658` — `GATE_EXIT=0`, frontend unit
+885, e2e **129 passed** (16.1 хв). Raw: `docs/multi-audio/_wip-s5l2a-review-codex.md`.
+
 **Обмеження.** `adminstats` `snapshot.go:137` не рахує `awaiting_audio` ні в `in_progress`, ні в `ready`
 (лічильник дашборду, не wire-парсинг) — поза обсягом. e2e-шлях video-only → аудіо → ready — у S5-L2b.
