@@ -199,7 +199,7 @@ mint-eviction — незавершене вивантаження) — upload-ju
 `integration` — зелені (2026-11-10). Нові тести: `audioupload_test` (7: head-gating, offset/over-declared,
 completion→enqueue, enqueue-fail, cancel), `transcode` audio sweep/recover (3), `tus/audioserver_test`
 (7: HEAD/PATCH/DELETE/offset/415/405/412/404), HTTP mint-контракт AT09–AT12, postgres integration
-(sweep-вибірка, locked-delete purge+promote-skip, recover-вибірка). e2e — reset+seed прогін на гілці.
+(sweep-вибірка, locked-delete purge+promote-skip, recover-вибірка). Повний упорядкований `make check` на `1e4eeb2` (2026-11-13) — `GATE_EXIT=0`, e2e **129 passed**, 0 skipped (15.8 хв). Попередній червоний e2e (Acc26–31 TOTP, `login→503`) був інфра-шумом: argon2id-timeout під CPU-контенцією від сторонніх контейнерів на хості (load 55–116); після їх зупинки (load ~8) той самий тест `Acc26–Acc29 and Acc31` зелений (2.4 хв) без змін у коді.
 
 **Відома test-robustness follow-up (non-blocking, SHIP-вердикт):** F1 integration-тест
 `testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted` доводить skip промоутнутого треку за
