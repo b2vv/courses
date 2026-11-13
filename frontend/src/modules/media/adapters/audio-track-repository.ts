@@ -31,6 +31,8 @@ export const audioTusResource: TusResource = {
   fingerprintKey: (trackId) => `courses.media.upload-fingerprint.v1.audio.${trackId}`,
   maxBytes: maximumAudioBytes,
   chunkBytes: audioChunkBytes,
+  // 409 upload_offset_conflict: another tab or a stale retry is writing this track's upload.
+  statusCode: (status) => (status === 409 ? 'upload_in_progress' : undefined),
 };
 
 function wireError(response: WireResponse): AudioTrackError {
@@ -156,8 +158,8 @@ export function createApiAudioTrackRepository(
         signal,
       );
     },
-    transfer(target, file, onProgress, signal) {
-      return tus.transfer(
+    async transfer(target, file, onProgress, signal) {
+      const result = await tus.transfer(
         target.kind === 'new'
           ? { kind: 'new', id: target.ticket.trackId }
           : // A resume has no ticket: the size is the re-selected file's, and the tus policy only
@@ -167,6 +169,11 @@ export function createApiAudioTrackRepository(
         onProgress,
         signal,
       );
+      // On a resume the size is the re-selected file's; a server Upload-Length that disagrees
+      // means it is not the interrupted file, so the resume is unverified, not a bad request.
+      if (target.kind === 'resume' && !result.ok && result.error.code === 'invalid_request')
+        return { ok: false, error: { code: 'upload_resume_unverified' } };
+      return result;
     },
     cancelUpload(trackId, signal) {
       return tus.cancel(trackId, signal);

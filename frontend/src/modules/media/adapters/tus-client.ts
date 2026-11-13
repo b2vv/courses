@@ -17,6 +17,7 @@ export type TusErrorCode =
   | 'unsupported_media'
   | 'upload_too_large'
   | 'video_not_found'
+  | 'upload_in_progress'
   | 'upload_resume_unverified';
 type TusResult =
   | { readonly ok: true; readonly value: null }
@@ -32,6 +33,8 @@ export type TusResource = {
   readonly fingerprintKey: (id: string) => string;
   readonly maxBytes: number;
   readonly chunkBytes: number;
+  /** A resource-specific reading of a tus status, tried before the shared mapping. */
+  readonly statusCode?: (status: number) => TusErrorCode | undefined;
 };
 
 /** A transfer of one resource: start a freshly minted upload, or resume an interrupted one. */
@@ -233,7 +236,10 @@ export function createTusTransport(
         const expected = method === 'HEAD' ? 200 : 204;
         return response.status === expected
           ? { ok: true, response }
-          : { ok: false, code: tusStatusCode(response.status) };
+          : {
+              ok: false,
+              code: resource.statusCode?.(response.status) ?? tusStatusCode(response.status),
+            };
       } catch (error) {
         return { ok: false, code: control.failureCode(error) };
       }

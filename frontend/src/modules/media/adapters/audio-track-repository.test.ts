@@ -222,7 +222,26 @@ describe('audio track API repository', () => {
     server.use(http.head(tusUrl, () => tusHead(3, 9)));
     expect(await tracks.transfer({ kind: 'resume', trackId }, file, () => {})).toEqual({
       ok: false,
-      error: { code: 'invalid_request' },
+      error: { code: 'upload_resume_unverified' },
+    });
+  });
+
+  test('a tus offset conflict reads as another upload in progress, not a bad response', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      fingerprintKey,
+      JSON.stringify({ originalName: 'dub.m4a', size: 6, lastModified: 7 }),
+    );
+    const tracks = createAudioTracks(createApiAudioTrackRepository({}, storage));
+    server.use(
+      http.head(tusUrl, () => tusHead(3, 6)),
+      http.patch(tusUrl, () =>
+        HttpResponse.json(envelope('upload_offset_conflict'), { status: 409 }),
+      ),
+    );
+    expect(await tracks.transfer({ kind: 'resume', trackId }, file, () => {})).toEqual({
+      ok: false,
+      error: { code: 'upload_in_progress' },
     });
   });
 
