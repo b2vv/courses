@@ -100,6 +100,47 @@ func TestAppendTruncatesToOffsetAndMovePreservesBytes(t *testing.T) {
 	}
 }
 
+func TestAudioUploadStorageKeysResolveAndRoundTrip(t *testing.T) {
+	storage, rootPath := openTestStorage(t)
+	ctx := context.Background()
+	const trackID = "44444444-4444-4444-8444-444444444444"
+	scratch := domain.StorageKey{Kind: domain.StorageTemporary, ID: testAssetID, Leaf: domain.AudioUploadLeafPrefix + trackID}
+	source := domain.StorageKey{Kind: domain.StorageSource, ID: testAssetID, Leaf: domain.AudioLeafPrefix + trackID}
+	hls := domain.StorageKey{Kind: domain.StorageHLS, ID: testAssetID, Leaf: domain.AudioLeafPrefix + trackID}
+
+	// The per-track audio scratch leaf must resolve; before the resolver accepted
+	// it, Append (and thus the whole upload) failed with an invalid-key error.
+	if written, err := storage.Append(ctx, scratch, 0, strings.NewReader("audio!")); err != nil || written != 6 {
+		t.Fatalf("audio scratch Append() = %d, %v", written, err)
+	}
+	assertFile(t, filepath.Join(rootPath, "temporary", testAssetID+"-"+domain.AudioUploadLeafPrefix+trackID), "audio!")
+	if size, err := storage.Size(ctx, scratch); err != nil || size != 6 {
+		t.Fatalf("audio scratch Size() = %d, %v", size, err)
+	}
+
+	if err := storage.Move(ctx, scratch, source); err != nil {
+		t.Fatalf("Move scratch to audio source: %v", err)
+	}
+	assertFile(t, filepath.Join(rootPath, "source", testAssetID, domain.AudioLeafPrefix+trackID), "audio!")
+
+	// Purge tolerates the scratch now being absent, and reclaims source and the
+	// (possibly absent) published HLS directory — the three keys the sweep purges.
+	for name, key := range map[string]domain.StorageKey{"scratch": scratch, "source": source, "hls": hls} {
+		if err := storage.Purge(ctx, key); err != nil {
+			t.Fatalf("Purge(%s) = %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(rootPath, "source", testAssetID, domain.AudioLeafPrefix+trackID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("audio source survived Purge: %v", err)
+	}
+
+	// A malformed audio-upload leaf is still rejected.
+	bad := domain.StorageKey{Kind: domain.StorageTemporary, ID: testAssetID, Leaf: domain.AudioUploadLeafPrefix + "not-a-uuid"}
+	if _, err := storage.Append(ctx, bad, 0, strings.NewReader("x")); err == nil {
+		t.Fatal("Append() accepted a malformed audio-upload leaf")
+	}
+}
+
 func TestHeadReturnsWholeShortFile(t *testing.T) {
 	storage, _ := openTestStorage(t)
 	key := domain.StorageKey{Kind: domain.StorageTemporary, ID: testAssetID, Leaf: "upload"}

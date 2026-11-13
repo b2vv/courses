@@ -76,10 +76,19 @@ type AssetRepository interface {
 	// CancelAudioUpload fails a Created/Uploading track, freeing the language slot.
 	CancelAudioUpload(ctx context.Context, trackID string, now time.Time) error
 
-	// SweepAudioTrackCandidates returns uploaded tracks in Created/Uploading whose
-	// expires_at has passed, for the caller to purge and delete.
+	// SweepAudioTrackCandidates returns uploaded tracks whose bytes may be
+	// reclaimed: expired incomplete uploads, never-completed failed uploads
+	// (cancel or mint-eviction), and completed-then-failed tracks past the
+	// failed-retention window.
 	SweepAudioTrackCandidates(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error)
-	DeleteAudioTrackSwept(ctx context.Context, trackID string) error
+	// DeleteSweptAudioTrackLocked re-checks sweep-eligibility under the row lock,
+	// runs purge for the storage reclaim, and deletes the row in one transaction;
+	// a concurrently-promoted (Queued) row yields ErrInvalidStateTransition so the
+	// caller skips it without purging live bytes.
+	DeleteSweptAudioTrackLocked(ctx context.Context, trackID string, now time.Time, purge func() error) error
+	// RecoverQueuedAudioTracks returns uploaded tracks stranded in Queued past the
+	// recovery grace (a lost post-commit enqueue), for the caller to re-enqueue.
+	RecoverQueuedAudioTracks(ctx context.Context, now time.Time, limit int) ([]domain.AudioTrack, error)
 
 	// The authoring surface (S5-L1): each verifies the actor may edit the asset's
 	// lesson's course before touching a track (ErrCourseForbidden otherwise), a

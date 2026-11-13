@@ -122,7 +122,7 @@ func enforceTreeModes(root string) error {
 }
 
 func (transcoder *Transcoder) probeArguments(source domain.StorageKey) ([]string, error) {
-	sourcePath, err := transcoder.resolveSource(source)
+	sourcePath, err := transcoder.resolveProbeSource(source)
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +383,17 @@ func renditionNames(renditions []domain.Rendition) []string {
 
 func (transcoder *Transcoder) resolveSource(key domain.StorageKey) (string, error) {
 	if key.Kind != domain.StorageSource || key.Leaf != "original" || !validUUID(key.ID) {
+		return "", errInvalidTranscodeInput
+	}
+	return filepath.Join(transcoder.root, string(key.Kind), key.ID, key.Leaf), nil
+}
+
+// resolveProbeSource accepts either source file ffprobe is run against: the video
+// source "original" or an uploaded audio track's own source audio-<trackID>.
+// Rendering keeps the two apart (resolveSource / resolveAudioSource), but probing
+// only reads streams, so one path serves both.
+func (transcoder *Transcoder) resolveProbeSource(key domain.StorageKey) (string, error) {
+	if key.Kind != domain.StorageSource || !validUUID(key.ID) || (key.Leaf != "original" && !validAudioLeaf(key.Leaf)) {
 		return "", errInvalidTranscodeInput
 	}
 	return filepath.Join(transcoder.root, string(key.Kind), key.ID, key.Leaf), nil

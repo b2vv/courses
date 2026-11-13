@@ -337,7 +337,10 @@ func resolve(key domain.StorageKey) (string, error) {
 			return path.Join(string(key.Kind), key.ID+".jpg"), nil
 		}
 	case domain.StorageTemporary:
-		if key.Leaf == "upload" || validClaimLeaf(key.Leaf) {
+		// "upload" is the per-asset video scratch; audio-upload-<trackID> is an
+		// uploaded audio track's own per-track scratch; a 32-hex claim leaf is a
+		// transcode work directory.
+		if key.Leaf == "upload" || validAudioUploadLeaf(key.Leaf) || validClaimLeaf(key.Leaf) {
 			return path.Join(string(key.Kind), key.ID+"-"+key.Leaf), nil
 		}
 	}
@@ -354,6 +357,10 @@ func validUUID(value string) bool {
 
 func validAudioLeaf(value string) bool {
 	return strings.HasPrefix(value, domain.AudioLeafPrefix) && validUUID(strings.TrimPrefix(value, domain.AudioLeafPrefix))
+}
+
+func validAudioUploadLeaf(value string) bool {
+	return strings.HasPrefix(value, domain.AudioUploadLeafPrefix) && validUUID(strings.TrimPrefix(value, domain.AudioUploadLeafPrefix))
 }
 
 func validClaimLeaf(value string) bool {

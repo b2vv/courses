@@ -158,3 +158,53 @@ verbatim), path-safety audio-leaf, quoted-string-safety, рівно-один-def
 **Наступний крок — S5 (wiring uploaded-track) з попереднім закриттям обмежень 1–3** або S-backfill/
 S6/S7 за `plan.md` §5. Мердж гілки `multi-audio` — через PR (код-фаза), після незалежного рев'ю
 дельти й go власника.
+
+---
+
+## S5-L1b fix-forward (2026-11-10) — закриття знахідок незалежного рев'ю PR #100
+
+PR #100 (S5-L1b: upload+enqueue+sweep для audio-доріжок) злито 2026-10/11 під **fork**-рев'ю, яке
+повернуло CLEAN, бо успадкувало контекст автора. Запущене згодом **незалежне** рев'ю (Codex, свіжий
+контекст) повернуло **BLOCK** із 4 Major. Усі звірені з кодом і закриті у `547b1f3`+HLS-fix
+(гілка `multi-audio-s5l1b-fixes`):
+
+- **F1 небезпечний sweep.** Стара `DeleteAudioTrackSwept` видаляла за id без фільтра стану → sweep
+  міг почистити/видалити доріжку, яку конкурентний PATCH щойно підняв у Queued. Замінено на
+  `DeleteSweptAudioTrackLocked`: під `FOR UPDATE` перевіряє eligibility тим самим предикатом, що й
+  вибірка, чистить сховище й видаляє в одній транзакції; промоутнутий рядок → `ErrInvalidStateTransition`,
+  пропуск без purge живих байтів.
+- **F2 втрата enqueue.** Доріжка, що закомітила Queued, але чий post-commit `EnqueueAudioTrack`
+  загубився (збій Redis / крах), застрягала. Додано `RecoverQueuedAudioTracks` (queued > 10 хв) і
+  audio-re-enqueue у `Transcode.Recover`; asynq дедупить за task id.
+- **F3 витік байтів.** Cancel/mint-eviction ставлять `failed`, а sweep брав лише created/uploading.
+  Розширено на незавершені failed (received<declared) і завершені-та-failed понад 30-денне вікно
+  (дзеркало video failed-reap). Published HLS failed-after-publish доріжки теж чиститься (`audioHLSKey`).
+- **Minor.** Опис `MediaBadRequest` тепер називає межу на медіа (2 GiB video, 500 MiB audio).
+
+**Рішення (2026-11-10, артефакт):** uploaded-доріжка у `failed` із `received<declared` (cancel /
+mint-eviction — незавершене вивантаження) — upload-junk; sweep чистить і видаляє рядок. `failed` із
+`received=declared` (transcode-fail, видимий у ListAudioTracks) лишається, реапиться після 30 днів.
+Перевірка: предикат `audioSweepEligible`; integration-тест на обидві гілки. Дивергенція від video
+(video має evicted_at) — audio розрізняє незавершене за received<declared.
+
+**Обмеження (магнітуда/механізм за AGENTS.md):**
+1. `Recover` виконується **лише один раз при старті** media-worker (`cmd/media-worker/main.go:61`),
+   не періодично — ідентично video-шляху. Загублений enqueue, що стався, поки worker працює, не
+   відвідується до наступного рестарту (і лише якщо рядок старший за 10-хв grace). `Sweep` натомість
+   НЕ стартовий: крім старту він біжить на початку кожного video-`Process` (`transcode.go:47`), тож
+   F3-cleanup частий. Періодична **recovery** — покращення всього worker-а (стосується й video),
+   поза обсягом цього audio-фіксу.
+
+**Верифікація.** `format-check` / `lint` / `typecheck` / `test` / `check-generated` / `build` /
+`integration` — зелені (2026-11-10). Нові тести: `audioupload_test` (7: head-gating, offset/over-declared,
+completion→enqueue, enqueue-fail, cancel), `transcode` audio sweep/recover (3), `tus/audioserver_test`
+(7: HEAD/PATCH/DELETE/offset/415/405/412/404), HTTP mint-контракт AT09–AT12, postgres integration
+(sweep-вибірка, locked-delete purge+promote-skip, recover-вибірка). Повний упорядкований `make check` на `1e4eeb2` (2026-11-13) — `GATE_EXIT=0`, e2e **129 passed**, 0 skipped (15.8 хв). Попередній червоний e2e (Acc26–31 TOTP, `login→503`) був інфра-шумом: argon2id-timeout під CPU-контенцією від сторонніх контейнерів на хості (load 55–116); після їх зупинки (load ~8) той самий тест `Acc26–Acc29 and Acc31` зелений (2.4 хв) без змін у коді.
+
+**Відома test-robustness follow-up (non-blocking, SHIP-вердикт):** F1 integration-тест
+`testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted` доводить skip промоутнутого треку за
+eligibility-предикатом, але не ганяє СПРАВЖНЮ конкурентну транзакцію (PATCH, що промоутить у Queued,
+проти sweep). Тож мутація «прибрати `FOR UPDATE`» тест би не завалила. Production-код коректно тримає
+row-lock (підтверджено незалежним рев'ю). Підсилення — детермінований two-transaction race за
+патерном `blockingMintTracer`/`testConcurrentPromoteAudioTrack` — залишено follow-up, щоб не вносити
+флак-ризик наприкінці.

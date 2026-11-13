@@ -125,6 +125,24 @@ func TestProbeArgumentsAreFixed(t *testing.T) {
 	assertArguments(t, got, want)
 }
 
+func TestProbeArgumentsAcceptAnUploadedAudioSource(t *testing.T) {
+	t.Parallel()
+	transcoder := New("/media")
+	const trackID = "44444444-4444-4444-8444-444444444444"
+	audioSource := domain.StorageKey{Kind: domain.StorageSource, ID: "11111111-1111-4111-8111-111111111111", Leaf: domain.AudioLeafPrefix + trackID}
+	got, err := transcoder.probeArguments(audioSource)
+	if err != nil {
+		t.Fatalf("probeArguments(audio source) = %v; the audio transcode job probes this key", err)
+	}
+	want := []string{"-v", "error", "-show_streams", "-show_format", "-print_format", "json", "--", "/media/source/11111111-1111-4111-8111-111111111111/" + domain.AudioLeafPrefix + trackID}
+	assertArguments(t, got, want)
+
+	bad := domain.StorageKey{Kind: domain.StorageSource, ID: "11111111-1111-4111-8111-111111111111", Leaf: "audio-not-a-uuid"}
+	if _, err := transcoder.probeArguments(bad); !errors.Is(err, errInvalidTranscodeInput) {
+		t.Fatalf("probeArguments(malformed audio leaf) error=%v want=%v", err, errInvalidTranscodeInput)
+	}
+}
+
 func TestRenderArgumentsForLandscapeAndPortraitSources(t *testing.T) {
 	t.Parallel()
 	transcoder := New("/media")

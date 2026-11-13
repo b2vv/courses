@@ -657,6 +657,78 @@ func TestRecoverFreesProcessingRowsWithoutAddingASecondTask(t *testing.T) {
 	}
 }
 
+func TestSweepAudioPurgesScratchAndSourceUnderLockedDelete(t *testing.T) {
+	t.Parallel()
+	var purged []string
+	track := uploadedTrack(domain.Failed)
+	repository := processingRepository(domain.Queued)
+	repository.sweepAudioTrackCandidates = func(ctx context.Context, _ time.Time, limit int) ([]domain.AudioTrack, error) {
+		assertMediaDeadline(t, ctx, 3*time.Second)
+		if limit != 50 {
+			t.Fatalf("limit=%d", limit)
+		}
+		return []domain.AudioTrack{track}, nil
+	}
+	storage := defaultStorage()
+	storage.purge = func(_ context.Context, key domain.StorageKey) error {
+		purged = append(purged, string(key.Kind))
+		return nil
+	}
+	if err := newTranscode(repository, storage, defaultTranscoder(), nil).Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertStrings(t, purged, []string{"temporary", "source", "hls"})
+	if countCall(repository.calls, "delete_swept_audio") != 1 {
+		t.Fatalf("calls=%v", repository.calls)
+	}
+}
+
+func TestSweepAudioSkipsAConcurrentlyPromotedTrackWithoutPurging(t *testing.T) {
+	t.Parallel()
+	repository := processingRepository(domain.Queued)
+	repository.sweepAudioTrackCandidates = func(context.Context, time.Time, int) ([]domain.AudioTrack, error) {
+		return []domain.AudioTrack{uploadedTrack(domain.Failed)}, nil
+	}
+	repository.deleteSweptAudioTrackLockd = func(context.Context, string, time.Time, func() error) error {
+		return domain.ErrInvalidStateTransition
+	}
+	storage := defaultStorage()
+	storage.purge = func(context.Context, domain.StorageKey) error {
+		t.Fatal("purge ran for a track that was no longer sweep-eligible")
+		return nil
+	}
+	if err := newTranscode(repository, storage, defaultTranscoder(), nil).Sweep(context.Background()); err != nil {
+		t.Fatalf("skip should not surface an error: %v", err)
+	}
+}
+
+func TestRecoverReenqueuesStrandedAudioTracks(t *testing.T) {
+	t.Parallel()
+	track := uploadedTrack(domain.Queued)
+	repository := processingRepository(domain.Queued)
+	repository.recoverQueuedAudioTracks = func(ctx context.Context, _ time.Time, limit int) ([]domain.AudioTrack, error) {
+		assertMediaDeadline(t, ctx, 3*time.Second)
+		if limit != 50 {
+			t.Fatalf("limit=%d", limit)
+		}
+		return []domain.AudioTrack{track}, nil
+	}
+	var got string
+	queue := &fakeQueue{
+		enqueue: func(context.Context, string, int) error { return nil },
+		enqueueAudio: func(_ context.Context, assetID, trackID string, attempt int) error {
+			got = assetID + ":" + trackID
+			return nil
+		},
+	}
+	if err := newTranscode(repository, defaultStorage(), defaultTranscoder(), queue).Recover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if want := track.VideoAssetID + ":" + track.ID; got != want {
+		t.Fatalf("re-enqueue=%q want %q", got, want)
+	}
+}
+
 func processingRepository(state domain.State) *fakeRepository {
 	repository := &fakeRepository{asset: mediaAsset(state)}
 	repository.sweepCandidates = func(context.Context, time.Time, int) ([]domain.VideoAsset, error) { return nil, nil }
