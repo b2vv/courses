@@ -31,6 +31,15 @@ describe('lesson video wire schemas', () => {
     ).toBe(true);
   });
 
+  test('accepts a video-only asset waiting for its first audio track', () => {
+    // Backend writes awaiting_audio for a source with no audio stream (S3, D4). One such row
+    // must not make the whole course video list unparseable.
+    expect(
+      courseVideosSchema.safeParse({ items: [video, { ...video, state: 'awaiting_audio' }] })
+        .success,
+    ).toBe(true);
+  });
+
   test.each([
     { items: [{ ...video, receivedBytes: 13 }] },
     { items: [{ ...video, storageKey: 'source/private' }] },

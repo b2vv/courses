@@ -3,6 +3,7 @@ export const videoStates = [
   'uploading',
   'queued',
   'processing',
+  'awaiting_audio',
   'ready',
   'failed',
 ] as const;
