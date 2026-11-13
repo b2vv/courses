@@ -98,6 +98,18 @@ L2a: стан у domain + schema + i18n uk/en (щоб список знову п
 уроку; відео-поле пояснює «додайте аудіодоріжку»; секція аудіо показується. e2e: video-only фікстура
 (testsrc2 без аудіо) → `awaiting_audio` → upload m4a → доріжка ready → відео ready без reload.
 
+### D-L2-9 — learner-читання мапить `awaiting_audio` у `processing` (розширення обсягу L2a, 2026-11-13, Courses 1)
+Під час коду L2a знайдено той самий клас дефекту в backend: `course/adapters/postgres/learning.go:35-37`
+мапив лише `created/uploading/queued/processing` у `processing`, а інше віддавав сирим, тож
+`awaiting_audio` виходив на wire поза контрактом `LearningVideoStates` (`processing|ready|failed`) і
+поза фронтенд-схемою `playback-schema.ts:42` → сторінка курсу учня для такого уроку не парситься.
+Фікс — додати `awaiting_audio` у той самий `IN (...)`: для учня відео без звуку ще не готове, як і
+`processing`. Закриває альтернативу «новий learner-стан» (зміна контракту без продуктової вимоги).
+Перевірка: integration-підтест у `learning_integration_test.go` (asset → `awaiting_audio` → `VideoProcessing`).
+Поза обсягом (обмеження): `adminstats` `in_progress` (`adminstats/adapters/postgres/snapshot.go:137`)
+не рахує `awaiting_audio` — лічильник, не wire-парсинг; відео без звуку зараз не потрапляє в
+`in_progress` і не в `ready` дашборду.
+
 ### D-L2-7 — operationId `mintAdminAudioTicket` для POST create
 Overlay-рядок + `make generate`; дзеркало `mintAdminVideoTicket`. Генерована назва
 `postApiV1AdminVideosVideoIdAudioTracks` інакше протече в adapter. Зміна — лише ім'я в generated client.
