@@ -110,6 +110,21 @@ L2a: стан у domain + schema + i18n uk/en (щоб список знову п
 не рахує `awaiting_audio` — лічильник, не wire-парсинг; відео без звуку зараз не потрапляє в
 `in_progress` і не в `ready` дашборду.
 
+### D-L2-10 — рішення під час коду L2b (2026-11-13, Courses 1)
+- **Секція аудіо — лише для поточного відео в `ready` або `awaiting_audio`.** Закриває «показувати й
+  під час `queued/processing`»: доріжки з'являються після транскоду (embedded створює worker), а
+  додавання до необробленого ассета не має продуктової потреби. Перевірка: component-тест D-L2-1
+  (processing → секції нема).
+- **`shownVideo`: `awaiting_audio` є поточним, лише якщо його generation > найновішого `ready`.**
+  Закриває «завжди вище за ready» і «завжди нижче»: новіша заміна без звуку мусить бути видимою, щоб
+  автор додав аудіо; старша застрягла генерація (поза pending-index, див. `_gotchas`) не ховає
+  ready-відео. Перевірка: два component-тести D-L2-8 + мутація `>`→`<` (2 падіння).
+- **Бейдж доріжки — `data-audio-state`, не `data-video-state`.** Закриває спільний атрибут: наявні
+  e2e-локатори `field.locator('[data-video-state]')` стали б неоднозначними (strict mode) на кожному
+  ready-уроці з embedded-доріжкою. Перевірка: повний e2e media-проєкт.
+- **Мова в Select не пропонує зайнятих мов** (не-failed доріжки того ж ассета, міграція 00026);
+  409 `duplicate_language` все одно мапиться (гонка). Перевірка: component-тести + domain-тест.
+
 ### D-L2-7 — operationId `mintAdminAudioTicket` для POST create
 Overlay-рядок + `make generate`; дзеркало `mintAdminVideoTicket`. Генерована назва
 `postApiV1AdminVideosVideoIdAudioTracks` інакше протече в adapter. Зміна — лише ім'я в generated client.
@@ -145,7 +160,7 @@ Overlay-рядок + `make generate`; дзеркало `mintAdminVideoTicket`. �
 | задача | READY? | що бракує |
 |---|---|---|
 | S5-L2a | **READY** (critique #3 ACCEPTED) | — |
-| S5-L2b | ACCEPTED, чекає мерджу L2a | залежність L2a |
+| S5-L2b | **READY** (L2a злито `15afa6c`, PR #102, 2026-11-13) | — |
 Залежності: L2b ← L2a злито. Impact L2a: tus-клієнт відео (D-L2-2) → повний e2e відео-upload.
 
 ## Ризики
