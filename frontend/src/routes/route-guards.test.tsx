@@ -13,13 +13,15 @@ import { setupServer } from 'msw/node';
 import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../modules/identity';
 import { createAuthoring } from '../modules/admin';
-import { createLessonVideos } from '../modules/media';
+import { createAudioTracks, createLessonVideos } from '../modules/media';
+import type { AudioTrackRepository } from '../modules/media';
 import { createUserAdministration } from '../modules/admin';
 import { createCatalog } from '../modules/catalog';
 import { createSession } from '../modules/identity';
 import { createAdminQueries } from '../app/composition/admin-queries';
 import { createAdminUserQueries } from '../app/composition/admin-user-queries';
 import { createAdminVideoQueries } from '../app/composition/admin-video-queries';
+import { createAdminAudioQueries } from '../app/composition/admin-audio-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
@@ -238,6 +240,17 @@ function createTestRouter(
     transfer: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
     cancelUpload: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
   };
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  const audioTrackRepository: AudioTrackRepository = {
+    list: unavailable,
+    mint: unavailable,
+    rename: unavailable,
+    setDefault: unavailable,
+    remove: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+  };
   const playbackRepository: PlaybackRepository = {
     getCourse: async () => ({ ok: false, error: { code: 'course_not_found' } }),
     play: async () => ({ ok: false, error: { code: 'lesson_not_found' } }),
@@ -253,6 +266,7 @@ function createTestRouter(
         ...createAdminQueries(createAuthoring(adminRepository)),
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
         videos: createAdminVideoQueries(createLessonVideos(lessonVideoRepository)),
+        audioTracks: createAdminAudioQueries(createAudioTracks(audioTrackRepository)),
         transcripts: createTranscriptQueries(transcriptStub),
         grants: createAdminGrantQueries({
           grant: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
