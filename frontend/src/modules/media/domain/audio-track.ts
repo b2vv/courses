@@ -115,6 +115,31 @@ export function validAudioTicketInput(declaredBytes: number, originalName: strin
   );
 }
 
+/**
+ * The offered languages a track may still take: one track per (asset, language), failed tracks
+ * excluded (migration 00026), so a failed upload frees its language. A track's own language stays
+ * offered while it is edited, even when it lies outside the offered list (data from before it).
+ */
+export function availableAudioLanguages(
+  tracks: readonly AudioTrack[],
+  editedTrackId?: string,
+): readonly string[] {
+  const taken = new Set(
+    tracks
+      .filter((track) => track.state !== 'failed' && track.trackId !== editedTrackId)
+      .map((track) => track.language),
+  );
+  const own = tracks.find((track) => track.trackId === editedTrackId)?.language;
+  const offered: string[] = audioTrackLanguages.filter((language) => !taken.has(language));
+  if (own !== undefined && !offered.includes(own)) offered.unshift(own);
+  return offered;
+}
+
+/** A created or uploading track with no transfer running in this tab was interrupted. */
+export function isInterruptedAudioTrack(track: AudioTrack): boolean {
+  return track.kind === 'uploaded' && (track.state === 'created' || track.state === 'uploading');
+}
+
 /** Only a Ready track that is not already the default can become the default. */
 export function canSetDefaultAudioTrack(track: AudioTrack): boolean {
   return track.state === 'ready' && !track.isDefault;

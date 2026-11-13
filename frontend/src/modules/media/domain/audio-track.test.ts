@@ -1,8 +1,10 @@
 import { describe, expect, test } from '@rstest/core';
 import {
   audioTrackLanguages,
+  availableAudioLanguages,
   canDeleteAudioTrack,
   canSetDefaultAudioTrack,
+  isInterruptedAudioTrack,
   terminalAudioSignature,
   validAudioLabel,
   validAudioLanguage,
@@ -86,5 +88,22 @@ describe('audio track domain', () => {
     expect(terminalAudioSignature([track(a, 'ready')])).not.toBe(
       terminalAudioSignature([track(a, 'failed')]),
     );
+  });
+
+  test('a language is offered once per asset; a failed track frees it; an edit keeps its own', () => {
+    const dub = { ...track(a, 'ready'), language: 'en' };
+    const failed = { ...track(b, 'failed'), language: 'pl' };
+    expect(availableAudioLanguages([dub, failed])).toEqual(['uk', 'pl', 'de', 'fr', 'es', 'und']);
+    expect(availableAudioLanguages([dub], a)).toContain('en');
+    const legacy = { ...track(a, 'ready'), language: 'pt-BR' };
+    expect(availableAudioLanguages([legacy], a)[0]).toBe('pt-BR');
+    expect(availableAudioLanguages([legacy])).not.toContain('pt-BR');
+  });
+
+  test('only an uploaded created/uploading track counts as interrupted', () => {
+    expect(isInterruptedAudioTrack(track(a, 'uploading'))).toBe(true);
+    expect(isInterruptedAudioTrack(track(a, 'created'))).toBe(true);
+    expect(isInterruptedAudioTrack(track(a, 'queued'))).toBe(false);
+    expect(isInterruptedAudioTrack({ ...track(a, 'created'), kind: 'embedded' })).toBe(false);
   });
 });

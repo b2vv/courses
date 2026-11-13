@@ -49,7 +49,7 @@ async function drainTranscodeQueue() {
   );
 }
 
-test('generate the six media fixtures with the worker ffmpeg', async () => {
+test('generate the eight media fixtures with the worker ffmpeg', async () => {
   // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
   // so the budget covers all five encodes plus streaming the bytes out.
   test.setTimeout(720_000);
@@ -66,6 +66,10 @@ test('generate the six media fixtures with the worker ffmpeg', async () => {
       'for size in 640x360 1280x720 320x240; do',
       '  ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=$size:rate=15 -f lavfi -i sine=frequency=440 -t 2 -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-$size.mp4',
       'done',
+      // Multi-audio S5-L2b: a video-only source (no audio stream → awaiting_audio) and a short
+      // AAC tone in an M4A container to upload as its audio track.
+      'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -t 2 -an -c:v libx264 -preset veryfast -y /tmp/e2e-640x360-silent.mp4',
+      'ffmpeg -nostdin -loglevel error -f lavfi -i sine=frequency=660 -t 2 -c:a aac -y /tmp/e2e-tone.m4a',
       'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i "flite=text=\'Welcome to the course. Today we will learn how video transcripts work.\':voice=slt" -shortest -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-speech-640x360.mp4',
     ].join('\n'),
   );
@@ -130,11 +134,19 @@ test('generate the six media fixtures with the worker ffmpeg', async () => {
 
   // `docker compose cp` cannot read from the worker's `/tmp`, which is a tmpfs mount rather
   // than part of the container filesystem, so the bytes are streamed out through exec instead.
-  for (const name of [...shortSizes, 'speech-640x360', '1280x720-5min', '1280x720-100s'] as const) {
-    const destination = path.join(fixtureDirectory, `e2e-${name}.mp4`);
+  const names = [
+    ...shortSizes.map((size) => `${size}.mp4`),
+    'speech-640x360.mp4',
+    '1280x720-5min.mp4',
+    '1280x720-100s.mp4',
+    '640x360-silent.mp4',
+    'tone.m4a',
+  ];
+  for (const name of names) {
+    const destination = path.join(fixtureDirectory, `e2e-${name}`);
     const { stdout } = await execute(
       'docker',
-      ['compose', 'exec', '-T', 'media-worker', 'cat', `/tmp/e2e-${name}.mp4`],
+      ['compose', 'exec', '-T', 'media-worker', 'cat', `/tmp/e2e-${name}`],
       { cwd: repositoryRoot, timeout: 120_000, maxBuffer: 128 * 1024 * 1024, encoding: 'buffer' },
     );
     await writeFile(destination, stdout);

@@ -1241,10 +1241,12 @@ nav a {
   border-radius: var(--radius-control);
   font-weight: 650;
 }
-.admin-video-state[data-video-state='ready'] {
+.admin-video-state[data-video-state='ready'],
+.admin-video-state[data-audio-state='ready'] {
   color: var(--color-success);
 }
 .admin-video-state[data-video-state='failed'],
+.admin-video-state[data-audio-state='failed'],
 .admin-video-error {
   color: var(--color-danger);
 }
@@ -1255,6 +1257,58 @@ nav a {
 }
 .admin-video-hint {
   color: var(--color-muted);
+}
+.admin-audio-field {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border);
+}
+.admin-audio-field h4,
+.admin-audio-field p {
+  margin: 0;
+}
+.admin-audio-tracks {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-audio-track {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.admin-audio-track-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.admin-audio-default {
+  font-weight: 650;
+  color: var(--color-success);
+}
+.admin-audio-new {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.admin-audio-new legend {
+  padding-inline: var(--space-1);
+  font-weight: 650;
+}
+.admin-audio-edit {
+  display: grid;
+  gap: var(--space-3);
 }
 .admin-row-actions,
 .admin-editor-save {
