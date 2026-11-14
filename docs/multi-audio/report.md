@@ -276,3 +276,65 @@ B40 — strict-mode violation, бо в полі ready-уроку тепер дв
 падіння заміни, поки на уроці є старше `ready` (як для відео на `main`). Причина `failed` доріжки не
 показується — DTO її не несе. `adminstats` `awaiting_audio` — як у L2a. GitHub CI не запускається
 (account-wide, див. пам'ять) — авторитетний гейт локальний.
+
+## S-backfill — embedded-доріжка для Ready-ассетів до S3 (2026-11-14)
+
+План: `docs/multi-audio/plan-sbackfill.md` (D-B1…D-B6, D-B3a; plan-critique Codex, 3 раунди → ACCEPTED).
+Гілка `multi-audio-sbackfill` від `main@2292869`. Вибір зрізу — власник, 2026-11-14.
+
+- **Дефект на `main`, закрито:** Ready-ассети, транскодовані до S3, не мали рядка `audio_tracks`, тож перша
+  вивантажена доріжка перегенеровувала master лише з неї — оригінальний звук (`audio/index.m3u8`) зникав із
+  плеєра; редактор показував порожній список доріжок.
+- **Міграція `00028`:** кожен `ready`, не evicted ассет **без жодної Ready-доріжки** отримує embedded
+  (`und`/«Original», default, Ready, leaf `original`) — як `Publish` після S3. Мова `und-x-original`, якщо `und`
+  тримає не-failed upload; обидві зайняті → відмова. `LOCK TABLE … SHARE ROW EXCLUSIVE` після
+  `SET LOCAL lock_timeout='5s'` серіалізує з mint/promote/delete/publish/evict/sweep. Детермінований id
+  `md5('multi-audio-backfill:'||asset_id)::uuid` — Down прибирає рівно ці рядки. Ready-ґейт для наявних
+  даних: після INSERT кожен Ready-ассет має ≥1 Ready-доріжку й рівно одну default, інакше відмова.
+- **Обсяг — звуження, не ремонт усіх (D-B6):** старий ассет, чия uploaded-доріжка **вже стала Ready** до
+  міграції, у БД не відрізнити від video-only — міграція його не чіпає; оригінальний звук такого ассета не
+  відновлено. Стан досяжний лише між S5 і цією міграцією, у test mode.
+
+**Верифікація.** Integration (реальний goose-провайдер, Postgres 17.5, testcontainers) — 4 нові підтести
+зелені: populated data 10 станів (A/A2/A3/H — backfill; B evicted, C embedded від Publish, D video-only з
+Ready upload, E processing, F failed, G awaiting_audio — без змін) + down прибирає лише backfill-рядки +
+повторний up відтворює ті самі id + promote на backfilled-ассеті дає 2 rendition-и з embedded default;
+відмова при зайнятих `und`/`und-x-original` (версія лишилась 27, рядків нема); відмова ґейта (Ready-доріжка
+без default) з відкатом backfill-кандидата; незакомічений writer → міграція чекає й падає з lock timeout
+(5.17 с), після rollback — успіх. Мутації (кожна ловиться своїм тестом): умова «нуль рядків» → падає
+populated; без `LOCK` → падає writer-тест; down «за kind» → падає populated.
+
+**Незалежне рев'ю (Codex `exec`):** W1 на `16fa3d0` — SHIP без доказів (не зараховано як перевірку);
+W2 — SHIP з доказами по 5 пунктах, включно з усіма 13 викликами `DownTo/UpTo` нижче 28 у backend (жоден не
+зачіпає ґейт: course-фікстури мають лише `queued` відео; інші пакети не понижують схему). Minor W2 —
+діагностика нижче. Raw: `_wip-sbackfill-review-codex-w1.md`, `-w2.md`.
+
+**Діагностика відмови `make migrate` (D-B3a).** Runner навмисно ховає помилку goose
+(`cmd/migrate/main.go:67-69`), тож при відмові 00028 оператор запускає read-only запити:
+
+```sql
+-- 1) Обидві мови зайняті (відмова «already uses both und and und-x-original»):
+SELECT a.id FROM video_assets a
+WHERE a.state='ready' AND a.evicted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.state='ready')
+  AND EXISTS (SELECT 1 FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.state<>'failed' AND t.language='und')
+  AND EXISTS (SELECT 1 FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.state<>'failed' AND t.language='und-x-original');
+-- 2) Ready-ассет, що лишився б без Ready default (відмова «has no ready default audio track»):
+SELECT a.id FROM video_assets a
+WHERE a.state='ready' AND a.evicted_at IS NULL
+  AND EXISTS (SELECT 1 FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.state='ready')
+  AND (SELECT count(*) FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.is_default) <> 1;
+-- 3) Lock timeout — хто тримає таблиці:
+SELECT l.pid, l.mode, l.granted, a.state, a.query_start
+FROM pg_locks l JOIN pg_stat_activity a USING (pid)
+WHERE l.relation IN ('video_assets'::regclass, 'audio_tracks'::regclass);
+-- D-B6: кандидати, яких міграція свідомо не чіпає (старий ассет з уже Ready upload, без embedded):
+SELECT a.id FROM video_assets a
+WHERE a.state='ready' AND a.evicted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM audio_tracks t WHERE t.video_asset_id=a.id AND t.kind='embedded');
+```
+Останній запит дає й video-only ассети (вони не мають embedded за визначенням) — розрізнити їх можна лише
+за наявністю каталогу `audio/` на диску, тож це список для ручного огляду, не автоматичний ремонт.
+
+**Обмеження.** D-B6 (вище). master.m3u8 на диску не змінюється (D-B4): назва «audio_0» лишається до
+першого regen. ASR не змінено (D-B5, S6). Down — test-only; після нього старі ассети знову без доріжок.
