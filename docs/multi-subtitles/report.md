@@ -6,7 +6,7 @@
 
 План зрізу: [plan-ms1.md](plan-ms1.md) (ACCEPTED r3). Гілка `multi-subtitles`; коміти коду:
 `f00b0ff` (зріз), `7bab674` (рев'ю W1), `4ed7ed0` (фікстура, зловлена гейтом), `5778964`
-(design-pass F1), `f415643` (звіт), `c34c0d0` (design-pass F4, глобальний `.ui-popover`/`.ui-listbox`).
+(design-pass F1), `f415643` (звіт), `c34c0d0` (design-pass F4, глобальний `.ui-popover`/`.ui-listbox`), `3759d07` (рев'ю W5 F5: клас замість `:has()`).
 
 ### Що зроблено
 
@@ -40,8 +40,13 @@
 
 ### Гейти і мутації
 
-- Ordered `make check` на фінальному коді `c34c0d0` (після F4, глобальний CSS): **GATE_EXIT=0**, e2e
-  **138 passed (18.3 хв)**, frontend 948 unit. Попередній на `f415643` (після F1): GATE_EXIT=0, e2e 138
+- Ordered `make check` на фінальному коді `3759d07` (після F5): перший прогін **червоний** на
+  `make integration` — `TestPlaybackSessionsAndAuthorizationAgainstRedisAndPostgreSQL`:
+  `port "5432/tcp" not found` (testcontainers не віддав мапінг порту Postgres-контейнера; дифф зрізу
+  на цьому коміті — лише фронтенд-CSS і два `className`, playback-backend не зачеплено). Повний
+  повторний прогін: **GATE_EXIT=0**, e2e **138 passed (18.2 хв)**, frontend 948 unit. Червоний прогін
+  не зараховано як зелений; це той самий клас нестабільності testcontainers, що Ryuk-гонка (B-27).
+- На `c34c0d0` (після F4, глобальний CSS): GATE_EXIT=0, e2e 138 (18.3 хв), frontend 948. Попередній на `f415643` (після F1): GATE_EXIT=0, e2e 138
   (18.4 хв), frontend 948. Попередній на `4ed7ed0`: GATE_EXIT=0, e2e 138, frontend 947. Перший прогін на `7bab674` впав на `make integration`: transcript-фікстура генерувала мови
   `'l-'||md5…` (однолітерний перший subtag) — новий CHECK її відкинув. Ні таргетний media-integration,
   ні рев'ю плану цього не знайшли; виправлено в `4ed7ed0`. Пастка — в Obsidian `_gotchas.md`.
@@ -158,6 +163,23 @@ listbox 13–396, `scrollTop` 265; поповер не прокручуєтьс�
 прокручується, рамка з відступом 8 px з боків, `scrollWidth` ≤ ширини (390/753/1009/1425);
 ComboBox на 390 (7 опцій) прокручує listbox. Кадри `F4-regression-*`. `Menu` у застосунку не
 використовується. Повний ordered `make check` на `c34c0d0` — GATE_EXIT=0, e2e 138 (розділ «Гейти»).
+
+**F5 (рев'ю W5, Major, виправлено `3759d07`):** `:has()` не підтримується Firefox до 121, а дефолтний
+browserslist Rsbuild (у проєкті без override) включає Firefox ≥104 — там F4 повертався. Тепер `Select`,
+`ComboBox` і `Menu` явно мають клас `ui-popover-list` (`controls.tsx`, `overlays.tsx`), правило — на
+класі; поповер плеєра (`PlayerSettingsMenu`, усередині `Dialog`) класу не має й не змінюється.
+Live-прогону у Firefox 104–120 немає (браузера немає на стенді); механізм — звичайний клас-селектор.
+
+**Перевірка на фінальній ревізії `3759d07` (F6 рев'ю W5).** Стенд після гейту (новий e2e-курс
+`982aa7a6…` з однією `und`-доріжкою; попередній курс прибрав гейт), повторний вхід тестовим admin з
+фікстури. Діалог при 200%/390: відкривається з Undetermined видимим (`scrollTop` 265, поповер не
+прокручується, рамка 16/16 px), Escape → тригер `:focus-visible`, другий Escape → «Edit track …».
+Reflow 320×640: нова доріжка — Tab → Enter → ↓ (English видима), End → Spanish видима, Escape → тригер
+`:focus-visible`; діалог — відкриття з Undetermined видимим, Escape ×2 з поверненням фокуса; ComboBox —
+7 опцій, прокручується listbox, сфокусована видима. Чотири класи (390/768/1024/1440) × Select власника,
+нова доріжка (End), мова розпізнавання (End), ComboBox (↓): у кожному поповер має `ui-popover-list`,
+сфокусована опція видима, поповер не прокручується, рамка 8/8 px, `scrollWidth` 390/753/1009/1425.
+Кадри `final-*`. Повний ordered `make check` на `3759d07` — GATE_EXIT=0 з другого прогону (розділ «Гейти»).
 
 ### Обмеження (магнітуда або механізм)
 
