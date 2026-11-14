@@ -10,6 +10,8 @@ export type PlayerPreferences = {
   readonly captionsOn: boolean;
   /** Advance to the next lesson when one ends — on by default, as YouTube/Hulu autoplay is. */
   readonly autoplayNext: boolean;
+  /** The audio language last chosen in the menu; started with when a lesson offers it exactly. */
+  readonly audioLanguage: string | null;
 };
 
 export const defaultPreferences: PlayerPreferences = {
@@ -18,6 +20,7 @@ export const defaultPreferences: PlayerPreferences = {
   rate: 1,
   captionsOn: false,
   autoplayNext: true,
+  audioLanguage: null,
 };
 
 const STORAGE_KEY = 'courses.player.prefs.v1';
@@ -25,6 +28,14 @@ const STORAGE_KEY = 'courses.player.prefs.v1';
 // Rates the player offers; a stored rate outside this set is dropped rather than clamped, so an old
 // or tampered value can never hand the student a speed no control can undo.
 const ALLOWED_RATES = new Set([0.75, 1, 1.25, 1.5, 2]);
+
+// The backend's language rule (media domain `validLanguage`): 1-35 ASCII letters of either case,
+// digits and hyphens, kept as given. A stored value outside it is dropped.
+const AUDIO_LANGUAGE = /^[A-Za-z0-9-]{1,35}$/;
+
+function audioLanguageOf(value: unknown): string | null {
+  return typeof value === 'string' && AUDIO_LANGUAGE.test(value) ? value : null;
+}
 
 function boundedVolume(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
@@ -60,6 +71,7 @@ export function parsePreferences(raw: string | null): PlayerPreferences {
       typeof record.autoplayNext === 'boolean'
         ? record.autoplayNext
         : defaultPreferences.autoplayNext,
+    audioLanguage: audioLanguageOf(record.audioLanguage),
   };
 }
 
@@ -70,6 +82,7 @@ export function serializePreferences(prefs: PlayerPreferences): string {
     rate: prefs.rate,
     captionsOn: prefs.captionsOn,
     autoplayNext: prefs.autoplayNext,
+    audioLanguage: prefs.audioLanguage,
   });
 }
 

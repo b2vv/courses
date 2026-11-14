@@ -17,6 +17,7 @@ test('a complete, valid blob round-trips through serialize/parse', () => {
     rate: 1.5,
     captionsOn: true,
     autoplayNext: false,
+    audioLanguage: 'en-US',
   };
   expect(parsePreferences(serializePreferences(prefs))).toEqual(prefs);
 });
@@ -35,6 +36,7 @@ test('each field falls back independently when its value is wrong', () => {
     rate: 1.25,
     captionsOn: false,
     autoplayNext: true,
+    audioLanguage: null,
   });
 });
 
@@ -46,6 +48,7 @@ test('a rate the player does not offer is dropped, not clamped', () => {
     rate: 1,
     captionsOn: false,
     autoplayNext: true,
+    audioLanguage: null,
   });
 });
 
@@ -62,4 +65,19 @@ test('captionsOn is remembered and defaults off when absent', () => {
 test('a negative or non-finite volume falls back to full volume', () => {
   expect(parsePreferences(JSON.stringify({ volume: -0.2 })).volume).toBe(1);
   expect(parsePreferences(JSON.stringify({ volume: Number.NaN })).volume).toBe(1);
+});
+
+test('audioLanguage keeps a backend-valid language as given and drops anything else', () => {
+  const read = (value: unknown) =>
+    parsePreferences(JSON.stringify({ audioLanguage: value })).audioLanguage;
+  // The backend accepts either case and does not normalise (media domain validLanguage).
+  expect(read('en-US')).toBe('en-US');
+  expect(read('und-x-original')).toBe('und-x-original');
+  expect(read('a')).toBe('a');
+  expect(read('x'.repeat(35))).toBe('x'.repeat(35));
+  for (const bad of ['', 'x'.repeat(36), 'en_US', 'en us', 'ук', 42, true, null, {}]) {
+    expect(read(bad)).toBeNull();
+  }
+  // An older blob written before S7 has no field at all.
+  expect(parsePreferences(JSON.stringify({ volume: 0.5 })).audioLanguage).toBeNull();
 });

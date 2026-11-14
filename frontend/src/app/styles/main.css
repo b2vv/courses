@@ -2515,6 +2515,15 @@ nav a {
   border-radius: var(--radius-panel);
   background: var(--color-media-frame);
 }
+/* Gear-menu choices wrap inside the panel at 200% text and narrow widths: a long audio-track
+   label (up to 64 characters, multi-audio S7) or "Автовідтворення" would otherwise widen the
+   anonymous text flex item past the popover and clip it. */
+.lesson-player-settings-panel .ui-choice {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
 .lesson-player-stage:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 2px;

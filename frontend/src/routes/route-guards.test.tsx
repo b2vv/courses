@@ -317,6 +317,7 @@ function createTestRouter(
             load: () => undefined,
             stopLoad: () => undefined,
             selectLevel: () => undefined,
+            selectAudioTrack: () => false,
             destroy: () => undefined,
           })),
       },
