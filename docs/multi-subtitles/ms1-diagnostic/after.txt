@@ -1,0 +1,10 @@
+                track                 |                asset                 | language | is_default |   kind   | primary_language |        reason         
+--------------------------------------+--------------------------------------+----------+------------+----------+------------------+-----------------------
+ f38bf22d-1b9d-4cfb-84ca-0414d1649cd1 | 31384483-2c8a-4f74-8748-613c4b7b46a7 | und      | t          | embedded |                  | no primary transcript
+ f9bc0e5f-df08-48b2-bd1f-332a305bbc1a | 47714b85-fc78-495f-b35e-ed072e8f5bc4 | und      | t          | embedded |                  | no primary transcript
+ 96288302-2aaf-4da2-a44a-405761ba7558 | 7cb52dd1-c1b3-4ea2-a213-0409b835cb71 | und      | t          | embedded |                  | no primary transcript
+ 7715c2d5-1470-42ed-8873-06d246d5f250 | 84b3a8f3-cf76-4373-9fab-00f4537f182f | und      | t          | embedded |                  | no primary transcript
+ d8e4b715-287e-42a0-9f3e-a2d769938d30 | fb7954c6-44fd-486c-9908-0cdd9e3e96cd | und      | t          | embedded |                  | no primary transcript
+ 2215de8f-e8dd-4c90-8269-996a6c865939 | fc121c1f-edf4-479b-8477-f832ccbf29b5 | und      | t          | embedded |                  | no primary transcript
+(6 rows)
+
