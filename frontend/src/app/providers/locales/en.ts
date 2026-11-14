@@ -873,7 +873,8 @@ export const en = {
         regenerate: 'Regenerate transcript',
         loadDraft: 'Load draft into editor',
         recognizing: 'Recognizing speech',
-        stale: 'This draft was made from an older video. Regenerate to update.',
+        stale:
+          'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
         failureNamed: 'Recognition failed: {{reason}}.',
         state: {
           pending: 'Queued for recognition',

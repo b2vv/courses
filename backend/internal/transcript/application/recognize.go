@@ -57,7 +57,7 @@ func NewRecognize(
 
 func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (RecognizeOutcome, error) {
 	now := r.timestamp()
-	claimed, err := r.drafts.Claim(ctx, job.LessonID, job.AssetID, job.Generation, now)
+	claimed, err := r.drafts.Claim(ctx, job.LessonID, job.AssetID, job.Generation, job.Requested, now)
 	if err != nil {
 		return RecognizeOutcome{}, err
 	}
@@ -65,7 +65,8 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 		return RecognizeOutcome{}, nil
 	}
 
-	audioPath, release, err := r.audio.Extract(ctx, job.AssetID)
+	// The claim recorded the default track's leaf; that is the audio to hear (multi-audio S6).
+	audioPath, release, err := r.audio.Extract(ctx, job.AssetID, claimed.Draft.SourceLeaf)
 	if err != nil {
 		if ctx.Err() != nil {
 			return r.handleContextFailure(ctx, claimed, job)
@@ -219,7 +220,7 @@ func (r *Recognize) Recover(ctx context.Context) error {
 
 func (r *Recognize) failBeforeStart(ctx context.Context, p ports.PendingRecognition, reason string) error {
 	now := r.timestamp()
-	claimed, err := r.drafts.Claim(ctx, p.LessonID, p.AssetID, p.Generation, now)
+	claimed, err := r.drafts.Claim(ctx, p.LessonID, p.AssetID, p.Generation, false, now)
 	if err != nil {
 		return err
 	}

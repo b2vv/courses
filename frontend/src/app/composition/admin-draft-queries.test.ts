@@ -153,4 +153,36 @@ describe('admin draft query boundary', () => {
     expect(reads).toBe(readsAtTimeout);
     unsubscribe();
   });
+
+  test.each([
+    ['no draft yet', null],
+    ['the old ready draft', '2026-09-24T12:00:00.000Z'],
+  ] as const)(
+    'keeps the regenerate wait past the five-minute cache GC while the server shows %s',
+    async (_label, updatedAt) => {
+      rstest.useFakeTimers();
+      let reads = 0;
+      const queries = createDraftQueries(
+        repository(async (id) => {
+          reads++;
+          return { ok: true, value: updatedAt === null ? draft(id, null) : draft(id, 'ready') };
+        }),
+      );
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { observer, unsubscribe } = await observeInitial(client, queries);
+      await client
+        .getMutationCache()
+        .build(client, queries.regenerate(client))
+        .execute({ lessonId, language: undefined });
+      expect(observer.getCurrentResult().data?.state).toBe('pending');
+
+      // The default gcTime is five minutes; the queue wait is bounded at fifteen.
+      await rstest.advanceTimersByTimeAsync(10 * 60 * 1_000);
+      expect(observer.getCurrentResult().data?.state).toBe('pending');
+      const readsMidWait = reads;
+      await rstest.advanceTimersByTimeAsync(draftPollMs);
+      expect(reads).toBe(readsMidWait + 1);
+      unsubscribe();
+    },
+  );
 });

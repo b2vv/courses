@@ -59,6 +59,7 @@ type fakeDrafts struct {
 	claimCalls         int
 	completeCalls      int
 	completeContextErr error
+	claimRequested     []bool
 }
 
 func (f *fakeDrafts) GetLessonDraft(context.Context, string) (ports.LessonDraft, error) {
@@ -69,8 +70,9 @@ func (f *fakeDrafts) PendingRecognitions(_ context.Context, _ int) ([]ports.Pend
 	return f.pendingResult, f.pendingErr
 }
 
-func (f *fakeDrafts) Claim(context.Context, string, string, int32, time.Time) (ports.ClaimedDraft, error) {
+func (f *fakeDrafts) Claim(_ context.Context, _, _ string, _ int32, requested bool, _ time.Time) (ports.ClaimedDraft, error) {
 	f.claimCalls++
+	f.claimRequested = append(f.claimRequested, requested)
 	return f.claimResult, f.claimErr
 }
 
@@ -107,9 +109,11 @@ type fakeAudio struct {
 	path     string
 	err      error
 	released bool
+	leaf     string
 }
 
-func (f *fakeAudio) Extract(context.Context, string) (string, func(), error) {
+func (f *fakeAudio) Extract(_ context.Context, _, leaf string) (string, func(), error) {
+	f.leaf = leaf
 	if f.err != nil {
 		return "", nil, f.err
 	}
@@ -807,8 +811,8 @@ func (e *errorOnceDrafts) GetLessonDraft(ctx context.Context, id string) (ports.
 func (e *errorOnceDrafts) PendingRecognitions(ctx context.Context, limit int) ([]ports.PendingRecognition, error) {
 	return e.inner.PendingRecognitions(ctx, limit)
 }
-func (e *errorOnceDrafts) Claim(ctx context.Context, l, a string, g int32, now time.Time) (ports.ClaimedDraft, error) {
-	return e.inner.Claim(ctx, l, a, g, now)
+func (e *errorOnceDrafts) Claim(ctx context.Context, l, a string, g int32, requested bool, now time.Time) (ports.ClaimedDraft, error) {
+	return e.inner.Claim(ctx, l, a, g, requested, now)
 }
 func (e *errorOnceDrafts) SaveDraft(ctx context.Context, d domain.TranscriptDraft, t string, now time.Time) (string, error) {
 	return e.inner.SaveDraft(ctx, d, t, now)

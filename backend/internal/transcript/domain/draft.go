@@ -1,6 +1,9 @@
 package domain
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // A draft is what the machine produces and the author corrects. It is deliberately NOT a
 // transcript: the transcript is what a student reads, and D8-10 keeps publication on the
@@ -56,6 +59,33 @@ type TranscriptDraft struct {
 
 	// Failure is the named cause, and only a failed draft has one.
 	Failure string
+
+	// SourceLeaf names the audio the draft was recognised from: the default track's leaf at claim
+	// time (multi-audio S6, D-S6-1). Empty is a draft made before S6, which always heard
+	// "original" (HeardLeaf).
+	SourceLeaf string
+}
+
+// OriginalAudioLeaf is the leaf of a video's own sound: the embedded track and every pre-S6 draft.
+const OriginalAudioLeaf = "original"
+
+// ValidAudioLeaf mirrors the leaf shape of `audio_tracks.source_leaf` (00025) and the
+// `asr_drafts.source_leaf` CHECK (00029): "original" or "audio-<lowercase uuid>". The extraction
+// adapter joins it into a path, so nothing else may pass.
+func ValidAudioLeaf(leaf string) bool {
+	if leaf == OriginalAudioLeaf {
+		return true
+	}
+	id, found := strings.CutPrefix(leaf, "audio-")
+	return found && validID(id)
+}
+
+// HeardLeaf is the leaf the draft's text came from; a pre-S6 draft heard the original.
+func (draft TranscriptDraft) HeardLeaf() string {
+	if draft.SourceLeaf == "" {
+		return OriginalAudioLeaf
+	}
+	return draft.SourceLeaf
 }
 
 // NewTranscriptDraft validates with the SAME constructors the transcript uses (D8-12). That is the point
@@ -137,15 +167,20 @@ func NewTranscriptDraft(input TranscriptDraft) (TranscriptDraft, error) {
 		Language:   language,
 		Segments:   segments,
 		Failure:    input.Failure,
+		SourceLeaf: input.SourceLeaf,
 	}, nil
 }
 
 // Stale answers whether the draft was made from a different video than the one the player would
-// pick now. The rule is the transcript's (D8-4): only a READY asset counts, and a lesson with
-// none must not read as stale.
-func (draft TranscriptDraft) Stale(readyGeneration int32) bool {
+// pick now, or from a different audio track than its current default (multi-audio S6, D-S6-6).
+// The generation rule is the transcript's (D8-4): only a READY asset counts, and a lesson with
+// none must not read as stale. An empty defaultLeaf (no default known) never makes it stale.
+func (draft TranscriptDraft) Stale(readyGeneration int32, defaultLeaf string) bool {
 	if readyGeneration == 0 {
 		return false
 	}
-	return draft.Generation != readyGeneration
+	if draft.Generation != readyGeneration {
+		return true
+	}
+	return defaultLeaf != "" && draft.HeardLeaf() != defaultLeaf
 }

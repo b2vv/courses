@@ -161,14 +161,18 @@ describe('lesson draft field', () => {
   it('C06 shows stale indicator when draft.stale is true', () => {
     renderField(draft('ready', { stale: true, segments: segments(1), language: 'uk' }));
     expect(
-      screen.getByText('This draft was made from an older video. Regenerate to update.'),
+      screen.getByText(
+        'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
+      ),
     ).toBeTruthy();
   });
 
   it('hides stale indicator when draft.stale is false', () => {
     renderField(draft('ready', { stale: false, segments: segments(1), language: 'uk' }));
     expect(
-      screen.queryByText('This draft was made from an older video. Regenerate to update.'),
+      screen.queryByText(
+        'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
+      ),
     ).toBeNull();
   });
 

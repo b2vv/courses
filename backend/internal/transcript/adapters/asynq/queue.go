@@ -36,6 +36,7 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 		Generation: job.Generation,
 		Language:   string(job.Language),
 		TaskMarker: job.TaskMarker,
+		Requested:  job.Requested,
 	})
 	if err != nil {
 		return domain.ErrDependencyUnavailable
@@ -75,4 +76,7 @@ type taskPayload struct {
 	Generation int32  `json:"generation"`
 	Language   string `json:"language,omitempty"`
 	TaskMarker string `json:"taskMarker,omitempty"`
+	// Requested marks the author's Regenerate (multi-audio S6). A task enqueued before S6 has no
+	// field and decodes as false — an automatic job, which is what every pre-S6 sweep task was.
+	Requested bool `json:"requested,omitempty"`
 }

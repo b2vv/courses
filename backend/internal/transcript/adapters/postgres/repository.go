@@ -27,6 +27,20 @@ const readyGenerationForLesson = `SELECT COALESCE((
   LIMIT 1
 ), 0)`
 
+// readyAudioForLesson is readyGenerationForLesson plus the source leaf of that asset's default
+// Ready audio track (multi-audio S6, D-S6-6); a lesson with no ready asset reads (0, ”).
+const readyAudioForLesson = `SELECT COALESCE(current.generation, 0), COALESCE(tracks.source_leaf, '')
+FROM (SELECT 1) AS anchor
+LEFT JOIN LATERAL (
+  SELECT assets.id, assets.generation
+  FROM video_assets AS assets
+  WHERE assets.lesson_id = $1::text::uuid AND assets.state = 'ready' AND assets.evicted_at IS NULL
+  ORDER BY assets.generation DESC
+  LIMIT 1
+) AS current ON true
+LEFT JOIN audio_tracks AS tracks
+  ON tracks.video_asset_id = current.id AND tracks.is_default AND tracks.state = 'ready'`
+
 // The course facts the access rule needs are read even when no transcript exists, so that a
 // missing transcript and a forbidden course cannot be told apart by the caller.
 const getLessonAccessCourse = `SELECT courses.instructor_id::text, courses.status,
