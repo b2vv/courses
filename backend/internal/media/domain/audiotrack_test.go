@@ -327,3 +327,30 @@ func TestValidateTrackDeletion(t *testing.T) {
 		})
 	}
 }
+
+// Multi-subtitles D2 (MS1 M-R1): a track language must be a tag a transcript can
+// carry once lowercased; case is preserved. The grammar itself is tested in
+// internal/contracts/language — this pins media's normalisation around it.
+func TestTrackLanguageFollowsTranscriptGrammar(t *testing.T) {
+	t.Parallel()
+	for _, language := range []string{"uk", "en-US", "pt-BR", "und", "und-x-original", "zh-Hant-TW", "EN"} {
+		if err := domain.ValidateAudioTrackMetadata(language, "Dub"); err != nil {
+			t.Errorf("language %q refused: %v", language, err)
+		}
+		track := validUploadedTrack()
+		track.Language = language
+		if _, err := domain.NewUploadedTrack(track); err != nil {
+			t.Errorf("uploaded track with language %q refused: %v", language, err)
+		}
+	}
+	for _, language := range []string{"e", "1x", "-en", "en-", "a--b", "und-", strings.Repeat("x", 35), strings.Repeat("x", 36), "uk_UA", "укр", " uk ", "Ka"} {
+		if err := domain.ValidateAudioTrackMetadata(language, "Dub"); err != domain.ErrInvalidRequest {
+			t.Errorf("language %q: err = %v, want invalid_request", language, err)
+		}
+		track := validEmbeddedTrack()
+		track.Language = language
+		if _, err := domain.NewEmbeddedTrack(track); err == nil {
+			t.Errorf("embedded track with language %q accepted", language)
+		}
+	}
+}

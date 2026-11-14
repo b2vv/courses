@@ -2144,7 +2144,8 @@ components:
                     type: string
                 language:
                     maxLength: 35
-                    minLength: 1
+                    minLength: 2
+                    pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
             required:
                 - label
@@ -2159,6 +2160,9 @@ components:
                 label:
                     type: string
                 language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
                 originalName:
                     type: string
@@ -2184,7 +2188,8 @@ components:
                     type: string
                 language:
                     maxLength: 35
-                    minLength: 1
+                    minLength: 2
+                    pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
                 state:
                     enum:

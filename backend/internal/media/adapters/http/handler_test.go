@@ -89,6 +89,10 @@ func (*mediaRepository) RegenerateMaster(context.Context, string, func([]mediado
 	panic("unexpected RegenerateMaster")
 }
 
+func (*mediaRepository) ListReadyAssetIDs(context.Context) ([]string, error) {
+	panic("unexpected ListReadyAssetIDs")
+}
+
 func (*mediaRepository) LoadAudioTrack(context.Context, string, string) (mediadomain.AudioTrack, error) {
 	panic("unexpected LoadAudioTrack")
 }
@@ -868,6 +872,36 @@ func TestAudioTrackContracts(t *testing.T) {
 		response := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "", http.MethodGet, "/api/v1/admin/videos/not-a-uuid/audio-tracks", nil, "", false)
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("MS1 mint and rename refuse a language no transcript can carry", func(t *testing.T) {
+		// multi-subtitles D2 (plan-ms1 M-R10): the refusal is 400 invalid_request and comes
+		// from the domain before any write — the repository is never reached, so nothing is stored.
+		for _, language := range []string{"e", "und-", "1x"} {
+			t.Run(language, func(t *testing.T) {
+				repository := audioTrackRepository()
+				repository.updateMetadata = func(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+					t.Fatalf("rename with language %q reached the repository", language)
+					return mediadomain.AudioTrack{}, nil
+				}
+				repository.mintAudioTrack = func(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error) {
+					t.Fatalf("mint with language %q reached the repository", language)
+					return mediadomain.AudioTrack{}, nil
+				}
+				identity := &mediaIdentity{}
+				handler := mediaAPIHandler(t, repository, &mediaQueue{}, identity)
+				rename := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPatch, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks/"+mediaTrackID, []byte(`{"language":"`+language+`","label":"Dub"}`), "application/json", false)
+				if rename.Code != http.StatusBadRequest {
+					t.Fatalf("rename status=%d body=%s", rename.Code, rename.Body.String())
+				}
+				assertMediaError(t, rename, "invalid_request")
+				mint := serveMedia(t, handler, identity, mediaUser(mediaAdminID, identitydomain.Admin), true, "http://localhost:8080", http.MethodPost, "/api/v1/admin/videos/"+mediaVideoID+"/audio-tracks", []byte(`{"declaredBytes":4096,"originalName":"track.aac","language":"`+language+`","label":"Dub"}`), "application/json", false)
+				if mint.Code != http.StatusBadRequest {
+					t.Fatalf("mint status=%d body=%s", mint.Code, mint.Body.String())
+				}
+				assertMediaError(t, mint, "invalid_request")
+			})
 		}
 	})
 

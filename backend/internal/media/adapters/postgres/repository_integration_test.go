@@ -202,6 +202,9 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S5-L1b recover selects stranded queued tracks", harness.testRecoverQueuedAudioTracksSelectsStranded)
 	t.Run("S-backfill 00028 backfills pre-S3 ready assets and reverses exactly", harness.testEmbeddedBackfillPopulated)
 	t.Run("S-backfill 00028 refuses when both fallback languages are taken", harness.testEmbeddedBackfillRefusesBothLanguagesTaken)
+	t.Run("MS1 00030 preflight refuses invalid and case-colliding languages unchanged", harness.testLanguageShapeMigrationRefuses)
+	t.Run("MS1 00030 relabels one legacy und track per asset from the primary transcript", harness.testLanguageShapeMigrationRelabels)
+	t.Run("MS1 track language CHECK and case-insensitive uniqueness", harness.testLanguageShapeGuards)
 	t.Run("S-backfill 00028 refuses a ready asset without a ready default", harness.testEmbeddedBackfillRefusesBrokenReadyGate)
 	t.Run("S-backfill 00028 waits for writers and times out loudly", harness.testEmbeddedBackfillWaitsForWriters)
 }

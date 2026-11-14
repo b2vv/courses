@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+
+	languagetag "courses/internal/contracts/language"
 )
 
 // The ceilings live here and nowhere else. The contract mirrors them and a pin holds the
@@ -39,30 +41,10 @@ func NewLanguage(raw string) (Language, error) {
 		return "", ErrInvalidRequest
 	}
 	lowered := strings.ToLower(trimmed)
-	if !validLanguageTag(lowered) {
+	if !languagetag.ValidTag(lowered) {
 		return "", ErrInvalidRequest
 	}
 	return Language(lowered), nil
-}
-
-func validLanguageTag(value string) bool {
-	if len(value) < 2 || len(value) > 35 {
-		return false
-	}
-	for index, part := range strings.Split(value, "-") {
-		if len(part) < 1 || len(part) > 8 {
-			return false
-		}
-		for _, r := range part {
-			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') {
-				return false
-			}
-		}
-		if index == 0 && (len(part) < 2 || part[0] < 'a' || part[0] > 'z') {
-			return false
-		}
-	}
-	return true
 }
 
 type DocumentLink struct {

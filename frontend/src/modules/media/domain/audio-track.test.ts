@@ -35,11 +35,31 @@ describe('audio track domain', () => {
     for (const language of audioTrackLanguages) expect(validAudioLanguage(language)).toBe(true);
   });
 
-  test.each(['uk', 'pt-BR', 'x'.repeat(35)])('accepts language %s', (value) => {
-    expect(validAudioLanguage(value)).toBe(true);
-  });
+  // The same table as backend internal/contracts/language/language_test.go, plus case: a track
+  // keeps its case, the grammar applies to the lowercased value.
+  test.each(['uk', 'en-US', 'pt-BR', 'und', 'und-x-original', 'zh-Hant-TW', 'de-1996', 'EN'])(
+    'accepts language %s',
+    (value) => {
+      expect(validAudioLanguage(value)).toBe(true);
+    },
+  );
 
-  test.each(['', 'x'.repeat(36), 'uk_UA', 'en us', 'укр'])('refuses language %j', (value) => {
+  test.each([
+    '',
+    'e',
+    '1x',
+    '-en',
+    'en-',
+    'a--b',
+    'und-',
+    'x'.repeat(35),
+    'x'.repeat(36),
+    'uk_UA',
+    'en us',
+    ' uk ',
+    'укр',
+    'abcdefghi',
+  ])('refuses language %j', (value) => {
     expect(validAudioLanguage(value)).toBe(false);
   });
 
@@ -99,6 +119,14 @@ describe('audio track domain', () => {
     const legacy = { ...track(a, 'ready'), language: 'pt-BR' };
     expect(availableAudioLanguages([legacy], a)[0]).toBe('pt-BR');
     expect(availableAudioLanguages([legacy])).not.toContain('pt-BR');
+  });
+
+  test('a language taken in another case is not offered, and an edited track keeps its own', () => {
+    const upper = { ...track(a, 'ready'), language: 'EN' };
+    expect(availableAudioLanguages([upper])).not.toContain('en');
+    const edited = availableAudioLanguages([upper], a);
+    expect(edited[0]).toBe('EN');
+    expect(edited).not.toContain('en');
   });
 
   test('only an uploaded created/uploading track counts as interrupted', () => {
