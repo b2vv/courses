@@ -318,11 +318,16 @@ test.describe('multi-audio S7 player audio tracks', () => {
       await audio.locator('label', { hasText: 'English dub' }).click();
       await expect(audio.getByRole('radio', { name: 'English dub' })).toBeChecked();
       // One deadline, counted from the click, for the playlist, a segment and the audible switch.
-      const switched = await waitForTone(page, 880, 5, 10_000 - (Date.now() - clickedAt));
+      const waitStarted = Date.now();
+      const switched = await waitForTone(page, 880, 5, 10_000 - (waitStarted - clickedAt));
+      const firstAudibleMs = waitStarted - clickedAt + switched.firstAt;
       const audibleMs = Date.now() - clickedAt;
       const playlist = dubResponses.find((entry) => uploadedAudioPlaylist.test(entry.pathname));
       const segment = dubResponses.find((entry) => entry.pathname.endsWith('.m4s'));
       expect(playlist?.status).toBe(200);
+      // The English track's leaf (`audio-<trackId>`): the prefix before it changes per session.
+      const englishLeaf = playlist?.pathname.match(/\/(audio-[0-9a-f-]{36})\/index\.m3u8$/)?.[1];
+      expect(englishLeaf).toBeDefined();
       expect(segment?.status).toBe(200);
       const after = await peak(page);
       expect(after.time).toBeGreaterThan(before);
@@ -331,7 +336,7 @@ test.describe('multi-audio S7 player audio tracks', () => {
       ).toEqual([]);
       await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
       console.log(
-        `S7 switch: dub playlist ${(playlist?.at ?? clickedAt) - clickedAt} ms, first dub segment ${(segment?.at ?? clickedAt) - clickedAt} ms, five 880 Hz samples by ${audibleMs} ms (first at ${switched.firstAt} ms into the wait), currentTime ${before.toFixed(2)} -> ${after.time.toFixed(2)} s, 0 waiting`,
+        `S7 switch: dub playlist ${(playlist?.at ?? clickedAt) - clickedAt} ms, first dub segment ${(segment?.at ?? clickedAt) - clickedAt} ms, first 880 Hz sample ${firstAudibleMs} ms, five by ${audibleMs} ms, currentTime ${before.toFixed(2)} -> ${after.time.toFixed(2)} s, 0 waiting`,
       );
 
       // R1: a lesson without that language plays its default and leaves the choice remembered.
@@ -352,7 +357,8 @@ test.describe('multi-audio S7 player audio tracks', () => {
       audioPlaylists.length = 0;
       await play(page, course.dual);
       await expect.poll(() => audioPlaylists.length, { timeout: 15_000 }).toBeGreaterThan(0);
-      expect(audioPlaylists[0]).toMatch(uploadedAudioPlaylist);
+      // Exactly the English track, not merely an uploaded one: the German track is 880 Hz as well.
+      expect(audioPlaylists[0]?.endsWith(`/${englishLeaf}/index.m3u8`)).toBe(true);
       await tapAudio(page);
       await waitForTone(page, 880, 3, 10_000);
       await page.getByRole('button', { name: 'Налаштування' }).click();
