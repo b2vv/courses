@@ -45,7 +45,8 @@
   `port "5432/tcp" not found` (testcontainers не віддав мапінг порту Postgres-контейнера; дифф зрізу
   на цьому коміті — лише фронтенд-CSS і два `className`, playback-backend не зачеплено). Повний
   повторний прогін: **GATE_EXIT=0**, e2e **138 passed (18.2 хв)**, frontend 948 unit. Червоний прогін
-  не зараховано як зелений; це той самий клас нестабільності testcontainers, що Ryuk-гонка (B-27).
+  не зараховано як зелений. Точна причина в Docker/testcontainers не встановлена; збій — на
+  отриманні рядка підключення (`sessions_integration_test.go:74–76`), до відкриття БД і міграцій.
 - На `c34c0d0` (після F4, глобальний CSS): GATE_EXIT=0, e2e 138 (18.3 хв), frontend 948. Попередній на `f415643` (після F1): GATE_EXIT=0, e2e 138
   (18.4 хв), frontend 948. Попередній на `4ed7ed0`: GATE_EXIT=0, e2e 138, frontend 947. Перший прогін на `7bab674` впав на `make integration`: transcript-фікстура генерувала мови
   `'l-'||md5…` (однолітерний перший subtag) — новий CHECK її відкинув. Ні таргетний media-integration,
@@ -180,6 +181,8 @@ Reflow 320×640: нова доріжка — Tab → Enter → ↓ (English ви
 нова доріжка (End), мова розпізнавання (End), ComboBox (↓): у кожному поповер має `ui-popover-list`,
 сфокусована опція видима, поповер не прокручується, рамка 8/8 px, `scrollWidth` 390/753/1009/1425.
 Кадри `final-*`. Повний ordered `make check` на `3759d07` — GATE_EXIT=0 з другого прогону (розділ «Гейти»).
+
+Рев'ю Codex: W1–W5 BLOCK (докази, F4, F5/F6), **W6 SHIP** — записи `_wip-ms1-review-codex-w{1..6}.md`.
 
 ### Обмеження (магнітуда або механізм)
 
