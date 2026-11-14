@@ -18,8 +18,42 @@ export class DraftQueryError extends Error {
   }
 }
 
+const lessonDraftQueryPrefix = ['admin', 'draft'] as const;
+
 export function lessonDraftQueryKey(lessonId: string) {
-  return ['admin', 'draft', lessonId] as const;
+  return [...lessonDraftQueryPrefix, lessonId] as const;
+}
+
+/**
+ * Re-reads every lesson draft in the cache; only mounted ones refetch. A default audio-track change
+ * keeps the video generation, so the generation-based invalidation cannot see it (multi-audio S6).
+ */
+export async function invalidateLessonDrafts(client: QueryClient) {
+  await client.invalidateQueries({ queryKey: lessonDraftQueryPrefix });
+}
+
+/**
+ * A stale draft is a pending recognition, so the server replaces it without the author asking
+ * (multi-audio S6). Wait for that within the same window as a requested regeneration: if the
+ * worker makes no progress, polling stops and the stale banner and Regenerate remain. The start
+ * of the wait lives with the query factory, not in the query cache, where an unobserved entry is
+ * garbage-collected after five minutes and would restart the window.
+ */
+function awaitingReplacement(
+  staleSince: Map<string, number>,
+  lessonId: string,
+  stale: boolean,
+): boolean {
+  if (!stale) {
+    staleSince.delete(lessonId);
+    return false;
+  }
+  const since = staleSince.get(lessonId);
+  if (since === undefined) {
+    staleSince.set(lessonId, Date.now());
+    return true;
+  }
+  return Date.now() - since < draftTaskTimeoutMs;
 }
 
 function lessonDraftPendingKey(lessonId: string) {
@@ -73,6 +107,7 @@ function clearPending(client: QueryClient, lessonId: string) {
 }
 
 export function createDraftQueries(drafts: DraftRepository) {
+  const staleSince = new Map<string, number>();
   return {
     drafts,
     lesson: (lessonId: string, client: QueryClient) =>
@@ -114,7 +149,12 @@ export function createDraftQueries(drafts: DraftRepository) {
           const serverIsRunning =
             query.state.data?.state === 'running' ||
             (query.state.data?.state === 'pending' && query.state.data.updatedAt !== null);
-          return waitingForTask || serverIsRunning ? draftPollMs : false;
+          const replacing = awaitingReplacement(
+            staleSince,
+            lessonId,
+            query.state.data?.stale === true,
+          );
+          return waitingForTask || serverIsRunning || replacing ? draftPollMs : false;
         },
       }),
     regenerate: (client: QueryClient) =>
