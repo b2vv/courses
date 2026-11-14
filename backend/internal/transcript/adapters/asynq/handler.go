@@ -46,6 +46,7 @@ func (handler *Handler) ProcessTask(ctx context.Context, task *asynqlib.Task) er
 		Generation: payload.Generation,
 		Language:   domain.Language(payload.Language),
 		TaskMarker: payload.TaskMarker,
+		Requested:  payload.Requested,
 	})
 	if err != nil {
 		metricOutcome = "failed"

@@ -35,7 +35,7 @@ func (f *draftFakeDrafts) GetLessonDraft(context.Context, string) (ports.LessonD
 func (f *draftFakeDrafts) PendingRecognitions(context.Context, int) ([]ports.PendingRecognition, error) {
 	return nil, nil
 }
-func (f *draftFakeDrafts) Claim(context.Context, string, string, int32, time.Time) (ports.ClaimedDraft, error) {
+func (f *draftFakeDrafts) Claim(context.Context, string, string, int32, bool, time.Time) (ports.ClaimedDraft, error) {
 	return f.claimResult, nil
 }
 func (f *draftFakeDrafts) SaveDraft(context.Context, domain.TranscriptDraft, string, time.Time) (string, error) {
@@ -173,6 +173,10 @@ func TestRegenerateEnqueues(t *testing.T) {
 	}
 	if queue.jobs[0].Language != "uk" {
 		t.Fatalf("language=%s want=uk", queue.jobs[0].Language)
+	}
+	// Multi-audio S6: the author's Regenerate may re-recognise a draft that heard the default.
+	if !queue.jobs[0].Requested {
+		t.Fatal("a Regenerate job is not marked requested")
 	}
 }
 

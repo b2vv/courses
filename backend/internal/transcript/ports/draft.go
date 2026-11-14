@@ -21,6 +21,11 @@ type LessonDraft struct {
 	UpdatedAt string
 
 	ReadyGeneration int32
+
+	// DefaultLeaf is the source leaf of the ready asset's default audio track, the audio a
+	// recognition would hear now (multi-audio S6); empty when there is none. With ReadyGeneration
+	// it derives staleness (D-S6-6).
+	DefaultLeaf string
 }
 
 // PendingRecognition is one lesson that has a ready asset and no draft for that asset's
@@ -90,7 +95,13 @@ type DraftRepository interface {
 	// A wrong generation is not cosmetic: `Stale` compares it against the generation the player
 	// would pick, so a draft claiming one it does not have reports the wrong answer, and the
 	// idempotency key (assetID, generation) stops naming the work it is supposed to name.
-	Claim(ctx context.Context, lessonID, assetID string, generation int32, now time.Time) (ClaimedDraft, error)
+	//
+	// Multi-audio S6 (D-S6-2): the claim records the leaf of the asset's default Ready audio track
+	// in the same statement and returns it in ClaimedDraft.Draft.SourceLeaf; an asset with no
+	// default is ErrNotFound. A same-generation draft is re-claimed only when `requested` (the
+	// author's Regenerate) or when its heard leaf differs from the current default — so a
+	// duplicate automatic task cannot overwrite an already current draft.
+	Claim(ctx context.Context, lessonID, assetID string, generation int32, requested bool, now time.Time) (ClaimedDraft, error)
 
 	// SaveDraft stores the author's corrections and returns the new token.
 	//

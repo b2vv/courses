@@ -107,11 +107,17 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	t.Run("C09 delayed old claim cannot overwrite the new draft", h.testDelayedOldClaim)
 	t.Run("re-claiming the same generation succeeds", h.testReclaimSameGeneration)
 	t.Run("C01 selects only ready assets missing their current draft", h.testPendingRecognitionsSelector)
+	t.Run("S6 pending follows the default track leaf", h.testPendingFollowsDefaultLeaf)
+	t.Run("S6 claim records the default leaf and needs a default", h.testClaimRecordsDefaultLeaf)
+	t.Run("S6 a duplicate automatic task does not re-claim", h.testAutomaticDuplicateNotReclaimed)
+	t.Run("S6 a draft is stale after the default changes", h.testDraftStaleAfterDefaultChange)
+	t.Run("S6 a rerun leaves the published transcript untouched", h.testRerunLeavesTranscriptUntouched)
+	t.Run("S6 the draft source leaf keeps its shape", h.testDraftSourceLeafShape)
 }
 
 type blockingAudio struct{}
 
-func (blockingAudio) Extract(context.Context, string) (string, func(), error) {
+func (blockingAudio) Extract(context.Context, string, string) (string, func(), error) {
 	return "/tmp/audio.wav", func() {}, nil
 }
 
@@ -181,6 +187,27 @@ func (h *draftHarness) insertAssetWithDuration(t *testing.T, assetID, lessonID s
 		assetID, lessonID, generation, durationSeconds, draftNow); err != nil {
 		t.Fatal(err)
 	}
+	// A Ready asset always holds its default Ready track since S3 and the 00028 backfill; the
+	// embedded one is what Publish writes for a source with sound (multi-audio S6 claims it).
+	h.insertDefaultTrack(t, assetID, "embedded", "original")
+}
+
+// insertDefaultTrack makes the asset's default Ready track; kind "uploaded" takes the leaf
+// audio-<trackId>, so leaf is ignored for it and the generated leaf is returned.
+func (h *draftHarness) insertDefaultTrack(t *testing.T, assetID, kind, leaf string) string {
+	t.Helper()
+	if _, err := h.pool.Exec(h.ctx, `UPDATE audio_tracks SET is_default=false WHERE video_asset_id=$1::text::uuid`, assetID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.pool.QueryRow(h.ctx, `WITH new_id AS (SELECT gen_random_uuid() AS id)
+		INSERT INTO audio_tracks(id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
+		SELECT id,$1::text::uuid,$2,'l-'||substr(md5(id::text),1,8),'Track',true,'ready',
+		       CASE WHEN $2='uploaded' THEN 'audio-'||id::text ELSE $3 END,
+		       CASE WHEN $2='uploaded' THEN 1024 ELSE 0 END,$4,$4
+		FROM new_id RETURNING source_leaf`, assetID, kind, leaf, draftNow).Scan(&leaf); err != nil {
+		t.Fatal(err)
+	}
+	return leaf
 }
 
 func (h *draftHarness) insertOrphanAssetWithDuration(t *testing.T, assetID string, durationSeconds float64) {
@@ -206,7 +233,7 @@ func (h *draftHarness) insertRunningDraft(t *testing.T, lessonID, assetID string
 
 func (h *draftHarness) completeReadyDraft(t *testing.T, lessonID, assetID string, generation int32, claimAt time.Time) {
 	t.Helper()
-	claimed, err := h.repository.Claim(h.ctx, lessonID, assetID, generation, claimAt)
+	claimed, err := h.repository.Claim(h.ctx, lessonID, assetID, generation, false, claimAt)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
@@ -222,7 +249,7 @@ func (h *draftHarness) completeReadyDraft(t *testing.T, lessonID, assetID string
 func (h *draftHarness) testClaimRejectsForeignAsset(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson2, 1, 60)
-	_, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow)
+	_, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
 	if err != domain.ErrNotFound {
 		t.Fatalf("Claim err=%v; want ErrNotFound", err)
 	}
@@ -255,7 +282,7 @@ func (h *draftHarness) testAssetDeleteCascadesDraft(t *testing.T) {
 func (h *draftHarness) testLessonDeleteCascadesDraft(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
-	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow)
+	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
@@ -288,11 +315,11 @@ func (h *draftHarness) testOldCompletionAfterNewClaim(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
 	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson1, 2, 60)
-	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow)
+	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	newClaim, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset2, 2, draftNow.Add(time.Second))
+	newClaim, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset2, 2, false, draftNow.Add(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +345,7 @@ func (h *draftHarness) testDelayedOldClaim(t *testing.T) {
 	h.completeReadyDraft(t, recoverLesson1, recoverAsset2, 2, draftNow.Add(2*time.Second))
 
 	// The old asset is still present (only soft-evicted), so Claim must reject it at the UPSERT.
-	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow.Add(4*time.Second))
+	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow.Add(4*time.Second))
 	if err != nil {
 		t.Fatalf("delayed old Claim: %v", err)
 	}
@@ -337,11 +364,13 @@ func (h *draftHarness) testDelayedOldClaim(t *testing.T) {
 func (h *draftHarness) testReclaimSameGeneration(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
-	first, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow)
+	first, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
 	if err != nil {
 		t.Fatalf("first Claim: %v", err)
 	}
-	second, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, draftNow.Add(time.Second))
+	// The author's Regenerate re-claims the same generation (requested); an automatic duplicate
+	// may not — see testAutomaticDuplicateNotReclaimed.
+	second, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, true, draftNow.Add(time.Second))
 	if err != nil {
 		t.Fatalf("same-generation Claim: %v", err)
 	}
@@ -494,10 +523,11 @@ func (h *draftHarness) testRecoverRaceWithReClaim(t *testing.T) {
 	recoveredToken := recovered[0].Token
 
 	// Step 2: Between Recover reading and the caller calling Complete, a new Claim
-	// arrives (e.g. regeneration or re-enqueue). This moves updated_at, so the old
-	// token no longer matches.
+	// arrives. This moves updated_at, so the old token no longer matches. Since multi-audio S6
+	// a same-generation draft that already heard the default is re-claimed only by the author's
+	// Regenerate (requested); an automatic re-enqueue is refused (D-S6-2).
 	claimNow := draftNow.Add(time.Second)
-	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, claimNow)
+	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, true, claimNow)
 	if err != nil {
 		t.Fatalf("re-Claim: %v", err)
 	}

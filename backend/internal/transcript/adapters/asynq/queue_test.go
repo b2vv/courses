@@ -46,3 +46,22 @@ func TestQueueMapsTaskIDConflictToAlreadyRunning(t *testing.T) {
 		t.Fatalf("err=%v want already_running", err)
 	}
 }
+
+// Multi-audio S6: Requested survives the queue, and a pre-S6 payload without it is automatic.
+func TestPayloadCarriesRequested(t *testing.T) {
+	for _, requested := range []bool{true, false} {
+		client := &fakeEnqueueClient{}
+		job := ports.RecognitionJob{LessonID: "40000000-0000-4000-8000-000000000001", AssetID: "50000000-0000-4000-8000-000000000001", Generation: 1, Requested: requested}
+		if err := newQueue(client).Enqueue(context.Background(), job, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		payload, err := decodePayload(client.task.Payload())
+		if err != nil || payload.Requested != requested {
+			t.Fatalf("requested=%v decoded=%+v err=%v", requested, payload, err)
+		}
+	}
+	legacy, err := decodePayload([]byte(`{"lessonId":"40000000-0000-4000-8000-000000000001","assetId":"50000000-0000-4000-8000-000000000001","generation":1}`))
+	if err != nil || legacy.Requested {
+		t.Fatalf("legacy payload=%+v err=%v, want automatic", legacy, err)
+	}
+}

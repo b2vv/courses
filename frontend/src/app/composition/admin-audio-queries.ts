@@ -9,6 +9,7 @@ import type {
   AudioTransferTarget,
   createAudioTracks,
 } from '../../modules/media';
+import { invalidateLessonDrafts } from './admin-draft-queries';
 import {
   adminCourseVideosQueryKey,
   invalidateAfterVideoWrite,
@@ -100,6 +101,8 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
               queryKey: adminCourseVideosQueryKey(courseId),
               exact: true,
             });
+            // The worker may have assigned a first default; the draft follows it (multi-audio S6).
+            await invalidateLessonDrafts(client);
           }
           return next;
         },
@@ -144,6 +147,8 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
         onSuccess: async (_value, { courseId, videoId }) => {
           await invalidateAfterAudioWrite(client, videoId);
           await invalidateAfterVideoWrite(client, courseId);
+          // The draft heard the old default: it is stale now and gets re-recognised (D-S6-6).
+          await invalidateLessonDrafts(client);
         },
       }),
     remove: (client: QueryClient) =>
@@ -153,6 +158,8 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
         onSuccess: async (_value, { courseId, videoId }) => {
           await invalidateAfterAudioWrite(client, videoId);
           await invalidateAfterVideoWrite(client, courseId);
+          // Deleting the default re-elects another one, which the draft did not hear (D-S6-6).
+          await invalidateLessonDrafts(client);
         },
       }),
     unwrap,

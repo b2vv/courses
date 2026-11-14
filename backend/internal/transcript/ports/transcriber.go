@@ -55,5 +55,9 @@ type AudioSource interface {
 	// It reports ErrNotFound when the asset's bytes are gone - which is an ordinary outcome,
 	// not a fault: eviction removes the source of an older generation while recognition of it
 	// may still be running.
-	Extract(ctx context.Context, assetID string) (audioPath string, release func(), err error)
+	//
+	// `leaf` is the source leaf of the audio to hear - the default track's (multi-audio S6):
+	// "original" for the video's own sound, "audio-<trackId>" for an uploaded track. It must pass
+	// domain.ValidAudioLeaf, otherwise ErrInvalidRequest.
+	Extract(ctx context.Context, assetID, leaf string) (audioPath string, release func(), err error)
 }

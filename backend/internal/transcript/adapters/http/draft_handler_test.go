@@ -27,7 +27,7 @@ func (s *stubDraftRepository) GetLessonDraft(context.Context, string) (ports.Les
 func (s *stubDraftRepository) PendingRecognitions(context.Context, int) ([]ports.PendingRecognition, error) {
 	return nil, nil
 }
-func (s *stubDraftRepository) Claim(context.Context, string, string, int32, time.Time) (ports.ClaimedDraft, error) {
+func (s *stubDraftRepository) Claim(context.Context, string, string, int32, bool, time.Time) (ports.ClaimedDraft, error) {
 	return ports.ClaimedDraft{}, nil
 }
 func (s *stubDraftRepository) SaveDraft(context.Context, domain.TranscriptDraft, string, time.Time) (string, error) {

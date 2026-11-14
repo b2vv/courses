@@ -81,7 +81,7 @@ func (d *Drafting) GetDraft(ctx context.Context, actor domain.Actor, lessonID st
 		Language:   lesson.Draft.Language,
 		Segments:   lesson.Draft.Segments,
 		Failure:    lesson.Draft.Failure,
-		Stale:      lesson.Draft.Stale(lesson.ReadyGeneration),
+		Stale:      lesson.Draft.Stale(lesson.ReadyGeneration, lesson.DefaultLeaf),
 		UpdatedAt:  lesson.UpdatedAt,
 		AssetID:    lesson.Draft.AssetID,
 		Generation: lesson.Draft.Generation,
@@ -134,6 +134,8 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		Generation: asset.Generation,
 		Language:   language,
 		TaskMarker: draftMarker(draft),
+		// The author asked: this job may re-recognise a draft that already heard the default.
+		Requested: true,
 	}, timeout)
 }
 

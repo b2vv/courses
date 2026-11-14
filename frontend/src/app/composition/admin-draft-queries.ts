@@ -18,32 +18,63 @@ export class DraftQueryError extends Error {
   }
 }
 
+const lessonDraftQueryPrefix = ['admin', 'draft'] as const;
+
 export function lessonDraftQueryKey(lessonId: string) {
-  return ['admin', 'draft', lessonId] as const;
+  return [...lessonDraftQueryPrefix, lessonId] as const;
 }
 
-function lessonDraftPendingKey(lessonId: string) {
-  return ['admin', 'draft-pending', lessonId] as const;
+/**
+ * Re-reads every lesson draft in the cache; only mounted ones refetch. A default audio-track change
+ * keeps the video generation, so the generation-based invalidation cannot see it (multi-audio S6).
+ */
+export async function invalidateLessonDrafts(client: QueryClient) {
+  await client.invalidateQueries({ queryKey: lessonDraftQueryPrefix });
 }
 
-function pendingSince(client: QueryClient, lessonId: string): number | undefined {
-  const marker = client.getQueryData<DraftPendingMarker>(lessonDraftPendingKey(lessonId));
-  if (marker === undefined) return undefined;
-  if (Date.now() - marker.startedAt >= draftTaskTimeoutMs) {
-    client.removeQueries({ queryKey: lessonDraftPendingKey(lessonId), exact: true });
-    return undefined;
-  }
-  return marker.startedAt;
-}
-
-function pendingRegeneration(client: QueryClient, lessonId: string): boolean {
-  const marker = client.getQueryData<DraftPendingMarker>(lessonDraftPendingKey(lessonId));
-  if (marker === undefined) return false;
-  if (Date.now() - marker.startedAt >= draftTaskTimeoutMs) {
-    client.removeQueries({ queryKey: lessonDraftPendingKey(lessonId), exact: true });
+/**
+ * A stale draft is a pending recognition, so the server replaces it without the author asking
+ * (multi-audio S6). Wait for that within the same window as a requested regeneration: if the
+ * worker makes no progress, polling stops and the stale banner and Regenerate remain. The start
+ * of the wait lives with the query factory, not in the query cache, where an unobserved entry is
+ * garbage-collected after five minutes and would restart the window.
+ */
+function awaitingReplacement(
+  staleSince: Map<string, number>,
+  lessonId: string,
+  draft: LessonDraft | undefined,
+): boolean {
+  // No data yet (first mount, or a remount after the cache dropped the draft) says nothing about
+  // staleness: keep the window's start, so it is not restarted by a remount.
+  if (draft === undefined) return false;
+  if (!draft.stale) {
+    staleSince.delete(lessonId);
     return false;
   }
-  return true;
+  const since = staleSince.get(lessonId);
+  if (since === undefined) {
+    staleSince.set(lessonId, Date.now());
+    return true;
+  }
+  return Date.now() - since < draftTaskTimeoutMs;
+}
+
+/**
+ * A requested regeneration is waited for until the task is claimed or the window ends. Like the
+ * stale window, the marker lives with the query factory: an unobserved query-cache entry is
+ * garbage-collected after five minutes, which cut the fifteen-minute wait short.
+ */
+function pendingSince(
+  pending: Map<string, DraftPendingMarker>,
+  lessonId: string,
+): DraftPendingMarker | undefined {
+  const marker = pending.get(lessonId);
+  if (marker === undefined) return undefined;
+  if (Date.now() - marker.startedAt >= draftTaskTimeoutMs) {
+    pending.delete(lessonId);
+    return undefined;
+  }
+  return marker;
 }
 
 function pendingDraft(lessonId: string): LessonDraft {
@@ -60,19 +91,18 @@ function pendingDraft(lessonId: string): LessonDraft {
   };
 }
 
-function markPending(client: QueryClient, lessonId: string) {
+function markPending(
+  pending: Map<string, DraftPendingMarker>,
+  client: QueryClient,
+  lessonId: string,
+) {
   const cachedDraft = client.getQueryData<LessonDraft>(lessonDraftQueryKey(lessonId));
-  client.setQueryData<DraftPendingMarker>(lessonDraftPendingKey(lessonId), {
-    startedAt: Date.now(),
-    updatedAt: cachedDraft?.updatedAt ?? null,
-  });
-}
-
-function clearPending(client: QueryClient, lessonId: string) {
-  client.removeQueries({ queryKey: lessonDraftPendingKey(lessonId), exact: true });
+  pending.set(lessonId, { startedAt: Date.now(), updatedAt: cachedDraft?.updatedAt ?? null });
 }
 
 export function createDraftQueries(drafts: DraftRepository) {
+  const staleSince = new Map<string, number>();
+  const pending = new Map<string, DraftPendingMarker>();
   return {
     drafts,
     lesson: (lessonId: string, client: QueryClient) =>
@@ -81,26 +111,23 @@ export function createDraftQueries(drafts: DraftRepository) {
         queryFn: async ({ signal }) => {
           const result = await drafts.getDraft(lessonId, signal);
           if (!result.ok) throw new DraftQueryError(result.error.code);
-          const marker = client.getQueryData<DraftPendingMarker>(lessonDraftPendingKey(lessonId));
-          if (pendingRegeneration(client, lessonId)) {
+          const marker = pendingSince(pending, lessonId);
+          if (marker !== undefined) {
             const oldDraftStillVisible =
-              marker?.updatedAt !== null && marker?.updatedAt === result.value.updatedAt;
+              marker.updatedAt !== null && marker.updatedAt === result.value.updatedAt;
             if (result.value.state === null || oldDraftStillVisible) return pendingDraft(lessonId);
-          }
-          if (result.value.state === null && pendingSince(client, lessonId) !== undefined) {
-            return pendingDraft(lessonId);
           }
           if (
             result.value.state === 'ready' ||
             result.value.state === 'no_speech' ||
             result.value.state === 'failed'
           ) {
-            clearPending(client, lessonId);
+            pending.delete(lessonId);
           }
           return result.value;
         },
         refetchInterval: (query) => {
-          const waitingForTask = pendingSince(client, lessonId) !== undefined;
+          const waitingForTask = pendingSince(pending, lessonId) !== undefined;
           if (
             !waitingForTask &&
             query.state.data?.state === 'pending' &&
@@ -114,7 +141,8 @@ export function createDraftQueries(drafts: DraftRepository) {
           const serverIsRunning =
             query.state.data?.state === 'running' ||
             (query.state.data?.state === 'pending' && query.state.data.updatedAt !== null);
-          return waitingForTask || serverIsRunning ? draftPollMs : false;
+          const replacing = awaitingReplacement(staleSince, lessonId, query.state.data);
+          return waitingForTask || serverIsRunning || replacing ? draftPollMs : false;
         },
       }),
     regenerate: (client: QueryClient) =>
@@ -130,12 +158,12 @@ export function createDraftQueries(drafts: DraftRepository) {
           if (!result.ok) throw new DraftQueryError(result.error.code);
         },
         onSuccess: (_value, { lessonId }) => {
-          markPending(client, lessonId);
+          markPending(pending, client, lessonId);
           return client.invalidateQueries({ queryKey: lessonDraftQueryKey(lessonId) });
         },
         onError: (error, { lessonId }) => {
           if (error instanceof DraftQueryError && error.code === 'already_running') {
-            markPending(client, lessonId);
+            markPending(pending, client, lessonId);
             return client.invalidateQueries({ queryKey: lessonDraftQueryKey(lessonId) });
           }
         },

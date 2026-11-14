@@ -49,7 +49,7 @@ async function drainTranscodeQueue() {
   );
 }
 
-test('generate the eight media fixtures with the worker ffmpeg', async () => {
+test('generate the nine media fixtures with the worker ffmpeg', async () => {
   // Encoding the five-minute seek fixture alone runs past two minutes on a busy machine,
   // so the budget covers all five encodes plus streaming the bytes out.
   test.setTimeout(720_000);
@@ -70,6 +70,8 @@ test('generate the eight media fixtures with the worker ffmpeg', async () => {
       // AAC tone in an M4A container to upload as its audio track.
       'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -t 2 -an -c:v libx264 -preset veryfast -y /tmp/e2e-640x360-silent.mp4',
       'ffmpeg -nostdin -loglevel error -f lavfi -i sine=frequency=660 -t 2 -c:a aac -y /tmp/e2e-tone.m4a',
+      // Multi-audio S6: an uploaded track with speech, so recognition of the default track is observable.
+      'ffmpeg -nostdin -loglevel error -f lavfi -i "flite=text=\'This is the dubbed audio track of the lesson about multiple languages.\':voice=slt" -c:a aac -y /tmp/e2e-speech-dub.m4a',
       'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i "flite=text=\'Welcome to the course. Today we will learn how video transcripts work.\':voice=slt" -shortest -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-speech-640x360.mp4',
     ].join('\n'),
   );
@@ -141,6 +143,7 @@ test('generate the eight media fixtures with the worker ffmpeg', async () => {
     '1280x720-100s.mp4',
     '640x360-silent.mp4',
     'tone.m4a',
+    'speech-dub.m4a',
   ];
   for (const name of names) {
     const destination = path.join(fixtureDirectory, `e2e-${name}`);

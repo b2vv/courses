@@ -19,9 +19,10 @@ var _ ports.AudioSource = (*Audio)(nil)
 
 const processWaitDelay = 2 * time.Second
 
-// Audio implements ports.AudioSource by extracting 16 kHz mono audio from a video source using
+// Audio implements ports.AudioSource by extracting 16 kHz mono audio from a media source using
 // ffmpeg. The source path is derived from the media module's storage layout (plan D8-3):
-// <mediaRoot>/source/<assetID>/original. The adapter owns this derivation so that the caller
+// <mediaRoot>/source/<assetID>/<leaf>, where the leaf is the default audio track's — "original"
+// for the video's own sound, "audio-<trackId>" for an uploaded track (multi-audio S6, D-S6-4). The adapter owns this derivation so that the caller
 // — the application layer — does not need to know where media keeps its bytes.
 //
 // The extracted audio is written to a temporary file under `tmpDir`; the caller MUST call the
@@ -38,12 +39,17 @@ func NewAudio(mediaRoot, tmpDir string) *Audio {
 	}
 }
 
-func (audio *Audio) Extract(ctx context.Context, assetID string) (string, func(), error) {
+func (audio *Audio) Extract(ctx context.Context, assetID, leaf string) (string, func(), error) {
 	if err := domain.ValidateID(assetID); err != nil {
 		return "", nil, err
 	}
+	// The leaf comes from the database, but it is joined into a path: only the two shapes the
+	// media module writes may pass (path safety).
+	if !domain.ValidAudioLeaf(leaf) {
+		return "", nil, domain.ErrInvalidRequest
+	}
 
-	sourcePath := filepath.Join(audio.mediaRoot, "source", assetID, "original")
+	sourcePath := filepath.Join(audio.mediaRoot, "source", assetID, leaf)
 	if _, err := os.Stat(sourcePath); errors.Is(err, os.ErrNotExist) {
 		return "", nil, domain.ErrNotFound
 	} else if err != nil {
