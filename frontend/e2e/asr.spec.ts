@@ -168,6 +168,7 @@ type DraftRead = {
   readonly state: string | null;
   readonly updatedAt: string | null;
   readonly segments: number;
+  readonly text: string;
 };
 
 async function readDraft(request: APIRequestContext, lessonID: string): Promise<DraftRead> {
@@ -179,10 +180,18 @@ async function readDraft(request: APIRequestContext, lessonID: string): Promise<
   const state: unknown = Reflect.get(body, 'state');
   const updatedAt: unknown = Reflect.get(body, 'updatedAt');
   const segments: unknown = Reflect.get(body, 'segments');
+  const lines: unknown[] = Array.isArray(segments) ? segments : [];
   return {
     state: typeof state === 'string' ? state : null,
     updatedAt: typeof updatedAt === 'string' ? updatedAt : null,
-    segments: Array.isArray(segments) ? segments.length : 0,
+    segments: lines.length,
+    text: lines
+      .map((line) => {
+        const text: unknown =
+          typeof line === 'object' && line !== null ? Reflect.get(line, 'text') : undefined;
+        return typeof text === 'string' ? text : '';
+      })
+      .join(' '),
   };
 }
 
@@ -464,18 +473,27 @@ test.describe('ASR acceptance with a stored admin session', () => {
     await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(2, {
       timeout: 240_000,
     });
-    await section
-      .getByRole('button', { name: 'Зробити основною доріжку Dub (Англійська)' })
-      .click();
-
-    // The editor learns at once that its draft heard another track (no reload, no Regenerate)…
+    // Hold recognition while the banner is observed: a sweep right after the switch could claim
+    // the replacement before the re-read draft reaches the browser (C06's pattern).
     const stale = page.getByText(/іншої аудіодоріжки|another audio track/);
-    await expect(stale).toBeVisible({ timeout: 30_000 });
+    await pauseRecognition();
+    try {
+      await section
+        .getByRole('button', { name: 'Зробити основною доріжку Dub (Англійська)' })
+        .click();
+      // The editor learns at once that its draft heard another track (no reload, no Regenerate)…
+      await expect(stale).toBeVisible({ timeout: 30_000 });
+    } finally {
+      await resumeRecognition();
+    }
     // …and the server's automatic replacement lands in the same open editor.
     await expect(stale).toBeHidden({ timeout: 300_000 });
     await waitForDraft(page, 'ready');
     const replaced = await readDraft(page.request, course.lessonID);
     expect(replaced.state).toBe('ready');
     expect(replaced.updatedAt).not.toBe(original.updatedAt);
+    // It heard the dub, not the video's own speech ("Welcome to the course…").
+    expect(replaced.text).toMatch(/dub|languages/i);
+    expect(original.text).not.toMatch(/dub|languages/i);
   });
 });

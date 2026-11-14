@@ -42,9 +42,12 @@ export async function invalidateLessonDrafts(client: QueryClient) {
 function awaitingReplacement(
   staleSince: Map<string, number>,
   lessonId: string,
-  stale: boolean,
+  draft: LessonDraft | undefined,
 ): boolean {
-  if (!stale) {
+  // No data yet (first mount, or a remount after the cache dropped the draft) says nothing about
+  // staleness: keep the window's start, so it is not restarted by a remount.
+  if (draft === undefined) return false;
+  if (!draft.stale) {
     staleSince.delete(lessonId);
     return false;
   }
@@ -149,11 +152,7 @@ export function createDraftQueries(drafts: DraftRepository) {
           const serverIsRunning =
             query.state.data?.state === 'running' ||
             (query.state.data?.state === 'pending' && query.state.data.updatedAt !== null);
-          const replacing = awaitingReplacement(
-            staleSince,
-            lessonId,
-            query.state.data?.stale === true,
-          );
+          const replacing = awaitingReplacement(staleSince, lessonId, query.state.data);
           return waitingForTask || serverIsRunning || replacing ? draftPollMs : false;
         },
       }),

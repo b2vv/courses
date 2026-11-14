@@ -99,6 +99,28 @@ describe('a default audio-track change and the mounted draft editor', () => {
     },
   );
 
+  test('a remount after the cache dropped the draft keeps the stale window', async () => {
+    rstest.useFakeTimers();
+    const source = drafts([draft('ready', true, '2026-11-14T10:00:00.000Z')]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queries = createDraftQueries(source.repository);
+    const first = new QueryObserver(client, queries.lesson(lessonId, client));
+    const stopFirst = first.subscribe(() => {});
+    await first.refetch();
+    await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs / 2);
+    stopFirst();
+    client.removeQueries({ queryKey: ['admin', 'draft', lessonId], exact: true });
+
+    const second = new QueryObserver(client, queries.lesson(lessonId, client));
+    const stopSecond = second.subscribe(() => {});
+    await second.refetch();
+    await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs / 2 + draftPollMs);
+    const readsAtLimit = source.reads();
+    await rstest.advanceTimersByTimeAsync(draftPollMs * 4);
+    expect(source.reads()).toBe(readsAtLimit);
+    stopSecond();
+  });
+
   test('stale polling gives up after the regeneration window when the worker makes no progress', async () => {
     rstest.useFakeTimers();
     const source = drafts([draft('ready', true, '2026-11-14T10:00:00.000Z')]);
