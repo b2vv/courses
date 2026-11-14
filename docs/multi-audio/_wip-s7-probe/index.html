@@ -1,0 +1,18 @@
+<!doctype html><html><body><video id="v" playsinline></video>
+<script src="/hls.min.js"></script>
+<script>
+const v=document.getElementById('v');
+const hls=new Hls(); hls.loadSource('/hls/master.m3u8'); hls.attachMedia(v);
+window.hls=hls;
+hls.on(Hls.Events.MANIFEST_PARSED,()=>{ v.play().catch(e=>window.playErr=String(e)); });
+window.peak=async function(){
+  if(!window.an){
+    const s=v.captureStream(); window.tracks=s.getAudioTracks().length;
+    const ctx=new AudioContext(); window.ctx=ctx;
+    const src=ctx.createMediaStreamSource(s); const an=ctx.createAnalyser(); an.fftSize=8192; src.connect(an); window.an=an;
+  }
+  const an=window.an, b=new Float32Array(an.frequencyBinCount); an.getFloatFrequencyData(b);
+  let mi=0; for(let i=1;i<b.length;i++) if(b[i]>b[mi]) mi=i;
+  return {hz: mi*window.ctx.sampleRate/an.fftSize, db: b[mi], state: window.ctx.state, tracks: window.tracks, t: v.currentTime, audioTrack: hls.audioTrack};
+};
+</script></body></html>
