@@ -297,7 +297,7 @@ async function uploadReady(
       new URL(response.url()).pathname === `/api/v1/admin/lessons/${target.lessonID}/video` &&
       response.request().method() === 'POST',
   );
-  await lesson.locator('input[type="file"]').setInputFiles(file);
+  await lesson.locator('input[type="file"]:not(.admin-audio-field input)').setInputFiles(file);
   const response = await minted;
   expect(response.status()).toBe(201);
   const id = videoID(await response.json());

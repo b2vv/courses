@@ -1,4 +1,5 @@
 import {
+  acceptedAudioFileName,
   audioChunkBytes,
   audioUploadPath,
   maximumAudioBytes,
@@ -42,6 +43,10 @@ export function createAudioTracks(repository: AudioTrackRepository) {
       },
       signal?: AbortSignal,
     ) {
+      // An obviously foreign file is refused before any ticket or byte (D-L2-5); the server still
+      // checks the codec after the upload.
+      if (!acceptedAudioFileName(input.originalName))
+        return Promise.resolve({ ok: false, error: { code: 'unsupported_media' } } as const);
       return validMediaId(videoId) &&
         validAudioTicketInput(input.declaredBytes, input.originalName) &&
         validAudioLanguage(input.language) &&

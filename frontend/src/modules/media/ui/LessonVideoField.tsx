@@ -8,6 +8,8 @@ import type {
   VideoTransferProgress,
 } from '../domain/video';
 import { Button, FileUpload, ProgressBar } from '../../../presentation/ui';
+import { LessonAudioTracksField } from './LessonAudioTracksField';
+import type { CourseEditorAudio } from './LessonAudioTracksField';
 
 const queuedRetryMs = 10 * 60_000;
 const processingRetryMs = 40 * 60_000;
@@ -34,6 +36,8 @@ export type CourseEditorVideo = {
   readonly isLoading: boolean;
   readonly error?: VideoErrorCode;
   readonly actions: LessonVideoFieldActions;
+  /** Audio tracks of the shown asset; absent where the editor offers no audio management. */
+  readonly audio?: CourseEditorAudio;
 };
 
 type LessonVideoFieldProps = CourseEditorVideo & {
@@ -54,7 +58,14 @@ function shownVideo(rows: readonly LessonVideo[]): LessonVideo | undefined {
           selected === undefined || row.generation > selected.generation ? row : selected,
         undefined,
       );
-  return newest('ready') ?? newest('failed');
+  const ready = newest('ready');
+  // A processed video-only asset waits for its first audio track (D-L2-8). It is the lesson's
+  // current video when it is newer than the Ready one — a replacement the author must finish —
+  // and a stale older one (it is outside the pending-per-lesson index) never hides the Ready one.
+  const awaiting = newest('awaiting_audio');
+  if (awaiting !== undefined && (ready === undefined || awaiting.generation > ready.generation))
+    return awaiting;
+  return ready ?? newest('failed');
 }
 
 function canRetry(video: LessonVideo, now: number): boolean {
@@ -132,6 +143,7 @@ export function LessonVideoField({
   isLoading,
   error,
   actions,
+  audio,
 }: LessonVideoFieldProps) {
   const { t } = useTranslation();
   const [progress, setProgress] = useState<VideoTransferProgress>();
@@ -232,6 +244,9 @@ export function LessonVideoField({
             progress === undefined && (
               <ProgressBar label={t('administration.video.processing')} isIndeterminate />
             )}
+          {current?.state === 'awaiting_audio' && (
+            <p className="admin-video-hint">{t('administration.video.awaitingAudio')}</p>
+          )}
           {current?.state === 'failed' && current.failureReason !== undefined && (
             <p>{failureMessage(current.failureReason, t)}</p>
           )}
@@ -273,12 +288,15 @@ export function LessonVideoField({
           )}
           {progress === undefined &&
             !interrupted &&
-            (current === undefined || current.state === 'ready' || current.state === 'failed') &&
+            (current === undefined ||
+              current.state === 'ready' ||
+              current.state === 'awaiting_audio' ||
+              current.state === 'failed') &&
             error === undefined &&
             !isLoading && (
               <FileUpload
                 label={
-                  current?.state === 'ready'
+                  current?.state === 'ready' || current?.state === 'awaiting_audio'
                     ? t('administration.video.replace')
                     : t('administration.video.upload')
                 }
@@ -286,6 +304,16 @@ export function LessonVideoField({
                 allowsMultiple={false}
                 isDisabled={isBusy}
                 onSelect={(files) => void transfer(files)}
+              />
+            )}
+          {audio !== undefined &&
+            current !== undefined &&
+            (current.state === 'ready' || current.state === 'awaiting_audio') && (
+              <LessonAudioTracksField
+                key={current.videoId}
+                videoId={current.videoId}
+                assetState={current.state}
+                audio={audio}
               />
             )}
         </>

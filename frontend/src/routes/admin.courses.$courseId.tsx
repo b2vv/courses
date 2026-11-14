@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { DraftQueryError } from '../app/composition/admin-draft-queries';
 import { AuthoringQueryError } from '../app/composition/admin-queries';
 import { VideoQueryError } from '../app/composition/admin-video-queries';
+import { AudioTrackQueryError } from '../app/composition/admin-audio-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
 import { asBrandedId, validEntityId } from '../contracts/course';
@@ -22,10 +23,20 @@ import type {
 } from '../contracts/course';
 import type { DraftErrorCode } from '../modules/transcript';
 import type { AuthenticatedUser } from '../modules/identity';
-import type { VideoErrorCode, VideoTransferProgress, VideoTransferTarget } from '../modules/media';
+import type {
+  AudioTrackErrorCode,
+  AudioTransferProgress,
+  AudioTransferTarget,
+  VideoErrorCode,
+  VideoTransferProgress,
+  VideoTransferTarget,
+} from '../modules/media';
 import { CourseEditorPending, CourseEditorView } from '../modules/admin';
 import type {
+  CourseEditorAudio,
   CourseEditorVideo,
+  LessonAudioTracksActionResult,
+  LessonAudioTracksActions,
   LessonVideoFieldActions,
   LessonVideoFieldActionResult,
 } from '../modules/media';
@@ -41,6 +52,14 @@ function courseId(value: string): CourseId {
 
 function videoErrorCode(error: unknown): VideoErrorCode | undefined {
   return error instanceof VideoQueryError
+    ? error.code
+    : error === null || error === undefined
+      ? undefined
+      : 'dependency_unavailable';
+}
+
+function audioErrorCode(error: unknown): AudioTrackErrorCode | undefined {
+  return error instanceof AudioTrackQueryError
     ? error.code
     : error === null || error === undefined
       ? undefined
@@ -98,6 +117,9 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
   const cancelVideo = useMutation(admin.videos.cancelUpload(queryClient));
   const [activeTransfers, setActiveTransfers] = useState(0);
   const videos = useQuery(admin.videos.list(course.id, activeTransfers > 0));
+  const audio = useCourseEditorAudio(course.id, () =>
+    queryClient.setQueryData(sessionQueryKey, null),
+  );
   const videosError = videoErrorCode(videos.error);
   const authenticationRequired = () => queryClient.setQueryData(sessionQueryKey, null);
 
@@ -178,6 +200,7 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
       isLoading: videos.isPending,
       ...(videosError === undefined ? {} : { error: videosError }),
       actions: videoActions,
+      audio,
     },
   };
 
@@ -186,6 +209,112 @@ function CourseEditorActions({ course, actor }: { course: CourseTree; actor: Aut
   ) : (
     <CourseEditorView course={course} actor={actor} ownerOptions={null} {...actions} />
   );
+}
+
+/** Audio tracks of each lesson's shown asset (D-L2-1); one query per asset, polled per D-L2-3. */
+function useCourseEditorAudio(
+  courseId: string,
+  authenticationRequired: () => void,
+): CourseEditorAudio {
+  const { admin } = Route.useRouteContext();
+  const queryClient = useQueryClient();
+  const audioTracks = admin.audioTracks;
+  const mint = useMutation(audioTracks.mint(queryClient));
+  const transfer = useMutation(audioTracks.transfer(queryClient));
+  const cancel = useMutation(audioTracks.cancelUpload(queryClient));
+  const rename = useMutation(audioTracks.rename(queryClient));
+  const setDefault = useMutation(audioTracks.setDefault(queryClient));
+  const remove = useMutation(audioTracks.remove(queryClient));
+  const [transfersByVideo, setTransfersByVideo] = useState<Readonly<Record<string, number>>>({});
+
+  async function action(run: () => Promise<unknown>): Promise<LessonAudioTracksActionResult> {
+    try {
+      await run();
+      return null;
+    } catch (error) {
+      const code = audioErrorCode(error) ?? 'dependency_unavailable';
+      if (code === 'authentication_required') authenticationRequired();
+      return code;
+    }
+  }
+
+  async function transferFile(
+    videoId: string,
+    target: AudioTransferTarget,
+    file: File,
+    onProgress: (progress: AudioTransferProgress) => void,
+  ) {
+    const count = (delta: number) =>
+      setTransfersByVideo((current) => ({
+        ...current,
+        [videoId]: (current[videoId] ?? 0) + delta,
+      }));
+    count(1);
+    try {
+      await transfer.mutateAsync({ courseId, videoId, target, file, onProgress });
+    } finally {
+      count(-1);
+    }
+  }
+
+  const actions: LessonAudioTracksActions = {
+    upload: (videoId, metadata, file, onProgress) =>
+      action(async () => {
+        const ticket = await mint.mutateAsync({
+          courseId,
+          videoId,
+          declaredBytes: file.size,
+          originalName: file.name,
+          language: metadata.language,
+          label: metadata.label,
+        });
+        await transferFile(videoId, { kind: 'new', ticket }, file, onProgress);
+      }),
+    resume: (track, file, onProgress) =>
+      action(() =>
+        transferFile(track.videoId, { kind: 'resume', trackId: track.trackId }, file, onProgress),
+      ),
+    cancel: (track) =>
+      action(() =>
+        cancel.mutateAsync({ courseId, videoId: track.videoId, trackId: track.trackId }),
+      ),
+    rename: (track, language, label) =>
+      action(() =>
+        rename.mutateAsync({
+          courseId,
+          videoId: track.videoId,
+          trackId: track.trackId,
+          language,
+          label,
+        }),
+      ),
+    setDefault: (track) =>
+      action(() =>
+        setDefault.mutateAsync({ courseId, videoId: track.videoId, trackId: track.trackId }),
+      ),
+    remove: (track) =>
+      action(() =>
+        remove.mutateAsync({ courseId, videoId: track.videoId, trackId: track.trackId }),
+      ),
+  };
+
+  return {
+    useTracks(videoId) {
+      const query = useQuery(
+        audioTracks.list(courseId, videoId, (transfersByVideo[videoId] ?? 0) > 0),
+      );
+      const error = audioErrorCode(query.error);
+      useEffect(() => {
+        if (error === 'authentication_required') authenticationRequired();
+      }, [error]);
+      return {
+        data: query.data,
+        isLoading: query.isPending,
+        ...(error === undefined ? {} : { error }),
+      };
+    },
+    actions,
+  };
 }
 
 function AdminOwnerEditor({

@@ -238,3 +238,41 @@ delta-рев'ю — SHIP на `b4ee658`. Повторний повний `make c
 
 **Обмеження.** `adminstats` `snapshot.go:137` не рахує `awaiting_audio` ні в `in_progress`, ні в `ready`
 (лічильник дашборду, не wire-парсинг) — поза обсягом. e2e-шлях video-only → аудіо → ready — у S5-L2b.
+
+## S5-L2b — UI аудіодоріжок уроку + e2e (2026-11-14)
+
+План: `docs/multi-audio/plan-s5l2.md` (D-L2-1…D-L2-5, D-L2-8, D-L2-10). Гілка `multi-audio-s5l2b` від `main@15afa6c`.
+
+- **Секція «Аудіодоріжки»** у `LessonVideoField` для поточного відео в `ready`/`awaiting_audio`
+  (`modules/media/ui/LessonAudioTracksField.tsx`): список зі станами, нова доріжка (Select мови з
+  константи без зайнятих мов + назва), resume/cancel перерваної доріжки лише зі списку, rename у
+  діалозі, «Зробити основною» лише на Ready не-default, видалення з підтвердженням і заблоковане для
+  останньої Ready-доріжки Ready-ассета; помилки сервера (409 тощо) мапляться в названі тексти uk/en.
+- **`shownVideo`:** `awaiting_audio` — поточне відео, лише коли новіше за найновіше `ready` (D-L2-10).
+- **Wiring:** `useCourseEditorAudio` у `routes/admin.courses.$courseId.tsx` — один query на ассет,
+  лічильник трансферів per video для опитування.
+- **Розширення файлу** перевіряється в application `mint` до будь-якого запиту (`unsupported_media`).
+
+**Верифікація.** Повний упорядкований `make check` на `a8c1005` (2026-11-14) — `GATE_EXIT=0`:
+frontend unit **910 passed**, e2e **131 passed** (15.7 хв), включно з двома новими:
+(1) ready-відео → друга доріжка «English» → ready → default → видалення оригіналу; `master.m3u8`
+містить 1 → 2 → 1 `EXT-X-MEDIA:TYPE=AUDIO`, `DEFAULT=YES` на English; axe на секції;
+(2) video-only фікстура → `awaiting_audio` → мова з клавіатури → m4a → відео `ready` без навігації.
+Нові тести: component 13, domain +8. Мутації: `shownVideo` `>`→`<` (2 падіння), delete-guard → `true`
+(1), фільтр мов прибрано (1).
+
+**Дефект, спійманий лише повним гейтом.** Гейт на `5927dcd` червоний (117 passed, 1 failed): playback
+B40 — strict-mode violation, бо в полі ready-уроку тепер два `input[type="file"]`; таргетні прогони
+зелені. Фікс `a8c1005`: усі video-upload локатори e2e скоуплено `:not(.admin-audio-field input)`.
+
+**Незалежне рев'ю (Codex `exec`, свіжий контекст), три хвилі:** W1 на `4f29e50` — BLOCK: Major #2
+(нема перевірки розширення до mint) виправлено в `5927dcd`; Major #1 (заміна, що впала через аудіо,
+ховається за старшим ready) — відповідь із механізмом (D-12; `failed` аудіо не відновлює,
+`postgres/audiotrack.go:421/:519`), записано в D-L2-10. W2 на `5927dcd` — SHIP, 0 знахідок, прийняв
+обидві відповіді. W3 (delta e2e-фікса) на `a8c1005` — SHIP, 0 знахідок. Raw:
+`_wip-s5l2b-review-codex.md`, `-w2.md`, `-w3.md`.
+
+**Обмеження.** Секція не показується під час `queued/processing` (D-L2-10). Автор не бачить причини
+падіння заміни, поки на уроці є старше `ready` (як для відео на `main`). Причина `failed` доріжки не
+показується — DTO її не несе. `adminstats` `awaiting_audio` — як у L2a. GitHub CI не запускається
+(account-wide, див. пам'ять) — авторитетний гейт локальний.

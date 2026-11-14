@@ -160,6 +160,18 @@ describe('audio track API repository', () => {
     ).toEqual(invalid);
   });
 
+  test('D-L2-5 refuses a non-audio file name before any request', async () => {
+    const tracks = createAudioTracks(createApiAudioTrackRepository());
+    expect(
+      await tracks.mint(videoId, {
+        declaredBytes: 6,
+        originalName: 'voice.wav',
+        language: 'en',
+        label: 'English',
+      }),
+    ).toEqual({ ok: false, error: { code: 'unsupported_media' } });
+  });
+
   test('a new transfer uploads to the audio path and clears its fingerprint', async () => {
     const storage = memoryStorage();
     const tracks = createAudioTracks(createApiAudioTrackRepository({}, storage));

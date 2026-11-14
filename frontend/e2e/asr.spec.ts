@@ -139,7 +139,10 @@ async function upload(page: Page, fixture: string) {
       candidate.url().endsWith('/video') &&
       candidate.request().method() === 'POST',
   );
-  await page.locator('input[type="file"]').first().setInputFiles(fixture);
+  await page
+    .locator('input[type="file"]:not(.admin-audio-field input)')
+    .first()
+    .setInputFiles(fixture);
   expect((await response).status()).toBe(201);
   await expect(page.locator('[data-video-state="ready"]')).toBeVisible({ timeout: 240_000 });
 }

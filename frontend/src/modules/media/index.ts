@@ -28,3 +28,9 @@ export type {
   LessonVideoFieldActionResult,
   LessonVideoFieldActions,
 } from './ui/LessonVideoField';
+export type {
+  CourseEditorAudio,
+  LessonAudioTracksActionResult,
+  LessonAudioTracksActions,
+  LessonAudioTracksState,
+} from './ui/LessonAudioTracksField';

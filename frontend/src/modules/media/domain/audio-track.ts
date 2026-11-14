@@ -104,6 +104,12 @@ export function validAudioLabel(value: string): boolean {
   });
 }
 
+/** D-L2-5: the picker filter is advisory (drag-and-drop bypasses it), so the name is checked too. */
+export function acceptedAudioFileName(originalName: string): boolean {
+  const name = originalName.toLowerCase();
+  return acceptedAudioFileTypes.some((extension) => name.endsWith(extension));
+}
+
 export function validAudioTicketInput(declaredBytes: number, originalName: string): boolean {
   return (
     Number.isSafeInteger(declaredBytes) &&
@@ -113,6 +119,31 @@ export function validAudioTicketInput(declaredBytes: number, originalName: strin
     [...originalName].length <= 255 &&
     !originalName.includes('\u0000')
   );
+}
+
+/**
+ * The offered languages a track may still take: one track per (asset, language), failed tracks
+ * excluded (migration 00026), so a failed upload frees its language. A track's own language stays
+ * offered while it is edited, even when it lies outside the offered list (data from before it).
+ */
+export function availableAudioLanguages(
+  tracks: readonly AudioTrack[],
+  editedTrackId?: string,
+): readonly string[] {
+  const taken = new Set(
+    tracks
+      .filter((track) => track.state !== 'failed' && track.trackId !== editedTrackId)
+      .map((track) => track.language),
+  );
+  const own = tracks.find((track) => track.trackId === editedTrackId)?.language;
+  const offered: string[] = audioTrackLanguages.filter((language) => !taken.has(language));
+  if (own !== undefined && !offered.includes(own)) offered.unshift(own);
+  return offered;
+}
+
+/** A created or uploading track with no transfer running in this tab was interrupted. */
+export function isInterruptedAudioTrack(track: AudioTrack): boolean {
+  return track.kind === 'uploaded' && (track.state === 'created' || track.state === 'uploading');
 }
 
 /** Only a Ready track that is not already the default can become the default. */
