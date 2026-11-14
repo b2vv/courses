@@ -41,6 +41,24 @@
 2. **Друга мова контенту** (транскрипт primary є; редактор/reader single-locale — lesson-builder §Lim2). **Рекомендація: не зараз** — без сигналу попиту.
 3. **Мультивалюта** (ціни лише UAH). **Рекомендація: не зараз** — немає попиту, test-mode.
 
+## Owner-initiated, у черзі (додано 2026-11-14)
+
+Після фази multi-subtitles (`docs/multi-subtitles/plan.md`), не замість неї.
+
+1. **Перевірка зв'язки TanStack Start + Rsbuild перед оновленням** (власник, 2026-11-14). Зараз:
+   `@tanstack/react-start` 1.169.3, `@tanstack/react-router` 1.170.45, `@rsbuild/core` 2.2.2
+   (`frontend/package.json`), образ `node:24-bookworm-slim` (`frontend/Dockerfile`).
+   - **Окрема тестова гілка**, три перевірки окремо, кожна зі своїм доказом:
+     1. **SPA-навігація** — клієнтські переходи між маршрутами без повного перезавантаження.
+     2. **SSR streaming** — сторінки йдуть потоком через nginx з `proxy_buffering off`
+        (`infrastructure/nginx/nginx.conf:241-243`), а не одним буфером.
+     3. **Компресія** — gzip лише там, де він налаштований (`nginx.conf:250-252`, `gzip_proxied any`,
+        `gzip_vary on`), і він не буферизує SSR-потік.
+   - **Не оновлювати автоматично за номером версії.** Спершу перевірити сумісність залежностей
+     (peer-залежності Start ↔ Router ↔ Rsbuild) і Node **в Linux/x86 Docker** (`--platform linux/amd64`;
+     хост розробки — arm64, тож локальний зелений прогін цього не доводить). Лише після цього —
+     оновлення й повний ordered `make check`.
+
 ## Наступний хід
 
 **Черга агента порожня — немає gardening-ходу, який варто брати без сигналу.** Роадмап §24 пройдено; security-audit повністю закрито; owner-послідовність з минулої агенди (deploy-readiness → orphaned-image → /teach-редактор) виконана до кінця. Кандидати, що лишились (джерела 2–4), — це або investigation без споживача (OpenTelemetry spans, limit_req endurance), або фіча, що чекає owner-сигналу (друга локаль).
