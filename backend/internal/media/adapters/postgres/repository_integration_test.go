@@ -200,6 +200,10 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S5-L1b sweep selects only reclaimable upload tracks", harness.testSweepAudioSelectsOnlyReclaimableTracks)
 	t.Run("S5-L1b locked delete purges eligible and skips a promoted track", harness.testDeleteSweptAudioTrackLockedPurgesAndSkipsPromoted)
 	t.Run("S5-L1b recover selects stranded queued tracks", harness.testRecoverQueuedAudioTracksSelectsStranded)
+	t.Run("S-backfill 00028 backfills pre-S3 ready assets and reverses exactly", harness.testEmbeddedBackfillPopulated)
+	t.Run("S-backfill 00028 refuses when both fallback languages are taken", harness.testEmbeddedBackfillRefusesBothLanguagesTaken)
+	t.Run("S-backfill 00028 refuses a ready asset without a ready default", harness.testEmbeddedBackfillRefusesBrokenReadyGate)
+	t.Run("S-backfill 00028 waits for writers and times out loudly", harness.testEmbeddedBackfillWaitsForWriters)
 }
 
 func (h *mediaHarness) testTwoReadyGenerations(t *testing.T) {
