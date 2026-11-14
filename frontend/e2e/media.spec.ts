@@ -11,6 +11,7 @@ import {
   type Page,
 } from '@playwright/test';
 import { promisify } from 'node:util';
+import axe from 'axe-core';
 import type {
   AdminCourseTree,
   ErrorResponse,
@@ -31,11 +32,13 @@ const lessons = {
   twoRung: { id: randomUUID(), title: `Дві сходинки ${runNamespace}`, index: 2 },
   subRung: { id: randomUUID(), title: `Мала роздільність ${runNamespace}`, index: 3 },
   restart: { id: randomUUID(), title: `Перезапуск ${runNamespace}`, index: 4 },
+  videoOnly: { id: randomUUID(), title: `Відео без звуку ${runNamespace}`, index: 5 },
 } as const;
 
 type CourseToken = { readonly id: string; readonly updatedAt: string };
 
 let course: CourseToken | undefined;
+let mainVideoId: string | undefined;
 let finishRequestTracking = () => Promise.resolve();
 
 async function compose(...args: string[]) {
@@ -77,8 +80,68 @@ function errorCode(payload: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
-function fixture(name: '640x360' | '1280x720' | '320x240' | '1280x720-5min') {
+function fixture(name: '640x360' | '1280x720' | '320x240' | '1280x720-5min' | '640x360-silent') {
   return path.join(fixtureDirectory, `e2e-${name}.mp4`);
+}
+
+const audioFixture = path.join(fixtureDirectory, 'e2e-tone.m4a');
+
+function trackID(payload: unknown): string {
+  if (typeof payload !== 'object' || payload === null)
+    throw new Error('Audio ticket response must be an object');
+  const id: unknown = Reflect.get(payload, 'trackId');
+  if (typeof id !== 'string') throw new Error('Audio ticket response must carry trackId');
+  return id;
+}
+
+function audioSection(field: Locator): Locator {
+  return field.getByRole('region', { name: 'Аудіодоріжки' });
+}
+
+/** Picks a language and a name, then the file; returns the minted track id. */
+async function uploadAudio(
+  page: Page,
+  section: Locator,
+  videoId: string,
+  language: string,
+  label: string,
+): Promise<string> {
+  await section.getByRole('button', { name: /Мова доріжки/ }).click();
+  await page.getByRole('option', { name: language }).click();
+  await section.getByRole('textbox', { name: 'Назва доріжки' }).fill(label);
+  const minted = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/admin/videos/${videoId}/audio-tracks` &&
+      response.request().method() === 'POST',
+  );
+  await section.locator('input[type="file"]').setInputFiles(audioFixture);
+  const response = await minted;
+  expect(response.status()).toBe(201);
+  return trackID(await response.json());
+}
+
+async function audioRenditions(videoId: string): Promise<string[]> {
+  return playlistLines(await readPlaylist(videoId, 'master.m3u8')).filter((line) =>
+    line.startsWith('#EXT-X-MEDIA:TYPE=AUDIO'),
+  );
+}
+
+declare global {
+  interface Window {
+    axe: typeof axe;
+  }
+}
+
+async function axeViolations(page: Page, section: Locator): Promise<string[]> {
+  await page.addScriptTag({ content: axe.source });
+  return section.evaluate(async (element) => {
+    const results = await window.axe.run(element, {
+      runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'],
+    });
+    return results.violations.flatMap((item) =>
+      item.nodes.map((node) => `${item.id} ${node.target.join(' ')}`),
+    );
+  });
 }
 
 function lessonField(page: Page, index: number): Locator {
@@ -123,7 +186,7 @@ async function upload(page: Page, lesson: (typeof lessons)[keyof typeof lessons]
       response.request().method() === 'POST'
     );
   });
-  await field.locator('input[type="file"]').setInputFiles(file);
+  await field.locator('input[type="file"]:not(.admin-audio-field input)').setInputFiles(file);
   const response = await minted;
   expect(response.status()).toBe(201);
   return { field, videoId: videoID(await response.json()) };
@@ -304,6 +367,7 @@ test.describe('the first real video through the whole chain', () => {
     const field = lessonField(page, lessons.main.index);
     await installProgressRecorder(field);
     const uploaded = await upload(page, lessons.main, fixture('640x360'));
+    mainVideoId = uploaded.videoId;
     await expect(uploaded.field.locator('[data-video-state]')).toHaveAttribute(
       'data-video-state',
       'ready',
@@ -342,6 +406,85 @@ test.describe('the first real video through the whole chain', () => {
     await expect(
       lessonField(page, lessons.main.index).locator('[data-video-state]'),
     ).toHaveAttribute('data-video-state', 'ready');
+  });
+
+  test('S5-L2b adds a second audio track, makes it the default and deletes the original', async ({
+    page,
+  }) => {
+    if (course === undefined || mainVideoId === undefined)
+      throw new Error('The ready main video was not uploaded');
+    const videoId = mainVideoId;
+    await page.goto(`/admin/courses/${course.id}`);
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    const field = lessonField(page, lessons.main.index);
+    const section = audioSection(field);
+    // The source carried a sound stream, so the worker created one embedded Ready track.
+    await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(1);
+    expect(await audioRenditions(videoId)).toHaveLength(1);
+    expect(await axeViolations(page, section)).toEqual([]);
+
+    await uploadAudio(page, section, videoId, 'Англійська', 'English');
+    await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(2, {
+      timeout: 120_000,
+    });
+    await expect.poll(() => audioRenditions(videoId)).toHaveLength(2);
+
+    await section
+      .getByRole('button', { name: 'Зробити основною доріжку English (Англійська)' })
+      .click();
+    const english = section.locator('li').filter({ hasText: 'English' });
+    await expect(english.getByText('За замовчуванням')).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await audioRenditions(videoId)).find((line) => line.includes('DEFAULT=YES')),
+      )
+      .toContain('NAME="English"');
+
+    const original = section.locator('li').filter({ hasNotText: 'English' });
+    await original.getByRole('button', { name: /^Видалити доріжку/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Видалити доріжку' }).click();
+    await expect(section.locator('li')).toHaveCount(1);
+    await expect.poll(() => audioRenditions(videoId)).toHaveLength(1);
+    // The one Ready track left on a Ready asset is kept (D-L2-4).
+    await expect(english.getByRole('button', { name: /^Видалити доріжку/ })).toHaveCount(0);
+    await expect(field.locator('[data-video-state]')).toHaveAttribute('data-video-state', 'ready');
+  });
+
+  test('S5-L2b a video-only upload waits for audio and turns ready without navigation', async ({
+    page,
+  }) => {
+    if (course === undefined) throw new Error('Media course was not created');
+    await page.goto(`/admin/courses/${course.id}`);
+    await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    const uploaded = await upload(page, lessons.videoOnly, fixture('640x360-silent'));
+    const state = uploaded.field.locator('[data-video-state]');
+    await expect(state).toHaveAttribute('data-video-state', 'awaiting_audio', {
+      timeout: 120_000,
+    });
+    const section = audioSection(uploaded.field);
+    await expect(section.getByText(/Перша готова аудіодоріжка/)).toBeVisible();
+
+    // Keyboard path: the language select opens and picks from the keyboard alone; with no
+    // track yet, the first offered language is Ukrainian.
+    await section.getByRole('button', { name: /Мова доріжки/ }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('option', { name: 'Українська' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(section.getByRole('button', { name: /Мова доріжки/ })).toContainText('Українська');
+    await section.getByRole('textbox', { name: 'Назва доріжки' }).fill('Українська');
+    const minted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname ===
+          `/api/v1/admin/videos/${uploaded.videoId}/audio-tracks` &&
+        response.request().method() === 'POST',
+    );
+    await section.locator('input[type="file"]').setInputFiles(audioFixture);
+    expect((await minted).status()).toBe(201);
+
+    // The worker promotes the asset with its first Ready track; the editor sees it unaided.
+    await expect(state).toHaveAttribute('data-video-state', 'ready', { timeout: 120_000 });
+    await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(1);
+    expect(await audioRenditions(uploaded.videoId)).toHaveLength(1);
   });
 
   test('B26 B27 B30 pins both ladder shapes and their one shared audio rendition', async ({

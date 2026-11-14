@@ -194,7 +194,7 @@ test('En04 En10 nginx media bytes require membership except for a published prev
         response.request().method() === 'POST',
     );
     await lesson
-      .locator('input[type="file"]')
+      .locator('input[type="file"]:not(.admin-audio-field input)')
       .setInputFiles(
         path.join(import.meta.dirname, '..', 'playwright', '.fixtures', 'e2e-640x360.mp4'),
       );
@@ -513,7 +513,7 @@ test('En16 blocked member keeps media bytes (CanConsume) but loses comments (Can
         response.request().method() === 'POST',
     );
     await lesson
-      .locator('input[type="file"]')
+      .locator('input[type="file"]:not(.admin-audio-field input)')
       .setInputFiles(
         path.join(import.meta.dirname, '..', 'playwright', '.fixtures', 'e2e-640x360.mp4'),
       );
