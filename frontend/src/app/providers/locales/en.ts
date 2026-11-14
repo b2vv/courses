@@ -408,6 +408,7 @@ export const en = {
         position: 'Playback position',
         quality: 'Quality',
         qualityAuto: 'Auto',
+        audio: 'Audio',
         volume: 'Volume',
         mute: 'Mute',
         unmute: 'Unmute',

@@ -414,6 +414,7 @@ export const uk = {
         position: 'Позиція відтворення',
         quality: 'Якість',
         qualityAuto: 'Автоматично',
+        audio: 'Аудіо',
         volume: 'Гучність',
         mute: 'Вимкнути звук',
         unmute: 'Увімкнути звук',

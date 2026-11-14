@@ -12,9 +12,11 @@ export * from './application/recovery';
 // Ports: the I/O contracts this feature depends on.
 export type {
   CreatePlaybackMedia,
+  PlaybackAudioTrack,
   PlaybackMedia,
   PlaybackMediaCallbacks,
   PlaybackMediaError,
+  PlaybackMediaOptions,
   PlaybackQuality,
 } from './ports/PlaybackMedia';
 export type { PlaybackRepository } from './ports/PlaybackRepository';

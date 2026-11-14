@@ -1,4 +1,13 @@
 export type PlaybackQuality = { readonly id: number; readonly label: string };
+/**
+ * One audio rendition of the lesson's master manifest (multi-audio S7). The language is its identity:
+ * it is unique per asset (migration 00026), whereas the hls index can change between manifests.
+ */
+export type PlaybackAudioTrack = {
+  readonly language: string;
+  readonly label: string;
+  readonly isDefault: boolean;
+};
 export type PlaybackMediaError = {
   readonly status: number | undefined;
   readonly retryable: boolean;
@@ -11,6 +20,9 @@ export type PlaybackMediaError = {
 export type PlaybackMediaCallbacks = {
   onReady(): void;
   onLevels(levels: readonly PlaybackQuality[]): void;
+  onAudioTracks(tracks: readonly PlaybackAudioTrack[]): void;
+  /** The track the player has selected (not necessarily audible yet). */
+  onAudioTrack(language: string): void;
   onError(error: PlaybackMediaError): void;
 };
 
@@ -19,10 +31,18 @@ export interface PlaybackMedia {
   load(source: string): void;
   stopLoad(): void;
   selectLevel(level: number | 'auto'): void;
+  /** Selects the track with exactly this language; false when the manifest has none. */
+  selectAudioTrack(language: string): boolean;
   destroy(): void;
 }
+
+export type PlaybackMediaOptions = {
+  /** The remembered audio language to start with when the manifest offers it exactly. */
+  readonly audioLanguage: string | null;
+};
 
 export type CreatePlaybackMedia = (
   video: HTMLVideoElement,
   callbacks: PlaybackMediaCallbacks,
+  options?: PlaybackMediaOptions,
 ) => PlaybackMedia;
