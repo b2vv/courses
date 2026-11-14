@@ -221,6 +221,22 @@ describe('lesson audio tracks field', () => {
     expect(screen.getByRole('option', { name: 'Polish' })).toBeTruthy();
   });
 
+  it('multi-subtitles MS1: a track stored as EN is English, takes English from the upload list and is named in its editor', async () => {
+    const user = userEvent.setup();
+    const upper = { ...embedded, language: 'EN', label: 'Original' };
+    renderView([upper]);
+    expect(screen.getByRole('button', { name: 'Edit track Original (English)' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /Track language/ }));
+    expect(screen.queryByRole('option', { name: 'English' })).toBeNull();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Edit track Original (English)' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Track language/ }));
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options.filter((text) => text === 'English')).toHaveLength(1);
+    expect(options).not.toContain('EN');
+  });
+
   it('refuses a name the HLS manifest cannot carry before any file is picked', async () => {
     const user = userEvent.setup();
     renderView([embedded]);
