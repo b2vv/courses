@@ -71,7 +71,10 @@
 ### Діагностика retained-тому (plan-ms1 M-D3, read-only)
 
 Запит — [ms1-diagnostic/diagnostic.sql](ms1-diagnostic/diagnostic.sql): кожна не-failed `und`/`und-*`
-доріжка Ready не-evicted ассета, мова primary уроку і причина, чому 00030 її (не) релейблить. Тепла БД
+доріжка Ready не-evicted ассета, мова primary уроку і причина, чому 00030 її (не) релейблить; предикат
+кандидата й вибір (default → embedded → менший id) — ті самі, що в кроці 2 міграції (рев'ю W3: перша
+версія називала eligible кожного кандидата, без вибору). `before.txt` знято першою версією: у кожному
+ассеті там один кандидат, тож вибір нічого б не змінив; `after.txt` — поточною. Тепла БД
 після фінального гейту, схему відкочено до v29, запит до і після `make up`.
 
 | | Рядків | eligible | no primary transcript | already has primary language |
@@ -95,11 +98,13 @@ embedded-доріжка перейменована в `EN` SQL-ом на лок�
 |---|---|---|---|---|---|---|
 | U1 нова доріжка, listbox відкрито, `EN` на ассеті — `English` немає | PASS | PASS | PASS | PASS | PASS (див. F3) | PASS |
 | U3 перейменування `EN`, listbox — `English*` один, `EN` немає | PASS | PASS | PASS | PASS | PASS | PASS |
-| U2 лише `und` — усі мови, крім `und` | PASS | PASS | PASS | PASS | N/A¹ | N/A¹ |
-| U4 клавіатура: Tab з «Edit track» → тригер, Enter відкриває, ↓ рухає з видимою рамкою, Escape закриває й повертає фокус (`:focus-visible`) — і в діалозі | PASS | PASS | PASS | PASS | N/A¹ | N/A¹ |
+| U2 лише `und` — усі мови, крім `und` | PASS | PASS | PASS | PASS | PASS | PASS |
+| U4 клавіатура: Tab з «Edit track» → тригер, Enter відкриває, ↓ рухає з видимою рамкою, Escape закриває й повертає фокус (`:focus-visible`) — і в діалозі | PASS | PASS | PASS | PASS | PASS, крім F4 | PASS |
 
-¹ U2 і U4 — інший набір опцій і інший спосіб введення для тієї самої контроли; макет при 200%/320
-перевірено U1/U3 на тій самій контролі. Набір опцій від ширини не залежить (`availableAudioLanguages`).
+U2/U4 при 200% і 320 — на `und`-курсі (U2-набір опцій), разом: нова доріжка — Tab → Enter → ↓ (English
+у фокусі), End прокручує до Spanish, Escape → фокус на тригері `:focus-visible`; діалог — Enter на
+«Edit track» → тригер → Enter → ↑/↓, Escape закриває список (фокус на тригері діалогу, `:focus-visible`),
+другий Escape закриває діалог і повертає фокус на «Edit track Original (Undetermined)».
 
 Скриншоти: `<в'юпорт>-U<n>-….jpg`. Списки опцій і активний елемент зняті з DOM у тому ж стані, що
 кадр: U1/U4 — Ukrainian, Polish, German, French, Spanish, Undetermined (English немає; ↓ → Polish);
@@ -130,6 +135,17 @@ U2 — Ukrainian, English, Polish, German, French, Spanish (Undetermined нем�
 (`overflow-wrap:anywhere` на значенні + `flex:none` на шевроні) розбила текст по складах — гірше,
 повернуто. Контрола лишається працездатною (відкривається, прокручується, вибір працює). Пропоную
 окремою задачею: стиснути відступи вкладених карток адмін-редактора уроку на вузькій ширині.
+
+**F4 (наявний до MS1, Minor, не виправлено в MS1):** при 200% тексту на 390 px діалог перейменування
+відкриває список із фокусом на вибраній опції (Undetermined, сьома з семи), але не прокручує до неї:
+опція 557–645 px, видима межа поповера 397 px (`390-text200-U4-dialog-F4-selected-obscured.jpg`) —
+сфокусований елемент повністю схований (WCAG 2.4.11). Механізм: прокручується `.ui-popover`
+(`overflow:auto`, `tokens.css`), а не `.ui-listbox`; React Aria прокручує до фокуса саме listbox, тож
+початковий фокус лишається за краєм. Перша ж стрілка прокручує поповер (`…-after-arrow.jpg`). На 320
+при 100% і на всіх базових класах список уміщається — не відтворюється. MS1 не змінював ні поповер, ні
+listbox (рев'ю W3: `git diff 5cbb44b..HEAD -- frontend` без CSS/розмітки); дефект глобального примітиву
+`Select`. Пропоную разом з F3 окремою задачею: listbox як контейнер прокрутки
+(`max-block-size: inherit; overflow: auto`) і повний e2e, бо зачіпає всі `Select`.
 
 ### Обмеження (магнітуда або механізм)
 
