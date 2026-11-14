@@ -133,18 +133,18 @@ func TestStalenessIsDerivedAndAgreesWithTheTranscriptRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if made.Stale(2) {
+	if made.Stale(2, "") {
 		t.Fatal("the generation the player would pick is this one; not stale")
 	}
-	if !made.Stale(3) {
+	if !made.Stale(3, "") {
 		t.Fatal("the video was replaced; stale")
 	}
 	// No ready asset at all must not read as stale — the same exception the transcript makes,
 	// so that a lesson whose transcode failed does not mark every draft out of date.
-	if made.Stale(0) {
+	if made.Stale(0, "") {
 		t.Fatal("a lesson with no ready asset must not read as stale")
 	}
-	if (Transcript{AuthoredAgainstGeneration: 2}).Stale(0) != made.Stale(0) {
+	if (Transcript{AuthoredAgainstGeneration: 2}).Stale(0) != made.Stale(0, "") {
 		t.Fatal("the draft and the transcript must answer the no-ready-asset case the same way")
 	}
 }
