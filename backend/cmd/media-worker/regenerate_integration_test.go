@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	mediaffmpeg "courses/internal/media/adapters/ffmpeg"
+	"courses/internal/media/ports"
 	containers "courses/internal/testsupport/containers"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -31,11 +33,11 @@ const (
 	regenOldTrk  = "a5000000-0000-4000-8000-000000000002"
 )
 
-// The master ffmpeg wrote before 00030: the embedded track still says `und`.
-const legacyMaster = `#EXTM3U
+// videoOnlyBase is the master shape ffmpeg's video pass leaves before any audio is attached (no
+// EXT-X-MEDIA, no AUDIO group); the production writer then renders the audio section into it.
+const videoOnlyBase = `#EXTM3U
 #EXT-X-VERSION:7
-#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group_aac",NAME="Original",LANGUAGE="und",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="audio/index.m3u8"
-#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS="avc1.64001e,mp4a.40.2",AUDIO="group_aac"
+#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS="avc1.64001e"
 360p/index.m3u8
 `
 
@@ -108,13 +110,24 @@ func TestRegenerateMastersAfterLegacyRelabel(t *testing.T) {
 
 	root := t.TempDir()
 	masterOf := func(assetID string) string { return filepath.Join(root, "hls", assetID, "master.m3u8") }
+	// The legacy master is produced by the production writer from the pre-00030 Ready set, so a
+	// drift in the writer's layout cannot leave this fixture green.
+	writer := mediaffmpeg.New(root)
+	legacy := []ports.AudioRendition{{TrackID: regenTrack, Name: "Original", Language: "und", Default: true, Embedded: true}}
 	for _, assetID := range []string{regenLive, regenEvicted} {
 		if err := os.MkdirAll(filepath.Dir(masterOf(assetID)), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(masterOf(assetID), []byte(legacyMaster), 0o640); err != nil {
+		if err := os.WriteFile(masterOf(assetID), []byte(videoOnlyBase), 0o640); err != nil {
 			t.Fatal(err)
 		}
+		if err := writer.RegenerateMaster(ctx, assetID, legacy); err != nil {
+			t.Fatalf("legacy master for %s: %v", assetID, err)
+		}
+	}
+	legacyMaster, err := os.ReadFile(masterOf(regenEvicted))
+	if err != nil || !strings.Contains(string(legacyMaster), `LANGUAGE="und"`) {
+		t.Fatalf("legacy master (err=%v):\n%s", err, legacyMaster)
 	}
 
 	if _, err := provider.UpTo(ctx, 30); err != nil {
@@ -151,7 +164,7 @@ func TestRegenerateMastersAfterLegacyRelabel(t *testing.T) {
 		t.Fatalf("second run changed the master:\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 	evicted, err := os.ReadFile(masterOf(regenEvicted))
-	if err != nil || string(evicted) != legacyMaster {
+	if err != nil || string(evicted) != string(legacyMaster) {
 		t.Fatalf("evicted master was touched (err=%v):\n%s", err, evicted)
 	}
 }
