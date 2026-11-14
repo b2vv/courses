@@ -24,6 +24,7 @@ import type {
 } from '../domain/playback';
 import type {
   CreatePlaybackMedia,
+  PlaybackAudioTrack,
   PlaybackMedia,
   PlaybackMediaError,
   PlaybackQuality,
@@ -112,6 +113,20 @@ function steppedRate(current: number, direction: 1 | -1): number {
   return PLAYBACK_RATES[next] ?? 1;
 }
 
+/**
+ * Menu options for the audio tracks: the manifest NAME, or the language when it is empty; tracks
+ * sharing a name are told apart by their language. Labels are React text, never markup.
+ */
+function audioTrackOptions(tracks: readonly PlaybackAudioTrack[]) {
+  const labelOf = (track: PlaybackAudioTrack) =>
+    track.label.trim() === '' ? track.language : track.label;
+  return tracks.map((track) => {
+    const label = labelOf(track);
+    const shared = tracks.filter((other) => labelOf(other) === label).length > 1;
+    return { id: track.language, label: shared ? `${label} (${track.language})` : label };
+  });
+}
+
 export function LessonPlayer({
   courseTitle,
   lesson,
@@ -189,6 +204,13 @@ export function LessonPlayer({
   const [captionsOn, setCaptionsOn] = useState(initialPrefs.captionsOn);
   const [autoplayNext, setAutoplayNext] = useState(initialPrefs.autoplayNext);
   const [qualityKey, setQualityKey] = useState('auto');
+  // Multi-audio S7: the manifest's audio tracks, the one hls has selected, and the remembered
+  // language. The ref hands the latest choice to a media instance created later in this view, so
+  // a recreated adapter does not fall back to the language read at mount.
+  const [audioTracks, setAudioTracks] = useState<readonly PlaybackAudioTrack[]>([]);
+  const [selectedAudio, setSelectedAudio] = useState<string | null>(null);
+  const [audioLanguage, setAudioLanguage] = useState(initialPrefs.audioLanguage);
+  const audioLanguageRef = useRef(initialPrefs.audioLanguage);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const pipSupported = typeof document !== 'undefined' && document.pictureInPictureEnabled === true;
@@ -346,23 +368,29 @@ export function LessonPlayer({
   useEffect(() => {
     const video = videoElement;
     if (lesson.videoState !== 'ready' || video === null) return;
-    const media = createMedia(video, {
-      onReady() {
-        const knownDuration = finiteTime(video.duration);
-        setDuration(knownDuration);
-        const resumeAt =
-          knownDuration > 0
-            ? Math.min(pendingTimeRef.current, knownDuration)
-            : pendingTimeRef.current;
-        video.currentTime = resumeAt;
-        positionRef.current = finiteTime(video.currentTime);
-        setPosition(positionRef.current);
-        reloadModeRef.current = 'initial';
-        void video.play();
+    const media = createMedia(
+      video,
+      {
+        onReady() {
+          const knownDuration = finiteTime(video.duration);
+          setDuration(knownDuration);
+          const resumeAt =
+            knownDuration > 0
+              ? Math.min(pendingTimeRef.current, knownDuration)
+              : pendingTimeRef.current;
+          video.currentTime = resumeAt;
+          positionRef.current = finiteTime(video.currentTime);
+          setPosition(positionRef.current);
+          reloadModeRef.current = 'initial';
+          void video.play();
+        },
+        onLevels: setQualities,
+        onAudioTracks: setAudioTracks,
+        onAudioTrack: setSelectedAudio,
+        onError: handleMediaError,
       },
-      onLevels: setQualities,
-      onError: handleMediaError,
-    });
+      { audioLanguage: audioLanguageRef.current },
+    );
     mediaRef.current = media;
     setMediaKind(media.kind);
     return () => {
@@ -373,6 +401,9 @@ export function LessonPlayer({
       mintRetryResolveRef.current = undefined;
       media.destroy();
       mediaRef.current = undefined;
+      // The next instance reports its own manifest's tracks.
+      setAudioTracks([]);
+      setSelectedAudio(null);
     };
   }, [createMedia, handleMediaError, lesson.videoState, videoElement]);
 
@@ -556,8 +587,8 @@ export function LessonPlayer({
 
   // Remember the knobs for the next lesson. Writing the stored value back on mount is a harmless no-op.
   useEffect(() => {
-    writePreferences({ volume, muted, rate, captionsOn, autoplayNext });
-  }, [volume, muted, rate, captionsOn, autoplayNext]);
+    writePreferences({ volume, muted, rate, captionsOn, autoplayNext, audioLanguage });
+  }, [volume, muted, rate, captionsOn, autoplayNext, audioLanguage]);
 
   // Drive the caption track from the remembered toggle rather than the <track default> attribute, so
   // the student's last choice wins. Re-applied when the track element appears (captions prop set).
@@ -851,6 +882,13 @@ export function LessonPlayer({
       label: quality.label,
     })),
   ];
+
+  const audioOptions = audioTrackOptions(audioTracks);
+  const shownAudio =
+    selectedAudio ??
+    audioTracks.find((track) => track.isDefault)?.language ??
+    audioTracks[0]?.language ??
+    '';
 
   const speedOptions = PLAYBACK_RATES.map((value) => ({
     id: String(value),
@@ -1185,6 +1223,21 @@ export function LessonPlayer({
                             const level = Number(key);
                             if (Number.isInteger(level)) mediaRef.current?.selectLevel(level);
                           }
+                        },
+                      },
+                    }
+                  : {})}
+                {...(mediaKind === 'hls' && audioTracks.length >= 2
+                  ? {
+                      audio: {
+                        label: t('learn.video.audio'),
+                        value: shownAudio,
+                        options: audioOptions,
+                        onChange: (language) => {
+                          // Remembered only when the manifest really has it (D-S7-2).
+                          if (mediaRef.current?.selectAudioTrack(language) !== true) return;
+                          audioLanguageRef.current = language;
+                          setAudioLanguage(language);
                         },
                       },
                     }

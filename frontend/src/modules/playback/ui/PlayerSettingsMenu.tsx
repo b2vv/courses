@@ -14,6 +14,8 @@ type PlayerSettingsMenuProps = {
   readonly speed: Group;
   /** Present only for adaptive (HLS) sources; a native file has one rendition and no choice. */
   readonly quality?: Group;
+  /** Present only for HLS with two or more audio tracks (multi-audio S7). */
+  readonly audio?: Group;
   /** Present only when the lesson has a transcript to show as captions. */
   readonly captions?: {
     readonly label: string;
@@ -38,6 +40,7 @@ export function PlayerSettingsMenu({
   label,
   speed,
   quality,
+  audio,
   captions,
   autoplay,
 }: PlayerSettingsMenuProps) {
@@ -68,6 +71,14 @@ export function PlayerSettingsMenu({
               value={quality.value}
               onChange={quality.onChange}
               options={quality.options}
+            />
+          )}
+          {audio === undefined ? null : (
+            <RadioGroup
+              label={audio.label}
+              value={audio.value}
+              onChange={audio.onChange}
+              options={audio.options}
             />
           )}
           {captions === undefined ? null : (

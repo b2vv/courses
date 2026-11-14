@@ -114,6 +114,7 @@ describe('lesson player states', () => {
         selectLevel(level) {
           selectedLevels.push(level);
         },
+        selectAudioTrack: () => false,
         destroy() {},
       };
       return media;
@@ -200,6 +201,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -247,6 +249,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -283,6 +286,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -331,6 +335,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -372,6 +377,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -411,6 +417,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -449,6 +456,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -518,6 +526,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -596,6 +605,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {
           destroyedVideos.push(video);
         },
@@ -661,6 +671,7 @@ describe('lesson player states', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -701,6 +712,7 @@ describe('A2 Up Next autoplay', () => {
         },
         stopLoad() {},
         selectLevel() {},
+        selectAudioTrack: () => false,
         destroy() {},
       };
     };
@@ -764,5 +776,135 @@ describe('A2 Up Next autoplay', () => {
     // The ticker gone, the secondary action is now Replay; the lesson can still be rewatched.
     expect(screen.getByRole('button', { name: 'Replay' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Play now' })).toBeTruthy();
+  });
+});
+
+describe('multi-audio S7: the audio track menu', () => {
+  type AudioFake = {
+    readonly selected: string[];
+    readonly options: Array<{ audioLanguage: string | null } | undefined>;
+    callbacks?: PlaybackMediaCallbacks;
+  };
+
+  function audioMedia(
+    tracks: ReadonlyArray<{ language: string; label: string; isDefault: boolean }>,
+    kind: 'hls' | 'native' = 'hls',
+    accept: (language: string) => boolean = () => true,
+  ) {
+    const fake: AudioFake = { selected: [], options: [] };
+    const createMedia: CreatePlaybackMedia = (video, callbacks, options) => {
+      fake.callbacks = callbacks;
+      fake.options.push(options);
+      Object.defineProperty(video, 'duration', { configurable: true, value: 100 });
+      Object.defineProperty(video, 'play', {
+        configurable: true,
+        value: () => Promise.resolve(),
+      });
+      return {
+        kind,
+        load() {
+          callbacks.onAudioTracks(tracks);
+          const start =
+            tracks.find((track) => track.language === options?.audioLanguage) ??
+            tracks.find((track) => track.isDefault);
+          if (start !== undefined) callbacks.onAudioTrack(start.language);
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        selectAudioTrack(language) {
+          fake.selected.push(language);
+          if (!accept(language)) return false;
+          callbacks.onAudioTrack(language);
+          return true;
+        },
+        destroy() {},
+      };
+    };
+    return { fake, createMedia };
+  }
+
+  const twoTracks = [
+    { language: 'und', label: 'Original', isDefault: true },
+    { language: 'en', label: 'English dub', isDefault: false },
+  ];
+
+  async function openSettings(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Play' }));
+    await user.click(await screen.findByRole('button', { name: /Settings/ }));
+  }
+
+  function storedAudioLanguage(): unknown {
+    const raw = localStorage.getItem('courses.player.prefs.v1');
+    return raw === null
+      ? undefined
+      : (JSON.parse(raw) as { audioLanguage?: unknown }).audioLanguage;
+  }
+
+  it('offers two tracks, switches on choice and remembers the language for the next lesson', async () => {
+    const user = userEvent.setup();
+    const { fake, createMedia } = audioMedia(twoTracks);
+    const first = renderPlayer('ready', actions(), createMedia);
+    expect(fake.options[0]).toEqual({ audioLanguage: null });
+    await openSettings(user);
+    const audio = await screen.findByRole('radiogroup', { name: 'Audio' });
+    expect(audio).toBeTruthy();
+    const original = screen.getByRole('radio', { name: 'Original' });
+    expect((original as HTMLInputElement).checked).toBe(true);
+
+    await user.click(screen.getByRole('radio', { name: 'English dub' }));
+    expect(fake.selected).toEqual(['en']);
+    await waitFor(() =>
+      expect((screen.getByRole('radio', { name: 'English dub' }) as HTMLInputElement).checked).toBe(
+        true,
+      ),
+    );
+    await waitFor(() => expect(storedAudioLanguage()).toBe('en'));
+    first.unmount();
+
+    const next = audioMedia(twoTracks);
+    renderPlayer('ready', actions(), next.createMedia);
+    expect(next.fake.options[0]).toEqual({ audioLanguage: 'en' });
+  });
+
+  it('keeps the selection and the preference when the manifest has no such track', async () => {
+    const user = userEvent.setup();
+    const { fake, createMedia } = audioMedia(twoTracks, 'hls', () => false);
+    renderPlayer('ready', actions(), createMedia);
+    await openSettings(user);
+    await user.click(await screen.findByRole('radio', { name: 'English dub' }));
+    expect(fake.selected).toEqual(['en']);
+    expect((screen.getByRole('radio', { name: 'Original' }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(storedAudioLanguage() ?? null).toBeNull();
+  });
+
+  it.each([
+    ['one track', twoTracks.slice(0, 1), 'hls'],
+    ['native playback', twoTracks, 'native'],
+  ] as const)('shows no audio group for %s', async (_label, tracks, kind) => {
+    const user = userEvent.setup();
+    const { createMedia } = audioMedia(tracks, kind);
+    renderPlayer('ready', actions(), createMedia);
+    await openSettings(user);
+    await screen.findByRole('radiogroup', { name: 'Speed' });
+    expect(screen.queryByRole('radiogroup', { name: 'Audio' })).toBeNull();
+  });
+
+  it('tells apart tracks that share a name and renders labels as text', async () => {
+    const user = userEvent.setup();
+    const { createMedia } = audioMedia([
+      { language: 'uk', label: 'Dub', isDefault: true },
+      { language: 'en', label: 'Dub', isDefault: false },
+      { language: 'de', label: '<b>Dub</b>', isDefault: false },
+      { language: 'fr', label: ' ', isDefault: false },
+    ]);
+    renderPlayer('ready', actions(), createMedia);
+    await openSettings(user);
+    expect(await screen.findByRole('radio', { name: 'Dub (uk)' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Dub (en)' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '<b>Dub</b>' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'fr' })).toBeTruthy();
   });
 });
