@@ -3,14 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Locator,
-  type Page,
-  type Response,
-} from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
@@ -110,18 +103,29 @@ async function uploadVideo(page: Page, lesson: Locator, lessonID: string, file: 
   await expect(lesson.locator('[data-video-state="ready"]')).toBeVisible({ timeout: 240_000 });
 }
 
-async function addDub(page: Page, lesson: Locator) {
+// Exactly the backend's maximum label length (media domain MaximumLabelLength = 64), with a
+// 27-character word that cannot wrap at a space.
+const longLabel = 'Deutsche Synchronfassungsbearbeitung mit einem langen Namen Test';
+
+async function addTrack(
+  page: Page,
+  lesson: Locator,
+  language: string,
+  label: string,
+  file: string,
+  readyCount: number,
+) {
   const section = lesson.getByRole('region', { name: 'Аудіодоріжки' });
   await section.getByRole('button', { name: /Мова доріжки/ }).click();
-  await page.getByRole('option', { name: 'Англійська' }).click();
-  await section.getByRole('textbox', { name: 'Назва доріжки' }).fill('English dub');
+  await page.getByRole('option', { name: language }).click();
+  await section.getByRole('textbox', { name: 'Назва доріжки' }).fill(label);
   const minted = page.waitForResponse(
     (candidate) =>
       candidate.url().includes('/audio-tracks') && candidate.request().method() === 'POST',
   );
-  await section.locator('input[type="file"]').setInputFiles(dubTrack);
+  await section.locator('input[type="file"]').setInputFiles(file);
   expect((await minted).status()).toBe(201);
-  await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(2, {
+  await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(readyCount, {
     timeout: 240_000,
   });
 }
@@ -243,7 +247,7 @@ test.afterAll(async () => {
 test.describe('multi-audio S7 player audio tracks', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('S7 an author publishes a lesson with two audio tracks and one with one', async ({
+  test('S7 an author publishes a lesson with three audio tracks and one with one', async ({
     browser,
     baseURL,
   }) => {
@@ -258,7 +262,9 @@ test.describe('multi-audio S7 player audio tracks', () => {
       await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
       const dual = lessonGroup(page, 1);
       await uploadVideo(page, dual, seeded.dual, dualVideo);
-      await addDub(page, dual);
+      await addTrack(page, dual, 'Англійська', 'English dub', dubTrack, 2);
+      // A third track whose label is as long as the backend allows, for the narrow-screen check.
+      await addTrack(page, dual, 'Німецька', longLabel, dubTrack, 3);
       await uploadVideo(page, lessonGroup(page, 2), seeded.single, singleVideo);
       await publishAndGrant(page.request, baseURL, seeded.id);
     } finally {
@@ -269,17 +275,20 @@ test.describe('multi-audio S7 player audio tracks', () => {
   test.describe('as a student', () => {
     test.use({ storageState: authStatePath('student') });
 
-    test('S7 switches to the dub, hears it without stopping and starts on it after a reload', async ({
+    test('S7 switches to the dub without stalling, keeps the choice where it is absent and starts on it next time', async ({
       page,
     }) => {
       test.setTimeout(300_000);
       if (course === undefined) throw new Error('Audio course was not created');
-      const dubResponses: Response[] = [];
+      const dubResponses: Array<{ pathname: string; status: number; at: number }> = [];
       const audioPlaylists: string[] = [];
-      // Listeners first, so no request made by an action below can be missed.
+      // Listeners first, so no request made by an action below can be missed; responses are
+      // timestamped where they arrive, not where a poll notices them.
       page.on('response', (response) => {
         const pathname = new URL(response.url()).pathname;
-        if (/\/audio-[0-9a-f-]{36}\//.test(pathname)) dubResponses.push(response);
+        if (/\/audio-[0-9a-f-]{36}\//.test(pathname)) {
+          dubResponses.push({ pathname, status: response.status(), at: Date.now() });
+        }
       });
       page.on('request', (request) => {
         const pathname = new URL(request.url()).pathname;
@@ -293,49 +302,53 @@ test.describe('multi-audio S7 player audio tracks', () => {
       expect(baseline.seen.at(-1)?.tracks).toBe(1);
       expect(dubResponses).toHaveLength(0);
 
-      const settings = page.getByRole('button', { name: 'Налаштування' });
-      await settings.click();
+      await page.getByRole('button', { name: 'Налаштування' }).click();
       const audio = page.getByRole('radiogroup', { name: 'Аудіо' });
-      await expect(audio.getByRole('radio')).toHaveCount(2);
+      await expect(audio.getByRole('radio')).toHaveCount(3);
       await expect(audio.getByRole('radio', { name: 'Original' })).toBeChecked();
       const before = (await peak(page)).time;
       expect(before).toBeLessThanOrEqual(10);
+      // Every stall from here to the end of the measured interval is recorded.
+      await page.locator('video').evaluate((node) => {
+        const stalls: number[] = [];
+        node.addEventListener('waiting', () => stalls.push(performance.now()));
+        Object.assign(window, { s7Stalls: stalls });
+      });
       const clickedAt = Date.now();
       await audio.locator('label', { hasText: 'English dub' }).click();
       await expect(audio.getByRole('radio', { name: 'English dub' })).toBeChecked();
-      await expect
-        .poll(
-          () =>
-            dubResponses.some(
-              (response) =>
-                uploadedAudioPlaylist.test(new URL(response.url()).pathname) &&
-                response.status() === 200,
-            ),
-          { timeout: 10_000 },
-        )
-        .toBe(true);
-      await expect
-        .poll(
-          () =>
-            dubResponses.some(
-              (response) =>
-                new URL(response.url()).pathname.endsWith('.m4s') && response.status() === 200,
-            ),
-          { timeout: 10_000 },
-        )
-        .toBe(true);
-      const firstSegmentMs = Date.now() - clickedAt;
-      const switched = await waitForTone(page, 880, 5, 10_000);
+      // One deadline, counted from the click, for the playlist, a segment and the audible switch.
+      const switched = await waitForTone(page, 880, 5, 10_000 - (Date.now() - clickedAt));
       const audibleMs = Date.now() - clickedAt;
+      const playlist = dubResponses.find((entry) => uploadedAudioPlaylist.test(entry.pathname));
+      const segment = dubResponses.find((entry) => entry.pathname.endsWith('.m4s'));
+      expect(playlist?.status).toBe(200);
+      expect(segment?.status).toBe(200);
       const after = await peak(page);
       expect(after.time).toBeGreaterThan(before);
+      expect(
+        await page.evaluate(() => (window as unknown as { s7Stalls: number[] }).s7Stalls),
+      ).toEqual([]);
       await expect(page.getByRole('button', { name: 'Пауза' })).toBeVisible();
       console.log(
-        `S7 switch: first dub segment ${firstSegmentMs} ms, 880 Hz run ended ${audibleMs} ms after the click (first 880 Hz sample ${switched.firstAt} ms into the wait), currentTime ${before.toFixed(2)} -> ${after.time.toFixed(2)} s`,
+        `S7 switch: dub playlist ${(playlist?.at ?? clickedAt) - clickedAt} ms, first dub segment ${(segment?.at ?? clickedAt) - clickedAt} ms, five 880 Hz samples by ${audibleMs} ms (first at ${switched.firstAt} ms into the wait), currentTime ${before.toFixed(2)} -> ${after.time.toFixed(2)} s, 0 waiting`,
       );
 
-      // The choice is remembered: a new view starts on the dub before the default is requested.
+      // R1: a lesson without that language plays its default and leaves the choice remembered.
       await page.keyboard.press('Escape');
+      await play(page, course.single);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const raw = localStorage.getItem('courses.player.prefs.v1');
+            return raw === null
+              ? null
+              : (JSON.parse(raw) as { audioLanguage?: unknown }).audioLanguage;
+          }),
+        )
+        .toBe('en');
+
+      // ...and the next lesson that offers it starts on the dub before the default is requested.
       audioPlaylists.length = 0;
       await play(page, course.dual);
       await expect.poll(() => audioPlaylists.length, { timeout: 15_000 }).toBeGreaterThan(0);
@@ -348,23 +361,44 @@ test.describe('multi-audio S7 player audio tracks', () => {
       ).toBeChecked();
     });
 
-    test('S7 the audio group is keyboard reachable and returns focus on Escape', async ({
+    test('S7 the audio group is reached by Tab, shows its focus and returns focus on Escape', async ({
       page,
     }) => {
       test.setTimeout(120_000);
       if (course === undefined) throw new Error('Audio course was not created');
       await play(page, course.dual);
       const settings = page.getByRole('button', { name: 'Налаштування' });
-      await settings.focus();
+      // Sequential Tab from the play/pause control, not .focus(): a control missing from the tab
+      // order must fail here.
+      await page.getByRole('button', { name: 'Пауза' }).focus();
+      for (
+        let step = 0;
+        step < 20 && !(await settings.evaluate((node) => node === document.activeElement));
+        step++
+      ) {
+        await page.keyboard.press('Tab');
+      }
+      await expect(settings).toBeFocused();
       await page.keyboard.press('Enter');
       const audio = page.getByRole('radiogroup', { name: 'Аудіо' });
       await expect(audio).toBeVisible();
-      // A fresh browser context has no remembered language: the default is selected, and an arrow
-      // moves within the group, selecting as it goes.
       const original = audio.getByRole('radio', { name: 'Original' });
+      // A fresh browser context has no remembered language: the default is selected.
       await expect(original).toBeChecked();
-      await original.focus();
+      for (
+        let step = 0;
+        step < 20 && !(await original.evaluate((node) => node === document.activeElement));
+        step++
+      ) {
+        await page.keyboard.press('Tab');
+      }
       await expect(original).toBeFocused();
+      const originalChoice = audio.locator('label.ui-choice', { hasText: 'Original' });
+      await expect(originalChoice).toHaveAttribute('data-focus-visible', 'true');
+      expect(await originalChoice.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe(
+        'solid',
+      );
+      // Arrows move within the group, selecting as they go.
       await page.keyboard.press('ArrowDown');
       const dub = audio.getByRole('radio', { name: 'English dub' });
       await expect(dub).toBeFocused();
@@ -372,6 +406,32 @@ test.describe('multi-audio S7 player audio tracks', () => {
       await page.keyboard.press('Escape');
       await expect(audio).toBeHidden();
       await expect(settings).toBeFocused();
+    });
+
+    test('S7 long track labels wrap inside the menu at 200% text on a 375 px screen', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      if (course === undefined) throw new Error('Audio course was not created');
+      await page.setViewportSize({ width: 375, height: 812 });
+      await play(page, course.dual);
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = '200%';
+      });
+      await page.getByRole('button', { name: 'Налаштування' }).click();
+      const audio = page.getByRole('radiogroup', { name: 'Аудіо' });
+      await expect(audio.getByRole('radio')).toHaveCount(3);
+      const panel = page.locator('.lesson-player-settings');
+      const sizes = await panel.evaluate((node) => ({
+        scrollWidth: node.scrollWidth,
+        clientWidth: node.clientWidth,
+      }));
+      // Vertical scrolling is expected at this size; sideways clipping is not.
+      expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth);
+      const long = audio.locator('label.ui-choice', { hasText: 'Synchronfassungsbearbeitung' });
+      await long.scrollIntoViewIfNeeded();
+      await long.click();
+      await expect(audio.getByRole('radio', { name: longLabel })).toBeChecked();
     });
 
     test('S7 a lesson with one audio track has no audio group', async ({ page }) => {

@@ -114,17 +114,17 @@ function steppedRate(current: number, direction: 1 | -1): number {
 }
 
 /**
- * Menu options for the audio tracks: the manifest NAME, or the language when it is empty; tracks
- * sharing a name are told apart by their language. Labels are React text, never markup.
+ * Menu options for the audio tracks: the manifest NAME, or the language when it is empty. When any
+ * two names collide, every option carries its language, which is unique per asset, so no two
+ * options can read the same. Labels are React text, never markup.
  */
 function audioTrackOptions(tracks: readonly PlaybackAudioTrack[]) {
-  const labelOf = (track: PlaybackAudioTrack) =>
-    track.label.trim() === '' ? track.language : track.label;
-  return tracks.map((track) => {
-    const label = labelOf(track);
-    const shared = tracks.filter((other) => labelOf(other) === label).length > 1;
-    return { id: track.language, label: shared ? `${label} (${track.language})` : label };
-  });
+  const named = tracks.map((track) => ({
+    id: track.language,
+    label: track.label.trim() === '' ? track.language : track.label,
+  }));
+  if (new Set(named.map((option) => option.label)).size === named.length) return named;
+  return named.map((option) => ({ id: option.id, label: `${option.label} (${option.id})` }));
 }
 
 export function LessonPlayer({

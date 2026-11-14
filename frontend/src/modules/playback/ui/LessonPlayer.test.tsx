@@ -881,6 +881,7 @@ describe('multi-audio S7: the audio track menu', () => {
   });
 
   it.each([
+    ['no track', [], 'hls'],
     ['one track', twoTracks.slice(0, 1), 'hls'],
     ['native playback', twoTracks, 'native'],
   ] as const)('shows no audio group for %s', async (_label, tracks, kind) => {
@@ -892,6 +893,15 @@ describe('multi-audio S7: the audio track menu', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Audio' })).toBeNull();
   });
 
+  it('names every option by its own label when none collide', async () => {
+    const user = userEvent.setup();
+    const { createMedia } = audioMedia(twoTracks);
+    renderPlayer('ready', actions(), createMedia);
+    await openSettings(user);
+    expect(await screen.findByRole('radio', { name: 'Original' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'English dub' })).toBeTruthy();
+  });
+
   it('tells apart tracks that share a name and renders labels as text', async () => {
     const user = userEvent.setup();
     const { createMedia } = audioMedia([
@@ -899,12 +909,19 @@ describe('multi-audio S7: the audio track menu', () => {
       { language: 'en', label: 'Dub', isDefault: false },
       { language: 'de', label: '<b>Dub</b>', isDefault: false },
       { language: 'fr', label: ' ', isDefault: false },
+      // Already shaped like a disambiguated label: must not collide with "Dub (uk)".
+      { language: 'pl', label: 'Dub (uk)', isDefault: false },
     ]);
     renderPlayer('ready', actions(), createMedia);
     await openSettings(user);
     expect(await screen.findByRole('radio', { name: 'Dub (uk)' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'Dub (en)' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: '<b>Dub</b>' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: 'fr' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '<b>Dub</b> (de)' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'fr (fr)' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Dub (uk) (pl)' })).toBeTruthy();
+    const names = screen
+      .getAllByRole('radio')
+      .map((radio) => radio.getAttribute('aria-label') ?? radio.closest('label')?.textContent);
+    expect(new Set(names).size).toBe(names.length);
   });
 });
