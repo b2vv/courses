@@ -195,6 +195,7 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S3 concurrent promote keeps exactly one default", harness.testConcurrentPromoteAudioTrack)
 	t.Run("S5-L1a authoring refuses a non-owner", harness.testAudioTrackAuthoringOwnership)
 	t.Run("S5-L1a rename updates metadata and 409s a duplicate language", harness.testUpdateAudioTrackMetadata)
+	t.Run("M2-R12 multilingual metadata writes skip master rewrite", harness.testM2R12MultilingualMetadata)
 	t.Run("S5-L1a delete regenerates the master from the remaining ready set", harness.testDeleteAudioTrackRegeneratesMaster)
 	t.Run("S5-L1a delete removes an embedded track", harness.testDeleteEmbeddedAudioTrack)
 	t.Run("S5-L1b sweep selects only reclaimable upload tracks", harness.testSweepAudioSelectsOnlyReclaimableTracks)

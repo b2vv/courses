@@ -74,7 +74,7 @@ func TestMintAudioTicketCarriesMultilingualDefault(t *testing.T) {
 		t.Run(fmt.Sprint(multilingual), func(t *testing.T) {
 			repository := &fakeRepository{}
 			service := application.NewAudioTracks(repository, nil, multilingual, func() time.Time { return time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC) })
-			track, err := service.MintAudioTicket(context.Background(), domain.Actor{}, mediaAssetID, 12, "dub.aac", "de", "Deutsch")
+			track, err := service.MintAudioTicket(context.Background(), domain.Actor{}, mediaAssetID, 12, "dub.aac", "de", "Deutsch", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

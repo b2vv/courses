@@ -262,7 +262,7 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, actor domain
 // domain has validated the new values. The (language, asset) unique index rejects
 // a clash with another non-failed track as ErrDuplicateLanguage (D6). The target
 // must exist under the asset.
-func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error) {
+func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.AudioTrack{}, persistenceError(err)
@@ -272,10 +272,18 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 	if _, err := authorizeAudioEdit(ctx, tx, actor, assetID); err != nil {
 		return domain.AudioTrack{}, err
 	}
+	previous, err := scanAudioTrack(tx.QueryRow(ctx, `SELECT `+audioTrackColumns+` FROM audio_tracks
+ WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid FOR UPDATE`, trackID, assetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
 	updated, err := scanAudioTrack(tx.QueryRow(ctx, `UPDATE audio_tracks
-		SET language=$3, label=$4, updated_at=$5
+		SET language=$3, label=$4, updated_at=$5, multilingual=COALESCE($6, multilingual)
 		WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid
-		RETURNING `+audioTrackColumns, trackID, assetID, language, label, now))
+		RETURNING `+audioTrackColumns, trackID, assetID, language, label, now, multilingual))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.AudioTrack{}, domain.ErrVideoNotFound
 	}
@@ -286,8 +294,10 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 		return domain.AudioTrack{}, persistenceError(err)
 	}
 	// NAME and LANGUAGE are rendered into the track's EXT-X-MEDIA line (D7).
-	if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
-		return domain.AudioTrack{}, err
+	if previous.Language != updated.Language || previous.Label != updated.Label {
+		if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
+			return domain.AudioTrack{}, err
+		}
 	}
 	if err := commit(ctx, tx); err != nil {
 		return domain.AudioTrack{}, err

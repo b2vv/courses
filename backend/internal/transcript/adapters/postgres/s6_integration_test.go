@@ -319,3 +319,43 @@ func (h *draftHarness) exec(t *testing.T, query string, args ...any) {
 		t.Fatal(err)
 	}
 }
+
+func (h *draftHarness) testM2R10TrackSelection(t *testing.T) {
+	h.reset(t)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
+	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson1, 2, 60)
+	h.insertAssetWithDuration(t, recoverAsset3, recoverLesson2, 1, 60)
+	h.insertTrack(t, recoverTrack2, recoverAsset2, "uploaded", "de", "ready", false)
+	h.insertTrack(t, recoverTrack3, recoverAsset2, "uploaded", "pl", "processing", false)
+	for _, tc := range []struct {
+		name, lesson, track string
+		found               bool
+	}{
+		{"requested non-default", recoverLesson1, recoverTrack2, true},
+		{"current default", recoverLesson1, initialTrackID(recoverAsset2), true},
+		{"old Ready asset", recoverLesson1, initialTrackID(recoverAsset1), false},
+		{"foreign lesson", recoverLesson1, initialTrackID(recoverAsset3), false},
+		{"non-ready track", recoverLesson1, recoverTrack3, false},
+		{"missing track", recoverLesson1, recoverTrack4, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := h.repository.LessonTrack(h.ctx, tc.lesson, tc.track)
+			if err != nil || (got != nil) != tc.found {
+				t.Fatalf("track=%+v err=%v found=%v", got, err, tc.found)
+			}
+			if got != nil && (got.TrackID != tc.track || got.AssetID != recoverAsset2) {
+				t.Fatalf("wrong selection=%+v", got)
+			}
+		})
+	}
+	h.completeReadyDraft(t, recoverLesson1, recoverAsset2, 2, draftNow)
+	if drafts, err := h.repository.ListLessonDrafts(h.ctx, recoverLesson1); err != nil || len(drafts) != 1 {
+		t.Fatalf("Ready draft setup=%+v err=%v", drafts, err)
+	}
+	// One pending asset per lesson (video_assets_pending_per_lesson): demote only the latest; the
+	// older Ready asset has no drafts, so the list must be empty either way.
+	h.exec(t, `UPDATE video_assets SET state='processing' WHERE id=$1::text::uuid`, recoverAsset2)
+	if drafts, err := h.repository.ListLessonDrafts(h.ctx, recoverLesson1); err != nil || len(drafts) != 0 {
+		t.Fatalf("no Ready drafts=%+v err=%v", drafts, err)
+	}
+}

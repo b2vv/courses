@@ -6,11 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * Null when recognition has not created a draft row yet.
- * @nullable
- */
-export type LessonDraftState = typeof LessonDraftState[keyof typeof LessonDraftState] | null;
+export type LessonDraftState = typeof LessonDraftState[keyof typeof LessonDraftState];
 
 
 export const LessonDraftState = {

@@ -88,8 +88,10 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			reflect.TypeFor[domain.AudioTrackKind](): trackKindStrings,
 		},
 		NullableFields: map[openapigen.Field]bool{
-			{Type: reflect.TypeFor[courseVideosDTO](), Name: "Items"}: false,
-			{Type: reflect.TypeFor[audioTracksDTO](), Name: "Items"}:  false,
+			{Type: reflect.TypeFor[mintAudioRequest](), Name: "Multilingual"}:   false,
+			{Type: reflect.TypeFor[renameTrackRequest](), Name: "Multilingual"}: false,
+			{Type: reflect.TypeFor[courseVideosDTO](), Name: "Items"}:           false,
+			{Type: reflect.TypeFor[audioTracksDTO](), Name: "Items"}:            false,
 		},
 		FieldRefs: map[openapigen.Field]string{
 			{Type: reflect.TypeFor[uploadTicketDTO](), Name: "ExpiresAt"}:      "AdminTimestamp",

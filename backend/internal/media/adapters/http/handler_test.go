@@ -42,12 +42,13 @@ var mediaNow = time.Date(2026, 9, 6, 12, 0, 0, 123456000, time.UTC)
 
 type mediaRepository struct {
 	mintCalls, listCalls, retryCalls int
+	mintedMultilingual               bool
 	mint                             func(context.Context, mediadomain.Actor, string, int64, string, time.Time, time.Time) (mediadomain.VideoAsset, error)
 	list                             func(context.Context, mediadomain.Actor, string) ([]mediadomain.VideoAsset, error)
 	retry                            func(context.Context, mediadomain.Actor, string, time.Duration, time.Time) (mediadomain.VideoAsset, error)
 	listTracks                       func(context.Context, mediadomain.Actor, string) ([]mediadomain.AudioTrack, error)
 	setDefault                       func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
-	updateMetadata                   func(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error)
+	updateMetadata                   func(context.Context, mediadomain.Actor, string, string, string, string, *bool, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error)
 	deleteTrack                      func(context.Context, mediadomain.Actor, string, string, time.Time, func([]mediadomain.AudioTrack) error) error
 	mintAudioTrack                   func(context.Context, mediadomain.Actor, string, int64, string, string, string, time.Time, time.Time) (mediadomain.AudioTrack, error)
 }
@@ -123,9 +124,9 @@ func (repository *mediaRepository) SetDefaultAudioTrack(ctx context.Context, act
 	panic("unexpected SetDefaultAudioTrack")
 }
 
-func (repository *mediaRepository) UpdateAudioTrackMetadata(ctx context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+func (repository *mediaRepository) UpdateAudioTrackMetadata(ctx context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
 	if repository.updateMetadata != nil {
-		return repository.updateMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
+		return repository.updateMetadata(ctx, actor, assetID, trackID, language, label, multilingual, now, rewrite)
 	}
 	panic("unexpected UpdateAudioTrackMetadata")
 }
@@ -156,8 +157,11 @@ func (*mediaRepository) Recover(context.Context, time.Time, int) ([]mediadomain.
 }
 
 func (repository *mediaRepository) MintAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID string, declaredBytes int64, originalName, language, label string, multilingual bool, expiresAt, now time.Time) (mediadomain.AudioTrack, error) {
+	repository.mintedMultilingual = multilingual
 	if repository.mintAudioTrack != nil {
-		return repository.mintAudioTrack(ctx, actor, assetID, declaredBytes, originalName, language, label, expiresAt, now)
+		track, err := repository.mintAudioTrack(ctx, actor, assetID, declaredBytes, originalName, language, label, expiresAt, now)
+		track.Multilingual = multilingual
+		return track, err
 	}
 	panic("unexpected MintAudioTrack")
 }
@@ -623,6 +627,10 @@ func retryAsset(id string, state mediadomain.State, updatedAt time.Time, token m
 }
 
 func mediaAPIHandler(t *testing.T, repository *mediaRepository, queue *mediaQueue, identity *mediaIdentity) http.Handler {
+	return mediaAPIWithAudio(t, repository, queue, identity, false, &mediaMasterWriter{})
+}
+
+func mediaAPIWithAudio(t *testing.T, repository *mediaRepository, queue *mediaQueue, identity *mediaIdentity, multilingualDefault bool, master ports.MasterWriter) http.Handler {
 	t.Helper()
 	config, err := identityhttp.NewConfig("test", "http://localhost:8080", false)
 	if err != nil {
@@ -630,7 +638,7 @@ func mediaAPIHandler(t *testing.T, repository *mediaRepository, queue *mediaQueu
 	}
 	identityHandler := identityhttp.NewHandler(identity, nil, nil, config)
 	tickets := mediaapplication.NewTickets(repository, queue, func() time.Time { return mediaNow })
-	audio := mediaapplication.NewAudioTracks(repository, &mediaMasterWriter{}, false, func() time.Time { return mediaNow })
+	audio := mediaapplication.NewAudioTracks(repository, master, multilingualDefault, func() time.Time { return mediaNow })
 	mediaHandler := mediahttp.NewHandler(tickets, audio)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)
@@ -739,7 +747,7 @@ func audioTrackRepository() *mediaRepository {
 		_ = rewrite(nil)
 		return nil
 	}
-	repo.updateMetadata = func(_ context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, _ time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+	repo.updateMetadata = func(_ context.Context, actor mediadomain.Actor, assetID, trackID, language, label string, _ *bool, _ time.Time, rewrite func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
 		if err := actor.CanEditLesson(mediaInstructorID); err != nil {
 			return mediadomain.AudioTrack{}, err
 		}
@@ -853,7 +861,7 @@ func TestAudioTrackContracts(t *testing.T) {
 
 	t.Run("AT07 duplicate language returns 409", func(t *testing.T) {
 		repository := audioTrackRepository()
-		repository.updateMetadata = func(_ context.Context, _ mediadomain.Actor, _, _, _, _ string, _ time.Time, _ func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+		repository.updateMetadata = func(_ context.Context, _ mediadomain.Actor, _, _, _, _ string, _ *bool, _ time.Time, _ func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
 			return mediadomain.AudioTrack{}, mediadomain.ErrDuplicateLanguage
 		}
 		identity := &mediaIdentity{}
@@ -881,7 +889,7 @@ func TestAudioTrackContracts(t *testing.T) {
 		for _, language := range []string{"e", "und-", "1x"} {
 			t.Run(language, func(t *testing.T) {
 				repository := audioTrackRepository()
-				repository.updateMetadata = func(context.Context, mediadomain.Actor, string, string, string, string, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
+				repository.updateMetadata = func(context.Context, mediadomain.Actor, string, string, string, string, *bool, time.Time, func([]mediadomain.AudioTrack) error) (mediadomain.AudioTrack, error) {
 					t.Fatalf("rename with language %q reached the repository", language)
 					return mediadomain.AudioTrack{}, nil
 				}

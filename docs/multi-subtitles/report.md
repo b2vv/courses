@@ -317,3 +317,37 @@ application; media HTTP is MS2c). On `ms2-3-asr-per-track`, not merged; one PR a
 - `make e2e` was not run (as in MS2a: C06/S6 are updated by MS3).
 - Review: Codex read-only w1 — SHIP, no findings (`_wip-ms2b-review-codex-w1.md`).
 - Not verified: inference by the real model in multilingual mode (the test stubs only the model itself).
+
+## MS2c — HTTP for drafts per track, transcript inventory, media `multilingual` — 2026-11-15
+
+Plan: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9), MS-D5, MS-D10 (HTTP), phase D3. On `ms2-3-asr-per-track`, not merged.
+
+### What was done
+- `GET …/lessons/{id}/drafts` — one draft per track of the latest Ready asset, in the order default → embedded →
+  by language → id; `stale` uses the MS-D5 rule. `POST …/drafts/{trackId}/regenerate` — no body, `202`;
+  `404 track_not_found` (new code), `409 already_running`. `/draft` and `/draft/regenerate` removed (404).
+  The temporary "empty trackID = default" convention from MS2a removed.
+- `GET …/lessons/{id}/transcripts` — `{language, updatedAt, stale, isPrimary}` by `language`. Access follows the course-editor
+  rule of the admin `PUT …/transcript`. **Decision (2026-11-15, Courses 1/Codex):** the plan cited "the same access as the admin
+  `GET …/transcript`", but that endpoint does not exist. Checked by the HTTP cases owner/foreign/anonymous and by integration.
+- Media: mint takes an optional `multilingual`, absent → env. PATCH takes an optional `multilingual`; the master is
+  rewritten only when language/label changed, compared under the asset lock (`FOR UPDATE`). GET returns `multilingual` and
+  `multilingualDefault`.
+- openapi and the client regenerated. **Temporary frontend bridge (until MS3a):** the editor takes `drafts[0]` after strict
+  validation of every item; regenerate runs on the trackId of the draft shown; the Regenerate language Select removed; the strict audio-track
+  schema accepts `multilingual`/`multilingualDefault`. Without it the Audio tracks list would fail at runtime while typecheck stays green.
+
+### Acceptance rows (MS2c revision)
+| Row | Status | Evidence |
+|---|---|---|
+| M2-R10 | PASS (backend + client) | HTTP contract tests for the new and removed routes and codes; integration for the inventory (0/1/2 languages, stale after a Ready replacement, no Ready → not stale, foreign course → forbidden); `make check-generated` exit 0. The editor's tabs come in MS3 |
+| M2-R12 (HTTP/media) | PASS | mint without the field → env, with it → the field; PATCH of the flag alone → 0 `RegenerateMaster` calls, of the language → 1; the repository write in integration; GET returns both fields |
+
+### Gates
+- `make format-check`, `lint`, `typecheck`, `test`, `integration` (67 packages ok, 0 FAIL), `check-generated` — exit 0.
+- The first integration run caught a defect in the new fixture: two pending assets per lesson against
+  `video_assets_pending_per_lesson`. It now demotes only the latest one.
+- The w1 Minor test (no Ready asset) was added while the gate was already running. It passed separately
+  (`go test -tags=integration -run ^TestTranscriptReadAgainstPostgreSQL$`); its run inside the full integration gate is not confirmed.
+- `make e2e` was not run: the ASR specs expect the old URLs; MS3 updates them (M3-R9).
+- Review: Codex read-only w1 — SHIP, 1 Minor closed (`_wip-ms2c-review-codex-w1.md`).

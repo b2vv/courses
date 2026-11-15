@@ -493,7 +493,7 @@ func (h *mediaHarness) testAudioTrackAuthoringOwnership(t *testing.T) {
 	if err := h.repository.SetDefaultAudioTrack(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
 		t.Fatalf("set-default by a non-owner: %v", err)
 	}
-	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, "de", "Ger", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, "de", "Ger", nil, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
 		t.Fatalf("rename by a non-owner: %v", err)
 	}
 	if err := h.repository.DeleteAudioTrack(h.ctx, stranger, mediaAssetOne, mediaTrackTwo, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrCourseForbidden) {
@@ -514,7 +514,7 @@ func (h *mediaHarness) testUpdateAudioTrackMetadata(t *testing.T) {
 	// The rename is rendered into the master (NAME/LANGUAGE), so the rewrite must see
 	// the new values inside the transaction, before commit.
 	var rewrittenWith []domain.AudioTrack
-	updated, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk-UA", "Українська", mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
+	updated, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk-UA", "Українська", nil, mediaNow.Add(time.Hour), func(ready []domain.AudioTrack) error {
 		rewrittenWith = ready
 		return nil
 	})
@@ -525,7 +525,7 @@ func (h *mediaHarness) testUpdateAudioTrackMetadata(t *testing.T) {
 		t.Fatalf("rename rewrote the master with %+v, want the renamed uk track", rewrittenWith)
 	}
 	// A failing master rewrite aborts the rename: the database keeps the old label.
-	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "Rolled back", mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "Rolled back", nil, mediaNow.Add(time.Hour), func([]domain.AudioTrack) error {
 		return errors.New("disk full")
 	}); err == nil {
 		t.Fatal("a failing master rewrite must fail the rename")
@@ -535,11 +535,11 @@ func (h *mediaHarness) testUpdateAudioTrackMetadata(t *testing.T) {
 	}
 	// Renaming to the embedded track's language collides on the (asset, language)
 	// unique index and surfaces as ErrDuplicateLanguage (409), not a generic 400.
-	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "en", "Clash", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrDuplicateLanguage) {
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "en", "Clash", nil, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrDuplicateLanguage) {
 		t.Fatalf("duplicate language: %v", err)
 	}
 	// A missing track under the asset is not found.
-	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, "de", "Ger", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrVideoNotFound) {
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackThree, "de", "Ger", nil, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrVideoNotFound) {
 		t.Fatalf("missing track: %v", err)
 	}
 }
@@ -747,5 +747,40 @@ func (h *mediaHarness) testRecoverQueuedAudioTracksSelectsStranded(t *testing.T)
 	}
 	if len(tracks) != 1 || tracks[0].ID != strandedQueued {
 		t.Fatalf("recovered=%+v want only %s", tracks, strandedQueued)
+	}
+}
+
+func (h *mediaHarness) testM2R12MultilingualMetadata(t *testing.T) {
+	h.reset(t)
+	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
+	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
+	calls := 0
+	rewrite := func([]domain.AudioTrack) error { calls++; return nil }
+	mode := true
+	updated, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "en", "Original", &mode, mediaNow.Add(time.Minute), rewrite)
+	if err != nil || !updated.Multilingual || calls != 0 {
+		t.Fatalf("flag-only=%+v err=%v calls=%d", updated, err, calls)
+	}
+	stored, err := h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne)
+	if err != nil || !stored.Multilingual {
+		t.Fatalf("persisted=%+v err=%v", stored, err)
+	}
+	updated, err = h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "uk", "Original", nil, mediaNow.Add(2*time.Minute), rewrite)
+	if err != nil || !updated.Multilingual || calls != 1 {
+		t.Fatalf("language=%+v err=%v calls=%d", updated, err, calls)
+	}
+	// Absent flag stays true even on a metadata no-op.
+	updated, err = h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "uk", "Original", nil, mediaNow.Add(3*time.Minute), rewrite)
+	if err != nil || !updated.Multilingual || calls != 1 {
+		t.Fatalf("no-op=%+v err=%v calls=%d", updated, err, calls)
+	}
+	mode = false
+	updated, err = h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "uk", "Original", &mode, mediaNow.Add(4*time.Minute), rewrite)
+	if err != nil || updated.Multilingual || calls != 1 {
+		t.Fatalf("false=%+v err=%v calls=%d", updated, err, calls)
+	}
+	stored, err = h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackOne)
+	if err != nil || stored.Multilingual {
+		t.Fatalf("persisted false=%+v err=%v", stored, err)
 	}
 }

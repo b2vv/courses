@@ -26,6 +26,7 @@ function track(trackId: string, state: AudioTrack['state'], overrides: Partial<A
     language: 'en',
     label: 'English',
     isDefault: false,
+    multilingual: false,
     state,
     updatedAt: '2026-11-13T12:00:00.000000Z',
     ...overrides,

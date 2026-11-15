@@ -55,9 +55,9 @@ func (f *draftFakeDrafts) LessonTrack(context.Context, string, string) (*ports.P
 var ownerActor = domain.Actor{UserID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
 var ownedCourse = domain.Course{OwnerID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Status: domain.Draft}
 
-// --- GetDraft tests ---
+// --- M2-R10 draft list tests ---
 
-func TestGetDraftFound(t *testing.T) {
+func TestM2R10ListDraftsFound(t *testing.T) {
 	t.Parallel()
 	drafts := &draftFakeDrafts{
 		lessonDraft: ports.LessonDraft{
@@ -72,52 +72,52 @@ func TestGetDraftFound(t *testing.T) {
 	}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	status, err := d.GetDraft(context.Background(), ownerActor, lessonID)
+	status, err := d.ListLessonDrafts(context.Background(), ownerActor, lessonID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Found {
+	if len(status) != 1 {
 		t.Fatal("draft must be found")
 	}
-	if status.State != domain.DraftReady {
-		t.Fatalf("state=%s want=ready", status.State)
+	if status[0].Draft.State != domain.DraftReady {
+		t.Fatalf("state=%s want=ready", status[0].Draft.State)
 	}
-	if status.Language != "uk" {
-		t.Fatalf("language=%s want=uk", status.Language)
+	if status[0].Draft.Language != "uk" {
+		t.Fatalf("language=%s want=uk", status[0].Draft.Language)
 	}
-	if len(status.Segments) != 2 {
-		t.Fatalf("segments=%d want=2", len(status.Segments))
+	if len(status[0].Draft.Segments) != 2 {
+		t.Fatalf("segments=%d want=2", len(status[0].Draft.Segments))
 	}
-	if status.Stale {
+	if status[0].Draft.Stale(status[0].TrackLanguage, status[0].TrackMultilingual) {
 		t.Fatal("must not be stale when track metadata matches")
 	}
 }
 
-func TestGetDraftNotFound(t *testing.T) {
+func TestM2R10ListDraftsNotFound(t *testing.T) {
 	t.Parallel()
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	status, err := d.GetDraft(context.Background(), ownerActor, lessonID)
+	status, err := d.ListLessonDrafts(context.Background(), ownerActor, lessonID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Found {
+	if len(status) != 0 {
 		t.Fatal("must not be found")
 	}
 }
 
-func TestGetDraftForbidden(t *testing.T) {
+func TestM2R10ListDraftsForbidden(t *testing.T) {
 	t.Parallel()
 	otherActor := domain.Actor{UserID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	_, err := d.GetDraft(context.Background(), otherActor, lessonID)
+	_, err := d.ListLessonDrafts(context.Background(), otherActor, lessonID)
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("err=%v want=forbidden", err)
 	}
 }
 
-func TestGetDraftStale(t *testing.T) {
+func TestM2R10ListDraftsStale(t *testing.T) {
 	t.Parallel()
 	drafts := &draftFakeDrafts{
 		lessonDraft: ports.LessonDraft{
@@ -132,11 +132,11 @@ func TestGetDraftStale(t *testing.T) {
 	}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	status, err := d.GetDraft(context.Background(), ownerActor, lessonID)
+	status, err := d.ListLessonDrafts(context.Background(), ownerActor, lessonID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.Stale {
+	if !status[0].Draft.Stale(status[0].TrackLanguage, status[0].TrackMultilingual) {
 		t.Fatal("must be stale when track languages differ")
 	}
 }
@@ -154,13 +154,13 @@ func TestRegenerateEnqueues(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID); err != nil {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID, trackID); err != nil {
 		t.Fatal(err)
 	}
 	if len(queue.jobs) != 1 {
 		t.Fatalf("jobs=%d want=1", len(queue.jobs))
 	}
-	// Multi-audio S6: the author's Regenerate may re-recognise a draft that heard the default.
+	// Multi-audio S6: the author's Regenerate may re-recognise a draft that heard the track.
 	if !queue.jobs[0].Requested {
 		t.Fatal("a Regenerate job is not marked requested")
 	}
@@ -178,7 +178,7 @@ func TestRegenerateRunningCurrentDraftIsVisibleAndDoesNotEnqueue(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID); !errors.Is(err, domain.ErrAlreadyRunning) {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID, trackID); !errors.Is(err, domain.ErrAlreadyRunning) {
 		t.Fatalf("err=%v want already_running", err)
 	}
 	if len(queue.jobs) != 0 {
@@ -190,8 +190,8 @@ func TestRegenerateNoAsset(t *testing.T) {
 	t.Parallel()
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), ownerActor, lessonID)
-	if !errors.Is(err, domain.ErrNotFound) {
+	err := d.Regenerate(context.Background(), ownerActor, lessonID, trackID)
+	if !errors.Is(err, domain.ErrTrackNotFound) {
 		t.Fatalf("err=%v want=not_found", err)
 	}
 }
@@ -201,7 +201,7 @@ func TestRegenerateForbidden(t *testing.T) {
 	otherActor := domain.Actor{UserID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), otherActor, lessonID)
+	err := d.Regenerate(context.Background(), otherActor, lessonID, trackID)
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("err=%v want=forbidden", err)
 	}
@@ -216,13 +216,13 @@ func TestRegenerateNilDuration(t *testing.T) {
 	}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), ownerActor, lessonID)
+	err := d.Regenerate(context.Background(), ownerActor, lessonID, trackID)
 	if !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("err=%v want=dependency_unavailable", err)
 	}
 }
 
-func TestRegenerateTargetsDefaultTrack(t *testing.T) {
+func TestM2R10RegenerateTargetsRequestedTrack(t *testing.T) {
 	t.Parallel()
 	dur := float64(60)
 	drafts := &draftFakeDrafts{
@@ -233,10 +233,10 @@ func TestRegenerateTargetsDefaultTrack(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID); err != nil {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID, trackID); err != nil {
 		t.Fatal(err)
 	}
 	if len(queue.jobs) != 1 || queue.jobs[0].TrackID != trackID {
-		t.Fatalf("jobs=%+v want default track %s", queue.jobs, trackID)
+		t.Fatalf("jobs=%+v want requested track %s", queue.jobs, trackID)
 	}
 }

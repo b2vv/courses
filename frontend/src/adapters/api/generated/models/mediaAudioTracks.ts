@@ -9,4 +9,5 @@ import type { MediaAudioTrack } from './mediaAudioTrack.ts';
 
 export interface MediaAudioTracks {
   items: MediaAudioTrack[];
+  multilingualDefault: boolean;
 }

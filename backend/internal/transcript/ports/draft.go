@@ -10,13 +10,14 @@ import (
 // LessonDraft is one track's machine output with its attempt token and CURRENT metadata.
 // The snapshot in Draft and the current metadata derive staleness without a stored flag.
 // Only tracks of the latest Ready, non-evicted asset are returned, so an older video's draft
-// cannot be offered after replacement. IsDefault keeps the legacy read usable until MS2c.
+// cannot be offered after replacement. Default and embedded flags determine the editor tab order.
 type LessonDraft struct {
 	Draft             domain.TranscriptDraft
 	UpdatedAt         string
 	TrackLanguage     domain.Language
 	TrackMultilingual bool
 	IsDefault         bool
+	IsEmbedded        bool
 }
 
 // PendingRecognition is one ready track of the latest Ready non-evicted asset with no draft.
@@ -115,7 +116,6 @@ type DraftRepository interface {
 	Recover(ctx context.Context, now time.Time, limit int) ([]RecoveredDraft, error)
 
 	// LessonTrack returns a ready track of the latest Ready non-evicted asset, with duration,
-	// or nil otherwise. Temporarily, an empty trackID selects its default ready track so the
-	// legacy default-only Regenerate can work until MS2c supplies an explicit track ID.
+	// or nil otherwise. trackID must identify the requested track explicitly.
 	LessonTrack(ctx context.Context, lessonID, trackID string) (*PendingRecognition, error)
 }

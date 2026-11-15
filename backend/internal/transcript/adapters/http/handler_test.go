@@ -36,8 +36,9 @@ type stubRepository struct {
 	// reach the read rather than being accepted and dropped.
 	gotLanguage domain.Language
 
-	saved   *ports.SaveTranscript
-	saveErr error
+	inventory []ports.TranscriptInventory
+	saved     *ports.SaveTranscript
+	saveErr   error
 }
 
 func (stub *stubRepository) GetLessonTranscript(_ context.Context, _, _ string, language domain.Language) (ports.LessonTranscript, error) {
@@ -328,4 +329,8 @@ func assertContract(t *testing.T, request *http.Request, response *httptest.Resp
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func (stub *stubRepository) ListLessonTranscripts(context.Context, string) ([]ports.TranscriptInventory, error) {
+	return stub.inventory, stub.err
 }

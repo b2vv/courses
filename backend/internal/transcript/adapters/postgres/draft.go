@@ -19,7 +19,7 @@ func (repository *Repository) ListLessonDrafts(ctx context.Context, lessonID str
 	rows, err := repository.pool.Query(ctx, `
   SELECT d.asset_id::text, d.generation, d.audio_track_id::text, d.track_language,
          d.track_multilingual, d.state, d.language, d.segments, d.failure, t.source_leaf,
-         d.updated_at, t.language, t.multilingual, t.is_default
+         d.updated_at, t.language, t.multilingual, t.is_default, t.kind
   FROM asr_drafts AS d
   JOIN audio_tracks AS t ON t.id = d.audio_track_id
   WHERE d.lesson_id = $1::text::uuid AND d.asset_id = (`+latestReadyAsset+`)
@@ -32,16 +32,17 @@ func (repository *Repository) ListLessonDrafts(ctx context.Context, lessonID str
 	for rows.Next() {
 		var item ports.LessonDraft
 		var raw domain.TranscriptDraft
-		var state, currentLanguage string
+		var state, currentLanguage, kind string
 		var language, failure pgtype.Text
 		var segmentsJSON []byte
 		var updatedAt time.Time
 		raw.LessonID = lessonID
 		if err := rows.Scan(&raw.AssetID, &raw.Generation, &raw.TrackID, &raw.TrackLanguage,
 			&raw.TrackMultilingual, &state, &language, &segmentsJSON, &failure, &raw.SourceLeaf,
-			&updatedAt, &currentLanguage, &item.TrackMultilingual, &item.IsDefault); err != nil {
+			&updatedAt, &currentLanguage, &item.TrackMultilingual, &item.IsDefault, &kind); err != nil {
 			return nil, persistenceError(err)
 		}
+		item.IsEmbedded = kind == "embedded"
 		raw.State, raw.Language, raw.Failure = domain.DraftState(state), domain.Language(language.String), failure.String
 		raw.Segments, err = decodeSegments(segmentsJSON)
 		if err != nil {
@@ -243,7 +244,7 @@ func (repository *Repository) LessonTrack(ctx context.Context, lessonID, trackID
   SELECT a.id::text, a.generation, t.id::text, a.duration_seconds
   FROM video_assets AS a JOIN audio_tracks AS t ON t.video_asset_id = a.id
   WHERE a.id = (`+latestReadyAsset+`) AND t.state = 'ready'
-    AND (($2 = '' AND t.is_default) OR t.id = NULLIF($2, '')::uuid)`,
+    AND t.id = $2::text::uuid`,
 		lessonID, trackID).Scan(&p.AssetID, &p.Generation, &p.TrackID, &duration)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

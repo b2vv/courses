@@ -335,6 +335,7 @@ func TestTranscriptReadAgainstPostgreSQL(t *testing.T) {
 	})
 
 	runWriteTests(t, ctx, pool, authoring, reading)
+	runM2R10InventoryTests(t, ctx, pool, authoring)
 	runLibraryTests(t, ctx, application.NewLibrary(repository), authoring)
 }
 

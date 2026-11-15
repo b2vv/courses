@@ -1,8 +1,10 @@
 package application
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"courses/internal/transcript/domain"
@@ -31,68 +33,53 @@ func NewDrafting(
 	return &Drafting{drafts: drafts, courses: courses, queue: queue, now: now, logger: logger}
 }
 
-type DraftStatus struct {
-	Found      bool
-	State      domain.DraftState
-	Language   domain.Language
-	Segments   []domain.Segment
-	Failure    string
-	Stale      bool
-	UpdatedAt  string
-	AssetID    string
-	Generation int32
-}
-
-func (d *Drafting) GetDraft(ctx context.Context, actor domain.Actor, lessonID string) (DraftStatus, error) {
+// ListLessonDrafts returns current drafts in the editor's tab order (MS-D6).
+func (d *Drafting) ListLessonDrafts(ctx context.Context, actor domain.Actor, lessonID string) ([]ports.LessonDraft, error) {
 	if err := domain.ValidateID(lessonID); err != nil {
-		return DraftStatus{}, err
+		return nil, err
 	}
 	if err := domain.ValidateID(actor.UserID); err != nil {
-		return DraftStatus{}, domain.ErrForbidden
+		return nil, domain.ErrForbidden
 	}
-
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-
 	course, err := d.courses.LessonCourse(ctx, lessonID)
 	if err != nil {
-		return DraftStatus{}, err
+		return nil, err
 	}
 	if !course.CanBeEditedBy(actor) {
-		return DraftStatus{}, domain.ErrForbidden
+		return nil, domain.ErrForbidden
 	}
-
-	lessons, err := d.drafts.ListLessonDrafts(ctx, lessonID)
+	drafts, err := d.drafts.ListLessonDrafts(ctx, lessonID)
 	if err != nil {
-		return DraftStatus{}, err
+		return nil, err
 	}
-	var lesson ports.LessonDraft
-	found := false
-	for _, candidate := range lessons {
-		if candidate.IsDefault {
-			lesson, found = candidate, true
-			break
+	slices.SortFunc(drafts, func(a, b ports.LessonDraft) int {
+		rank := func(d ports.LessonDraft) int {
+			if d.IsDefault {
+				return 0
+			}
+			if d.IsEmbedded {
+				return 1
+			}
+			return 2
 		}
-	}
-	if !found {
-		return DraftStatus{}, nil
-	}
-
-	return DraftStatus{
-		Found:      true,
-		State:      lesson.Draft.State,
-		Language:   lesson.Draft.Language,
-		Segments:   lesson.Draft.Segments,
-		Failure:    lesson.Draft.Failure,
-		Stale:      lesson.Draft.Stale(lesson.TrackLanguage, lesson.TrackMultilingual),
-		UpdatedAt:  lesson.UpdatedAt,
-		AssetID:    lesson.Draft.AssetID,
-		Generation: lesson.Draft.Generation,
-	}, nil
+		if c := cmp.Compare(rank(a), rank(b)); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.TrackLanguage, b.TrackLanguage); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Draft.TrackID, b.Draft.TrackID)
+	})
+	return drafts, nil
 }
 
-func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID string) error {
+func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID, trackID string) error {
 	if err := domain.ValidateID(lessonID); err != nil {
+		return err
+	}
+	if err := domain.ValidateID(trackID); err != nil {
 		return err
 	}
 	if err := domain.ValidateID(actor.UserID); err != nil {
@@ -110,12 +97,12 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		return domain.ErrForbidden
 	}
 
-	asset, err := d.drafts.LessonTrack(ctx, lessonID, "")
+	asset, err := d.drafts.LessonTrack(ctx, lessonID, trackID)
 	if err != nil {
 		return err
 	}
 	if asset == nil {
-		return domain.ErrNotFound
+		return domain.ErrTrackNotFound
 	}
 	if asset.DurationSeconds == nil {
 		return domain.ErrDependencyUnavailable
@@ -144,7 +131,7 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		Generation: asset.Generation,
 		TrackID:    asset.TrackID,
 		TaskMarker: marker,
-		// The author asked: this job may replace the default track's existing draft.
+		// The author asked: this job may replace the track's existing draft.
 		Requested: true,
 	}, timeout)
 }

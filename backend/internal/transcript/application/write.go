@@ -62,3 +62,23 @@ func (authoring *Authoring) Save(ctx context.Context, actor domain.Actor, reques
 		Segments: transcript.Segments, ExpectedUpdatedAt: request.ExpectedUpdatedAt,
 	})
 }
+
+// List returns the published language inventory under the same editor rule as Save.
+func (authoring *Authoring) List(ctx context.Context, actor domain.Actor, lessonID string) ([]ports.TranscriptInventory, error) {
+	if err := domain.ValidateID(lessonID); err != nil {
+		return nil, err
+	}
+	if err := domain.ValidateID(actor.UserID); err != nil {
+		return nil, domain.ErrForbidden
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	course, err := authoring.repository.LessonCourse(ctx, lessonID)
+	if err != nil {
+		return nil, err
+	}
+	if !course.CanBeEditedBy(actor) {
+		return nil, domain.ErrForbidden
+	}
+	return authoring.repository.ListLessonTranscripts(ctx, lessonID)
+}

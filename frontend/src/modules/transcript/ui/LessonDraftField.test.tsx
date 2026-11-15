@@ -18,6 +18,7 @@ function draftActions(overrides: Partial<LessonDraftFieldActions> = {}): LessonD
 function draft(state: LessonDraft['state'], overrides: Partial<LessonDraft> = {}): LessonDraft {
   return {
     lessonId,
+    trackId: state === null ? null : '60000000-0000-4000-8000-000000000001',
     state,
     language: null,
     failure: null,
@@ -69,9 +70,11 @@ describe('lesson draft field', () => {
     expect(container.querySelector('.admin-draft-field')).toBeNull();
   });
 
-  it('shows generate button when no draft exists and passes axe', async () => {
+  it('disables generate when no draft exists and passes axe', async () => {
     const { container } = renderField(draft(null));
-    expect(screen.getByRole('button', { name: 'Generate transcript' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Generate transcript' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Regenerate transcript' })).toBeNull();
     expect((await axe.run(container)).violations).toEqual([]);
   });
@@ -176,51 +179,46 @@ describe('lesson draft field', () => {
     ).toBeNull();
   });
 
-  it('C11 auto language sends undefined to regenerate, never the string "auto"', async () => {
+  it('regenerates the shown track without a language Select', async () => {
     const user = userEvent.setup();
-    let capturedLanguage: string | undefined = 'NOT_CALLED';
+    const calls: string[][] = [];
+    const shown = draft('ready');
     renderField(
-      draft(null),
+      shown,
       draftActions({
-        regenerate: async (_lessonId, language) => {
-          capturedLanguage = language;
+        regenerate: async (id, trackId) => {
+          calls.push([id, trackId]);
           return null;
         },
       }),
     );
-
-    await user.click(screen.getByRole('button', { name: 'Generate transcript' }));
-    await waitFor(() => expect(capturedLanguage).not.toBe('NOT_CALLED'));
-    expect(capturedLanguage).toBeUndefined();
+    expect(screen.queryByRole('button', { name: /Recognition language/i })).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Regenerate transcript' }));
+    await waitFor(() => expect(calls).toEqual([[lessonId, shown.trackId]]));
   });
 
-  it('sends selected language code when a specific language is chosen', async () => {
+  it('does not regenerate a track without a draft', async () => {
     const user = userEvent.setup();
-    let capturedLanguage: string | undefined = 'NOT_CALLED';
+    let calls = 0;
     renderField(
       draft(null),
       draftActions({
-        regenerate: async (_lessonId, language) => {
-          capturedLanguage = language;
+        regenerate: async () => {
+          calls++;
           return null;
         },
       }),
     );
-
-    const select = screen.getByRole('button', { name: /Recognition language/i });
-    await user.click(select);
-    const option = screen.getByRole('option', { name: 'English' });
-    await user.click(option);
     await user.click(screen.getByRole('button', { name: 'Generate transcript' }));
-    await waitFor(() => expect(capturedLanguage).not.toBe('NOT_CALLED'));
-    expect(capturedLanguage).toBe('en');
+    expect(calls).toBe(0);
   });
 
   it('shows action error from regenerate and clears it on retry', async () => {
     const user = userEvent.setup();
     let calls = 0;
     renderField(
-      draft(null),
+      draft('ready'),
       draftActions({
         regenerate: async () => {
           calls++;
@@ -229,21 +227,21 @@ describe('lesson draft field', () => {
       }),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Generate transcript' }));
+    await user.click(screen.getByRole('button', { name: 'Regenerate transcript' }));
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
         'Recognition is already running for this lesson.',
       ),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Generate transcript' }));
+    await user.click(screen.getByRole('button', { name: 'Regenerate transcript' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
   it('shows dependency_unavailable when regenerate throws', async () => {
     const user = userEvent.setup();
     renderField(
-      draft(null),
+      draft('ready'),
       draftActions({
         regenerate: async () => {
           throw new Error('network error');
@@ -251,7 +249,7 @@ describe('lesson draft field', () => {
       }),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Generate transcript' }));
+    await user.click(screen.getByRole('button', { name: 'Regenerate transcript' }));
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
         'Recognition service is temporarily unavailable. Try again later.',

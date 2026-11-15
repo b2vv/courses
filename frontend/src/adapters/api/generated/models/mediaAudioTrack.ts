@@ -23,6 +23,7 @@ export interface MediaAudioTrack {
      * @pattern ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
      */
   language: string;
+  multilingual: boolean;
   state: MediaAudioTrackState;
   trackId: string;
   updatedAt: AdminTimestamp;

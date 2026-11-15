@@ -31,10 +31,11 @@ type uploadService interface {
 }
 
 type audioService interface {
-	MintAudioTicket(context.Context, domain.Actor, string, int64, string, string, string) (domain.AudioTrack, error)
+	MultilingualDefault() bool
+	MintAudioTicket(context.Context, domain.Actor, string, int64, string, string, string, *bool) (domain.AudioTrack, error)
 	List(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
 	SetDefault(context.Context, domain.Actor, string, string) error
-	Rename(context.Context, domain.Actor, string, string, string, string) (domain.AudioTrack, error)
+	Rename(context.Context, domain.Actor, string, string, string, string, *bool) (domain.AudioTrack, error)
 	Delete(context.Context, domain.Actor, string, string) error
 }
 
@@ -73,21 +74,24 @@ type courseVideosDTO struct {
 }
 
 type audioTrackDTO struct {
-	TrackID   string                `json:"trackId"`
-	VideoID   string                `json:"videoId"`
-	Kind      domain.AudioTrackKind `json:"kind"`
-	Language  string                `json:"language"`
-	Label     string                `json:"label"`
-	IsDefault bool                  `json:"isDefault"`
-	State     domain.State          `json:"state"`
-	UpdatedAt string                `json:"updatedAt"`
+	TrackID      string                `json:"trackId"`
+	VideoID      string                `json:"videoId"`
+	Kind         domain.AudioTrackKind `json:"kind"`
+	Language     string                `json:"language"`
+	Label        string                `json:"label"`
+	IsDefault    bool                  `json:"isDefault"`
+	Multilingual bool                  `json:"multilingual"`
+	State        domain.State          `json:"state"`
+	UpdatedAt    string                `json:"updatedAt"`
 }
 
 type audioTracksDTO struct {
-	Items []audioTrackDTO `json:"items"`
+	Items               []audioTrackDTO `json:"items"`
+	MultilingualDefault bool            `json:"multilingualDefault"`
 }
 
 type mintAudioRequest struct {
+	Multilingual  *bool  `json:"multilingual,omitempty"`
 	DeclaredBytes int64  `json:"declaredBytes"`
 	OriginalName  string `json:"originalName"`
 	Language      string `json:"language"`
@@ -103,8 +107,9 @@ type audioUploadTicketDTO struct {
 }
 
 type renameTrackRequest struct {
-	Language string `json:"language"`
-	Label    string `json:"label"`
+	Multilingual *bool  `json:"multilingual,omitempty"`
+	Language     string `json:"language"`
+	Label        string `json:"label"`
 }
 
 func NewHandler(upload uploadService, audio audioService) *Handler {
@@ -211,7 +216,7 @@ func (handler *Handler) mintAudioTicket(w http.ResponseWriter, r *http.Request) 
 		writeMediaError(w, r, err)
 		return
 	}
-	track, err := handler.audio.MintAudioTicket(r.Context(), actor, videoID, request.DeclaredBytes, request.OriginalName, request.Language, request.Label)
+	track, err := handler.audio.MintAudioTicket(r.Context(), actor, videoID, request.DeclaredBytes, request.OriginalName, request.Language, request.Label, request.Multilingual)
 	if err != nil {
 		writeMediaError(w, r, err)
 		return
@@ -242,7 +247,7 @@ func (handler *Handler) listAudioTracks(w http.ResponseWriter, r *http.Request) 
 	for _, track := range tracks {
 		items = append(items, mapAudioTrack(track))
 	}
-	httpserver.WriteJSON(w, http.StatusOK, audioTracksDTO{Items: items})
+	httpserver.WriteJSON(w, http.StatusOK, audioTracksDTO{Items: items, MultilingualDefault: handler.audio.MultilingualDefault()})
 }
 
 func (handler *Handler) renameAudioTrack(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +266,7 @@ func (handler *Handler) renameAudioTrack(w http.ResponseWriter, r *http.Request)
 		writeMediaError(w, r, err)
 		return
 	}
-	track, err := handler.audio.Rename(r.Context(), actor, videoID, trackID, request.Language, request.Label)
+	track, err := handler.audio.Rename(r.Context(), actor, videoID, trackID, request.Language, request.Label, request.Multilingual)
 	if err != nil {
 		writeMediaError(w, r, err)
 		return
@@ -308,7 +313,7 @@ func (handler *Handler) deleteAudioTrack(w http.ResponseWriter, r *http.Request)
 func mapAudioTrack(track domain.AudioTrack) audioTrackDTO {
 	return audioTrackDTO{
 		TrackID: track.ID, VideoID: track.VideoAssetID, Kind: track.Kind,
-		Language: track.Language, Label: track.Label, IsDefault: track.IsDefault,
+		Language: track.Language, Label: track.Label, IsDefault: track.IsDefault, Multilingual: track.Multilingual,
 		State: track.State, UpdatedAt: formatMediaTime(track.UpdatedAt),
 	}
 }
@@ -329,6 +334,7 @@ func decodeRenameTrack(w http.ResponseWriter, r *http.Request) (renameTrackReque
 		return renameTrackRequest{}, domain.ErrInvalidRequest
 	}
 	var language, label *string
+	var multilingual *bool
 	seen := make(map[string]struct{}, 2)
 	for decoder.More() {
 		token, err := decoder.Token()
@@ -345,6 +351,11 @@ func decodeRenameTrack(w http.ResponseWriter, r *http.Request) (renameTrackReque
 			err = decoder.Decode(&language)
 		case "label":
 			err = decoder.Decode(&label)
+		case "multilingual":
+			err = decoder.Decode(&multilingual)
+			if multilingual == nil {
+				return renameTrackRequest{}, domain.ErrInvalidRequest
+			}
 		default:
 			return renameTrackRequest{}, domain.ErrInvalidRequest
 		}
@@ -356,7 +367,7 @@ func decodeRenameTrack(w http.ResponseWriter, r *http.Request) (renameTrackReque
 	if err != nil || closing != json.Delim('}') || language == nil || label == nil || decoder.Decode(&struct{}{}) != io.EOF {
 		return renameTrackRequest{}, domain.ErrInvalidRequest
 	}
-	return renameTrackRequest{Language: *language, Label: *label}, nil
+	return renameTrackRequest{Language: *language, Label: *label, Multilingual: multilingual}, nil
 }
 
 func mediaActor(w http.ResponseWriter, r *http.Request) (domain.Actor, bool) {
@@ -440,6 +451,7 @@ func decodeMintAudio(w http.ResponseWriter, r *http.Request) (mintAudioRequest, 
 	}
 	var declaredBytes *int64
 	var originalName, language, label *string
+	var multilingual *bool
 	seen := make(map[string]struct{}, 4)
 	for decoder.More() {
 		token, err := decoder.Token()
@@ -460,6 +472,11 @@ func decodeMintAudio(w http.ResponseWriter, r *http.Request) (mintAudioRequest, 
 			err = decoder.Decode(&language)
 		case "label":
 			err = decoder.Decode(&label)
+		case "multilingual":
+			err = decoder.Decode(&multilingual)
+			if multilingual == nil {
+				return mintAudioRequest{}, domain.ErrInvalidRequest
+			}
 		default:
 			return mintAudioRequest{}, domain.ErrInvalidRequest
 		}
@@ -471,7 +488,7 @@ func decodeMintAudio(w http.ResponseWriter, r *http.Request) (mintAudioRequest, 
 	if err != nil || closing != json.Delim('}') || declaredBytes == nil || originalName == nil || language == nil || label == nil || decoder.Decode(&struct{}{}) != io.EOF {
 		return mintAudioRequest{}, domain.ErrInvalidRequest
 	}
-	return mintAudioRequest{DeclaredBytes: *declaredBytes, OriginalName: *originalName, Language: *language, Label: *label}, nil
+	return mintAudioRequest{DeclaredBytes: *declaredBytes, OriginalName: *originalName, Language: *language, Label: *label, Multilingual: multilingual}, nil
 }
 
 func mapVideo(asset domain.VideoAsset) videoDTO {

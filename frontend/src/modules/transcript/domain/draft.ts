@@ -2,6 +2,7 @@ export type DraftState = 'pending' | 'running' | 'ready' | 'failed' | 'no_speech
 
 export type LessonDraft = {
   readonly lessonId: string;
+  readonly trackId: string | null;
   readonly state: DraftState | null;
   readonly language: string | null;
   readonly failure: string | null;
@@ -27,6 +28,7 @@ export type DraftErrorCode =
   | 'course_forbidden'
   | 'lesson_not_found'
   | 'asset_not_found'
+  | 'track_not_found'
   | 'dependency_unavailable'
   | 'already_running'
   | 'invalid_request'

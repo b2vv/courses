@@ -17,6 +17,7 @@ function track(state: AudioTrack['state']): AudioTrack {
     language: 'en',
     label: 'English',
     isDefault: false,
+    multilingual: false,
     state,
     updatedAt: '2026-11-13T12:00:00.000000Z',
   };
@@ -30,7 +31,7 @@ function setup(responses: readonly (readonly AudioTrack[])[]) {
     list: async () => {
       const value = responses[Math.min(read, responses.length - 1)] ?? [];
       read += 1;
-      return { ok: true, value };
+      return { ok: true, value: { items: value, multilingualDefault: false } };
     },
     mint: unavailable,
     rename: unavailable,

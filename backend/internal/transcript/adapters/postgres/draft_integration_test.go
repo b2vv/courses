@@ -111,6 +111,7 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	t.Run("M2-R2 C01 selects only current Ready assets missing drafts", h.testPendingRecognitionsSelector)
 	t.Run("M2-R2 S6 pending follows each ready track regardless of default", h.testPendingPerTrack)
 	t.Run("M2-R3 S6 claim records selected track leaf language and mode", h.testClaimRecordsTrack)
+	t.Run("M2-R10 track lookup scopes latest Ready lesson and ready state", h.testM2R10TrackSelection)
 	t.Run("M2-R7 S6 automatic duplicate preserves stale output until requested", h.testAutomaticDuplicateNotReclaimed)
 	t.Run("M2-R7 S6 staleness follows track language and mode", h.testDraftStaleAfterMetadataChange)
 	t.Run("S6 a rerun leaves the published transcript untouched", h.testRerunLeavesTranscriptUntouched)

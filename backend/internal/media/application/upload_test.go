@@ -40,7 +40,7 @@ type fakeRepository struct {
 	failAudioTrack             func(context.Context, string, string, time.Time) error
 	listAudioTracks            func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
 	setDefaultAudioTrack       func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
-	updateAudioTrackMetadata   func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
+	updateAudioTrackMetadata   func(context.Context, domain.Actor, string, string, string, string, *bool, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
 	deleteAudioTrack           func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
 	publishedDuration          *float64
 	requeue                    func(context.Context, string, domain.ClaimToken, time.Time) error
@@ -147,10 +147,10 @@ func (repository *fakeRepository) SetDefaultAudioTrack(ctx context.Context, acto
 	return nil
 }
 
-func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
+func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
 	repository.calls = append(repository.calls, "update_audio_track_metadata")
 	if repository.updateAudioTrackMetadata != nil {
-		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
+		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, multilingual, now, rewrite)
 	}
 	return domain.AudioTrack{}, nil
 }

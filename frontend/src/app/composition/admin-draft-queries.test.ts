@@ -15,6 +15,7 @@ const otherLessonId = '20000000-0000-4000-8000-000000000002';
 function draft(lesson: string, state: LessonDraft['state']): LessonDraft {
   return {
     lessonId: lesson,
+    trackId: state === null ? null : '60000000-0000-4000-8000-000000000001',
     state,
     language: null,
     failure: null,
@@ -57,6 +58,27 @@ afterEach(() => {
 });
 
 describe('admin draft query boundary', () => {
+  test('forwards the shown track id to regeneration', async () => {
+    const calls: string[][] = [];
+    const queries = createDraftQueries(
+      repository(
+        async (id) => ({ ok: true, value: draft(id, 'ready') }),
+        async (id, trackId) => {
+          calls.push([id, trackId]);
+          return { ok: true, value: undefined };
+        },
+      ),
+    );
+    const client = new QueryClient();
+    const trackId = '60000000-0000-4000-8000-000000000002';
+    await client
+      .getMutationCache()
+      .build(client, queries.regenerate(client))
+      .execute({ lessonId, trackId });
+    expect(calls).toEqual([[lessonId, trackId]]);
+    client.clear();
+  });
+
   test('keeps polling and exposes pending after a successful regenerate until ready', async () => {
     rstest.useFakeTimers();
     let reads = 0;
@@ -82,7 +104,7 @@ describe('admin draft query boundary', () => {
     await client
       .getMutationCache()
       .build(client, queries.regenerate(client))
-      .execute({ lessonId, language: undefined });
+      .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
 
     expect(observer.getCurrentResult().data?.state).toBe('pending');
     expect(reads).toBe(2);
@@ -117,7 +139,7 @@ describe('admin draft query boundary', () => {
       client
         .getMutationCache()
         .build(client, queries.regenerate(client))
-        .execute({ lessonId, language: undefined }),
+        .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' }),
     ).rejects.toBeInstanceOf(DraftQueryError);
 
     expect(first.observer.getCurrentResult().data?.state).toBe('pending');
@@ -143,7 +165,7 @@ describe('admin draft query boundary', () => {
     await client
       .getMutationCache()
       .build(client, queries.regenerate(client))
-      .execute({ lessonId, language: undefined });
+      .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
     expect(observer.getCurrentResult().data?.state).toBe('pending');
 
     await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs);
@@ -173,7 +195,7 @@ describe('admin draft query boundary', () => {
       await client
         .getMutationCache()
         .build(client, queries.regenerate(client))
-        .execute({ lessonId, language: undefined });
+        .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
       expect(observer.getCurrentResult().data?.state).toBe('pending');
 
       // The default gcTime is five minutes; the queue wait is bounded at fifteen.

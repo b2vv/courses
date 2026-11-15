@@ -91,7 +91,7 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
       queryOptions({
         queryKey: adminAudioTracksQueryKey(videoId),
         queryFn: async ({ client, signal }) => {
-          const next = unwrap(await tracks.list(videoId, signal));
+          const next = unwrap(await tracks.list(videoId, signal)).items;
           const signature = terminalAudioSignature(next);
           const key = terminalSignatureKey(videoId);
           const previous = client.getQueryData<string>(key);

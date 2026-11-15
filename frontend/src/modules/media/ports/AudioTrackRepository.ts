@@ -1,5 +1,6 @@
 import type {
   AudioTrack,
+  AudioTracks,
   AudioTrackResult,
   AudioTransferProgress,
   AudioTransferTarget,
@@ -7,7 +8,7 @@ import type {
 } from '../domain/audio-track';
 
 export interface AudioTrackRepository {
-  list(videoId: string, signal?: AbortSignal): Promise<AudioTrackResult<readonly AudioTrack[]>>;
+  list(videoId: string, signal?: AbortSignal): Promise<AudioTrackResult<AudioTracks>>;
   mint(
     videoId: string,
     input: {

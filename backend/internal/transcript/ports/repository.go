@@ -38,7 +38,17 @@ type SaveTranscript struct {
 	ExpectedUpdatedAt string
 }
 
+type TranscriptInventory struct {
+	Language  domain.Language
+	UpdatedAt string
+	Stale     bool
+	IsPrimary bool
+}
+
 type TranscriptRepository interface {
+	// ListLessonTranscripts lists published language metadata, ordered by language.
+	ListLessonTranscripts(ctx context.Context, lessonID string) ([]TranscriptInventory, error)
+
 	// GetLessonTranscript returns the transcript of one lesson. An absent transcript is not an
 	// error: a lesson simply may not have one yet, and the caller renders that as a state.
 	// Language may be empty, in which case the repository picks the only one, or the first by

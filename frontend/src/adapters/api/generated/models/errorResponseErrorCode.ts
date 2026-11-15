@@ -98,6 +98,7 @@ export const ErrorResponseErrorCode = {
   slug_immutable: 'slug_immutable',
   slug_taken: 'slug_taken',
   token_used: 'token_used',
+  track_not_found: 'track_not_found',
   transcript_document_exists: 'transcript_document_exists',
   transcript_document_limit: 'transcript_document_limit',
   transcript_document_referenced: 'transcript_document_referenced',

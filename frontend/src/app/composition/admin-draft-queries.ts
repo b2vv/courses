@@ -80,6 +80,7 @@ function pendingSince(
 function pendingDraft(lessonId: string): LessonDraft {
   return {
     lessonId,
+    trackId: null,
     state: 'pending',
     language: null,
     failure: null,
@@ -149,12 +150,12 @@ export function createDraftQueries(drafts: DraftRepository) {
       mutationOptions({
         mutationFn: async ({
           lessonId,
-          language,
+          trackId,
         }: {
           readonly lessonId: string;
-          readonly language: string | undefined;
+          readonly trackId: string;
         }) => {
-          const result = await drafts.regenerate(lessonId, language);
+          const result = await drafts.regenerate(lessonId, trackId);
           if (!result.ok) throw new DraftQueryError(result.error.code);
         },
         onSuccess: (_value, { lessonId }) => {

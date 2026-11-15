@@ -182,3 +182,29 @@ func persistenceError(err error) error {
 	}
 	return domain.ErrDependencyUnavailable
 }
+
+func (repository *Repository) ListLessonTranscripts(ctx context.Context, lessonID string) ([]ports.TranscriptInventory, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT language, updated_at, is_primary,
+ authored_against_generation, (`+readyGenerationForLesson+`)
+ FROM transcripts WHERE lesson_id=$1::text::uuid ORDER BY language`, lessonID)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	result := make([]ports.TranscriptInventory, 0)
+	for rows.Next() {
+		var item ports.TranscriptInventory
+		var updatedAt time.Time
+		var generation, readyGeneration int32
+		if err := rows.Scan(&item.Language, &updatedAt, &item.IsPrimary, &generation, &readyGeneration); err != nil {
+			return nil, persistenceError(err)
+		}
+		item.UpdatedAt = updatedAt.UTC().Format(time.RFC3339Nano)
+		item.Stale = (domain.Transcript{AuthoredAgainstGeneration: generation}).Stale(readyGeneration)
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return result, nil
+}

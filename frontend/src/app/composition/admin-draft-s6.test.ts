@@ -15,6 +15,7 @@ const trackId = '60000000-0000-4000-8000-000000000001';
 function draft(state: LessonDraft['state'], stale: boolean, updatedAt: string): LessonDraft {
   return {
     lessonId,
+    trackId: state === null ? null : '60000000-0000-4000-8000-000000000001',
     state,
     language: state === 'ready' ? 'en' : null,
     failure: null,
@@ -44,7 +45,7 @@ function audioQueries() {
   const unavailable = async () =>
     ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
   const repository: AudioTrackRepository = {
-    list: async () => ({ ok: true, value: [] }),
+    list: async () => ({ ok: true, value: { items: [], multilingualDefault: false } }),
     mint: unavailable,
     rename: unavailable,
     setDefault: async () => ({ ok: true, value: null }),

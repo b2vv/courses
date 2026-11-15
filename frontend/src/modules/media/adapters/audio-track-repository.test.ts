@@ -22,6 +22,7 @@ const wireTrack = {
   language: 'en',
   label: 'English',
   isDefault: false,
+  multilingual: false,
   state: 'ready',
   updatedAt: '2026-11-13T12:00:00.123456Z',
 };
@@ -78,16 +79,52 @@ const file = new File(['abcdef'], 'dub.m4a', { lastModified: 7 });
 describe('audio track API repository', () => {
   test('reads the track list and refuses a track of another asset', async () => {
     const tracks = createAudioTracks(createApiAudioTrackRepository());
-    server.use(http.get(api, () => HttpResponse.json({ items: [wireTrack] })));
-    expect(await tracks.list(videoId)).toEqual({ ok: true, value: [wireTrack] });
+    server.use(
+      http.get(api, () => HttpResponse.json({ items: [wireTrack], multilingualDefault: true })),
+    );
+    expect(await tracks.list(videoId)).toEqual({
+      ok: true,
+      value: { items: [wireTrack], multilingualDefault: true },
+    });
     server.use(
       http.get(api, () =>
         HttpResponse.json({
           items: [{ ...wireTrack, videoId: '50000000-0000-4000-8000-000000000002' }],
+          multilingualDefault: true,
         }),
       ),
     );
     expect(await tracks.list(videoId)).toEqual({ ok: false, error: { code: 'invalid_response' } });
+  });
+
+  test.each([
+    {
+      name: 'missing track multilingual',
+      response: { items: [{ ...wireTrack, multilingual: undefined }], multilingualDefault: false },
+    },
+    { name: 'missing list multilingualDefault', response: { items: [wireTrack] } },
+    {
+      name: 'invalid track multilingual',
+      response: { items: [{ ...wireTrack, multilingual: 'false' }], multilingualDefault: false },
+    },
+    {
+      name: 'unknown track key',
+      response: { items: [{ ...wireTrack, extra: true }], multilingualDefault: false },
+    },
+  ])('rejects a list with $name', async ({ response }) => {
+    server.use(http.get(api, () => HttpResponse.json(response)));
+    expect(await createApiAudioTrackRepository().list(videoId)).toEqual({
+      ok: false,
+      error: { code: 'invalid_response' },
+    });
+  });
+
+  test('rename parses and retains multilingual in its shared track response', async () => {
+    const response = { ...wireTrack, multilingual: true };
+    server.use(http.patch(`${api}/${trackId}`, () => HttpResponse.json(response)));
+    expect(await createApiAudioTrackRepository().rename(videoId, trackId, 'en', 'English')).toEqual(
+      { ok: true, value: response },
+    );
   });
 
   test('mints a ticket only for the derived audio upload path', async () => {

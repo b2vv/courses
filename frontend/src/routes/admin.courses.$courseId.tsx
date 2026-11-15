@@ -355,10 +355,10 @@ function AdminOwnerEditor({
   }
   async function draftRegenerate(
     lessonId: string,
-    language: string | undefined,
+    trackId: string,
   ): Promise<DraftErrorCode | null> {
     try {
-      await regenerateDraft.mutateAsync({ lessonId, language });
+      await regenerateDraft.mutateAsync({ lessonId, trackId });
       return null;
     } catch (error) {
       const code =

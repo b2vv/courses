@@ -276,6 +276,7 @@ function createTestRouter(
             ok: true,
             value: {
               lessonId: '',
+              trackId: null,
               state: null,
               language: null,
               failure: null,
