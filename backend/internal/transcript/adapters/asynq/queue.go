@@ -34,6 +34,7 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 		LessonID:   job.LessonID,
 		AssetID:    job.AssetID,
 		Generation: job.Generation,
+		TrackID:    job.TrackID,
 		Language:   string(job.Language),
 		TaskMarker: job.TaskMarker,
 		Requested:  job.Requested,
@@ -67,16 +68,17 @@ func recognitionTaskID(job ports.RecognitionJob) string {
 			marker = job.TaskMarker
 		}
 	}
-	return fmt.Sprintf("%s:%d:%s", job.AssetID, job.Generation, marker)
+	return fmt.Sprintf("%s:%d:%s:%s", job.AssetID, job.Generation, job.TrackID, marker)
 }
 
 type taskPayload struct {
 	LessonID   string `json:"lessonId"`
 	AssetID    string `json:"assetId"`
 	Generation int32  `json:"generation"`
+	TrackID    string `json:"trackId"`
 	Language   string `json:"language,omitempty"`
 	TaskMarker string `json:"taskMarker,omitempty"`
-	// Requested marks the author's Regenerate (multi-audio S6). A task enqueued before S6 has no
-	// field and decodes as false — an automatic job, which is what every pre-S6 sweep task was.
+	// Requested marks the author's Regenerate; an automatic job never replaces an existing
+	// draft. Tasks from before the trackId cutover are refused by decodePayload (MS-D3).
 	Requested bool `json:"requested,omitempty"`
 }

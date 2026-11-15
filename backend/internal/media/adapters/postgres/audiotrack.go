@@ -20,6 +20,7 @@ kind,
 language,
 label,
 is_default,
+multilingual,
 state,
 source_leaf,
 declared_bytes,
@@ -89,13 +90,13 @@ func (repository *Repository) CreateAudioTrack(ctx context.Context, track domain
 	}
 	stored, err := scanAudioTrack(tx.QueryRow(ctx, `INSERT INTO audio_tracks(
 		id,video_asset_id,kind,language,label,is_default,state,source_leaf,
-		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
-		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at,multilingual)
+		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING `+audioTrackColumns,
 		track.ID, track.VideoAssetID, string(track.Kind), track.Language, track.Label,
 		track.IsDefault, string(track.State), track.SourceLeaf,
 		track.DeclaredBytes, track.ReceivedBytes, track.OriginalName, expiresAt,
-		created, updated))
+		created, updated, track.Multilingual))
 	if err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
 			return domain.AudioTrack{}, mapped
@@ -573,23 +574,23 @@ func lockAssetTracks(ctx context.Context, tx pgx.Tx, assetID string) ([]domain.A
 func scanAudioTrack(row pgx.Row) (domain.AudioTrack, error) {
 	var (
 		id, videoAssetID, kind, language, label, state, sourceLeaf string
-		isDefault                                                  bool
+		isDefault, multilingual                                    bool
 		declaredBytes, receivedBytes                               int64
 		originalName                                               string
 		expiresAt                                                  pgtype.Timestamptz
 		createdAt, updatedAt                                       pgtype.Timestamptz
 	)
-	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &state, &sourceLeaf,
+	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &multilingual, &state, &sourceLeaf,
 		&declaredBytes, &receivedBytes, &originalName, &expiresAt, &createdAt, &updatedAt); err != nil {
 		return domain.AudioTrack{}, err
 	}
-	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, state, sourceLeaf,
+	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, multilingual, state, sourceLeaf,
 		declaredBytes, receivedBytes, originalName, expiresAt, createdAt, updatedAt)
 }
 
 func mapAudioTrack(
 	id, videoAssetID, kind, language, label string,
-	isDefault bool,
+	isDefault, multilingual bool,
 	state, sourceLeaf string,
 	declaredBytes, receivedBytes int64,
 	originalName string,
@@ -613,6 +614,7 @@ func mapAudioTrack(
 		Language:      language,
 		Label:         label,
 		IsDefault:     isDefault,
+		Multilingual:  multilingual,
 		State:         domain.State(state),
 		SourceLeaf:    sourceLeaf,
 		DeclaredBytes: declaredBytes,
@@ -656,9 +658,9 @@ func (repository *Repository) MintAudioTrack(
 		WITH new_id AS (SELECT gen_random_uuid() AS id)
 		INSERT INTO audio_tracks(
 			id,video_asset_id,kind,language,label,is_default,state,source_leaf,
-			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
+			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at,multilingual)
 		SELECT id,$1::text::uuid,'uploaded',$2,$3,false,'created',
-			'audio-'||id::text,$4,0,$5,$6,$7,$7
+			'audio-'||id::text,$4,0,$5,$6,$7,$7,false
 		FROM new_id
 		RETURNING `+audioTrackColumns,
 		assetID, language, label, declaredBytes, originalName, expiresAt, now))

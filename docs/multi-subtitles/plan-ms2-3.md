@@ -179,8 +179,9 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 чернетки**. Перейменування чи зміна `multilingual` pending не створюють: вони роблять чернетку stale
 (MS-D5), а нове розпізнавання запускає автор кнопкою.
 
-`is_default` більше не умова: розпізнається кожна доріжка (O2). Доріжки `awaiting_audio`/`failed`
-і доріжки старих ассетів не pending.
+`is_default` більше не умова: розпізнається кожна доріжка (O2). Не pending: доріжка не в стані `ready` (`created`…`processing`, `failed`), доріжка
+старого ассета й ассет не в стані `ready` (зокрема `awaiting_audio` — це стан ассета, не доріжки;
+виправлено 2026-11-15 за MS2a run 2).
 
 **Claim** — один statement:
 - `INSERT … SELECT FROM audio_tracks JOIN video_assets` перевіряє (урок, ассет, генерація, доріжка
@@ -482,7 +483,7 @@ stale (MS-D5) і вимагає Regenerate (O7).
 | ID | Рядок | Доказ |
 |---|---|---|
 | M2-R1 | Міграція 00031 на populated data: 2 зіставлені, 1 видалена; PK `audio_track_id`; каскад видалення доріжки; Down/Up | integration (`UpTo(30)` → seed → `UpTo(31)`) |
-| M2-R2 | Pending: дві `ready` доріжки поточного ассета без чернеток → 2; `awaiting_audio`/`failed`/старий ассет → 0; `is_default` не впливає; доріжка з чернеткою після перейменування чи зміни `multilingual` → **0** (O7) | integration |
+| M2-R2 | Pending: дві `ready` доріжки поточного ассета без чернеток → 2; не-`ready` доріжка / ассет `awaiting_audio` / старий ассет → 0; `is_default` не впливає; доріжка з чернеткою після перейменування чи зміни `multilingual` → **0** (O7) | integration |
 | M2-R3 | Claim: (урок, ассет, ген, доріжка) одним statement; чужа доріжка → NotFound (C21); пише `track_language` | integration |
 | M2-R4 | C09 нове: claim доріжки старого Ready-ассета → Superseded; читання лише поточного ассета; повільний старий Complete не перезаписує | integration |
 | M2-R5 | TaskID містить доріжку: дві доріжки одного ассета → 2 задачі | unit (queue) |

@@ -8,12 +8,14 @@ import (
 
 func draft(mutate func(*TranscriptDraft)) TranscriptDraft {
 	base := TranscriptDraft{
-		LessonID:   id("01"),
-		AssetID:    id("02"),
-		Generation: 1,
-		State:      DraftReady,
-		Language:   "uk",
-		Segments:   []Segment{segment(0, 1000, "03")},
+		LessonID:      id("01"),
+		AssetID:       id("02"),
+		Generation:    1,
+		TrackID:       id("04"),
+		TrackLanguage: "uk",
+		State:         DraftReady,
+		Language:      "uk",
+		Segments:      []Segment{segment(0, 1000, "03")},
 	}
 	if mutate != nil {
 		mutate(&base)
@@ -126,26 +128,19 @@ func TestADraftAlwaysNamesTheVideoItCameFrom(t *testing.T) {
 	}
 }
 
-func TestStalenessIsDerivedAndAgreesWithTheTranscriptRule(t *testing.T) {
-	// D8-4: the same rule as Transcript.Stale, so a draft and a transcript of the same lesson
-	// cannot disagree about which one is out of date.
-	made, err := NewTranscriptDraft(draft(func(d *TranscriptDraft) { d.Generation = 2 }))
+func TestStalenessIsDerivedFromTrackMetadata(t *testing.T) {
+	made, err := NewTranscriptDraft(draft(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if made.Stale(2, "") {
-		t.Fatal("the generation the player would pick is this one; not stale")
+	if made.Stale("UK", false) {
+		t.Fatal("same normalised track language must not be stale")
 	}
-	if !made.Stale(3, "") {
-		t.Fatal("the video was replaced; stale")
+	if !made.Stale("en", false) {
+		t.Fatal("renamed track must make hinted output stale")
 	}
-	// No ready asset at all must not read as stale — the same exception the transcript makes,
-	// so that a lesson whose transcode failed does not mark every draft out of date.
-	if made.Stale(0, "") {
-		t.Fatal("a lesson with no ready asset must not read as stale")
-	}
-	if (Transcript{AuthoredAgainstGeneration: 2}).Stale(0) != made.Stale(0, "") {
-		t.Fatal("the draft and the transcript must answer the no-ready-asset case the same way")
+	if !made.Stale("uk", true) {
+		t.Fatal("mode change must make output stale")
 	}
 }
 

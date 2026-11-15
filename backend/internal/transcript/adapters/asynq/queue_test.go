@@ -23,16 +23,16 @@ func (c *fakeEnqueueClient) EnqueueContext(_ context.Context, task *asynqlib.Tas
 
 func TestQueueUsesAssetGenerationAndStableMarker(t *testing.T) {
 	job := ports.RecognitionJob{
-		AssetID: "50000000-0000-4000-8000-000000000001", Generation: 7,
+		AssetID: "50000000-0000-4000-8000-000000000001", Generation: 7, TrackID: "track-one",
 		TaskMarker: "2026-09-24T12:34:56.123456789Z",
 	}
-	if got := recognitionTaskID(job); got != "50000000-0000-4000-8000-000000000001:7:20260924T123456.123456Z" {
+	if got := recognitionTaskID(job); got != "50000000-0000-4000-8000-000000000001:7:track-one:20260924T123456.123456Z" {
 		t.Fatalf("task id=%q", got)
 	}
 	if got := recognitionTaskID(job); got != recognitionTaskID(job) {
 		t.Fatal("task id is not stable")
 	}
-	if got := recognitionTaskID(ports.RecognitionJob{AssetID: job.AssetID, Generation: job.Generation}); got != job.AssetID+":7:none" {
+	if got := recognitionTaskID(ports.RecognitionJob{AssetID: job.AssetID, Generation: job.Generation, TrackID: job.TrackID}); got != job.AssetID+":7:track-one:none" {
 		t.Fatalf("empty marker task id=%q", got)
 	}
 }
@@ -47,11 +47,11 @@ func TestQueueMapsTaskIDConflictToAlreadyRunning(t *testing.T) {
 	}
 }
 
-// Multi-audio S6: Requested survives the queue, and a pre-S6 payload without it is automatic.
+// Requested survives the queue; a legacy task missing trackId is refused (MS-D3).
 func TestPayloadCarriesRequested(t *testing.T) {
 	for _, requested := range []bool{true, false} {
 		client := &fakeEnqueueClient{}
-		job := ports.RecognitionJob{LessonID: "40000000-0000-4000-8000-000000000001", AssetID: "50000000-0000-4000-8000-000000000001", Generation: 1, Requested: requested}
+		job := ports.RecognitionJob{LessonID: "40000000-0000-4000-8000-000000000001", AssetID: "50000000-0000-4000-8000-000000000001", Generation: 1, TrackID: "70000000-0000-4000-8000-000000000001", Requested: requested}
 		if err := newQueue(client).Enqueue(context.Background(), job, time.Minute); err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +61,7 @@ func TestPayloadCarriesRequested(t *testing.T) {
 		}
 	}
 	legacy, err := decodePayload([]byte(`{"lessonId":"40000000-0000-4000-8000-000000000001","assetId":"50000000-0000-4000-8000-000000000001","generation":1}`))
-	if err != nil || legacy.Requested {
-		t.Fatalf("legacy payload=%+v err=%v, want automatic", legacy, err)
+	if !errors.Is(err, errInvalidTaskPayload) {
+		t.Fatalf("legacy payload=%+v err=%v, want invalid_task_payload", legacy, err)
 	}
 }

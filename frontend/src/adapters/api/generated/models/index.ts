@@ -218,8 +218,6 @@ export * from './publishAdminLessonDocumentLocale.ts';
 export * from './publishAdminLessonDocumentParams.ts';
 export * from './publishCommentRequest.ts';
 export * from './publishLessonDocumentRequest.ts';
-export * from './publishLessonDraft200.ts';
-export * from './publishLessonDraftRequest.ts';
 export * from './publishTeachLessonDocumentLocale.ts';
 export * from './publishTeachLessonDocumentParams.ts';
 export * from './purchaseConflictResponse.ts';

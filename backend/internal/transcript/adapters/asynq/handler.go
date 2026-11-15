@@ -44,6 +44,7 @@ func (handler *Handler) ProcessTask(ctx context.Context, task *asynqlib.Task) er
 		LessonID:   payload.LessonID,
 		AssetID:    payload.AssetID,
 		Generation: payload.Generation,
+		TrackID:    payload.TrackID,
 		Language:   domain.Language(payload.Language),
 		TaskMarker: payload.TaskMarker,
 		Requested:  payload.Requested,
@@ -85,7 +86,7 @@ func decodePayload(encoded []byte) (taskPayload, error) {
 	if err := json.Unmarshal(encoded, &payload); err != nil {
 		return payload, errInvalidTaskPayload
 	}
-	if payload.LessonID == "" || payload.AssetID == "" || payload.Generation < 1 {
+	if payload.LessonID == "" || payload.AssetID == "" || payload.TrackID == "" || payload.Generation < 1 {
 		return payload, errInvalidTaskPayload
 	}
 	return payload, nil

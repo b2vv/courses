@@ -13,28 +13,22 @@ type CourseReader interface {
 	LessonCourse(ctx context.Context, lessonID string) (domain.Course, error)
 }
 
-type TranscriptPublisher interface {
-	SaveLessonTranscript(ctx context.Context, save ports.SaveTranscript) (string, error)
-}
-
 type Drafting struct {
-	drafts      ports.DraftRepository
-	courses     CourseReader
-	transcripts TranscriptPublisher
-	queue       ports.RecognitionQueue
-	now         Clock
-	logger      *slog.Logger
+	drafts  ports.DraftRepository
+	courses CourseReader
+	queue   ports.RecognitionQueue
+	now     Clock
+	logger  *slog.Logger
 }
 
 func NewDrafting(
 	drafts ports.DraftRepository,
 	courses CourseReader,
-	transcripts TranscriptPublisher,
 	queue ports.RecognitionQueue,
 	now Clock,
 	logger *slog.Logger,
 ) *Drafting {
-	return &Drafting{drafts: drafts, courses: courses, transcripts: transcripts, queue: queue, now: now, logger: logger}
+	return &Drafting{drafts: drafts, courses: courses, queue: queue, now: now, logger: logger}
 }
 
 type DraftStatus struct {
@@ -68,20 +62,29 @@ func (d *Drafting) GetDraft(ctx context.Context, actor domain.Actor, lessonID st
 		return DraftStatus{}, domain.ErrForbidden
 	}
 
-	lesson, err := d.drafts.GetLessonDraft(ctx, lessonID)
+	lessons, err := d.drafts.ListLessonDrafts(ctx, lessonID)
 	if err != nil {
 		return DraftStatus{}, err
 	}
-	if !lesson.Found {
+	var lesson ports.LessonDraft
+	found := false
+	for _, candidate := range lessons {
+		if candidate.IsDefault {
+			lesson, found = candidate, true
+			break
+		}
+	}
+	if !found {
 		return DraftStatus{}, nil
 	}
+
 	return DraftStatus{
 		Found:      true,
 		State:      lesson.Draft.State,
 		Language:   lesson.Draft.Language,
 		Segments:   lesson.Draft.Segments,
 		Failure:    lesson.Draft.Failure,
-		Stale:      lesson.Draft.Stale(lesson.ReadyGeneration, lesson.DefaultLeaf),
+		Stale:      lesson.Draft.Stale(lesson.TrackLanguage, lesson.TrackMultilingual),
 		UpdatedAt:  lesson.UpdatedAt,
 		AssetID:    lesson.Draft.AssetID,
 		Generation: lesson.Draft.Generation,
@@ -107,7 +110,7 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		return domain.ErrForbidden
 	}
 
-	asset, err := d.drafts.LessonAsset(ctx, lessonID)
+	asset, err := d.drafts.LessonTrack(ctx, lessonID, "")
 	if err != nil {
 		return err
 	}
@@ -118,13 +121,20 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		return domain.ErrDependencyUnavailable
 	}
 
-	draft, err := d.drafts.GetLessonDraft(ctx, lessonID)
+	drafts, err := d.drafts.ListLessonDrafts(ctx, lessonID)
 	if err != nil {
 		return err
 	}
-	if draft.Found && draft.Draft.AssetID == asset.AssetID &&
-		draft.Draft.Generation == asset.Generation && draft.Draft.State == domain.DraftRunning {
-		return domain.ErrAlreadyRunning
+	var marker string
+	for _, draft := range drafts {
+		if draft.Draft.TrackID != asset.TrackID {
+			continue
+		}
+		if draft.Draft.State == domain.DraftRunning {
+			return domain.ErrAlreadyRunning
+		}
+		marker = draft.UpdatedAt
+		break
 	}
 
 	timeout := TaskTimeout(*asset.DurationSeconds)
@@ -132,59 +142,10 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		LessonID:   lessonID,
 		AssetID:    asset.AssetID,
 		Generation: asset.Generation,
+		TrackID:    asset.TrackID,
 		Language:   language,
-		TaskMarker: draftMarker(draft),
-		// The author asked: this job may re-recognise a draft that already heard the default.
+		TaskMarker: marker,
+		// The author asked: this job may replace the default track's existing draft.
 		Requested: true,
 	}, timeout)
-}
-
-func draftMarker(draft ports.LessonDraft) string {
-	if !draft.Found {
-		return ""
-	}
-	return draft.UpdatedAt
-}
-
-type PublishRequest struct {
-	LessonID          string
-	ExpectedUpdatedAt string
-}
-
-func (d *Drafting) Publish(ctx context.Context, actor domain.Actor, request PublishRequest) (string, error) {
-	if err := domain.ValidateID(request.LessonID); err != nil {
-		return "", err
-	}
-	if err := domain.ValidateID(actor.UserID); err != nil {
-		return "", domain.ErrForbidden
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	course, err := d.courses.LessonCourse(ctx, request.LessonID)
-	if err != nil {
-		return "", err
-	}
-	if !course.CanBeEditedBy(actor) {
-		return "", domain.ErrForbidden
-	}
-
-	lesson, err := d.drafts.GetLessonDraft(ctx, request.LessonID)
-	if err != nil {
-		return "", err
-	}
-	if !lesson.Found {
-		return "", domain.ErrNotFound
-	}
-	if lesson.Draft.State != domain.DraftReady {
-		return "", domain.ErrInvalidRequest
-	}
-
-	return d.transcripts.SaveLessonTranscript(ctx, ports.SaveTranscript{
-		LessonID:          request.LessonID,
-		Language:          lesson.Draft.Language,
-		Segments:          lesson.Draft.Segments,
-		ExpectedUpdatedAt: request.ExpectedUpdatedAt,
-	})
 }

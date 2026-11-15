@@ -7,29 +7,21 @@ import (
 	"courses/internal/transcript/domain"
 )
 
-// LessonDraft is one read of the machine-made draft. It carries the same two pieces the
-// transcript read carries and for the same reasons: the lock token, without which the author
-// cannot close the editing loop, and the generation the player would pick, because staleness is
-// derived rather than stored (D8-4).
+// LessonDraft is one track's machine output with its attempt token and CURRENT metadata.
+// The snapshot in Draft and the current metadata derive staleness without a stored flag.
+// Only tracks of the latest Ready, non-evicted asset are returned, so an older video's draft
+// cannot be offered after replacement. IsDefault keeps the legacy read usable until MS2c.
 type LessonDraft struct {
-	Found bool
-	Draft domain.TranscriptDraft
-
-	// UpdatedAt is the optimistic-lock token. The draft has two writers - the author and
-	// recognition - so it needs the same guard the transcript has, and for a sharper reason:
-	// regeneration moves the token while the author is typing into it.
-	UpdatedAt string
-
-	ReadyGeneration int32
-
-	// DefaultLeaf is the source leaf of the ready asset's default audio track, the audio a
-	// recognition would hear now (multi-audio S6); empty when there is none. With ReadyGeneration
-	// it derives staleness (D-S6-6).
-	DefaultLeaf string
+	Draft             domain.TranscriptDraft
+	UpdatedAt         string
+	TrackLanguage     domain.Language
+	TrackMultilingual bool
+	IsDefault         bool
 }
 
-// PendingRecognition is one lesson that has a ready asset and no draft for that asset's
-// generation. It is the whole of the trigger (plan P-1): there is no event and no outbox in
+// PendingRecognition is one ready track of the latest Ready non-evicted asset with no draft.
+// Renaming or changing multilingual does not create pending work (O7). It is the whole of the
+// trigger (plan P-1): there is no event and no outbox in
 // this repository, so "start recognition" is a QUESTION ABOUT STATE, asked repeatedly. A crash
 // between publishing an asset and enqueueing a task therefore loses nothing - the next sweep
 // asks again.
@@ -37,6 +29,7 @@ type PendingRecognition struct {
 	LessonID   string
 	AssetID    string
 	Generation int32
+	TrackID    string
 	TaskMarker string
 
 	// DurationSeconds is nil when the probe produced none. D8-9 makes the task timeout derive
@@ -56,14 +49,14 @@ type ClaimedDraft struct {
 	// back. Without it, recovery opens a hole that generation alone cannot close: a worker
 	// declared dead, its draft requeued and claimed by a SECOND worker, and then the first one
 	// - not dead, only slow - finishes and overwrites the second one's result. Both carry the
-	// same (assetID, generation), so ErrDraftSuperseded never fires. The token distinguishes
+	// same (assetID, generation, trackID), so identity alone cannot distinguish them. The token distinguishes
 	// two ATTEMPTS at the same generation, which is exactly what P-5 makes possible.
 	Token string
 }
 
 // RecoveredDraft is a running draft whose P-3 timeout has elapsed, returned by Recover so the
 // caller can fail it. Token is the row's updated_at at the moment of recovery — the same value
-// Complete expects, so a concurrent re-Claim (new generation or re-enqueue) is visible as
+// Complete expects, so a concurrent requested re-Claim of this track is visible as
 // ErrDraftSuperseded rather than silently overwritten.
 type RecoveredDraft struct {
 	Draft domain.TranscriptDraft
@@ -71,49 +64,30 @@ type RecoveredDraft struct {
 }
 
 type DraftRepository interface {
-	// GetLessonDraft returns the draft of one lesson. Absence is a state, not an error: a
-	// lesson simply may not have been recognised yet.
-	GetLessonDraft(ctx context.Context, lessonID string) (LessonDraft, error)
+	// ListLessonDrafts returns one entry per current track that has a draft. Absence is a
+	// state, not an error: a track simply may not have been recognised yet.
+	ListLessonDrafts(ctx context.Context, lessonID string) ([]LessonDraft, error)
 
 	// PendingRecognitions answers the trigger question (P-1). `limit` bounds one sweep so a
 	// backlog cannot be pulled into memory whole.
 	PendingRecognitions(ctx context.Context, limit int) ([]PendingRecognition, error)
 
-	// Claim moves a draft to `running` for exactly one caller. A second task for the same
-	// (assetID, generation) finds it already claimed and answers so - the conflict is VISIBLE,
-	// unlike the media queue's TaskID collision, which returns a silent success and would make
-	// the author's "regenerate" button do nothing (D8-6).
+	// Claim moves a track's draft to running in one INSERT SELECT against audio_tracks and
+	// video_assets. Only the author's requested Regenerate may replace an existing draft (O7);
+	// a duplicate automatic task visibly answers Claimed:false instead of overwriting output.
 	//
-	// The implementation MUST verify the whole triple - that the asset belongs to the lesson AND
-	// that the generation is that asset's own - in one statement against `video_assets`. Neither
-	// a foreign key nor a CHECK can hold it here: a CHECK cannot see other rows, and a composite
-	// key into `video_assets (lesson_id, id)` would rest on a nullable column that
-	// `ON DELETE SET NULL` empties. So the write path is the only place the pairing can live,
-	// and a draft naming another lesson's asset, or the right asset under the wrong generation,
-	// is otherwise perfectly storable (C21).
+	// The write MUST verify lesson, asset, generation and ready track membership together. A
+	// CHECK cannot read another row, and video_assets.lesson_id is nullable (ON DELETE SET NULL),
+	// so neither a CHECK nor a composite foreign key holds this pairing. Without verification
+	// a foreign track or a right asset under a wrong generation would be storable (C21).
+	// Wrong/foreign/missing tracks return ErrNotFound; a valid track of a non-latest Ready asset
+	// returns ErrDraftSuperseded. This prevents delayed jobs from claiming an obsolete video.
 	//
-	// A wrong generation is not cosmetic: `Stale` compares it against the generation the player
-	// would pick, so a draft claiming one it does not have reports the wrong answer, and the
-	// idempotency key (assetID, generation) stops naming the work it is supposed to name.
-	//
-	// Multi-audio S6 (D-S6-2): the claim records the leaf of the asset's default Ready audio track
-	// in the same statement and returns it in ClaimedDraft.Draft.SourceLeaf; an asset with no
-	// default is ErrNotFound. A same-generation draft is re-claimed only when `requested` (the
-	// author's Regenerate) or when its heard leaf differs from the current default — so a
-	// duplicate automatic task cannot overwrite an already current draft.
-	Claim(ctx context.Context, lessonID, assetID string, generation int32, requested bool, now time.Time) (ClaimedDraft, error)
-
-	// SaveDraft stores the author's corrections and returns the new token.
-	//
-	// A8b is why this exists: the owner decided the draft is saved on the server so work can
-	// continue later, from another device, after a closed browser. Without it, `UpdatedAt` above
-	// would be a token that nothing consumes - a lock announced and never taken - and the author's
-	// only way to keep text would be to publish it as a transcript, which is the OTHER save.
-	//
-	// It refuses with domain.ErrTranscriptModified when the token is stale, which is how the
-	// author learns that regeneration replaced the text under them rather than silently losing
-	// the edit (D8-1).
-	SaveDraft(ctx context.Context, draft domain.TranscriptDraft, expectedUpdatedAt string, now time.Time) (string, error)
+	// Language, multilingual and the immutable source leaf are read in that same statement:
+	// the recorded snapshot must describe the bytes and mode this attempt will hear, even when
+	// another author renames the track concurrently. Leaf is returned through the track join,
+	// not duplicated on the draft row.
+	Claim(ctx context.Context, lessonID, assetID string, generation int32, trackID string, requested bool, now time.Time) (ClaimedDraft, error)
 
 	// Complete stores the terminal outcome - ready, failed or no_speech.
 	//
@@ -121,11 +95,10 @@ type DraftRepository interface {
 	// distinction is not visible in a bare error (D8-7):
 	//
 	//   - domain.ErrDraftSuperseded - the draft this job claimed is no longer the draft on the
-	//     row. Two different causes, one answer: the video was replaced while recognition ran
-	//     (C09), or another worker re-claimed the same generation after recovery declared this
-	//     one dead. The task is DONE, not failed: retrying would spend tens of minutes per
+	//     track row: another worker re-claimed it after recovery declared this one dead. The task
+	//     is DONE, not failed: retrying would spend tens of minutes per
 	//     attempt on a result nobody will read.
-	//   - domain.ErrNotFound - the lesson was deleted mid-flight, which is an ordinary authoring
+	//   - domain.ErrNotFound - the lesson, asset or track was deleted mid-flight, an ordinary authoring
 	//     move, not a fault (C08). Also done, also without a retry.
 	//   - anything else - transient, and the queue may retry.
 	//
@@ -133,7 +106,7 @@ type DraftRepository interface {
 	// attempts on a deleted lesson that D8-7 exists to refuse, or swallow everything, which
 	// loses real failures.
 	// `claimToken` is the value ClaimedDraft handed out; a completion that does not present the
-	// current one is refused as superseded.
+	// current one is refused as superseded. The write is keyed by audio_track_id and token.
 	Complete(ctx context.Context, draft domain.TranscriptDraft, claimToken string, now time.Time) error
 
 	// Recover returns drafts abandoned in `running` whose per-row P-3 timeout has elapsed, so the
@@ -141,7 +114,8 @@ type DraftRepository interface {
 	// derives the per-row threshold from video_assets.duration_seconds via the P-3 formula.
 	Recover(ctx context.Context, now time.Time, limit int) ([]RecoveredDraft, error)
 
-	// LessonAsset returns the current ready asset for a lesson, or nil when no ready asset exists.
-	// Regeneration uses it to enqueue a new recognition task for a specific lesson.
-	LessonAsset(ctx context.Context, lessonID string) (*PendingRecognition, error)
+	// LessonTrack returns a ready track of the latest Ready non-evicted asset, with duration,
+	// or nil otherwise. Temporarily, an empty trackID selects its default ready track so the
+	// legacy default-only Regenerate can work until MS2c supplies an explicit track ID.
+	LessonTrack(ctx context.Context, lessonID, trackID string) (*PendingRecognition, error)
 }

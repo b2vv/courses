@@ -2843,13 +2843,6 @@ components:
             required:
                 - expectedUpdatedAt
             type: object
-        PublishLessonDraftRequest:
-            additionalProperties: false
-            properties:
-                expectedUpdatedAt:
-                    format: date-time
-                    type: string
-            type: object
         PurchaseOrder:
             additionalProperties: false
             properties:
@@ -4199,54 +4192,6 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Get a lesson recognition draft
-    /api/v1/admin/lessons/{lessonId}/draft/publish:
-        post:
-            description: Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
-            operationId: publishLessonDraft
-            parameters:
-                - in: path
-                  name: lessonId
-                  required: true
-                  schema:
-                    format: uuid
-                    type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/PublishLessonDraftRequest'
-            responses:
-                "200":
-                    content:
-                        application/json:
-                            schema:
-                                additionalProperties: false
-                                properties:
-                                    updatedAt:
-                                        format: date-time
-                                        type: string
-                                required:
-                                    - updatedAt
-                                type: object
-                    description: The draft was published as the lesson transcript.
-                    headers:
-                        Cache-Control:
-                            $ref: '#/components/headers/NoStore'
-                        X-Request-ID:
-                            $ref: '#/components/headers/RequestID'
-                "400":
-                    $ref: '#/components/responses/InvalidRequest'
-                "401":
-                    $ref: '#/components/responses/Unauthenticated'
-                "403":
-                    $ref: '#/components/responses/AdminMutationForbidden'
-                "404":
-                    $ref: '#/components/responses/LessonNotFound'
-                "409":
-                    $ref: '#/components/responses/TranscriptConflict'
-                "503":
-                    $ref: '#/components/responses/Unavailable'
-            summary: Publish a lesson recognition draft
     /api/v1/admin/lessons/{lessonId}/draft/regenerate:
         post:
             description: Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.

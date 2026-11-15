@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -94,25 +95,28 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	defer pool.Close()
 
 	h := &draftHarness{ctx: ctx, pool: pool, repository: transcriptpostgres.NewRepository(pool)}
+	t.Run("M2-R1 migration 00031 maps populated drafts and round trips", func(t *testing.T) { h.testDraftTrackMigration(t, provider) })
 
-	t.Run("running draft past per-row P-3 timeout is recovered", h.testExpiredDraftRecovered)
-	t.Run("running draft within per-row P-3 timeout is not recovered", h.testFreshDraftNotRecovered)
-	t.Run("recovered draft completed as failed timeout", h.testRecoverThenComplete)
-	t.Run("concurrent re-Claim between Recover and Complete yields ErrDraftSuperseded", h.testRecoverRaceWithReClaim)
+	t.Run("M2-R8 running draft past per-row P-3 timeout is recovered", h.testExpiredDraftRecovered)
+	t.Run("M2-R8 running draft within per-row P-3 timeout is not recovered", h.testFreshDraftNotRecovered)
+	t.Run("M2-R8 recovered draft completed as failed timeout", h.testRecoverThenComplete)
+	t.Run("M2-R8 concurrent re-Claim between Recover and Complete yields ErrDraftSuperseded", h.testRecoverRaceWithReClaim)
 	t.Run("deadline fails running draft with timeout", h.testProcessDeadlineFailsDraft)
-	t.Run("C21 rejects an asset belonging to another lesson", h.testClaimRejectsForeignAsset)
+	t.Run("M2-R3 C21 rejects foreign lesson asset track non-ready and generation", h.testClaimRejectsForeignAsset)
 	t.Run("C22 deletes a draft when its asset is deleted", h.testAssetDeleteCascadesDraft)
 	t.Run("C08 lesson deletion removes the draft before completion", h.testLessonDeleteCascadesDraft)
-	t.Run("C09 old completion after new claim is superseded", h.testOldCompletionAfterNewClaim)
-	t.Run("C09 delayed old claim cannot overwrite the new draft", h.testDelayedOldClaim)
-	t.Run("re-claiming the same generation succeeds", h.testReclaimSameGeneration)
-	t.Run("C01 selects only ready assets missing their current draft", h.testPendingRecognitionsSelector)
-	t.Run("S6 pending follows the default track leaf", h.testPendingFollowsDefaultLeaf)
-	t.Run("S6 claim records the default leaf and needs a default", h.testClaimRecordsDefaultLeaf)
-	t.Run("S6 a duplicate automatic task does not re-claim", h.testAutomaticDuplicateNotReclaimed)
-	t.Run("S6 a draft is stale after the default changes", h.testDraftStaleAfterDefaultChange)
+	t.Run("M2-R4 C09 slow old completion stays hidden after asset replacement", h.testOldCompletionAfterNewClaim)
+	t.Run("M2-R4 C09 delayed old Ready track claim is superseded", h.testDelayedOldClaim)
+	t.Run("M2-R4 re-claiming the same track fences slow completion", h.testReclaimSameGeneration)
+	t.Run("M2-R2 C01 selects only current Ready assets missing drafts", h.testPendingRecognitionsSelector)
+	t.Run("M2-R2 S6 pending follows each ready track regardless of default", h.testPendingPerTrack)
+	t.Run("M2-R3 S6 claim records selected track leaf language and mode", h.testClaimRecordsTrack)
+	t.Run("M2-R7 S6 automatic duplicate preserves stale output until requested", h.testAutomaticDuplicateNotReclaimed)
+	t.Run("M2-R7 S6 staleness follows track language and mode", h.testDraftStaleAfterMetadataChange)
 	t.Run("S6 a rerun leaves the published transcript untouched", h.testRerunLeavesTranscriptUntouched)
-	t.Run("S6 the draft source leaf keeps its shape", h.testDraftSourceLeafShape)
+	t.Run("M2-R3 S6 joined source leaf keeps audio track shape", h.testTrackSourceLeafShape)
+	t.Run("M2-R8 tracks recover and complete independently", h.testTracksRecoverIndependently)
+	t.Run("M2-R9 deleting one track preserves sibling draft and published language", h.testTrackDeletePreservesTranscript)
 }
 
 type blockingAudio struct{}
@@ -136,7 +140,7 @@ func (h *draftHarness) testProcessDeadlineFailsDraft(t *testing.T) {
 	ctx, cancel := context.WithTimeout(h.ctx, 500*time.Millisecond)
 	defer cancel()
 	outcome, err := r.Process(ctx, ports.RecognitionJob{
-		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1,
+		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1, TrackID: initialTrackID(recoverAsset1),
 	})
 	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
 		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
@@ -187,27 +191,21 @@ func (h *draftHarness) insertAssetWithDuration(t *testing.T, assetID, lessonID s
 		assetID, lessonID, generation, durationSeconds, draftNow); err != nil {
 		t.Fatal(err)
 	}
-	// A Ready asset always holds its default Ready track since S3 and the 00028 backfill; the
-	// embedded one is what Publish writes for a source with sound (multi-audio S6 claims it).
-	h.insertDefaultTrack(t, assetID, "embedded", "original")
+	h.insertTrack(t, initialTrackID(assetID), assetID, "embedded", "en", "ready", true)
 }
 
-// insertDefaultTrack makes the asset's default Ready track; kind "uploaded" takes the leaf
-// audio-<trackId>, so leaf is ignored for it and the generated leaf is returned.
-func (h *draftHarness) insertDefaultTrack(t *testing.T, assetID, kind, leaf string) string {
+func initialTrackID(assetID string) string { return "a" + assetID[1:] }
+
+func (h *draftHarness) insertTrack(t *testing.T, id, assetID, kind, language, state string, isDefault bool) {
 	t.Helper()
-	if _, err := h.pool.Exec(h.ctx, `UPDATE audio_tracks SET is_default=false WHERE video_asset_id=$1::text::uuid`, assetID); err != nil {
+	if _, err := h.pool.Exec(h.ctx, `INSERT INTO audio_tracks(
+		id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
+		VALUES($1::text::uuid,$2::text::uuid,$3,$4,'Track',$5,$6,
+		CASE WHEN $3='uploaded' THEN 'audio-'||$1 ELSE 'original' END,
+		CASE WHEN $3='uploaded' THEN 1024 ELSE 0 END,$7,$7)`,
+		id, assetID, kind, language, isDefault, state, draftNow); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.pool.QueryRow(h.ctx, `WITH new_id AS (SELECT gen_random_uuid() AS id)
-		INSERT INTO audio_tracks(id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
-		SELECT id,$1::text::uuid,$2,'zz-'||substr(md5(id::text),1,8),'Track',true,'ready',
-		       CASE WHEN $2='uploaded' THEN 'audio-'||id::text ELSE $3 END,
-		       CASE WHEN $2='uploaded' THEN 1024 ELSE 0 END,$4,$4
-		FROM new_id RETURNING source_leaf`, assetID, kind, leaf, draftNow).Scan(&leaf); err != nil {
-		t.Fatal(err)
-	}
-	return leaf
 }
 
 func (h *draftHarness) insertOrphanAssetWithDuration(t *testing.T, assetID string, durationSeconds float64) {
@@ -223,22 +221,20 @@ func (h *draftHarness) insertOrphanAssetWithDuration(t *testing.T, assetID strin
 
 func (h *draftHarness) insertRunningDraft(t *testing.T, lessonID, assetID string, generation int32, updatedAt time.Time) {
 	t.Helper()
-	if _, err := h.pool.Exec(h.ctx, `INSERT INTO asr_drafts(
-		lesson_id,asset_id,generation,state,segments,created_at,updated_at)
-		VALUES($1::text::uuid,$2::text::uuid,$3,'running','[]'::jsonb,$4,$5)`,
-		lessonID, assetID, generation, updatedAt, updatedAt); err != nil {
-		t.Fatal(err)
+	claimed, err := h.repository.Claim(h.ctx, lessonID, assetID, generation, initialTrackID(assetID), false, updatedAt)
+	if err != nil || !claimed.Claimed {
+		t.Fatalf("seed running draft: claim=%+v err=%v", claimed, err)
 	}
 }
 
 func (h *draftHarness) completeReadyDraft(t *testing.T, lessonID, assetID string, generation int32, claimAt time.Time) {
 	t.Helper()
-	claimed, err := h.repository.Claim(h.ctx, lessonID, assetID, generation, false, claimAt)
+	claimed, err := h.repository.Claim(h.ctx, lessonID, assetID, generation, initialTrackID(assetID), false, claimAt)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
 	if err := h.repository.Complete(h.ctx, domain.TranscriptDraft{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: initialTrackID(assetID),
 		State: domain.DraftReady, Language: domain.Language("en"),
 		Segments: []domain.Segment{{ID: "60000000-0000-4000-8000-000000000001", EndMs: 1000, Text: "ready"}},
 	}, claimed.Token, claimAt.Add(time.Second)); err != nil {
@@ -248,17 +244,30 @@ func (h *draftHarness) completeReadyDraft(t *testing.T, lessonID, assetID string
 
 func (h *draftHarness) testClaimRejectsForeignAsset(t *testing.T) {
 	h.reset(t)
-	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson2, 1, 60)
-	_, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
-	if err != domain.ErrNotFound {
-		t.Fatalf("Claim err=%v; want ErrNotFound", err)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
+	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson2, 1, 60)
+	h.insertTrack(t, recoverTrack2, recoverAsset1, "uploaded", "de", "processing", false)
+	for _, item := range []struct {
+		name, lesson, asset, track string
+		generation                 int32
+	}{
+		{"foreign lesson", recoverLesson2, recoverAsset1, initialTrackID(recoverAsset1), 1},
+		{"foreign asset", recoverLesson1, recoverAsset2, initialTrackID(recoverAsset2), 1},
+		{"foreign track", recoverLesson1, recoverAsset1, initialTrackID(recoverAsset2), 1},
+		{"missing track", recoverLesson1, recoverAsset1, recoverTrack3, 1},
+		{"non-ready track", recoverLesson1, recoverAsset1, recoverTrack2, 1},
+		{"wrong generation", recoverLesson1, recoverAsset1, initialTrackID(recoverAsset1), 2},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			claim, err := h.repository.Claim(h.ctx, item.lesson, item.asset, item.generation, item.track, false, draftNow)
+			if err != domain.ErrNotFound || claim.Claimed {
+				t.Fatalf("claim=%+v err=%v; want NotFound", claim, err)
+			}
+		})
 	}
-	var drafts int
-	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM asr_drafts WHERE lesson_id=$1::text::uuid`, recoverLesson1).Scan(&drafts); err != nil {
-		t.Fatal(err)
-	}
-	if drafts != 0 {
-		t.Fatalf("draft rows for foreign lesson=%d; want 0", drafts)
+	var count int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM asr_drafts`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("invalid claims wrote %d drafts, err=%v", count, err)
 	}
 }
 
@@ -282,7 +291,7 @@ func (h *draftHarness) testAssetDeleteCascadesDraft(t *testing.T) {
 func (h *draftHarness) testLessonDeleteCascadesDraft(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
-	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
+	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), false, draftNow)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
@@ -302,7 +311,7 @@ func (h *draftHarness) testLessonDeleteCascadesDraft(t *testing.T) {
 	}
 
 	err = h.repository.Complete(h.ctx, domain.TranscriptDraft{
-		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1,
+		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1, TrackID: initialTrackID(recoverAsset1),
 		State: domain.DraftReady, Language: domain.Language("en"),
 		Segments: []domain.Segment{{ID: "60000000-0000-4000-8000-000000000002", EndMs: 1000, Text: "ready"}},
 	}, claimed.Token, draftNow.Add(time.Second))
@@ -314,24 +323,20 @@ func (h *draftHarness) testLessonDeleteCascadesDraft(t *testing.T) {
 func (h *draftHarness) testOldCompletionAfterNewClaim(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
+	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), false, draftNow)
+	if err != nil || !old.Claimed {
+		t.Fatalf("old claim=%+v err=%v", old, err)
+	}
 	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson1, 2, 60)
-	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
-	if err != nil {
-		t.Fatal(err)
+	h.completeReadyDraft(t, recoverLesson1, recoverAsset2, 2, draftNow.Add(time.Second))
+	// Different assets have different rows: old completion may finish, but is never offered.
+	h.completeDraftText(t, old.Draft, old.Token, "old", draftNow.Add(3*time.Second))
+	drafts, err := h.repository.ListLessonDrafts(h.ctx, recoverLesson1)
+	if err != nil || len(drafts) != 1 {
+		t.Fatalf("drafts=%+v err=%v", drafts, err)
 	}
-	newClaim, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset2, 2, false, draftNow.Add(time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.repository.Complete(h.ctx, domain.TranscriptDraft{
-		LessonID: recoverLesson1, AssetID: recoverAsset1, Generation: 1,
-		State: domain.DraftReady, Language: "en",
-		Segments: []domain.Segment{{ID: "60000000-0000-4000-8000-000000000001", EndMs: 1000, Text: "old"}},
-	}, old.Token, draftNow.Add(2*time.Second)); err != domain.ErrDraftSuperseded {
-		t.Fatalf("old Complete err=%v; want ErrDraftSuperseded", err)
-	}
-	if newClaim.Token == old.Token {
-		t.Fatal("new Claim reused old optimistic-lock token")
+	if drafts[0].Draft.TrackID != initialTrackID(recoverAsset2) || drafts[0].Draft.Segments[0].Text != "ready" {
+		t.Fatalf("old output was offered: %+v", drafts)
 	}
 }
 
@@ -339,38 +344,28 @@ func (h *draftHarness) testDelayedOldClaim(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
 	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson1, 2, 60)
-	if _, err := h.pool.Exec(h.ctx, `UPDATE video_assets SET evicted_at=$2, updated_at=$2 WHERE id=$1::text::uuid`, recoverAsset1, draftNow.Add(time.Second)); err != nil {
-		t.Fatal(err)
+	h.completeReadyDraft(t, recoverLesson1, recoverAsset2, 2, draftNow)
+	// Keep both assets Ready and non-evicted: latest-generation membership is the guard.
+	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), false, draftNow.Add(4*time.Second))
+	if err != domain.ErrDraftSuperseded || old.Claimed {
+		t.Fatalf("old claim=%+v err=%v; want Superseded", old, err)
 	}
-	h.completeReadyDraft(t, recoverLesson1, recoverAsset2, 2, draftNow.Add(2*time.Second))
-
-	// The old asset is still present (only soft-evicted), so Claim must reject it at the UPSERT.
-	old, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow.Add(4*time.Second))
-	if err != nil {
-		t.Fatalf("delayed old Claim: %v", err)
-	}
-	if old.Claimed {
-		t.Fatal("delayed old Claim was accepted")
-	}
-	draft, err := h.repository.GetLessonDraft(h.ctx, recoverLesson1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if draft.Draft.Generation != 2 || draft.Draft.Segments[0].Text != "ready" {
-		t.Fatalf("delayed old worker overwrote draft: generation=%d text=%q; want generation 2/ready", draft.Draft.Generation, draft.Draft.Segments[0].Text)
+	drafts, err := h.repository.ListLessonDrafts(h.ctx, recoverLesson1)
+	if err != nil || len(drafts) != 1 || drafts[0].Draft.Generation != 2 || drafts[0].Draft.Segments[0].Text != "ready" {
+		t.Fatalf("delayed claim changed current drafts=%+v err=%v", drafts, err)
 	}
 }
 
 func (h *draftHarness) testReclaimSameGeneration(t *testing.T) {
 	h.reset(t)
 	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
-	first, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, false, draftNow)
+	first, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), false, draftNow)
 	if err != nil {
 		t.Fatalf("first Claim: %v", err)
 	}
 	// The author's Regenerate re-claims the same generation (requested); an automatic duplicate
 	// may not — see testAutomaticDuplicateNotReclaimed.
-	second, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, true, draftNow.Add(time.Second))
+	second, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), true, draftNow.Add(time.Second))
 	if err != nil {
 		t.Fatalf("same-generation Claim: %v", err)
 	}
@@ -380,6 +375,15 @@ func (h *draftHarness) testReclaimSameGeneration(t *testing.T) {
 	if second.Token == first.Token {
 		t.Fatal("same-generation Claim reused the previous optimistic-lock token")
 	}
+	h.completeDraftText(t, second.Draft, second.Token, "new attempt", draftNow.Add(2*time.Second))
+	first.Draft.State, first.Draft.Language = domain.DraftReady, "en"
+	first.Draft.Segments = []domain.Segment{{ID: "60000000-0000-4000-8000-000000000001", EndMs: 1000, Text: "slow old attempt"}}
+	if err := h.repository.Complete(h.ctx, first.Draft, first.Token, draftNow.Add(3*time.Second)); err != domain.ErrDraftSuperseded {
+		t.Fatalf("slow Complete err=%v; want Superseded", err)
+	}
+	if got := h.lessonDraft(t, recoverLesson1, first.Draft.TrackID); got.Draft.Segments[0].Text != "new attempt" {
+		t.Fatalf("slow worker overwrote new text: %+v", got)
+	}
 }
 
 func (h *draftHarness) testPendingRecognitionsSelector(t *testing.T) {
@@ -388,8 +392,8 @@ func (h *draftHarness) testPendingRecognitionsSelector(t *testing.T) {
 	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson2, 1, 60)
 	h.completeReadyDraft(t, recoverLesson2, recoverAsset2, 1, draftNow)
 	h.insertAssetWithDuration(t, recoverAsset3, recoverLesson3, 1, 60)
-	h.insertAssetWithDuration(t, recoverAsset4, recoverLesson3, 2, 60)
 	h.completeReadyDraft(t, recoverLesson3, recoverAsset3, 1, draftNow)
+	h.insertAssetWithDuration(t, recoverAsset4, recoverLesson3, 2, 60)
 	h.insertAssetWithDuration(t, recoverAsset5, recoverLesson4, 1, 60)
 	h.insertAssetWithDuration(t, recoverAsset6, recoverLesson4, 2, 60)
 	h.completeReadyDraft(t, recoverLesson4, recoverAsset6, 2, draftNow)
@@ -404,7 +408,7 @@ func (h *draftHarness) testPendingRecognitionsSelector(t *testing.T) {
 	if pending[0].LessonID != recoverLesson1 || pending[1].LessonID != recoverLesson3 || pending[1].Generation != 2 {
 		t.Fatalf("pending=%+v; want lesson1/gen1 and lesson3/gen2", pending)
 	}
-	asset, err := h.repository.LessonAsset(h.ctx, recoverLesson3)
+	asset, err := h.repository.LessonTrack(h.ctx, recoverLesson3, initialTrackID(recoverAsset4))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,6 +491,7 @@ func (h *draftHarness) testRecoverThenComplete(t *testing.T) {
 	err = h.repository.Complete(h.ctx, domain.TranscriptDraft{
 		LessonID:   d.Draft.LessonID,
 		AssetID:    d.Draft.AssetID,
+		TrackID:    d.Draft.TrackID,
 		Generation: d.Draft.Generation,
 		State:      domain.DraftFailed,
 		Failure:    "timeout",
@@ -524,10 +529,10 @@ func (h *draftHarness) testRecoverRaceWithReClaim(t *testing.T) {
 
 	// Step 2: Between Recover reading and the caller calling Complete, a new Claim
 	// arrives. This moves updated_at, so the old token no longer matches. Since multi-audio S6
-	// a same-generation draft that already heard the default is re-claimed only by the author's
+	// an existing draft is re-claimed only by the author's
 	// Regenerate (requested); an automatic re-enqueue is refused (D-S6-2).
 	claimNow := draftNow.Add(time.Second)
-	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, true, claimNow)
+	claimed, err := h.repository.Claim(h.ctx, recoverLesson1, recoverAsset1, 1, initialTrackID(recoverAsset1), true, claimNow)
 	if err != nil {
 		t.Fatalf("re-Claim: %v", err)
 	}
@@ -540,6 +545,7 @@ func (h *draftHarness) testRecoverRaceWithReClaim(t *testing.T) {
 	err = h.repository.Complete(h.ctx, domain.TranscriptDraft{
 		LessonID:   recoverLesson1,
 		AssetID:    recoverAsset1,
+		TrackID:    initialTrackID(recoverAsset1),
 		Generation: 1,
 		State:      domain.DraftFailed,
 		Failure:    "timeout",
@@ -558,3 +564,130 @@ func (h *draftHarness) testRecoverRaceWithReClaim(t *testing.T) {
 		t.Fatalf("state=%s; want running (new claim is untouched)", state)
 	}
 }
+
+// M2-R1 exercises the migration itself against the old populated schema, not hand-built v31 rows.
+func (h *draftHarness) testDraftTrackMigration(t *testing.T, provider *goose.Provider) {
+	if _, err := provider.DownTo(h.ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(h.ctx, 30); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// Restore the shared harness schema even when an assertion fails mid-migration.
+		if _, err := provider.Up(context.Background()); err != nil {
+			t.Errorf("restore head: %v", err)
+		}
+	})
+	h.reset(t)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 60)
+	h.insertAssetWithDuration(t, recoverAsset2, recoverLesson2, 1, 60)
+	h.insertAssetWithDuration(t, recoverAsset3, recoverLesson3, 1, 60)
+	h.exec(t, `UPDATE audio_tracks SET language='EN-US' WHERE id=$1::text::uuid`, initialTrackID(recoverAsset1))
+	h.insertTrack(t, recoverTrack2, recoverAsset2, "uploaded", "UK", "ready", false)
+	// C's leaf names a real but failed track: no non-failed match may survive backfill.
+	h.insertTrack(t, recoverTrack3, recoverAsset3, "uploaded", "de", "failed", false)
+	for _, item := range []struct {
+		lesson, asset string
+		leaf          *string
+	}{
+		{recoverLesson1, recoverAsset1, nil},
+		{recoverLesson2, recoverAsset2, stringPointer("audio-" + recoverTrack2)},
+		{recoverLesson3, recoverAsset3, stringPointer("audio-" + recoverTrack3)},
+	} {
+		h.exec(t, `INSERT INTO asr_drafts(lesson_id,asset_id,generation,state,segments,source_leaf,created_at,updated_at)
+			VALUES($1::text::uuid,$2::text::uuid,1,'running','[]'::jsonb,$3,$4,$4)`, item.lesson, item.asset, item.leaf, draftNow)
+	}
+	if _, err := provider.UpTo(h.ctx, 31); err != nil {
+		t.Fatalf("00031 populated up: %v", err)
+	}
+	assertMapped := func(stage string, want map[string]string, wantTracks int) {
+		t.Helper()
+		rows, err := h.pool.Query(h.ctx, `SELECT lesson_id::text,audio_track_id::text,track_language,track_multilingual FROM asr_drafts`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		got := map[string]string{}
+		for rows.Next() {
+			var lesson, track, language string
+			var mode bool
+			if err := rows.Scan(&lesson, &track, &language, &mode); err != nil {
+				t.Fatal(err)
+			}
+			if mode {
+				t.Fatalf("%s: migrated draft mode=true", stage)
+			}
+			got[lesson] = track + "|" + language
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Fatalf("%s: mapped drafts=%v; want %v", stage, got, want)
+		}
+		var total, modes int
+		if err := h.pool.QueryRow(h.ctx, `SELECT count(*),count(*) FILTER (WHERE multilingual) FROM audio_tracks`).Scan(&total, &modes); err != nil || total != wantTracks || modes != 0 {
+			t.Fatalf("%s: tracks=%d multilingual=%d err=%v", stage, total, modes, err)
+		}
+	}
+	assertMapped("up", map[string]string{
+		recoverLesson1: initialTrackID(recoverAsset1) + "|en-us", // A embedded
+		recoverLesson2: recoverTrack2 + "|uk",                    // B uploaded; C deleted
+	}, 5)
+	var primaryKey string
+	if err := h.pool.QueryRow(h.ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='asr_drafts'::regclass AND contype='p'`).Scan(&primaryKey); err != nil || primaryKey != "PRIMARY KEY (audio_track_id)" {
+		t.Fatalf("PK=%q err=%v", primaryKey, err)
+	}
+	// Down keeps one draft per lesson (MS2a review w1): the default track's even when another
+	// track's attempt is newer (lesson B), else the newest attempt (lesson C, no default draft).
+	h.exec(t, `INSERT INTO asr_drafts(lesson_id,asset_id,generation,audio_track_id,track_language,state,segments,created_at,updated_at)
+		VALUES($1::text::uuid,$2::text::uuid,1,$3::text::uuid,'en','running','[]'::jsonb,$4,$4)`,
+		recoverLesson2, recoverAsset2, initialTrackID(recoverAsset2), draftNow.Add(-time.Hour))
+	h.insertTrack(t, recoverTrack4, recoverAsset3, "uploaded", "fr", "ready", false)
+	h.insertTrack(t, recoverTrack5, recoverAsset3, "uploaded", "pl", "ready", false)
+	for track, at := range map[string]time.Time{recoverTrack4: draftNow.Add(-time.Hour), recoverTrack5: draftNow} {
+		h.exec(t, `INSERT INTO asr_drafts(lesson_id,asset_id,generation,audio_track_id,track_language,state,segments,created_at,updated_at)
+			VALUES($1::text::uuid,$2::text::uuid,1,$3::text::uuid,'xx','running','[]'::jsonb,$4,$4)`,
+			recoverLesson3, recoverAsset3, track, at)
+	}
+	// Round-trip on populated rows must restore source leaves and map back to the same tracks.
+	if _, err := provider.DownTo(h.ctx, 30); err != nil {
+		t.Fatalf("00031 down: %v", err)
+	}
+	leaves := map[string]string{}
+	leafRows, err := h.pool.Query(h.ctx, `SELECT lesson_id::text, COALESCE(source_leaf,'') FROM asr_drafts`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for leafRows.Next() {
+		var lesson, leaf string
+		if err := leafRows.Scan(&lesson, &leaf); err != nil {
+			t.Fatal(err)
+		}
+		leaves[lesson] = leaf
+	}
+	leafRows.Close()
+	if want := map[string]string{recoverLesson1: "original", recoverLesson2: "original", recoverLesson3: "audio-" + recoverTrack5}; fmt.Sprint(leaves) != fmt.Sprint(want) {
+		t.Fatalf("down survivors=%v; want default-first then newest %v", leaves, want)
+	}
+	if _, err := provider.UpTo(h.ctx, 31); err != nil {
+		t.Fatalf("00031 re-up: %v", err)
+	}
+	assertMapped("re-up", map[string]string{
+		recoverLesson1: initialTrackID(recoverAsset1) + "|en-us",
+		recoverLesson2: initialTrackID(recoverAsset2) + "|en",
+		recoverLesson3: recoverTrack5 + "|pl",
+	}, 7)
+	// Lesson B's surviving draft now hangs on its embedded track; deleting that track takes it.
+	h.exec(t, `DELETE FROM audio_tracks WHERE id=$1::text::uuid`, initialTrackID(recoverAsset2))
+	var count int
+	if err := h.pool.QueryRow(h.ctx, `SELECT count(*) FROM asr_drafts`).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("draft count after track cascade=%d err=%v", count, err)
+	}
+	if got := h.lessonDraft(t, recoverLesson1, initialTrackID(recoverAsset1)); got.Draft.TrackLanguage != "en-us" {
+		t.Fatalf("cascade removed wrong draft: %+v", got)
+	}
+}
+
+func stringPointer(value string) *string { return &value }

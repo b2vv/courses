@@ -652,14 +652,8 @@ components:
                     minLength: 2
                     pattern: "^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$"
             required: null
-        PublishLessonDraftRequest:
-            properties:
-                expectedUpdatedAt:
-                    format: "date-time"
-            required: null
         saveSegmentRequest: null
         saveResult: null
-        publishResult: null
         documentsResult: null
         PlaybackSessionRequest:
             properties:
@@ -1317,32 +1311,6 @@ paths:
                             $ref: "#/components/headers/NoStore"
                         X-Request-ID:
                             $ref: "#/components/headers/RequestID"
-    /api/v1/admin/lessons/{lessonId}/draft/publish:
-        post:
-            operationId: "publishLessonDraft"
-            summary: "Publish a lesson recognition draft"
-            description: "Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached."
-            parameters:
-                lessonId:
-                    schema:
-                        format: "uuid"
-            requestBody:
-                required: false
-            responses:
-                "200":
-                    description: "The draft was published as the lesson transcript."
-                    headers:
-                        Cache-Control:
-                            $ref: "#/components/headers/NoStore"
-                        X-Request-ID:
-                            $ref: "#/components/headers/RequestID"
-                    content:
-                        application/json:
-                            schema:
-                                properties:
-                                    updatedAt:
-                                        format: "date-time"
-                                $ref: null
     /api/v1/admin/lessons/{lessonId}/draft/regenerate:
         post:
             operationId: "regenerateLessonDraft"

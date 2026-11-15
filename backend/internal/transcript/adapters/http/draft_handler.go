@@ -11,10 +11,6 @@ import (
 	"courses/platform/httpserver"
 )
 
-type publishResult struct {
-	UpdatedAt string `json:"updatedAt"`
-}
-
 type DraftHandler struct{ drafting *application.Drafting }
 
 func NewDraftHandler(drafting *application.Drafting) *DraftHandler {
@@ -30,8 +26,6 @@ func (handler *DraftHandler) RegisterAdmin(
 		authenticate(http.HandlerFunc(handler.getDraft)))
 	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/draft/regenerate",
 		authenticate(sameOrigin(http.HandlerFunc(handler.regenerate))))
-	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/draft/publish",
-		authenticate(sameOrigin(http.HandlerFunc(handler.publish))))
 }
 
 type draftSegmentDTO struct {
@@ -111,45 +105,6 @@ func (handler *DraftHandler) getDraft(w http.ResponseWriter, r *http.Request) {
 		dto.UpdatedAt = &draft.UpdatedAt
 	}
 	httpserver.WriteJSON(w, http.StatusOK, dto)
-}
-
-type publishRequest struct {
-	ExpectedUpdatedAt string `json:"expectedUpdatedAt"`
-}
-
-func (handler *DraftHandler) publish(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-
-	transportActor, ok := httpserver.ActorFromContext(r.Context())
-	if !ok {
-		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
-		return
-	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
-
-	var request publishRequest
-	if r.ContentLength > 0 {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
-		}
-		if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
-		}
-	}
-
-	token, err := handler.drafting.Publish(r.Context(), actor, application.PublishRequest{
-		LessonID:          r.PathValue("lessonId"),
-		ExpectedUpdatedAt: request.ExpectedUpdatedAt,
-	})
-	if err != nil {
-		writeTranscriptError(w, r, err)
-		return
-	}
-	httpserver.WriteJSON(w, http.StatusOK, publishResult{UpdatedAt: token})
 }
 
 type regenerateRequest struct {

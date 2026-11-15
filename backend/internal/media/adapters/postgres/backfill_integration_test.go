@@ -192,6 +192,12 @@ func (h *mediaHarness) testEmbeddedBackfillPopulated(t *testing.T) {
 	}
 	assertBackfilled("re-up")
 
+	// Backfill/rollback assertions stay on v28. Current repository reads also need
+	// the later multilingual column; upgrade before exercising the production path.
+	if _, err := provider.Up(h.ctx); err != nil {
+		t.Fatalf("upgrade before current repository: %v", err)
+	}
+
 	// Consequence 1 of the plan: an upload finishing on a backfilled asset no longer
 	// rewrites the master without the original sound; the embedded track stays default.
 	if _, err := h.pool.Exec(h.ctx, `UPDATE audio_tracks SET state='processing' WHERE id=$1::text::uuid`, backfillTrack(2)); err != nil {
