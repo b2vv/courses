@@ -1204,7 +1204,10 @@ nav a {
 .admin-module {
   display: grid;
   gap: var(--space-4);
-  padding: var(--space-6) 0 var(--space-6) var(--space-6);
+  /* Nested inline paddings are capped by the viewport: in rem they double with enlarged text and,
+     six levels deep, pushed the lesson past a 390px viewport at 200% (F3, plan-f3.md). */
+  padding-block: var(--space-6);
+  padding-inline: min(var(--space-6), 2.5vw) 0;
   border-inline-start: 4px solid var(--color-primary);
   border-block-end: 1px solid var(--color-border);
 }
@@ -1219,13 +1222,18 @@ nav a {
 .admin-lesson {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4) 0 0 var(--space-4);
+  padding-block: var(--space-4) 0;
+  padding-inline: min(var(--space-4), 2.5vw) 0;
   border-inline-start: 1px solid var(--color-border);
 }
 .admin-video-field {
   display: grid;
   justify-items: start;
   gap: var(--space-3);
+}
+.admin-program.ui-card,
+.admin-video-field.ui-card {
+  padding-inline: min(var(--card-padding), 2.5vw);
 }
 .admin-video-field h3,
 .admin-video-field p {
@@ -1279,7 +1287,8 @@ nav a {
 .admin-audio-track {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding-block: var(--space-3);
+  padding-inline: min(var(--space-3), 2.5vw);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
 }
@@ -1289,6 +1298,11 @@ nav a {
   align-items: center;
   gap: var(--space-2);
 }
+/* The label is author text up to 64 characters with no spaces; it may break anywhere (F3). */
+.admin-audio-track-head > strong {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
 .admin-audio-default {
   font-weight: 650;
   color: var(--color-success);
@@ -1297,8 +1311,10 @@ nav a {
   display: grid;
   justify-items: start;
   gap: var(--space-3);
+  min-inline-size: 0;
   margin: 0;
-  padding: var(--space-3);
+  padding-block: var(--space-3);
+  padding-inline: min(var(--space-3), 2.5vw);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
 }
@@ -1453,7 +1469,7 @@ nav a {
     flex: 1;
   }
   .admin-module {
-    padding-inline-start: var(--space-4);
+    padding-inline-start: min(var(--space-4), 2.5vw);
   }
 }
 .detail-heading {
@@ -3591,4 +3607,20 @@ button.transcript-line-body:hover {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* Transcript editor line: the document fieldset keeps the UA min-content width, and document labels
+   are author text up to 200 characters; both must shrink with the lesson (F3). */
+.transcript-editor-lines fieldset {
+  min-inline-size: 0;
+  margin-inline: 0;
+}
+.transcript-editor-lines fieldset label {
+  overflow-wrap: anywhere;
+}
+/* Course document labels are author text up to 200 characters; an unbroken one widened the whole
+   course editor grid (F3, found with the long-label fixture). */
+.document-library-items a {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
