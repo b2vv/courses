@@ -1,9 +1,22 @@
 # План зрізів MS2 + MS3 — ASR на доріжку, інвентар мов, редактор мов (одна поставка)
 
 Фаза: [plan.md](plan.md) (ACCEPTED r6). MS1 злитий (`6ad8d8d`, PR #107), F3 злитий (`37ec4b0`, PR #108).
-Гілка `ms2-3-asr-per-track` від `main@37ec4b0`. Статус: **ACCEPTED (Codex plan-critic r7, 2026-11-15; r1–r6 BLOCKED, усі знахідки закриті — `_wip-ms23-plan-critique-{1..7}.md`).**
+Гілка `ms2-3-asr-per-track` від `main@37ec4b0`. Статус: **ACCEPTED (Codex plan-critic r9, 2026-11-15): r7 ACCEPTED, власник додав O7/O8, дельта r8 BLOCKED → r9 ACCEPTED (minor DTO-поле закрито) — `_wip-ms23-plan-critique-{1..9}.md`.**
 Автор: Courses 1, 2026-11-15. MS2 і MS3 — окремі зрізи з власними комітами, але один PR і один
 ordered gate (фаза §4, r3 blocker 3).
+
+## 0. Рішення власника цього зрізу (2026-11-15, AskUserQuestion / чат, сесія Courses 1)
+
+- **O7 — повторне розпізнавання лише кнопкою.** Перейменування доріжки (і зміна O8-позначки) робить
+  чернетку stale, але нове розпізнавання стартує лише після «Regenerate». Автоматично розпізнається
+  тільки доріжка, у якої ще немає чернетки. Закриває альтернативу «автоматично після
+  перейменування» (план r1–r7).
+- **O8 — багатомовна доріжка.** Доріжка має позначку `multilingual`: перемикач поруч із вибором мови
+  в полі Audio tracks. Позначка зберігається на доріжці й діє на кожне її розпізнавання: і перше
+  автоматичне, і Regenerate. Початкове значення для нових доріжок задає змінна env проєкту
+  `ASR_MULTILINGUAL_DEFAULT`.
+- **Прийнято власником:** транскрипт багатомовної доріжки має одну позначку мови (мову доріжки), а
+  текст у ньому змішаний.
 
 ## 1. Межі
 
@@ -162,11 +175,9 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 
 ### MS-D3. Pending, claim, complete, recover — на доріжку
 
-**Pending.** Кожна `ready` доріжка останнього Ready не-evicted ассета уроку, для якої виконується
-одне з двох:
-- чернетки немає;
-- `draft.track_language ≠ lower(track.language)` і `draft.track_language` не з `und`-родини (O5:
-  `und`→мова не перерозпізнається).
+**Pending (O7).** Кожна `ready` доріжка останнього Ready не-evicted ассета уроку, **у якої немає
+чернетки**. Перейменування чи зміна `multilingual` pending не створюють: вони роблять чернетку stale
+(MS-D5), а нове розпізнавання запускає автор кнопкою.
 
 `is_default` більше не умова: розпізнається кожна доріжка (O2). Доріжки `awaiting_audio`/`failed`
 і доріжки старих ассетів не pending.
@@ -174,18 +185,22 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 **Claim** — один statement:
 - `INSERT … SELECT FROM audio_tracks JOIN video_assets` перевіряє (урок, ассет, генерація, доріжка
   `ready`) і що ассет — останній Ready уроку.
-- Записує `track_language`.
-- `ON CONFLICT (audio_track_id) DO UPDATE … WHERE requested OR track_language` змінився (не з
-  `und`-родини).
+- Записує знімок доріжки: `track_language` і `track_multilingual` (MS-D10).
+- Транспорт режиму до движка:
+  - `Transcriber.Transcribe` отримує `multilingual bool`;
+  - Go-адаптер передає `--multilingual` у `transcribe.py`;
+  - `transcribe.py` викликає `model.transcribe(..., language=None, multilingual=True)`.
+- `ON CONFLICT (audio_track_id) DO UPDATE … WHERE requested`. Лише Regenerate автора переписує
+  наявну чернетку (O7); дубль автоматичної задачі відмовляє, як у S6.
 - Чужа або неіснуюча доріжка → `ErrNotFound` (C21).
 - Доріжка не останнього Ready-ассета → `ErrDraftSuperseded`.
-- `RETURNING track_language, source_leaf` доріжки.
+- `RETURNING track_language, track_multilingual, source_leaf` доріжки.
 
 **Інше.**
 - `Complete`/`Recover`: `WHERE audio_track_id = $ AND updated_at = token` (токен спроби як
   сьогодні).
 - `Recover` повертає `TrackID`.
-- `ClaimedDraft.Draft` отримує `TrackID`, `TrackLanguage`, `SourceLeaf`.
+- `ClaimedDraft.Draft` отримує `TrackID`, `TrackLanguage`, `TrackMultilingual`, `SourceLeaf`.
 
 **C09 у новому формулюванні.**
 - Старий і новий ассет мають різні доріжки, а отже різні рядки.
@@ -204,6 +219,9 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 ### MS-D4. Підказка мови — з доріжки, без ручного override
 
 **Правило.** `hint(T)`:
+- `multilingual` (O8) → без підказки й з `multilingual=True` у faster-whisper: мова визначається
+  окремо для кожного 30-секундного вікна (перевірено в установленому 1.2.1:
+  `faster_whisper/transcribe.py:1191-1197` викликає `detect_language` на кожне вікно);
 - `und`-родина (`und` або `und-*`) → без підказки (auto-detect);
 - інакше перший subtag `track_language`, якщо він є в списку faster-whisper 1.2.1 (100 кодів, §2);
 - інакше без підказки, а worker логує `hint_unsupported` з тегом.
@@ -212,7 +230,8 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 лише «підказка або нічого».
 
 **Regenerate** не приймає тіла (мова зникає з `regenerateRequest`). Помилкову мову автор
-виправляє перейменуванням доріжки (S5 PATCH): pending за MS-D3 → нова чернетка з новою підказкою.
+виправляє перейменуванням доріжки (S5 PATCH): чернетка стає stale, Regenerate (O7) дає нову
+чернетку з новою підказкою.
 Для `und`-доріжки той самий шлях: поставити мову доріжці, після чого Regenerate з підказкою.
 
 **Відкинуто.** Залишити Select мови в Regenerate. Підказка, що розходиться з мовою доріжки, дає
@@ -224,10 +243,11 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
 **Видаляються.** `GET …/lessons/{lessonId}/draft` і `POST …/draft/regenerate|publish`.
 
 **Нові ендпоінти:**
-- `GET /api/v1/admin/lessons/{lessonId}/drafts` повертає `{drafts: [{trackId, trackLanguage,
+- `GET /api/v1/admin/lessons/{lessonId}/drafts` повертає `{drafts: [{trackId, trackLanguage, trackMultilingual,
   state, language, failure, stale, updatedAt, assetId, generation, segments}]}`. Це по одній
   чернетці на кожну доріжку останнього Ready-ассета, що має чернетку.
-  - `stale` = `track_language ≠ lower(поточна мова доріжки)` і `track_language` не з `und`-родини.
+  - `stale` = (`track_language ≠ lower(поточна мова доріжки)` і `track_language` не з
+    `und`-родини) **або** `track_multilingual ≠ поточна multilingual доріжки`.
   - Генерацію не перевіряємо: читання вже відсікає старі ассети.
 - `POST /api/v1/admin/lessons/{lessonId}/drafts/{trackId}/regenerate`: без тіла, `202`.
   - Доріжка не належить останньому Ready-ассету уроку → `404 track_not_found` (новий код).
@@ -329,8 +349,8 @@ PK `lesson_id` і `source_leaf` з leaf доріжки.
   виконується одне з двох:
   - `draft.trackLanguage = lower(T.language)`;
   - `draft.trackLanguage` з `und`-родини.
-  Інакше показується текст «чернетка розпізнана для іншої мови доріжки — перегенеровується
-  автоматично». Стару гілку `draftOffer.languageMismatch` (`TranscriptEditor.tsx:213`) прибираємо.
+  Інакше показується текст «чернетка розпізнана для іншої мови чи режиму доріжки —
+  натисніть Regenerate» (O7). Стару гілку `draftOffer.languageMismatch` (`TranscriptEditor.tsx:213`) прибираємо.
 - **Нові id рядків (r1 Blocker 1).**
   - Закрито правилом MS-D6 «кожен PUT з редактора дає рядкам нові id». Окремого перетворення id
     при завантаженні чернетки не потрібно.
@@ -408,6 +428,53 @@ O5-PATCH і перейменування ключа не змінюють, то�
   «мова невідома». Вгадування мови немає.
 - Колізії та повторна міграція: їх немає, бо немає запису під чужий ключ.
 
+### MS-D10. Позначка `multilingual` доріжки (O8)
+
+**Сховище й домен (media).**
+- Міграція `00031` (та сама, що MS-D2) додає `audio_tracks.multilingual boolean NOT NULL DEFAULT
+  false`. Наявні доріжки — `false`: це поведінка до O8, і SQL не може прочитати env.
+- `asr_drafts.track_multilingual boolean NOT NULL` — знімок на claim; бекфіл `false`.
+- Домен media: `AudioTrack.Multilingual`; конструктори приймають його явно.
+
+**Початкове значення — `ASR_MULTILINGUAL_DEFAULT`** (`true`/`false`, відсутня = `false`; інше
+значення → процес не стартує з іменованою помилкою, як інші `ConfigFromEnvironment`).
+- Читається в composition root **api** (аплоад доріжки) і **media-worker** (embedded-доріжка при
+  транскоді, `transcode.go:468-480`). Передається в media application як значення, без глобального
+  стану.
+- Додається в `.env.example` і в `environment` обох сервісів у `docker-compose.yml`.
+
+**HTTP (media, openapigen).**
+- `POST …/audio-tracks` (`mintAudioRequest`, `handler.go:90`) приймає опційне `multilingual`;
+  відсутнє → env-значення.
+- `PATCH …/audio-tracks/{trackId}` (`renameTrackRequest`, `:105`): тіло лишається повним —
+  `language` і `label` обов'язкові, як зараз, плюс опційне `multilingual` (відсутнє = без змін).
+  - Master переписується (`RegenerateMaster`, `postgres/audiotrack.go:287`) лише якщо змінились
+    `language` чи `label`.
+  - Зміна тільки `multilingual` master не чіпає: позначка не потрапляє в маніфест.
+  - UI завжди шле поточні мову й мітку рядка разом із позначкою, тож часткового оновлення немає.
+- `GET …/audio-tracks` повертає `multilingual` на кожній доріжці й `multilingualDefault` на рівні
+  відповіді (`audioTracksDTO`, `:245`), щоб форма аплоаду показала початкове значення з env.
+
+**UI (Audio tracks, `LessonAudioTracksField`).** Перемикач «Кілька мов» поруч із вибором мови:
+- у формі нової доріжки — початкове значення `multilingualDefault`;
+- у рядку наявної доріжки — її значення; зміна = PATCH.
+
+Вкладка мови (MS-D6) показує позначку поруч із мовою доріжки. Зміна позначки робить чернетку
+stale (MS-D5) і вимагає Regenerate (O7).
+
+**Кеш фронтенду (r8 Major 1).**
+- DTO чернетки (MS-D5) несе `trackLanguage` і `trackMultilingual`.
+- Guard MS-D7 рахує придатність **локально** проти поточних даних доріжки з запиту доріжок, а не
+  лише за серверним `stale`:
+  - `draft.trackMultilingual = track.multilingual`, **і**
+  - мовна умова MS-D7.
+  - Виняток `und`-родини стосується лише мови, режиму він не обходить.
+- Успішний PATCH доріжки (мова, мітка чи позначка) інвалідує і доріжки, і чернетки уроку
+  (`admin-audio-queries.ts:137` зараз інвалідує лише доріжки).
+
+**Відкинуто.** Позначка на запиті Regenerate замість доріжки (варіант «біля Regenerate»). Власник
+обрав властивість доріжки, яка діє і на перше автоматичне розпізнавання.
+
 ## 4. Рядки приймання
 
 ### MS2 (backend; integration на справжньому Postgres, unit, HTTP-контракт)
@@ -415,16 +482,17 @@ O5-PATCH і перейменування ключа не змінюють, то�
 | ID | Рядок | Доказ |
 |---|---|---|
 | M2-R1 | Міграція 00031 на populated data: 2 зіставлені, 1 видалена; PK `audio_track_id`; каскад видалення доріжки; Down/Up | integration (`UpTo(30)` → seed → `UpTo(31)`) |
-| M2-R2 | Pending: дві `ready` доріжки поточного ассета → 2; `awaiting_audio`/`failed`/старий ассет → 0; `is_default` не впливає | integration |
+| M2-R2 | Pending: дві `ready` доріжки поточного ассета без чернеток → 2; `awaiting_audio`/`failed`/старий ассет → 0; `is_default` не впливає; доріжка з чернеткою після перейменування чи зміни `multilingual` → **0** (O7) | integration |
 | M2-R3 | Claim: (урок, ассет, ген, доріжка) одним statement; чужа доріжка → NotFound (C21); пише `track_language` | integration |
 | M2-R4 | C09 нове: claim доріжки старого Ready-ассета → Superseded; читання лише поточного ассета; повільний старий Complete не перезаписує | integration |
 | M2-R5 | TaskID містить доріжку: дві доріжки одного ассета → 2 задачі | unit (queue) |
 | M2-R6 | Підказка: `en-US`→`en`, `de`→`de`, `haw`→`haw`, `und`/`und-x-original`→ немає, `tlh`→ немає + лог `hint_unsupported`; список = 100 кодів 1.2.1 | unit (адаптер) + Process передає підказку claim'у |
-| M2-R7 | Перейменування: `en`→`de` → stale + pending; `und`→`uk` → ні те, ні те; `en-US`→`en-GB` → stale | integration |
+| M2-R7 | Перейменування: `en`→`de` → stale, **не** pending; `und`→`uk` → не stale; `en-US`→`en-GB` → stale; зміна `multilingual` → stale; автоматичний дубль задачі не переписує stale-чернетку, Regenerate переписує | integration |
 | M2-R8 | Complete/Recover за токеном спроби на доріжку; гонка Recover × re-Claim → Superseded (наявний тест перенесено) | integration |
 | M2-R9 | Видалення доріжки забирає її чернетку; транскрипт її мови лишається | integration |
 | M2-R10 | HTTP: `GET drafts`, `POST drafts/{trackId}/regenerate` (202 / 404 `track_not_found` / 409); `/draft`, `/draft/publish`, `/draft/regenerate` → 404; `GET transcripts`; openapi-контракт і згенерований клієнт | HTTP contract tests + check-generated |
 | M2-R11 | Задача без `trackId` → завершена без повтору | unit |
+| M2-R12 | **Межа Python→faster-whisper (r8 Major 2):** Go-тест адаптера whisper запускає **справжній** `transcribe.py` через `python3` зі stub-пакетом `faster_whisper` на `PYTHONPATH`. Stub записує kwargs `WhisperModel.transcribe` у файл, тест перевіряє `multilingual=True, language=None` для режиму й `multilingual=False, language=<hint>` для звичайного. Відсутній `python3` — провал тесту, не skip. `multilingual`: міграція (наявні `false`); `ASR_MULTILINGUAL_DEFAULT` true/false/відсутня/невалідна (старт падає); embedded-доріжка й аплоад без поля беруть env; PATCH змінює лише позначку, master не переписується; `GET` повертає `multilingual` і `multilingualDefault`; claim пише `track_multilingual`; Process передає режим і без підказки; PATCH лише позначки — `RegenerateMaster` не викликано, PATCH мови — викликано | unit (config, домен, адаптер whisper зі справжнім `transcribe.py`) + integration (репозиторій media/transcript) + HTTP contract |
 
 ### MS3 (frontend; unit + e2e на Compose + design-pass)
 
@@ -434,13 +502,15 @@ O5-PATCH і перейменування ключа не змінюють, то�
 | M3-R2 | Вкладка доріжки: мова фіксована, Save = PUT мовою вкладки | unit + e2e (мережевий запит) |
 | M3-R3 | Guard: чернетка іншої мови або stale → без «Load draft», з поясненням | unit |
 | M3-R4 | `und`: діалог (попередній вибір, виключення), PATCH→PUT; `duplicate_language` → помилка без PUT і без змін ключів; PATCH ок + PUT впав → та сама вкладка, нова мова, рядки на місці, повтор Save = PUT; той самий випадок + reload → рядки пропонуються з ключа `track:<id>` | unit (усі гілки) + e2e (успіх; PUT-збій через `page.route` → reload → restore) |
-| M3-R5 | Regenerate на вкладку без Select; pending-мітка на доріжку (дві вкладки не ділять мітку) | unit (`admin-draft-queries`) |
+| M3-R5 | Stale-чернетка після перейменування показує «натисніть Regenerate» і не перерозпізнається сама (O7); Regenerate на вкладку без Select; pending-мітка на доріжку (дві вкладки не ділять мітку) | unit (`admin-draft-queries`) |
 | M3-R6 | Ключ на вкладку: знімки двох вкладок ізольовані; відірваний знімок (легасі, зникла доріжка, приєднана сирота) з мовою → пропозиція у вкладці цієї мови; без мови/без вкладки → у default-вкладці з позначкою; власний знімок вкладки має перевагу; ключ видаляється лише після Save/«Відкинути»; повторний захід пропонує знову | unit (`recovery`, hook) + e2e (`transcript.spec` «unsaved lines survive a reload» (:499) розширено на дві вкладки) |
 | M3-R7 | Неактивні панелі приховані; id унікальні при кількох змонтованих редакторах (`document.querySelectorAll('[id]')` без дублів у межах уроку), доступні імена заголовків/регіонів вказують на активну панель; клавіатура (стрілки, Tab); 390/768/1024/1440 + 200% + 320 | design-pass (браузер, скриншоти, DOM-замір) + unit |
 | M3-R8 | e2e: урок із відео (embedded `und`, мовлення «Welcome to the course…») + dub-доріжка мовою **`en-GB`** (мовлення «This is the dubbed audio track…», `media.setup.ts:74-75`; мова ставиться через API аплоаду, бо S5-список її не пропонує). Тоді обидві підказки англійські (`en-GB` → `en`), а тексти розрізняють записи (r3 Major 2). Кроки: → 2 чернетки; текст чернетки `und` містить `Welcome`, а не `dubbed`; текст чернетки `en-gb` містить `dubbed`, а не `Welcome` (доказ, що кожна доріжка розпізнана **своїм** аудіо — шлях продакшну, як `asr.spec.ts:495`) → `und`: підтвердити `en` → PUT; `en-gb`: Load → Save → інвентар `[en, en-gb]`, доріжка `en`; `GET transcript?language=en` і `?language=en-gb` повертають саме цю мову з рядками, що дорівнюють тілу відповідного PUT (мова й тексти, не лише статус: відсутній транскрипт теж 200 — `handler.go:77`). Підказку `de`/`uk` доводить unit M2-R6, не цей e2e | e2e (`asr.spec`) |
-| M3-R9 | Наявні `asr.spec` оновлено: C11 → «підказка з мови доріжки» (Regenerate без тіла); C17/C18 — помічники скоуплено до вибраної вкладки доріжки, C18 без Select мови (:407); S6 «default change» → «кожна Ready-доріжка має свою чернетку» і «перейменування перерозпізнає»; C06 → «після заміни відео стара чернетка не пропонується» | e2e |
+| M3-R9 | Наявні `asr.spec` оновлено: C11 → «підказка з мови доріжки» (Regenerate без тіла); C17/C18 — помічники скоуплено до вибраної вкладки доріжки, C18 без Select мови (:407); S6 «default change» → «кожна Ready-доріжка має свою чернетку» і «перейменування робить чернетку stale, Regenerate перерозпізнає» (O7); C06 → «після заміни відео стара чернетка не пропонується» | e2e |
 | M3-R10 | Save-time перечитування: доріжку перейменовано/видалено після Load → Save відмовляє з повідомленням, 0 PUT; запит доріжок або інвентаря падає (мережа, 5xx, тайм-аут) → повторювана помилка, рядки на місці, **0 PUT** | unit (усі гілки, лічильник PUT) + e2e (`page.request` PATCH між Load і Save; `page.route` 503 на GET доріжок → 0 PUT) |
 | M3-R11 | Нові id рядків, **окрема фікстура з однією доріжкою** (embedded `und`, мовлення; окремий урок від M3-R8, щоб перейменування не впиралися в її доріжки — `00030:88`; кроки (a)→(d) послідовні на одній доріжці): (a) `und`-чернетка → Save `en` → перейменувати `en`→`fr` → Load та сама чернетка → Save `fr` → 200; (b) відкрити збережений `fr`, правити рядки → перейменувати `fr`→`pl` (вільна) → Save → 200, `pl` новий, `fr` сирота незмінна; (c) правити → перейменувати в мову, що має транскрипт-сироту (`en`) → Save питає заміну → підтвердити → `en` = ці рядки, `pl` незмінна. (d) з доріжкою тепер `en`: брудне перейменування `en`→`es` → capture → reload → Restore → Save → 200, `es` новий, `en` незмінна; (e) відірваний варіант: брудне перейменування `es`→`de` → capture → заміна відео (стара доріжка зникає) → нова доріжка мовою `de` → Restore відірваного знімка → Save → 200, `es` незмінна. Скрізь оригінальний транскрипт зберігається | unit (нові id на кожен PUT, вибір токена, чистий/брудний) + e2e (a–d; e — unit + e2e M3-R12b) |
+| M3-R14 | Перемикач «Кілька мов» у Audio tracks: форма нової доріжки стартує з `multilingualDefault`; рядок доріжки показує й змінює позначку (PATCH); вкладка мови показує позначку; доступна назва, клавіатура, 44px; e2e: доріжка з `multilingual=true` → чернетка розпізнана (кінцевий ланцюг; що режим дійшов до движка, доводить M2-R12) | unit + e2e + design-pass |
+| M3-R15 | Кеш (r8 Major 1): готова чернетка → перемкнути «Кілька мов» у відкритому редакторі → «Load draft» вимкнено з поясненням, автоматичної заміни немає → Regenerate → нова чернетка з новим режимом → Load увімкнено; те саме для `und`-чернетки (мовний виняток не обходить режим) | unit (guard, інвалідація) + e2e |
 | M3-R13 | Знімок пише пару (`baseLanguage`, `expectedUpdatedAt`); restore повертає її; вихідний токен перевіряється на кожному кроці: (e) відкрити `en` (T1) → перейменувати в відсутню `es` → capture → reload → restore → Save → PUT `es` **без** токена → 200, `en` незмінна; (f) те саме в наявну `es` → підтвердження з версією `es` → PUT з токеном `es`; (g) знімок без `baseLanguage` → гілка «інша мова» (без токена бази). Замок не обходиться: (a) два редактори однієї мови — A відкрив `en` (T1), B зберіг `en` (T2), A зберігає → `transcript_modified`, рядки B на сервері, рядки A лишаються в редакторі; (b) відновлений знімок із базою T1 після чужого збереження T2 → Save → `transcript_modified`; (c) підтвердження заміни L, після якого L змінилась → `transcript_modified`; (d) L створено між інвентарем і PUT → `transcript_exists`. Скрізь сервер не перезаписує новіший чужий запис | unit (вибір токена, усі гілки) + e2e (a, b через `page.request` PUT між відкриттям і Save) |
 | M3-R12 | Відірвані знімки: (a) набрати рядки, поки перше відео обробляється (без blur/reload), дочекатись Ready → рядки пропонуються у default-вкладці; (b) набрати у вкладці доріжки, завантажити заміну відео → після промоції рядки пропонуються у вкладці тієї ж мови/default; (c) брудна сирота `lang:X` → перейменувати доріжку в X → рядки пропонуються у вкладці доріжки | e2e (`asr.spec`: a, b) + unit (c, flush при розмонтуванні, вибір вкладки для пропозиції) |
 
@@ -463,10 +533,14 @@ O5-PATCH і перейменування ключа не змінюють, то�
 
 - **Ціна ASR** множиться на доріжки (фаза §6): ~19 хв воркера на годину аудіо на кожну доріжку,
   послідовно.
-- **Перейменування доріжки з визначеною мовою запускає перерозпізнавання без кнопки** (MS-D3), тобто
-  ті самі ~19 хв на годину. Механізм: чернетка розпізнана з підказкою старої мови, і MS-D7 її не
-  опублікує. Скасування немає. Чернетки, розпізнані під `und`-родиною (без підказки), виняток: їх не
-  перерозпізнають ні при O5-PATCH, ні при подальших перейменуваннях (фаза D5, r4).
+- **Після перейменування доріжки чернетка лишається stale, доки автор не натисне Regenerate** (O7).
+  Її не можна завантажити у вкладку (MS-D7). Виняток — чернетки, розпізнані під `und`-родиною (без
+  підказки): вони лишаються придатними і після O5-PATCH, і після подальших перейменувань (фаза D5,
+  r4).
+- **Багатомовне розпізнавання** визначає мову на 30-секундне вікно. Вставку іншою мовою, коротшу за
+  вікно, воно пропустить або розпізнає мовою вікна. Транскрипт має одну позначку мови, текст
+  змішаний (прийнято власником, O8). Ціна в CPU не заміряна; замір — разом зі спайком
+  продуктивності ASR (окрема задача).
 - **Знято з фазового D5** (MS-D1, таблиця): штамп генерації чернетки, ідентичність спроби,
   ідемпотентність втраченої відповіді. Перевірку мови/існування доріжки перенесено в клієнт з вікном
   гонки в один запит.
