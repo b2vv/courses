@@ -377,7 +377,9 @@
   display: grid;
   place-items: center;
   overflow: auto;
-  padding: var(--space-4);
+  /* Inline paddings capped by the viewport so enlarged text does not double them (F3). */
+  padding-block: var(--space-4);
+  padding-inline: min(var(--space-4), 4vw);
   background: var(--color-overlay);
 }
 .ui-modal {
@@ -390,7 +392,8 @@
   border-radius: var(--radius-panel);
 }
 .ui-dialog {
-  padding: var(--space-6);
+  padding-block: var(--space-6);
+  padding-inline: min(var(--space-6), 5vw);
 }
 .ui-dialog h2 {
   font-family: var(--font-display);
