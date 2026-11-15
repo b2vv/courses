@@ -13,8 +13,9 @@ export interface MediaAudioRename {
      */
   label: string;
   /**
-     * @minLength 1
+     * @minLength 2
      * @maxLength 35
+     * @pattern ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
      */
   language: string;
 }

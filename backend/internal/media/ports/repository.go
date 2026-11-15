@@ -43,6 +43,9 @@ type AssetRepository interface {
 	// deterministic order while holding the lock, so concurrent audio transcodes
 	// cannot interleave two writers. rewrite performs the atomic file write.
 	RegenerateMaster(ctx context.Context, assetID string, rewrite func(ready []domain.AudioTrack) error) error
+	// ListReadyAssetIDs lists every Ready, non-evicted asset in (generation, id) order — the set
+	// whose masters `media-worker regenerate-masters` rewrites (multi-subtitles MS1 M-D4).
+	ListReadyAssetIDs(ctx context.Context) ([]string, error)
 
 	LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error)
 	// LoadAudioTrackUpload loads an uploaded audio track by its id alone (the tus

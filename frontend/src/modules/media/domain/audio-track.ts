@@ -86,9 +86,19 @@ export function audioUploadPath(trackId: string): string {
   return `/uploads/audio/${trackId}`;
 }
 
-/** Mirrors the server rule: 1..35 ASCII letters, digits or hyphens. */
+/**
+ * Mirrors the server rule (backend internal/contracts/language, multi-subtitles D2): once
+ * lowercased, the language is a transcript tag — 2..35 characters, hyphen-separated subtags of
+ * 1..8 [a-z0-9], the first at least two characters and starting with a letter. Case is kept.
+ */
+const languageTag = /^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$/;
 export function validAudioLanguage(value: string): boolean {
-  return value.length <= maximumAudioLanguageLength && /^[A-Za-z0-9-]+$/.test(value);
+  return (
+    value.length >= 2 &&
+    value.length <= maximumAudioLanguageLength &&
+    /^[A-Za-z0-9-]+$/.test(value) &&
+    languageTag.test(value.toLowerCase())
+  );
 }
 
 /**
@@ -130,13 +140,20 @@ export function availableAudioLanguages(
   tracks: readonly AudioTrack[],
   editedTrackId?: string,
 ): readonly string[] {
+  // Case-insensitive, like the server's per-asset uniqueness (multi-subtitles D2): `en` is taken
+  // by a track called `EN`.
   const taken = new Set(
     tracks
       .filter((track) => track.state !== 'failed' && track.trackId !== editedTrackId)
-      .map((track) => track.language),
+      .map((track) => track.language.toLowerCase()),
   );
   const own = tracks.find((track) => track.trackId === editedTrackId)?.language;
-  const offered: string[] = audioTrackLanguages.filter((language) => !taken.has(language));
+  // The edited track's own language is offered once, as stored: `en` is not offered beside `EN`.
+  const offered: string[] = audioTrackLanguages.filter(
+    (language) =>
+      !taken.has(language.toLowerCase()) &&
+      (own === undefined || language === own || language.toLowerCase() !== own.toLowerCase()),
+  );
   if (own !== undefined && !offered.includes(own)) offered.unshift(own);
   return offered;
 }

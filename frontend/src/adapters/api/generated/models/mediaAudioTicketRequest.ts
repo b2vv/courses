@@ -9,6 +9,11 @@
 export interface MediaAudioTicketRequest {
   declaredBytes: number;
   label: string;
+  /**
+     * @minLength 2
+     * @maxLength 35
+     * @pattern ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
+     */
   language: string;
   originalName: string;
 }

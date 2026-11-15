@@ -180,7 +180,7 @@ export function Select({ label, options, description, errorMessage, ...props }: 
         <span aria-hidden="true">⌄</span>
       </Aria.Button>
       <FieldHelp description={description} errorMessage={errorMessage} />
-      <Aria.Popover className="ui-popover">
+      <Aria.Popover className="ui-popover ui-popover-list">
         <Aria.ListBox items={options} className="ui-listbox">
           {(item) => (
             <Aria.ListBoxItem id={item.id} textValue={item.label} className="ui-option">
@@ -234,7 +234,7 @@ export function ComboBox({
         </Aria.Button>
       </div>
       <FieldHelp description={description} errorMessage={errorMessage} />
-      <Aria.Popover className="ui-popover">
+      <Aria.Popover className="ui-popover ui-popover-list">
         <Aria.ListBox<ChoiceOption>
           className="ui-listbox"
           renderEmptyState={() =>

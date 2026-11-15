@@ -294,6 +294,29 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 	return updated, nil
 }
 
+// ListReadyAssetIDs lists every Ready, non-evicted asset (MS1 M-D4). It takes no lock: each
+// asset is then rewritten through RegenerateMaster, which locks and re-checks it.
+func (repository *Repository) ListReadyAssetIDs(ctx context.Context) ([]string, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT id::text FROM video_assets
+		WHERE state='ready' AND evicted_at IS NULL ORDER BY generation, id`)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, persistenceError(err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return ids, nil
+}
+
 // RegenerateMaster serialises a master rewrite per asset (D7). It locks the asset
 // row, then its tracks, reads the Ready set in deterministic (created_at, id)
 // order and hands it to rewrite while still holding the locks, so two concurrent

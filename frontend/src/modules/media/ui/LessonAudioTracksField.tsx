@@ -67,8 +67,11 @@ function isOfferedLanguage(value: string): value is OfferedLanguage {
   return (audioTrackLanguages as readonly string[]).includes(value);
 }
 
+// Case-insensitive like the language rule itself (multi-subtitles D2): a track stored as `EN` is
+// English, not an unknown code.
 function languageName(code: string, t: Translate): string {
-  return isOfferedLanguage(code) ? t(`administration.audio.language.${code}`) : code;
+  const lowered = code.toLowerCase();
+  return isOfferedLanguage(lowered) ? t(`administration.audio.language.${lowered}`) : code;
 }
 
 function languageOptions(codes: readonly string[], t: Translate) {
