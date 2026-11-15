@@ -255,3 +255,33 @@ transcript»; інші стани ASR не відрендерені й не вв
   `border-inline-start`.
 - Інші місця з текстом автора поза редактором курсу (наприклад, матеріали рядка транскрипту в плеєрі
   студента) не перевірялись.
+
+## MS2a — чернетка ASR на доріжку: міграція 00031 і репозиторій — 2026-11-15
+
+План: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9), рішення MS-D1 (бекенд), MS-D2, MS-D3, MS-D10
+(лише сховище). Коміт `c8fa93f` на `ms2-3-asr-per-track`, не злитий; один PR і один ordered gate
+разом із MS2b/MS2c/MS3 (план §5).
+
+### Що зроблено
+- Міграція `00031`: PK `asr_drafts` → `audio_track_id`, знімки `track_language`/`track_multilingual`,
+  бекфіл за (ассет, leaf), незіставлені чернетки видалено, `source_leaf` прибрано;
+  `audio_tracks.multilingual` і унікальність `(video_asset_id, source_leaf)` (Codex w1 minor 1).
+- Pending, claim, complete, recover на доріжку; TaskID і payload з `trackId`; claim `Superseded`/
+  `NotFound` завершує задачу без збою.
+- Видалено `/draft/publish`, `Drafting.Publish`, `TranscriptPublisher`, `SaveDraft`; openapi і
+  клієнт перегенеровано. Старі `GET /draft` і `/draft/regenerate` тимчасово працюють на default-доріжку до MS2c.
+
+### Рядки приймання (ревізія `c8fa93f`)
+| Рядок | Статус | Доказ |
+|---|---|---|
+| M2-R1 | PASS | integration, включно з вибором у Down (default, потім найновіша) |
+| M2-R2, R3, R4, R7, R8, R9 | PASS | integration, `go test -tags=integration -v`: 29 підтестів M2 PASS, 0 FAIL/SKIP |
+| M2-R5 | PASS (частково) | unit `queue_test`: TaskID містить доріжку; «дві доріжки → 2 задачі» — MS2b |
+| M2-R11 | PASS | unit: payload без `trackId` → `invalid_task_payload` |
+| M2-R6, R10, R12 | NOT_TESTED | MS2b/MS2c |
+
+### Гейти
+- `go build`, `go vet`, `go test ./internal/transcript/... ./internal/media/...` — ok; `make format-check` — ok; frontend `typecheck` — ok.
+- Повний `make integration` двічі (до і після фіксу w1): `GATE_EXIT=0`, 67 пакетів ok, 0 FAIL.
+- Не запускались для цього зрізу: `make e2e`. Наявні C06/S6 e2e очікують стару модель; їх оновлює MS3 (M3-R9).
+- Рев'ю: Codex read-only w1 — SHIP, 2 minor закрито (`_wip-ms2a-review-codex-w1.md`).
