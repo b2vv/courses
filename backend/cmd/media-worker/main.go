@@ -29,6 +29,18 @@ func main() {
 	logger := observability.NewLogger("media-worker")
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	mode, err := commandMode(os.Args[1:])
+	if err != nil {
+		logger.Error("worker refused its arguments", "reason", err.Error())
+		os.Exit(2)
+	}
+	if mode == modeRegenerateMasters {
+		if err := regenerate(ctx, logger); err != nil {
+			logger.Error("master regeneration failed", "reason", err.Error())
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(ctx, logger); err != nil {
 		logger.Error("worker stopped with an error", "reason", err.Error())
 		os.Exit(1)

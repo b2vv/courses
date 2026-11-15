@@ -273,6 +273,22 @@
 .ui-listbox {
   outline: none;
 }
+/* The list, not the popover, scrolls: React Aria scrolls the focused option into view inside the
+   listbox, so a popover-level scroll left an initially focused late option hidden (MS1 F4). The
+   padding moves onto the list so the option focus ring stays inside the scroll box. An explicit class,
+   not :has(), so Firefox below 121 (in the Rsbuild default targets) gets the same layout (W5 F5). */
+.ui-popover-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.ui-popover-list > .ui-listbox {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+  padding: var(--space-2);
+  scroll-padding-block: var(--space-2);
+}
 .ui-option {
   border-color: transparent;
   cursor: pointer;

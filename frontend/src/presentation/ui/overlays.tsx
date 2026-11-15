@@ -71,7 +71,7 @@ export function Menu({ label, items, onAction }: MenuProps) {
   return (
     <Aria.MenuTrigger>
       <Button variant="secondary">{label}</Button>
-      <Aria.Popover className="ui-popover">
+      <Aria.Popover className="ui-popover ui-popover-list">
         <Aria.Menu items={items} onAction={onAction} className="ui-listbox">
           {(item) => (
             <Aria.MenuItem

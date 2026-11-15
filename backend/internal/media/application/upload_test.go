@@ -33,6 +33,7 @@ type fakeRepository struct {
 	publish                    func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
 	publishedEmbedded          *domain.AudioTrack
 	regenerateMaster           func(context.Context, string, func([]domain.AudioTrack) error) error
+	listReadyAssetIDs          func(context.Context) ([]string, error)
 	loadAudioTrack             func(context.Context, string, string) (domain.AudioTrack, error)
 	promoteAudioTrack          func(context.Context, string, string, time.Time, func([]domain.AudioTrack) error) (*domain.VideoAsset, error)
 	failAudioTrack             func(context.Context, string, string, time.Time) error
@@ -97,6 +98,14 @@ func (repository *fakeRepository) RegenerateMaster(ctx context.Context, assetID 
 		return repository.regenerateMaster(ctx, assetID, rewrite)
 	}
 	return nil
+}
+
+func (repository *fakeRepository) ListReadyAssetIDs(ctx context.Context) ([]string, error) {
+	repository.calls = append(repository.calls, "list_ready_asset_ids")
+	if repository.listReadyAssetIDs != nil {
+		return repository.listReadyAssetIDs(ctx)
+	}
+	return nil, nil
 }
 
 func (repository *fakeRepository) LoadAudioTrack(ctx context.Context, assetID, trackID string) (domain.AudioTrack, error) {

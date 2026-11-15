@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	languagetag "courses/internal/contracts/language"
 )
 
 const (
@@ -264,19 +266,19 @@ func ValidateAudioTicket(declaredBytes int64, originalName string) error {
 	return nil
 }
 
+// validLanguage is the transcript tag grammar applied to the lowercased value
+// (multi-subtitles D2): a track's language is the key of its subtitles, so a value
+// no transcript can carry is refused here rather than leaving a track that can never
+// have captions. Case is preserved in storage and in the manifest. ASCII is checked
+// before lowering because Unicode lowering maps some non-ASCII runes (the Kelvin
+// sign) onto ASCII letters.
 func validLanguage(value string) bool {
-	count := utf8.RuneCountInString(value)
-	if count < 1 || count > MaximumLanguageLength {
-		return false
-	}
-	for _, r := range value {
-		letter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-		digit := r >= '0' && r <= '9'
-		if !letter && !digit && r != '-' {
+	for index := 0; index < len(value); index++ {
+		if value[index] >= utf8.RuneSelf {
 			return false
 		}
 	}
-	return true
+	return languagetag.ValidTag(strings.ToLower(value))
 }
 
 func validLabel(value string) bool {

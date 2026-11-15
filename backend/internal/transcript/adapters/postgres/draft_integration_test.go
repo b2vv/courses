@@ -201,7 +201,7 @@ func (h *draftHarness) insertDefaultTrack(t *testing.T, assetID, kind, leaf stri
 	}
 	if err := h.pool.QueryRow(h.ctx, `WITH new_id AS (SELECT gen_random_uuid() AS id)
 		INSERT INTO audio_tracks(id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
-		SELECT id,$1::text::uuid,$2,'l-'||substr(md5(id::text),1,8),'Track',true,'ready',
+		SELECT id,$1::text::uuid,$2,'zz-'||substr(md5(id::text),1,8),'Track',true,'ready',
 		       CASE WHEN $2='uploaded' THEN 'audio-'||id::text ELSE $3 END,
 		       CASE WHEN $2='uploaded' THEN 1024 ELSE 0 END,$4,$4
 		FROM new_id RETURNING source_leaf`, assetID, kind, leaf, draftNow).Scan(&leaf); err != nil {

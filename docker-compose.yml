@@ -99,6 +99,31 @@ services:
     # courses-group membership. read_only root still applies — only this volume and /tmp are writable.
     volumes: [media-data:/media]
     tmpfs: [/tmp]
+  # Multi-subtitles MS1 (M-D5): a one-shot that rewrites every Ready asset's master from the
+  # database after migrations — a migration can change track metadata the manifest renders (00030
+  # relabels legacy `und` tracks) but cannot write files. It exits; media-worker starts only after
+  # it succeeds, so a failure stops `up --wait`. Idempotent and serialised by the asset lock, so it
+  # also re-runs safely beside a running worker on a repeated `up`.
+  media-masters:
+    build: { context: ./backend, dockerfile: Dockerfile, target: worker }
+    command: ['regenerate-masters']
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-courses}
+      POSTGRES_USER: ${POSTGRES_USER:-courses}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run make env}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run make env}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      upload: { condition: service_started }
+    volumes: [media-data:/media]
+    init: true
+    logging: *logging
+    restart: 'no'
+    read_only: true
+    tmpfs: [/tmp]
   media-worker:
     <<: *runtime
     build: { context: ./backend, dockerfile: Dockerfile, target: worker }
@@ -112,6 +137,7 @@ services:
       HTTP_ADDR: ':8081'
     depends_on:
       migrate: { condition: service_completed_successfully }
+      media-masters: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       # K13: an EMPTY media-data volume is populated from the image's /media tree by whichever
       # container mounts it first; three images doing that in parallel collided on a fresh volume

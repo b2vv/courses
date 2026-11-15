@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"courses/internal/media/domain"
@@ -67,6 +68,42 @@ func (service *AudioTracks) Delete(ctx context.Context, actor domain.Actor, asse
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
 	return mediaOperationError(ctx, service.repository.DeleteAudioTrack(callCtx, actor, assetID, trackID, service.timestamp(), service.rewrite(callCtx, assetID)))
+}
+
+// MasterRegeneration is the outcome of RegenerateAllMasters: how many masters were rewritten,
+// which assets disappeared (evicted or deleted) between the listing and their rewrite, and which
+// failed.
+type MasterRegeneration struct {
+	Regenerated int
+	Skipped     []string
+	Failed      []string
+}
+
+// RegenerateAllMasters rewrites the master of every Ready asset from the database (MS1 M-D4):
+// a migration can change track metadata the manifest renders (00030 relabels legacy `und` tracks)
+// but cannot write files. Each rewrite goes through the same serialised path a rename takes, so
+// it is safe against concurrent authoring and can be repeated. One asset's failure does not stop
+// the others; the error is only for the listing itself.
+func (service *AudioTracks) RegenerateAllMasters(ctx context.Context) (MasterRegeneration, error) {
+	ids, err := service.repository.ListReadyAssetIDs(ctx)
+	if err != nil {
+		return MasterRegeneration{}, err
+	}
+	result := MasterRegeneration{Skipped: []string{}, Failed: []string{}}
+	for _, id := range ids {
+		callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
+		err := service.repository.RegenerateMaster(callCtx, id, service.rewrite(callCtx, id))
+		cancel()
+		switch {
+		case err == nil:
+			result.Regenerated++
+		case errors.Is(err, domain.ErrVideoNotFound):
+			result.Skipped = append(result.Skipped, id)
+		default:
+			result.Failed = append(result.Failed, id)
+		}
+	}
+	return result, nil
 }
 
 // rewrite regenerates the master from the Ready set the repository hands it. An
