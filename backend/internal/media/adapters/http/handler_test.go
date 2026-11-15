@@ -155,7 +155,7 @@ func (*mediaRepository) Recover(context.Context, time.Time, int) ([]mediadomain.
 	panic("unexpected Recover")
 }
 
-func (repository *mediaRepository) MintAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, now time.Time) (mediadomain.AudioTrack, error) {
+func (repository *mediaRepository) MintAudioTrack(ctx context.Context, actor mediadomain.Actor, assetID string, declaredBytes int64, originalName, language, label string, multilingual bool, expiresAt, now time.Time) (mediadomain.AudioTrack, error) {
 	if repository.mintAudioTrack != nil {
 		return repository.mintAudioTrack(ctx, actor, assetID, declaredBytes, originalName, language, label, expiresAt, now)
 	}
@@ -630,7 +630,7 @@ func mediaAPIHandler(t *testing.T, repository *mediaRepository, queue *mediaQueu
 	}
 	identityHandler := identityhttp.NewHandler(identity, nil, nil, config)
 	tickets := mediaapplication.NewTickets(repository, queue, func() time.Time { return mediaNow })
-	audio := mediaapplication.NewAudioTracks(repository, &mediaMasterWriter{}, func() time.Time { return mediaNow })
+	audio := mediaapplication.NewAudioTracks(repository, &mediaMasterWriter{}, false, func() time.Time { return mediaNow })
 	mediaHandler := mediahttp.NewHandler(tickets, audio)
 	return httpserver.NewHandler(httpserver.Options{Service: "api", Register: func(mux *http.ServeMux) {
 		mediaHandler.RegisterAdmin(mux, identityHandler.Authenticate, identityHandler.RequireSameOrigin)

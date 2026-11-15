@@ -285,3 +285,35 @@ transcript»; інші стани ASR не відрендерені й не вв
 - Повний `make integration` двічі (до і після фіксу w1): `GATE_EXIT=0`, 67 пакетів ok, 0 FAIL.
 - Не запускались для цього зрізу: `make e2e`. Наявні C06/S6 e2e очікують стару модель; їх оновлює MS3 (M3-R9).
 - Рев'ю: Codex read-only w1 — SHIP, 2 minor закрито (`_wip-ms2a-review-codex-w1.md`).
+
+## MS2b — language hint from the track, multilingual mode, `ASR_MULTILINGUAL_DEFAULT` — 2026-11-15
+
+Plan: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9), decisions MS-D4 and MS-D10 (env default and the media
+application; media HTTP is MS2c). On `ms2-3-asr-per-track`, not merged; one PR and one ordered gate together with MS2c/MS3.
+
+### What was done
+- The `Transcriber` port takes the track language and its `multilingual` from the claim snapshot. `RecognitionJob.Language`,
+  the payload's `language` and the `language` parameter of `Regenerate` were removed (MS-D4). The legacy `/draft/regenerate`
+  still validates the body but ignores the language until MS2c.
+- The whisper adapter: `multilingual` → `--multilingual`; the `und` family → no hint; otherwise the first subtag,
+  if it is in the 100 faster-whisper 1.2.1 codes; otherwise no hint plus `hint_unsupported` (tag only).
+- `transcribe.py`: `--multilingual` → `language=None, multilingual=True`.
+- `ASR_MULTILINGUAL_DEFAULT` (`platform/config`): `true`/`false`; empty = `false`; anything else → api and
+  media-worker fail to start. The value goes into the embedded track (transcode) and into the uploaded-track mint;
+  added to `.env.example` and docker-compose (api, media-worker). media-masters passes `false`: it does not create tracks.
+
+### Acceptance rows (MS2b revision)
+| Row | Status | Evidence |
+|---|---|---|
+| M2-R5 | PASS | unit `queue_test`: two tracks of one asset → two different TaskIDs |
+| M2-R6 | PASS (adapter + Process) | unit `engine_test`: `en-US`→`en`, `de`, `haw`, `und`/`und-x-original`→none, `tlh`→none + log, list = 100 codes; `recognize_test`: Process passes the claim snapshot |
+| M2-R11 | PASS | unit: payload without `trackId` → error, process not called, `MaxRetry(0)` |
+| M2-R12 | PASS (Python boundary, env, mint/embedded, claim) | `TestRealTranscribePythonModelBoundary`: the real `transcribe.py` via `python3` with a stub `faster_whisper`, kwargs `True/None`, `False/"en"`, `False/None`; ran on the host and in `golang:1.27.3-bookworm`. Config table; mint/embedded true/false. Media HTTP (PATCH/GET `multilingual`, `multilingualDefault`) — MS2c |
+| M2-R10 | NOT_TESTED | MS2c |
+
+### Gates
+- `make format-check`, `make lint`, `make test` — exit 0; the whisper tests in `golang:1.27.3-bookworm` — exit 0.
+- Full `make integration`: `GATE_EXIT=0`, 67 packages ok, 0 FAIL.
+- `make e2e` was not run (as in MS2a: C06/S6 are updated by MS3).
+- Review: Codex read-only w1 — SHIP, no findings (`_wip-ms2b-review-codex-w1.md`).
+- Not verified: inference by the real model in multilingual mode (the test stubs only the model itself).

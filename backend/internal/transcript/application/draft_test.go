@@ -154,14 +154,11 @@ func TestRegenerateEnqueues(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID, "uk"); err != nil {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID); err != nil {
 		t.Fatal(err)
 	}
 	if len(queue.jobs) != 1 {
 		t.Fatalf("jobs=%d want=1", len(queue.jobs))
-	}
-	if queue.jobs[0].Language != "uk" {
-		t.Fatalf("language=%s want=uk", queue.jobs[0].Language)
 	}
 	// Multi-audio S6: the author's Regenerate may re-recognise a draft that heard the default.
 	if !queue.jobs[0].Requested {
@@ -181,7 +178,7 @@ func TestRegenerateRunningCurrentDraftIsVisibleAndDoesNotEnqueue(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID, "uk"); !errors.Is(err, domain.ErrAlreadyRunning) {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID); !errors.Is(err, domain.ErrAlreadyRunning) {
 		t.Fatalf("err=%v want already_running", err)
 	}
 	if len(queue.jobs) != 0 {
@@ -193,7 +190,7 @@ func TestRegenerateNoAsset(t *testing.T) {
 	t.Parallel()
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), ownerActor, lessonID, "")
+	err := d.Regenerate(context.Background(), ownerActor, lessonID)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("err=%v want=not_found", err)
 	}
@@ -204,7 +201,7 @@ func TestRegenerateForbidden(t *testing.T) {
 	otherActor := domain.Actor{UserID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}
 	d := NewDrafting(&draftFakeDrafts{}, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), otherActor, lessonID, "")
+	err := d.Regenerate(context.Background(), otherActor, lessonID)
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("err=%v want=forbidden", err)
 	}
@@ -219,13 +216,13 @@ func TestRegenerateNilDuration(t *testing.T) {
 	}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, &fakeQueue{}, testClock, testLogger)
 
-	err := d.Regenerate(context.Background(), ownerActor, lessonID, "")
+	err := d.Regenerate(context.Background(), ownerActor, lessonID)
 	if !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("err=%v want=dependency_unavailable", err)
 	}
 }
 
-func TestRegenerateAutoLanguage(t *testing.T) {
+func TestRegenerateTargetsDefaultTrack(t *testing.T) {
 	t.Parallel()
 	dur := float64(60)
 	drafts := &draftFakeDrafts{
@@ -236,10 +233,10 @@ func TestRegenerateAutoLanguage(t *testing.T) {
 	queue := &fakeQueue{}
 	d := NewDrafting(drafts, &fakeCourseReader{course: ownedCourse}, queue, testClock, testLogger)
 
-	if err := d.Regenerate(context.Background(), ownerActor, lessonID, ""); err != nil {
+	if err := d.Regenerate(context.Background(), ownerActor, lessonID); err != nil {
 		t.Fatal(err)
 	}
-	if queue.jobs[0].Language != "" {
-		t.Fatalf("language=%q want empty for auto-detect", queue.jobs[0].Language)
+	if len(queue.jobs) != 1 || queue.jobs[0].TrackID != trackID {
+		t.Fatalf("jobs=%+v want default track %s", queue.jobs, trackID)
 	}
 }

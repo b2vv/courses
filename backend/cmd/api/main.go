@@ -101,6 +101,11 @@ func main() {
 		logger.Error("startup failed", "reason", err.Error())
 		os.Exit(1)
 	}
+	multilingualDefault, err := config.ASRMultilingualDefault(os.Getenv)
+	if err != nil {
+		logger.Error("startup failed", "reason", err.Error())
+		os.Exit(1)
+	}
 	dependencies, err := runtime.Open(ctx, "api", logger)
 	if err != nil {
 		logger.Error("startup failed", "reason", err.Error())
@@ -166,7 +171,7 @@ func main() {
 		mediaRepository := mediapostgres.NewRepository(dependencies.Database)
 		mediaQueue := mediaasynq.NewQueue(dependencies.Redis)
 		mediaTickets := mediaapplication.NewTickets(mediaRepository, mediaQueue, time.Now)
-		audioTracks := mediaapplication.NewAudioTracks(mediaRepository, mediaffmpeg.New("/media"), time.Now)
+		audioTracks := mediaapplication.NewAudioTracks(mediaRepository, mediaffmpeg.New("/media"), multilingualDefault, time.Now)
 		mediaHandler := mediahttp.NewHandler(mediaTickets, audioTracks)
 		imageRepository := imagepostgres.NewRepository(dependencies.Database)
 		// The storage adapter opens an existing root (os.OpenRoot does not create it); the API owns

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -94,11 +95,14 @@ func (f *fakeDrafts) LessonTrack(context.Context, string, string) (*ports.Pendin
 }
 
 type fakeTranscriber struct {
-	result ports.Recognition
-	err    error
+	result       ports.Recognition
+	err          error
+	language     domain.Language
+	multilingual bool
 }
 
-func (f *fakeTranscriber) Transcribe(context.Context, string, domain.Language) (ports.Recognition, error) {
+func (f *fakeTranscriber) Transcribe(_ context.Context, _ string, language domain.Language, multilingual bool) (ports.Recognition, error) {
+	f.language, f.multilingual = language, multilingual
 	return f.result, f.err
 }
 
@@ -437,39 +441,24 @@ func TestProcessReleasesAudioOnEngineError(t *testing.T) {
 	}
 }
 
-func TestProcessPassesLanguageHint(t *testing.T) {
+func TestProcessPassesClaimTrackSnapshot(t *testing.T) {
 	t.Parallel()
-	var passedHint domain.Language
-	transcriber := &fakeTranscriber{
-		result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 5.0},
+	for _, multilingual := range []bool{false, true} {
+		t.Run(fmt.Sprint(multilingual), func(t *testing.T) {
+			transcriber := &fakeTranscriber{result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 5}}
+			drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "de", TrackMultilingual: multilingual}}}
+			r := NewRecognize(drafts, transcriber, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
+			if _, err := r.Process(context.Background(), ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID}); err != nil {
+				t.Fatal(err)
+			}
+			if transcriber.language != "de" || transcriber.multilingual != multilingual {
+				t.Fatalf("engine received %q/%v, want claim de/%v", transcriber.language, transcriber.multilingual, multilingual)
+			}
+			if drafts.completedDraft.TrackLanguage != "de" || drafts.completedDraft.TrackMultilingual != multilingual {
+				t.Fatalf("completed draft lost claim snapshot: %+v", drafts.completedDraft)
+			}
+		})
 	}
-	original := transcriber.Transcribe
-	_ = original
-	captureTranscriber := &capturingTranscriber{
-		inner:  transcriber,
-		onCall: func(hint domain.Language) { passedHint = hint },
-	}
-	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
-	}
-	r := NewRecognize(drafts, captureTranscriber, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
-
-	r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, Language: "uk",
-	})
-	if passedHint != "uk" {
-		t.Fatalf("hint=%q want=uk", passedHint)
-	}
-}
-
-type capturingTranscriber struct {
-	inner  *fakeTranscriber
-	onCall func(domain.Language)
-}
-
-func (c *capturingTranscriber) Transcribe(ctx context.Context, path string, hint domain.Language) (ports.Recognition, error) {
-	c.onCall(hint)
-	return c.inner.Transcribe(ctx, path, hint)
 }
 
 func TestProcessNoSpeechOutcomeFlag(t *testing.T) {

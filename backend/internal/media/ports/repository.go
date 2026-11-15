@@ -67,7 +67,7 @@ type AssetRepository interface {
 	// verifying the actor may edit the asset's lesson's course (D-S5L1-3). The
 	// track begins in Created with the declared upload size and expiry.
 	MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string,
-		declaredBytes int64, originalName, language, label string,
+		declaredBytes int64, originalName, language, label string, multilingual bool,
 		expiresAt, now time.Time) (domain.AudioTrack, error)
 
 	// AppendAudioChunk mirrors AppendChunk for an uploaded audio track: locks the

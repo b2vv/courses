@@ -12,7 +12,8 @@ Contract:
 Arguments:
   --model PATH    path to the model weights directory
   --audio PATH    path to the 16 kHz mono WAV to recognise
-  --language TAG  optional BCP-47 hint; absent means auto-detect
+  --language CODE optional supported engine language code; absent means auto-detect
+  --multilingual detect language per 30 s window; overrides --language
 """
 
 import argparse
@@ -27,7 +28,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="ASR engine (faster-whisper)")
     parser.add_argument("--model", required=True, help="path to model weights")
     parser.add_argument("--audio", required=True, help="path to 16 kHz mono audio")
-    parser.add_argument("--language", default=None, help="BCP-47 language hint")
+    parser.add_argument("--language", default=None, help="engine language code")
+    parser.add_argument("--multilingual", action="store_true", help="detect language per window")
     args = parser.parse_args()
 
     try:
@@ -48,7 +50,8 @@ def main() -> None:
     t1 = time.monotonic()
     raw_segments, info = model.transcribe(
         args.audio,
-        language=args.language,
+        language=None if args.multilingual else args.language,
+        multilingual=args.multilingual,
         vad_filter=True,         # mandatory — §4.5, A01
         vad_parameters=dict(
             threshold=0.5,       # default Silero threshold, not swept

@@ -81,7 +81,7 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 	}
 	defer release()
 
-	recognition, err := r.transcriber.Transcribe(ctx, audioPath, job.Language)
+	recognition, err := r.transcriber.Transcribe(ctx, audioPath, claimed.Draft.TrackLanguage, claimed.Draft.TrackMultilingual)
 	if err != nil {
 		if ctx.Err() != nil {
 			return r.handleContextFailure(ctx, claimed, job)

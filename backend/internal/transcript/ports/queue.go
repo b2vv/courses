@@ -3,8 +3,6 @@ package ports
 import (
 	"context"
 	"time"
-
-	"courses/internal/transcript/domain"
 )
 
 type RecognitionJob struct {
@@ -12,7 +10,6 @@ type RecognitionJob struct {
 	AssetID    string
 	Generation int32
 	TrackID    string
-	Language   domain.Language
 	TaskMarker string
 
 	// Requested is true for the author's Regenerate and false for the pending sweep: only a

@@ -121,7 +121,7 @@ func (handler *DraftHandler) regenerate(w http.ResponseWriter, r *http.Request) 
 	}
 	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
-	var language domain.Language
+	// MS2c replaces this legacy request decoding; keep its validation/error codes until then.
 	if r.ContentLength > 0 {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 		decoder.DisallowUnknownFields()
@@ -135,16 +135,15 @@ func (handler *DraftHandler) regenerate(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if request.Language != nil && *request.Language != "" {
-			parsed, err := domain.NewLanguage(*request.Language)
+			_, err := domain.NewLanguage(*request.Language)
 			if err != nil {
 				writeTranscriptError(w, r, err)
 				return
 			}
-			language = parsed
 		}
 	}
 
-	err := handler.drafting.Regenerate(r.Context(), actor, r.PathValue("lessonId"), language)
+	err := handler.drafting.Regenerate(r.Context(), actor, r.PathValue("lessonId"))
 	if err != nil {
 		writeTranscriptError(w, r, err)
 		return

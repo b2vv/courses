@@ -634,7 +634,7 @@ func mapAudioTrack(
 // the same asset before inserting, mirroring video Mint's expired-upload eviction.
 func (repository *Repository) MintAudioTrack(
 	ctx context.Context, actor domain.Actor, assetID string,
-	declaredBytes int64, originalName, language, label string,
+	declaredBytes int64, originalName, language, label string, multilingual bool,
 	expiresAt, now time.Time,
 ) (domain.AudioTrack, error) {
 	tx, err := repository.pool.Begin(ctx)
@@ -660,10 +660,10 @@ func (repository *Repository) MintAudioTrack(
 			id,video_asset_id,kind,language,label,is_default,state,source_leaf,
 			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at,multilingual)
 		SELECT id,$1::text::uuid,'uploaded',$2,$3,false,'created',
-			'audio-'||id::text,$4,0,$5,$6,$7,$7,false
+			'audio-'||id::text,$4,0,$5,$6,$7,$7,$8
 		FROM new_id
 		RETURNING `+audioTrackColumns,
-		assetID, language, label, declaredBytes, originalName, expiresAt, now))
+		assetID, language, label, declaredBytes, originalName, expiresAt, now, multilingual))
 	if err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
 			return domain.AudioTrack{}, mapped

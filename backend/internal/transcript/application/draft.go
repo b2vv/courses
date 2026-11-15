@@ -91,7 +91,7 @@ func (d *Drafting) GetDraft(ctx context.Context, actor domain.Actor, lessonID st
 	}, nil
 }
 
-func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID string, language domain.Language) error {
+func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID string) error {
 	if err := domain.ValidateID(lessonID); err != nil {
 		return err
 	}
@@ -143,7 +143,6 @@ func (d *Drafting) Regenerate(ctx context.Context, actor domain.Actor, lessonID 
 		AssetID:    asset.AssetID,
 		Generation: asset.Generation,
 		TrackID:    asset.TrackID,
-		Language:   language,
 		TaskMarker: marker,
 		// The author asked: this job may replace the default track's existing draft.
 		Requested: true,

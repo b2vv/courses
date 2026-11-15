@@ -1,12 +1,17 @@
 package whisper
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -116,7 +121,7 @@ cat << 'JSON'
 JSON
 `)
 	engine := NewEngine("/bin/sh", scriptPath, "/fake/model", noopLogger())
-	recognition, err := engine.Transcribe(context.Background(), "/fake/audio.wav", "")
+	recognition, err := engine.Transcribe(context.Background(), "/fake/audio.wav", "und", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,23 +136,137 @@ JSON
 	}
 }
 
-func TestTranscribePassesLanguageHintToScript(t *testing.T) {
+func TestTranscribeDerivesHintFromTrack(t *testing.T) {
 	t.Parallel()
-	// The script echoes all its arguments so we can verify the hint arrives.
-	scriptPath := writeScript(t, `#!/bin/sh
-echo "$@" >&2
-cat << 'JSON'
-{"language":"uk","speech_seconds":1.0,"segments":[{"id":"11111111-1111-4111-8111-111111111111","start_ms":0,"end_ms":1000,"text":"тест"}]}
-JSON
+	for _, test := range []struct {
+		language     domain.Language
+		multilingual bool
+		hint         string
+		unsupported  bool
+	}{
+		{language: "en-US", hint: "en"},
+		{language: "de", hint: "de"},
+		{language: "haw", hint: "haw"},
+		{language: "und"},
+		{language: "und-x-original"},
+		{language: "tlh", unsupported: true},
+		{language: "de", multilingual: true},
+	} {
+		t.Run(string(test.language)+"/"+fmt.Sprint(test.multilingual), func(t *testing.T) {
+			scriptPath := writeScript(t, `#!/bin/sh
+printf '%s\n' "$@" >&2
+printf '%s\n' '{"language":"en","speech_seconds":2,"segments":[]}'
 `)
-	engine := NewEngine("/bin/sh", scriptPath, "/fake/model", noopLogger())
-	_, err := engine.Transcribe(context.Background(), "/fake/audio.wav", domain.Language("uk"))
+			var logs bytes.Buffer
+			engine := NewEngine("/bin/sh", scriptPath, "/fake/model", slog.New(slog.NewJSONHandler(&logs, nil)))
+			if _, err := engine.Transcribe(context.Background(), "/fake/audio.wav", test.language, test.multilingual); err != nil {
+				t.Fatal(err)
+			}
+			var args []string
+			unsupported := false
+			decoder := json.NewDecoder(&logs)
+			for decoder.More() {
+				var record struct {
+					Message string `json:"msg"`
+					Level   string `json:"level"`
+					Tag     string `json:"tag"`
+					Stderr  string `json:"stderr"`
+				}
+				if err := decoder.Decode(&record); err != nil {
+					t.Fatal(err)
+				}
+				if record.Message == "hint_unsupported" {
+					unsupported = record.Level == "WARN" && record.Tag == string(test.language)
+				}
+				if record.Stderr != "" {
+					args = strings.Fields(record.Stderr)
+				}
+			}
+			if unsupported != test.unsupported {
+				t.Fatalf("hint_unsupported=%v want %v", unsupported, test.unsupported)
+			}
+			want := []string{"--model", "/fake/model", "--audio", "/fake/audio.wav"}
+			if test.multilingual {
+				want = append(want, "--multilingual")
+			}
+			if test.hint != "" {
+				want = append(want, "--language", test.hint)
+			}
+			if !slices.Equal(args, want) {
+				t.Fatalf("argv=%q want %q", args, want)
+			}
+		})
+	}
+}
+
+func TestLanguageCodesPinnedToFasterWhisper121(t *testing.T) {
+	t.Parallel()
+	codes := strings.Fields(languageCodes)
+	if len(codes) != 100 {
+		t.Fatalf("language codes=%d want 100", len(codes))
+	}
+	seen := make(map[string]bool)
+	for _, code := range codes {
+		if seen[code] {
+			t.Fatalf("duplicate code %q", code)
+		}
+		seen[code] = true
+	}
+}
+
+// M2-R12: execute the production script, observing the actual Python model-call kwargs.
+func TestRealTranscribePythonModelBoundary(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatalf("M2-R12 requires python3: %v", err)
+	}
+	stubPath, err := filepath.Abs("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The hint is passed; the script ran and returned valid output. We cannot easily capture
-	// stderr from the engine in this test (it goes to the logger), but the fact that
-	// --language uk was added to the argv is tested by construction in Engine.Transcribe.
+	t.Setenv("PYTHONPATH", stubPath+string(os.PathListSeparator)+os.Getenv("PYTHONPATH"))
+	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
+	for _, test := range []struct {
+		name         string
+		language     domain.Language
+		multilingual bool
+		hint         *string
+	}{
+		{name: "multilingual", language: "de", multilingual: true},
+		{name: "regional", language: "en-US", hint: new("en")},
+		{name: "undetermined", language: "und"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			capture := filepath.Join(t.TempDir(), "kwargs.json")
+			t.Setenv("WHISPER_TEST_KWARGS", capture)
+			engine := NewEngine(python, "transcribe.py", "/fake/model", noopLogger())
+			if _, err := engine.Transcribe(context.Background(), "/fake/audio.wav", test.language, test.multilingual); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var kwargs map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &kwargs); err != nil {
+				t.Fatal(err)
+			}
+			var multilingual bool
+			if err := json.Unmarshal(kwargs["multilingual"], &multilingual); err != nil {
+				t.Fatal(err)
+			}
+			if multilingual != test.multilingual {
+				t.Fatalf("multilingual=%v want %v", multilingual, test.multilingual)
+			}
+			wantLanguage, err := json.Marshal(test.hint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(kwargs["language"], wantLanguage) {
+				t.Fatalf("language=%s want %s", kwargs["language"], wantLanguage)
+			}
+		})
+	}
 }
 
 func TestTranscribeReturnsContextErrorOnCancellation(t *testing.T) {
@@ -160,7 +279,7 @@ sleep 30
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := engine.Transcribe(ctx, "/fake/audio.wav", "")
+		_, err := engine.Transcribe(ctx, "/fake/audio.wav", "und", false)
 		done <- err
 	}()
 
@@ -189,7 +308,7 @@ echo "model not found" >&2
 exit 1
 `)
 	engine := NewEngine("/bin/sh", scriptPath, "/fake/model", noopLogger())
-	_, err := engine.Transcribe(context.Background(), "/fake/audio.wav", "")
+	_, err := engine.Transcribe(context.Background(), "/fake/audio.wav", "und", false)
 	if err == nil {
 		t.Fatal("non-zero exit must be an error")
 	}

@@ -18,13 +18,14 @@ import (
 // under the asset lock promote also takes, so the API and the media worker never
 // write one master concurrently.
 type AudioTracks struct {
-	repository ports.AssetRepository
-	master     ports.MasterWriter
-	now        Clock
+	repository          ports.AssetRepository
+	master              ports.MasterWriter
+	now                 Clock
+	multilingualDefault bool
 }
 
-func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter, now Clock) *AudioTracks {
-	return &AudioTracks{repository: repository, master: master, now: now}
+func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter, multilingualDefault bool, now Clock) *AudioTracks {
+	return &AudioTracks{repository: repository, master: master, now: now, multilingualDefault: multilingualDefault}
 }
 
 func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string) (domain.AudioTrack, error) {
@@ -37,7 +38,7 @@ func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Ac
 	now := service.timestamp()
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	track, err := service.repository.MintAudioTrack(callCtx, actor, assetID, declaredBytes, originalName, language, label, now.Add(ticketLifetime), now)
+	track, err := service.repository.MintAudioTrack(callCtx, actor, assetID, declaredBytes, originalName, language, label, service.multilingualDefault, now.Add(ticketLifetime), now)
 	return track, mediaOperationError(ctx, err)
 }
 

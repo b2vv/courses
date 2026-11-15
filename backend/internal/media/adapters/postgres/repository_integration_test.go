@@ -579,7 +579,7 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 		t.Fatalf("active assets=%+v", assets)
 	}
 	storage := &sweepStorage{}
-	if err := application.NewTranscode(h.repository, storage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+	if err := application.NewTranscode(h.repository, storage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 	assertSweepKeys(t, storage.calls, mediaAssetOne)
@@ -683,7 +683,7 @@ func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
 	}
 
 	failingStorage := &sweepStorage{failOn: domain.StorageHLS}
-	if err := application.NewTranscode(h.repository, failingStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); !errors.Is(err, domain.ErrDependencyUnavailable) {
+	if err := application.NewTranscode(h.repository, failingStorage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("failed purge error=%v", err)
 	}
 	if len(failingStorage.calls) != 2 || failingStorage.calls[0].Kind != domain.StorageSource || failingStorage.calls[1].Kind != domain.StorageHLS {
@@ -695,7 +695,7 @@ func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
 		t.Fatalf("retry candidates=%+v err=%v", candidates, err)
 	}
 	successfulStorage := &sweepStorage{}
-	if err := application.NewTranscode(h.repository, successfulStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+	if err := application.NewTranscode(h.repository, successfulStorage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 	assertSweepKeys(t, successfulStorage.calls, mediaAssetOne)

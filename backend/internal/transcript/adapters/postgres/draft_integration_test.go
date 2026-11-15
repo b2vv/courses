@@ -127,7 +127,7 @@ func (blockingAudio) Extract(context.Context, string, string) (string, func(), e
 
 type blockingTranscriber struct{}
 
-func (blockingTranscriber) Transcribe(ctx context.Context, _ string, _ domain.Language) (ports.Recognition, error) {
+func (blockingTranscriber) Transcribe(ctx context.Context, _ string, _ domain.Language, _ bool) (ports.Recognition, error) {
 	<-ctx.Done()
 	return ports.Recognition{}, ctx.Err()
 }

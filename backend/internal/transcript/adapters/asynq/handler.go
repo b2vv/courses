@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"courses/internal/transcript/application"
-	"courses/internal/transcript/domain"
 	"courses/internal/transcript/ports"
 	"courses/platform/observability"
 	asynqlib "github.com/hibiken/asynq"
@@ -45,7 +44,6 @@ func (handler *Handler) ProcessTask(ctx context.Context, task *asynqlib.Task) er
 		AssetID:    payload.AssetID,
 		Generation: payload.Generation,
 		TrackID:    payload.TrackID,
-		Language:   domain.Language(payload.Language),
 		TaskMarker: payload.TaskMarker,
 		Requested:  payload.Requested,
 	})

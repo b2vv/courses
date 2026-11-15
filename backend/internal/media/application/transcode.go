@@ -27,15 +27,16 @@ type TranscodeOutcome struct {
 }
 
 type Transcode struct {
-	repository ports.AssetRepository
-	storage    ports.MediaStorage
-	transcoder ports.Transcoder
-	queue      ports.TranscodingQueue
-	now        Clock
+	repository          ports.AssetRepository
+	storage             ports.MediaStorage
+	transcoder          ports.Transcoder
+	queue               ports.TranscodingQueue
+	now                 Clock
+	multilingualDefault bool
 }
 
-func NewTranscode(repository ports.AssetRepository, storage ports.MediaStorage, transcoder ports.Transcoder, queue ports.TranscodingQueue, now Clock) *Transcode {
-	return &Transcode{repository: repository, storage: storage, transcoder: transcoder, queue: queue, now: now}
+func NewTranscode(repository ports.AssetRepository, storage ports.MediaStorage, transcoder ports.Transcoder, queue ports.TranscodingQueue, multilingualDefault bool, now Clock) *Transcode {
+	return &Transcode{repository: repository, storage: storage, transcoder: transcoder, queue: queue, now: now, multilingualDefault: multilingualDefault}
 }
 
 func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (TranscodeOutcome, error) {
@@ -121,7 +122,7 @@ func (transcode *Transcode) Process(ctx context.Context, job ports.Job) (Transco
 
 	var embedded *domain.AudioTrack
 	if domain.SourceHasAudio(probe) {
-		track, err := embeddedTrack(asset.ID, transcode.timestamp())
+		track, err := embeddedTrack(asset.ID, transcode.multilingualDefault, transcode.timestamp())
 		if err != nil {
 			return TranscodeOutcome{}, err
 		}
@@ -475,7 +476,7 @@ const (
 // source carries its own audio (D3/D4). Its source leaf is the shared video
 // source ("original"), so the id can be freshly minted here without affecting any
 // storage path.
-func embeddedTrack(assetID string, now time.Time) (domain.AudioTrack, error) {
+func embeddedTrack(assetID string, multilingual bool, now time.Time) (domain.AudioTrack, error) {
 	id, err := freshUUID()
 	if err != nil {
 		return domain.AudioTrack{}, err
@@ -485,6 +486,7 @@ func embeddedTrack(assetID string, now time.Time) (domain.AudioTrack, error) {
 		VideoAssetID: assetID,
 		Kind:         domain.EmbeddedTrack,
 		Language:     embeddedTrackLanguage,
+		Multilingual: multilingual,
 		Label:        embeddedTrackLabel,
 		IsDefault:    true,
 		State:        domain.Ready,

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -26,6 +27,11 @@ const (
 	// wedge the child even without a concurrent reader.
 	stderrLimit = 64 * 1024
 )
+
+// faster-whisper 1.2.1 tokenizer._LANGUAGE_CODES, read in the asr-worker image with:
+// /opt/whisper/bin/python3 -c "from faster_whisper.tokenizer import _LANGUAGE_CODES"
+// Refresh this list when upgrading the engine.
+const languageCodes = "af am ar as az ba be bg bn bo br bs ca cs cy da de el en es et eu fa fi fo fr gl gu ha haw he hi hr ht hu hy id is it ja jw ka kk km kn ko la lb ln lo lt lv mg mi mk ml mn mr ms mt my ne nl nn no oc pa pl ps pt ro ru sa sd si sk sl sn so sq sr su sv sw ta te tg th tk tl tr tt uk ur uz vi yi yo yue zh"
 
 // Engine implements ports.Transcriber by running a Python subprocess that invokes
 // faster-whisper. Each call spawns a fresh process — the model is NOT kept resident between
@@ -66,10 +72,19 @@ type scriptSegment struct {
 	Confidence *float64 `json:"confidence,omitempty"`
 }
 
-func (engine *Engine) Transcribe(ctx context.Context, audioPath string, languageHint domain.Language) (ports.Recognition, error) {
+func (engine *Engine) Transcribe(ctx context.Context, audioPath string, trackLanguage domain.Language, multilingual bool) (ports.Recognition, error) {
 	arguments := []string{engine.script, "--model", engine.model, "--audio", audioPath}
-	if languageHint != "" {
-		arguments = append(arguments, "--language", string(languageHint))
+	if multilingual {
+		arguments = append(arguments, "--multilingual")
+	} else {
+		primary := strings.SplitN(strings.ToLower(string(trackLanguage)), "-", 2)[0]
+		switch {
+		case primary == "und": // The und family deliberately requests auto-detection.
+		case strings.Contains(" "+languageCodes+" ", " "+primary+" "):
+			arguments = append(arguments, "--language", primary)
+		default:
+			engine.logger.Warn("hint_unsupported", "tag", string(trackLanguage))
+		}
 	}
 
 	command := exec.CommandContext(ctx, engine.python, arguments...)

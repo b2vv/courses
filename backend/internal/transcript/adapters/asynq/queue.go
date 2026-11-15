@@ -35,7 +35,6 @@ func (queue *Queue) Enqueue(ctx context.Context, job ports.RecognitionJob, timeo
 		AssetID:    job.AssetID,
 		Generation: job.Generation,
 		TrackID:    job.TrackID,
-		Language:   string(job.Language),
 		TaskMarker: job.TaskMarker,
 		Requested:  job.Requested,
 	})
@@ -76,7 +75,6 @@ type taskPayload struct {
 	AssetID    string `json:"assetId"`
 	Generation int32  `json:"generation"`
 	TrackID    string `json:"trackId"`
-	Language   string `json:"language,omitempty"`
 	TaskMarker string `json:"taskMarker,omitempty"`
 	// Requested marks the author's Regenerate; an automatic job never replaces an existing
 	// draft. Tasks from before the trackId cutover are refused by decodePayload (MS-D3).

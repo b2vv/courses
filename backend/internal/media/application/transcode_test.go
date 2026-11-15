@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"syscall"
 	"testing"
 	"time"
@@ -791,7 +792,7 @@ func defaultTranscoder() *fakeTranscoder {
 }
 
 func newTranscode(repository *fakeRepository, storage *fakeStorage, transcoder *fakeTranscoder, queue *fakeQueue) *application.Transcode {
-	return application.NewTranscode(repository, storage, transcoder, queue, func() time.Time {
+	return application.NewTranscode(repository, storage, transcoder, queue, false, func() time.Time {
 		return time.Date(2026, 9, 6, 12, 0, 0, 123456789, time.UTC)
 	})
 }
@@ -806,4 +807,20 @@ func countString(values []string, want string) int {
 		}
 	}
 	return count
+}
+
+func TestProcessEmbeddedTrackCarriesMultilingualDefault(t *testing.T) {
+	t.Parallel()
+	for _, multilingual := range []bool{false, true} {
+		t.Run(fmt.Sprint(multilingual), func(t *testing.T) {
+			repository := processingRepository(domain.Queued)
+			service := application.NewTranscode(repository, defaultStorage(), defaultTranscoder(), nil, multilingual, func() time.Time { return time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC) })
+			if _, err := service.Process(context.Background(), ports.Job{AssetID: mediaAssetID, MaxRetry: 3}); err != nil {
+				t.Fatal(err)
+			}
+			if track := repository.publishedEmbedded; track == nil || track.Multilingual != multilingual {
+				t.Fatalf("embedded=%+v want multilingual=%v", track, multilingual)
+			}
+		})
+	}
 }
