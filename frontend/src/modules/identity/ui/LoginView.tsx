@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AuthenticatedUser, CredentialsInput, SessionErrorCode } from '../domain/identity';
-import { Button, Checkbox, TextField } from '../../../presentation/ui';
+import { Button, Checkbox, Link, TextField } from '../../../presentation/ui';
 
 type LoginViewProps = {
   readonly user: AuthenticatedUser | null;
@@ -129,6 +129,10 @@ export function LoginView({
           <Button type="submit" isDisabled={isPending}>
             {isPending ? t('login.submitting') : t('login.submit')}
           </Button>
+          <Link href="/password/forgot">{t('login.forgot')}</Link>
+          <p className="auth-alt">
+            {t('login.noAccount')} <Link href="/register">{t('login.register')}</Link>
+          </p>
         </form>
       )}
     </section>

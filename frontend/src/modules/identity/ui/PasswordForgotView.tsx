@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SessionErrorCode } from '../domain/identity';
-import { Button, TextField } from '../../../presentation/ui';
+import { Button, Link, TextField } from '../../../presentation/ui';
 type Props = {
   readonly isPending: boolean;
   readonly sent: boolean;
@@ -21,6 +21,9 @@ export function PasswordForgotView({ isPending, sent, errorCode, onSubmit }: Pro
       <section className="notice">
         <h1>{t('forgot.sentTitle')}</h1>
         <p>{t('forgot.sent')}</p>
+        <p className="auth-alt">
+          <Link href="/login">{t('forgot.back')}</Link>
+        </p>
       </section>
     );
   return (
@@ -46,6 +49,9 @@ export function PasswordForgotView({ isPending, sent, errorCode, onSubmit }: Pro
         <Button type="submit" isDisabled={isPending}>
           {t(isPending ? 'forgot.submitting' : 'forgot.submit')}
         </Button>
+        <p className="auth-alt">
+          {t('forgot.remembered')} <Link href="/login">{t('forgot.login')}</Link>
+        </p>
       </form>
     </section>
   );

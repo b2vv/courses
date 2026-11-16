@@ -133,3 +133,19 @@ test('shows an invalid second-factor refusal', () => {
   view({ pendingId: 'pending-login', errorCode: 'invalid_totp' });
   expect(screen.getByRole('alert').textContent).toBe('Код автентифікатора неправильний.');
 });
+
+test('AUTH-1 offers the recovery and sign-up paths on the password step only', () => {
+  view();
+  expect(screen.getByRole('link', { name: 'Забули пароль?' }).getAttribute('href')).toBe(
+    '/password/forgot',
+  );
+  expect(screen.getByRole('link', { name: 'Зареєструватися' }).getAttribute('href')).toBe(
+    '/register',
+  );
+});
+
+test('AUTH-1 hides the sign-up and recovery links on the second-factor step', () => {
+  view({ pendingId: 'pending-1', onComplete: () => undefined });
+  expect(screen.queryByRole('link', { name: 'Забули пароль?' })).toBe(null);
+  expect(screen.queryByRole('link', { name: 'Зареєструватися' })).toBe(null);
+});
