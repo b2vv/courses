@@ -1,0 +1,5806 @@
+{
+ "G0-404": {
+  "role": "guest",
+  "path": "/no-such-page-dp",
+  "variants": {
+   "phone-light": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabP-light": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabL-light": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "desk-light": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\""
+    ],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "phone-dark": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabP-dark": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabL-dark": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "desk-dark": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "text200-phone": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "pxLocked": "0/12",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1380,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "text200-desk": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "pxLocked": "1/12",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 961,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "reflow320": {
+    "status": 404,
+    "url": "/no-such-page-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Сторінку не знайдено"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 831,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   }
+  }
+ },
+ "C1": {
+  "role": "guest",
+  "path": "/",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2061,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1809,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1352,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1431,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Переглянути курси ↗\"",
+     "a \"▶ Як влаштоване навчання\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Переглянути курси ↗\"",
+     "a \"▶ Як влаштоване навчання\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Переглянути курси ↗\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2061,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1809,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1352,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1431,
+    "axe": [
+     "color-contrast(serious)x1: .hero-progress-meta"
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/",
+    "pxLocked": "0/38",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6190,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/",
+    "pxLocked": "2/38",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2544,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark.active \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Навички, які працюють у production"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2132,
+    "errors": []
+   }
+  }
+ },
+ "C2": {
+  "role": "guest",
+  "path": "/courses",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 6583,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 3465,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 2876,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 2691,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "select \"Спочатку новіЗа назвою\"",
+     "button \"Знайти\"",
+     "a \"Teach editor non-owner e2e-te-\"",
+     "a \"Детальніше: Teach editor non-o\"",
+     "a \"Teach editor owner e2e-te-mwh4\"",
+     "a \"Детальніше: Teach editor owner\"",
+     "a \"Refund e2e-refund-mwh4q4ew-eb6\"",
+     "a \"Детальніше: Refund e2e-refund-\"",
+     "a \"Конструктор уроку draft e2e-lb\"",
+     "a \"Детальніше: Конструктор уроку \"",
+     "a \"Конструктор уроку bullet e2e-l\"",
+     "a \"Детальніше: Конструктор уроку \"",
+     "a \"Конструктор уроку a11y e2e-lb-\"",
+     "a \"Детальніше: Конструктор уроку \"",
+     "a \"Конструктор уроку read e2e-lb-\"",
+     "a \"Детальніше: Конструктор уроку \"",
+     "a \"Go: фундамент надійного бекенд\"",
+     "a \"Детальніше: Go: фундамент наді\"",
+     "a \"React: доступні інтерфейси\"",
+     "a \"Детальніше: React: доступні ін\"",
+     "a \"Системний дизайн на практиці\"",
+     "a \"Детальніше: Системний дизайн н\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 6583,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 3465,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 2876,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 2691,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/courses",
+    "pxLocked": "0/121",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 16478,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/courses",
+    "pxLocked": "1/121",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 6065,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/courses",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Каталог курсів"
+    ],
+    "title": "Каталог курсів — CourseForge",
+    "height": 6719,
+    "errors": []
+   }
+  }
+ },
+ "C3-free": {
+  "role": "guest",
+  "path": "/courses/go-backend-foundations",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1523,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1230,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1195,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1273,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "button \"Записатися\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "button \"Записатися\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1523,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1230,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1195,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1273,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "pxLocked": "0/26",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 4612,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "pxLocked": "1/26",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 2123,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/courses/go-backend-foundations",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Go: фундамент надійного бекенду"
+    ],
+    "title": "Go: фундамент надійного бекенду — CourseForge",
+    "height": 1675,
+    "errors": []
+   }
+  }
+ },
+ "C3-paid": {
+  "role": "guest",
+  "path": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1554,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1223,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1245,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1352,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "a \"Почати навчання\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "a \"Почати навчання\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1554,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1223,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1245,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1352,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "pxLocked": "0/29",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 3888,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "pxLocked": "1/29",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 2165,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/courses/e2e-refund-mwh4q4ew-eb654ca6",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Refund e2e-refund-mwh4q4ew-eb654ca6"
+    ],
+    "title": "Refund e2e-refund-mwh4q4ew-eb654ca6 — CourseForge",
+    "height": 1579,
+    "errors": []
+   }
+  }
+ },
+ "C3-enrolled": {
+  "role": "student",
+  "path": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1629,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1316,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1297,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1426,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "a \"Почати навчання\"",
+     "button \"Поскаржитися на викладача\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"← Усі курси\"",
+     "a \"Почати навчання\"",
+     "button \"Поскаржитися на викладача\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1629,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1316,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1297,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1426,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "pxLocked": "0/32",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 4644,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "pxLocked": "1/32",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 2276,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/courses/e2e-lb-mwh4p19r-e661fbd3-read",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [
+     "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3"
+    ],
+    "title": "Конструктор уроку read e2e-lb-mwh4p19r-e661fbd3 — CourseForge",
+    "height": 1746,
+    "errors": []
+   }
+  }
+ },
+ "C3-404": {
+  "role": "guest",
+  "path": "/courses/no-such-course-dp",
+  "variants": {
+   "phone-light": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1099,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabP-light": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1130,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabL-light": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 874,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "desk-light": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 971,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Перейти до каталогу\"",
+     "a \"</>CourseForge\"",
+     "a \"Каталог\""
+    ],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "phone-dark": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1099,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabP-dark": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1130,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "tabL-dark": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 874,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "desk-dark": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 971,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "text200-phone": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "pxLocked": "0/17",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1587,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "text200-desk": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "pxLocked": "0/17",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1143,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   },
+   "reflow320": {
+    "status": 404,
+    "url": "/courses/no-such-course-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [
+     "a.wordmark \"</>CourseForge\" 188x38"
+    ],
+    "h1": [],
+    "title": "Курс — CourseForge",
+    "height": 1012,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 ()"
+    ]
+   }
+  }
+ },
+ "A1": {
+  "role": "guest",
+  "path": "/login",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Увійти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Увійти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/login",
+    "pxLocked": "0/18",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 1866,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/login",
+    "pxLocked": "1/18",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 1380,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/login",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Вхід у кабінет"
+    ],
+    "title": "Вхід — CourseForge",
+    "height": 840,
+    "errors": []
+   }
+  }
+ },
+ "A2": {
+  "role": "guest",
+  "path": "/register",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 791,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 919,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Зареєструватися\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Зареєструватися\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "input \"\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 791,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 919,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/register",
+    "pxLocked": "0/17",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2115,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/register",
+    "pxLocked": "1/17",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1447,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/register",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створити обліковий запис"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 953,
+    "errors": []
+   }
+  }
+ },
+ "A3": {
+  "role": "guest",
+  "path": "/verify-email",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Надіслати лист знову\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Надіслати лист знову\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Надіслати лист знову\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Надіслати лист знову\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/verify-email",
+    "pxLocked": "0/14",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1570,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/verify-email",
+    "pxLocked": "1/14",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 981,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/verify-email",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 831,
+    "errors": []
+   }
+  }
+ },
+ "A4": {
+  "role": "guest",
+  "path": "/password/forgot",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Надіслати посилання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Надіслати посилання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Надіслати посилання\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/password/forgot",
+    "pxLocked": "0/15",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1646,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/password/forgot",
+    "pxLocked": "1/15",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1137,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/password/forgot",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Скинути пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 831,
+    "errors": []
+   }
+  }
+ },
+ "A5": {
+  "role": "guest",
+  "path": "/password/reset",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Зберегти пароль\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Зберегти пароль\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "button \"Зберегти пароль\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Увійти\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 879,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/password/reset",
+    "pxLocked": "0/15",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1636,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/password/reset",
+    "pxLocked": "1/15",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1137,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/password/reset",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Створіть новий пароль"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 831,
+    "errors": []
+   }
+  }
+ },
+ "A6": {
+  "role": "student",
+  "path": "/email/change/confirm",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 931,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 931,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "pxLocked": "0/16",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1814,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "pxLocked": "1/16",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 993,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/email/change/confirm",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Підтверджуємо нову пошту"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 935,
+    "errors": []
+   }
+  }
+ },
+ "A7": {
+  "role": "student",
+  "path": "/settings/account",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1395,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1186,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1220,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1349,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Змінити пароль\"",
+     "input \"\"",
+     "button \"Змінити пошту\"",
+     "button \"Увімкнути 2FA\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "input \"\"",
+     "input \"\"",
+     "button \"Змінити пароль\"",
+     "input \"\"",
+     "button \"Змінити пошту\"",
+     "button \"Увімкнути 2FA\"",
+     "BODY",
+     "a \"До основного вмісту\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1395,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1186,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1220,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1349,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/settings/account",
+    "pxLocked": "0/25",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 3774,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/settings/account",
+    "pxLocked": "1/25",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2333,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/settings/account",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Налаштування акаунта"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1486,
+    "errors": []
+   }
+  }
+ },
+ "P1-404": {
+  "role": "student",
+  "path": "/orders/00000000-0000-4000-8000-000000000000",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 931,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Повернутися до курсу\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Повернутися до курсу\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Повернутися до курсу\"",
+     "BODY",
+     "a \"До основного вмісту\""
+    ],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 931,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "pxLocked": "0/16",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1586,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "pxLocked": "1/16",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 993,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/orders/00000000-0000-4000-8000-000000000000",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Оплата курсу"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 935,
+    "errors": [
+     "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+   }
+  }
+ },
+ "L1": {
+  "role": "student",
+  "path": "/learn",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 12149,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6389,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4594,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4617,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\"",
+     "a \"Почати навчання\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 12149,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6389,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4594,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4617,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/learn",
+    "pxLocked": "0/216",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 39098,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/learn",
+    "pxLocked": "1/216",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 12732,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/learn",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Моє навчання"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 13410,
+    "errors": []
+   }
+  }
+ },
+ "L2-outline": {
+  "role": "student",
+  "path": "/learn/e2e-lb-mwh4p19r-e661fbd3-read",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1656,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1367,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1324,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1185,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "textarea \"\"",
+     "button \"Прив’язати до поточного момент\"",
+     "a \"1.1Урок readПоточний урок\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "textarea \"\"",
+     "button \"Прив’язати до поточного момент\"",
+     "a \"1.1Урок readПоточний урок\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1656,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1367,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1324,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1185,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "pxLocked": "0/35",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 4270,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "pxLocked": "0/35",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 2710,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1828,
+    "errors": []
+   }
+  }
+ },
+ "L2-document": {
+  "role": "student",
+  "path": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1656,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1367,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1324,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1185,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "textarea \"\"",
+     "button \"Прив’язати до поточного момент\"",
+     "a \"1.1Урок readПоточний урок\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "textarea \"\"",
+     "button \"Прив’язати до поточного момент\"",
+     "a \"1.1Урок readПоточний урок\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1656,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1367,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1324,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1185,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "pxLocked": "0/35",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 4270,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "pxLocked": "0/35",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 2710,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/learn/e2e-lb-mwh4p19r-e661fbd3-read/e8253573-7b77-4a47-81cd-a8416af1021f",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1828,
+    "errors": []
+   }
+  }
+ },
+ "L2-locked": {
+  "role": "student",
+  "path": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+  "variants": {
+   "phone-light": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 979,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-light": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-light": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-light": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Купити курс\"",
+     "a \"1.1УрокПісля покупкиПоточний у\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Купити курс\"",
+     "a \"1.1УрокПісля покупкиПоточний у\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"CourseForge — головна\"",
+     "a \"Каталог\"",
+     "a \"Моє навчання\"",
+     "a \"Акаунт\"",
+     "button \"Вийти\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Купити курс\""
+    ],
+    "errors": []
+   },
+   "phone-dark": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 979,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "pxLocked": "0/26",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2670,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "pxLocked": "0/26",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1213,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/learn/e2e-refund-mwh4q4ew-eb654ca6/eb915e1e-8551-432a-9e3c-415ec90ec90a",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Урок"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1091,
+    "errors": []
+   }
+  }
+ },
+ "D0-404": {
+  "role": "admin",
+  "path": "/admin/no-such-dp",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "pxLocked": "0/19",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "pxLocked": "0/19",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/no-such-dp",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 720,
+    "errors": []
+   }
+  }
+ },
+ "D1": {
+  "role": "admin",
+  "path": "/admin",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 6989,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 6093,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 2059,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 2045,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Створити курс\"",
+     "input \"\"",
+     "button \"Знайти\"",
+     "button \"Усі\"",
+     "div \"КурсиНазваСтатусСтудентиЦінаОн\"",
+     "button \"Назва\"",
+     "button \"Студенти\"",
+     "button \"Ціна\"",
+     "button \"Оновлено\"",
+     "a \"Субтитри e2e-transcript-mwh4qf\"",
+     "a \"Редагувати курс «Субтитри e2e-\"",
+     "a \"Транскрипт e2e-transcript-mwh4\"",
+     "a \"Редагувати курс «Транскрипт e2\"",
+     "a \"Редактор e2e-transcript-mwh4qf\"",
+     "a \"Редагувати курс «Редактор e2e-\"",
+     "button \"Видалити чернетку «Редактор e2\"",
+     "a \"Teach editor non-owner e2e-te-\"",
+     "a \"Редагувати курс «Teach editor \"",
+     "a \"Переглянути курс «Teach editor\"",
+     "a \"Teach editor owner e2e-te-mwh4\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin",
+    "pxLocked": "0/177",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 22694,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin",
+    "pxLocked": "0/177",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 4412,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Курси"
+    ],
+    "title": "Адміністрування курсів — CourseForge",
+    "height": 7244,
+    "errors": []
+   }
+  }
+ },
+ "D2": {
+  "role": "admin",
+  "path": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 4613,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 3812,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 3693,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 3241,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "a \"← Усі курси\"",
+     "a \"Перегляд\"",
+     "div \"Огляд\"",
+     "input \"\"",
+     "textarea \"Run-scoped teach-editor browse\"",
+     "textarea \"A course created only for the \"",
+     "button \"Викладач Курсу⌄\"",
+     "button \"Архівувати\"",
+     "button \"Зберегти зміни\"",
+     "input \"\"",
+     "button \"Зберегти ціну\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "pxLocked": "0/105",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 12692,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "pxLocked": "0/105",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 8189,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76"
+    ],
+    "title": "Teach editor owner e2e-te-mwh4qcn8-9a1e9a76 — CourseForge",
+    "height": 4842,
+    "errors": []
+   }
+  }
+ },
+ "D3": {
+  "role": "admin",
+  "path": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1574,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1222,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1204,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1043,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Зберегти чернетку\"",
+     "button \"Опублікувати\"",
+     "button \"Редактор\"",
+     "button \"Пересунути вгору\"",
+     "button \"Пересунути вниз\"",
+     "button \"Видалити секцію\"",
+     "button \"Жирний\"",
+     "button \"Курсив\"",
+     "button \"Заголовок\"",
+     "button \"Підзаголовок\"",
+     "button \"Маркований список\"",
+     "button \"Нумерований список\"",
+     "button \"Посилання\"",
+     "div \"Текст\"",
+     "button \"ВідеоВідео уроку\"",
+     "button \"ТекстПояснення та списки\"",
+     "button \"ЗображенняІлюстрація з описом\"",
+     "button \"РядКонтент у колонках\"",
+     "button \"ЗавданняПрактика для учнів\"",
+     "BODY"
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "pxLocked": "0/49",
+    "docOverflow": 320,
+    "overflowEls": [
+     "header.lesson-editor-header \"Документ урокуРедактор урокуСтворіть уро\"",
+     "div.lesson-editor-headings \"Документ урокуРедактор урокуСтворіть уро\"",
+     "span.lesson-editor-eyebrow \"Документ уроку\"",
+     "h1#lesson-editor-heading. \"Редактор уроку\"",
+     "p.lesson-editor-intro \"Створіть урок, який хочеться читати.\"",
+     "div.lesson-editor-actions \"Зберегти чернеткуОпублікувати\"",
+     "button#react-aria2667650019-_r_2_.ui-button.ui-button--primary \"Опублікувати\"",
+     "div.lesson-editor-meta \"РедакторПереглядЗбережено · 1\""
+    ],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4396,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "pxLocked": "0/49",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2959,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 46,
+    "overflowEls": [
+     "div.lesson-editor-actions \"Зберегти чернеткуОпублікувати\"",
+     "button#react-aria2550278638-_r_2_.ui-button.ui-button--primary \"Опублікувати\""
+    ],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1932,
+    "errors": []
+   }
+  }
+ },
+ "D4": {
+  "role": "admin",
+  "path": "/admin/users",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/users",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 2586,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/users",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 2499,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/users",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 1143,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/users",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 1068,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "input \"\"",
+     "button \"Знайти\"",
+     "button \"Усі\"",
+     "button \"Усі ролі⌄\"",
+     "div \"КористувачіКористувачРольСтату\"",
+     "button \"Користувач\"",
+     "button \"Оновлено\"",
+     "button \"Заблокувати Owner e2e-te-mwh4q\"",
+     "button \"Видалити Owner e2e-te-mwh4qcn8\"",
+     "button \"Скинути пароль Owner e2e-te-mw\"",
+     "button \"Заблокувати Адміністратор Курс\"",
+     "button \"Видалити Адміністратор Курсу\"",
+     "button \"Скинути пароль Адміністратор К\"",
+     "button \"Заблокувати Викладач Курсу\"",
+     "button \"Видалити Викладач Курсу\"",
+     "button \"Скинути пароль Викладач Курсу\"",
+     "button \"Заблокувати Сторонній Глядач\"",
+     "button \"Видалити Сторонній Глядач\"",
+     "button \"Скинути пароль Сторонній Гляда\"",
+     "button \"Заблокувати Студентка Курсу\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/users",
+    "pxLocked": "0/90",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 7413,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/users",
+    "pxLocked": "0/90",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 2468,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/users",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Користувачі"
+    ],
+    "title": "Користувачі — CourseForge",
+    "height": 2785,
+    "errors": []
+   }
+  }
+ },
+ "D5": {
+  "role": "admin",
+  "path": "/admin/analytics",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 4336,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 2511,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 2520,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 2341,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Реєстрації\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Реєстрації\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "pxLocked": "0/114",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 9798,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "pxLocked": "0/114",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 8665,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/analytics",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Аналітика"
+    ],
+    "title": "Analytics — CourseForge",
+    "height": 4462,
+    "errors": []
+   }
+  }
+ },
+ "D6": {
+  "role": "admin",
+  "path": "/admin/learners",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 8033,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6265,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6248,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6602,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "input \"\"",
+     "button \"Шукати\"",
+     "button \"Усі⌄\"",
+     "a \"Enrollment en07 e2e-enrollment\"",
+     "a \"A11y e2e-discussion-mwh4nxx3-8\"",
+     "a \"A11y e2e-instructor-mwh4oofs-7\"",
+     "a \"A11y e2e-learning-mwh4owp7-da5\"",
+     "a \"Enrollment block-consume e2e-e\"",
+     "a \"Enrollment en01 e2e-enrollment\"",
+     "a \"Enrollment en04 e2e-enrollment\"",
+     "a \"Enrollment en05 e2e-enrollment\"",
+     "a \"Enrollment en07 e2e-enrollment\"",
+     "a \"Go: фундамент надійного бекенд\"",
+     "a \"Lo12 e2e-learning-mwh4owp7-da5\"",
+     "a \"Lo13 e2e-learning-mwh4owp7-da5\"",
+     "a \"React: доступні інтерфейси\"",
+     "a \"Teach editor non-owner e2e-te-\"",
+     "a \"Teach editor owner e2e-te-mwh4\"",
+     "a \"WayForPay callback\"",
+     "a \"WayForPay resume\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/learners",
+    "pxLocked": "0/204",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 21945,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/learners",
+    "pxLocked": "0/204",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 19145,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 8729,
+    "errors": []
+   }
+  }
+ },
+ "D7": {
+  "role": "admin",
+  "path": "/admin/participant-reports",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1081,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 775,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Усі\"",
+     "button \"Вирішити\"",
+     "button \"Відкликати доступ\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Усі\"",
+     "button \"Вирішити\"",
+     "button \"Відкликати доступ\"",
+     "BODY",
+     "a \"До основного вмісту\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "pxLocked": "0/39",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 3107,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "pxLocked": "0/39",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2032,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/participant-reports",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Черга скарг учасників"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1246,
+    "errors": []
+   }
+  }
+ },
+ "D8-empty": {
+  "role": "admin",
+  "path": "/admin/refunds",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Усі\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\"",
+     "a \"Скарги учасників\"",
+     "a \"Повернення\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Усі\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Курси\"",
+     "a \"Аналітика\"",
+     "a \"Учні\"",
+     "a \"Користувачі\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "pxLocked": "0/28",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2071,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "pxLocked": "0/28",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1276,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/admin/refunds",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Повернення коштів"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 755,
+    "errors": []
+   }
+  }
+ },
+ "T0": {
+  "role": "instructor",
+  "path": "/teach",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/teach",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/teach",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/teach",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/teach",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/teach",
+    "pxLocked": "0/14",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/teach",
+    "pxLocked": "0/14",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/teach",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [],
+    "title": "CourseForge — навчання через практику",
+    "height": 720,
+    "errors": []
+   }
+  }
+ },
+ "T1": {
+  "role": "instructor",
+  "path": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 844,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1024,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 768,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 900,
+    "axe": [],
+    "tab": [
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "a \"Урок owner e2e-te-mwh4qcn8-9a1\"",
+     "button \"Заблокувати\"",
+     "button \"Поскаржитися\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "a \"Урок owner e2e-te-mwh4qcn8-9a1\"",
+     "button \"Заблокувати\"",
+     "button \"Поскаржитися\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "a \"Урок owner e2e-te-mwh4qcn8-9a1\"",
+     "button \"Заблокувати\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "pxLocked": "0/32",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2370,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "pxLocked": "0/32",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1356,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Робоче місце інструктора"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 823,
+    "errors": []
+   }
+  }
+ },
+ "T2": {
+  "role": "instructor",
+  "path": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1574,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1222,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1204,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1043,
+    "axe": [],
+    "tab": [
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "button \"Зберегти чернетку\"",
+     "button \"Опублікувати\"",
+     "button \"Редактор\"",
+     "button \"Пересунути вгору\"",
+     "button \"Пересунути вниз\"",
+     "button \"Видалити секцію\"",
+     "button \"Жирний\"",
+     "button \"Курсив\"",
+     "button \"Заголовок\"",
+     "button \"Підзаголовок\"",
+     "button \"Маркований список\"",
+     "button \"Нумерований список\"",
+     "button \"Посилання\"",
+     "div \"Текст\"",
+     "button \"ВідеоВідео уроку\"",
+     "button \"ТекстПояснення та списки\"",
+     "button \"ЗображенняІлюстрація з описом\"",
+     "button \"РядКонтент у колонках\"",
+     "button \"ЗавданняПрактика для учнів\"",
+     "BODY",
+     "a \"До основного вмісту\"",
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "pxLocked": "0/44",
+    "docOverflow": 320,
+    "overflowEls": [
+     "header.lesson-editor-header \"Документ урокуРедактор урокуСтворіть уро\"",
+     "div.lesson-editor-headings \"Документ урокуРедактор урокуСтворіть уро\"",
+     "span.lesson-editor-eyebrow \"Документ уроку\"",
+     "h1#lesson-editor-heading. \"Редактор уроку\"",
+     "p.lesson-editor-intro \"Створіть урок, який хочеться читати.\"",
+     "div.lesson-editor-actions \"Зберегти чернеткуОпублікувати\"",
+     "button#react-aria3209707265-_r_2_.ui-button.ui-button--primary \"Опублікувати\"",
+     "div.lesson-editor-meta \"РедакторПереглядЗбережено · 1\""
+    ],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 4396,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "pxLocked": "0/44",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 2959,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/teach/courses/ce277022-238f-466a-9607-bdf227cf1f98/lessons/27325418-911e-40ab-a8b7-9c67e8c6dda0",
+    "docOverflow": 46,
+    "overflowEls": [
+     "div.lesson-editor-actions \"Зберегти чернеткуОпублікувати\"",
+     "button#react-aria7611854931-_r_2_.ui-button.ui-button--primary \"Опублікувати\""
+    ],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Редактор уроку"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 1932,
+    "errors": []
+   }
+  }
+ },
+ "T3": {
+  "role": "instructor",
+  "path": "/teach/learners",
+  "variants": {
+   "phone-dark": {
+    "status": 200,
+    "url": "/teach/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 6920,
+    "axe": [],
+    "errors": []
+   },
+   "tabP-dark": {
+    "status": 200,
+    "url": "/teach/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 5322,
+    "axe": [],
+    "errors": []
+   },
+   "tabL-dark": {
+    "status": 200,
+    "url": "/teach/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 5306,
+    "axe": [],
+    "errors": []
+   },
+   "desk-dark": {
+    "status": 200,
+    "url": "/teach/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 5588,
+    "axe": [],
+    "tab": [
+     "a \"Модерація\"",
+     "a \"Учні\"",
+     "a \"← На клієнт\"",
+     "button \"UA\"",
+     "button \"EN\"",
+     "button \"Вийти\"",
+     "input \"\"",
+     "button \"Шукати\"",
+     "button \"Усі⌄\"",
+     "a \"Enrollment en07 e2e-enrollment\"",
+     "a \"A11y e2e-discussion-mwh4nxx3-8\"",
+     "a \"A11y e2e-instructor-mwh4oofs-7\"",
+     "a \"A11y e2e-learning-mwh4owp7-da5\"",
+     "a \"Enrollment block-consume e2e-e\"",
+     "a \"Enrollment en01 e2e-enrollment\"",
+     "a \"Enrollment en04 e2e-enrollment\"",
+     "a \"Enrollment en05 e2e-enrollment\"",
+     "a \"Enrollment en07 e2e-enrollment\"",
+     "a \"Go: фундамент надійного бекенд\"",
+     "a \"Lo12 e2e-learning-mwh4owp7-da5\"",
+     "a \"Lo13 e2e-learning-mwh4owp7-da5\"",
+     "a \"React: доступні інтерфейси\"",
+     "a \"Teach editor owner e2e-te-mwh4\"",
+     "a \"Відхилення e2e-instructor-mwh4\"",
+     "a \"Конструктор уроку a11y e2e-lb-\"",
+     "a \"Конструктор уроку bullet e2e-l\"",
+     "a \"Конструктор уроку draft e2e-lb\"",
+     "a \"Конструктор уроку read e2e-lb-\"",
+     "a \"Модерація e2e-discussion-mwh4n\"",
+     "a \"Обговорення e2e-discussion-mwh\""
+    ],
+    "errors": []
+   },
+   "text200-phone": {
+    "status": 200,
+    "url": "/teach/learners",
+    "pxLocked": "0/171",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 18869,
+    "errors": []
+   },
+   "text200-desk": {
+    "status": 200,
+    "url": "/teach/learners",
+    "pxLocked": "0/171",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 16288,
+    "errors": []
+   },
+   "reflow320": {
+    "status": 200,
+    "url": "/teach/learners",
+    "docOverflow": 0,
+    "overflowEls": [],
+    "clipped": [],
+    "small": [],
+    "h1": [
+     "Учні"
+    ],
+    "title": "CourseForge — навчання через практику",
+    "height": 7458,
+    "errors": []
+   }
+  }
+ }
+}
