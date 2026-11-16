@@ -578,6 +578,14 @@ export const en = {
         },
       },
       languageTabs: {
+        chooseHeading: 'Confirm the transcript language',
+        languagePlaceholder: 'Choose a language',
+        chooseLanguage: 'Track language',
+        attachHint: 'To attach an existing transcript, rename the track in Audio tracks',
+        languageRequired: 'Choose a language before saving.',
+        saveLanguage: 'Rename track and save',
+        noLanguages:
+          'No languages are available. Rename the track in Audio tracks to attach an existing transcript.',
         label: 'Transcript languages',
         loadFailed: 'Could not load the transcript languages — reload the page.',
         unknown: 'Unknown language',
@@ -598,6 +606,11 @@ export const en = {
         text: 'Line {{line}} text',
         documents: 'Line {{line}} materials',
         recovery: {
+          resolveFirst: 'Restore or discard the unsaved changes first',
+          detachedLanguage: 'Unsaved lines from another tab (language: {{language}})',
+          detachedUnknown: 'Unsaved lines from another tab (language unknown)',
+          legacyLanguage: 'Unsaved lines from before tabs (language: {{language}})',
+          legacyUnknown: 'Unsaved lines from before tabs (language unknown)',
           heading: 'Unsaved changes',
           staleHeading: 'Unsaved changes over text that has moved on',
           description: 'Changes you never saved are still on this device. Restore them here?',
@@ -618,7 +631,9 @@ export const en = {
         errors: {
           track_verification_failed: 'Could not verify the track — try again.',
           track_changed: 'The track changed or was removed. Reload the tracks and try again.',
-          track_language_required: "Set the track's language in Audio tracks first",
+          track_rename_failed: 'Could not rename the track — try again.',
+          duplicate_language: 'A track in that language already exists.',
+          language_cancelled: 'Language not changed; your lines are still here.',
           replacement_cancelled: 'Replacement cancelled. Your lines are still here.',
 
           invalid_request: 'Check the line times and text.',

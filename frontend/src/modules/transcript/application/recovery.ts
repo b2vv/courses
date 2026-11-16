@@ -27,11 +27,22 @@ export type TranscriptDraftLine = {
   readonly documentIds: readonly string[];
 };
 
+export type AcceptedTranscriptSource = {
+  readonly key: string;
+  readonly capturedAt: number;
+};
+
+export const maximumAcceptedTranscriptSources = 8;
+
+/** A captured editor retains cleanup ownership of the detached version it restored. */
 export type TranscriptSnapshot = {
+  readonly acceptedSource?: readonly AcceptedTranscriptSource[];
   readonly key: string;
   readonly capturedAt: number;
   /** The editor language at capture time. Older snapshots may omit this field. */
   readonly language?: string;
+  /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
+  readonly baseLanguage?: string;
   /**
    * The server token the edits were made against. `undefined` is a real value: it means the
    * lesson had no transcript when the author started typing, which is exactly what the write
@@ -48,8 +59,11 @@ export type TranscriptSnapshot = {
 };
 
 export type TranscriptBaseline = {
+  readonly acceptedSource?: readonly AcceptedTranscriptSource[] | undefined;
   /** The editor language used for newly captured snapshots. */
   readonly language?: string;
+  /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
+  readonly baseLanguage?: string;
   readonly expectedUpdatedAt: string | undefined;
   /** The current ASR draft generation, when the editor's lines came from a draft. */
   readonly draftUpdatedAt?: string;
@@ -180,4 +194,77 @@ export function transcriptHistoryKey(parts: {
   readonly instanceId?: string;
 }): string {
   return `${parts.userId}:${parts.lessonId}${parts.instanceId ? `:${parts.instanceId}` : ''}`;
+}
+
+/** Current product tab identities, independent of media-module types. Empty means one editor. */
+export type TranscriptRecoveryTab = {
+  readonly instanceId: string;
+  readonly language: string;
+  readonly isDefault: boolean;
+};
+
+export type DetachedTranscriptSnapshot = {
+  readonly instanceId: string;
+  readonly legacy: boolean;
+  readonly snapshot: TranscriptSnapshot;
+};
+
+export function isLessonHistoryKey(key: string, lessonKey: string): boolean {
+  return key === lessonKey || key.startsWith(`${lessonKey}:`);
+}
+
+/** Read-only placement: never migrate or write a snapshot under another tab's key. */
+export function detachedTranscriptSnapshots(
+  lessonKey: string,
+  keys: readonly string[],
+  snapshots: readonly TranscriptSnapshot[],
+  tabs: readonly TranscriptRecoveryTab[],
+): readonly DetachedTranscriptSnapshot[] {
+  const storedKeys = new Set(keys.filter((key) => isLessonHistoryKey(key, lessonKey)));
+  const ownKeys = new Set(
+    tabs.length === 0 ? [lessonKey] : tabs.map((tab) => `${lessonKey}:${tab.instanceId}`),
+  );
+  const fallback = tabs.find((tab) => tab.isDefault) ?? tabs[0];
+  return snapshots
+    .filter((snapshot) => storedKeys.has(snapshot.key) && !ownKeys.has(snapshot.key))
+    .sort((a, b) => b.capturedAt - a.capturedAt || a.key.localeCompare(b.key))
+    .map((snapshot) => {
+      const matches = tabs.filter(
+        (tab) => tab.language.toLowerCase() === snapshot.language?.toLowerCase(),
+      );
+      // Construction excludes a track and orphan with the same language; prefer the track
+      // defensively if a caller supplies both.
+      const target = matches.find((tab) => tab.instanceId.startsWith('track:')) ?? matches[0];
+      return {
+        instanceId: (target ?? fallback)?.instanceId ?? '',
+        legacy: snapshot.key === lessonKey,
+        snapshot,
+      };
+    });
+}
+
+/** A Save may retire only the exact detached copy it accepted, while no mounted tab owns it. */
+export async function clearAcceptedTranscriptSnapshot(
+  store: TranscriptHistoryStore,
+  accepted: TranscriptSnapshot | AcceptedTranscriptSource,
+  isOwned: () => boolean,
+): Promise<void> {
+  try {
+    const stored = await store.read(accepted.key);
+    if (
+      !isOwned() &&
+      stored !== null &&
+      stored.key === accepted.key &&
+      stored.capturedAt === accepted.capturedAt &&
+      (!('lines' in accepted) ||
+        (stored.language === accepted.language &&
+          stored.baseLanguage === accepted.baseLanguage &&
+          stored.expectedUpdatedAt === accepted.expectedUpdatedAt &&
+          stored.draftUpdatedAt === accepted.draftUpdatedAt &&
+          sameLines(stored.lines, accepted.lines)))
+    )
+      await store.clearIfVersion(accepted.key, accepted.capturedAt);
+  } catch {
+    // A failed read is not permission to delete; atomic cleanup preserves intervening captures.
+  }
 }

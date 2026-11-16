@@ -32,3 +32,5 @@ export type { CourseEditorDrafts, LessonDraftFieldActions } from './ui/LessonDra
 export type { TranscriptDraftOffer } from './ui/transcript-draft-offer';
 export { idleCaptureMs, useTranscriptRecovery } from './ui/use-transcript-recovery';
 export type { TranscriptRecovery, TranscriptRecoveryOptions } from './ui/use-transcript-recovery';
+
+export { useDetachedTranscriptRecovery } from './ui/use-detached-transcript-recovery';

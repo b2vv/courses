@@ -13,6 +13,8 @@ export interface TranscriptHistoryStore {
   read(key: string): Promise<TranscriptSnapshot | null>;
   write(snapshot: TranscriptSnapshot): Promise<void>;
   clear(key: string): Promise<void>;
+  /** Atomically delete only the captured version; newer captures must survive. */
+  clearIfVersion(key: string, capturedAt: number): Promise<boolean>;
   /**
    * Every key held, so that a change of viewer can sweep what is no longer theirs. The store
    * returns keys and nothing else: which of them are foreign is a decision, and it lives in

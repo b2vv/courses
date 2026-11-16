@@ -585,6 +585,14 @@ export const uk = {
         },
       },
       languageTabs: {
+        chooseHeading: 'Підтвердьте мову транскрипту',
+        languagePlaceholder: 'Оберіть мову',
+        chooseLanguage: 'Мова доріжки',
+        attachHint: "Щоб прив'язати наявний транскрипт, перейменуйте доріжку в Audio tracks",
+        languageRequired: 'Оберіть мову перед збереженням.',
+        saveLanguage: 'Перейменувати доріжку й зберегти',
+        noLanguages:
+          'Немає доступних мов. Перейменуйте доріжку в Audio tracks, щоб прив’язати наявний транскрипт.',
         label: 'Мови транскрипту',
         loadFailed: 'Не вдалося завантажити мови транскрипту — оновіть сторінку.',
         unknown: 'Невідома мова',
@@ -607,6 +615,11 @@ export const uk = {
         saved: 'Транскрипт збережено.',
         empty: 'Реплік ще немає.',
         recovery: {
+          resolveFirst: 'Спершу відновіть або відкиньте незбережені зміни',
+          detachedLanguage: 'Незбережені рядки з іншої вкладки (мова: {{language}})',
+          detachedUnknown: 'Незбережені рядки з іншої вкладки (мова невідома)',
+          legacyLanguage: 'Незбережені рядки до появи вкладок (мова: {{language}})',
+          legacyUnknown: 'Незбережені рядки до появи вкладок (мова невідома)',
           heading: 'Незбережені зміни',
           staleHeading: 'Незбережені зміни поверх застарілого тексту',
           description:
@@ -625,7 +638,9 @@ export const uk = {
         errors: {
           track_verification_failed: 'Не вдалося перевірити доріжку — спробуйте ще',
           track_changed: 'Доріжку змінено або видалено. Оновіть доріжки й спробуйте ще.',
-          track_language_required: 'Спершу вкажіть мову доріжки в Audio tracks',
+          track_rename_failed: 'Не вдалося перейменувати доріжку — спробуйте ще.',
+          duplicate_language: 'Доріжка цією мовою вже існує.',
+          language_cancelled: 'Мову не змінено; ваші рядки залишилися тут.',
           replacement_cancelled: 'Заміну скасовано. Ваші рядки залишилися тут.',
 
           invalid_request: 'Перевірте часи й текст реплік.',
