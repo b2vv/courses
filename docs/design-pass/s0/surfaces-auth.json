@@ -1,0 +1,9 @@
+[
+ ["A1","guest","/login","client"],
+ ["A2","guest","/register","client"],
+ ["A2-taken","guest","/register","client",[{"fill":["Ім’я","Дизайн Прохід"]},{"fill":["Електронна пошта","student@courseforge.local"]},{"fill":["Пароль","Secretpass123!"]},{"click":"Зареєструватися"},{"wait":"Ця пошта вже зареєстрована."}]],
+ ["A4","guest","/password/forgot","client"],
+ ["A4-sent","guest","/password/forgot","client",[{"fill":["Електронна пошта","nobody-dp-{v}@example.invalid"]},{"click":"Надіслати посилання"},{"wait":"Перевірте пошту"}]],
+ ["A5-notoken","guest","/password/reset","client"],
+ ["A5-badtoken","guest","/password/reset?token=dp-invalid-token","client",[{"fill":["Новий пароль","Secretpass123!"]},{"click":"Зберегти пароль"},{"wait":"Посилання не працює"}]]
+]
