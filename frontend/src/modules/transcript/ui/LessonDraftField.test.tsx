@@ -18,6 +18,8 @@ function draftActions(overrides: Partial<LessonDraftFieldActions> = {}): LessonD
 function draft(state: LessonDraft['state'], overrides: Partial<LessonDraft> = {}): LessonDraft {
   return {
     lessonId,
+    trackLanguage: 'uk',
+    trackMultilingual: false,
     trackId: state === null ? null : '60000000-0000-4000-8000-000000000001',
     state,
     language: null,
@@ -165,7 +167,7 @@ describe('lesson draft field', () => {
     renderField(draft('ready', { stale: true, segments: segments(1), language: 'uk' }));
     expect(
       screen.getByText(
-        'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
+        'The draft was recognized for another track language or mode — press Regenerate',
       ),
     ).toBeTruthy();
   });
@@ -174,7 +176,7 @@ describe('lesson draft field', () => {
     renderField(draft('ready', { stale: false, segments: segments(1), language: 'uk' }));
     expect(
       screen.queryByText(
-        'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
+        'The draft was recognized for another track language or mode — press Regenerate',
       ),
     ).toBeNull();
   });

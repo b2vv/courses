@@ -351,3 +351,80 @@ Plan: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9), MS-D5, MS-D10 (HTTP), phase 
   (`go test -tags=integration -run ^TestTranscriptReadAgainstPostgreSQL$`); its run inside the full integration gate is not confirmed.
 - `make e2e` was not run: the ASR specs expect the old URLs; MS3 updates them (M3-R9).
 - Review: Codex read-only w1 — SHIP, 1 Minor closed (`_wip-ms2c-review-codex-w1.md`).
+
+## MS3a — data and language tabs in the lesson editor — checkpoint 2026-11-16
+
+Plan: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9, `_wip-ms23-plan-critique-{1..9}.md`), MS-D6, MS-D7, MS-D10 (frontend),
+on `ms2-3-asr-per-track` @ `a985543`. Owner go-ahead: "Починай", 2026-11-16 (chat, Courses 1).
+
+### Pre-code checkpoint
+- **Scope / acceptance (full).** Rows M3-R1, M3-R2, M3-R3, M3-R5, M3-R7, M3-R10, M3-R14, M3-R15 at unit level, and the save-path parts
+  of M3-R11 (new segment ids on every PUT) and M3-R13 (token choice, branches a–d). Their e2e parts are MS3c. Non-goals: the player and panel
+  (MS4), the UX fixes from the editor review (owner, 2026-11-15: at the end).
+- **Decision (2026-11-16, Courses 1): what MS3a leaves to MS3b.** The plan's split names only "data and tabs" / "`und` flow and recovery".
+  MS3a therefore excludes M3-R4 (the `und` confirm dialog, PATCH → PUT), M3-R6 / M3-R12 (detached snapshots, flush on unmount) and the
+  `baseLanguage` half of M3-R13. Until MS3b, inside the one PR: an `und` tab loads its draft, but Save is refused with a message, so 0 PUT
+  with `language=und`. Recovery keys are already per tab (MS-D9 key), so a legacy `user:lesson` snapshot is not offered between MS3a and MS3b.
+  Check: unit "und tab Save → 0 PUT"; MS3b reopens both.
+- **Grilling / decisions.** None open. O7 and O8 hold. The current "stale draft = pending recognition, wait 15 min" poll in
+  `admin-draft-queries.ts` contradicts O7 and is removed (M3-R5).
+- **Dependencies / writers.** MS2c committed (`a985543`); the HTTP drafts, inventory and media `multilingual` exist in the generated
+  client. Writer: Codex (implementation runs), Courses 1 (gates, browser, commit). Peer sessions share the working tree: only files of this
+  slice are touched.
+- **Scoped impact.** `modules/admin/ui/CourseEditorView.tsx` (mount point of the field), new tabs component under `modules/admin/ui`;
+  `modules/transcript/{domain,adapters,application,ui}` (`TranscriptEditor`, `LessonDraftField`, `LessonTranscriptField`, recovery key);
+  `modules/media/{adapters,ui}` (`LessonAudioTracksField`, rename/mint); `app/composition/{admin-draft-queries,admin-audio-queries}.ts`;
+  `routes/admin.courses.$courseId.tsx` (wiring). Existing e2e (`transcript.spec`, `asr.spec`, `media*.spec`) select by role. Hidden panels
+  use `display:none`, so they leave the accessibility tree and keep strict-mode selectors unique; checked in MS3c by the full e2e run.
+- **Plan critique / defense.** Covered by the whole-plan critique r9 ACCEPTED; MS3a adds no contract. Post-code: Codex read-only review
+  (`review_mode=independent_subagent` → Codex runtime, per owner memory 26.10).
+- **Admission: READY** (owner go-ahead 2026-11-16; no open required question).
+
+### What was done (Codex runs 1–2, Courses 1 fixes)
+- Run 1 (`_wip-ms3a-run1.md`): the drafts list per lesson replaces the `drafts[0]` bridge; the inventory adapter (strict schema);
+  pending markers keyed `lessonId:trackId`; the stale-draft wait (`awaitingReplacement`) removed (O7); an audio-track PATCH invalidates
+  the lesson's drafts; the pure guard `draftLoadable(draft, track)`; the "Multiple languages" switch in the new-track form
+  (initial `multilingualDefault`) and on each track row (PATCH with the full body).
+- Run 2 (`_wip-ms3a-run2.md`): `LessonLanguageTabs` (`modules/admin/ui`). One tab per ready track of the latest Ready asset, plus
+  orphans; the no-Ready fallback is the old single editor. The editor is keyed by tab identity; recovery keys are per tab; the
+  guard text is shown instead of Load. Save re-reads the tracks and inventory directly, with the token rules of MS-D6 and new ids
+  on every PUT. The interim `und` rule: Save refused, 0 PUT.
+- **Courses 1, browser defect 1 (2026-11-16):** the tab set was computed from `tracks.data ?? []` while the tracks were still
+  loading. A transcript in a track's language showed as an orphan, React Aria selected that orphan tab and kept it after the tracks
+  arrived, and its editor mounted under the orphan's recovery key. Seen live: the "Ukrainian" orphan was selected instead of the
+  default track. Fix: tabs render only when both lists are loaded; a failed read shows an alert. Two unit tests were added.
+- **Courses 1, browser defect 2:** the row switch and the new-track switch had the same accessible name "Multiple languages". The
+  row switch is now named per track, like Make default and Delete ("Multiple languages in track Original (Undetermined)").
+
+### design-pass (browser, Kiri stack rebuilt from the branch, migrate `applied: 1` = 00031)
+Fixture: course "Субтитри e2e-transcript-…" (lesson `7539aed1`): one `und` default track with a `no_speech` draft, plus an orphan
+`uk` transcript.
+| Check | Result | Evidence |
+|---|---|---|
+| Tabs and order (M3-R1) | PASS | "Unknown language · Default" selected first, then "Ukrainian"; after fix 1 |
+| Unique ids, inert panels, names (M3-R7) | PASS | `querySelectorAll('[id]')` → 0 duplicates; inactive panel `inert` + `display:none`; `aria-labelledby` → active tab |
+| 1440 / 1024 / 768 / 390 | PASS | `scrollWidth` ≤ viewport at each width; tabs 44 px high, stacked at 390 |
+| 320 px and 200 % text | PASS | 0 elements of the tabs/panel past the viewport; tabs 304×188 / 193×88 |
+| Keyboard | PASS | ArrowRight selects "Ukrainian", 3 px focus outline (`:focus-visible`); Tab enters the active panel ("Line 1 start, ms") |
+| `und` tab Save (interim rule) | PASS | line typed → "Set the track's language in Audio tracks first", 0 non-GET requests, line kept |
+| Orphan Save (M3-R2/R10 orphan branch) | PASS | requests: GET inventory → PUT transcript → refetch; "Transcript saved."; text restored afterwards |
+| Row switch (M3-R14) | PASS | PATCH body `{"language":"und","label":"Original","multilingual":false/true}` → refetch of audio-tracks AND drafts (M3-R15 invalidation); restored to `false` (DB checked) |
+| Two track tabs, Load guard on a ready draft, rename flows | NOT_TESTED in browser | need a second (dub) track; unit-tested here, e2e in MS3c (M3-R8, R11, R15) |
+
+The browser evidence above is of the revision before the review-w1 fixes. Those fixes change only the refresh-failure and
+post-confirmation paths, not the rendered tabs, and are covered by unit tests (below); they were not re-walked in the browser.
+
+### Review
+- Codex read-only w1 — **BLOCK, 2 Major**, both in `LessonLanguageTabs.tsx`:
+  1. My fix for browser defect 1 unmounted every editor when a background refresh of the tracks or inventory failed, losing
+     unsaved lines. Now the alert sits above the tabs while cached lists exist. Test: "a failed background refresh keeps the editors…".
+  2. A track renamed or deleted while the replace dialog was open still got `PUT language=<new>` (M3-R10). Now `trackMatches` is
+     re-checked after confirmation, and the confirmed token is kept. Test: "a track renamed while the replace dialog is open sends
+     zero PUT". Mutation-checked: without the re-check the test fails (26/27).
+- Codex read-only w2 — **SHIP, no findings** (`_wip-ms3a-review-codex-w2.md`).
+
+### Gates (final MS3a revision)
+- Frontend: `oxfmt --check`, `tsc --noEmit`, `npm run lint` (oxlint + architecture check), `npm test` (**1047 passed, 0 skipped**)
+  — all exit 0.
+- Not run for this slice: `make integration` (no backend change since `a985543`, where it was green); `make e2e` (ASR specs expect
+  the pre-MS2 URLs, MS3c updates them); the full ordered `make check` runs once on the final MS3 commit.

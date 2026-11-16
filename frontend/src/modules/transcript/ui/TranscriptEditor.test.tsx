@@ -292,19 +292,12 @@ test('a recovery snapshot restores its language after a reload', async () => {
   expect(savedLanguage).toBe('en');
 });
 
-test('a draft in another language is explained and cannot replace a saved transcript', () => {
+test('draft offer loading no longer applies the obsolete language-mismatch branch', () => {
   editor(async () => null, {
     hasSavedTranscript: true,
     draftOffer: { segments: draftSegments, language: 'en', updatedAt: 'T1' },
   });
-
-  expect(
-    screen.getByText(
-      'Чернетка мовою en, а збережений транскрипт — мовою uk. Перегенеруйте чернетку мовою uk.',
-    ),
-  ).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Завантажити чернетку' })).toBeNull();
-  expect((screen.getByLabelText('Текст репліки 1') as HTMLTextAreaElement).value).toBe('Перша');
+  expect(screen.getByRole('button', { name: 'Завантажити чернетку' })).toBeTruthy();
 });
 
 test('a draft language is accepted when there is no saved transcript', async () => {

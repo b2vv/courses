@@ -172,6 +172,8 @@ describe('course editor', () => {
     } satisfies CourseTree;
     const readyDraft: LessonDraft = {
       lessonId: firstLessonId,
+      trackLanguage: 'uk',
+      trackMultilingual: false,
       trackId: '60000000-0000-4000-8000-000000000001',
       state: 'ready',
       language: 'uk',

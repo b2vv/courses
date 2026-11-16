@@ -121,10 +121,19 @@ describe('audio track API repository', () => {
 
   test('rename parses and retains multilingual in its shared track response', async () => {
     const response = { ...wireTrack, multilingual: true };
-    server.use(http.patch(`${api}/${trackId}`, () => HttpResponse.json(response)));
-    expect(await createApiAudioTrackRepository().rename(videoId, trackId, 'en', 'English')).toEqual(
-      { ok: true, value: response },
+    server.use(
+      http.patch(`${api}/${trackId}`, async ({ request }) => {
+        expect(await request.json()).toEqual({
+          language: 'en',
+          label: 'English',
+          multilingual: true,
+        });
+        return HttpResponse.json(response);
+      }),
     );
+    expect(
+      await createApiAudioTrackRepository().rename(videoId, trackId, 'en', 'English', true),
+    ).toEqual({ ok: true, value: response });
   });
 
   test('mints a ticket only for the derived audio upload path', async () => {
@@ -142,6 +151,28 @@ describe('audio track API repository', () => {
       error: { code: 'invalid_response' },
     });
   });
+
+  test.each([false, true])(
+    'mint sends explicit multilingual=%s through the generated client',
+    async (multilingual) => {
+      const input = {
+        declaredBytes: 6,
+        originalName: 'dub.m4a',
+        language: 'en',
+        label: 'Dub',
+        multilingual,
+      };
+      server.use(
+        http.post(api, async ({ request }) => {
+          expect(await request.json()).toEqual(input);
+          return HttpResponse.json(ticket, { status: 201 });
+        }),
+      );
+      expect(await createAudioTracks(createApiAudioTrackRepository()).mint(videoId, input)).toEqual(
+        { ok: true, value: ticket },
+      );
+    },
+  );
 
   test.each<{ name: string; status: number; code: string; expected: AudioTrackErrorCode }>([
     {
@@ -163,7 +194,7 @@ describe('audio track API repository', () => {
     server.use(
       http.patch(`${api}/${trackId}`, () => HttpResponse.json(envelope(code), { status })),
     );
-    expect(await tracks.rename(videoId, trackId, 'en', 'English')).toEqual({
+    expect(await tracks.rename(videoId, trackId, 'en', 'English', true)).toEqual({
       ok: false,
       error: { code: expected },
     });
@@ -182,8 +213,8 @@ describe('audio track API repository', () => {
   test('refuses invalid input before any request (msw would fail an unhandled call)', async () => {
     const tracks = createAudioTracks(createApiAudioTrackRepository());
     const invalid = { ok: false, error: { code: 'invalid_request' } };
-    expect(await tracks.rename(videoId, trackId, 'en us', 'English')).toEqual(invalid);
-    expect(await tracks.rename(videoId, trackId, 'en', 'Say "hi"')).toEqual(invalid);
+    expect(await tracks.rename(videoId, trackId, 'en us', 'English', false)).toEqual(invalid);
+    expect(await tracks.rename(videoId, trackId, 'en', 'Say "hi"', false)).toEqual(invalid);
     expect(
       await tracks.mint(videoId, {
         declaredBytes: 500 * 1024 * 1024 + 1,

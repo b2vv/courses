@@ -272,21 +272,8 @@ function createTestRouter(
           grant: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
         }),
         drafts: createDraftQueries({
-          getDraft: async () => ({
-            ok: true,
-            value: {
-              lessonId: '',
-              trackId: null,
-              state: null,
-              language: null,
-              failure: null,
-              stale: false,
-              updatedAt: null,
-              assetId: null,
-              generation: null,
-              segments: [],
-            },
-          }),
+          listDrafts: async () => ({ ok: true, value: [] }),
+          listTranscripts: async () => ({ ok: true, value: [] }),
           regenerate: async () => ({ ok: true, value: undefined }),
         }),
         stats: createAdminStatsQueries({

@@ -132,10 +132,10 @@ export function createApiAudioTrackRepository(
         signal,
       );
     },
-    rename(videoId, trackId, language, label, signal) {
+    rename(videoId, trackId, language, label, multilingual, signal) {
       return request<AudioTrack>(
         'admin.audioTracks.rename',
-        (init) => renameAdminAudioTrack(videoId, trackId, { language, label }, init),
+        (init) => renameAdminAudioTrack(videoId, trackId, { language, label, multilingual }, init),
         200,
         (raw) => track(raw, { videoId, trackId }),
         signal,

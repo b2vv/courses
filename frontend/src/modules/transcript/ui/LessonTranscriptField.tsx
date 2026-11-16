@@ -15,7 +15,10 @@ export type CourseEditorTranscripts = {
    * needs one of them. */
   /** A real hook, named as one: it is called during this component's render, and calling it
    * anything else would hide that from the rules that check hook usage. */
-  readonly useLessonTranscript: (lessonId: string) => {
+  readonly useLessonTranscript: (
+    lessonId: string,
+    language?: string,
+  ) => {
     readonly data: LessonTranscript | undefined;
     readonly isLoading: boolean;
   };
@@ -43,6 +46,9 @@ export type CourseEditorTranscripts = {
 
 type LessonTranscriptFieldProps = CourseEditorTranscripts & {
   readonly lessonId: string;
+  readonly instanceId?: string;
+  readonly fixedLanguage?: string;
+  readonly editorSave?: import('./TranscriptEditor').TranscriptEditorActions['save'];
   /** An ASR draft loaded for this lesson, if the author asked for one — see `TranscriptEditor`. */
   readonly draftOffer?: TranscriptDraftOffer;
   readonly draftUpdatedAt?: string;
@@ -52,6 +58,9 @@ type LessonTranscriptFieldProps = CourseEditorTranscripts & {
 
 export function LessonTranscriptField({
   lessonId,
+  instanceId = '',
+  fixedLanguage,
+  editorSave,
   useLessonTranscript,
   documents,
   history,
@@ -61,7 +70,7 @@ export function LessonTranscriptField({
   onDraftOfferHandled,
   onTranscriptKnown,
 }: LessonTranscriptFieldProps) {
-  const { data, isLoading } = useLessonTranscript(lessonId);
+  const { data, isLoading } = useLessonTranscript(lessonId, fixedLanguage);
 
   useEffect(() => {
     if (!isLoading)
@@ -79,24 +88,29 @@ export function LessonTranscriptField({
   // machine-made draft and correct it, but nothing stops them writing the first lines by hand
   // before that exists. The token is absent, which is exactly what the write path reads as
   // "the author believes nothing is there".
-  const language = data?.language ?? 'uk';
+  const language = fixedLanguage ?? data?.language ?? 'uk';
   const expectedUpdatedAt = data?.updatedAt ?? undefined;
 
   return (
     <TranscriptEditor
-      key={`${lessonId}-${expectedUpdatedAt ?? 'new'}`}
+      key={instanceId}
+      instanceId={instanceId}
+      fixedLanguage={fixedLanguage !== undefined}
       lessonId={lessonId}
       language={language}
+      baseLanguage={data?.language ?? language}
       {...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt })}
       segments={data?.segments ?? []}
       documents={documents}
       history={{
         store: history.store,
-        key: transcriptHistoryKey({ userId: history.authorId, lessonId }),
+        key: transcriptHistoryKey({ userId: history.authorId, lessonId, instanceId }),
       }}
       hasSavedTranscript={data?.language !== undefined && data.language !== null}
       actions={{
-        save: (nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments),
+        save:
+          editorSave ??
+          ((nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments)),
       }}
       {...(draftOffer === undefined ? {} : { draftOffer })}
       {...(draftUpdatedAt === undefined ? {} : { draftUpdatedAt })}

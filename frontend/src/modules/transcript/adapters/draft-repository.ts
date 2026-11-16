@@ -1,13 +1,28 @@
 import type { DraftErrorCode, DraftResult, DraftState, LessonDraft } from '../domain/draft';
 import { z } from 'zod';
 import type { DraftRepository } from '../ports/DraftRepository';
-import { getLessonDrafts, regenerateLessonDraft } from '../../../adapters/api/generated/courses';
+import {
+  getLessonDrafts,
+  listLessonTranscripts,
+  regenerateLessonDraft,
+} from '../../../adapters/api/generated/courses';
 import type {
   DraftSegment as GeneratedDraftSegment,
   LessonDraft as GeneratedLessonDraft,
 } from '../../../adapters/api/generated/models';
 import { createApiTransport, unnamedStatusCode } from '../../../adapters/api/transport';
 import type { TransportOptions, WireResponse } from '../../../adapters/api/transport';
+
+const transcriptInventorySchema = z.strictObject({
+  transcripts: z.array(
+    z.strictObject({
+      language: z.string().refine(isLanguage),
+      updatedAt: z.iso.datetime({ offset: true }),
+      stale: z.boolean(),
+      isPrimary: z.boolean(),
+    }),
+  ),
+});
 
 function failure(code: DraftErrorCode): DraftResult<never> {
   return { ok: false, error: { code } };
@@ -147,6 +162,8 @@ function mapDraft(raw: GeneratedLessonDraft, lessonId: string): LessonDraft | un
   return {
     lessonId,
     trackId: raw.trackId,
+    trackLanguage: raw.trackLanguage,
+    trackMultilingual: raw.trackMultilingual,
     state,
     language: raw.language,
     failure: raw.failure,
@@ -182,7 +199,7 @@ function namedError(
 export function createApiDraftRepository(options: TransportOptions = {}): DraftRepository {
   const send = createApiTransport(options);
   return {
-    async getDraft(lessonId, signal) {
+    async listDrafts(lessonId, signal) {
       const outcome = await send(
         'admin.draft.get',
         (init) => getLessonDrafts(lessonId, init),
@@ -208,24 +225,37 @@ export function createApiDraftRepository(options: TransportOptions = {}): DraftR
         !raw.drafts.every(isGeneratedLessonDraft)
       )
         return failure('invalid_response');
-      // Temporary MS2c bridge: the server orders the default track first; MS3 adds tabs.
-      const first = raw.drafts[0];
-      const draft =
-        first === undefined
-          ? {
-              lessonId,
-              trackId: null,
-              state: null,
-              language: null,
-              failure: null,
-              stale: false,
-              updatedAt: null,
-              assetId: null,
-              generation: null,
-              segments: [],
-            }
-          : mapDraft(first, lessonId);
-      return draft === undefined ? failure('invalid_response') : { ok: true, value: draft };
+      const drafts: LessonDraft[] = [];
+      for (const item of raw.drafts) {
+        const draft = mapDraft(item, lessonId);
+        if (draft === undefined) return failure('invalid_response');
+        drafts.push(draft);
+      }
+      return { ok: true, value: drafts };
+    },
+
+    async listTranscripts(lessonId, signal) {
+      const outcome = await send(
+        'admin.transcripts.list',
+        (init) => listLessonTranscripts(lessonId, init),
+        200,
+        signal,
+      );
+      if (!outcome.ok) return failure(outcome.code as DraftErrorCode);
+      if (outcome.status !== 200)
+        return failure(
+          namedError(outcome, {
+            400: ['invalid_request'],
+            401: ['authentication_required'],
+            403: ['course_forbidden'],
+            404: ['lesson_not_found'],
+            503: ['dependency_unavailable'],
+          }),
+        );
+      const parsed = transcriptInventorySchema.safeParse(outcome.data);
+      return parsed.success
+        ? { ok: true, value: parsed.data.transcripts }
+        : failure('invalid_response');
     },
 
     async regenerate(lessonId, trackId, signal) {

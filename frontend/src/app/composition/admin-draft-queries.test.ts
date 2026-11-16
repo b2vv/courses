@@ -1,210 +1,210 @@
-import { afterEach, describe, expect, rstest, test } from '@rstest/core';
+import { afterEach, expect, rstest, test } from '@rstest/core';
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import {
-  DraftQueryError,
   createDraftQueries,
+  draftOfTrack,
   draftPollMs,
   draftTaskTimeoutMs,
+  DraftQueryError,
 } from './admin-draft-queries';
-import type { LessonDraft } from '../../modules/transcript';
-import type { DraftRepository } from '../../modules/transcript';
+import type { DraftRepository, LessonDraft } from '../../modules/transcript';
 
-const lessonId = '20000000-0000-4000-8000-000000000001';
-const otherLessonId = '20000000-0000-4000-8000-000000000002';
-
-function draft(lesson: string, state: LessonDraft['state']): LessonDraft {
+const lessonId = 'lesson';
+const trackT = 'T';
+const trackU = 'U';
+function draft(trackId: string, overrides: Partial<LessonDraft> = {}): LessonDraft {
   return {
-    lessonId: lesson,
-    trackId: state === null ? null : '60000000-0000-4000-8000-000000000001',
-    state,
-    language: null,
+    lessonId,
+    trackId,
+    trackLanguage: 'en',
+    trackMultilingual: false,
+    state: 'ready',
+    language: 'en',
     failure: null,
     stale: false,
-    updatedAt: state === null ? null : '2026-09-24T12:00:00.000Z',
-    assetId: null,
-    generation: null,
+    updatedAt: '2026-11-16T12:00:00Z',
+    assetId: 'asset',
+    generation: 1,
     segments: [],
+    ...overrides,
   };
 }
-
-function draftWithUpdatedAt(
-  lesson: string,
-  state: LessonDraft['state'],
-  updatedAt: string,
-): LessonDraft {
-  return { ...draft(lesson, state), updatedAt };
-}
-
-function repository(
-  getDraft: DraftRepository['getDraft'],
-  regenerate: DraftRepository['regenerate'] = async () => ({ ok: true, value: undefined }),
-): DraftRepository {
-  return { getDraft, regenerate };
-}
-
-async function observeInitial(
-  client: QueryClient,
-  queries: ReturnType<typeof createDraftQueries>,
-  id = lessonId,
-) {
-  const observer = new QueryObserver(client, queries.lesson(id, client));
+function harness(initial: LessonDraft[] = [], rejected = false) {
+  let rows = initial;
+  let reads = 0;
+  const calls: string[][] = [];
+  const repository: DraftRepository = {
+    listDrafts: async () => {
+      reads++;
+      return { ok: true, value: rows };
+    },
+    listTranscripts: async () => ({ ok: true, value: [] }),
+    regenerate: async (lesson, track) => {
+      calls.push([lesson, track]);
+      return rejected
+        ? { ok: false, error: { code: 'already_running' } }
+        : { ok: true, value: undefined };
+    },
+  };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queries = createDraftQueries(repository);
+  const options = queries.lesson(lessonId, client);
+  const observer = new QueryObserver(client, options);
   const unsubscribe = observer.subscribe(() => {});
-  await observer.refetch();
-  return { observer, unsubscribe };
+  const regenerate = (trackId: string) =>
+    client
+      .getMutationCache()
+      .build(client, queries.regenerate(client))
+      .execute({ lessonId, trackId });
+  return {
+    client,
+    queries,
+    observer,
+    unsubscribe,
+    regenerate,
+    calls,
+    reads: () => reads,
+    set: (next: LessonDraft[]) => {
+      rows = next;
+    },
+    track: (id: string) => draftOfTrack(observer.getCurrentResult().data, id),
+  };
 }
-
 afterEach(() => {
   rstest.useRealTimers();
 });
 
-describe('admin draft query boundary', () => {
-  test('forwards the shown track id to regeneration', async () => {
-    const calls: string[][] = [];
-    const queries = createDraftQueries(
-      repository(
-        async (id) => ({ ok: true, value: draft(id, 'ready') }),
-        async (id, trackId) => {
-          calls.push([id, trackId]);
-          return { ok: true, value: undefined };
-        },
-      ),
-    );
-    const client = new QueryClient();
-    const trackId = '60000000-0000-4000-8000-000000000002';
-    await client
-      .getMutationCache()
-      .build(client, queries.regenerate(client))
-      .execute({ lessonId, trackId });
-    expect(calls).toEqual([[lessonId, trackId]]);
-    client.clear();
-  });
+test('one list per lesson, selectors return the requested track', async () => {
+  const h = harness([draft(trackT), draft(trackU)]);
+  await h.observer.refetch();
+  expect(h.observer.getCurrentResult().data).toHaveLength(2);
+  expect(h.track(trackU)?.trackId).toBe(trackU);
+  expect(h.track('absent')).toBeUndefined();
+  h.unsubscribe();
+  h.client.clear();
+});
 
-  test('keeps polling and exposes pending after a successful regenerate until ready', async () => {
+test('two tracks keep separate markers; changes to U do not acknowledge T', async () => {
+  rstest.useFakeTimers();
+  const h = harness([draft(trackT), draft(trackU)]);
+  await h.observer.refetch();
+  await h.regenerate(trackT);
+  await h.regenerate(trackU);
+  expect(h.calls).toEqual([
+    [lessonId, trackT],
+    [lessonId, trackU],
+  ]);
+  expect(h.track(trackT)?.state).toBe('pending');
+  expect(h.track(trackU)?.state).toBe('pending');
+  h.set([draft(trackT), draft(trackU, { updatedAt: '2026-11-16T12:01:00Z' })]);
+  await rstest.advanceTimersByTimeAsync(draftPollMs);
+  expect(h.track(trackU)?.state).toBe('ready');
+  expect(h.track(trackT)?.state).toBe('pending');
+  const before = h.reads();
+  await rstest.advanceTimersByTimeAsync(draftPollMs);
+  expect(h.reads()).toBeGreaterThan(before);
+  h.set([draft(trackT, { state: 'running', updatedAt: '2026-11-16T12:02:00Z' }), draft(trackU)]);
+  await rstest.advanceTimersByTimeAsync(draftPollMs);
+  expect(h.track(trackT)?.state).toBe('running');
+  h.set([draft(trackT, { updatedAt: '2026-11-16T12:03:00Z' }), draft(trackU)]);
+  await rstest.advanceTimersByTimeAsync(draftPollMs);
+  expect(h.track(trackT)?.state).toBe('ready');
+  const done = h.reads();
+  await rstest.advanceTimersByTimeAsync(draftPollMs * 2);
+  expect(h.reads()).toBe(done);
+  h.unsubscribe();
+  h.client.clear();
+});
+
+test('a stale ready draft has no refetch interval (O7)', async () => {
+  rstest.useFakeTimers();
+  const h = harness([draft(trackT, { stale: true })]);
+  await h.observer.refetch();
+  const before = h.reads();
+  await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs + draftPollMs);
+  expect(h.reads()).toBe(before);
+  expect(h.track(trackT)?.stale).toBe(true);
+  h.unsubscribe();
+  h.client.clear();
+});
+
+test.each(['running', 'pending'] as const)(
+  'server %s state polls without a local marker',
+  async (state) => {
     rstest.useFakeTimers();
-    let reads = 0;
-    const queries = createDraftQueries(
-      repository(async (id) => {
-        reads++;
-        return {
-          ok: true,
-          value:
-            reads === 1
-              ? draftWithUpdatedAt(id, 'ready', '2026-09-24T12:00:00.000Z')
-              : reads === 2
-                ? draftWithUpdatedAt(id, 'ready', '2026-09-24T12:00:00.000Z')
-                : reads === 3
-                  ? draftWithUpdatedAt(id, 'running', '2026-09-24T12:00:00.500Z')
-                  : draftWithUpdatedAt(id, 'ready', '2026-09-24T12:00:01.000Z'),
-        };
-      }),
+    const h = harness([draft(trackT, { state })]);
+    await h.observer.refetch();
+    const before = h.reads();
+    await rstest.advanceTimersByTimeAsync(draftPollMs);
+    expect(h.reads()).toBeGreaterThan(before);
+    h.unsubscribe();
+    h.client.clear();
+  },
+);
+
+test('already_running starts only the requested track marker', async () => {
+  rstest.useFakeTimers();
+  const h = harness([draft(trackT), draft(trackU)], true);
+  await h.observer.refetch();
+  await expect(h.regenerate(trackT)).rejects.toBeInstanceOf(DraftQueryError);
+  expect(h.track(trackT)?.state).toBe('pending');
+  expect(h.track(trackU)?.state).toBe('ready');
+  h.unsubscribe();
+  h.client.clear();
+});
+
+test.each([false, true])('queue marker expires at 15 min; existing snapshot=%s', async (exists) => {
+  rstest.useFakeTimers();
+  const h = harness(exists ? [draft(trackT)] : []);
+  await h.observer.refetch();
+  await h.regenerate(trackT);
+  expect(h.track(trackT)?.state).toBe('pending');
+  await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs);
+  expect(h.track(trackT)?.state).toBe(exists ? 'ready' : undefined);
+  const done = h.reads();
+  await rstest.advanceTimersByTimeAsync(draftPollMs * 2);
+  expect(h.reads()).toBe(done);
+  h.unsubscribe();
+  h.client.clear();
+});
+
+test.each([false, true])(
+  'marker survives real unobserved cache GC; existing snapshot=%s',
+  async (exists) => {
+    rstest.useFakeTimers();
+    const h = harness(exists ? [draft(trackT)] : []);
+    await h.observer.refetch();
+    await h.regenerate(trackT);
+    h.unsubscribe();
+    await rstest.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(h.client.getQueryState(h.queries.lesson(lessonId, h.client).queryKey)).toBeUndefined();
+    const observer = new QueryObserver(h.client, h.queries.lesson(lessonId, h.client));
+    const stop = observer.subscribe(() => {});
+    await observer.refetch();
+    expect(draftOfTrack(observer.getCurrentResult().data, trackT)?.state).toBe('pending');
+    await rstest.advanceTimersByTimeAsync(5 * 60 * 1000);
+    expect(draftOfTrack(observer.getCurrentResult().data, trackT)?.state).toBe(
+      exists ? 'ready' : undefined,
     );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { observer, unsubscribe } = await observeInitial(client, queries);
-
-    await client
-      .getMutationCache()
-      .build(client, queries.regenerate(client))
-      .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
-
-    expect(observer.getCurrentResult().data?.state).toBe('pending');
-    expect(reads).toBe(2);
-
-    await rstest.advanceTimersByTimeAsync(draftPollMs);
-    expect(observer.getCurrentResult().data?.state).toBe('running');
-    await rstest.advanceTimersByTimeAsync(draftPollMs);
-    expect(observer.getCurrentResult().data?.state).toBe('ready');
-    expect(observer.getCurrentResult().data?.updatedAt).toBe('2026-09-24T12:00:01.000Z');
-    const readsAtReady = reads;
+    const done = h.reads();
     await rstest.advanceTimersByTimeAsync(draftPollMs * 2);
-    expect(reads).toBe(readsAtReady);
-    unsubscribe();
-  });
+    expect(h.reads()).toBe(done);
+    stop();
+    h.client.clear();
+  },
+);
 
-  test('already_running also starts polling for only that lesson', async () => {
-    rstest.useFakeTimers();
-    let reads = 0;
-    const queries = createDraftQueries(
-      repository(
-        async (id) => {
-          reads++;
-          return { ok: true, value: draft(id, null) };
-        },
-        async () => ({ ok: false, error: { code: 'already_running' } }),
-      ),
-    );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const first = await observeInitial(client, queries);
-    const other = await observeInitial(client, queries, otherLessonId);
-    await expect(
-      client
-        .getMutationCache()
-        .build(client, queries.regenerate(client))
-        .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' }),
-    ).rejects.toBeInstanceOf(DraftQueryError);
-
-    expect(first.observer.getCurrentResult().data?.state).toBe('pending');
-    expect(other.observer.getCurrentResult().data?.state).toBeNull();
-    const readsBeforePoll = reads;
-    await rstest.advanceTimersByTimeAsync(draftPollMs);
-    expect(reads).toBe(readsBeforePoll + 1);
-    first.unsubscribe();
-    other.unsubscribe();
-  });
-
-  test('stops polling and returns ordinary null after the 15-minute queue timeout', async () => {
-    rstest.useFakeTimers();
-    let reads = 0;
-    const queries = createDraftQueries(
-      repository(async (id) => {
-        reads++;
-        return { ok: true, value: draft(id, null) };
-      }),
-    );
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { observer, unsubscribe } = await observeInitial(client, queries);
-    await client
-      .getMutationCache()
-      .build(client, queries.regenerate(client))
-      .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
-    expect(observer.getCurrentResult().data?.state).toBe('pending');
-
-    await rstest.advanceTimersByTimeAsync(draftTaskTimeoutMs);
-    expect(observer.getCurrentResult().data?.state).toBeNull();
-    const readsAtTimeout = reads;
-    await rstest.advanceTimersByTimeAsync(draftPollMs * 2);
-    expect(reads).toBe(readsAtTimeout);
-    unsubscribe();
-  });
-
-  test.each([
-    ['no draft yet', null],
-    ['the old ready draft', '2026-09-24T12:00:00.000Z'],
-  ] as const)(
-    'keeps the regenerate wait past the five-minute cache GC while the server shows %s',
-    async (_label, updatedAt) => {
-      rstest.useFakeTimers();
-      let reads = 0;
-      const queries = createDraftQueries(
-        repository(async (id) => {
-          reads++;
-          return { ok: true, value: updatedAt === null ? draft(id, null) : draft(id, 'ready') };
-        }),
-      );
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const { observer, unsubscribe } = await observeInitial(client, queries);
-      await client
-        .getMutationCache()
-        .build(client, queries.regenerate(client))
-        .execute({ lessonId, trackId: '60000000-0000-4000-8000-000000000001' });
-      expect(observer.getCurrentResult().data?.state).toBe('pending');
-
-      // The default gcTime is five minutes; the queue wait is bounded at fifteen.
-      await rstest.advanceTimersByTimeAsync(10 * 60 * 1_000);
-      expect(observer.getCurrentResult().data?.state).toBe('pending');
-      const readsMidWait = reads;
-      await rstest.advanceTimersByTimeAsync(draftPollMs);
-      expect(reads).toBe(readsMidWait + 1);
-      unsubscribe();
-    },
-  );
+test('inventory is per lesson and does not poll', async () => {
+  rstest.useFakeTimers();
+  const h = harness();
+  const options = h.queries.inventory(lessonId);
+  const observer = new QueryObserver(h.client, options);
+  const stop = observer.subscribe(() => {});
+  await observer.refetch();
+  expect(observer.getCurrentResult().data).toEqual([]);
+  expect(options).not.toHaveProperty('refetchInterval');
+  expect(h.queries.inventory('other').queryKey).not.toEqual(options.queryKey);
+  stop();
+  h.unsubscribe();
+  h.client.clear();
 });

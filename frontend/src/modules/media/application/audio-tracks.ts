@@ -40,6 +40,7 @@ export function createAudioTracks(repository: AudioTrackRepository) {
         readonly originalName: string;
         readonly language: string;
         readonly label: string;
+        readonly multilingual?: boolean;
       },
       signal?: AbortSignal,
     ) {
@@ -59,13 +60,14 @@ export function createAudioTracks(repository: AudioTrackRepository) {
       trackId: string,
       language: string,
       label: string,
+      multilingual: boolean,
       signal?: AbortSignal,
     ) {
       return validMediaId(videoId) &&
         validMediaId(trackId) &&
         validAudioLanguage(language) &&
         validAudioLabel(label)
-        ? repository.rename(videoId, trackId, language, label, signal)
+        ? repository.rename(videoId, trackId, language, label, multilingual, signal)
         : Promise.resolve(invalid);
     },
     setDefault(videoId: string, trackId: string, signal?: AbortSignal) {

@@ -177,6 +177,7 @@ export async function forgetOtherAuthors(
 export function transcriptHistoryKey(parts: {
   readonly userId: string;
   readonly lessonId: string;
+  readonly instanceId?: string;
 }): string {
-  return `${parts.userId}:${parts.lessonId}`;
+  return `${parts.userId}:${parts.lessonId}${parts.instanceId ? `:${parts.instanceId}` : ''}`;
 }

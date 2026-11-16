@@ -16,6 +16,7 @@ export interface AudioTrackRepository {
       readonly originalName: string;
       readonly language: string;
       readonly label: string;
+      readonly multilingual?: boolean;
     },
     signal?: AbortSignal,
   ): Promise<AudioTrackResult<AudioUploadTicket>>;
@@ -24,6 +25,7 @@ export interface AudioTrackRepository {
     trackId: string,
     language: string,
     label: string,
+    multilingual: boolean,
     signal?: AbortSignal,
   ): Promise<AudioTrackResult<AudioTrack>>;
   setDefault(

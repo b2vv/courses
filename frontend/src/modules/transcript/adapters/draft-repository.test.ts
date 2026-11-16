@@ -36,52 +36,22 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-describe('draft API repository bridge', () => {
-  test('uses the first draft in server order and maps its lesson/track identity', async () => {
-    server.use(
-      http.get(api, () =>
-        HttpResponse.json({
-          drafts: [
-            wireDraft,
-            { ...wireDraft, trackId: otherTrackId, language: 'en', trackLanguage: 'en' },
-          ],
-        }),
-      ),
-    );
-    expect(await createApiDraftRepository().getDraft(lessonId)).toEqual({
+describe('draft API repository', () => {
+  test('returns all drafts in server order with every track snapshot', async () => {
+    const other = { ...wireDraft, trackId: otherTrackId, language: 'en', trackLanguage: 'en' };
+    server.use(http.get(api, () => HttpResponse.json({ drafts: [wireDraft, other] })));
+    expect(await createApiDraftRepository().listDrafts(lessonId)).toEqual({
       ok: true,
-      value: {
-        lessonId,
-        trackId,
-        state: 'ready',
-        language: 'uk',
-        failure: null,
-        stale: false,
-        updatedAt: wireDraft.updatedAt,
-        assetId: wireDraft.assetId,
-        generation: 1,
-        segments: wireDraft.segments,
-      },
+      value: [
+        { ...wireDraft, lessonId },
+        { ...other, lessonId },
+      ],
     });
   });
 
-  test('an empty list preserves the existing no-draft result', async () => {
+  test('returns an empty list when no tracks have drafts', async () => {
     server.use(http.get(api, () => HttpResponse.json({ drafts: [] })));
-    expect(await createApiDraftRepository().getDraft(lessonId)).toEqual({
-      ok: true,
-      value: {
-        lessonId,
-        trackId: null,
-        state: null,
-        language: null,
-        failure: null,
-        stale: false,
-        updatedAt: null,
-        assetId: null,
-        generation: null,
-        segments: [],
-      },
-    });
+    expect(await createApiDraftRepository().listDrafts(lessonId)).toEqual({ ok: true, value: [] });
   });
 
   test.each([
@@ -118,7 +88,7 @@ describe('draft API repository bridge', () => {
     },
   ])('rejects the whole list for $name', async ({ response }) => {
     server.use(http.get(api, () => HttpResponse.json(response)));
-    expect(await createApiDraftRepository().getDraft(lessonId)).toEqual(invalid);
+    expect(await createApiDraftRepository().listDrafts(lessonId)).toEqual(invalid);
   });
 
   test('maps queued to pending and permits RFC3339 timestamps with no fractional seconds', async () => {
@@ -137,9 +107,9 @@ describe('draft API repository bridge', () => {
         }),
       ),
     );
-    expect(await createApiDraftRepository().getDraft(lessonId)).toMatchObject({
+    expect(await createApiDraftRepository().listDrafts(lessonId)).toMatchObject({
       ok: true,
-      value: { trackId, state: 'pending', language: null },
+      value: [{ trackId, state: 'pending', language: null }],
     });
   });
 
@@ -177,6 +147,48 @@ describe('draft API repository bridge', () => {
     expect(await createApiDraftRepository().regenerate(lessonId, trackId)).toEqual({
       ok: false,
       error: { code: expected },
+    });
+  });
+});
+
+describe('transcript inventory', () => {
+  const url = `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcripts`;
+  const item = { language: 'en-us', updatedAt: wireDraft.updatedAt, stale: true, isPrimary: false };
+  test.each([
+    { items: [] },
+    { items: [item] },
+    { items: [item, { ...item, language: 'uk', isPrimary: true }] },
+  ])('parses inventory $items', async ({ items }) => {
+    server.use(http.get(url, () => HttpResponse.json({ transcripts: items })));
+    expect(await createApiDraftRepository().listTranscripts(lessonId)).toEqual({
+      ok: true,
+      value: items,
+    });
+  });
+  test.each([
+    {},
+    { transcripts: null },
+    { transcripts: [item], extra: true },
+    { transcripts: [item, { ...item, extra: true }] },
+    { transcripts: [{ ...item, language: 'EN' }] },
+    { transcripts: [{ ...item, updatedAt: 'bad' }] },
+    { transcripts: [{ ...item, stale: 'true' }] },
+    { transcripts: [{ ...item, isPrimary: undefined }] },
+  ])('rejects malformed inventory %j', async (body) => {
+    server.use(http.get(url, () => HttpResponse.json(body)));
+    expect(await createApiDraftRepository().listTranscripts(lessonId)).toEqual(invalid);
+  });
+  test.each([
+    [400, 'invalid_request'],
+    [401, 'authentication_required'],
+    [403, 'course_forbidden'],
+    [404, 'lesson_not_found'],
+    [503, 'dependency_unavailable'],
+  ] as const)('maps inventory error %s %s', async (status, code) => {
+    server.use(http.get(url, () => HttpResponse.json({ error: { code } }, { status })));
+    expect(await createApiDraftRepository().listTranscripts(lessonId)).toEqual({
+      ok: false,
+      error: { code },
     });
   });
 });

@@ -208,7 +208,7 @@ describe('lesson audio tracks field', () => {
 
     const progress = await screen.findByRole('progressbar', { name: 'Uploading audio' });
     expect(progress.getAttribute('aria-valuenow')).toBe('25');
-    expect(captured).toEqual([{ language: 'en', label: 'English dub' }]);
+    expect(captured).toEqual([{ language: 'en', label: 'English dub', multilingual: false }]);
     expect((await axe.run(container)).violations).toEqual([]);
     if (release === undefined) throw new Error('The upload was not initialized');
     release();
@@ -328,7 +328,9 @@ describe('lesson audio tracks field', () => {
     await user.clear(name);
     await user.type(name, 'Оригінал');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(recorded.calls.rename).toEqual([[embedded, 'uk', 'Оригінал']]));
+    await waitFor(() =>
+      expect(recorded.calls.rename).toEqual([[embedded, 'uk', 'Оригінал', false]]),
+    );
   });
 
   it('shows a 409 language conflict from a race as a named error', async () => {
@@ -356,4 +358,61 @@ describe('lesson audio tracks field', () => {
     expect(screen.queryByRole('button', { name: 'Upload audio' })).toBeNull();
     expect(container.innerHTML).not.toMatch(/[Ѐ-ӿ]/u);
   });
+});
+
+it.each([false, true])(
+  'new switch initializes from multilingualDefault=%s and uploads the selected mode',
+  async (multilingualDefault) => {
+    const user = userEvent.setup();
+    const recorded = actions();
+    const { container } = renderView([], recorded.value, 'ready', { multilingualDefault });
+    const toggle = screen.getByRole('switch', { name: 'Multiple languages' });
+    expect(toggle).toHaveProperty('checked', multilingualDefault);
+    await user.click(toggle);
+    expect(toggle).toHaveProperty('checked', !multilingualDefault);
+    await user.click(screen.getByRole('button', { name: /Choose a language Track language/ }));
+    await user.click(await screen.findByRole('option', { name: 'English' }));
+    await user.type(screen.getByRole('textbox', { name: 'Track name' }), 'Dub');
+    await user.upload(fileInput(container), new File(['audio'], 'dub.m4a', { type: 'audio/mp4' }));
+    await waitFor(() => expect(recorded.calls.upload).toHaveLength(1));
+    expect(recorded.calls.upload[0]?.[1]).toEqual({
+      language: 'en',
+      label: 'Dub',
+      multilingual: !multilingualDefault,
+    });
+  },
+);
+
+it('row switch toggles with Space, sends complete metadata and keeps focus while pending/error', async () => {
+  const user = userEvent.setup();
+  let finish: ((code: 'dependency_unavailable') => void) | undefined;
+  const calls: unknown[][] = [];
+  const row = track(dubId, 'ready', { multilingual: true });
+  renderView(
+    [row],
+    actions({
+      rename: async (...args) => {
+        calls.push(args);
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    }).value,
+  );
+  const toggle = within(screen.getByRole('listitem')).getByRole('switch', {
+    name: `Multiple languages in track ${row.label} (English)`,
+  });
+  expect(toggle).toHaveProperty('checked', true);
+  toggle.focus();
+  await user.keyboard(' ');
+  expect(calls).toEqual([[row, row.language, row.label, false]]);
+  expect(toggle.getAttribute('aria-disabled')).toBe('true');
+  expect(document.activeElement).toBe(toggle);
+  await user.keyboard(' ');
+  expect(calls).toHaveLength(1);
+  if (finish === undefined) throw new Error('switch did not start PATCH');
+  finish('dependency_unavailable');
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  await waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBe('false'));
+  expect(document.activeElement).toBe(toggle);
 });

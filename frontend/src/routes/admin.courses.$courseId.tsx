@@ -7,11 +7,16 @@ import {
 } from '@tanstack/react-query';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { DraftQueryError } from '../app/composition/admin-draft-queries';
+import {
+  DraftQueryError,
+  draftOfTrack,
+  lessonTranscriptInventoryQueryKey,
+} from '../app/composition/admin-draft-queries';
 import { AuthoringQueryError } from '../app/composition/admin-queries';
 import { VideoQueryError } from '../app/composition/admin-video-queries';
 import { AudioTrackQueryError } from '../app/composition/admin-audio-queries';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
+import { lessonTranscriptQueryKey } from '../app/composition/transcript-queries';
 import { sessionQueryKey } from '../app/composition/identity-queries';
 import { asBrandedId, validEntityId } from '../contracts/course';
 import type {
@@ -267,6 +272,7 @@ function useCourseEditorAudio(
           originalName: file.name,
           language: metadata.language,
           label: metadata.label,
+          multilingual: metadata.multilingual,
         });
         await transferFile(videoId, { kind: 'new', ticket }, file, onProgress);
       }),
@@ -278,7 +284,7 @@ function useCourseEditorAudio(
       action(() =>
         cancel.mutateAsync({ courseId, videoId: track.videoId, trackId: track.trackId }),
       ),
-    rename: (track, language, label) =>
+    rename: (track, language, label, multilingual) =>
       action(() =>
         rename.mutateAsync({
           courseId,
@@ -286,6 +292,7 @@ function useCourseEditorAudio(
           trackId: track.trackId,
           language,
           label,
+          multilingual,
         }),
       ),
     setDefault: (track) =>
@@ -308,7 +315,8 @@ function useCourseEditorAudio(
         if (error === 'authentication_required') authenticationRequired();
       }, [error]);
       return {
-        data: query.data,
+        data: query.data?.items,
+        multilingualDefault: query.data?.multilingualDefault ?? false,
         isLoading: query.isPending,
         ...(error === undefined ? {} : { error }),
       };
@@ -345,13 +353,19 @@ function AdminOwnerEditor({
   const documentsQuery = transcripts.documents(course.id);
   const documentsKey = documentsQuery.queryKey;
   const documents = useQuery(documentsQuery);
-  function useLessonTranscript(lessonId: string) {
-    const query = useQuery(transcripts.lesson(lessonId));
+  function useLessonTranscript(lessonId: string, language?: string) {
+    const query = useQuery({
+      ...transcripts.lesson(lessonId, language),
+      placeholderData: keepPreviousData,
+    });
     return { data: query.data, isLoading: query.isLoading };
   }
-  function useLessonDraft(lessonId: string) {
+  function useLessonDraft(lessonId: string, trackId?: string) {
     const query = useQuery(draftQueries.lesson(lessonId, queryClient));
-    return { data: query.data, isLoading: query.isLoading };
+    return {
+      data: trackId === undefined ? query.data?.[0] : draftOfTrack(query.data, trackId),
+      isLoading: query.isLoading,
+    };
   }
   async function draftRegenerate(
     lessonId: string,
@@ -381,6 +395,21 @@ function AdminOwnerEditor({
       onDelete={onDelete}
       onAuthenticationRequired={onAuthenticationRequired}
       video={video}
+      languages={{
+        useInventory(lessonId) {
+          return useQuery(draftQueries.inventory(lessonId));
+        },
+        async readInventory(lessonId) {
+          const result = await draftQueries.drafts.listTranscripts(lessonId);
+          if (!result.ok) throw new DraftQueryError(result.error.code);
+          return result.value;
+        },
+        async readTracks(videoId) {
+          const result = await admin.audioTracks.tracks.list(videoId);
+          if (!result.ok) throw new AudioTrackQueryError(result.error);
+          return result.value.items;
+        },
+      }}
       drafts={{
         useLessonDraft,
         actions: { regenerate: draftRegenerate },
@@ -409,6 +438,16 @@ function AdminOwnerEditor({
             ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
             segments,
           });
+          if (result.ok)
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: lessonTranscriptInventoryQueryKey(lessonId),
+                exact: true,
+              }),
+              queryClient.invalidateQueries({
+                queryKey: lessonTranscriptQueryKey(lessonId).slice(0, 3),
+              }),
+            ]);
           return result.ok ? null : result.error.code;
         },
       }}
