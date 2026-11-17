@@ -62,6 +62,7 @@ type fakeDrafts struct {
 	completeCalls      int
 	completeContextErr error
 	claimRequested     []bool
+	claimTracks        []string
 }
 
 func (f *fakeDrafts) ListLessonDrafts(context.Context, string) ([]ports.LessonDraft, error) {
@@ -72,8 +73,9 @@ func (f *fakeDrafts) PendingRecognitions(_ context.Context, _ int) ([]ports.Pend
 	return f.pendingResult, f.pendingErr
 }
 
-func (f *fakeDrafts) Claim(_ context.Context, _, _ string, _ int32, _ string, requested bool, _ time.Time) (ports.ClaimedDraft, error) {
+func (f *fakeDrafts) Claim(_ context.Context, _, _ string, _ int32, track string, requested bool, _ time.Time) (ports.ClaimedDraft, error) {
 	f.claimCalls++
+	f.claimTracks = append(f.claimTracks, track)
 	f.claimRequested = append(f.claimRequested, requested)
 	return f.claimResult, f.claimErr
 }

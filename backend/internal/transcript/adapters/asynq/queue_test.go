@@ -128,3 +128,22 @@ func TestLegacyTaskRefusedWithoutProcessingOrRetries(t *testing.T) {
 		t.Fatal("process called for a task without trackId")
 	}
 }
+
+func TestTrackIDUsesThePublishedWireKey(t *testing.T) {
+	const track = "70000000-0000-4000-8000-000000000001"
+	client := &fakeEnqueueClient{}
+	if err := newQueue(client).Enqueue(context.Background(), ports.RecognitionJob{LessonID: "lesson", AssetID: "asset", Generation: 1, TrackID: track}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(client.task.Payload(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if string(payload["trackId"]) != `"70000000-0000-4000-8000-000000000001"` {
+		t.Fatalf("wire trackId=%s; want literal track UUID", payload["trackId"])
+	}
+	decoded, err := decodePayload([]byte(`{"lessonId":"lesson","assetId":"asset","generation":1,"trackId":"70000000-0000-4000-8000-000000000001"}`))
+	if err != nil || decoded.TrackID != track {
+		t.Fatalf("hand-authored trackId decoded=%q err=%v", decoded.TrackID, err)
+	}
+}

@@ -145,6 +145,8 @@ func TestTranscribeDerivesHintFromTrack(t *testing.T) {
 		unsupported  bool
 	}{
 		{language: "en-US", hint: "en"},
+		{language: "EN-us", hint: "en"},
+		{language: "af", hint: "af"},
 		{language: "de", hint: "de"},
 		{language: "haw", hint: "haw"},
 		{language: "und"},

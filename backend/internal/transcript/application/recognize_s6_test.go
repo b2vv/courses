@@ -63,7 +63,34 @@ func TestEnqueuePendingJobsAreAutomatic(t *testing.T) {
 	if err := r.EnqueuePending(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(queue.jobs) != 1 || queue.jobs[0].Requested {
+	if len(queue.jobs) != 1 || queue.jobs[0].Requested || queue.jobs[0].TrackID != trackID {
 		t.Fatalf("pending jobs=%+v, want one automatic job", queue.jobs)
+	}
+}
+
+func TestRecoveryAndMissingDurationRetainTrackIdentity(t *testing.T) {
+	for _, recovery := range []bool{false, true} {
+		drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken}}
+		if recovery {
+			drafts.recoverResult = []ports.RecoveredDraft{{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID}, Token: claimToken}}
+		} else {
+			drafts.pendingResult = []ports.PendingRecognition{{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID}}
+		}
+		r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
+		var err error
+		if recovery {
+			err = r.Recover(context.Background())
+		} else {
+			err = r.EnqueuePending(context.Background())
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !recovery && (len(drafts.claimTracks) != 1 || drafts.claimTracks[0] != trackID) {
+			t.Fatalf("nil-duration claim tracks=%v; want [%s]", drafts.claimTracks, trackID)
+		}
+		if drafts.completeCalls != 1 || drafts.completedDraft.TrackID != trackID {
+			t.Fatalf("recovery=%v completed track=%q calls=%d; want %s once", recovery, drafts.completedDraft.TrackID, drafts.completeCalls, trackID)
+		}
 	}
 }

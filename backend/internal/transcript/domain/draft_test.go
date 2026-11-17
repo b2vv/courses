@@ -210,3 +210,20 @@ func TestACauseCannotCarryWhatPostgresCannotStore(t *testing.T) {
 		t.Fatalf("a NUL in the cause must be refused, got %v", err)
 	}
 }
+
+func TestDraftValidatesTrackIdentityAndSnapshot(t *testing.T) {
+	for _, track := range []string{"", "bad", "00000000-0000-0000-0000-000000000000"} {
+		if _, err := NewTranscriptDraft(draft(func(d *TranscriptDraft) { d.TrackID = track })); err != ErrInvalidRequest {
+			t.Errorf("TrackID=%q error=%v; want invalid_request", track, err)
+		}
+	}
+	for _, language := range []Language{"", "en..us", "en-abcdefgh-abcdefgh-abcdefgh-abcdefgh"} {
+		if _, err := NewTranscriptDraft(draft(func(d *TranscriptDraft) { d.TrackLanguage = language })); err != ErrInvalidRequest {
+			t.Errorf("TrackLanguage=%q error=%v; want invalid_request", language, err)
+		}
+	}
+	made, err := NewTranscriptDraft(draft(func(d *TranscriptDraft) { d.TrackLanguage = "EN-US" }))
+	if err != nil || made.TrackLanguage != "en-us" {
+		t.Fatalf("snapshot=%q err=%v; want en-us", made.TrackLanguage, err)
+	}
+}

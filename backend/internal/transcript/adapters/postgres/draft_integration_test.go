@@ -97,6 +97,13 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	h := &draftHarness{ctx: ctx, pool: pool, repository: transcriptpostgres.NewRepository(pool)}
 	t.Run("M2-R1 migration 00031 maps populated drafts and round trips", func(t *testing.T) { h.testDraftTrackMigration(t, provider) })
 
+	t.Run("track: schema constraints", h.testDraftTrackSchemaConstraints)
+	t.Run("track: rollback assets and ties", func(t *testing.T) { h.testDraftTrackRollbackAcrossAssetsAndTiedTracks(t, provider) })
+	t.Run("track: current asset and metadata", h.testDraftTrackCurrentAssetAndMetadata)
+	t.Run("track: pending eligibility order limit", h.testDraftTrackPendingEligibilityOrderAndLimit)
+	t.Run("track: claim asset and reset", h.testDraftTrackClaimAssetAndReset)
+	t.Run("track: recovery state order limit", h.testDraftTrackRecoveryStateOrderAndLimit)
+	t.Run("track: claim concurrent track deletion", h.testDraftTrackClaimConcurrentTrackDeletion)
 	t.Run("M2-R8 running draft past per-row P-3 timeout is recovered", h.testExpiredDraftRecovered)
 	t.Run("M2-R8 running draft within per-row P-3 timeout is not recovered", h.testFreshDraftNotRecovered)
 	t.Run("M2-R8 recovered draft completed as failed timeout", h.testRecoverThenComplete)

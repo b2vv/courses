@@ -3,6 +3,8 @@ package http_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -160,6 +162,15 @@ func TestM2R10RegenerateHTTP(t *testing.T) {
 			draftServer(t, drafts, courses, queue).ServeHTTP(rec, r)
 			if tc.code != "" {
 				assertM2R10Error(t, rec, tc.status, tc.code)
+				if tc.running {
+					var body httpserver.ErrorResponse
+					if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+						t.Fatal(err)
+					}
+					if body.Error.Message != "Recognition is already running for this track" {
+						t.Fatalf("running message=%q; want Recognition is already running for this track", body.Error.Message)
+					}
+				}
 			} else if rec.Code != tc.status {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
@@ -255,5 +266,76 @@ func TestM2R10RemovedRoutesReturn404(t *testing.T) {
 		if rec.Code != 404 {
 			t.Fatalf("%s %s=%d", tc.method, tc.path, rec.Code)
 		}
+	}
+}
+
+func TestDraftInventoryPreservesRecognitionFields(t *testing.T) {
+	confidence := 0.8
+	drafts := &stubDraftRepository{drafts: []ports.LessonDraft{
+		{IsDefault: true, TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: draftTrackID, TrackLanguage: "uk", State: domain.DraftReady, Language: "en", Segments: []domain.Segment{{ID: documentID, StartMs: 123, EndMs: 1456, Text: "recognized", Confidence: &confidence, Speaker: "Lecturer"}}}},
+		{TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: "71000000-0000-4000-8000-000000000002", TrackLanguage: "uk", State: domain.DraftFailed, Failure: "engine_error"}},
+	}}
+	rec := httptest.NewRecorder()
+	draftServer(t, drafts, &stubCourseReader{course: domain.Course{OwnerID: ownerID}}, &draftQueue{}).ServeHTTP(rec, draftRequest("GET", "/drafts", "", ownerID, ""))
+	if rec.Code != 200 {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Drafts []struct {
+			Language *string
+			Failure  *string
+			Segments []struct {
+				StartMs, EndMs int64
+				Confidence     *float64
+				Speaker        *string
+			}
+		}
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Drafts) != 2 {
+		t.Fatalf("draft count=%d", len(body.Drafts))
+	}
+	ready, failed := body.Drafts[0], body.Drafts[1]
+	if ready.Language == nil || *ready.Language != "en" || failed.Language != nil {
+		t.Fatalf("recognized languages ready=%v failed=%v; want en and null", ready.Language, failed.Language)
+	}
+	if failed.Failure == nil || *failed.Failure != "engine_error" {
+		t.Fatalf("failure=%v; want engine_error", failed.Failure)
+	}
+	if len(ready.Segments) != 1 {
+		t.Fatalf("segments=%d", len(ready.Segments))
+	}
+	segment := ready.Segments[0]
+	if segment.StartMs != 123 || segment.EndMs != 1456 {
+		t.Fatalf("segment times=%d..%d; want 123..1456", segment.StartMs, segment.EndMs)
+	}
+	if segment.Confidence == nil || *segment.Confidence != 0.8 {
+		t.Fatalf("confidence=%v; want 0.8", segment.Confidence)
+	}
+	if segment.Speaker == nil || *segment.Speaker != "Lecturer" {
+		t.Fatalf("speaker=%v; want Lecturer", segment.Speaker)
+	}
+}
+
+type failingDraftBody struct{}
+
+func (failingDraftBody) Read([]byte) (int, error) { return 0, errors.New("body read failed") }
+func (failingDraftBody) Close() error             { return nil }
+
+var _ io.ReadCloser = failingDraftBody{}
+
+func TestRegenerateRefusesBodyReadFailure(t *testing.T) {
+	duration := 60.0
+	drafts := &stubDraftRepository{lessonAsset: &ports.PendingRecognition{TrackID: draftTrackID, DurationSeconds: &duration}}
+	queue := &draftQueue{}
+	request := draftRequest("POST", "/drafts/"+draftTrackID+"/regenerate", "", ownerID, "http://localhost:8080")
+	request.Body = failingDraftBody{}
+	rec := httptest.NewRecorder()
+	draftServer(t, drafts, &stubCourseReader{course: domain.Course{OwnerID: ownerID}}, queue).ServeHTTP(rec, request)
+	assertM2R10Error(t, rec, 400, "invalid_request")
+	if len(queue.jobs) != 0 || drafts.gotTrackID != "" {
+		t.Fatalf("body failure did work: lookup=%q jobs=%v", drafts.gotTrackID, queue.jobs)
 	}
 }
