@@ -916,3 +916,9 @@ Harness: a temporary Playwright spec (not in the e2e suite; copy `ms3-design-pas
   - **Tests:** two unit tests. One retries the reaper conflict and checks the orphan target was terminated first; the other refuses a non-reaper conflict. Disabling the new clause fails the first, with the gate's own message.
   - **Codex review w1: SHIP, 2 non-blocking, both fixed.** The comment now notes v0.44.0's own 20 s conflict retry and that why it ran out on attempt 10 is not established. The test now returns a target and asserts its termination.
   - Committed. Next: attempt 11.
+- **`make check` attempt 11 (21:13–21:45): GREEN, `GATE_EXIT=0`** on HEAD `03d2440`, which is PR #109 plus flakefix and flakefix-ryuk.
+  - **Checks:** format-check, lint, typecheck. Frontend tests **1322 passed**, 0 failed. Go: **130 `ok`, 0 FAIL**. Integration, check-generated, build and smoke passed.
+  - **Reset:** `e2e-reset` removed all three volumes.
+  - **e2e: 151 passed, 0 failed, 0 did not run (24.0 min)**, including B18, S5 and every `asr.spec` row.
+  - **§4 rows:** M3-R8/R9 and the browser parts of the PARTIAL rows are now proven by this e2e on the final revision.
+  - **Next:** push, then squash-merge PR #109 (owner: "По закінченню 109 мердж").
