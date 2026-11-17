@@ -73,13 +73,17 @@ for (const source of [
   });
 }
 
-for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
+for (const outcome of ['same', 'newer', 'missing', 'wrong-key', 'error', 'abort'] as const) {
   test(`MS3b fix4 atomic IndexedDB cleanup ${outcome} uses one readwrite transaction and waits for commit`, async () => {
     const transaction = new EventTarget();
     const value =
       outcome === 'missing'
         ? undefined
-        : { ...snapshot, revision: outcome === 'newer' ? 'newer-revision' : snapshot.revision };
+        : {
+            ...snapshot,
+            key: outcome === 'wrong-key' ? 'different-key' : snapshot.key,
+            revision: outcome === 'newer' ? 'newer-revision' : snapshot.revision,
+          };
     const request = Object.assign(new EventTarget(), { result: value });
     const remove = rstest.fn();
     const get = rstest.fn(() => request);
@@ -106,13 +110,16 @@ for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
     expect(get).toHaveBeenCalledExactlyOnceWith(snapshot.key);
     expect(remove).not.toHaveBeenCalled();
     request.dispatchEvent(new Event('success'));
-    if (outcome === 'same' || outcome === 'abort')
+    if (outcome === 'same' || outcome === 'abort' || outcome === 'error')
       expect(remove).toHaveBeenCalledExactlyOnceWith(snapshot.key);
     else expect(remove).not.toHaveBeenCalled();
     expect(start).toHaveBeenCalledTimes(1);
     await Promise.resolve();
     expect(settled).toBe(false);
-    if (outcome === 'abort') {
+    if (outcome === 'error') {
+      transaction.dispatchEvent(new Event('error'));
+      await expect(observed).rejects.toThrow('transaction failed');
+    } else if (outcome === 'abort') {
       transaction.dispatchEvent(new Event('abort'));
       await expect(observed).rejects.toThrow('transaction aborted');
     } else {
@@ -196,4 +203,32 @@ test('MS3d IndexedDB cleanup preserves a replacement with equal capturedAt and d
   expect(await store.read(snapshot.key)).toEqual(second);
   expect(await store.clearIfVersion(second.key, second.revision)).toBe(true);
   expect(await store.read(snapshot.key)).toBeNull();
+});
+
+test.each([
+  { name: 'missing key', value: { ...snapshot, key: undefined } },
+  { name: 'missing capturedAt', value: { ...snapshot, capturedAt: undefined } },
+  { name: 'numeric language', value: { ...snapshot, language: 42 } },
+  { name: 'numeric expectedUpdatedAt', value: { ...snapshot, expectedUpdatedAt: 42 } },
+  { name: 'numeric draftUpdatedAt', value: { ...snapshot, draftUpdatedAt: 42 } },
+  { name: 'numeric line id', value: { ...snapshot, lines: [{ ...snapshot.lines[0], id: 42 }] } },
+  {
+    name: 'numeric startMs',
+    value: { ...snapshot, lines: [{ ...snapshot.lines[0], startMs: 42 }] },
+  },
+  { name: 'numeric endMs', value: { ...snapshot, lines: [{ ...snapshot.lines[0], endMs: 42 }] } },
+  { name: 'numeric text', value: { ...snapshot, lines: [{ ...snapshot.lines[0], text: 42 }] } },
+  {
+    name: 'numeric documentIds',
+    value: { ...snapshot, lines: [{ ...snapshot.lines[0], documentIds: [42] }] },
+  },
+])('GAP IndexedDB rejects $name without offering corrupt recovery', async ({ value }) => {
+  storedValue(value);
+  expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toBeNull();
+});
+
+test('GAP IndexedDB preserves the ASR draft token alongside valid recovery text', async () => {
+  const value = { ...snapshot, draftUpdatedAt: 'D1' };
+  storedValue(value);
+  expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toEqual(value);
 });

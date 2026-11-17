@@ -208,6 +208,8 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const) 
       }
       await act(async () => {});
       expect(await store.read(key)).toEqual(version === 'same' ? null : c);
+      if (version === 'newer' && path === 'Save')
+        expect(f.result.current.offer).toEqual({ kind: 'none' });
       if (version === 'newer' && path !== 'unmount' && path !== 'Save')
         expect(f.result.current.offer).toMatchObject({ kind: 'offer', snapshot: c });
       f.unmount();
@@ -258,3 +260,224 @@ test('MS3d hook captures unique revisions in one millisecond and Save preserves 
   first.unmount();
   second.unmount();
 });
+
+function recoverySnapshot(key: string, text = 'Recovered'): TranscriptSnapshot {
+  return {
+    key,
+    revision: `revision:${key}:${text}`,
+    capturedAt: 1,
+    language: 'uk',
+    baseLanguage: 'en',
+    expectedUpdatedAt: 'T1',
+    lines: [{ ...line, text }],
+  };
+}
+
+test('GAP switching a loaded visit hides its offer until the new store read resolves', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = recoverySnapshot('gap-switch:a');
+  await store.write(a);
+  const next = deferred<TranscriptSnapshot | null>();
+  const other = { ...createMemoryTranscriptHistory(), read: () => next.promise };
+  const f = renderHook(
+    ({ key, source }) => useTranscriptRecovery({ historyKey: key, store: source, baseline }),
+    { initialProps: { key: a.key, source: store } },
+  );
+  await act(async () => {});
+  expect(f.result.current.offer).toMatchObject({ snapshot: a });
+  f.rerender({ key: 'gap-switch:b', source: other });
+  expect(f.result.current.isLoaded).toBe(false);
+  expect(f.result.current.offer).toEqual({ kind: 'none' });
+  await act(async () => next.resolve(null));
+  expect(f.result.current.isLoaded).toBe(true);
+});
+
+for (const outcome of ['resolve', 'reject'] as const) {
+  test(`GAP obsolete initial read ${outcome} cannot replace the current visit offer`, async () => {
+    const store = createMemoryTranscriptHistory();
+    const old = deferred<TranscriptSnapshot | null>();
+    const b = recoverySnapshot(`gap-obsolete-${outcome}:b`);
+    await store.write(b);
+    const read = rstest.spyOn(store, 'read').mockReturnValueOnce(old.promise);
+    const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
+      initialProps: { key: `gap-obsolete-${outcome}:a` },
+    });
+    f.rerender({ key: b.key });
+    await act(async () => {});
+    expect(f.result.current.offer).toMatchObject({ snapshot: b });
+    await act(async () => {
+      if (outcome === 'resolve') old.resolve(recoverySnapshot('obsolete-a'));
+      else old.reject(new Error('obsolete read refused'));
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(f.result.current.offer).toMatchObject({ snapshot: b });
+    expect(f.result.current.isLoaded).toBe(true);
+  });
+}
+
+test('GAP obsolete read completion cannot authorize retirement in an unread visit', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = deferred<TranscriptSnapshot | null>();
+  const b = deferred<TranscriptSnapshot | null>();
+  rstest.spyOn(store, 'read').mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+  const clear = rstest.spyOn(store, 'clearIfVersion');
+  const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
+    initialProps: { key: 'gap-unread:a' },
+  });
+  f.rerender({ key: 'gap-unread:b' });
+  await act(async () => a.resolve(null));
+  act(() => f.result.current.captureNow([{ ...line, text: 'own B' }]));
+  await act(async () => {});
+  act(() => f.result.current.finalize());
+  await act(async () => {});
+  expect(clear).not.toHaveBeenCalled();
+  await act(async () => b.resolve(null));
+});
+
+for (const action of ['finalize', 'clean capture'] as const) {
+  test(`GAP ${action} cannot retire an own write before the initial read finishes`, async () => {
+    const store = createMemoryTranscriptHistory();
+    const pending = deferred<TranscriptSnapshot | null>();
+    rstest.spyOn(store, 'read').mockReturnValueOnce(pending.promise);
+    const clear = rstest.spyOn(store, 'clearIfVersion');
+    const key = `gap-initial:${action}`;
+    sessionStorage.setItem(`transcript-recovery-dismissed:${key}`, '1');
+    const f = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
+    act(() => f.result.current.captureNow([{ ...line, text: 'own dirty' }]));
+    await act(async () => {});
+    // Successful capture clears a previous dismissal; reinstate it to observe finalize's guard.
+    sessionStorage.setItem(`transcript-recovery-dismissed:${key}`, '1');
+    act(() => {
+      if (action === 'finalize') f.result.current.finalize();
+      else f.result.current.captureNow([line]);
+    });
+    await act(async () => {});
+    expect(clear).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(`transcript-recovery-dismissed:${key}`)).toBe('1');
+    await act(async () => pending.resolve(null));
+    sessionStorage.removeItem(`transcript-recovery-dismissed:${key}`);
+  });
+}
+
+test('GAP finalization waits for its write commit before conditional retirement', async () => {
+  const memory = createMemoryTranscriptHistory();
+  const commit = deferred<void>();
+  const write = rstest.fn(async (snapshot: TranscriptSnapshot) => {
+    await commit.promise;
+    await memory.write(snapshot);
+  });
+  const clear = rstest.spyOn(memory, 'clearIfVersion');
+  const store = { ...memory, write };
+  const f = renderHook(() => useTranscriptRecovery({ historyKey: 'gap-commit', store, baseline }));
+  await act(async () => {});
+  act(() => f.result.current.captureNow([{ ...line, text: 'Own' }]));
+  act(() => f.result.current.finalize());
+  await act(async () => {});
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(clear).not.toHaveBeenCalled();
+  await act(async () => commit.resolve());
+  expect(clear).toHaveBeenCalledExactlyOnceWith('gap-commit', write.mock.calls[0]?.[0].revision);
+  expect(await memory.read('gap-commit')).toBeNull();
+});
+
+test('GAP finalization without an own write retains the accepted recovery source', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = recoverySnapshot('gap-accepted');
+  await store.write(a);
+  const clear = rstest.spyOn(store, 'clearIfVersion');
+  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
+  await act(async () => {});
+  act(() => f.result.current.accept());
+  act(() => f.result.current.finalize());
+  await act(async () => {});
+  expect(clear).not.toHaveBeenCalled();
+  expect(await store.read(a.key)).toEqual(a);
+});
+
+test('GAP mismatch refresh from an obsolete visit cannot replace the current offer', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = recoverySnapshot('gap-refresh:a');
+  const b = recoverySnapshot('gap-refresh:b');
+  await store.write(a);
+  await store.write(b);
+  const delayed = deferred<TranscriptSnapshot | null>();
+  const read = rstest.spyOn(store, 'read');
+  const clear = rstest.spyOn(store, 'clearIfVersion').mockResolvedValue(false);
+  const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
+    initialProps: { key: a.key },
+  });
+  await act(async () => {});
+  read.mockReturnValueOnce(delayed.promise);
+  act(() => f.result.current.dismiss());
+  await act(async () => {});
+  expect(clear).toHaveBeenCalledExactlyOnceWith(a.key, a.revision);
+  expect(read).toHaveBeenCalledTimes(2);
+  f.rerender({ key: b.key });
+  await act(async () => {});
+  expect(f.result.current.offer).toMatchObject({ snapshot: b });
+  await act(async () =>
+    delayed.resolve({ ...a, revision: 'foreign', lines: [{ ...line, text: 'foreign' }] }),
+  );
+  expect(f.result.current.offer).toMatchObject({ snapshot: b });
+});
+
+test('GAP repeated Discard retires the refreshed revision rather than its predecessor', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = recoverySnapshot('gap-discard');
+  const c = { ...a, revision: 'C', lines: [{ ...line, text: 'C' }] };
+  await store.write(a);
+  const clear = rstest.spyOn(store, 'clearIfVersion');
+  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
+  await act(async () => {});
+  await store.write(c);
+  act(() => f.result.current.dismiss());
+  await act(async () => {});
+  expect(f.result.current.offer).toMatchObject({ snapshot: c });
+  clear.mockClear();
+  act(() => f.result.current.dismiss());
+  await act(async () => {});
+  expect(clear).toHaveBeenCalledExactlyOnceWith(c.key, 'C');
+  expect(await store.read(c.key)).toBeNull();
+});
+
+test('GAP a vanished mismatch closes the stale own recovery prompt', async () => {
+  const store = createMemoryTranscriptHistory();
+  const a = recoverySnapshot('gap-vanished');
+  await store.write(a);
+  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
+  await act(async () => {});
+  expect(f.result.current.offer.kind).toBe('offer');
+  await store.clear(a.key);
+  act(() => f.result.current.captureNow([line]));
+  await act(async () => {});
+  expect(f.result.current.offer).toEqual({ kind: 'none' });
+});
+
+for (const action of ['captureNow', 'noteChange'] as const) {
+  test(`GAP suspended ${action} does not arm capture when resumed or unmounted`, async () => {
+    const f = fixture();
+    await act(async () => {});
+    rstest.useFakeTimers();
+    act(() => f.result.current.setCapturing(false));
+    act(() => f.result.current[action]([{ ...line, text: 'suspended edit' }]));
+    expect(f.write).not.toHaveBeenCalled();
+    act(() => f.result.current.setCapturing(true));
+    act(() => rstest.advanceTimersByTime(idleCaptureMs));
+    f.unmount();
+    expect(f.write).not.toHaveBeenCalled();
+  });
+}
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  let reject: (reason: unknown) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}

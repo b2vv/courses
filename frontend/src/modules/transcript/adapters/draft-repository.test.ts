@@ -57,6 +57,11 @@ describe('draft API repository', () => {
   test.each([
     { name: 'unknown envelope key', response: { drafts: [wireDraft], extra: true } },
     { name: 'missing drafts', response: {} },
+    { name: 'null envelope', response: null },
+    { name: 'obsolete lessonId', response: { drafts: [{ ...wireDraft, lessonId }] } },
+    { name: 'fractional generation', response: { drafts: [{ ...wireDraft, generation: 1.5 }] } },
+    { name: 'zero generation', response: { drafts: [{ ...wireDraft, generation: 0 }] } },
+    { name: 'negative generation', response: { drafts: [{ ...wireDraft, generation: -1 }] } },
     { name: 'unknown first-item key', response: { drafts: [{ ...wireDraft, extra: true }] } },
     {
       name: 'unknown later-item key',
@@ -88,7 +93,7 @@ describe('draft API repository', () => {
     },
   ])('rejects the whole list for $name', async ({ response }) => {
     server.use(http.get(api, () => HttpResponse.json(response)));
-    expect(await createApiDraftRepository().listDrafts(lessonId)).toEqual(invalid);
+    await expect(createApiDraftRepository().listDrafts(lessonId)).resolves.toEqual(invalid);
   });
 
   test('maps queued to pending and permits RFC3339 timestamps with no fractional seconds', async () => {
@@ -192,3 +197,35 @@ describe('transcript inventory', () => {
     });
   });
 });
+
+test('GAP inventory cancellation reports request_cancelled after request starts', async () => {
+  const controller = new AbortController();
+  const { promise: started, resolve: markStarted } = deferred<void>();
+  const { promise: response, resolve: releaseResponse } = deferred<void>();
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcripts`, async () => {
+      markStarted();
+      await response;
+      return HttpResponse.json({ transcripts: [] });
+    }),
+  );
+  const pending = createApiDraftRepository().listTranscripts(lessonId, controller.signal);
+  await started;
+  controller.abort();
+  releaseResponse();
+  expect(await pending).toEqual({ ok: false, error: { code: 'request_cancelled' } });
+});
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  let reject: (reason: unknown) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}

@@ -1,4 +1,4 @@
-import { expect, test } from '@rstest/core';
+import { expect, rstest, test } from '@rstest/core';
 import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
 import {
   captureDirective,
@@ -440,4 +440,25 @@ test('MS3d detached uk snapshot skips a matching orphan: matching track, else de
   expect(place([detached], [orphan])).toEqual([]);
   // No tabs at all: the single editor.
   expect(place([detached], [])[0]?.instanceId).toBe('');
+});
+
+test.each([
+  { key: 'another-key' },
+  { language: 'es' },
+  { baseLanguage: 'fr' },
+  { expectedUpdatedAt: 'T2' },
+  { draftUpdatedAt: 'D2' },
+])('GAP accepted cleanup preserves a same-revision snapshot differing in %j', async (change) => {
+  const accepted = snapshot({ baseLanguage: 'en', draftUpdatedAt: 'D1' });
+  const replacement = { ...accepted, ...change };
+  const memory = createMemoryTranscriptHistory();
+  await memory.write(replacement);
+  const clearIfVersion = rstest.fn(async () => true);
+  await clearAcceptedTranscriptSnapshot(
+    { ...memory, read: async () => replacement, clearIfVersion },
+    accepted,
+    () => false,
+  );
+  expect(clearIfVersion).not.toHaveBeenCalled();
+  expect(await memory.read(replacement.key)).toEqual(replacement);
 });

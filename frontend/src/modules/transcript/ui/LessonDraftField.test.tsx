@@ -265,3 +265,11 @@ describe('lesson draft field', () => {
     expect(output.getAttribute('data-draft-state')).toBe('ready');
   });
 });
+
+it('GAP a missing shown track reports not found after Regenerate', async () => {
+  renderField(draft('ready'), draftActions({ regenerate: async () => 'track_not_found' }));
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Regenerate transcript' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'Save the course and upload a video before generating.',
+  );
+});

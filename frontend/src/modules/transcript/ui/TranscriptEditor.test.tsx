@@ -5,6 +5,7 @@ import { createI18n, I18nProvider } from '../../../app/providers/i18n';
 import type { TranscriptErrorCode, TranscriptSegment } from '../domain/transcript';
 import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
 import { TranscriptEditor } from './TranscriptEditor';
+import type { TranscriptSnapshot } from '../application/recovery';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
 const documentId = '60000000-0000-4000-8000-000000000001';
@@ -18,6 +19,9 @@ const segments: TranscriptSegment[] = [
     documentIds: [],
   },
 ];
+
+const firstSegment = segments[0];
+if (firstSegment === undefined) throw new Error('editor fixture requires one segment');
 
 async function editor(
   save: TranscriptEditorActionsSave,
@@ -618,6 +622,7 @@ test('MS3b fix 5 a clean track rename followed by editing is not a dirty track r
     history: { key: 'author:lesson:track:one', store: createMemoryTranscriptHistory() },
   };
   const view = render(<TranscriptEditor {...props} />);
+  await act(async () => {});
   // A cached base can remain while the new-language query is in flight.
   view.rerender(<TranscriptEditor {...props} language="en" />);
   fireEvent.change(screen.getByLabelText('Текст репліки 1'), {
@@ -822,6 +827,11 @@ test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only 
   const hint = await screen.findByText('Restore or discard the unsaved changes first');
   const text = screen.getByRole('textbox', { name: 'Line 1 text' });
   expect(text.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id);
+  for (const name of ['Line 1 start, ms', 'Line 1 end, ms']) {
+    expect(
+      screen.getByRole('textbox', { name }).getAttribute('aria-describedby')?.split(' '),
+    ).toContain(hint.id);
+  }
   text.focus();
   expect(document.activeElement).toBe(text);
   expect(text).toHaveProperty('readOnly', true);
@@ -1366,3 +1376,449 @@ test('MS3b fix6 failed Save preserves a newer capture without recapturing old li
   expect(write).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'A');
 });
+
+function gapEditorProps(store = createMemoryTranscriptHistory(), key = 'author:gap-editor') {
+  return {
+    lessonId,
+    language: 'uk',
+    baseLanguage: 'uk',
+    expectedUpdatedAt: 'T1',
+    segments,
+    documents: [],
+    actions: { save: rstest.fn(async () => null) },
+    history: { key, store },
+  };
+}
+function gapSource(key: string, text = 'Detached'): TranscriptSnapshot {
+  return {
+    key,
+    revision: `revision:${key}`,
+    capturedAt: 1,
+    language: 'uk',
+    baseLanguage: 'uk',
+    expectedUpdatedAt: 'T1',
+    lines: [{ ...storedLine, text }],
+  };
+}
+function detachedOffer(snapshot: TranscriptSnapshot) {
+  return { instanceId: '', legacy: false, snapshot };
+}
+const clickSave = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+const clickRestore = () => fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
+
+// Keep all unchanged props by reference so each case reaches just its own rebase guard.
+for (const change of ['base language', 'token', 'segments'] as const) {
+  test(`GAP a clean editor adopts a server change to only ${change}`, async () => {
+    const props = gapEditorProps();
+    const view = render(<TranscriptEditor {...props} />);
+    await act(async () => {});
+    view.rerender(
+      <TranscriptEditor
+        {...props}
+        baseLanguage={change === 'base language' ? 'en' : 'uk'}
+        expectedUpdatedAt={change === 'token' ? 'T2' : 'T1'}
+        segments={change === 'segments' ? [{ ...firstSegment, text: 'New server' }] : segments}
+      />,
+    );
+    if (change === 'segments')
+      expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'New server');
+    fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Edited' } });
+    clickSave();
+    await act(async () => {});
+    expect(props.actions.save).toHaveBeenCalledWith(
+      'uk',
+      change === 'token' ? 'T2' : 'T1',
+      expect.arrayContaining([expect.objectContaining({ text: 'Edited' })]),
+      change === 'base language' ? 'en' : 'uk',
+    );
+  });
+}
+
+test('GAP a completed Save lets the next canonical server token become the next edit base', async () => {
+  const props = gapEditorProps();
+  const view = render(<TranscriptEditor {...props} />);
+  await act(async () => {});
+  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saved A' } });
+  clickSave();
+  await act(async () => {});
+  expect(screen.getByText('Транскрипт збережено.')).toBeTruthy();
+  view.rerender(
+    <TranscriptEditor
+      {...props}
+      expectedUpdatedAt="T2"
+      segments={[{ ...firstSegment, text: 'Saved A' }]}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Edit B' } });
+  clickSave();
+  await act(async () => {});
+  expect(props.actions.save).toHaveBeenLastCalledWith('uk', 'T2', expect.any(Array), 'uk');
+});
+
+test('GAP dirty edits compare against their retained base after a server prop refresh', async () => {
+  const props = gapEditorProps();
+  const view = render(<TranscriptEditor {...props} />);
+  await act(async () => {});
+  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Dirty first' } });
+  // A new recognition generation reruns baseline memoization while the dirty editor keeps T1.
+  view.rerender(
+    <TranscriptEditor
+      {...props}
+      expectedUpdatedAt="T2"
+      draftUpdatedAt="D2"
+      segments={[{ ...firstSegment, text: 'Server moved' }]}
+    />,
+  );
+  const text = screen.getByLabelText('Текст репліки 1');
+  fireEvent.change(text, { target: { value: 'Server moved' } });
+  fireEvent.focusOut(text);
+  await act(async () => {});
+  expect(await props.history.store.read(props.history.key)).toMatchObject({
+    expectedUpdatedAt: 'T1',
+    lines: [{ text: 'Server moved' }],
+  });
+});
+
+test('GAP a pending Save locks fields, documents, line controls and repeat Save', async () => {
+  const pending = deferred<null>();
+  const save = rstest.fn(() => pending.promise);
+  await editor(save, {
+    draftOffer: { language: 'uk', updatedAt: 'D1', segments: [{ ...firstSegment, text: 'ASR' }] },
+  });
+  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saving A' } });
+  clickSave();
+  for (const label of ['Початок репліки 1, мс', 'Кінець репліки 1, мс', 'Текст репліки 1']) {
+    const field = screen.getByLabelText(label);
+    expect(field).toHaveProperty('readOnly', true);
+    fireEvent.change(field, { target: { value: '99' } });
+  }
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Довідка' }));
+  for (const name of [
+    'Додати репліку',
+    'Видалити репліку 1',
+    'Завантажити чернетку',
+    'Зберегти транскрипт',
+  ]) {
+    const button = screen.getByRole('button', { name });
+    fireEvent.click(button);
+  }
+  expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'Saving A');
+  expect(screen.getByLabelText('Початок репліки 1, мс')).toHaveProperty('value', '0');
+  expect(screen.getByRole('checkbox', { name: 'Довідка' })).toHaveProperty('checked', false);
+  expect(save).toHaveBeenCalledTimes(1);
+  await act(async () => pending.resolve(null));
+});
+
+for (const action of ['Restore', 'Discard'] as const) {
+  test(`GAP detached ${action} during pending Save cannot change text or ownership`, async () => {
+    const props = gapEditorProps();
+    const source = gapSource(`${props.history.key}:source`);
+    await props.history.store.write(source);
+    const clear = rstest.spyOn(props.history.store, 'clearIfVersion');
+    const pending = deferred<null>();
+    const save = rstest.fn(() => pending.promise);
+    render(
+      <TranscriptEditor
+        {...props}
+        actions={{ save }}
+        detachedSnapshots={[detachedOffer(source)]}
+      />,
+    );
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saving own' } });
+    clickSave();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: action === 'Restore' ? 'Відновити зміни' : 'Не відновлювати',
+      }),
+    );
+    await act(async () => {});
+    expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'Saving own');
+    expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
+    expect(clear.mock.calls.filter(([key]) => key === source.key)).toEqual([]);
+    expect(await props.history.store.read(source.key)).toEqual(source);
+    await act(async () => pending.resolve(null));
+    expect(await props.history.store.read(source.key)).toEqual(source);
+  });
+}
+
+test('GAP ancestry distinguishes two revisions of the same key within its eight-source limit', async () => {
+  const props = gapEditorProps();
+  const source = {
+    ...gapSource('source'),
+    revision: 'new',
+    acceptedSource: [
+      { key: 'source', revision: 'old' },
+      { key: 'source', revision: 'new' },
+      { key: 'a', revision: 'a1' },
+      { key: 'b', revision: 'b1' },
+      { key: 'c', revision: 'c1' },
+      { key: 'd', revision: 'd1' },
+      { key: 'e', revision: 'e1' },
+      { key: 'f', revision: 'f1' },
+      { key: 'overflow', revision: 'o1' },
+    ],
+  };
+  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
+  await act(async () => {});
+  clickRestore();
+  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
+  await act(async () => {});
+  expect((await props.history.store.read(props.history.key))?.acceptedSource).toEqual([
+    { key: 'source', revision: 'new' },
+    { key: 'source', revision: 'old' },
+    { key: 'a', revision: 'a1' },
+    { key: 'b', revision: 'b1' },
+    { key: 'c', revision: 'c1' },
+    { key: 'd', revision: 'd1' },
+    { key: 'e', revision: 'e1' },
+    { key: 'f', revision: 'f1' },
+  ]);
+});
+
+test('GAP ancestry dedup retains the full restored snapshot for content-aware cleanup', async () => {
+  const props = gapEditorProps();
+  const source = gapSource('duplicate-source');
+  const offered = { ...source, acceptedSource: [{ key: source.key, revision: source.revision }] };
+  await props.history.store.write(offered);
+  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(offered)]} />);
+  await act(async () => {});
+  clickRestore();
+  const replacement = {
+    ...offered,
+    lines: [{ ...storedLine, text: 'Changed with same revision' }],
+  };
+  await props.history.store.write(replacement);
+  clickSave();
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toEqual(replacement);
+});
+
+test('GAP restoring a descendant handles all concurrently offered ancestors', async () => {
+  const props = gapEditorProps();
+  const a = gapSource('ancestor-a');
+  const b = gapSource('ancestor-b');
+  const c = {
+    ...gapSource('descendant-c'),
+    acceptedSource: [
+      { key: a.key, revision: a.revision },
+      { key: b.key, revision: b.revision },
+    ],
+  };
+  render(<TranscriptEditor {...props} detachedSnapshots={[c, a, b].map(detachedOffer)} />);
+  await act(async () => {});
+  clickRestore();
+  expect(screen.queryByRole('button', { name: 'Відновити зміни' })).toBeNull();
+  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
+  await act(async () => {});
+  expect((await props.history.store.read(props.history.key))?.acceptedSource).toHaveLength(3);
+});
+
+test('GAP loading ASR after a detached restore releases and reoffers the old source', async () => {
+  const props = gapEditorProps();
+  const source = gapSource('pre-asr-source');
+  await props.history.store.write(source);
+  render(
+    <TranscriptEditor
+      {...props}
+      detachedSnapshots={[detachedOffer(source)]}
+      draftOffer={{
+        language: 'uk',
+        updatedAt: 'D2',
+        segments: [{ ...firstSegment, text: 'ASR replacement' }],
+      }}
+    />,
+  );
+  await act(async () => {});
+  clickRestore();
+  const load = screen.getByRole('button', { name: 'Завантажити чернетку' });
+  fireEvent.click(load);
+  expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'ASR replacement');
+  expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
+  clickSave();
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toEqual(source);
+});
+
+test('GAP legacy recovery keeps the loaded ASR generation and current editor language', async () => {
+  const props = gapEditorProps();
+  const source = {
+    key: props.history.key,
+    revision: 'legacy',
+    capturedAt: 1,
+    expectedUpdatedAt: 'T1',
+    draftUpdatedAt: 'D1',
+    lines: [storedLine],
+  };
+  await props.history.store.write(source);
+  const view = render(<TranscriptEditor {...props} draftUpdatedAt="D2" />);
+  await act(async () => {});
+  clickRestore();
+  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toMatchObject({
+    language: 'uk',
+    draftUpdatedAt: 'D1',
+    lines: [storedLine],
+  });
+  view.unmount();
+  const revisit = render(<TranscriptEditor {...props} draftUpdatedAt="D2" />);
+  await act(async () => {});
+  expect(
+    screen.getByText(
+      'На цьому пристрої лишилися незбережені зміни, але транскрипт на сервері відтоді змінився. Якщо відновити й зберегти, новіший текст буде перезаписано.',
+    ),
+  ).toBeTruthy();
+  clickRestore();
+  clickSave();
+  await act(async () => {});
+  expect(props.actions.save).toHaveBeenCalledWith('uk', 'T1', expect.any(Array), '');
+  revisit.unmount();
+});
+
+test('GAP a rejected Save reports unavailable, retains recovery and resumes later captures', async () => {
+  const props = gapEditorProps();
+  const save = rstest.fn(async () => {
+    throw new Error('network refused');
+  });
+  render(<TranscriptEditor {...props} actions={{ save }} />);
+  await act(async () => {});
+  const text = screen.getByLabelText('Текст репліки 1');
+  fireEvent.change(text, { target: { value: 'Before failure' } });
+  clickSave();
+  await act(async () => {});
+  expect(screen.getByText('Сервіс недоступний. Спробуйте ще раз.')).toBeTruthy();
+  expect(screen.queryByText('Транскрипт збережено.')).toBeNull();
+  expect(await props.history.store.read(props.history.key)).toMatchObject({
+    lines: [{ text: 'Before failure' }],
+  });
+  fireEvent.change(text, { target: { value: 'After failure' } });
+  fireEvent.focusOut(text);
+  await act(async () => {});
+  expect(await props.history.store.read(props.history.key)).toMatchObject({
+    lines: [{ text: 'After failure' }],
+  });
+});
+
+test('GAP a source acquired by a mounted tab is removed from captured cleanup ancestry', async () => {
+  const props = gapEditorProps();
+  const source = gapSource('acquired-source');
+  await props.history.store.write(source);
+  const offers = [detachedOffer(source)];
+  const view = render(<TranscriptEditor {...props} detachedSnapshots={offers} />);
+  await act(async () => {});
+  clickRestore();
+  view.rerender(
+    <TranscriptEditor {...props} detachedSnapshots={offers} mountedHistoryKeys={[source.key]} />,
+  );
+  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
+  await act(async () => {});
+  expect((await props.history.store.read(props.history.key))?.acceptedSource).toBeUndefined();
+  view.rerender(<TranscriptEditor {...props} detachedSnapshots={offers} mountedHistoryKeys={[]} />);
+  clickSave();
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toEqual(source);
+});
+
+test('GAP source cleanup rechecks newly mounted ownership after its deferred read', async () => {
+  const memory = createMemoryTranscriptHistory();
+  const props = gapEditorProps(memory);
+  const source = gapSource('newly-mounted-source');
+  await memory.write(source);
+  const pending = deferred<TranscriptSnapshot | null>();
+  const started = deferred<void>();
+  const store = {
+    ...memory,
+    read: async (key: string) => {
+      if (key === source.key) {
+        started.resolve();
+        return pending.promise;
+      }
+      return memory.read(key);
+    },
+  };
+  const clear = rstest.spyOn(store, 'clearIfVersion');
+  const offers = [detachedOffer(source)];
+  const view = render(
+    <TranscriptEditor
+      {...props}
+      history={{ key: props.history.key, store }}
+      detachedSnapshots={offers}
+    />,
+  );
+  await act(async () => {});
+  clickRestore();
+  clickSave();
+  await started.promise;
+  view.rerender(
+    <TranscriptEditor
+      {...props}
+      history={{ key: props.history.key, store }}
+      detachedSnapshots={offers}
+      mountedHistoryKeys={[source.key]}
+    />,
+  );
+  await act(async () => pending.resolve(source));
+  expect(clear.mock.calls.filter(([key]) => key === source.key)).toEqual([]);
+  expect(await memory.read(source.key)).toEqual(source);
+});
+
+test('GAP successful detached Save removes ancestry from subsequent author captures', async () => {
+  const props = gapEditorProps();
+  const source = gapSource('saved-source');
+  await props.history.store.write(source);
+  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
+  await act(async () => {});
+  clickRestore();
+  clickSave();
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toBeNull();
+  const text = screen.getByLabelText('Текст репліки 1');
+  fireEvent.change(text, { target: { value: 'New edit after successful Save' } });
+  fireEvent.focusOut(text);
+  await act(async () => {});
+  expect(await props.history.store.read(props.history.key)).toMatchObject({
+    lines: [{ text: 'New edit after successful Save' }],
+  });
+  expect((await props.history.store.read(props.history.key))?.acceptedSource).toBeUndefined();
+});
+
+test('GAP Discard of a refreshed own offer releases an earlier detached restoration', async () => {
+  const props = gapEditorProps();
+  const source = gapSource('released-after-discard');
+  await props.history.store.write(source);
+  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
+  await act(async () => {});
+  clickRestore();
+  const text = screen.getByLabelText('Текст репліки 1');
+  fireEvent.focusOut(text);
+  await act(async () => {});
+  const newer = gapSource(props.history.key, 'Other window C');
+  await props.history.store.write(newer);
+  fireEvent.change(text, { target: { value: 'Перша' } });
+  fireEvent.focusOut(text);
+  await act(async () => {});
+  expect(screen.getByText(recoveryLockHint)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' }));
+  await act(async () => {});
+  expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
+  clickSave();
+  await act(async () => {});
+  expect(await props.history.store.read(source.key)).toEqual(source);
+});
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  let reject: (reason: unknown) => void = () => {
+    throw new Error('Deferred promise not initialized');
+  };
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
