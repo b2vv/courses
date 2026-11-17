@@ -566,3 +566,214 @@ Fixture as MS3a (lesson `7539aed1`: `und` default track, `no_speech` draft, orph
   failed, 0 skipped**.
 - Not run for this slice: `make integration` (no backend change), `make e2e` (MS3c), the full ordered `make check` (once, on the final
   MS3 commit).
+
+## MS3c — e2e of the MS3 rows and the final gate — checkpoint 2026-11-17
+
+Plan: [plan-ms2-3.md](plan-ms2-3.md) (ACCEPTED r9) §4 MS3 table and §5, on `ms2-3-asr-per-track` @ `7b20d2c`.
+Owner go-ahead: "Next" in reply to "Починати MS3c?", 2026-11-17 (chat, Courses 1).
+
+### Pre-code checkpoint
+- **Scope / acceptance (full).** The e2e parts of the MS3 rows: M3-R1 (`transcript.spec` green unchanged), M3-R2 (PUT language from the
+  network request), M3-R4 (`und` confirm success; PUT failure via `page.route` → reload → restore), M3-R6 (two-tab isolation through a
+  reload), M3-R8 (two tracks, each draft heard from its own audio, `en`/`en-gb` transcripts equal the PUT bodies), M3-R9 (the existing
+  `asr.spec` moved to the per-track URLs and tab-scoped helpers), M3-R10 (rename between Load and Save → 0 PUT; 503 on GET tracks → 0 PUT),
+  M3-R11 (a–d), M3-R12 (a, b), M3-R13 (a, b), M3-R14 (a `multilingual=true` track gets a draft), M3-R15 (switch → Load disabled →
+  Regenerate → Load enabled). Then the full ordered `make check` and one PR for MS2+MS3. Non-goals: player/panel (MS4), editor UX fixes
+  (owner, 2026-11-15: at the end), product code changes except defects the e2e finds (each recorded as a defect with a test).
+- **Decision (2026-11-17, Courses 1): where M3-R6 two-tab e2e lives.** The plan names `transcript.spec` :499 "extended to two tabs", but a
+  second tab needs a Ready asset with two ready tracks, which `transcript.spec` does not seed (it has no video). The two-tab reload goes into
+  `asr.spec` on the M3-R8 fixture; `transcript.spec` :499 stays unchanged as the M3-R1 "no Ready asset → one editor, legacy key" proof.
+  Check: both tests in the full e2e run.
+- **Decision (2026-11-17, Courses 1): the `en-GB` dub track is minted through the upload API**, not the S5 language list, which does not
+  offer `en-GB` (plan M3-R8). Check: the track row shows `en-gb` and its draft's `trackLanguage` is `en-gb`.
+- **Grilling / decisions.** None open: O5, O7, O8, MS-D6..D10 hold. Every spec that creates courses deletes them in `afterAll`
+  (AGENTS.md: whoever adds a globally counted thing cleans up).
+- **Dependencies / writers.** MS3b committed (`7b20d2c`). Writer: Codex (spec runs), Courses 1 (stack, gates, commit, PR). Shared working
+  tree: only `frontend/e2e/*` and this report, unless an e2e finds a product defect.
+- **Scoped impact.** `frontend/e2e/asr.spec.ts` (rewrite of helpers + new tests), possibly `frontend/e2e/media.setup.ts` (no new fixture
+  expected: `e2e-speech-640x360.mp4` and `e2e-speech-dub.m4a` exist). Runtime: each recognition is minutes on the worker; the spec grows
+  by roughly 8 tests of 4–8 min each — measured in the gate, recorded here.
+- **Plan critique / defense.** Covered by the plan r9; no new contract. Post-code: Codex read-only review (`review_mode=independent_subagent`
+  → Codex runtime). Full `make integration` and e2e run on the final commit (§5).
+- **Admission: READY.**
+
+### MS3c run 1 (Codex) and defect 1, 2026-11-17
+- Run 1 (`_wip-ms3c-run1.md`): `asr.spec` migrated to the per-track URLs and tab-scoped helpers; new tests M3-R8/R2/R4-success/R6
+  (one journey), M3-R4 PATCH-ok + PUT-503 → reload → restore → retry, M3-R14. Targeted runs: 10 passed, S6 rename stopped on a defect.
+- **Defect 1 (pre-existing since multi-audio S5-L2b, found by the S6 rename e2e):** the audio-track edit dialog is portaled, but React
+  bubbles `submit` through the component tree, so its `<form>` also submitted the course editor's `<form>`: an extra
+  `PUT /admin/courses/{id}` around the PATCH, "Зміни збережено.", and the selected transcript tab reset to the default. Evidence:
+  `frontend/test-results/ms3c-run1-v2/…raft-stale-until-Regenerate…/rename-writes.json` (PUT, PATCH, PUT). Fix: `stopPropagation` in the
+  dialog's submit (`LessonAudioTracksField.tsx`). Test: "submitting the edit dialog does not submit the course form it is rendered
+  within" — fails without the fix (outer submit recorded), passes with it. It is the only nested `<form>` under the course form (all
+  `<form>` in `frontend/src` checked). After the image rebuild: C11 49.2 s and S6 rename 49.4 s passed (`test-results/ms3c-fix1`).
+
+### MS3c review routing and record block (added 2026-11-17 after re-reading `docs/development/ai-factory.md`)
+The checkpoint above named only `review_mode`; the adapter requires the full routing and a package bound to a snapshot. Recorded now,
+before the w1 verdict arrives, not retroactively for any verdict.
+- **Routing.** Goal: independent post-code review of MS3c → new Codex read-only run (independent context, not a fork; owner memory
+  26.10 "review every task"). Owner: Courses 1. Reference: `docs/multi-subtitles/_wip-ms3c-review-w1.log` → output
+  `_wip-ms3c-review-codex-w1.md`. Delivery owner: Courses 1 (local `codex exec -s read-only`). Shared resource: read-only, no stack access.
+- **Package `ms3c-w1`.** Root `/Users/strelia/projects/courses`, branch `ms2-3-asr-per-track`, base/HEAD `7b20d2c9b06f`. Closed scope
+  and SHA-256: `frontend/e2e/asr.spec.ts` `92e0695a…de812`; `frontend/src/modules/media/ui/LessonAudioTracksField.tsx` `24e71a1e…8e54b`;
+  `…/LessonAudioTracksField.test.tsx` `1c6698fc…9461a`. Contract: `plan-ms2-3.md` `e27efa6a…09b4` §4. Raw evidence: run journals
+  `_wip-ms3c-run{1,2}.md` (commands, exits, reporter lines; full `asr.spec` 26 passed, 12.4 m, exit 0). Gaps in the sent prompt:
+  hashes and raw-evidence commands were not inlined (the reviewer reads the journals); Standards and Spec axes are asked together.
+  A verdict counts only for these hashes; any later change reopens the affected rows.
+- **Transfer state:** `sent` (Codex process started); ACK/verdict pending. Next action: read the verdict → fix findings (Codex) → w2 on the
+  delta, or, on SHIP, the gate. Owner: Courses 1.
+- **Heavy shared resource.** The targeted and full-file e2e above ran on the shared Kiri stack in this session (no other session's run
+  observed; not recorded as an agreed window beforehand — a gap). The final ordered `make check` resets the dev volumes
+  (`e2e-reset`): it runs only in a window confirmed with the owner, then the commit/PR.
+- **Required final verdict:** independent review SHIP on the final snapshot + ordered `make check` exit 0 with full e2e. Until both: not DONE.
+- **w1 verdict received (2026-11-17), package `ms3c-w1` hashes matched: BLOCK, 3 Major + 1 Minor**, all test strength
+  (`_wip-ms3c-review-codex-w1.md`): R8/R11b–d take the PUT as their own expectation; R12b cannot tell language placement from default
+  placement and stops before Save; R15 `en` setup races automatic recognition; one cleanup exception skips the rest. Defect-1 fix judged
+  correct and complete. Transfer state → `verdict_received`. Next: Codex fix run 1 (`_wip-ms3c-fix1-brief.md`) → w2 on the new hashes.
+- **Fix run 1 (Codex, `_wip-ms3c-fix1.md`):** R8 PUT = that track's ASR draft, R11b–d PUT = the typed/restored constants (mutation
+  red / reverted green recorded for each); R12b now has a matching non-default track beside a different default, plus a no-match →
+  default variant, both through Save → 200 and preservation; R15 `en` waits for the initial draft, renames, regenerates to `en`; cleanup
+  continues per course. Full `asr.spec` 26 passed (12.3 m), exit 0. Limitation: the cleanup-exception path is not exercised by an
+  injected failure. **Package `ms3c-w2`:** `asr.spec.ts` `a3682a92…3f33f`; media TSX/test unchanged from `ms3c-w1`. State: `sent`.
+- **w2 verdict received (2026-11-17), package `ms3c-w2` hashes matched: SHIP**, no findings (`_wip-ms3c-review-codex-w2.md`). All four w1
+  findings closed in code; no weakening of the other rows. Remaining before DONE: the ordered `make check` with full e2e (needs the
+  owner's confirmation of the volume-resetting window), then commit and PR.
+- **Gate window confirmed by the owner (2026-11-17, "Так, запускай").** Attempt 1 (04:25) failed at step 1 `format-check`:
+  `frontend/e2e/asr.spec.ts` unformatted (a `test.info().attach(...)` call wrapped by hand at ~l.1188); nothing else ran, no volume
+  reset. Delta: `npx oxfmt e2e/asr.spec.ts`, one call re-wrapped; whitespace-stripped content identical to `ms3c-w2` (checked by
+  `diff` after `tr -d ' \n\t'`). New hash `asr.spec.ts` `de98e411…c28e9e`; the w2 SHIP carries over as a formatting-only delta,
+  no reviewed row is affected. Codex runs reported `npm run format` but the file was not left formatted — the gate caught it.
+  Attempt 2 started on that hash.
+- **Attempt 2 (04:25–04:36), `asr.spec.ts` `de98e411`:** format-check, lint, typecheck, unit, `go test -race`, integration,
+  check-generated, build, e2e-reset, up, drain-queue, seeds passed; **`smoke` failed: `API rate limit not enforced`** (60 requests, no
+  429). Mechanism: the Kiri `environment.sh` exports `COMPOSE_FILE` = base + `docker-compose.e2e.yml` + Kiri override, so the gate's
+  bare `make up` mounted `api-req.e2e.conf` (burst 200) where `smoke` expects the production `api-req.conf` (burst 20). Not caused by
+  this branch (no infra change). **Decision (2026-11-17, Courses 1):** run the gate with the Kiri `DOCKER_HOST` and
+  `COMPOSE_FILE` = base + Kiri override (it only maps monitoring ports); the `e2e` recipe exports its own base+e2e `COMPOSE_FILE`.
+  Check: attempt 3's `smoke` line and its log header. Attempt 3 started.
+- **Attempt 3 stopped by Courses 1 (2026-11-17 ~04:41) during `go test -race`, before `e2e-reset` (log: 0 reset lines; no orphan
+  go/testcontainers containers).** Re-reading the local rules (owner request) showed two process breaches: (1) the owner confirmed one
+  volume-resetting `make check`; attempts 2 and 3 were reruns taken without a fresh confirmation, attempt 2 reset the volumes; (2)
+  attempt 3 ran with a `COMPOSE_FILE` different from the one the Kiri instructions select — a change to how the shared stand is raised,
+  which needs the owner's agreement, not an author decision. The "Decision" above is therefore withdrawn to a **proposal awaiting the
+  owner**. Also missed: author `format:check` before the gate (memory: Codex skips oxfmt). The format-only delta binding to the w2 SHIP
+  stands per `docs/development/ai-factory.md` §checkpoint ("правопис/форматування — перевірений delta та явна прив'язка").
+- **Record block (current).** Task: multi-subtitles MS3c / final gate. Snapshot: HEAD `7b20d2c` + dirty `asr.spec.ts` `de98e411…`,
+  `LessonAudioTracksField.tsx` `24e71a1e…`, `.test.tsx` `1c6698fc…`, this report. review_mode: independent_subagent (Codex read-only);
+  writer: Courses 1 (Codex runs); reviewer: Codex w2. Transfer: `verdict_received` (SHIP, `ms3c-w2`; bound to `de98e411` as a
+  formatting delta). Required final verdict: w2 SHIP + ordered `make check` exit 0 with full e2e — **BLOCKED**: gate not passed.
+  Action `ms3c-gate-4`: owner chooses the compose selection for the gate and confirms the volume-resetting window → Courses 1 runs it.
+  Owner of the next step: the repository owner.
+- **Rules re-read (owner request, 2026-11-17 ~05:00).** `agent-entry.md` (changed 04:57: §1 retry of a silent agent "with an adequate
+  reviewer in a clean context") and `AGENTS.local.md` (04:08) read in full. Per the archive-search rule (look up a claimed decision
+  before relying on it), archive lookup: project `courses`, read-only search client, queries "make check kiri", "COMPOSE_FILE smoke",
+  "API rate limit not enforced"; all `exhausted`, 6/0/0 hits. No prior decision on the gate's compose selection on Kiri; earlier
+  sessions only assumed "e2e with explicit `-f` drops the Kiri override". Found: session `594370c1` (design-pass, slice AUTH, worktree
+  `claude/design-pass-all-screens-085f0e`) also waits for a volume-resetting `make check` on the same Kiri stand (its Q3, owner window)
+  and used live stand data for its checks; it was idle (last activity 2026-11-16 15:46) during attempts 1–3, so no concurrent heavy
+  run, but attempt 2's `e2e-reset` reset the data that session saw. Limits: a terminal cursor does not prove the archive is complete.
+  The two gates are one-at-a-time on this stand; the order is the owner's call.
+- **Owner decision (2026-11-17 ~05:05, "Go" to the choice "base compose, now"):** the MS3c gate runs on Kiri with `DOCKER_HOST` from
+  `environment.sh` and `COMPOSE_FILE` = `docker-compose.yml` + `courses-kiri/local-runtime.override.json`; one volume-resetting run,
+  window now, before the AUTH session's gate. Check: attempt 4's log header and `smoke` line. Action `ms3c-gate-4` → running.
+- **Attempt 4 (04:59–05:25, owner-approved compose selection), `asr.spec.ts` `de98e411`: GATE_EXIT=2 at `e2e`.** All steps through
+  `smoke` passed (unit 1186/0, `PASS … login and SSR rate limits`, `PASS media rate limit` — the compose selection is confirmed).
+  e2e: **112 passed, 2 failed, 37 did not run (18.5 m)**; log `frontend/test-logs/api-nginx-20261117T030644Z.log`.
+  1. `asr.spec.ts:983` **M3-R11 a–d** (own test, passed targeted and in the 26/26 full-file runs): at step (c) Save showed
+     "Доріжку змінено або видалено. Оновіть доріжки й спробуйте ще." instead of the replace dialog; 0 PUT. Request order after the
+     `en` PATCH: GET audio-tracks → GET transcripts → GET audio-tracks (Save re-read) → GET drafts; at step (b), which passed, GET drafts
+     came before the Save re-read. Hypothesis (not proven): the Save-time track check compares against a value refreshed by the drafts
+     query, so a Save clicked after a same-page rename but before that refetch is refused — a product race a fast author can hit, or a
+     missing settle wait in the test. Evidence: `frontend/test-results/asr-ASR-acceptance-with-a--1209b-…/{requests.json,error-context.md}`.
+  2. `instructor.spec.ts:380` W07/W08 (untouched by this branch): `POST /api/v1/admin/courses` → 503 `dependency_unavailable`
+     "Identity service is temporarily unavailable" after 4092 ms (requestId `c13f05f2…`); neighbouring requests took ~1 s. Mechanism
+     not established (identity lookup timeout under full-suite load on Kiri is the candidate).
+  37 did not run: the serial blocks after those failures. Gate **FAIL**; the w2 SHIP does not cover a new R11 fix. Next: owner decision.
+- **Diagnosis of attempt 4 and fix (Courses 1, 2026-11-17).** R11: `renameTrack` waited for the PATCH 200 and the unchanged selected
+  tab id, not for the tab's name; the tab id is keyed by track id (`track:<id>`, `LessonLanguageTabs.tsx:50`), so it stayed while the
+  name was still Polish, and Save carried `language: 'pl'` against fresh tracks saying `en` → `track_changed` (the M3-R10 refusal,
+  `LessonLanguageTabs.tsx:284–302`). Fix in the test only: after the PATCH, wait until this track's tab (`[id$="-tab-track:<id>"]`)
+  is named after the new language. format/typecheck/lint exit 0; `asr.spec.ts` → `f74e41d5…98a13`. **Not run on the stand** (needs the
+  owner's window). W07/W08 503: identity returned `ErrDependencyUnavailable` after 4092 ms with `workers: 1` (no parallel stop);
+  candidate: the amd64 Postgres under emulation on Kiri stalling under the full suite — not proven, outside this diff.
+- **Package `ms3c-w3`:** `asr.spec.ts` `f74e41d5…`, media TSX/test unchanged; delta `_wip-ms3c-w3.diff` against the w2 bytes
+  (`_wip-ms3c-w2-asr.spec.ts.txt`, `a3682a92…`). Prompt `_wip-ms3c-review-prompt-w3.md` (`8bb00f4e`). Reviewer: Codex read-only
+  (independent context). Transfer: `sent`. Next: verdict → owner window for a targeted R11 run + full ordered `make check`.
+- **w3 verdict received (2026-11-17), package `ms3c-w3` hashes matched before and after: SHIP**, Standards no findings, Spec no
+  blockers (`_wip-ms3c-review-codex-w3.md`). Diagnosis confirmed: Save carries the rendered tab language (`LessonLanguageTabs.tsx:384`),
+  the guard (`:284`) refuses per MS-D6/M3-R10; the wait covers all 11 helper call sites, cannot be satisfied by an orphan `lang:` tab,
+  and weakens no row (the foreign-rename R10 test bypasses the helper, `asr.spec.ts:922`). **Non-blocking UX observation** (open,
+  owner): the rename dialog closes before its PATCH and the tabs' re-render (`LessonAudioTracksField.tsx:464`), so a fast author can
+  meet the same safe refusal; candidate for the deferred admin-editor UX fix. Transfer → `verdict_received`. Still required: the owner's
+  stand window, targeted R11 + full ordered `make check` exit 0.
+- **2026-11-17 — owner "Так" (one run, this consent only):** package `ms3c-w3` re-verified by sha256 before the run (all three match).
+  Targeted R11 on the Kiri e2e stack (`playwright --project=chromium -g M3-R11`, setup included): **6 passed**, R11 49.4 s, exit 0.
+  Full ordered `make check` attempt 5 started with the owner-approved compose selection (base + Kiri override); result pending.
+- **2026-11-17 — `make check` attempt 5: RED, `GATE_EXIT=2` at `e2e`** (07:56–08:23, HEAD `7b20d2c`, `asr.spec.ts` `f74e41d5`).
+  Every step before `e2e` passed; e2e **113 passed, 1 failed, 37 did not run** (dependants of the failed project). All asr.spec rows
+  passed, R11 included. The failure is `catalog.spec.ts:2` (SSR `/courses` without JS): nginx answered **504 after 15.020 s**
+  (06:20:19, requestId `ae5a1cd9…`). The api served `GET /api/v1/courses` in 18 ms at 06:20:07, but the frontend logged that SSR
+  request at **14026 ms**; the next `/courses` took 53 ms. Mechanism of the 14 s frontend stall: **unknown** (frontend is native
+  arm64, 0 restarts, not OOM; postgres runs amd64 under emulation; `/readyz` 503 after 3007 ms at 06:10:37 and the
+  `drafts` 503 after 3894 ms at 06:08 show the same stand latency as attempt 4's W07/W08 503). Outside this diff (catalog SSR is
+  untouched), but unproven — not claimed as a flake. A rerun resets the Kiri volumes and needs the owner's consent.
+- **2026-11-17 — Kiri stall research (read-only, owner "Research troubleshooting kiri"):** `work/research-kiri-stalls.md`.
+  Measured mechanism: Kiri's virtio balloon cycles roughly every 20 s even on an idle stand. It holds 10→12 GiB of 16 and drives guest
+  `MemAvailable` down to 31–150 MiB, with 4–6 k major faults per 3 s at each trough. A co-tenant on the same VM
+  (`factory-storage-alpha-factory-1`) uses ~100 % CPU, and host swap is at 9.35 of 10 GiB. The correlation of the 06:20 stall with a
+  trough is not recorded. Options (owner): `KIRI_NO_BALLOON`, co-tenants out of the gate window, a balloon recorder during the next run.
+- **2026-11-17 — cargotrans stopped on Kiri (owner):** loadavg 5.9→4.3–5.0, but the balloon took the freed memory (12→14 GiB). Troughs
+  are unchanged at 17–59 MiB `MemAvailable` with 4.2 k major faults per 3 s. Co-tenant removal alone does not remove the measured mechanism
+  (`work/research-kiri-stalls.md` §Update).
+- **2026-11-17 — Kiri balloon disabled (owner "Так вимикай"):** `KIRI_NO_BALLOON=1` on `dev.kiri.daemon` and the VM restarted. Measured
+  for 90 s after the reboot: balloon 0 pages, guest `MemAvailable` ≈15 GiB, loadavg 1.1–1.5, and the stand came back healthy. Whether
+  this removes the gate stalls is unproven until the next gate runs with the recorder. Rollback in `work/research-kiri-stalls.md`.
+- **2026-11-17 — `make check` attempt 6 (owner "Так жени", balloon off, memory recorder): RED, `GATE_EXIT=2` at `e2e`** (09:18–09:39
+  local, HEAD `7b20d2c`, `asr.spec.ts` `f74e41d5`). Every step before e2e passed. e2e: **112 passed, 2 failed, 37 did not run**; all
+  asr.spec rows passed again.
+  - **Kiri stalls gone in this run:** 587 recorder samples, balloon 0 throughout, guest `MemAvailable` ≥ 11.1 GiB, `allocstall` 0, and
+    **0 responses with 5xx** in the api/nginx stream (attempt 5 had five 503/504s). e2e took 14.4 min (attempt 5: 18.5 min).
+  - **New root cause of both failures:** `make e2e-reset` is a **silent no-op on Kiri**. The cut-over volumes `courses_postgres-data`,
+    `courses_redis-data` and `courses_media-data` carry **no labels**. The recipe selects them by
+    `label=com.docker.compose.project`/`volume`, so it finds nothing and removes nothing. Its "survived" check uses the same filter,
+    and it prints "removed postgres-data redis-data media-data" anyway (`Makefile:119-128`). Proof: `docker volume ls` labels are empty;
+    the catalog snapshot at 07:36Z lists run tokens decoding to 06:20–06:22Z (attempt 5), and the admin list shows **148 courses**.
+    Hence: `catalog.spec.ts:2` — the seeded course is pushed off page 1 by leftovers. `admin.spec.ts:182` S5 — clicking the Students
+    sort dropped `search=` from the URL on a 148-row table. That second mechanism is not proven: it may be a hydration race that only
+    the large table widens. No gate since the Kiri cut-over (attempts 4–6) started from a reset database.
+- **2026-11-17 — slice MS3c-reset (owner: "Спершу виправити Makefile"), pre-code checkpoint.**
+  - **Task:** `make e2e-reset` must actually remove `postgres-data`, `redis-data` and `media-data` when the volumes carry no compose
+    labels, as on Kiri, and must never claim a removal that did not happen.
+  - **Decision (2026-11-17, Courses 1; check:** `docker compose config --format json` → `volumes.<key>.name`): select each volume by
+    compose label **or** by compose's own resolved name `<project>_<key>`. That is the name compose computes when there is no `name:`
+    override, and there is none (verified: `courses_postgres-data` and so on).
+  - **Behaviour:**
+    - re-check by both selectors afterwards and fail if one survived;
+    - report per volume what was removed, or that it was absent, instead of the blanket "removed".
+    - Absent stays OK: a fresh runner or machine has nothing to remove. A hard failure on "nothing removed" would break first runs.
+  - **Scope:** `Makefile` only; K13's explicit volume list and prometheus-data kept.
+  - **Proof:** run the real target on Kiri with a probe project (`COMPOSE_PROJECT_NAME=e2ereset-probe`) holding one unlabeled, one
+    labeled and one absent volume; no Courses volume is touched.
+  - **Review:** independent Codex.
+  - **Ready:** yes. The Courses volumes are wiped only on the owner's next gate consent.
+- **2026-11-17 — MS3c-reset, Codex w1: BLOCK, two Majors** (`_wip-ms3c-reset-review-codex.md`, Makefile `69efe2b5…`):
+  1. failed lookups read as "absent" with exit 0;
+  2. the `basename` fallback can name a different project than compose, which takes `name: courses`, so deletion by name could hit
+     another project's volumes.
+
+  Both accepted.
+  - **Fix w2** (Makefile `ee9f995a…`):
+    - project and volume names come from `docker compose -f … -f … config --format json`, parsed with node;
+    - one checked `docker volume ls` per lookup;
+    - a missing key or a failed resolver exits 1.
+  - **Probe proof on Kiri:** mixed removed/removed/absent; idempotent; simulated `volume ls` failure → exit 2; in a directory named
+    `courses-review` the project resolves to `courses`, and with `COMPOSE_PROJECT_NAME=other` to `other_*`.
+  - **Review:** package `ms3c-reset-w2` sent to Codex.
+- **2026-11-17 — MS3c-reset, Codex w2: SHIP** (both w1 Majors closed; `_wip-ms3c-reset-review-codex-w2.md`). One Minor (the compose `config` status was masked by node) fixed in w3 (Makefile `dcba12dd…`): `config` is captured and checked before parsing. Probe proof: real JSON followed by exit 32 → exit 2, probe volume kept. Delta `ms3c-reset-w3` sent to Codex.
+- **2026-11-17 — MS3c-reset, Codex w3: SHIP** (`_wip-ms3c-reset-review-codex-w3.md`): the Minor is closed and the delta has no regression; Makefile `dcba12dd…` matched before and after review. Transfer → `verdict_received`. Still needed: the owner's consent for the next `make check`. With this fix it actually removes the Kiri Courses volumes `postgres-data`, `redis-data` and `media-data`, for the first time since the cut-over.
+- **2026-11-17 — `make check` attempt 7 (owner "Yes"): GREEN, `GATE_EXIT=0`** (10:34–11:06 local, HEAD `7b20d2c`, `asr.spec.ts` `f74e41d5`, Makefile `dcba12dd`, Kiri balloon off).
+  - **Reset:** `e2e-reset` removed `courses_postgres-data`, `courses_redis-data` and `courses_media-data`. This is the first real reset on Kiri.
+  - **Counts:** format-check, lint and typecheck pass. Frontend tests: 1186 passed, 0 failed. Go: 127 `ok` package lines, 0 FAIL. integration, check-generated and build pass; drain-queue before=0 after=0; smoke passes. **e2e: 151 passed, 0 failed, 0 did not run (26.4 min).** That includes every MS3 asr.spec row (R2–R15) and the MS3a/MS3b frontend fixes.
+  - **Stand:** 918 recorder samples, balloon 0, guest `MemAvailable` ≥ 11.4 GiB, peak loadavg 11.4. There were 15 5xx responses in the api/nginx stream, all fast (0–432 ms), on playback-authorize/heartbeat, admin videos/drafts and one `/courses`. There was **no 504 and no multi-second stall**. Their routes match the deliberate dependency outages of the recovery and media specs, but this was not traced row by row.
+  - **Host watch:** host swap reached **11.79 of 12 GiB** (macOS grew the swap file) now that the VM keeps its memory. Lowering `memory_mib` is the owner's call (`work/research-kiri-stalls.md`).
+  - **Next:** commit with explicit paths, then one PR for MS2+MS3.

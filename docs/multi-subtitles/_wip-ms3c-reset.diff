@@ -1,0 +1,41 @@
+diff --git a/Makefile b/Makefile
+index 4d2d2da..80fb105 100644
+--- a/Makefile
++++ b/Makefile
+@@ -110,8 +110,12 @@ e2e-local: e2e-reset up seed-identities seed e2e
+ # scoped to the seeded slugs; leaked e2e-ratings-* courses needed a manual `down -v`). Local dev data
+ # lives in the same compose project, so it is wiped too — by decision, not by accident; `make e2e`
+ # alone does not reset and stays the quick rerun against a live stack. prometheus-data is kept:
+-# metrics history is no test input. The volumes are found by compose labels, not by guessed names,
+-# and the target fails if any of them survived (a container still holding one makes `rm` refuse).
++# metrics history is no test input. A volume is found by its compose labels or by the name compose
++# itself resolves, `<project>_<key>` (no `name:` override exists; `docker compose config --format json`
++# shows it). The name matters: volumes copied between engines lose their labels — the Kiri cut-over
++# volumes have none, and a label-only lookup removed nothing on 2026-11-17 while printing "removed".
++# The target fails if any of them survived (a container still holding one makes `rm` refuse), and it
++# reports per volume what it removed or that it was absent; absent is fine (a fresh machine).
+ # The list is explicit on purpose, not "every project volume except prometheus": a future volume is
+ # as likely to be a cache someone wants kept (a model, a build cache) as test state, and an inverted
+ # rule would wipe it silently. Whoever adds a stateful volume that tests write to adds it here.
+@@ -119,13 +123,18 @@ E2E_RESET_VOLUMES := postgres-data redis-data media-data
+ e2e-reset:
+ 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml down --remove-orphans
+ 	@project=$${COMPOSE_PROJECT_NAME:-$$(basename "$$PWD")}; \
++	find_volumes() { \
++	  { docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$1; \
++	    docker volume inspect --format '{{.Name}}' "$${project}_$$1" 2>/dev/null; } | sort -u; \
++	}; \
+ 	for volume in $(E2E_RESET_VOLUMES); do \
+-	  ids=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
++	  ids=$$(find_volumes $$volume); \
+ 	  if [ -n "$$ids" ]; then docker volume rm $$ids > /dev/null || exit 1; fi; \
+-	  left=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
++	  left=$$(find_volumes $$volume); \
+ 	  if [ -n "$$left" ]; then echo "e2e-reset: $$volume survived: $$left" >&2; exit 1; fi; \
++	  if [ -n "$$ids" ]; then echo "e2e-reset: $$volume: removed" $$ids; else echo "e2e-reset: $$volume: absent"; fi; \
+ 	done; \
+-	echo "e2e-reset: project $$project, removed $(E2E_RESET_VOLUMES) (prometheus-data kept)"
++	echo "e2e-reset: project $$project done (prometheus-data kept)"
+ # Owner-run live WayForPay proof (Pay25-live), work/archive/runbook-o06c-tunnel.md. Needs only
+ # WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
+ # stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.
