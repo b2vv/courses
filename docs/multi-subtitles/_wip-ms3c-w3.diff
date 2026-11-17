@@ -1,0 +1,43 @@
+diff --git a/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-464c-45bf-bb0f-3980a0267658/scratchpad/asr.spec.before.ts b/frontend/e2e/asr.spec.ts
+index 8e4ae37..34d8176 100644
+--- a/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-464c-45bf-bb0f-3980a0267658/scratchpad/asr.spec.before.ts
++++ b/frontend/e2e/asr.spec.ts
+@@ -359,9 +359,20 @@ async function renameTrack(page: Page, label: string, language: string) {
+     (r) => r.url().includes('/audio-tracks/') && r.request().method() === 'PATCH',
+   );
+   await dialog.getByRole('button', { name: 'Зберегти', exact: true }).click();
+-  expect((await response).status()).toBe(200);
++  const patched = await response;
++  expect(patched.status()).toBe(200);
+   await expect(dialog).toBeHidden();
+   await expect(selected).toHaveAttribute('id', selectedID ?? '');
++  // The PATCH answer arrives before the tracks refetch re-renders the tabs; a Save clicked in
++  // between still carries the old language and M3-R10 correctly refuses it (gate 2026-11-17).
++  // Wait for what the author sees: this track's tab (React Aria id `…-tab-track:<id>`) is
++  // named after the new language.
++  const trackID = new URL(patched.url()).pathname.split('/').at(-1) ?? '';
++  await expect(
++    page
++      .getByRole('tablist', { name: 'Мови транскрипту' })
++      .locator(`[role="tab"][id$="-tab-track:${trackID}"]`),
++  ).toHaveAccessibleName(new RegExp(`^${language}`));
+   expect(
+     network
+       .slice(before)
+@@ -1185,12 +1196,10 @@ test.describe('ASR acceptance with a stored admin session', () => {
+       await expect
+         .poll(readSnapshot)
+         .toMatchObject({ language: 'de', baseLanguage: 'es', lines: [{ text }] });
+-      await test
+-        .info()
+-        .attach('detached-source', {
+-          body: JSON.stringify(await readSnapshot()),
+-          contentType: 'application/json',
+-        });
++      await test.info().attach('detached-source', {
++        body: JSON.stringify(await readSnapshot()),
++        contentType: 'application/json',
++      });
+       const newAssetId = await upload(page, silentVideo);
+       // The old Ready asset remains visible while its replacement is processing.
+       await expect(

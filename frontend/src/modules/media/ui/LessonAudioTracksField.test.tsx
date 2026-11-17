@@ -333,6 +333,37 @@ describe('lesson audio tracks field', () => {
     );
   });
 
+  it('submitting the edit dialog does not submit the course form it is rendered within', async () => {
+    // The dialog is portaled, but React bubbles submit through the component tree: inside the
+    // course editor's <form> an unstopped submit also saved the course (MS3c e2e, 2026-11-17).
+    const user = userEvent.setup();
+    const recorded = actions();
+    const outer: string[] = [];
+    render(
+      <I18nProvider instance={createI18n('en')}>
+        <main>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              outer.push('course');
+            }}
+          >
+            <LessonAudioTracksView
+              videoId={videoId}
+              assetState="ready"
+              state={{ data: [embedded], isLoading: false }}
+              actions={recorded.value}
+            />
+          </form>
+        </main>
+      </I18nProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit track Українська (Ukrainian)' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(recorded.calls.rename).toHaveLength(1));
+    expect(outer).toEqual([]);
+  });
+
   it('shows a 409 language conflict from a race as a named error', async () => {
     const user = userEvent.setup();
     const { container } = renderView(

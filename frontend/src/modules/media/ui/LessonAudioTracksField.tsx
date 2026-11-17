@@ -457,6 +457,9 @@ function RenameDialog({
           className="admin-audio-edit"
           onSubmit={(event) => {
             event.preventDefault();
+            // Portaled, but React bubbles submit through the component tree into the course
+            // editor's <form>, which would save the course too.
+            event.stopPropagation();
             if (!valid) return;
             close();
             void run(() => actions.rename(track, language, label, track.multilingual));
