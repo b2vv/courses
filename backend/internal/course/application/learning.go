@@ -35,6 +35,9 @@ func (learning *Learning) GetCourse(ctx context.Context, actor domain.Actor, slu
 		for lessonIndex := range course.Modules[moduleIndex].Lessons {
 			lesson := &course.Modules[moduleIndex].Lessons[lessonIndex]
 			lesson.Locked = course.PurchaseRequiredBy(actor, *lesson)
+			if lesson.Locked {
+				lesson.AudioTracks = []domain.LearningAudioTrack{}
+			}
 		}
 	}
 	return course, nil

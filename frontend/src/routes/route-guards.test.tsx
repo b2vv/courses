@@ -885,6 +885,7 @@ test('K18 keeps the lesson usable when discussion loading fails', async () => {
             position: 0,
             completed: false,
             clientSeq: 0,
+            audioTracks: [],
             isPreview: false,
             locked: false,
           },
@@ -1140,6 +1141,7 @@ function paidCourse(): LearningCourse {
     position: 0,
     completed: false,
     clientSeq: 0,
+    audioTracks: [],
     isPreview,
     locked,
   });

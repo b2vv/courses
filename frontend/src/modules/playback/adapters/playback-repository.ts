@@ -78,6 +78,10 @@ export function createApiPlaybackRepository(
           lessons: module.lessons.map((lesson) => ({
             id: lesson.id,
             title: lesson.title,
+            audioTracks: lesson.audioTracks.map((track) => ({
+              language: track.language,
+              isDefault: track.isDefault,
+            })),
             videoState: lesson.videoState,
             position: lesson.position,
             completed: lesson.completed,

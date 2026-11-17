@@ -13,6 +13,7 @@ function lesson(
     position,
     completed: false,
     clientSeq: 0,
+    audioTracks: [],
     isPreview: false,
     locked: false,
     ...overrides,

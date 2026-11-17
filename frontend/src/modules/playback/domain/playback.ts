@@ -1,6 +1,12 @@
 export type LearningVideoState = 'processing' | 'ready' | 'failed' | null;
 
+export type LearningAudioTrack = {
+  readonly language: string;
+  readonly isDefault: boolean;
+};
+
 export type LearningLesson = {
+  readonly audioTracks: readonly LearningAudioTrack[];
   readonly id: string;
   readonly title: string;
   readonly videoState: LearningVideoState;

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -74,6 +75,120 @@ func TestLearningReaderAgainstPostgreSQL(t *testing.T) {
 		}
 	}
 	repository := coursepostgres.NewRepository(pool)
+
+	t.Run("M03 audio tracks follow the playable asset and viewer access", func(t *testing.T) {
+		var courseID, moduleID, lessonID, noVideoID, processingLessonID string
+		if err := pool.QueryRow(ctx, `INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,published_at,price_minor,currency)
+			VALUES(gen_random_uuid(),$1,'learning-ms4','MS4','Summary','Description','published',now(),50000,'UAH') RETURNING id::text`, learningOwnerID).Scan(&courseID); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			for _, query := range []string{
+				`DELETE FROM video_assets WHERE lesson_id IN (SELECT l.id FROM course_lessons l JOIN course_modules m ON m.id=l.module_id WHERE m.course_id=$1)`,
+				`DELETE FROM course_grants WHERE course_id=$1`,
+				`DELETE FROM courses WHERE id=$1`,
+			} {
+				if _, err := pool.Exec(context.Background(), query, courseID); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+		if err := pool.QueryRow(ctx, `INSERT INTO course_modules(id,course_id,title,position) VALUES(gen_random_uuid(),$1,'Module',0) RETURNING id::text`, courseID).Scan(&moduleID); err != nil {
+			t.Fatal(err)
+		}
+		for index, id := range []*string{&lessonID, &noVideoID, &processingLessonID} {
+			if err := pool.QueryRow(ctx, `INSERT INTO course_lessons(id,module_id,title,position) VALUES(gen_random_uuid(),$1,'Lesson',$2) RETURNING id::text`, moduleID, index).Scan(id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var oldAssetID, newAssetID, processingAssetID string
+		for _, asset := range []struct {
+			lesson     string
+			generation int
+			state      string
+			id         *string
+		}{
+			{lessonID, 1, "ready", &oldAssetID},
+			{lessonID, 2, "processing", &newAssetID},
+			{processingLessonID, 1, "processing", &processingAssetID},
+		} {
+			if err := pool.QueryRow(ctx, `INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at)
+				VALUES(gen_random_uuid(),$1,$2,$3,1,1,'ms4.mp4',ARRAY['360p'],now()+interval '1 day',now(),now()) RETURNING id::text`, asset.lesson, asset.generation, asset.state).Scan(asset.id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Reverse insertion/creation order makes ORDER BY track id observable. Excluded tracks
+		// sit between the two Ready ids, and every asset has distinguishable languages.
+		for _, track := range []struct {
+			suffix                 int
+			asset, language, state string
+			isDefault              bool
+		}{
+			{4, oldAssetID, "en-US", "ready", true},
+			{3, oldAssetID, "fr", "queued", false},
+			{2, oldAssetID, "de", "failed", false},
+			{1, oldAssetID, "UK", "ready", false},
+			{5, newAssetID, "es", "ready", true},
+			{6, processingAssetID, "it", "ready", true},
+		} {
+			id := fmt.Sprintf("91000000-0000-4000-8000-%012d", track.suffix)
+			if _, err := pool.Exec(ctx, `INSERT INTO audio_tracks(id,video_asset_id,kind,language,label,is_default,state,source_leaf,declared_bytes,created_at,updated_at)
+				VALUES($1::text::uuid,$2,'uploaded',$3,$3,$4,$5,'audio-'||$1::text,1,now(),now())`, id, track.asset, track.language, track.isDefault, track.state); err != nil {
+				t.Fatal(err)
+			}
+		}
+		oldTracks := []domain.LearningAudioTrack{{Language: "UK", IsDefault: false}, {Language: "en-US", IsDefault: true}}
+		readTracks := func(t *testing.T, want []domain.LearningAudioTrack) {
+			t.Helper()
+			course, err := repository.GetLearningCourse(ctx, learningViewerID, "learning-ms4")
+			if err != nil {
+				t.Fatal(err)
+			}
+			lessons := course.Modules[0].Lessons
+			if lessons[0].ID != lessonID || !reflect.DeepEqual(lessons[0].AudioTracks, want) {
+				t.Fatalf("playable lesson=%+v want tracks=%+v", lessons[0], want)
+			}
+			for _, lesson := range lessons[1:] {
+				if lesson.AudioTracks == nil || len(lesson.AudioTracks) != 0 {
+					t.Fatalf("non-ready lesson=%+v want empty tracks", lesson)
+				}
+			}
+		}
+		t.Run("old Ready plus newer processing uses old Ready ordered tracks only", func(t *testing.T) { readTracks(t, oldTracks) })
+		t.Run("newer Ready wins and its eviction falls back to previous Ready", func(t *testing.T) {
+			if _, err := pool.Exec(ctx, `UPDATE video_assets SET state='ready' WHERE id=$1`, newAssetID); err != nil {
+				t.Fatal(err)
+			}
+			readTracks(t, []domain.LearningAudioTrack{{Language: "es", IsDefault: true}})
+			if _, err := pool.Exec(ctx, `UPDATE video_assets SET evicted_at=now() WHERE id=$1`, newAssetID); err != nil {
+				t.Fatal(err)
+			}
+			readTracks(t, oldTracks)
+		})
+		t.Run("non-member locked lesson redacts tracks while member sees the same lesson", func(t *testing.T) {
+			learning := application.NewLearning(repository)
+			viewer := domain.Actor{UserID: learningViewerID, Role: domain.ActorStudent, EmailVerified: true}
+			course, err := learning.GetCourse(ctx, viewer, "learning-ms4")
+			if err != nil {
+				t.Fatal(err)
+			}
+			lesson := course.Modules[0].Lessons[0]
+			if lesson.ID != lessonID || !lesson.Locked || lesson.AudioTracks == nil || len(lesson.AudioTracks) != 0 {
+				t.Fatalf("non-member lesson=%+v", lesson)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO course_grants(user_id,course_id,source,state,granted_by) VALUES($1,$2,'admin','active',$3)`, learningViewerID, courseID, learningOwnerID); err != nil {
+				t.Fatal(err)
+			}
+			course, err = learning.GetCourse(ctx, viewer, "learning-ms4")
+			if err != nil {
+				t.Fatal(err)
+			}
+			lesson = course.Modules[0].Lessons[0]
+			if lesson.ID != lessonID || lesson.Locked || !reflect.DeepEqual(lesson.AudioTracks, oldTracks) {
+				t.Fatalf("member lesson=%+v want tracks=%+v", lesson, oldTracks)
+			}
+		})
+	})
 
 	t.Run("ratings and lesson count match the public catalog", func(t *testing.T) {
 		// The fixture course is shared with later subtests (B27 counts its program): remove everything

@@ -34,6 +34,7 @@ function lesson(videoState: LearningLesson['videoState']): LearningLesson {
     position: 12,
     completed: false,
     clientSeq: 4,
+    audioTracks: [],
     isPreview: false,
     locked: false,
   };
