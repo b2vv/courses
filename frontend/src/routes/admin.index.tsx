@@ -47,13 +47,18 @@ function AdminCourseListRoute() {
     sort?: AdminCourseSort;
     page?: number;
   }) {
-    const merged = { ...state, ...next };
+    // Merge over the router's latest search, not this render's `state`: right after a search
+    // submit the URL already carries `search` while this component still renders the previous
+    // list (the loader is pending), and a sort click would otherwise drop it (gate 2026-11-17).
     void navigate({
-      search: {
-        ...(merged.status === undefined ? {} : { status: merged.status }),
-        ...(merged.search === '' ? {} : { search: merged.search }),
-        ...(merged.sort === 'recent' ? {} : { sort: merged.sort }),
-        ...(merged.page === 1 ? {} : { page: merged.page }),
+      search: (previous) => {
+        const merged = { ...adminListState(previous), ...next };
+        return {
+          ...(merged.status === undefined ? {} : { status: merged.status }),
+          ...(merged.search === '' ? {} : { search: merged.search }),
+          ...(merged.sort === 'recent' ? {} : { sort: merged.sort }),
+          ...(merged.page === 1 ? {} : { page: merged.page }),
+        };
       },
     });
   }

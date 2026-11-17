@@ -1,6 +1,7 @@
 import { audioChunkBytes, audioUploadPath, maximumAudioBytes } from '../domain/audio-track';
 import type {
   AudioTrack,
+  AudioTracks,
   AudioTrackError,
   AudioTrackResult,
   AudioUploadTicket,
@@ -106,7 +107,7 @@ export function createApiAudioTrackRepository(
 
   return {
     list(videoId, signal) {
-      return request<readonly AudioTrack[]>(
+      return request<AudioTracks>(
         'admin.audioTracks.list',
         (init) => listAdminAudioTracks(videoId, init),
         200,
@@ -114,7 +115,7 @@ export function createApiAudioTrackRepository(
           const parsed = audioTracksSchema.safeParse(raw);
           if (!parsed.success || parsed.data.items.some((item) => item.videoId !== videoId))
             return invalid;
-          return { ok: true, value: parsed.data.items };
+          return { ok: true, value: parsed.data };
         },
         signal,
       );
@@ -131,10 +132,10 @@ export function createApiAudioTrackRepository(
         signal,
       );
     },
-    rename(videoId, trackId, language, label, signal) {
+    rename(videoId, trackId, language, label, multilingual, signal) {
       return request<AudioTrack>(
         'admin.audioTracks.rename',
-        (init) => renameAdminAudioTrack(videoId, trackId, { language, label }, init),
+        (init) => renameAdminAudioTrack(videoId, trackId, { language, label, multilingual }, init),
         200,
         (raw) => track(raw, { videoId, trackId }),
         signal,

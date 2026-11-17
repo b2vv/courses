@@ -3624,3 +3624,8 @@ button.transcript-line-body:hover {
   min-inline-size: 0;
   overflow-wrap: anywhere;
 }
+
+/* Force-mounted lesson editors keep local state while leaving inactive tabs inaccessible. */
+.lesson-language-panel[inert] {
+  display: none;
+}

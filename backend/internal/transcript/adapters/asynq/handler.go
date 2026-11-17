@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"courses/internal/transcript/application"
-	"courses/internal/transcript/domain"
 	"courses/internal/transcript/ports"
 	"courses/platform/observability"
 	asynqlib "github.com/hibiken/asynq"
@@ -44,7 +43,7 @@ func (handler *Handler) ProcessTask(ctx context.Context, task *asynqlib.Task) er
 		LessonID:   payload.LessonID,
 		AssetID:    payload.AssetID,
 		Generation: payload.Generation,
-		Language:   domain.Language(payload.Language),
+		TrackID:    payload.TrackID,
 		TaskMarker: payload.TaskMarker,
 		Requested:  payload.Requested,
 	})
@@ -85,7 +84,7 @@ func decodePayload(encoded []byte) (taskPayload, error) {
 	if err := json.Unmarshal(encoded, &payload); err != nil {
 		return payload, errInvalidTaskPayload
 	}
-	if payload.LessonID == "" || payload.AssetID == "" || payload.Generation < 1 {
+	if payload.LessonID == "" || payload.AssetID == "" || payload.TrackID == "" || payload.Generation < 1 {
 		return payload, errInvalidTaskPayload
 	}
 	return payload, nil

@@ -1,4 +1,5 @@
-// Package containers retries the temporary testcontainers-go Ryuk create-to-start race.
+// Package containers retries the temporary testcontainers-go Ryuk races: a reaper seen in the
+// "created" state, and two packages creating the same session reaper name at once.
 //
 // TEMPORARY(testcontainers-go#3868): remove this package and its call sites when a
 // testcontainers-go release contains PR #3868; then run the integration gate three times.
@@ -109,7 +110,17 @@ func Start[T testcontainers.Container](ctx context.Context, start func(context.C
 
 func isReaperRace(err error) bool {
 	message := err.Error()
-	return strings.Contains(message, "wait for reaper") && strings.Contains(message, `unexpected container status "created"`)
+	createdRace := strings.Contains(message, "wait for reaper") &&
+		strings.Contains(message, `unexpected container status "created"`)
+	// Second shape (gate 2026-11-17, cmd/media-worker): packages of one `go test` share a session
+	// id and can race to create the same `reaper_<session>` (reaper.go:311-330). v0.44.0 already
+	// retries that conflict inside its own 20 s backoff (reaper.go:229-270); this error is what is
+	// left when that budget ends without a usable reaper. A fresh Start then looks the reaper up
+	// again and reuses it. Why the upstream retry ran out on attempt 10 is not established.
+	nameRace := strings.Contains(message, "new reaper") &&
+		strings.Contains(message, "Conflict.") &&
+		strings.Contains(message, "is already in use")
+	return createdRace || nameRace
 }
 
 func retryExhausted(err error) error {

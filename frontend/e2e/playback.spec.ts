@@ -1081,16 +1081,24 @@ test.describe('T7 playback milestone', () => {
       // Same anchor as P05: the row restores what the pause recorded, not the number the seek asked for.
       const pausedAt = await pauseAndRecord(page);
 
-      // The break has to be observable, or an offline toggle that changed nothing would pass.
-      // It shows up as the player's unavailable state: losing the network exhausts the media
-      // retries, and `LessonPlayer.tsx:338` then replaces the whole player - controls included.
+      // The break has to be observable, or an offline toggle that changed nothing would pass. It
+      // is proved by a request from this page that must fail while offline. It used to be proved
+      // by the player's unavailable state, but a paused player that needs no more data issues no
+      // request offline, so its retries never run out: the attempt-8 trace on 2026-11-17 shows
+      // the last segment request ~51 ms before `setOffline` and no request after it, and the row
+      // waited 60 s for an error that never came.
       //
-      // Which is why this row does not seek while offline. That assumed the player stays
-      // operable through a break; it does not, and it is right not to. The row's claim is that
-      // the recorded position survives the break, not that the player keeps taking input during
-      // one - a failed write moving the saved position is B11's subject, at the datastore.
+      // The row still does not seek while offline: its claim is that the recorded position
+      // survives the break, not that the player takes input during one - a failed write moving
+      // the saved position is B11's subject, at the datastore.
       await page.context().setOffline(true);
-      await expect(page.getByText('Відео зараз недоступне.')).toBeVisible({ timeout: 60_000 });
+      const reachedServer = await page.evaluate(() =>
+        fetch(window.location.href, { cache: 'no-store' }).then(
+          () => true,
+          () => false,
+        ),
+      );
+      expect(reachedServer, 'a request during the break must fail').toBe(false);
       await page.context().setOffline(false);
 
       const recoveredPage = await page.context().newPage();

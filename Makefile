@@ -110,22 +110,40 @@ e2e-local: e2e-reset up seed-identities seed e2e
 # scoped to the seeded slugs; leaked e2e-ratings-* courses needed a manual `down -v`). Local dev data
 # lives in the same compose project, so it is wiped too — by decision, not by accident; `make e2e`
 # alone does not reset and stays the quick rerun against a live stack. prometheus-data is kept:
-# metrics history is no test input. The volumes are found by compose labels, not by guessed names,
-# and the target fails if any of them survived (a container still holding one makes `rm` refuse).
+# metrics history is no test input. The project and each volume's name come from the same resolved
+# compose configuration `down` uses (`docker compose config --format json`: a top-level `name:` and
+# `COMPOSE_PROJECT_NAME` win over the directory, so there is no basename guess). A volume is found by
+# that name or by its compose labels: volumes copied between engines lose their labels — the Kiri
+# cut-over volumes have none, and a label-only lookup removed nothing on 2026-11-17 while printing
+# "removed". A failed lookup fails the target instead of reading as "absent"; it fails too if any
+# volume survived (a container still holding one makes `rm` refuse). Each volume reports "removed …"
+# or "absent"; absent is fine (a fresh machine or CI runner).
 # The list is explicit on purpose, not "every project volume except prometheus": a future volume is
 # as likely to be a cache someone wants kept (a model, a build cache) as test state, and an inverted
 # rule would wipe it silently. Whoever adds a stateful volume that tests write to adds it here.
 E2E_RESET_VOLUMES := postgres-data redis-data media-data
+E2E_RESET_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+E2E_RESET_LS := docker volume ls --format '{{.Name}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.volume"}}'
 e2e-reset:
-	docker compose -f docker-compose.yml -f docker-compose.e2e.yml down --remove-orphans
-	@project=$${COMPOSE_PROJECT_NAME:-$$(basename "$$PWD")}; \
+	$(E2E_RESET_COMPOSE) down --remove-orphans
+	@config=$$($(E2E_RESET_COMPOSE) config --format json) \
+	  || { echo "e2e-reset: cannot resolve the compose configuration" >&2; exit 1; }; \
+	resolved=$$(printf '%s' "$$config" | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { const c = JSON.parse(s); if (!c.name) process.exit(1); console.log(c.name); for (const [k, v] of Object.entries(c.volumes ?? {})) console.log(k + " " + v.name); });') \
+	  || { echo "e2e-reset: cannot resolve the compose project and volume names" >&2; exit 1; }; \
+	project=$$(echo "$$resolved" | sed -n 1p); \
+	pick() { awk -v n="$$1" -v p="$$project" -v v="$$2" '$$1 == n || ($$2 == p && $$3 == v) { print $$1 }' | sort -u; }; \
 	for volume in $(E2E_RESET_VOLUMES); do \
-	  ids=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
+	  name=$$(echo "$$resolved" | awk -v v="$$volume" 'NR > 1 && $$1 == v { print $$2 }'); \
+	  if [ -z "$$name" ]; then echo "e2e-reset: $$volume is not a volume of project $$project" >&2; exit 1; fi; \
+	  all=$$($(E2E_RESET_LS)) || { echo "e2e-reset: cannot list volumes" >&2; exit 1; }; \
+	  ids=$$(echo "$$all" | pick "$$name" "$$volume"); \
 	  if [ -n "$$ids" ]; then docker volume rm $$ids > /dev/null || exit 1; fi; \
-	  left=$$(docker volume ls -q --filter label=com.docker.compose.project=$$project --filter label=com.docker.compose.volume=$$volume); \
-	  if [ -n "$$left" ]; then echo "e2e-reset: $$volume survived: $$left" >&2; exit 1; fi; \
+	  all=$$($(E2E_RESET_LS)) || { echo "e2e-reset: cannot list volumes" >&2; exit 1; }; \
+	  left=$$(echo "$$all" | pick "$$name" "$$volume"); \
+	  if [ -n "$$left" ]; then echo "e2e-reset: $$volume survived:" $$left >&2; exit 1; fi; \
+	  if [ -n "$$ids" ]; then echo "e2e-reset: $$volume: removed" $$ids; else echo "e2e-reset: $$volume: absent"; fi; \
 	done; \
-	echo "e2e-reset: project $$project, removed $(E2E_RESET_VOLUMES) (prometheus-data kept)"
+	echo "e2e-reset: project $$project done (prometheus-data kept)"
 # Owner-run live WayForPay proof (Pay25-live), work/archive/runbook-o06c-tunnel.md. Needs only
 # WAYFORPAY_MERCHANT_ACCOUNT and WAYFORPAY_SECRET_KEY in .env; opens a public quick tunnel to this
 # stack (seeded demo accounts included), so keep it short-lived and run tunnel-down after.

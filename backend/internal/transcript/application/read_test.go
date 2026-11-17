@@ -64,3 +64,7 @@ func TestReadingConsumesOnlyMembershipOrPreviewContent(t *testing.T) {
 		})
 	}
 }
+
+func (readRepository) ListLessonTranscripts(context.Context, string) ([]ports.TranscriptInventory, error) {
+	return nil, nil
+}

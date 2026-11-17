@@ -1,8 +1,6 @@
 package http
 
 import (
-	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
@@ -10,10 +8,6 @@ import (
 	"courses/internal/transcript/domain"
 	"courses/platform/httpserver"
 )
-
-type publishResult struct {
-	UpdatedAt string `json:"updatedAt"`
-}
 
 type DraftHandler struct{ drafting *application.Drafting }
 
@@ -26,12 +20,10 @@ func (handler *DraftHandler) RegisterAdmin(
 	authenticate func(http.Handler) http.Handler,
 	sameOrigin func(http.Handler) http.Handler,
 ) {
-	mux.Handle("GET /api/v1/admin/lessons/{lessonId}/draft",
-		authenticate(http.HandlerFunc(handler.getDraft)))
-	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/draft/regenerate",
+	mux.Handle("GET /api/v1/admin/lessons/{lessonId}/drafts",
+		authenticate(http.HandlerFunc(handler.listDrafts)))
+	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/drafts/{trackId}/regenerate",
 		authenticate(sameOrigin(http.HandlerFunc(handler.regenerate))))
-	mux.Handle("POST /api/v1/admin/lessons/{lessonId}/draft/publish",
-		authenticate(sameOrigin(http.HandlerFunc(handler.publish))))
 }
 
 type draftSegmentDTO struct {
@@ -44,116 +36,59 @@ type draftSegmentDTO struct {
 }
 
 type draftDTO struct {
-	LessonID   string             `json:"lessonId"`
-	State      *domain.DraftState `json:"state"`
-	Language   *string            `json:"language"`
-	Failure    *string            `json:"failure"`
-	Stale      bool               `json:"stale"`
-	UpdatedAt  *string            `json:"updatedAt"`
-	AssetID    *string            `json:"assetId"`
-	Generation *int32             `json:"generation"`
-	Segments   []draftSegmentDTO  `json:"segments"`
+	TrackID           string            `json:"trackId"`
+	TrackLanguage     string            `json:"trackLanguage"`
+	TrackMultilingual bool              `json:"trackMultilingual"`
+	State             domain.DraftState `json:"state"`
+	Language          *string           `json:"language"`
+	Failure           *string           `json:"failure"`
+	Stale             bool              `json:"stale"`
+	UpdatedAt         string            `json:"updatedAt"`
+	AssetID           string            `json:"assetId"`
+	Generation        int32             `json:"generation"`
+	Segments          []draftSegmentDTO `json:"segments"`
+}
+type draftsDTO struct {
+	Drafts []draftDTO `json:"drafts"`
 }
 
-func (handler *DraftHandler) getDraft(w http.ResponseWriter, r *http.Request) {
+func (handler *DraftHandler) listDrafts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-
 	transportActor, ok := httpserver.ActorFromContext(r.Context())
 	if !ok {
 		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 		return
 	}
 	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
-
-	draft, err := handler.drafting.GetDraft(r.Context(), actor, r.PathValue("lessonId"))
+	drafts, err := handler.drafting.ListLessonDrafts(r.Context(), actor, r.PathValue("lessonId"))
 	if err != nil {
 		writeTranscriptError(w, r, err)
 		return
 	}
-	if !draft.Found {
-		httpserver.WriteJSON(w, http.StatusOK, draftDTO{
-			LessonID: r.PathValue("lessonId"),
-			Segments: []draftSegmentDTO{},
-		})
-		return
-	}
-
-	segments := make([]draftSegmentDTO, 0, len(draft.Segments))
-	for _, s := range draft.Segments {
-		mapped := draftSegmentDTO{
-			ID: s.ID, StartMs: s.StartMs, EndMs: s.EndMs,
-			Text: s.Text, Confidence: s.Confidence,
+	result := draftsDTO{Drafts: make([]draftDTO, 0, len(drafts))}
+	for _, item := range drafts {
+		draft := item.Draft
+		dto := draftDTO{TrackID: draft.TrackID, TrackLanguage: string(draft.TrackLanguage), TrackMultilingual: draft.TrackMultilingual,
+			State: draft.State, Stale: draft.Stale(item.TrackLanguage, item.TrackMultilingual), UpdatedAt: item.UpdatedAt,
+			AssetID: draft.AssetID, Generation: draft.Generation, Segments: make([]draftSegmentDTO, 0, len(draft.Segments))}
+		if draft.Language != "" {
+			lang := string(draft.Language)
+			dto.Language = &lang
 		}
-		if s.Speaker != "" {
-			v := s.Speaker
-			mapped.Speaker = &v
+		if draft.Failure != "" {
+			dto.Failure = &draft.Failure
 		}
-		segments = append(segments, mapped)
-	}
-
-	state := draft.State
-	dto := draftDTO{
-		LessonID:   r.PathValue("lessonId"),
-		State:      &state,
-		Stale:      draft.Stale,
-		Segments:   segments,
-		AssetID:    &draft.AssetID,
-		Generation: &draft.Generation,
-	}
-	if draft.Language != "" {
-		lang := string(draft.Language)
-		dto.Language = &lang
-	}
-	if draft.Failure != "" {
-		dto.Failure = &draft.Failure
-	}
-	if draft.UpdatedAt != "" {
-		dto.UpdatedAt = &draft.UpdatedAt
-	}
-	httpserver.WriteJSON(w, http.StatusOK, dto)
-}
-
-type publishRequest struct {
-	ExpectedUpdatedAt string `json:"expectedUpdatedAt"`
-}
-
-func (handler *DraftHandler) publish(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-
-	transportActor, ok := httpserver.ActorFromContext(r.Context())
-	if !ok {
-		httpserver.WriteError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
-		return
-	}
-	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
-
-	var request publishRequest
-	if r.ContentLength > 0 {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
+		for _, segment := range draft.Segments {
+			mapped := draftSegmentDTO{ID: segment.ID, StartMs: segment.StartMs, EndMs: segment.EndMs, Text: segment.Text, Confidence: segment.Confidence}
+			if segment.Speaker != "" {
+				speaker := segment.Speaker
+				mapped.Speaker = &speaker
+			}
+			dto.Segments = append(dto.Segments, mapped)
 		}
-		if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
-		}
+		result.Drafts = append(result.Drafts, dto)
 	}
-
-	token, err := handler.drafting.Publish(r.Context(), actor, application.PublishRequest{
-		LessonID:          r.PathValue("lessonId"),
-		ExpectedUpdatedAt: request.ExpectedUpdatedAt,
-	})
-	if err != nil {
-		writeTranscriptError(w, r, err)
-		return
-	}
-	httpserver.WriteJSON(w, http.StatusOK, publishResult{UpdatedAt: token})
-}
-
-type regenerateRequest struct {
-	Language *string `json:"language"`
+	httpserver.WriteJSON(w, http.StatusOK, result)
 }
 
 func (handler *DraftHandler) regenerate(w http.ResponseWriter, r *http.Request) {
@@ -166,30 +101,13 @@ func (handler *DraftHandler) regenerate(w http.ResponseWriter, r *http.Request) 
 	}
 	actor := domain.Actor{UserID: transportActor.UserID, Administrator: transportActor.Role == "admin", EmailVerified: transportActor.EmailVerified}
 
-	var language domain.Language
-	if r.ContentLength > 0 {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
-		decoder.DisallowUnknownFields()
-		var request regenerateRequest
-		if err := decoder.Decode(&request); err != nil {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
-		}
-		if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-			writeTranscriptError(w, r, domain.ErrInvalidRequest)
-			return
-		}
-		if request.Language != nil && *request.Language != "" {
-			parsed, err := domain.NewLanguage(*request.Language)
-			if err != nil {
-				writeTranscriptError(w, r, err)
-				return
-			}
-			language = parsed
-		}
+	// Reject every byte, including whitespace and chunked bodies with unknown ContentLength.
+	if body, err := io.ReadAll(io.LimitReader(r.Body, 1)); err != nil || len(body) != 0 {
+		writeTranscriptError(w, r, domain.ErrInvalidRequest)
+		return
 	}
 
-	err := handler.drafting.Regenerate(r.Context(), actor, r.PathValue("lessonId"), language)
+	err := handler.drafting.Regenerate(r.Context(), actor, r.PathValue("lessonId"), r.PathValue("trackId"))
 	if err != nil {
 		writeTranscriptError(w, r, err)
 		return

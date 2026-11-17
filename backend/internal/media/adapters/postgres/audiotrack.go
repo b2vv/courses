@@ -20,6 +20,7 @@ kind,
 language,
 label,
 is_default,
+multilingual,
 state,
 source_leaf,
 declared_bytes,
@@ -89,13 +90,13 @@ func (repository *Repository) CreateAudioTrack(ctx context.Context, track domain
 	}
 	stored, err := scanAudioTrack(tx.QueryRow(ctx, `INSERT INTO audio_tracks(
 		id,video_asset_id,kind,language,label,is_default,state,source_leaf,
-		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
-		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at,multilingual)
+		VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING `+audioTrackColumns,
 		track.ID, track.VideoAssetID, string(track.Kind), track.Language, track.Label,
 		track.IsDefault, string(track.State), track.SourceLeaf,
 		track.DeclaredBytes, track.ReceivedBytes, track.OriginalName, expiresAt,
-		created, updated))
+		created, updated, track.Multilingual))
 	if err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
 			return domain.AudioTrack{}, mapped
@@ -261,7 +262,7 @@ func (repository *Repository) DeleteAudioTrack(ctx context.Context, actor domain
 // domain has validated the new values. The (language, asset) unique index rejects
 // a clash with another non-failed track as ErrDuplicateLanguage (D6). The target
 // must exist under the asset.
-func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error) {
+func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return domain.AudioTrack{}, persistenceError(err)
@@ -271,10 +272,18 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 	if _, err := authorizeAudioEdit(ctx, tx, actor, assetID); err != nil {
 		return domain.AudioTrack{}, err
 	}
+	previous, err := scanAudioTrack(tx.QueryRow(ctx, `SELECT `+audioTrackColumns+` FROM audio_tracks
+ WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid FOR UPDATE`, trackID, assetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AudioTrack{}, domain.ErrVideoNotFound
+	}
+	if err != nil {
+		return domain.AudioTrack{}, persistenceError(err)
+	}
 	updated, err := scanAudioTrack(tx.QueryRow(ctx, `UPDATE audio_tracks
-		SET language=$3, label=$4, updated_at=$5
+		SET language=$3, label=$4, updated_at=$5, multilingual=COALESCE($6, multilingual)
 		WHERE id=$1::text::uuid AND video_asset_id=$2::text::uuid
-		RETURNING `+audioTrackColumns, trackID, assetID, language, label, now))
+		RETURNING `+audioTrackColumns, trackID, assetID, language, label, now, multilingual))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.AudioTrack{}, domain.ErrVideoNotFound
 	}
@@ -285,8 +294,10 @@ func (repository *Repository) UpdateAudioTrackMetadata(ctx context.Context, acto
 		return domain.AudioTrack{}, persistenceError(err)
 	}
 	// NAME and LANGUAGE are rendered into the track's EXT-X-MEDIA line (D7).
-	if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
-		return domain.AudioTrack{}, err
+	if previous.Language != updated.Language || previous.Label != updated.Label {
+		if err := rewriteReadyTracks(ctx, tx, assetID, rewrite); err != nil {
+			return domain.AudioTrack{}, err
+		}
 	}
 	if err := commit(ctx, tx); err != nil {
 		return domain.AudioTrack{}, err
@@ -573,23 +584,23 @@ func lockAssetTracks(ctx context.Context, tx pgx.Tx, assetID string) ([]domain.A
 func scanAudioTrack(row pgx.Row) (domain.AudioTrack, error) {
 	var (
 		id, videoAssetID, kind, language, label, state, sourceLeaf string
-		isDefault                                                  bool
+		isDefault, multilingual                                    bool
 		declaredBytes, receivedBytes                               int64
 		originalName                                               string
 		expiresAt                                                  pgtype.Timestamptz
 		createdAt, updatedAt                                       pgtype.Timestamptz
 	)
-	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &state, &sourceLeaf,
+	if err := row.Scan(&id, &videoAssetID, &kind, &language, &label, &isDefault, &multilingual, &state, &sourceLeaf,
 		&declaredBytes, &receivedBytes, &originalName, &expiresAt, &createdAt, &updatedAt); err != nil {
 		return domain.AudioTrack{}, err
 	}
-	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, state, sourceLeaf,
+	return mapAudioTrack(id, videoAssetID, kind, language, label, isDefault, multilingual, state, sourceLeaf,
 		declaredBytes, receivedBytes, originalName, expiresAt, createdAt, updatedAt)
 }
 
 func mapAudioTrack(
 	id, videoAssetID, kind, language, label string,
-	isDefault bool,
+	isDefault, multilingual bool,
 	state, sourceLeaf string,
 	declaredBytes, receivedBytes int64,
 	originalName string,
@@ -613,6 +624,7 @@ func mapAudioTrack(
 		Language:      language,
 		Label:         label,
 		IsDefault:     isDefault,
+		Multilingual:  multilingual,
 		State:         domain.State(state),
 		SourceLeaf:    sourceLeaf,
 		DeclaredBytes: declaredBytes,
@@ -632,7 +644,7 @@ func mapAudioTrack(
 // the same asset before inserting, mirroring video Mint's expired-upload eviction.
 func (repository *Repository) MintAudioTrack(
 	ctx context.Context, actor domain.Actor, assetID string,
-	declaredBytes int64, originalName, language, label string,
+	declaredBytes int64, originalName, language, label string, multilingual bool,
 	expiresAt, now time.Time,
 ) (domain.AudioTrack, error) {
 	tx, err := repository.pool.Begin(ctx)
@@ -656,12 +668,12 @@ func (repository *Repository) MintAudioTrack(
 		WITH new_id AS (SELECT gen_random_uuid() AS id)
 		INSERT INTO audio_tracks(
 			id,video_asset_id,kind,language,label,is_default,state,source_leaf,
-			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at)
+			declared_bytes,received_bytes,original_name,expires_at,created_at,updated_at,multilingual)
 		SELECT id,$1::text::uuid,'uploaded',$2,$3,false,'created',
-			'audio-'||id::text,$4,0,$5,$6,$7,$7
+			'audio-'||id::text,$4,0,$5,$6,$7,$7,$8
 		FROM new_id
 		RETURNING `+audioTrackColumns,
-		assetID, language, label, declaredBytes, originalName, expiresAt, now))
+		assetID, language, label, declaredBytes, originalName, expiresAt, now, multilingual))
 	if err != nil {
 		if mapped, ok := audioTrackConflict(err); ok {
 			return domain.AudioTrack{}, mapped

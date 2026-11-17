@@ -21,12 +21,15 @@ export const audioTrackSchema = z
     language: z.string().refine(validAudioLanguage),
     label: z.string().refine(validAudioLabel),
     isDefault: z.boolean(),
+    multilingual: z.boolean(),
     state: z.enum(audioTrackStates),
     updatedAt: isoTimestampSchema,
   })
   .strict();
 
-export const audioTracksSchema = z.object({ items: z.array(audioTrackSchema) }).strict();
+export const audioTracksSchema = z
+  .object({ items: z.array(audioTrackSchema), multilingualDefault: z.boolean() })
+  .strict();
 
 export const audioUploadTicketSchema = z
   .object({

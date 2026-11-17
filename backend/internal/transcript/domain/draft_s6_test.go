@@ -21,26 +21,23 @@ func TestValidAudioLeaf(t *testing.T) {
 	}
 }
 
-func TestDraftStaleFollowsGenerationAndHeardLeaf(t *testing.T) {
-	const uploaded = "audio-70000000-0000-4000-8000-000000000001"
-	legacy := TranscriptDraft{Generation: 2}
-	heardUpload := TranscriptDraft{Generation: 2, SourceLeaf: uploaded}
+func TestDraftStaleFollowsTrackLanguageAndMode(t *testing.T) {
 	for _, test := range []struct {
-		name        string
-		draft       TranscriptDraft
-		generation  int32
-		defaultLeaf string
-		want        bool
+		name                            string
+		snapshot                        Language
+		current                         Language
+		previousMode, currentMode, want bool
 	}{
-		{"no ready asset never reads stale", legacy, 0, uploaded, false},
-		{"another generation", legacy, 3, OriginalAudioLeaf, true},
-		{"a pre-S6 draft heard the original", legacy, 2, OriginalAudioLeaf, false},
-		{"a pre-S6 draft after the default moved to an upload", legacy, 2, uploaded, true},
-		{"heard the current default", heardUpload, 2, uploaded, false},
-		{"default moved back to the original", heardUpload, 2, OriginalAudioLeaf, true},
-		{"no default known reads by generation only", heardUpload, 2, "", false},
+		{"same tag ignores current case", "en-gb", "EN-GB", false, false, false},
+		{"rename", "uk", "en", false, false, true},
+		{"und can be assigned a language", "und", "en", false, false, false},
+		{"und family can be reassigned", "und-latn", "fr", false, false, false},
+		{"und prefix alone is not family", "under", "en", false, false, true},
+		{"mode change", "en", "en", false, true, true},
+		{"und still invalidates mode", "und", "en", true, false, true},
 	} {
-		if got := test.draft.Stale(test.generation, test.defaultLeaf); got != test.want {
+		draft := TranscriptDraft{TrackLanguage: test.snapshot, TrackMultilingual: test.previousMode}
+		if got := draft.Stale(test.current, test.currentMode); got != test.want {
 			t.Errorf("%s: Stale=%v, want %v", test.name, got, test.want)
 		}
 	}

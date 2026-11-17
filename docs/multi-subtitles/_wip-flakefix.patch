@@ -1,0 +1,128 @@
+diff --git a/frontend/e2e/playback.spec.ts b/frontend/e2e/playback.spec.ts
+index e327234..a798db1 100644
+--- a/frontend/e2e/playback.spec.ts
++++ b/frontend/e2e/playback.spec.ts
+@@ -1081,16 +1081,24 @@ test.describe('T7 playback milestone', () => {
+       // Same anchor as P05: the row restores what the pause recorded, not the number the seek asked for.
+       const pausedAt = await pauseAndRecord(page);
+ 
+-      // The break has to be observable, or an offline toggle that changed nothing would pass.
+-      // It shows up as the player's unavailable state: losing the network exhausts the media
+-      // retries, and `LessonPlayer.tsx:338` then replaces the whole player - controls included.
++      // The break has to be observable, or an offline toggle that changed nothing would pass. It
++      // is proved by a request from this page that must fail while offline. It used to be proved
++      // by the player's unavailable state, but a paused player whose forward buffer is already
++      // full (hls.js keeps 30 s ahead) issues no request offline, so its retries never run out:
++      // the attempt-8 trace on 2026-11-17 shows the last segment request ~50 ms before
++      // `setOffline` and none after it, and the row waited 60 s for an error that cannot come.
+       //
+-      // Which is why this row does not seek while offline. That assumed the player stays
+-      // operable through a break; it does not, and it is right not to. The row's claim is that
+-      // the recorded position survives the break, not that the player keeps taking input during
+-      // one - a failed write moving the saved position is B11's subject, at the datastore.
++      // The row still does not seek while offline: its claim is that the recorded position
++      // survives the break, not that the player takes input during one - a failed write moving
++      // the saved position is B11's subject, at the datastore.
+       await page.context().setOffline(true);
+-      await expect(page.getByText('Відео зараз недоступне.')).toBeVisible({ timeout: 60_000 });
++      const reachedServer = await page.evaluate(() =>
++        fetch(window.location.href, { cache: 'no-store' }).then(
++          () => true,
++          () => false,
++        ),
++      );
++      expect(reachedServer, 'a request during the break must fail').toBe(false);
+       await page.context().setOffline(false);
+ 
+       const recoveredPage = await page.context().newPage();
+diff --git a/frontend/src/routes/admin.index.tsx b/frontend/src/routes/admin.index.tsx
+index c3cc432..7e0d596 100644
+--- a/frontend/src/routes/admin.index.tsx
++++ b/frontend/src/routes/admin.index.tsx
+@@ -47,13 +47,18 @@ function AdminCourseListRoute() {
+     sort?: AdminCourseSort;
+     page?: number;
+   }) {
+-    const merged = { ...state, ...next };
++    // Merge over the router's latest search, not this render's `state`: right after a search
++    // submit the URL already carries `search` while this component still renders the previous
++    // list (the loader is pending), and a sort click would otherwise drop it (gate 2026-11-17).
+     void navigate({
+-      search: {
+-        ...(merged.status === undefined ? {} : { status: merged.status }),
+-        ...(merged.search === '' ? {} : { search: merged.search }),
+-        ...(merged.sort === 'recent' ? {} : { sort: merged.sort }),
+-        ...(merged.page === 1 ? {} : { page: merged.page }),
++      search: (previous) => {
++        const merged = { ...adminListState(previous), ...next };
++        return {
++          ...(merged.status === undefined ? {} : { status: merged.status }),
++          ...(merged.search === '' ? {} : { search: merged.search }),
++          ...(merged.sort === 'recent' ? {} : { sort: merged.sort }),
++          ...(merged.page === 1 ? {} : { page: merged.page }),
++        };
+       },
+     });
+   }
+diff --git a/frontend/src/routes/route-guards.test.tsx b/frontend/src/routes/route-guards.test.tsx
+index cf30d1b..e0dff9b 100644
+--- a/frontend/src/routes/route-guards.test.tsx
++++ b/frontend/src/routes/route-guards.test.tsx
+@@ -691,6 +691,57 @@ test('B02 renders the admin list empty state without weakening the shell guard',
+   expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '', sort: 'recent' }]);
+ });
+ 
++test('S5 a sort clicked while the search submit is still loading keeps the search', async () => {
++  const admin = user('admin');
++  answerWith(admin);
++  let releaseSearch: (() => void) | undefined;
++  const searchHeld = new Promise<void>((resolve) => {
++    releaseSearch = resolve;
++  });
++  const course: AdminCourse = {
++    id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
++    slug: 'postgres-course',
++    title: 'Postgres course',
++    status: 'draft',
++    instructorId: admin.id,
++    updatedAt: '2026-09-05T10:15:30.000000Z',
++    lessonCount: 1,
++    studentCount: 0,
++    price: null,
++  };
++  const router = createTestRouter('/admin', admin, 'uk', [], {
++    list: async (query) => {
++      observedAdminQueries.push(query);
++      // Hold only the first searched list, so the sort click lands while the search route is
++      // still pending and this component still renders the unfiltered list.
++      if (query.search !== '' && query.sort === 'recent') await searchHeld;
++      return {
++        ok: true,
++        value: {
++          items: [course],
++          pagination: { limit: query.limit, offset: query.offset, total: 1 },
++          statusCounts: { total: 1, draft: 1, published: 0, archived: 0 },
++        },
++      };
++    },
++  });
++  // The browser keeps the previous match on screen for a second before a pending component; the
++  // shared test router shows it at once, which would hide the list this race needs.
++  router.options.defaultPendingMs = 60_000;
++
++  await router.load();
++  renderRouter(router);
++  await userEvent.type(screen.getByRole('textbox', { name: 'Пошук курсів' }), 'postgres');
++  await userEvent.click(screen.getByRole('button', { name: 'Знайти' }));
++  await waitFor(() => expect(router.state.location.search).toEqual({ search: 'postgres' }));
++  await userEvent.click(screen.getByRole('button', { name: /Студенти/ }));
++  releaseSearch?.();
++
++  await waitFor(() =>
++    expect(router.state.location.search).toEqual({ search: 'postgres', sort: 'students' }),
++  );
++});
++
+ test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
+   const admin = user('admin');
+   answerWith(admin);

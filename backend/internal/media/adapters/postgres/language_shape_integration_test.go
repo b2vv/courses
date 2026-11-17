@@ -184,7 +184,7 @@ func (h *mediaHarness) testLanguageShapeGuards(t *testing.T) {
 	}
 
 	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "de", "Ger", false, domain.Ready, mediaNow.Add(time.Minute))
-	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "EN", "Clash", mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrDuplicateLanguage) {
+	if _, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "EN", "Clash", nil, mediaNow.Add(time.Hour), noMasterRewrite); !errors.Is(err, domain.ErrDuplicateLanguage) {
 		t.Fatalf("rename de→EN beside en: err = %v, want duplicate_language", err)
 	}
 	upload := func(id, language string, state domain.State) (domain.AudioTrack, error) {

@@ -32,6 +32,7 @@ type fakeRepository struct {
 	claim                      func(context.Context, string, domain.ClaimToken, time.Time) (domain.VideoAsset, bool, error)
 	publish                    func(context.Context, string, domain.ClaimToken, []domain.Rendition, *float64, time.Time, *domain.AudioTrack, ports.PublishPolicy) (domain.VideoAsset, *domain.VideoAsset, error)
 	publishedEmbedded          *domain.AudioTrack
+	mintedMultilingual         bool
 	regenerateMaster           func(context.Context, string, func([]domain.AudioTrack) error) error
 	listReadyAssetIDs          func(context.Context) ([]string, error)
 	loadAudioTrack             func(context.Context, string, string) (domain.AudioTrack, error)
@@ -39,7 +40,7 @@ type fakeRepository struct {
 	failAudioTrack             func(context.Context, string, string, time.Time) error
 	listAudioTracks            func(context.Context, domain.Actor, string) ([]domain.AudioTrack, error)
 	setDefaultAudioTrack       func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
-	updateAudioTrackMetadata   func(context.Context, domain.Actor, string, string, string, string, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
+	updateAudioTrackMetadata   func(context.Context, domain.Actor, string, string, string, string, *bool, time.Time, func([]domain.AudioTrack) error) (domain.AudioTrack, error)
 	deleteAudioTrack           func(context.Context, domain.Actor, string, string, time.Time, func([]domain.AudioTrack) error) error
 	publishedDuration          *float64
 	requeue                    func(context.Context, string, domain.ClaimToken, time.Time) error
@@ -146,10 +147,10 @@ func (repository *fakeRepository) SetDefaultAudioTrack(ctx context.Context, acto
 	return nil
 }
 
-func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
+func (repository *fakeRepository) UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func([]domain.AudioTrack) error) (domain.AudioTrack, error) {
 	repository.calls = append(repository.calls, "update_audio_track_metadata")
 	if repository.updateAudioTrackMetadata != nil {
-		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, now, rewrite)
+		return repository.updateAudioTrackMetadata(ctx, actor, assetID, trackID, language, label, multilingual, now, rewrite)
 	}
 	return domain.AudioTrack{}, nil
 }
@@ -192,8 +193,9 @@ func (repository *fakeRepository) Recover(ctx context.Context, now time.Time, li
 	return repository.recover(ctx, now, limit)
 }
 
-func (repository *fakeRepository) MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string, expiresAt, now time.Time) (domain.AudioTrack, error) {
-	return domain.AudioTrack{}, nil
+func (repository *fakeRepository) MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string, multilingual bool, expiresAt, now time.Time) (domain.AudioTrack, error) {
+	repository.mintedMultilingual = multilingual
+	return domain.AudioTrack{Multilingual: multilingual}, nil
 }
 
 func (repository *fakeRepository) AppendAudioChunk(ctx context.Context, trackID string, offset int64, now time.Time, chunkPolicy ports.AudioChunkPolicy, completePolicy ports.AudioCompletePolicy) (domain.AudioTrack, error) {

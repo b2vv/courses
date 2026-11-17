@@ -1,0 +1,649 @@
+[
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 390,
+    "file": "s1-tabs-und-draft-390.png",
+    "documentScrollWidth": 390,
+    "scope": 312,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 768,
+    "file": "s1-tabs-und-draft-768.png",
+    "documentScrollWidth": 768,
+    "scope": 662,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 1024,
+    "file": "s1-tabs-und-draft-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 649,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 1440,
+    "file": "s1-tabs-und-draft-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 1065,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 1440,
+    "file": "s1-tabs-und-draft-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 709,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 390,
+    "file": "s1-tabs-und-draft-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 307,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s1-tabs-und-draft",
+    "viewport": 320,
+    "file": "s1-tabs-und-draft-320.png",
+    "documentScrollWidth": 320,
+    "scope": 249,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 7
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 390,
+    "file": "s5-audio-tracks-390.png",
+    "documentScrollWidth": 390,
+    "scope": 291,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 768,
+    "file": "s5-audio-tracks-768.png",
+    "documentScrollWidth": 768,
+    "scope": 628,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 1024,
+    "file": "s5-audio-tracks-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 615,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 1440,
+    "file": "s5-audio-tracks-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 1031,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 1440,
+    "file": "s5-audio-tracks-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 643,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 390,
+    "file": "s5-audio-tracks-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 285,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "state": "s5-audio-tracks",
+    "viewport": 320,
+    "file": "s5-audio-tracks-320.png",
+    "documentScrollWidth": 320,
+    "scope": 231,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаПольськаНімецькаФран 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 12
+  },
+  {
+    "keyboard": {
+      "afterArrowRight": {
+        "role": "tab",
+        "name": "Англійська",
+        "focusVisible": true,
+        "outline": "solid 3px",
+        "boxShadow": "none"
+      },
+      "selected": "Англійська",
+      "afterTabIntoPanel": {
+        "role": "button",
+        "name": "Завантажити чернетку в редактор",
+        "focusVisible": true,
+        "outline": "solid 3px",
+        "boxShadow": "none"
+      }
+    }
+  },
+  {
+    "undDialogFocus": {
+      "role": "dialog",
+      "name": "Підтвердьте мову транскриптуЩоб прив'яза",
+      "focusVisible": true,
+      "outline": "auto 1px",
+      "boxShadow": "none"
+    }
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 390,
+    "file": "s4-und-dialog-390.png",
+    "documentScrollWidth": 390,
+    "scope": 357,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 768,
+    "file": "s4-und-dialog-768.png",
+    "documentScrollWidth": 768,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 1024,
+    "file": "s4-und-dialog-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 1440,
+    "file": "s4-und-dialog-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 1440,
+    "file": "s4-und-dialog-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 1150,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 390,
+    "file": "s4-und-dialog-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 357,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "state": "s4-und-dialog",
+    "viewport": 320,
+    "file": "s4-und-dialog-320.png",
+    "documentScrollWidth": 320,
+    "scope": 292,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "ПольськаНімецькаФранцузькаІспа 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 4
+  },
+  {
+    "undDialogEscapeFocus": {
+      "role": "button",
+      "name": "Зберегти транскрипт",
+      "focusVisible": true,
+      "outline": "solid 3px",
+      "boxShadow": "rgba(255, 255, 255, 0.28) 0px 1px 0px 0px inset, color(srgb "
+    }
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 390,
+    "file": "s3-orphan-uk-390.png",
+    "documentScrollWidth": 390,
+    "scope": 312,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 768,
+    "file": "s3-orphan-uk-768.png",
+    "documentScrollWidth": 768,
+    "scope": 662,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 1024,
+    "file": "s3-orphan-uk-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 649,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 1440,
+    "file": "s3-orphan-uk-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 1065,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 1440,
+    "file": "s3-orphan-uk-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 709,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 390,
+    "file": "s3-orphan-uk-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 300,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s3-orphan-uk",
+    "viewport": 320,
+    "file": "s3-orphan-uk-320.png",
+    "documentScrollWidth": 320,
+    "scope": 249,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "renameDialogFocus": {
+      "role": "dialog",
+      "name": "Мова й назва доріжкиМова доріжкиАнглійсь",
+      "focusVisible": true,
+      "outline": "auto 1px",
+      "boxShadow": "none"
+    }
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 390,
+    "file": "s6-rename-dialog-390.png",
+    "documentScrollWidth": 390,
+    "scope": 357,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 768,
+    "file": "s6-rename-dialog-768.png",
+    "documentScrollWidth": 768,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 1024,
+    "file": "s6-rename-dialog-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 1440,
+    "file": "s6-rename-dialog-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 574,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 1440,
+    "file": "s6-rename-dialog-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 1150,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 390,
+    "file": "s6-rename-dialog-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 357,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 209x41"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "state": "s6-rename-dialog",
+    "viewport": 320,
+    "file": "s6-rename-dialog-320.png",
+    "documentScrollWidth": 320,
+    "scope": 292,
+    "outside": [
+      "div.",
+      "label.",
+      "select."
+    ],
+    "smallTargets": [
+      "УкраїнськаАнглійськаПольськаНі 115x22"
+    ],
+    "duplicateIds": [],
+    "controls": 5
+  },
+  {
+    "renameEscapeFocus": {
+      "role": "button",
+      "name": "Змінити доріжку English dub (Англійська)",
+      "focusVisible": true,
+      "outline": "solid 3px",
+      "boxShadow": "none"
+    }
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 390,
+    "file": "s2-detached-offer-en-390.png",
+    "documentScrollWidth": 390,
+    "scope": 312,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 768,
+    "file": "s2-detached-offer-en-768.png",
+    "documentScrollWidth": 768,
+    "scope": 662,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 1024,
+    "file": "s2-detached-offer-en-1024.png",
+    "documentScrollWidth": 1024,
+    "scope": 649,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 1440,
+    "file": "s2-detached-offer-en-1440.png",
+    "documentScrollWidth": 1440,
+    "scope": 1065,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 1440,
+    "file": "s2-detached-offer-en-1440-text200.png",
+    "documentScrollWidth": 1440,
+    "scope": 709,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 390,
+    "file": "s2-detached-offer-en-390-text200.png",
+    "documentScrollWidth": 390,
+    "scope": 300,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "state": "s2-detached-offer-en",
+    "viewport": 320,
+    "file": "s2-detached-offer-en-320.png",
+    "documentScrollWidth": 320,
+    "scope": 249,
+    "outside": [],
+    "smallTargets": [],
+    "duplicateIds": [],
+    "controls": 8
+  },
+  {
+    "cleanup": "1d171ac2-e88f-4b44-9673-507e61253868",
+    "status": 204
+  }
+]

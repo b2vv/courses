@@ -27,20 +27,6 @@ const readyGenerationForLesson = `SELECT COALESCE((
   LIMIT 1
 ), 0)`
 
-// readyAudioForLesson is readyGenerationForLesson plus the source leaf of that asset's default
-// Ready audio track (multi-audio S6, D-S6-6); a lesson with no ready asset reads (0, ”).
-const readyAudioForLesson = `SELECT COALESCE(current.generation, 0), COALESCE(tracks.source_leaf, '')
-FROM (SELECT 1) AS anchor
-LEFT JOIN LATERAL (
-  SELECT assets.id, assets.generation
-  FROM video_assets AS assets
-  WHERE assets.lesson_id = $1::text::uuid AND assets.state = 'ready' AND assets.evicted_at IS NULL
-  ORDER BY assets.generation DESC
-  LIMIT 1
-) AS current ON true
-LEFT JOIN audio_tracks AS tracks
-  ON tracks.video_asset_id = current.id AND tracks.is_default AND tracks.state = 'ready'`
-
 // The course facts the access rule needs are read even when no transcript exists, so that a
 // missing transcript and a forbidden course cannot be told apart by the caller.
 const getLessonAccessCourse = `SELECT courses.instructor_id::text, courses.status,
@@ -195,4 +181,30 @@ func persistenceError(err error) error {
 		return err
 	}
 	return domain.ErrDependencyUnavailable
+}
+
+func (repository *Repository) ListLessonTranscripts(ctx context.Context, lessonID string) ([]ports.TranscriptInventory, error) {
+	rows, err := repository.pool.Query(ctx, `SELECT language, updated_at, is_primary,
+ authored_against_generation, (`+readyGenerationForLesson+`)
+ FROM transcripts WHERE lesson_id=$1::text::uuid ORDER BY language`, lessonID)
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+	defer rows.Close()
+	result := make([]ports.TranscriptInventory, 0)
+	for rows.Next() {
+		var item ports.TranscriptInventory
+		var updatedAt time.Time
+		var generation, readyGeneration int32
+		if err := rows.Scan(&item.Language, &updatedAt, &item.IsPrimary, &generation, &readyGeneration); err != nil {
+			return nil, persistenceError(err)
+		}
+		item.UpdatedAt = updatedAt.UTC().Format(time.RFC3339Nano)
+		item.Stale = (domain.Transcript{AuthoredAgainstGeneration: generation}).Stale(readyGeneration)
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, persistenceError(err)
+	}
+	return result, nil
 }

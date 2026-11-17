@@ -57,7 +57,10 @@ func NewRecognize(
 
 func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (RecognizeOutcome, error) {
 	now := r.timestamp()
-	claimed, err := r.drafts.Claim(ctx, job.LessonID, job.AssetID, job.Generation, job.Requested, now)
+	claimed, err := r.drafts.Claim(ctx, job.LessonID, job.AssetID, job.Generation, job.TrackID, job.Requested, now)
+	if errors.Is(err, domain.ErrDraftSuperseded) || errors.Is(err, domain.ErrNotFound) {
+		return RecognizeOutcome{}, nil
+	}
 	if err != nil {
 		return RecognizeOutcome{}, err
 	}
@@ -65,7 +68,7 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 		return RecognizeOutcome{}, nil
 	}
 
-	// The claim recorded the default track's leaf; that is the audio to hear (multi-audio S6).
+	// The claim recorded this track's immutable leaf; that is the audio to hear.
 	audioPath, release, err := r.audio.Extract(ctx, job.AssetID, claimed.Draft.SourceLeaf)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -78,7 +81,7 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 	}
 	defer release()
 
-	recognition, err := r.transcriber.Transcribe(ctx, audioPath, job.Language)
+	recognition, err := r.transcriber.Transcribe(ctx, audioPath, claimed.Draft.TrackLanguage, claimed.Draft.TrackMultilingual)
 	if err != nil {
 		if ctx.Err() != nil {
 			return r.handleContextFailure(ctx, claimed, job)
@@ -95,20 +98,28 @@ func (r *Recognize) Process(ctx context.Context, job ports.RecognitionJob) (Reco
 
 	if recognition.SpeechSeconds < noSpeechThreshold {
 		return r.complete(ctx, claimed, domain.TranscriptDraft{
-			LessonID:   job.LessonID,
-			AssetID:    job.AssetID,
-			Generation: job.Generation,
-			State:      domain.DraftNoSpeech,
+			LessonID:          job.LessonID,
+			AssetID:           job.AssetID,
+			Generation:        job.Generation,
+			TrackID:           job.TrackID,
+			TrackLanguage:     claimed.Draft.TrackLanguage,
+			TrackMultilingual: claimed.Draft.TrackMultilingual,
+			SourceLeaf:        claimed.Draft.SourceLeaf,
+			State:             domain.DraftNoSpeech,
 		})
 	}
 
 	draft, err := domain.NewTranscriptDraft(domain.TranscriptDraft{
-		LessonID:   job.LessonID,
-		AssetID:    job.AssetID,
-		Generation: job.Generation,
-		State:      domain.DraftReady,
-		Language:   recognition.Language,
-		Segments:   recognition.Segments,
+		LessonID:          job.LessonID,
+		AssetID:           job.AssetID,
+		Generation:        job.Generation,
+		TrackID:           job.TrackID,
+		TrackLanguage:     claimed.Draft.TrackLanguage,
+		TrackMultilingual: claimed.Draft.TrackMultilingual,
+		SourceLeaf:        claimed.Draft.SourceLeaf,
+		State:             domain.DraftReady,
+		Language:          recognition.Language,
+		Segments:          recognition.Segments,
 	})
 	if errors.Is(err, domain.ErrSegmentLimit) {
 		return r.fail(ctx, claimed, job, "segment_limit")
@@ -148,16 +159,20 @@ func (r *Recognize) complete(ctx context.Context, claimed ports.ClaimedDraft, dr
 
 func (r *Recognize) fail(ctx context.Context, claimed ports.ClaimedDraft, job ports.RecognitionJob, reason string) (RecognizeOutcome, error) {
 	return r.complete(ctx, claimed, domain.TranscriptDraft{
-		LessonID:   job.LessonID,
-		AssetID:    job.AssetID,
-		Generation: job.Generation,
-		State:      domain.DraftFailed,
-		Failure:    reason,
+		LessonID:          job.LessonID,
+		AssetID:           job.AssetID,
+		Generation:        job.Generation,
+		TrackID:           job.TrackID,
+		TrackLanguage:     claimed.Draft.TrackLanguage,
+		TrackMultilingual: claimed.Draft.TrackMultilingual,
+		SourceLeaf:        claimed.Draft.SourceLeaf,
+		State:             domain.DraftFailed,
+		Failure:           reason,
 	})
 }
 
-// EnqueuePending polls for ready assets without a draft for their current generation and
-// enqueues a recognition task for each (plan P-1). It runs on the worker's startup ticker.
+// EnqueuePending polls for ready tracks of the latest Ready asset without any draft and
+// enqueues a recognition task per track (O7, plan P-1). It runs on the worker's startup ticker.
 func (r *Recognize) EnqueuePending(ctx context.Context) error {
 	pending, err := r.drafts.PendingRecognitions(ctx, pendingLimit)
 	if err != nil {
@@ -176,6 +191,7 @@ func (r *Recognize) EnqueuePending(ctx context.Context) error {
 			LessonID:   p.LessonID,
 			AssetID:    p.AssetID,
 			Generation: p.Generation,
+			TrackID:    p.TrackID,
 			TaskMarker: p.TaskMarker,
 		}, timeout); err != nil {
 			if errors.Is(err, domain.ErrAlreadyRunning) {
@@ -200,6 +216,7 @@ func (r *Recognize) Recover(ctx context.Context) error {
 			LessonID:   d.Draft.LessonID,
 			AssetID:    d.Draft.AssetID,
 			Generation: d.Draft.Generation,
+			TrackID:    d.Draft.TrackID,
 			State:      domain.DraftFailed,
 			Failure:    "timeout",
 		}, d.Token, r.timestamp())
@@ -220,7 +237,7 @@ func (r *Recognize) Recover(ctx context.Context) error {
 
 func (r *Recognize) failBeforeStart(ctx context.Context, p ports.PendingRecognition, reason string) error {
 	now := r.timestamp()
-	claimed, err := r.drafts.Claim(ctx, p.LessonID, p.AssetID, p.Generation, false, now)
+	claimed, err := r.drafts.Claim(ctx, p.LessonID, p.AssetID, p.Generation, p.TrackID, false, now)
 	if err != nil {
 		return err
 	}
@@ -231,6 +248,7 @@ func (r *Recognize) failBeforeStart(ctx context.Context, p ports.PendingRecognit
 		LessonID:   p.LessonID,
 		AssetID:    p.AssetID,
 		Generation: p.Generation,
+		TrackID:    p.TrackID,
 		State:      domain.DraftFailed,
 		Failure:    reason,
 	}, claimed.Token, r.timestamp())

@@ -14,6 +14,7 @@ const (
 	ErrPurchaseRequired Error = "course_purchase_required"
 	ErrEmailNotVerified Error = "email_not_verified"
 	ErrNotFound         Error = "not_found"
+	ErrTrackNotFound    Error = "track_not_found"
 
 	ErrDependencyUnavailable Error = "dependency_unavailable"
 	ErrAlreadyRunning        Error = "already_running"

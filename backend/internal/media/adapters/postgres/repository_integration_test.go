@@ -164,6 +164,11 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	defer pool.Close()
 	harness := &mediaHarness{ctx: ctx, connection: connection, pool: pool, repository: NewRepository(pool)}
 
+	t.Run("audio track: multilingual persistence", harness.testMultilingualPersistence)
+	t.Run("audio track: metadata siblings and label rollback", harness.testTrackMetadata)
+	t.Run("audio track: metadata foreign lock scope", harness.testTrackMetadataForeignLock)
+	t.Run("audio track: metadata lock query failure", harness.testTrackMetadataLockQueryFailure)
+	t.Run("audio track: metadata lock excludes sweep", harness.testTrackMetadataExcludesSweep)
 	t.Run("P06 replacing a video keeps two ready generations", harness.testTwoReadyGenerations)
 	t.Run("B16 only expired uploads are taken over", harness.testExpiredUploadTakeover)
 	t.Run("B22 generation remains monotonic after eviction", harness.testMonotonicGeneration)
@@ -195,6 +200,7 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	t.Run("S3 concurrent promote keeps exactly one default", harness.testConcurrentPromoteAudioTrack)
 	t.Run("S5-L1a authoring refuses a non-owner", harness.testAudioTrackAuthoringOwnership)
 	t.Run("S5-L1a rename updates metadata and 409s a duplicate language", harness.testUpdateAudioTrackMetadata)
+	t.Run("M2-R12 multilingual metadata writes skip master rewrite", harness.testM2R12MultilingualMetadata)
 	t.Run("S5-L1a delete regenerates the master from the remaining ready set", harness.testDeleteAudioTrackRegeneratesMaster)
 	t.Run("S5-L1a delete removes an embedded track", harness.testDeleteEmbeddedAudioTrack)
 	t.Run("S5-L1b sweep selects only reclaimable upload tracks", harness.testSweepAudioSelectsOnlyReclaimableTracks)
@@ -579,7 +585,7 @@ func (h *mediaHarness) testPublishEvictsOldest(t *testing.T) {
 		t.Fatalf("active assets=%+v", assets)
 	}
 	storage := &sweepStorage{}
-	if err := application.NewTranscode(h.repository, storage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+	if err := application.NewTranscode(h.repository, storage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 	assertSweepKeys(t, storage.calls, mediaAssetOne)
@@ -683,7 +689,7 @@ func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
 	}
 
 	failingStorage := &sweepStorage{failOn: domain.StorageHLS}
-	if err := application.NewTranscode(h.repository, failingStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); !errors.Is(err, domain.ErrDependencyUnavailable) {
+	if err := application.NewTranscode(h.repository, failingStorage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("failed purge error=%v", err)
 	}
 	if len(failingStorage.calls) != 2 || failingStorage.calls[0].Kind != domain.StorageSource || failingStorage.calls[1].Kind != domain.StorageHLS {
@@ -695,7 +701,7 @@ func (h *mediaHarness) testOrphanSweepOrdering(t *testing.T) {
 		t.Fatalf("retry candidates=%+v err=%v", candidates, err)
 	}
 	successfulStorage := &sweepStorage{}
-	if err := application.NewTranscode(h.repository, successfulStorage, nil, nil, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
+	if err := application.NewTranscode(h.repository, successfulStorage, nil, nil, false, func() time.Time { return mediaNow }).Sweep(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 	assertSweepKeys(t, successfulStorage.calls, mediaAssetOne)

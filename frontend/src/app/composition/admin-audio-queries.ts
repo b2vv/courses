@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { terminalAudioSignature } from '../../modules/media';
 import type {
   AudioTrack,
+  LessonVideo,
   AudioTrackError,
   AudioTrackResult,
   AudioTransferProgress,
@@ -52,6 +53,13 @@ async function invalidateAfterAudioWrite(client: QueryClient, videoId: string) {
   await client.invalidateQueries({ queryKey: adminAudioTracksQueryKey(videoId), exact: true });
 }
 
+async function invalidateAudioLessonDrafts(client: QueryClient, courseId: string, videoId: string) {
+  const videos = client.getQueryData<readonly LessonVideo[]>(adminCourseVideosQueryKey(courseId));
+  const lessonId = videos?.find((video) => video.videoId === videoId)?.lessonId;
+  // A detached caller may not have the course video list cached; invalidate all in that case.
+  await invalidateLessonDrafts(client, lessonId);
+}
+
 export type AudioTrackVariables = {
   readonly courseId: string;
   readonly videoId: string;
@@ -64,10 +72,12 @@ export type MintAudioTrackVariables = {
   readonly originalName: string;
   readonly language: string;
   readonly label: string;
+  readonly multilingual: boolean;
 };
 export type RenameAudioTrackVariables = AudioTrackVariables & {
   readonly language: string;
   readonly label: string;
+  readonly multilingual: boolean;
 };
 export type TransferAudioTrackVariables = {
   readonly courseId: string;
@@ -92,7 +102,7 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
         queryKey: adminAudioTracksQueryKey(videoId),
         queryFn: async ({ client, signal }) => {
           const next = unwrap(await tracks.list(videoId, signal));
-          const signature = terminalAudioSignature(next);
+          const signature = terminalAudioSignature(next.items);
           const key = terminalSignatureKey(videoId);
           const previous = client.getQueryData<string>(key);
           client.setQueryData(key, signature);
@@ -101,13 +111,13 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
               queryKey: adminCourseVideosQueryKey(courseId),
               exact: true,
             });
-            // The worker may have assigned a first default; the draft follows it (multi-audio S6).
-            await invalidateLessonDrafts(client);
+            // A newly Ready track can now have its own draft.
+            await invalidateAudioLessonDrafts(client, courseId, videoId);
           }
           return next;
         },
         refetchInterval: (query) =>
-          audioTrackRefetchInterval(query.state.data, transferInFlightInThisTab),
+          audioTrackRefetchInterval(query.state.data?.items, transferInFlightInThisTab),
       }),
     mint: (client: QueryClient) =>
       mutationOptions({
@@ -118,6 +128,7 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
               originalName: input.originalName,
               language: input.language,
               label: input.label,
+              multilingual: input.multilingual,
             }),
           ),
         onSuccess: (_ticket, { videoId }) => invalidateAfterAudioWrite(client, videoId),
@@ -136,9 +147,18 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
       }),
     rename: (client: QueryClient) =>
       mutationOptions({
-        mutationFn: async ({ videoId, trackId, language, label }: RenameAudioTrackVariables) =>
-          unwrap(await tracks.rename(videoId, trackId, language, label)),
-        onSuccess: (_track, { videoId }) => invalidateAfterAudioWrite(client, videoId),
+        mutationFn: async ({
+          videoId,
+          trackId,
+          language,
+          label,
+          multilingual,
+        }: RenameAudioTrackVariables) =>
+          unwrap(await tracks.rename(videoId, trackId, language, label, multilingual)),
+        onSuccess: async (_track, { courseId, videoId }) => {
+          await invalidateAfterAudioWrite(client, videoId);
+          await invalidateAudioLessonDrafts(client, courseId, videoId);
+        },
       }),
     setDefault: (client: QueryClient) =>
       mutationOptions({
@@ -147,8 +167,8 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
         onSuccess: async (_value, { courseId, videoId }) => {
           await invalidateAfterAudioWrite(client, videoId);
           await invalidateAfterVideoWrite(client, courseId);
-          // The draft heard the old default: it is stale now and gets re-recognised (D-S6-6).
-          await invalidateLessonDrafts(client);
+          // Server order is default first; refresh the draft order.
+          await invalidateAudioLessonDrafts(client, courseId, videoId);
         },
       }),
     remove: (client: QueryClient) =>
@@ -158,8 +178,8 @@ export function createAdminAudioQueries(tracks: ReturnType<typeof createAudioTra
         onSuccess: async (_value, { courseId, videoId }) => {
           await invalidateAfterAudioWrite(client, videoId);
           await invalidateAfterVideoWrite(client, courseId);
-          // Deleting the default re-elects another one, which the draft did not hear (D-S6-6).
-          await invalidateLessonDrafts(client);
+          // Deleted tracks and their drafts disappear; a new default can be elected.
+          await invalidateAudioLessonDrafts(client, courseId, videoId);
         },
       }),
     unwrap,

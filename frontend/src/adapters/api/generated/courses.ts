@@ -43,6 +43,7 @@ import type {
   DisableTwoFactorRequest,
   DismissReportsRequest,
   DraftConflictResponse,
+  DraftSourceNotFoundResponse,
   DuplicateLanguageResponse,
   EmailRequest,
   EmailTakenResponse,
@@ -67,9 +68,10 @@ import type {
   LessonDocumentConflictResponse,
   LessonDocumentDraft,
   LessonDocumentUpdated,
-  LessonDraft,
+  LessonDrafts,
   LessonNotFoundResponse,
   LessonTranscript,
+  LessonTranscripts,
   ListAdminCoursesParams,
   ListAdminLearnersParams,
   ListAdminUsersParams,
@@ -119,8 +121,6 @@ import type {
   PublishAdminLessonDocumentParams,
   PublishCommentRequest,
   PublishLessonDocumentRequest,
-  PublishLessonDraft200,
-  PublishLessonDraftRequest,
   PublishTeachLessonDocumentParams,
   PurchaseConflictResponse,
   PurchaseOrder,
@@ -129,7 +129,6 @@ import type {
   ReceiveWayForPayCallbackBody,
   RecoveryCodes,
   RefundQueuePage,
-  RegenerateLessonDraftRequest,
   RegisterRequest,
   ResetPasswordRequest,
   Review,
@@ -1628,60 +1627,60 @@ const res = await fetch(getPublishAdminLessonDocumentUrl(lessonId,params),
 
 
 
-export type getLessonDraftResponse200 = {
-  data: LessonDraft
+export type getLessonDraftsResponse200 = {
+  data: LessonDrafts
   status: 200
 }
 
-export type getLessonDraftResponse400 = {
+export type getLessonDraftsResponse400 = {
   data: InvalidRequestResponse
   status: 400
 }
 
-export type getLessonDraftResponse401 = {
+export type getLessonDraftsResponse401 = {
   data: UnauthenticatedResponse
   status: 401
 }
 
-export type getLessonDraftResponse403 = {
+export type getLessonDraftsResponse403 = {
   data: ForbiddenResponse
   status: 403
 }
 
-export type getLessonDraftResponse404 = {
+export type getLessonDraftsResponse404 = {
   data: LessonNotFoundResponse
   status: 404
 }
 
-export type getLessonDraftResponse503 = {
+export type getLessonDraftsResponse503 = {
   data: UnavailableResponse
   status: 503
 }
 
-export type getLessonDraftResponseSuccess = (getLessonDraftResponse200) & {
+export type getLessonDraftsResponseSuccess = (getLessonDraftsResponse200) & {
   headers: Headers;
 };
-export type getLessonDraftResponseError = (getLessonDraftResponse400 | getLessonDraftResponse401 | getLessonDraftResponse403 | getLessonDraftResponse404 | getLessonDraftResponse503) & {
+export type getLessonDraftsResponseError = (getLessonDraftsResponse400 | getLessonDraftsResponse401 | getLessonDraftsResponse403 | getLessonDraftsResponse404 | getLessonDraftsResponse503) & {
   headers: Headers;
 };
 
-export type getLessonDraftResponse = (getLessonDraftResponseSuccess | getLessonDraftResponseError)
+export type getLessonDraftsResponse = (getLessonDraftsResponseSuccess | getLessonDraftsResponseError)
 
-export const getGetLessonDraftUrl = (lessonId: string,) => {
-
-
+export const getGetLessonDraftsUrl = (lessonId: string,) => {
 
 
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft`
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/drafts`
 }
 
 /**
- * Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached.
- * @summary Get a lesson recognition draft
+ * Returns drafts of the latest Ready asset, default first, then embedded, then language and track ID. No Ready asset or no drafts returns an empty drafts array. Track metadata is the claim snapshot; stale compares it with current metadata. Course editor access; responses are never cached.
+ * @summary List lesson recognition drafts
  */
-export const getLessonDraft = async (lessonId: string, options?: RequestInit): Promise<getLessonDraftResponse> => {
+export const getLessonDrafts = async (lessonId: string, options?: RequestInit): Promise<getLessonDraftsResponse> => {
 
-  const res = await fetch(getGetLessonDraftUrl(lessonId),
+  const res = await fetch(getGetLessonDraftsUrl(lessonId),
   {
     ...options,
     method: 'GET'
@@ -1693,91 +1692,8 @@ export const getLessonDraft = async (lessonId: string, options?: RequestInit): P
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getLessonDraftResponse
-}
-
-
-
-export type publishLessonDraftResponse200 = {
-  data: PublishLessonDraft200
-  status: 200
-}
-
-export type publishLessonDraftResponse400 = {
-  data: InvalidRequestResponse
-  status: 400
-}
-
-export type publishLessonDraftResponse401 = {
-  data: UnauthenticatedResponse
-  status: 401
-}
-
-export type publishLessonDraftResponse403 = {
-  data: AdminMutationForbiddenResponse
-  status: 403
-}
-
-export type publishLessonDraftResponse404 = {
-  data: LessonNotFoundResponse
-  status: 404
-}
-
-export type publishLessonDraftResponse409 = {
-  data: TranscriptConflictResponse
-  status: 409
-}
-
-export type publishLessonDraftResponse503 = {
-  data: UnavailableResponse
-  status: 503
-}
-
-export type publishLessonDraftResponseSuccess = (publishLessonDraftResponse200) & {
-  headers: Headers;
-};
-export type publishLessonDraftResponseError = (publishLessonDraftResponse400 | publishLessonDraftResponse401 | publishLessonDraftResponse403 | publishLessonDraftResponse404 | publishLessonDraftResponse409 | publishLessonDraftResponse503) & {
-  headers: Headers;
-};
-
-export type publishLessonDraftResponse = (publishLessonDraftResponseSuccess | publishLessonDraftResponseError)
-
-export const getPublishLessonDraftUrl = (lessonId: string,) => {
-
-
-
-
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/publish`
-}
-
-/**
- * Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
- * @summary Publish a lesson recognition draft
- */
-export const publishLessonDraft = async (lessonId: string,
-    publishLessonDraftRequest?: PublishLessonDraftRequest, options?: RequestInit): Promise<publishLessonDraftResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getPublishLessonDraftUrl(lessonId),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(publishLessonDraftRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: publishLessonDraftResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as publishLessonDraftResponse
+  const data: getLessonDraftsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getLessonDraftsResponse
 }
 
 
@@ -1803,7 +1719,7 @@ export type regenerateLessonDraftResponse403 = {
 }
 
 export type regenerateLessonDraftResponse404 = {
-  data: LessonNotFoundResponse
+  data: DraftSourceNotFoundResponse
   status: 404
 }
 
@@ -1826,33 +1742,28 @@ export type regenerateLessonDraftResponseError = (regenerateLessonDraftResponse4
 
 export type regenerateLessonDraftResponse = (regenerateLessonDraftResponseSuccess | regenerateLessonDraftResponseError)
 
-export const getRegenerateLessonDraftUrl = (lessonId: string,) => {
+export const getRegenerateLessonDraftUrl = (lessonId: string,
+    trackId: string,) => {
 
 
 
 
-  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/draft/regenerate`
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/drafts/${trackId}/regenerate`
 }
 
 /**
- * Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+ * Authenticated same-origin mutation for the course owner or an admin. Accepts no body; any byte is invalid_request. Only a ready track of the latest Ready asset can be regenerated. A running draft returns already_running. Responses are never cached.
  * @summary Queue lesson speech recognition
  */
 export const regenerateLessonDraft = async (lessonId: string,
-    regenerateLessonDraftRequest?: RegenerateLessonDraftRequest, options?: RequestInit): Promise<regenerateLessonDraftResponse> => {
+    trackId: string, options?: RequestInit): Promise<regenerateLessonDraftResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Array.isArray(h)) return Object.fromEntries(h);
-    return h;
-  };
-const res = await fetch(getRegenerateLessonDraftUrl(lessonId),
+  const res = await fetch(getRegenerateLessonDraftUrl(lessonId,trackId),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(regenerateLessonDraftRequest)
+    method: 'POST'
+
+
   }
 )
 
@@ -1949,6 +1860,82 @@ const res = await fetch(getSaveLessonTranscriptUrl(lessonId),
 
   const data: saveLessonTranscriptResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as saveLessonTranscriptResponse
+}
+
+
+
+export type listLessonTranscriptsResponse200 = {
+  data: LessonTranscripts
+  status: 200
+}
+
+export type listLessonTranscriptsResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type listLessonTranscriptsResponse401 = {
+  data: UnauthenticatedResponse
+  status: 401
+}
+
+export type listLessonTranscriptsResponse403 = {
+  data: LearningForbiddenResponse
+  status: 403
+}
+
+export type listLessonTranscriptsResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type listLessonTranscriptsResponse500 = {
+  data: InternalErrorResponse
+  status: 500
+}
+
+export type listLessonTranscriptsResponse503 = {
+  data: UnavailableResponse
+  status: 503
+}
+
+export type listLessonTranscriptsResponseSuccess = (listLessonTranscriptsResponse200) & {
+  headers: Headers;
+};
+export type listLessonTranscriptsResponseError = (listLessonTranscriptsResponse400 | listLessonTranscriptsResponse401 | listLessonTranscriptsResponse403 | listLessonTranscriptsResponse404 | listLessonTranscriptsResponse500 | listLessonTranscriptsResponse503) & {
+  headers: Headers;
+};
+
+export type listLessonTranscriptsResponse = (listLessonTranscriptsResponseSuccess | listLessonTranscriptsResponseError)
+
+export const getListLessonTranscriptsUrl = (lessonId: string,) => {
+
+
+
+
+  return `${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcripts`
+}
+
+/**
+ * Course editor access, identical to admin PUT transcript. Ordered by language; stale compares the authored generation with the latest Ready non-evicted asset. Responses are never cached.
+ * @summary List published transcript languages
+ */
+export const listLessonTranscripts = async (lessonId: string, options?: RequestInit): Promise<listLessonTranscriptsResponse> => {
+
+  const res = await fetch(getListLessonTranscriptsUrl(lessonId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLessonTranscriptsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listLessonTranscriptsResponse
 }
 
 
@@ -3066,7 +3053,7 @@ export const getListAdminAudioTracksUrl = (videoId: string,) => {
 }
 
 /**
- * Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached.
+ * Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached. Each item includes multilingual; multilingualDefault reports the configured upload default.
  * @summary List audio tracks for a video asset
  */
 export const listAdminAudioTracks = async (videoId: string, options?: RequestInit): Promise<listAdminAudioTracksResponse> => {
@@ -3147,7 +3134,7 @@ export const getMintAdminAudioTicketUrl = (videoId: string,) => {
 }
 
 /**
- * Creates an uploaded audio track for the asset and returns its tus upload target. Admins may mint for any asset; instructors only for assets in courses they own. The track language must be unique on the asset.
+ * Creates an uploaded audio track for the asset and returns its tus upload target. Admins may mint for any asset; instructors only for assets in courses they own. The track language must be unique on the asset. Optional multilingual defaults to the configured ASR_MULTILINGUAL_DEFAULT when omitted.
  * @summary Mint an audio track upload ticket
  */
 export const mintAdminAudioTicket = async (videoId: string,
@@ -3314,7 +3301,7 @@ export const getRenameAdminAudioTrackUrl = (videoId: string,
 }
 
 /**
- * Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+ * Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock only when language or label changes. Optional multilingual is unchanged when omitted; changing only that flag does not rewrite the master.
  * @summary Rename an audio track
  */
 export const renameAdminAudioTrack = async (videoId: string,

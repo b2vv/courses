@@ -6,7 +6,7 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -14,7 +14,7 @@ import { apiOrigin } from '../adapters/api/api-origin';
 import { createApiSessionRepository } from '../modules/identity';
 import { createAuthoring } from '../modules/admin';
 import { createAudioTracks, createLessonVideos } from '../modules/media';
-import type { AudioTrackRepository } from '../modules/media';
+import type { AudioTrack, LessonVideo, AudioTrackRepository } from '../modules/media';
 import { createUserAdministration } from '../modules/admin';
 import { createCatalog } from '../modules/catalog';
 import { createSession } from '../modules/identity';
@@ -33,7 +33,10 @@ import {
   createDocumentQueries,
   type DocumentRepository,
 } from '../modules/document';
-import { createTranscriptQueries } from '../app/composition/transcript-queries';
+import {
+  lessonTranscriptQueryKey,
+  createTranscriptQueries,
+} from '../app/composition/transcript-queries';
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
 import { createPurchaseQueries } from '../app/composition/purchase-queries';
@@ -118,7 +121,11 @@ const observedAdminUserQueries: AdminUserQuery[] = [];
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
+// multilingualEditor fixtures: unmount and drop their caches so no QueryClient GC timers outlive a test.
+const multilingualTeardown: (() => void)[] = [];
+
 afterEach(() => {
+  for (const teardown of multilingualTeardown.splice(0)) teardown();
   focusManager.setFocused(undefined);
   observedAdminQueries.length = 0;
   observedAdminUserQueries.length = 0;
@@ -272,20 +279,8 @@ function createTestRouter(
           grant: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
         }),
         drafts: createDraftQueries({
-          getDraft: async () => ({
-            ok: true,
-            value: {
-              lessonId: '',
-              state: null,
-              language: null,
-              failure: null,
-              stale: false,
-              updatedAt: null,
-              assetId: null,
-              generation: null,
-              segments: [],
-            },
-          }),
+          listDrafts: async () => ({ ok: true, value: [] }),
+          listTranscripts: async () => ({ ok: true, value: [] }),
           regenerate: async () => ({ ok: true, value: undefined }),
         }),
         stats: createAdminStatsQueries({
@@ -694,6 +689,57 @@ test('B02 renders the admin list empty state without weakening the shell guard',
   // The empty slot replaces the table and its pager (proto's editorial empty state).
   expect(screen.queryByRole('navigation', { name: 'Сторінки курсів' })).toBeNull();
   expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '', sort: 'recent' }]);
+});
+
+test('S5 a sort clicked while the search submit is still loading keeps the search', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  let releaseSearch: (() => void) | undefined;
+  const searchHeld = new Promise<void>((resolve) => {
+    releaseSearch = resolve;
+  });
+  const course: AdminCourse = {
+    id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
+    slug: 'postgres-course',
+    title: 'Postgres course',
+    status: 'draft',
+    instructorId: admin.id,
+    updatedAt: '2026-09-05T10:15:30.000000Z',
+    lessonCount: 1,
+    studentCount: 0,
+    price: null,
+  };
+  const router = createTestRouter('/admin', admin, 'uk', [], {
+    list: async (query) => {
+      observedAdminQueries.push(query);
+      // Hold only the first searched list, so the sort click lands while the search route is
+      // still pending and this component still renders the unfiltered list.
+      if (query.search !== '' && query.sort === 'recent') await searchHeld;
+      return {
+        ok: true,
+        value: {
+          items: [course],
+          pagination: { limit: query.limit, offset: query.offset, total: 1 },
+          statusCounts: { total: 1, draft: 1, published: 0, archived: 0 },
+        },
+      };
+    },
+  });
+  // The browser keeps the previous match on screen for a second before a pending component; the
+  // shared test router shows it at once, which would hide the list this race needs.
+  router.options.defaultPendingMs = 60_000;
+
+  await router.load();
+  renderRouter(router);
+  await userEvent.type(screen.getByRole('textbox', { name: 'Пошук курсів' }), 'postgres');
+  await userEvent.click(screen.getByRole('button', { name: 'Знайти' }));
+  await waitFor(() => expect(router.state.location.search).toEqual({ search: 'postgres' }));
+  await userEvent.click(screen.getByRole('button', { name: /Студенти/ }));
+  releaseSearch?.();
+
+  await waitFor(() =>
+    expect(router.state.location.search).toEqual({ search: 'postgres', sort: 'students' }),
+  );
 });
 
 test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
@@ -1344,4 +1390,534 @@ test('an unsafe course slug on the order page is dropped from the way back', asy
   expect(screen.getByRole('link', { name: 'Повернутися до курсу' }).getAttribute('href')).toBe(
     '/courses',
   );
+});
+
+// Mount the actual guarded editor with real query adapters and controlled ports.
+async function multilingualEditor(ready = true) {
+  const actor = user('admin');
+  answerWith(actor);
+  const lessonId = '20000000-0000-4000-8000-000000000001';
+  const videoId = '50000000-0000-4000-8000-000000000001';
+  const trackId = '60000000-0000-4000-8000-000000000001';
+  const course = {
+    ...adminTree(actor),
+    modules: [
+      {
+        id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
+        title: 'Module',
+        lessons: [{ id: asBrandedId(lessonId, 'lesson'), title: 'Lesson', isPreview: false }],
+      },
+    ],
+  };
+  const router = createTestRouter(`/admin/courses/${course.id}`, actor, 'en', [], {
+    load: async () => ({ ok: true, value: course }),
+  });
+  const context = router.options.context;
+  const state = {
+    tracks: [
+      {
+        trackId,
+        videoId,
+        kind: 'embedded',
+        language: 'en',
+        label: 'Original',
+        isDefault: true,
+        multilingual: false,
+        state: 'ready',
+        updatedAt: 'T1',
+      },
+      {
+        trackId: '60000000-0000-4000-8000-000000000002',
+        videoId,
+        kind: 'uploaded',
+        language: 'en-gb',
+        label: 'British',
+        isDefault: false,
+        multilingual: false,
+        state: 'ready',
+        updatedAt: 'T1',
+      },
+    ] as AudioTrack[],
+    videos: [
+      {
+        videoId,
+        lessonId,
+        state: 'ready',
+        generation: 1,
+        originalName: 'video.mp4',
+        declaredBytes: 1,
+        receivedBytes: 1,
+        updatedAt: 'T1',
+      },
+    ] as LessonVideo[],
+    inventoryReads: 0,
+    inventoryFailure: false,
+    putFailure: false,
+    puts: [] as Parameters<TranscriptRepository['saveLessonTranscript']>[],
+    requested: [] as (string | undefined)[],
+    bases: new Map<string, LessonTranscript>([
+      [
+        'en',
+        {
+          lessonId,
+          language: 'en',
+          updatedAt: 'EN1',
+          stale: false,
+          segments: [
+            { id: 'english', startMs: 0, endMs: 1000, text: 'English lines', documentIds: [] },
+          ],
+          documents: [],
+        },
+      ],
+      [
+        'en-gb',
+        {
+          lessonId,
+          language: 'en-gb',
+          updatedAt: 'GB1',
+          stale: false,
+          segments: [
+            { id: 'british', startMs: 0, endMs: 1000, text: 'British lines', documentIds: [] },
+          ],
+          documents: [],
+        },
+      ],
+    ]),
+    deferredLanguage: '' as string,
+    releaseLanguage: undefined as (() => void) | undefined,
+  };
+  context.admin.videos.videos.listByCourse = async () => ({ ok: true, value: state.videos });
+  context.admin.audioTracks.tracks.list = async () => ({
+    ok: true,
+    value: { items: state.tracks, multilingualDefault: true },
+  });
+  const transcriptRepository: TranscriptRepository = {
+    ...transcriptStub,
+    getLessonTranscript: async (_id, language) => {
+      state.requested.push(language);
+      if (language === state.deferredLanguage)
+        await new Promise<void>((resolve) => {
+          state.releaseLanguage = resolve;
+        });
+      return {
+        ok: true,
+        value: state.bases.get(language ?? 'en') ?? {
+          lessonId,
+          language: null,
+          updatedAt: null,
+          stale: false,
+          segments: [],
+          documents: [],
+        },
+      };
+    },
+    listCourseDocuments: async () => ({ ok: true, value: [] }),
+    saveLessonTranscript: async (...args) => {
+      state.puts.push(args);
+      if (state.putFailure) return { ok: false, error: { code: 'dependency_unavailable' } };
+      const [id, input] = args;
+      state.bases.set(input.language, {
+        lessonId: id,
+        language: input.language,
+        updatedAt: 'SAVED2',
+        stale: false,
+        segments: [...input.segments],
+        documents: [],
+      });
+      return { ok: true, value: { updatedAt: 'SAVED2' } };
+    },
+  };
+  context.admin.transcripts = createTranscriptQueries(transcriptRepository);
+  context.admin.drafts.drafts.listTranscripts = async () => {
+    state.inventoryReads++;
+    return state.inventoryFailure
+      ? { ok: false, error: { code: 'dependency_unavailable' } }
+      : {
+          ok: true,
+          value: [...state.bases.values()].map((base) => ({
+            language: base.language ?? 'en',
+            updatedAt: base.updatedAt ?? '',
+            stale: false,
+            isPrimary: base.language === 'en',
+          })),
+        };
+  };
+  if (!ready) {
+    state.videos = [];
+    context.admin.drafts.drafts.listDrafts = async () => ({
+      ok: true,
+      value: ['First default draft', 'Last sibling draft'].map((text, index) => ({
+        lessonId,
+        trackId: index === 0 ? trackId : '60000000-0000-4000-8000-000000000002',
+        trackLanguage: 'en',
+        trackMultilingual: false,
+        state: 'ready',
+        language: 'en',
+        updatedAt: 'D1',
+        failure: null,
+        stale: false,
+        assetId: null,
+        generation: 1,
+        segments: [{ id: `draft-${index}`, startMs: 0, endMs: 1000, text }],
+      })),
+    });
+  }
+  await router.load();
+  const view = render(
+    <>
+      <style>{'.lesson-language-panel[inert] { display: none; }'}</style>
+      <QueryClientProvider client={context.queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </>,
+  );
+  multilingualTeardown.push(() => {
+    view.unmount();
+    context.queryClient.clear();
+  });
+  await userEvent.click(await screen.findByRole('tab', { name: 'Lessons' }));
+  if (ready) await screen.findByRole('tab', { name: /English.*Default/ });
+  await screen.findByDisplayValue('English lines');
+  return { router, context, state, view, lessonId, videoId, trackId };
+}
+
+test('guarded editor forwards multilingual server default and language-specific transcript reads', async () => {
+  const f = await multilingualEditor();
+  expect(screen.getByRole('switch', { name: 'Multiple languages' })).toHaveProperty(
+    'checked',
+    true,
+  );
+  expect(f.state.requested).toContain('en');
+  expect(f.state.requested).toContain('en-gb');
+  await userEvent.click(screen.getByRole('tab', { name: 'en-gb' }));
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+    'value',
+    'British lines',
+  );
+});
+
+test.each([false, true])(
+  'guarded rename retains previous lines while new language response waits, dirty=%s',
+  async (dirty) => {
+    const f = await multilingualEditor();
+    if (dirty)
+      fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+        target: { value: 'My edit' },
+      });
+    f.state.deferredLanguage = 'fr';
+    f.state.bases.set('fr', {
+      lessonId: f.lessonId,
+      language: 'fr',
+      updatedAt: 'FR1',
+      stale: false,
+      segments: [{ id: 'french', startMs: 0, endMs: 1000, text: 'French lines', documentIds: [] }],
+      documents: [],
+    });
+    f.state.tracks = f.state.tracks.map((track) =>
+      track.trackId === f.trackId ? { ...track, language: 'fr' } : track,
+    );
+    await act(async () => {
+      await f.context.queryClient.invalidateQueries({
+        queryKey: ['admin', 'audio-tracks', 'list', f.videoId],
+        exact: true,
+      });
+    });
+    await waitFor(() => expect(f.state.releaseLanguage).toBeTypeOf('function'));
+    expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+      'value',
+      dirty ? 'My edit' : 'English lines',
+    );
+    await act(async () => {
+      f.state.releaseLanguage?.();
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+        'value',
+        dirty ? 'My edit' : 'French lines',
+      ),
+    );
+  },
+);
+
+test('guarded fresh inventory error prevents PUT and retains edited lines', async () => {
+  const f = await multilingualEditor();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Keep me' },
+  });
+  f.state.inventoryFailure = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await screen.findByText('Could not verify the track — try again.');
+  expect(f.state.puts).toHaveLength(0);
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty('value', 'Keep me');
+});
+
+test('guarded Save refreshes inventory and every lesson language, isolates sibling and uses latest token', async () => {
+  const f = await multilingualEditor();
+  const client = f.context.queryClient;
+  client.setQueryData(lessonTranscriptQueryKey(f.lessonId), f.state.bases.get('en'));
+  client.setQueryData(lessonTranscriptQueryKey('sibling', 'en'), { marker: 'untouched' });
+  const before = f.state.inventoryReads;
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Saved lines' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await screen.findByText('Transcript saved.');
+  expect(f.state.inventoryReads).toBeGreaterThan(before);
+  expect(client.getQueryState(lessonTranscriptQueryKey(f.lessonId))?.isInvalidated).toBe(true);
+  expect(client.getQueryData(lessonTranscriptQueryKey(f.lessonId, 'en'))).toMatchObject({
+    updatedAt: 'SAVED2',
+  });
+  expect(client.getQueryData(lessonTranscriptQueryKey(f.lessonId, 'en-gb'))).toMatchObject({
+    updatedAt: 'GB1',
+  });
+  expect(f.state.requested.filter((language) => language === 'en-gb').length).toBeGreaterThan(1);
+  expect(client.getQueryState(lessonTranscriptQueryKey('sibling', 'en'))?.isInvalidated).toBe(
+    false,
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Saved again' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await waitFor(() => expect(f.state.puts).toHaveLength(2));
+  expect(f.state.puts[1]?.[1].expectedUpdatedAt).toBe('SAVED2');
+});
+
+test('failed guarded PUT does not invalidate settled inventory or any lesson transcript', async () => {
+  const f = await multilingualEditor();
+  const before = f.state.inventoryReads;
+  const reads = f.state.requested.length;
+  f.state.putFailure = true;
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Keep me' },
+  });
+  const invalidations: unknown[] = [];
+  const stop = f.context.queryClient.getQueryCache().subscribe((event) => {
+    if (event.type === 'updated' && event.action.type === 'invalidate')
+      invalidations.push(event.query.queryKey);
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await screen.findByText('The service is unavailable. Try again.');
+  stop();
+  expect(f.state.inventoryReads).toBe(before + 1); // fresh Save verification only
+  expect(f.state.requested).toHaveLength(reads);
+  expect(invalidations).toEqual([]);
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty('value', 'Keep me');
+});
+
+test('guarded single-editor fallback loads the first default draft while no Ready video exists', async () => {
+  await multilingualEditor(false);
+  fireEvent.click(await screen.findByRole('button', { name: 'Load draft into editor' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Load the draft' }));
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+    'value',
+    'First default draft',
+  );
+});
+
+test('guarded upload forwards enabled multilingual mode to mint and transfers the new track', async () => {
+  const f = await multilingualEditor();
+  const minted: unknown[] = [];
+  const transferred: unknown[] = [];
+  f.context.admin.audioTracks.tracks.mint = async (...args) => {
+    minted.push(args);
+    return {
+      ok: true,
+      value: {
+        trackId: '60000000-0000-4000-8000-000000000003',
+        uploadUrl: '/uploads/audio/60000000-0000-4000-8000-000000000003',
+        chunkBytes: 8388608,
+        maxBytes: 524288000,
+        expiresAt: '2026-11-17T12:00:00Z',
+      },
+    };
+  };
+  f.context.admin.audioTracks.tracks.transfer = async (target, file) => {
+    transferred.push([target, file.name, file.size]);
+    return { ok: true, value: null };
+  };
+  const browser = userEvent.setup();
+  // Select through RAC's native control; the behavior under test is route metadata forwarding.
+  const select = screen
+    .getByRole('region', { name: 'Audio tracks' })
+    .querySelector<HTMLSelectElement>('select');
+  if (select === null) throw new Error('Native upload-language control must be rendered');
+  fireEvent.change(select, { target: { value: 'pl' } });
+  await browser.type(screen.getByRole('textbox', { name: 'Track name' }), 'Polish dub');
+  const input = screen
+    .getByRole('region', { name: 'Audio tracks' })
+    .querySelector<HTMLInputElement>('input[type="file"]');
+  if (input === null) throw new Error('Audio upload input must be rendered');
+  await browser.upload(input, new File(['audio'], 'dub.m4a', { type: 'audio/mp4' }));
+  await waitFor(() => expect(transferred).toHaveLength(1));
+  expect(await screen.findByRole('switch', { name: 'Multiple languages' })).toHaveProperty(
+    'checked',
+    true,
+  );
+  expect(minted).toEqual([
+    [
+      '50000000-0000-4000-8000-000000000001',
+      {
+        declaredBytes: 5,
+        originalName: 'dub.m4a',
+        language: 'pl',
+        label: 'Polish dub',
+        multilingual: true,
+      },
+    ],
+  ]);
+  expect(transferred).toEqual([
+    [
+      {
+        kind: 'new',
+        ticket: {
+          trackId: '60000000-0000-4000-8000-000000000003',
+          uploadUrl: '/uploads/audio/60000000-0000-4000-8000-000000000003',
+          chunkBytes: 8388608,
+          maxBytes: 524288000,
+          expiresAt: '2026-11-17T12:00:00Z',
+        },
+      },
+      'dub.m4a',
+      5,
+    ],
+  ]);
+});
+
+test('guarded track switch forwards enabled multilingual mode through route composition', async () => {
+  const f = await multilingualEditor();
+  const calls: unknown[] = [];
+  f.context.admin.audioTracks.tracks.rename = async (...args) => {
+    calls.push(args);
+    const original = f.state.tracks[0];
+    if (original === undefined) throw new Error('Original track must exist');
+    const updated = { ...original, multilingual: true };
+    f.state.tracks = [updated, ...f.state.tracks.slice(1)];
+    return { ok: true, value: updated };
+  };
+  const toggle = screen.getByRole('switch', {
+    name: 'Multiple languages in track Original (English)',
+  });
+  expect(toggle).toHaveProperty('checked', false);
+  toggle.focus();
+  await userEvent.keyboard(' ');
+  await waitFor(() => expect(toggle).toHaveProperty('checked', true));
+  expect(calls).toEqual([
+    [
+      '50000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001',
+      'en',
+      'Original',
+      true,
+    ],
+  ]);
+});
+
+test('guarded sibling tab loads its own ASR draft and preserves default editor lines', async () => {
+  const f = await multilingualEditor();
+  f.context.admin.drafts.drafts.listDrafts = async () => ({
+    ok: true,
+    value: [
+      {
+        lessonId: f.lessonId,
+        trackId: '60000000-0000-4000-8000-000000000001',
+        trackLanguage: 'en',
+        trackMultilingual: false,
+        state: 'ready',
+        language: 'en',
+        updatedAt: 'D1',
+        failure: null,
+        stale: false,
+        assetId: null,
+        generation: 1,
+        segments: [{ id: 'default-draft', startMs: 0, endMs: 1000, text: 'Default recognized' }],
+      },
+      {
+        lessonId: f.lessonId,
+        trackId: '60000000-0000-4000-8000-000000000002',
+        trackLanguage: 'en-gb',
+        trackMultilingual: false,
+        state: 'ready',
+        language: 'en',
+        updatedAt: 'D2',
+        failure: null,
+        stale: false,
+        assetId: null,
+        generation: 1,
+        segments: [{ id: 'british-draft', startMs: 0, endMs: 1000, text: 'British recognized' }],
+      },
+    ],
+  });
+  await act(async () => {
+    await f.context.queryClient.invalidateQueries({ queryKey: ['admin', 'draft', f.lessonId] });
+  });
+  await userEvent.click(screen.getByRole('tab', { name: 'en-gb' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Load draft into editor' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Load the draft' }));
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+    'value',
+    'British recognized',
+  );
+  await userEvent.click(screen.getByRole('tab', { name: /English.*Default/ }));
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+    'value',
+    'English lines',
+  );
+});
+
+test('guarded regeneration sends the selected sibling track to the draft repository', async () => {
+  const f = await multilingualEditor();
+  const calls: unknown[] = [];
+  f.context.admin.drafts.drafts.regenerate = async (...args) => {
+    calls.push(args);
+    return { ok: true, value: undefined };
+  };
+  await userEvent.click(screen.getByRole('tab', { name: 'en-gb' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Generate transcript' }));
+  await waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls).toEqual([
+    ['20000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000002'],
+  ]);
+});
+
+test('guarded fresh track failure retains edits and prevents PUT until a successful retry', async () => {
+  const f = await multilingualEditor();
+  const list = f.context.admin.audioTracks.tracks.list;
+  f.context.admin.audioTracks.tracks.list = async () => ({
+    ok: false,
+    error: { code: 'dependency_unavailable' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Keep track failure edit' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await screen.findByText('Could not verify the track — try again.');
+  expect(f.state.puts).toEqual([]);
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty(
+    'value',
+    'Keep track failure edit',
+  );
+  f.context.admin.audioTracks.tracks.list = list;
+  fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
+  await screen.findByText('Transcript saved.');
+  expect(f.state.puts).toHaveLength(1);
+  expect(f.state.puts[0]?.[1]).toMatchObject({
+    language: 'en',
+    expectedUpdatedAt: 'EN1',
+    segments: [{ text: 'Keep track failure edit' }],
+  });
+});
+
+test('guarded editor reads language inventory for its own lesson through route composition', async () => {
+  const f = await multilingualEditor();
+  const calls: string[] = [];
+  const read = f.context.admin.drafts.drafts.listTranscripts;
+  f.context.admin.drafts.drafts.listTranscripts = async (id, signal) => {
+    calls.push(id);
+    return read(id, signal);
+  };
+  await act(async () => {
+    await f.context.queryClient.invalidateQueries({ queryKey: ['admin', 'transcript-inventory'] });
+  });
+  expect(calls).toEqual(['20000000-0000-4000-8000-000000000001']);
+  expect(screen.getByRole('tab', { name: 'en-gb' })).toBeTruthy();
 });

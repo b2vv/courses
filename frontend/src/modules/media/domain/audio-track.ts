@@ -22,8 +22,14 @@ export type AudioTrack = {
   readonly language: string;
   readonly label: string;
   readonly isDefault: boolean;
+  readonly multilingual: boolean;
   readonly state: AudioTrackState;
   readonly updatedAt: string;
+};
+
+export type AudioTracks = {
+  readonly items: readonly AudioTrack[];
+  readonly multilingualDefault: boolean;
 };
 
 export type AudioUploadTicket = {

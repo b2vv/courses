@@ -577,8 +577,27 @@ export const en = {
           unavailable: 'The service is unavailable. Try again.',
         },
       },
+      languageTabs: {
+        chooseHeading: 'Confirm the transcript language',
+        languagePlaceholder: 'Choose a language',
+        chooseLanguage: 'Track language',
+        attachHint: 'To attach an existing transcript, rename the track in Audio tracks',
+        languageRequired: 'Choose a language before saving.',
+        saveLanguage: 'Rename track and save',
+        noLanguages:
+          'No languages are available. Rename the track in Audio tracks to attach an existing transcript.',
+        label: 'Transcript languages',
+        loadFailed: 'Could not load the transcript languages — reload the page.',
+        unknown: 'Unknown language',
+        replace:
+          'A transcript in {{language}} (updated {{time}}) already exists — replace it with these lines?',
+        confirm: 'Replace',
+        cancel: 'Cancel',
+      },
       transcriptEditor: {
         heading: 'Lesson transcript',
+        languageChanged:
+          'The track language is now {{language}}; these lines will be saved in {{language}}.',
         language: 'Transcript language',
         add: 'Add a line',
         remove: 'Remove line {{line}}',
@@ -587,6 +606,11 @@ export const en = {
         text: 'Line {{line}} text',
         documents: 'Line {{line}} materials',
         recovery: {
+          resolveFirst: 'Restore or discard the unsaved changes first',
+          detachedLanguage: 'Unsaved lines from another tab (language: {{language}})',
+          detachedUnknown: 'Unsaved lines from another tab (language unknown)',
+          legacyLanguage: 'Unsaved lines from before tabs (language: {{language}})',
+          legacyUnknown: 'Unsaved lines from before tabs (language unknown)',
           heading: 'Unsaved changes',
           staleHeading: 'Unsaved changes over text that has moved on',
           description: 'Changes you never saved are still on this device. Restore them here?',
@@ -598,8 +622,6 @@ export const en = {
         draftOffer: {
           heading: 'A recognized draft is ready',
           description: 'Recognition finished. Load its text into the editor?',
-          languageMismatch:
-            'The draft is in {{draftLanguage}}, but the saved transcript is in {{transcriptLanguage}}. Regenerate the draft in {{transcriptLanguage}}.',
           load: 'Load the draft',
           dismiss: 'Skip',
         },
@@ -607,6 +629,13 @@ export const en = {
         saved: 'Transcript saved.',
         empty: 'No lines yet.',
         errors: {
+          track_verification_failed: 'Could not verify the track — try again.',
+          track_changed: 'The track changed or was removed. Reload the tracks and try again.',
+          track_rename_failed: 'Could not rename the track — try again.',
+          duplicate_language: 'A track in that language already exists.',
+          language_cancelled: 'Language not changed; your lines are still here.',
+          replacement_cancelled: 'Replacement cancelled. Your lines are still here.',
+
           invalid_request: 'Check the line times and text.',
           transcript_modified: 'The transcript changed while you were editing. Reload the page.',
           transcript_exists: 'A transcript in that language already exists.',
@@ -812,6 +841,9 @@ export const en = {
         },
       },
       audio: {
+        multilingual: 'Multiple languages',
+        multilingualNamed: 'Multiple languages in track {{name}}',
+        multilingualHint: 'Recognition detects the language of each passage.',
         title: 'Audio tracks',
         awaitingHint: 'The first ready audio track makes the video watchable.',
         loading: 'Loading audio tracks…',
@@ -868,6 +900,8 @@ export const en = {
         },
       },
       asr: {
+        trackMismatch:
+          'The draft was recognized for another track language or mode — press Regenerate',
         title: 'Speech recognition',
         language: 'Recognition language',
         generate: 'Generate transcript',
@@ -875,7 +909,7 @@ export const en = {
         loadDraft: 'Load draft into editor',
         recognizing: 'Recognizing speech',
         stale:
-          'This draft was made from an older video or another audio track. A new draft is being prepared automatically; you can also regenerate.',
+          'This draft uses an older track language or recognition mode. Regenerate to update it.',
         failureNamed: 'Recognition failed: {{reason}}.',
         state: {
           pending: 'Queued for recognition',

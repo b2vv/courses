@@ -6,6 +6,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublishLessonDraft200 = {
+export interface LessonTranscriptInventory {
+  isPrimary: boolean;
+  /**
+     * @minLength 2
+     * @maxLength 35
+     * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
+     */
+  language: string;
+  stale: boolean;
   updatedAt: string;
-};
+}

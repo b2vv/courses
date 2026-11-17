@@ -42,12 +42,13 @@ func (state DraftState) Terminal() bool {
 type TranscriptDraft struct {
 	LessonID string
 
-	// AssetID and Generation name the video this text came from. Staleness is DERIVED from the
-	// generation, exactly as the transcript derives it (D8-4), so there is no stored flag to
-	// drift. Unlike the transcript's zero, a draft ALWAYS has an asset: nothing makes one
-	// except a ready asset.
-	AssetID    string
-	Generation int32
+	// AssetID and Generation retain the source video identity for claim validation and cascades.
+	// Reads only expose tracks of the latest Ready asset; metadata snapshots derive staleness.
+	AssetID           string
+	Generation        int32
+	TrackID           string
+	TrackLanguage     Language
+	TrackMultilingual bool
 
 	State DraftState
 
@@ -60,9 +61,8 @@ type TranscriptDraft struct {
 	// Failure is the named cause, and only a failed draft has one.
 	Failure string
 
-	// SourceLeaf names the audio the draft was recognised from: the default track's leaf at claim
-	// time (multi-audio S6, D-S6-1). Empty is a draft made before S6, which always heard
-	// "original" (HeardLeaf).
+	// SourceLeaf is read through the track join, never stored on the draft row. The track's
+	// immutable leaf identifies the bytes to extract, independently of the current default.
 	SourceLeaf string
 }
 
@@ -70,7 +70,7 @@ type TranscriptDraft struct {
 const OriginalAudioLeaf = "original"
 
 // ValidAudioLeaf mirrors the leaf shape of `audio_tracks.source_leaf` (00025) and the
-// `asr_drafts.source_leaf` CHECK (00029): "original" or "audio-<lowercase uuid>". The extraction
+// former `asr_drafts.source_leaf` CHECK (00029): "original" or "audio-<lowercase uuid>". The extraction
 // adapter joins it into a path, so nothing else may pass.
 func ValidAudioLeaf(leaf string) bool {
 	if leaf == OriginalAudioLeaf {
@@ -92,8 +92,12 @@ func (draft TranscriptDraft) HeardLeaf() string {
 // of the decision: a looped model output has to be refused here, at the boundary of the module,
 // rather than an hour later when the author presses save and discovers the text will not go in.
 func NewTranscriptDraft(input TranscriptDraft) (TranscriptDraft, error) {
-	if !validID(input.LessonID) || !validID(input.AssetID) {
+	if !validID(input.LessonID) || !validID(input.AssetID) || !validID(input.TrackID) {
 		return TranscriptDraft{}, ErrInvalidRequest
+	}
+	trackLanguage, err := NewLanguage(string(input.TrackLanguage))
+	if err != nil {
+		return TranscriptDraft{}, err
 	}
 	if input.Generation < 1 {
 		return TranscriptDraft{}, ErrInvalidRequest
@@ -160,27 +164,29 @@ func NewTranscriptDraft(input TranscriptDraft) (TranscriptDraft, error) {
 	}
 
 	return TranscriptDraft{
-		LessonID:   input.LessonID,
-		AssetID:    input.AssetID,
-		Generation: input.Generation,
-		State:      input.State,
-		Language:   language,
-		Segments:   segments,
-		Failure:    input.Failure,
-		SourceLeaf: input.SourceLeaf,
+		LessonID:          input.LessonID,
+		AssetID:           input.AssetID,
+		Generation:        input.Generation,
+		TrackID:           input.TrackID,
+		TrackLanguage:     trackLanguage,
+		TrackMultilingual: input.TrackMultilingual,
+		State:             input.State,
+		Language:          language,
+		Segments:          segments,
+		Failure:           input.Failure,
+		SourceLeaf:        input.SourceLeaf,
 	}, nil
 }
 
-// Stale answers whether the draft was made from a different video than the one the player would
-// pick now, or from a different audio track than its current default (multi-audio S6, D-S6-6).
-// The generation rule is the transcript's (D8-4): only a READY asset counts, and a lesson with
-// none must not read as stale. An empty defaultLeaf (no default known) never makes it stale.
-func (draft TranscriptDraft) Stale(readyGeneration int32, defaultLeaf string) bool {
-	if readyGeneration == 0 {
-		return false
-	}
-	if draft.Generation != readyGeneration {
-		return true
-	}
-	return defaultLeaf != "" && draft.HeardLeaf() != defaultLeaf
+// IsUndetermined identifies tracks recognised without a language hint. Their draft can be
+// reused after the author assigns a language; a mode change still requires Regenerate.
+func IsUndetermined(language Language) bool {
+	return language == "und" || strings.HasPrefix(string(language), "und-")
+}
+
+// Stale compares the claim's metadata snapshot with the current track. Rename and mode changes
+// never schedule recognition themselves (O7); the author decides when to replace the draft.
+func (draft TranscriptDraft) Stale(currentTrackLanguage Language, currentMultilingual bool) bool {
+	return (draft.TrackLanguage != Language(strings.ToLower(string(currentTrackLanguage))) &&
+		!IsUndetermined(draft.TrackLanguage)) || draft.TrackMultilingual != currentMultilingual
 }

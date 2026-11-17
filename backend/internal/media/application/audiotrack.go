@@ -12,22 +12,23 @@ import (
 // AudioTracks is the authoring service for a lesson's audio tracks (S5-L1): list,
 // rename, set-default and delete. Ownership is enforced inside the repository (the
 // same course-instructor join the video authoring paths use); this service adds
-// input validation and the master regeneration every mutation needs, because the
+// input validation and master regeneration for manifest metadata changes, because the
 // default flag, the label and the language are all rendered into the master's
 // EXT-X-MEDIA lines (D7). The rewrite runs inside the repository's transaction,
 // under the asset lock promote also takes, so the API and the media worker never
 // write one master concurrently.
 type AudioTracks struct {
-	repository ports.AssetRepository
-	master     ports.MasterWriter
-	now        Clock
+	repository          ports.AssetRepository
+	master              ports.MasterWriter
+	now                 Clock
+	multilingualDefault bool
 }
 
-func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter, now Clock) *AudioTracks {
-	return &AudioTracks{repository: repository, master: master, now: now}
+func NewAudioTracks(repository ports.AssetRepository, master ports.MasterWriter, multilingualDefault bool, now Clock) *AudioTracks {
+	return &AudioTracks{repository: repository, master: master, now: now, multilingualDefault: multilingualDefault}
 }
 
-func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string) (domain.AudioTrack, error) {
+func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Actor, assetID string, declaredBytes int64, originalName, language, label string, multilingual *bool) (domain.AudioTrack, error) {
 	if err := domain.ValidateAudioTicket(declaredBytes, originalName); err != nil {
 		return domain.AudioTrack{}, err
 	}
@@ -37,7 +38,11 @@ func (service *AudioTracks) MintAudioTicket(ctx context.Context, actor domain.Ac
 	now := service.timestamp()
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	track, err := service.repository.MintAudioTrack(callCtx, actor, assetID, declaredBytes, originalName, language, label, now.Add(ticketLifetime), now)
+	mode := service.multilingualDefault
+	if multilingual != nil {
+		mode = *multilingual
+	}
+	track, err := service.repository.MintAudioTrack(callCtx, actor, assetID, declaredBytes, originalName, language, label, mode, now.Add(ticketLifetime), now)
 	return track, mediaOperationError(ctx, err)
 }
 
@@ -54,13 +59,13 @@ func (service *AudioTracks) SetDefault(ctx context.Context, actor domain.Actor, 
 	return mediaOperationError(ctx, service.repository.SetDefaultAudioTrack(callCtx, actor, assetID, trackID, service.timestamp(), service.rewrite(callCtx, assetID)))
 }
 
-func (service *AudioTracks) Rename(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string) (domain.AudioTrack, error) {
+func (service *AudioTracks) Rename(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool) (domain.AudioTrack, error) {
 	if err := domain.ValidateAudioTrackMetadata(language, label); err != nil {
 		return domain.AudioTrack{}, err
 	}
 	callCtx, cancel := context.WithTimeout(ctx, mediaOperationTimeout)
 	defer cancel()
-	track, err := service.repository.UpdateAudioTrackMetadata(callCtx, actor, assetID, trackID, language, label, service.timestamp(), service.rewrite(callCtx, assetID))
+	track, err := service.repository.UpdateAudioTrackMetadata(callCtx, actor, assetID, trackID, language, label, multilingual, service.timestamp(), service.rewrite(callCtx, assetID))
 	return track, mediaOperationError(ctx, err)
 }
 
@@ -122,3 +127,5 @@ func (service *AudioTracks) rewrite(ctx context.Context, assetID string) func([]
 func (service *AudioTracks) timestamp() time.Time {
 	return service.now().UTC().Truncate(mediaStoreResolution)
 }
+
+func (service *AudioTracks) MultilingualDefault() bool { return service.multilingualDefault }

@@ -52,6 +52,7 @@ type AudioTrack struct {
 	Language     string
 	Label        string
 	IsDefault    bool
+	Multilingual bool
 	State        State
 	SourceLeaf   string
 

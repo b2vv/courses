@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TranscriptDraftLine } from '../application/recovery';
+import {
+  clearAcceptedTranscriptSnapshot,
+  maximumAcceptedTranscriptSources,
+  type AcceptedTranscriptSource,
+  type DetachedTranscriptSnapshot,
+  type TranscriptDraftLine,
+  type TranscriptSnapshot,
+} from '../application/recovery';
 import type {
   TranscriptDocument,
   TranscriptErrorCode,
@@ -13,17 +20,32 @@ import type { TranscriptDraftOffer } from './transcript-draft-offer';
 
 type DraftLine = TranscriptDraftLine;
 
+export type TranscriptSaveErrorCode =
+  | TranscriptErrorCode
+  | 'track_verification_failed'
+  | 'track_changed'
+  | 'track_rename_failed'
+  | 'duplicate_language'
+  | 'replacement_cancelled'
+  | 'language_cancelled';
+
 export type TranscriptEditorActions = {
   save(
     language: string,
     expectedUpdatedAt: string | undefined,
     segments: readonly TranscriptSegment[],
-  ): Promise<TranscriptErrorCode | null>;
+    baseLanguage?: string,
+  ): Promise<TranscriptSaveErrorCode | null>;
 };
 
 type TranscriptEditorProps = {
   readonly lessonId: string;
+  readonly instanceId?: string;
+  readonly detachedSnapshots?: readonly DetachedTranscriptSnapshot[];
+  readonly mountedHistoryKeys?: readonly string[];
+  readonly fixedLanguage?: boolean;
   readonly language: string;
+  readonly baseLanguage?: string;
   /** Whether the server returned a saved transcript; absent means a first transcript. */
   readonly hasSavedTranscript?: boolean;
   readonly expectedUpdatedAt?: string;
@@ -65,8 +87,12 @@ function toDraft(segment: TranscriptSegment): DraftLine {
 
 export function TranscriptEditor({
   lessonId,
+  instanceId = '',
+  detachedSnapshots = [],
+  mountedHistoryKeys = [],
+  fixedLanguage = false,
   language,
-  hasSavedTranscript = false,
+  baseLanguage = language,
   expectedUpdatedAt,
   segments,
   documents,
@@ -79,39 +105,107 @@ export function TranscriptEditor({
   const { t } = useTranslation();
   const [lines, setLines] = useState<readonly DraftLine[]>(() => segments.map(toDraft));
   const [currentLanguage, setCurrentLanguage] = useState(language);
+  // Track identity/language is independent of a restored snapshot's token owner.
+  const [editLanguage, setEditLanguage] = useState(language);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | undefined>(draftOffer?.updatedAt);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const [failure, setFailure] = useState<TranscriptErrorCode | null>(null);
+  const [handledDetached, setHandledDetached] = useState<readonly string[]>([]);
+  const [refreshedDetached, setRefreshedDetached] = useState<
+    ReadonlyMap<string, TranscriptSnapshot>
+  >(() => new Map());
+  const acceptedDetached = useRef<readonly (TranscriptSnapshot | AcceptedTranscriptSource)[]>([]);
+  const ownedKeys = useRef(mountedHistoryKeys);
+  useEffect(() => {
+    ownedKeys.current = mountedHistoryKeys;
+    acceptedDetached.current = acceptedDetached.current.filter(
+      (source) => !mountedHistoryKeys.includes(source.key),
+    );
+  }, [mountedHistoryKeys]);
+  const [failure, setFailure] = useState<TranscriptSaveErrorCode | null>(null);
+
+  const [base, setBase] = useState(() => ({
+    language: baseLanguage,
+    token: expectedUpdatedAt,
+    segments,
+  }));
+  const dirty =
+    status !== 'saved' && JSON.stringify(lines) !== JSON.stringify(base.segments.map(toDraft));
+  // Adjust only a clean editor when a new server base arrives. Keeping this conditional
+  // avoids an effect render with old lines under a new language, and preserves dirty tokens.
+  if (
+    !dirty &&
+    (base.language !== baseLanguage ||
+      base.token !== expectedUpdatedAt ||
+      base.segments !== segments)
+  ) {
+    setBase({ language: baseLanguage, token: expectedUpdatedAt, segments });
+    setLines(segments.map(toDraft));
+    setCurrentLanguage(language);
+    setEditLanguage(language);
+  }
+  if (!dirty && editLanguage !== language) setEditLanguage(language);
+  const saveLanguage = fixedLanguage ? language : currentLanguage;
+  const identity = `${lessonId}${instanceId ? `-${instanceId}` : ''}`;
 
   const currentDraftUpdatedAt = draftUpdatedAt ?? suppliedDraftUpdatedAt;
   const baseline = useMemo(() => {
-    const base = {
-      language: currentLanguage,
-      expectedUpdatedAt,
-      lines: segments.map(toDraft),
+    const value = {
+      language: saveLanguage,
+      baseLanguage: base.language,
+      expectedUpdatedAt: base.token,
+      lines: base.segments.map(toDraft),
     };
     return currentDraftUpdatedAt === undefined
-      ? base
-      : { ...base, draftUpdatedAt: currentDraftUpdatedAt };
-  }, [currentDraftUpdatedAt, currentLanguage, expectedUpdatedAt, segments]);
+      ? value
+      : { ...value, draftUpdatedAt: currentDraftUpdatedAt };
+  }, [currentDraftUpdatedAt, saveLanguage, base]);
+  // Read the ref at capture time, including unmounts before another render.
+  const captureBaseline = {
+    ...baseline,
+    get acceptedSource() {
+      return acceptedDetached.current.length === 0
+        ? undefined
+        : acceptedDetached.current.map(({ key, revision }) => ({ key, revision }));
+    },
+  };
   const recovery = useTranscriptRecovery({
     historyKey: history.key,
     store: history.store,
-    baseline,
+    baseline: captureBaseline,
   });
 
-  // The idle capture is armed from an effect rather than from inside the state updater: React
-  // may invoke an updater twice, and a store write is not something to do twice for one keystroke.
+  const recoveryLocked = !recovery.isLoaded || recovery.offer.kind !== 'none';
+  const readOnly = recoveryLocked || status === 'saving';
   const { captureNow, noteChange } = recovery;
-  useEffect(() => {
-    noteChange(lines);
-  }, [lines, noteChange]);
+  // Only author actions arm capture. Server/base updates must never flush a clean editor
+  // over a still-unresolved recovery snapshot.
+  const changeLines = (next: readonly DraftLine[]) => {
+    setLines(next);
+    noteChange(next);
+  };
 
   // Leaving a field is the moment the author is most likely to leave the page next, so it is
   // where the snapshot is taken. The listener is attached to the DOM rather than written as a
   // JSX handler: `focusout` bubbles natively, so one listener covers every field without each of
   // them knowing about recovery, and a section is not an element that should carry a handler.
   const root = useRef<HTMLElement | null>(null);
+  const focusAfterRecovery = useRef<Element | null>(null);
+  const firstLineText = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const initiatingControl = focusAfterRecovery.current;
+    if (initiatingControl === null) return;
+    focusAfterRecovery.current = null;
+    if (document.activeElement !== initiatingControl && document.activeElement !== document.body)
+      return;
+    const nextOffer = root.current?.querySelector<HTMLButtonElement>(
+      '.transcript-editor-recovery button, .transcript-editor-draft-offer button',
+    );
+    const target =
+      nextOffer ??
+      firstLineText.current ??
+      root.current?.querySelector<HTMLButtonElement>('[data-add-line]');
+    target?.focus();
+  });
   // Mirrored in a ref, and written from an effect rather than during render, so that the listener
   // below can stay registered once instead of being torn down and rebuilt on every keystroke.
   const linesRef = useRef(lines);
@@ -122,13 +216,71 @@ export function TranscriptEditor({
     const element = root.current;
     if (element === null) return undefined;
     const onFocusOut = () => {
-      captureNow(linesRef.current);
+      if (!recoveryLocked) captureNow(linesRef.current);
     };
     element.addEventListener('focusout', onFocusOut);
     return () => {
       element.removeEventListener('focusout', onFocusOut);
     };
-  }, [captureNow]);
+  }, [captureNow, recoveryLocked]);
+
+  const selectedDetached =
+    recovery.isLoaded && recovery.offer.kind === 'none'
+      ? detachedSnapshots.find((offer) => !handledDetached.includes(offer.snapshot.key))
+      : undefined;
+  const detached =
+    selectedDetached === undefined
+      ? undefined
+      : {
+          ...selectedDetached,
+          snapshot:
+            refreshedDetached.get(selectedDetached.snapshot.key) ?? selectedDetached.snapshot,
+        };
+  const offeredSnapshot =
+    recovery.offer.kind === 'none' ? detached?.snapshot : recovery.offer.snapshot;
+  const releaseAcceptedDetached = () => {
+    const previous = acceptedDetached.current;
+    acceptedDetached.current = [];
+    setHandledDetached((current) =>
+      current.filter((key) => !previous.some((source) => source.key === key)),
+    );
+  };
+  const handleDetached = async (accepted: boolean, initiatingControl: Element) => {
+    if (detached === undefined) return;
+    const key = detached.snapshot.key;
+    if (accepted) {
+      releaseAcceptedDetached();
+      const sources = [detached.snapshot, ...(detached.snapshot.acceptedSource ?? [])];
+      // Keep newest restoration ownership first; overflow stays recoverable in its own key.
+      acceptedDetached.current = sources
+        .filter(
+          (source, index) =>
+            sources.findIndex(
+              (other) => other.key === source.key && other.revision === source.revision,
+            ) === index,
+        )
+        .slice(0, maximumAcceptedTranscriptSources);
+    } else {
+      try {
+        if (!(await history.store.clearIfVersion(key, detached.snapshot.revision))) {
+          const latest = await history.store.read(key).catch(() => undefined);
+          if (latest !== null) {
+            focusAfterRecovery.current = initiatingControl;
+            if (latest !== undefined)
+              setRefreshedDetached((current) => new Map(current).set(key, latest));
+            return; // A newer copy was not discarded or handled: offer it again.
+          }
+        }
+      } catch {
+        // Refused storage must not prevent continuing to the next offer.
+      }
+      focusAfterRecovery.current = initiatingControl;
+    }
+    setHandledDetached((current) => [
+      ...current,
+      ...(accepted ? acceptedDetached.current.map((source) => source.key) : [key]),
+    ]);
+  };
 
   const recoveryLabel =
     recovery.offer.kind === 'offer-stale'
@@ -137,10 +289,13 @@ export function TranscriptEditor({
 
   // Times are held as TEXT while editing and parsed only on save. Parsing on every keystroke turns
   // a half-typed "1" into a real value and reorders the lines under the author's cursor.
-  const update = (index: number, change: Partial<DraftLine>) =>
-    setLines((current) =>
-      current.map((line, position) => (position === index ? { ...line, ...change } : line)),
+  const update = (index: number, change: Partial<DraftLine>) => {
+    if (readOnly) return;
+    setStatus('idle');
+    changeLines(
+      lines.map((line, position) => (position === index ? { ...line, ...change } : line)),
     );
+  };
 
   const parsed = (): readonly TranscriptSegment[] | null => {
     const result: TranscriptSegment[] = [];
@@ -149,7 +304,7 @@ export function TranscriptEditor({
       const endMs = Number(line.endMs);
       if (!Number.isInteger(startMs) || !Number.isInteger(endMs)) return null;
       result.push({
-        id: line.id,
+        id: crypto.randomUUID(),
         startMs,
         endMs,
         text: line.text,
@@ -163,19 +318,30 @@ export function TranscriptEditor({
     <section
       ref={root}
       className="transcript-editor"
-      aria-labelledby={`transcript-editor-${lessonId}`}
+      aria-labelledby={`transcript-editor-${identity}`}
     >
-      <h4 id={`transcript-editor-${lessonId}`}>{t('administration.transcriptEditor.heading')}</h4>
+      <h4 id={`transcript-editor-${identity}`}>{t('administration.transcriptEditor.heading')}</h4>
 
-      {recovery.offer.kind === 'none' ? null : (
+      {instanceId.startsWith('track:') && fixedLanguage && dirty && editLanguage !== language && (
+        <p>{t('administration.transcriptEditor.languageChanged', { language })}</p>
+      )}
+
+      {offeredSnapshot === undefined ? null : (
         // Deliberately NOT an `output`, whose implicit role is `status`: this section already owns
         // one for "transcript saved", and a second would make both ambiguous to a screen reader
         // and to any test that asks the page for its status.
         <div
           className="transcript-editor-recovery"
-          aria-labelledby={`transcript-recovery-${lessonId}`}
+          aria-labelledby={`transcript-recovery-${identity}`}
         >
-          <h5 id={`transcript-recovery-${lessonId}`}>{t(recoveryLabel)}</h5>
+          <h5 id={`transcript-recovery-${identity}`}>
+            {detached === undefined
+              ? t(recoveryLabel)
+              : t(
+                  `administration.transcriptEditor.recovery.${detached.legacy ? 'legacy' : 'detached'}${offeredSnapshot.language ? 'Language' : 'Unknown'}`,
+                  { language: offeredSnapshot.language },
+                )}
+          </h5>
           <p>
             {t(
               recovery.offer.kind === 'offer-stale'
@@ -185,58 +351,88 @@ export function TranscriptEditor({
           </p>
           <Button
             type="button"
-            onPress={() => {
-              if (recovery.offer.kind === 'none') return;
-              setLines(recovery.offer.snapshot.lines);
-              if (recovery.offer.snapshot.language !== undefined) {
-                setCurrentLanguage(recovery.offer.snapshot.language);
+            aria-disabled={status === 'saving'}
+            onPress={(event) => {
+              if (status === 'saving' || offeredSnapshot === undefined) return;
+              focusAfterRecovery.current = event.target;
+              setStatus('idle');
+              changeLines(offeredSnapshot.lines);
+              if (offeredSnapshot.language !== undefined) {
+                if (!fixedLanguage) setCurrentLanguage(offeredSnapshot.language);
               }
-              recovery.accept();
+              const snapshot = offeredSnapshot;
+              setDraftUpdatedAt(snapshot.draftUpdatedAt);
+              setBase((current) => ({
+                ...current,
+                // Empty string is not a real language tag: legacy tokens have no known owner.
+                language: snapshot.baseLanguage ?? '',
+                token: snapshot.expectedUpdatedAt,
+              }));
+              if (detached === undefined) {
+                releaseAcceptedDetached();
+                acceptedDetached.current = snapshot.acceptedSource ?? [];
+                setHandledDetached((current) => [
+                  ...current,
+                  ...acceptedDetached.current.map((source) => source.key),
+                ]);
+                recovery.accept();
+              } else void handleDetached(true, event.target);
             }}
           >
             {t('administration.transcriptEditor.recovery.restore')}
           </Button>
-          <Button type="button" variant="secondary" onPress={() => recovery.dismiss()}>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-disabled={status === 'saving'}
+            onPress={(event) => {
+              if (status === 'saving') return;
+              focusAfterRecovery.current = event.target;
+              if (detached === undefined) {
+                releaseAcceptedDetached();
+                recovery.dismiss();
+              } else void handleDetached(false, event.target);
+            }}
+          >
             {t('administration.transcriptEditor.recovery.discard')}
           </Button>
         </div>
       )}
 
-      {recovery.offer.kind === 'none' && draftOffer !== undefined && (
+      {offeredSnapshot === undefined && draftOffer !== undefined && (
         <div
           className="transcript-editor-draft-offer"
-          aria-labelledby={`transcript-draft-offer-${lessonId}`}
+          aria-labelledby={`transcript-draft-offer-${identity}`}
         >
-          <h5 id={`transcript-draft-offer-${lessonId}`}>
+          <h5 id={`transcript-draft-offer-${identity}`}>
             {t('administration.transcriptEditor.draftOffer.heading')}
           </h5>
-          {hasSavedTranscript && draftOffer.language !== language ? (
-            <p>
-              {t('administration.transcriptEditor.draftOffer.languageMismatch', {
-                draftLanguage: draftOffer.language,
-                transcriptLanguage: language,
-              })}
-            </p>
-          ) : (
-            <>
-              <p>{t('administration.transcriptEditor.draftOffer.description')}</p>
-              <Button
-                type="button"
-                onPress={() => {
-                  setLines(draftOffer.segments.map(toDraft));
-                  setCurrentLanguage(draftOffer.language);
-                  setDraftUpdatedAt(draftOffer.updatedAt);
-                  onDraftOfferHandled?.();
-                }}
-              >
-                {t('administration.transcriptEditor.draftOffer.load')}
-              </Button>
-            </>
-          )}
+          <p>{t('administration.transcriptEditor.draftOffer.description')}</p>
+          <Button
+            type="button"
+            aria-disabled={readOnly}
+            onPress={() => {
+              if (readOnly) return;
+              releaseAcceptedDetached();
+              changeLines(draftOffer.segments.map(toDraft));
+              if (!fixedLanguage) setCurrentLanguage(draftOffer.language);
+              setDraftUpdatedAt(draftOffer.updatedAt);
+              setStatus('idle');
+              onDraftOfferHandled?.();
+            }}
+          >
+            {t('administration.transcriptEditor.draftOffer.load')}
+          </Button>
           <Button type="button" variant="secondary" onPress={() => onDraftOfferHandled?.()}>
             {t('administration.transcriptEditor.draftOffer.dismiss')}
           </Button>
         </div>
+      )}
+
+      {recoveryLocked && (
+        <p id={`transcript-recovery-lock-${identity}`}>
+          {t('administration.transcriptEditor.recovery.resolveFirst')}
+        </p>
       )}
 
       {lines.length === 0 ? <p>{t('administration.transcriptEditor.empty')}</p> : null}
@@ -245,16 +441,29 @@ export function TranscriptEditor({
         {lines.map((line, index) => (
           <li key={line.id}>
             <TextField
+              isReadOnly={readOnly}
+              {...(recoveryLocked
+                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                : {})}
               label={t('administration.transcriptEditor.start', { line: index + 1 })}
               value={line.startMs}
               onChange={(value) => update(index, { startMs: value })}
             />
             <TextField
+              isReadOnly={readOnly}
+              {...(recoveryLocked
+                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                : {})}
               label={t('administration.transcriptEditor.end', { line: index + 1 })}
               value={line.endMs}
               onChange={(value) => update(index, { endMs: value })}
             />
             <TextArea
+              {...(index === 0 ? { ref: firstLineText } : {})}
+              isReadOnly={readOnly}
+              {...(recoveryLocked
+                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                : {})}
               label={t('administration.transcriptEditor.text', { line: index + 1 })}
               value={line.text}
               onChange={(value) => update(index, { text: value })}
@@ -265,6 +474,7 @@ export function TranscriptEditor({
                 <label key={document.id}>
                   <input
                     type="checkbox"
+                    aria-disabled={readOnly}
                     checked={line.documentIds.includes(document.id)}
                     onChange={(event) =>
                       update(index, {
@@ -281,7 +491,12 @@ export function TranscriptEditor({
             <Button
               type="button"
               variant="secondary"
-              onPress={() => setLines((current) => current.filter((_, at) => at !== index))}
+              aria-disabled={readOnly}
+              onPress={() => {
+                if (readOnly) return;
+                setStatus('idle');
+                changeLines(lines.filter((_, at) => at !== index));
+              }}
             >
               {t('administration.transcriptEditor.remove', { line: index + 1 })}
             </Button>
@@ -291,40 +506,60 @@ export function TranscriptEditor({
 
       <Button
         type="button"
+        data-add-line
         variant="secondary"
-        onPress={() =>
-          setLines((current) => [
-            ...current,
+        aria-disabled={readOnly}
+        onPress={() => {
+          if (readOnly) return;
+          setStatus('idle');
+          changeLines([
+            ...lines,
             {
               id: crypto.randomUUID(),
-              startMs: String(current.at(-1)?.endMs ?? '0'),
-              endMs: String(Number(current.at(-1)?.endMs ?? '0') + 1000),
+              startMs: String(lines.at(-1)?.endMs ?? '0'),
+              endMs: String(Number(lines.at(-1)?.endMs ?? '0') + 1000),
               text: '',
               documentIds: [],
             },
-          ])
-        }
+          ]);
+        }}
       >
         {t('administration.transcriptEditor.add')}
       </Button>
 
       <Button
         type="button"
-        isDisabled={status === 'saving'}
+        aria-disabled={readOnly}
         onPress={async () => {
+          if (readOnly) return;
           const segmentsToSave = parsed();
           if (segmentsToSave === null) {
             setFailure('invalid_request');
             return;
           }
+          recovery.setCapturing(false);
           setStatus('saving');
           setFailure(null);
-          const error = await actions.save(currentLanguage, expectedUpdatedAt, segmentsToSave);
+          let error: TranscriptSaveErrorCode | null;
+          try {
+            error = await actions.save(saveLanguage, base.token, segmentsToSave, base.language);
+          } catch {
+            error = 'unavailable';
+          }
+          recovery.setCapturing(true);
           setStatus(error === null ? 'saved' : 'idle');
           setFailure(error);
           // Only a save the server accepted drops the local copy. A reload must never do it:
           // that is the one case the copy exists for.
-          if (error === null) recovery.finalize();
+          if (error === null) {
+            setEditLanguage(saveLanguage);
+            recovery.finalize();
+            for (const accepted of acceptedDetached.current)
+              void clearAcceptedTranscriptSnapshot(history.store, accepted, () =>
+                ownedKeys.current.includes(accepted.key),
+              );
+            acceptedDetached.current = [];
+          }
         }}
       >
         {t('administration.transcriptEditor.save')}

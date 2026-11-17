@@ -1,8 +1,13 @@
-import { describe, expect, test } from '@rstest/core';
-import { QueryClient } from '@tanstack/react-query';
+import { describe, expect, rstest, test } from '@rstest/core';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { createAudioTracks } from '../../modules/media';
 import type { AudioTrack, AudioTrackRepository } from '../../modules/media';
-import { audioTrackRefetchInterval, createAdminAudioQueries } from './admin-audio-queries';
+import {
+  adminAudioTracksQueryKey,
+  audioTrackRefetchInterval,
+  createAdminAudioQueries,
+} from './admin-audio-queries';
+import { lessonDraftQueryKey } from './admin-draft-queries';
 import { adminCourseVideosQueryKey, videoPollMs } from './admin-video-queries';
 
 const courseId = '10000000-0000-4000-8000-000000000001';
@@ -17,6 +22,7 @@ function track(state: AudioTrack['state']): AudioTrack {
     language: 'en',
     label: 'English',
     isDefault: false,
+    multilingual: false,
     state,
     updatedAt: '2026-11-13T12:00:00.000000Z',
   };
@@ -30,7 +36,7 @@ function setup(responses: readonly (readonly AudioTrack[])[]) {
     list: async () => {
       const value = responses[Math.min(read, responses.length - 1)] ?? [];
       read += 1;
-      return { ok: true, value };
+      return { ok: true, value: { items: value, multilingualDefault: false } };
     },
     mint: unavailable,
     rename: unavailable,
@@ -103,4 +109,210 @@ describe('admin audio query boundary', () => {
     expect(audioTrackRefetchInterval([track('uploading')], false)).toBe(false);
     expect(audioTrackRefetchInterval(undefined, false)).toBe(false);
   });
+});
+
+test.each(['rename', 'remove', 'setDefault'] as const)(
+  '%s invalidates audio and only the affected lesson drafts',
+  async (method) => {
+    const lessonId = 'lesson';
+    const otherLessonId = 'other';
+    const unavailable = async () =>
+      ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+    const repository: AudioTrackRepository = {
+      list: unavailable,
+      mint: unavailable,
+      transfer: unavailable,
+      cancelUpload: unavailable,
+      rename: async () => ({ ok: true, value: track('ready') }),
+      remove: async () => ({ ok: true, value: null }),
+      setDefault: async () => ({ ok: true, value: null }),
+    };
+    const client = new QueryClient();
+    client.setQueryData(adminCourseVideosQueryKey(courseId), [{ videoId, lessonId }]);
+    client.setQueryData(adminAudioTracksQueryKey(videoId), {
+      items: [],
+      multilingualDefault: false,
+    });
+    client.setQueryData(lessonDraftQueryKey(lessonId), []);
+    client.setQueryData(lessonDraftQueryKey(otherLessonId), []);
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    const variables = {
+      courseId,
+      videoId,
+      trackId,
+      language: 'en',
+      label: 'English',
+      multilingual: true,
+    };
+    if (method === 'rename')
+      await client.getMutationCache().build(client, queries.rename(client)).execute(variables);
+    else await client.getMutationCache().build(client, queries[method](client)).execute(variables);
+    expect(client.getQueryState(adminAudioTracksQueryKey(videoId))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(lessonDraftQueryKey(lessonId))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(lessonDraftQueryKey(otherLessonId))?.isInvalidated).toBe(false);
+    client.clear();
+  },
+);
+
+test('mint forwards multilingual to the audio port', async () => {
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  const calls: unknown[] = [];
+  const repository: AudioTrackRepository = {
+    list: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+    rename: unavailable,
+    remove: unavailable,
+    setDefault: unavailable,
+    mint: async (_video, input) => {
+      calls.push(input);
+      return {
+        ok: true,
+        value: {
+          trackId,
+          uploadUrl: `/uploads/audio/${trackId}`,
+          chunkBytes: 8388608,
+          maxBytes: 524288000,
+          expiresAt: '2026-11-16T12:00:00Z',
+        },
+      };
+    },
+  };
+  const client = new QueryClient();
+  const queries = createAdminAudioQueries(createAudioTracks(repository));
+  await client.getMutationCache().build(client, queries.mint(client)).execute({
+    courseId,
+    videoId,
+    declaredBytes: 6,
+    originalName: 'dub.m4a',
+    language: 'en',
+    label: 'Dub',
+    multilingual: true,
+  });
+  expect(calls).toEqual([
+    { declaredBytes: 6, originalName: 'dub.m4a', language: 'en', label: 'Dub', multilingual: true },
+  ]);
+  client.clear();
+});
+
+test('terminal audio transition refetches only the affected mounted draft', async () => {
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  let state: AudioTrack['state'] = 'processing';
+  const repository: AudioTrackRepository = {
+    list: async () => ({ ok: true, value: { items: [track(state)], multilingualDefault: false } }),
+    mint: unavailable,
+    rename: unavailable,
+    remove: unavailable,
+    setDefault: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+  };
+  const client = new QueryClient();
+  client.setQueryData(adminCourseVideosQueryKey(courseId), [{ videoId, lessonId: 'lesson' }]);
+  let affectedReads = 0;
+  let siblingReads = 0;
+  const affected = new QueryObserver(client, {
+    queryKey: lessonDraftQueryKey('lesson'),
+    queryFn: async () => ++affectedReads,
+  });
+  const sibling = new QueryObserver(client, {
+    queryKey: lessonDraftQueryKey('sibling'),
+    queryFn: async () => ++siblingReads,
+  });
+  const stop = affected.subscribe(() => {});
+  const stopSibling = sibling.subscribe(() => {});
+  try {
+    await affected.refetch();
+    await sibling.refetch();
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    await client.fetchQuery(queries.list(courseId, videoId));
+    const before = affectedReads;
+    const siblingBefore = siblingReads;
+    state = 'ready';
+    await client.fetchQuery(queries.list(courseId, videoId));
+    expect(affectedReads).toBe(before + 1);
+    expect(siblingReads).toBe(siblingBefore);
+  } finally {
+    stop();
+    stopSibling();
+    client.clear();
+  }
+});
+
+test.each(['queued', 'processing'] as const)(
+  'list envelope with %s audio schedules another port read',
+  async (state) => {
+    rstest.useFakeTimers();
+    const unavailable = async () =>
+      ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+    let reads = 0;
+    const repository: AudioTrackRepository = {
+      list: async () => {
+        reads++;
+        return { ok: true, value: { items: [track(state)], multilingualDefault: false } };
+      },
+      mint: unavailable,
+      rename: unavailable,
+      remove: unavailable,
+      setDefault: unavailable,
+      transfer: unavailable,
+      cancelUpload: unavailable,
+    };
+    const client = new QueryClient();
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    const observer = new QueryObserver(client, queries.list(courseId, videoId));
+    const stop = observer.subscribe(() => {});
+    try {
+      await observer.refetch();
+      const before = reads;
+      await rstest.advanceTimersByTimeAsync(videoPollMs);
+      expect(reads).toBe(before + 1);
+    } finally {
+      stop();
+      client.clear();
+      rstest.useRealTimers();
+    }
+  },
+);
+
+test('rename preserves enabled multilingual mode through query and application to the repository', async () => {
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  const rename = rstest.fn<AudioTrackRepository['rename']>(async () => ({
+    ok: true,
+    value: { ...track('ready'), multilingual: true },
+  }));
+  const repository: AudioTrackRepository = {
+    list: unavailable,
+    mint: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+    remove: unavailable,
+    setDefault: unavailable,
+    rename,
+  };
+  const client = new QueryClient();
+  try {
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    await client.getMutationCache().build(client, queries.rename(client)).execute({
+      courseId,
+      videoId,
+      trackId,
+      language: 'en',
+      label: 'English',
+      multilingual: true,
+    });
+    expect(rename).toHaveBeenCalledExactlyOnceWith(
+      '50000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001',
+      'en',
+      'English',
+      true,
+      undefined,
+    );
+  } finally {
+    client.clear();
+  }
 });

@@ -9,19 +9,15 @@ import type { DraftSegment } from './draftSegment.ts';
 import type { LessonDraftState } from './lessonDraftState.ts';
 
 export interface LessonDraft {
-  /** @nullable */
-  assetId: string | null;
+  assetId: string;
   /**
      * @minLength 1
      * @maxLength 200
      * @nullable
      */
   failure: string | null;
-  /**
-     * @minimum 1
-     * @nullable
-     */
-  generation: number | null;
+  /** @minimum 1 */
+  generation: number;
   /**
      * @minLength 2
      * @maxLength 35
@@ -29,16 +25,18 @@ export interface LessonDraft {
      * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
      */
   language: string | null;
-  lessonId: string;
   /** @maxItems 5000 */
   segments: DraftSegment[];
-  /** True when the draft was made from a previous ready video generation. */
+  /** True when current track language or multilingual mode differs from the claim snapshot (und-family language snapshots remain valid). */
   stale: boolean;
-  /**
-     * Null when recognition has not created a draft row yet.
-     * @nullable
-     */
   state: LessonDraftState;
-  /** @nullable */
-  updatedAt: string | null;
+  trackId: string;
+  /**
+     * @minLength 2
+     * @maxLength 35
+     * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
+     */
+  trackLanguage: string;
+  trackMultilingual: boolean;
+  updatedAt: string;
 }

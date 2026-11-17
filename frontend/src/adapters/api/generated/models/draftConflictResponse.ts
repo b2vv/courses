@@ -8,6 +8,6 @@
 import type { ErrorResponse } from './errorResponse.ts';
 
 /**
- * Recognition is already running for the lesson's current video asset.
+ * Recognition is already running for the requested track.
  */
 export type DraftConflictResponse = ErrorResponse;

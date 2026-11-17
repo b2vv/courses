@@ -5,12 +5,8 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { LessonDraft } from './lessonDraft.ts';
 
-export interface RegenerateLessonDraftRequest {
-  /**
-     * @minLength 2
-     * @maxLength 35
-     * @pattern ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
-     */
-  language?: string;
+export interface LessonDrafts {
+  drafts: LessonDraft[];
 }
