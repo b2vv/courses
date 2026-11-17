@@ -118,3 +118,24 @@ func TestRegenerateIgnoresAnotherRunningTrack(t *testing.T) {
 		t.Fatalf("regenerate err=%v jobs=%+v; want selected track enqueued", err, queue.jobs)
 	}
 }
+
+func TestRegenerateUsesSelectedDraftAttemptMarker(t *testing.T) {
+	duration := 60.0
+	drafts := &inventoryDrafts{
+		draftFakeDrafts: draftFakeDrafts{lessonAsset: &ports.PendingRecognition{LessonID: lessonID, AssetID: assetID, Generation: 2, TrackID: trackID, DurationSeconds: &duration}},
+		rows: []ports.LessonDraft{
+			{Draft: domain.TranscriptDraft{TrackID: "70000000-0000-4000-8000-000000000002", State: domain.DraftReady}, UpdatedAt: "2026-11-16T09:00:00Z"},
+			{Draft: domain.TranscriptDraft{TrackID: trackID, State: domain.DraftReady}, UpdatedAt: "2026-11-17T10:12:34.123456Z"},
+		},
+	}
+	queue := &fakeQueue{}
+	if err := NewDrafting(drafts, &inventoryCourseReader{}, queue, testClock, testLogger).Regenerate(context.Background(), ownerActor, lessonID, trackID); err != nil {
+		t.Fatal(err)
+	}
+	if len(queue.jobs) != 1 {
+		t.Fatalf("enqueued jobs=%d; want one", len(queue.jobs))
+	}
+	if got := queue.jobs[0].TaskMarker; got != "2026-11-17T10:12:34.123456Z" {
+		t.Fatalf("task marker=%q; want selected draft attempt 2026-11-17T10:12:34.123456Z", got)
+	}
+}

@@ -147,3 +147,28 @@ func TestTrackIDUsesThePublishedWireKey(t *testing.T) {
 		t.Fatalf("hand-authored trackId decoded=%q err=%v", decoded.TrackID, err)
 	}
 }
+
+// Stop after Claim to observe the task-to-application identity boundary without an engine.
+type taskClaimRecorder struct {
+	ports.DraftRepository
+	calls int
+	track string
+}
+
+func (r *taskClaimRecorder) Claim(_ context.Context, _, _ string, _ int32, track string, _ bool, _ time.Time) (ports.ClaimedDraft, error) {
+	r.calls++
+	r.track = track
+	return ports.ClaimedDraft{}, nil
+}
+func TestTaskHandlerPassesTrackIDToClaim(t *testing.T) {
+	drafts := &taskClaimRecorder{}
+	recognize := application.NewRecognize(drafts, nil, nil, nil, func() time.Time { return time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC) }, nil)
+	handler := NewHandler(recognize.Process, observability.NewMetrics())
+	task := asynqlib.NewTask(TaskTypeRecognize, []byte(`{"lessonId":"40000000-0000-4000-8000-000000000001","assetId":"50000000-0000-4000-8000-000000000001","generation":2,"trackId":"70000000-0000-4000-8000-000000000002","requested":true}`))
+	if err := handler.ProcessTask(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+	if drafts.calls != 1 || drafts.track != "70000000-0000-4000-8000-000000000002" {
+		t.Fatalf("Claim calls=%d track=%q; want one claim for 70000000-0000-4000-8000-000000000002", drafts.calls, drafts.track)
+	}
+}

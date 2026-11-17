@@ -100,6 +100,7 @@ func TestDraftRecoverAgainstPostgreSQL(t *testing.T) {
 	t.Run("track: schema constraints", h.testDraftTrackSchemaConstraints)
 	t.Run("track: rollback assets and ties", func(t *testing.T) { h.testDraftTrackRollbackAcrossAssetsAndTiedTracks(t, provider) })
 	t.Run("track: current asset and metadata", h.testDraftTrackCurrentAssetAndMetadata)
+	t.Run("track: selected duration", h.testLessonTrackDuration)
 	t.Run("track: pending eligibility order limit", h.testDraftTrackPendingEligibilityOrderAndLimit)
 	t.Run("track: claim asset and reset", h.testDraftTrackClaimAssetAndReset)
 	t.Run("track: recovery state order limit", h.testDraftTrackRecoveryStateOrderAndLimit)

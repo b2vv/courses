@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers/promises';
 import { expect, test, rstest } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -1822,3 +1823,55 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+test('async-retirement contains a rejected cleanup while editing and Save remain available', async () => {
+  const store = createMemoryTranscriptHistory();
+  const retirement = deferred<boolean>();
+  const clear = rstest
+    .spyOn(store, 'clearIfVersion')
+    .mockResolvedValue(false)
+    .mockReturnValueOnce(retirement.promise);
+  const saved: string[] = [];
+  const unhandled: unknown[] = [];
+  const observeRejection = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  let view: Awaited<ReturnType<typeof editor>> | undefined;
+  try {
+    process.on('unhandledRejection', observeRejection);
+    view = await editor(
+      async (_language, _token, lines) => {
+        saved.push(lines[0]?.text ?? 'missing line');
+        return null;
+      },
+      { history: { key: 'async-retirement:lesson', store } },
+    );
+    fireEvent.change(screen.getByLabelText('Текст репліки 1'), {
+      target: { value: 'Before retirement' },
+    });
+    fireEvent.blur(screen.getByLabelText('Текст репліки 1'));
+    await act(async () => {});
+    expect((await store.read('async-retirement:lesson'))?.lines[0]?.text).toBe('Before retirement');
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+    await screen.findByText('Транскрипт збережено.');
+    expect(clear).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      retirement.reject(new Error('asynchronous storage refusal'));
+    });
+    // Cross a Node event-loop turn so an escaped rejection is observable inside this named test.
+    await setImmediate();
+    fireEvent.change(screen.getByLabelText('Текст репліки 1'), {
+      target: { value: 'After retirement' },
+    });
+    expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'After retirement');
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+    await screen.findByText('Транскрипт збережено.');
+    expect(saved).toEqual(['Before retirement', 'After retirement']);
+    await setImmediate();
+    expect(unhandled, 'async retirement must contain the rejected cleanup').toEqual([]);
+  } finally {
+    view?.unmount();
+    process.off('unhandledRejection', observeRejection);
+    clear.mockRestore();
+  }
+});

@@ -212,6 +212,9 @@ func TestProcessNoSpeech(t *testing.T) {
 	if drafts.completedDraft.State != domain.DraftNoSpeech {
 		t.Fatalf("state=%s want=no_speech", drafts.completedDraft.State)
 	}
+	if drafts.completeCalls != 1 || drafts.completedDraft.TrackID != trackID {
+		t.Fatalf("no-speech completion calls=%d track=%q; want one completion for 70000000-0000-4000-8000-000000000001", drafts.completeCalls, drafts.completedDraft.TrackID)
+	}
 }
 
 func TestProcessSourceNotFound(t *testing.T) {

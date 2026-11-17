@@ -276,3 +276,43 @@ test.each(['queued', 'processing'] as const)(
     }
   },
 );
+
+test('rename preserves enabled multilingual mode through query and application to the repository', async () => {
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  const rename = rstest.fn<AudioTrackRepository['rename']>(async () => ({
+    ok: true,
+    value: { ...track('ready'), multilingual: true },
+  }));
+  const repository: AudioTrackRepository = {
+    list: unavailable,
+    mint: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+    remove: unavailable,
+    setDefault: unavailable,
+    rename,
+  };
+  const client = new QueryClient();
+  try {
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    await client.getMutationCache().build(client, queries.rename(client)).execute({
+      courseId,
+      videoId,
+      trackId,
+      language: 'en',
+      label: 'English',
+      multilingual: true,
+    });
+    expect(rename).toHaveBeenCalledExactlyOnceWith(
+      '50000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001',
+      'en',
+      'English',
+      true,
+      undefined,
+    );
+  } finally {
+    client.clear();
+  }
+});

@@ -296,3 +296,27 @@ func (h *draftHarness) testDraftTrackClaimConcurrentTrackDeletion(t *testing.T) 
 		t.Fatal(ctx.Err())
 	}
 }
+
+func (h *draftHarness) testLessonTrackDuration(t *testing.T) {
+	h.reset(t)
+	h.insertAssetWithDuration(t, recoverAsset1, recoverLesson1, 1, 123.75)
+	t.Run("known", func(t *testing.T) {
+		selected, err := h.repository.LessonTrack(h.ctx, recoverLesson1, initialTrackID(recoverAsset1))
+		if err != nil || selected == nil {
+			t.Fatalf("selected track=%+v err=%v; want ready track", selected, err)
+		}
+		if selected.DurationSeconds == nil {
+			t.Fatal("selected duration=nil; want 123.75 seconds")
+		}
+		if *selected.DurationSeconds != 123.75 {
+			t.Fatalf("selected duration=%v; want 123.75 seconds", *selected.DurationSeconds)
+		}
+	})
+	h.exec(t, `UPDATE video_assets SET duration_seconds=NULL WHERE id=$1::text::uuid`, recoverAsset1)
+	t.Run("unknown", func(t *testing.T) {
+		selected, err := h.repository.LessonTrack(h.ctx, recoverLesson1, initialTrackID(recoverAsset1))
+		if err != nil || selected == nil || selected.DurationSeconds != nil {
+			t.Fatalf("unknown duration track=%+v err=%v; want ready track with nil duration", selected, err)
+		}
+	})
+}

@@ -272,8 +272,10 @@ func TestM2R10RemovedRoutesReturn404(t *testing.T) {
 func TestDraftInventoryPreservesRecognitionFields(t *testing.T) {
 	confidence := 0.8
 	drafts := &stubDraftRepository{drafts: []ports.LessonDraft{
-		{IsDefault: true, TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: draftTrackID, TrackLanguage: "uk", State: domain.DraftReady, Language: "en", Segments: []domain.Segment{{ID: documentID, StartMs: 123, EndMs: 1456, Text: "recognized", Confidence: &confidence, Speaker: "Lecturer"}}}},
-		{TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: "71000000-0000-4000-8000-000000000002", TrackLanguage: "uk", State: domain.DraftFailed, Failure: "engine_error"}},
+		{IsDefault: true, TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: draftTrackID, TrackLanguage: "uk", State: domain.DraftReady, AssetID: draftAssetID, Language: "en", Segments: []domain.Segment{{ID: documentID, StartMs: 123, EndMs: 1456, Text: "recognized", Confidence: &confidence, Speaker: "Lecturer"}}}},
+		{TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: "71000000-0000-4000-8000-000000000002", TrackLanguage: "uk", State: domain.DraftFailed, AssetID: draftAssetID, Failure: "engine_error"}},
+		{TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: "71000000-0000-4000-8000-000000000003", TrackLanguage: "uk", State: domain.DraftRunning, AssetID: draftAssetID}},
+		{TrackLanguage: "uk", Draft: domain.TranscriptDraft{TrackID: "71000000-0000-4000-8000-000000000004", TrackLanguage: "uk", State: domain.DraftNoSpeech, AssetID: draftAssetID}},
 	}}
 	rec := httptest.NewRecorder()
 	draftServer(t, drafts, &stubCourseReader{course: domain.Course{OwnerID: ownerID}}, &draftQueue{}).ServeHTTP(rec, draftRequest("GET", "/drafts", "", ownerID, ""))
@@ -282,9 +284,11 @@ func TestDraftInventoryPreservesRecognitionFields(t *testing.T) {
 	}
 	var body struct {
 		Drafts []struct {
-			Language *string
-			Failure  *string
-			Segments []struct {
+			State, AssetID string
+			Language       *string
+			Failure        *string
+			Segments       []struct {
+				ID             string
 				StartMs, EndMs int64
 				Confidence     *float64
 				Speaker        *string
@@ -294,8 +298,20 @@ func TestDraftInventoryPreservesRecognitionFields(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Drafts) != 2 {
+	if len(body.Drafts) != 4 {
 		t.Fatalf("draft count=%d", len(body.Drafts))
+	}
+	for i, want := range []string{"ready", "failed", "running", "no_speech"} {
+		row := body.Drafts[i]
+		if row.State != want {
+			t.Fatalf("draft %d state=%q; want %q", i, row.State, want)
+		}
+		if row.AssetID != "72000000-0000-4000-8000-000000000001" {
+			t.Fatalf("draft %d assetId=%q; want 72000000-0000-4000-8000-000000000001", i, row.AssetID)
+		}
+		if row.Segments == nil || (i > 0 && len(row.Segments) != 0) {
+			t.Fatalf("draft %d segments=%+v; want an array, empty for non-ready states", i, row.Segments)
+		}
 	}
 	ready, failed := body.Drafts[0], body.Drafts[1]
 	if ready.Language == nil || *ready.Language != "en" || failed.Language != nil {
@@ -308,6 +324,9 @@ func TestDraftInventoryPreservesRecognitionFields(t *testing.T) {
 		t.Fatalf("segments=%d", len(ready.Segments))
 	}
 	segment := ready.Segments[0]
+	if segment.ID != documentID {
+		t.Fatalf("segment id=%q; want %s", segment.ID, documentID)
+	}
 	if segment.StartMs != 123 || segment.EndMs != 1456 {
 		t.Fatalf("segment times=%d..%d; want 123..1456", segment.StartMs, segment.EndMs)
 	}
