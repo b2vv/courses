@@ -873,3 +873,41 @@ Harness: a temporary Playwright spec (not in the e2e suite; copy `ms3-design-pas
   - **Minor fixed:** the X-019 test's rejection listener and the editor mount now sit inside the `try/finally`. typecheck 0, lint 0, `TranscriptEditor.test.tsx` 87/87; backend gofmt/vet/unit transcript ok on the branch.
   - **Mutation accounting, final:** 500 KILLED + 208 CLOSED + 25 E2E_ONLY/INCONCLUSIVE closed (6 by existing tests) + 38 accepted EQUIVALENT = **771/771 resolved**. Committed.
 - **2026-11-17 — PR #109 delta re-review `pr109-final-3` @ `c2f4310`: both axes SHIP-PENDING-GATE** (`_wip-pr109-review3-codex-{standards,spec}.md`). Standards: Critical 0, Major 0, Minor 0; 771/771 mutations resolved. Spec: 0 code or evidence findings; §4 has **15 PASS** (M2-R7 and M2-R10 moved from PARTIAL), **10 PARTIAL** and **2 NOT_TESTED** (M3-R8/R9). The remaining browser portions are proven only by the full e2e of the final ordered gate. Transfer: `verdict_received` 2/2. **Remaining:** the ordered `make check` on `c2f4310`, which waits on the owner's consent.
+- **2026-11-17 — owner: "По закінченню 109 мердж".** Read as: run the remaining gate, then merge PR #109 when green. **`make check` attempt 8 started** on HEAD `ea1fe47` (code = `c2f4310`). It resets the Kiri dev volumes and uses the approved compose selection; log `pr109-make-check-8.log` in the session scratchpad, plus the Kiri memory recorder. On `GATE_EXIT=0`: push the branch, then squash-merge PR #109.
+- **`make check` attempt 8 (19:16–19:51): RED, `GATE_EXIT=2` at `e2e`.**
+  - **Passed before e2e:** format/lint/typecheck; frontend tests 1321; Go; integration; check-generated; build. `e2e-reset` removed `courses_{postgres,redis,media}-data`; smoke passed.
+  - **e2e:** 128 passed, **1 failed**, 22 did not run (the dependent playback rows).
+  - **The failure:** `playback.spec.ts:1073` **B18** ("keeps the last recorded position across a network break"). After `setOffline(true)` the text «Відео зараз недоступне.» did not appear within 60 s. The page snapshot shows the player intact and paused at 0:40 of 5:00.
+  - **Not this PR:** it changes no playback code. The diff `37ec4b0..c2f4310` is empty for `frontend/src/modules/playback`, `backend/internal/playback`, `playback.spec.ts` and the learn routes. B18 passed in attempt 7.
+  - **Hypothesis, unverified:** a paused player whose forward buffer already covers its needs issues no new request offline, so its retries never exhaust and the unavailable state never comes. This is load- or timing-dependent.
+  - **Evidence:** the trace and error context are copied to the scratchpad (`b18-attempt8/`).
+  - **New flake shape:** the 2026-10-07 B18 fix in `docs/playback/report.md` §6 was a different mechanism. It goes to the backlog as a playback e2e flake, owner of the fix to be decided, not part of PR #109.
+  - **Next:** a full ordered rerun (attempt 9), under the owner's "По закінченню 109 мердж".
+- **`make check` attempt 9 (19:52–20:18): RED, `GATE_EXIT=2` at `e2e`.** All steps before e2e passed (frontend tests 1321; 130 Go `ok`, 0 FAIL; the reset removed all three volumes). e2e: 113 passed, **1 failed**, 37 did not run. The failure is `admin.spec.ts:182` **S5**: clicking the Students sort produced `/admin?sort=students` and dropped `search=<token>`. B18 passed this time.
+  - **Mechanism, read from code:** `go()` in `frontend/src/routes/admin.index.tsx:44-58` merges over `state` from `Route.useSearch()` at render time. The test's wait — the created draft's row is visible — is also satisfied by the unfiltered list, because that draft was just created and sorts first. A click before the search navigation re-renders therefore merges over a stale state without `search`.
+  - **Product race, not only a test flake:** a fast user loses the search the same way.
+  - **Not this PR:** pre-existing since `4c98a7f`; the PR does not touch `admin.index.tsx` or `admin.spec.ts`.
+  - **Correction:** this also corrects the attempt-6 note above. The S5 failure there was not explained by the 148-row table.
+  - **Evidence:** `s5-attempt9/` in the scratchpad.
+- **Gate status for PR #109:** attempts 8 and 9 each failed exactly one e2e row, in code this PR does not change (B18 playback, S5 admin list). Both runs passed every MS2/MS3 row, including the `asr.spec` rows. The ordered gate is not green, so **PR #109 is not merged.** Next step is the owner's decision.
+
+## Gate flakes fix (owner 2026-11-17: "Спершу полагодити флейки") — slice `flakefix`, on the PR #109 branch
+
+- **Pre-code checkpoint:** two e2e rows outside PR #109 code blocked attempts 8/9. They are fixed on this branch, so one gate covers both the fixes and PR #109. Independent Codex review. Ready: yes.
+- **S5, a product race** (`frontend/src/routes/admin.index.tsx`, `go()`):
+  - **Defect:** `go()` merged over the render-time `state` from `Route.useSearch()`. After a search submit the URL already carries `search`, but the component still renders the previous match while the loader is pending. A sort click in that window dropped `search`.
+  - **Fix:** `navigate({ search: (previous) => … })` merges over the router's latest search.
+  - **Test:** route-level `route-guards.test.tsx` "S5 a sort clicked while the search submit is still loading keeps the search". It holds the searched list with a promise and sets the router's `defaultPendingMs` to 60 s, as the browser keeps the previous match on screen.
+  - **Discrimination:** with the old `admin.index.tsx` restored, the test fails with `expected { sort: 'students' } to deeply equal { search, sort }`, the gate's failure exactly. With the fix it passes.
+  - **No change:** `admin.spec.ts` stays as it is.
+- **B18, a test that waited on a buffer-dependent event** (`frontend/e2e/playback.spec.ts`):
+  - **Proven by the attempt-8 trace:** the last media segment request was ~50 ms before `setOffline(true)`, with no request after it. The player was paused with hls.js's forward buffer full (`maxBufferLength` 30), so retries never ran and «Відео зараз недоступне.» could not appear.
+  - **Fix (test only):** the break is proved by a same-page `fetch(location, { cache: 'no-store' })` that must fail while offline. The row's claim, that the recorded position survives the break, is unchanged.
+  - **Discrimination:** without `setOffline(true)` the fetch succeeds and the assertion fails.
+- **Checks so far:** typecheck 0, lint 0, format applied. Targeted e2e with `--repeat-each=5` for both rows runs after a frontend rebuild from this tree.
+- **flakefix, Codex review w1: SHIP, 0 BLOCKER, 1 non-blocking** (`_wip-flakefix-review-codex-w1.md`).
+  - **S5:** installed router-core 1.171.38 builds from `_pendingLocation || latestLocation`, so the functional search updater sees the latest URL. Callers keep their behavior. The test discriminates by construction.
+  - **B18:** the reviewer verified the trace independently: the last request was 50.7 ms before `setOffline` and none came after. The fetch proof is sound: no service worker exists, and a cached success would fail the assertion, not pass it. No other row has the B18 shape; B28 follows an observed 404.
+  - **Minor:** the comment's "30 s ahead" overstated the evidence. **Fixed** to state only the observed absence of requests.
+- **Targeted e2e on Kiri, frontend rebuilt from this tree:** S5 `--repeat-each=5`: **5/5 passed** (2.3–2.9 s). B18 `--repeat-each=5`, run with `--no-deps` plus playback-profile and its teardown: **5/5 passed** (3.5–3.9 s, against the old 60 s wait). An earlier B18 attempt ran without `--no-deps`; it pulled in the whole `chromium` project, failed P08 on unseeded identities, and never reached B18, so it is not evidence either way.
+- Committed. Next: ordered `make check` attempt 10, then push and merge on green (owner: "По закінченню 109 мердж").

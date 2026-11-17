@@ -691,6 +691,57 @@ test('B02 renders the admin list empty state without weakening the shell guard',
   expect(observedAdminQueries).toEqual([{ limit: 20, offset: 0, search: '', sort: 'recent' }]);
 });
 
+test('S5 a sort clicked while the search submit is still loading keeps the search', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  let releaseSearch: (() => void) | undefined;
+  const searchHeld = new Promise<void>((resolve) => {
+    releaseSearch = resolve;
+  });
+  const course: AdminCourse = {
+    id: asBrandedId('10000000-0000-4000-8000-000000000001', 'course'),
+    slug: 'postgres-course',
+    title: 'Postgres course',
+    status: 'draft',
+    instructorId: admin.id,
+    updatedAt: '2026-09-05T10:15:30.000000Z',
+    lessonCount: 1,
+    studentCount: 0,
+    price: null,
+  };
+  const router = createTestRouter('/admin', admin, 'uk', [], {
+    list: async (query) => {
+      observedAdminQueries.push(query);
+      // Hold only the first searched list, so the sort click lands while the search route is
+      // still pending and this component still renders the unfiltered list.
+      if (query.search !== '' && query.sort === 'recent') await searchHeld;
+      return {
+        ok: true,
+        value: {
+          items: [course],
+          pagination: { limit: query.limit, offset: query.offset, total: 1 },
+          statusCounts: { total: 1, draft: 1, published: 0, archived: 0 },
+        },
+      };
+    },
+  });
+  // The browser keeps the previous match on screen for a second before a pending component; the
+  // shared test router shows it at once, which would hide the list this race needs.
+  router.options.defaultPendingMs = 60_000;
+
+  await router.load();
+  renderRouter(router);
+  await userEvent.type(screen.getByRole('textbox', { name: 'Пошук курсів' }), 'postgres');
+  await userEvent.click(screen.getByRole('button', { name: 'Знайти' }));
+  await waitFor(() => expect(router.state.location.search).toEqual({ search: 'postgres' }));
+  await userEvent.click(screen.getByRole('button', { name: /Студенти/ }));
+  releaseSearch?.();
+
+  await waitFor(() =>
+    expect(router.state.location.search).toEqual({ search: 'postgres', sort: 'students' }),
+  );
+});
+
 test('R34 keeps unusable admin search text in the URL and queries with independent defaults', async () => {
   const admin = user('admin');
   answerWith(admin);
