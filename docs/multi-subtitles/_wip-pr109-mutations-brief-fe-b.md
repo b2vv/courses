@@ -32,3 +32,7 @@ WORKING FILE: `/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-
    E2E_ONLY. Final answer = summary of the file.
 
 Long scope: if you approach your time limit, stop at a construct boundary with the copy clean and write `NEXT: resume at <id>`.
+
+## Survivor confirmation (added after part fe-a)
+Before classifying a survivor, rerun that one mutation against the **whole** frontend unit suite (`cd frontend && npx rstest run`);
+a survivor is a GAP only if the whole suite stays green. Record that second command and result in the row.

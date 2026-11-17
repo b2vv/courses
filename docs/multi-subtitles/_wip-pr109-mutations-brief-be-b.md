@@ -37,3 +37,8 @@ Long scope: if you approach your time limit, stop at a construct boundary with t
 Run Go with `export GOCACHE=/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-464c-45bf-bb0f-3980a0267658/scratchpad/mut-be/.gocache GOTMPDIR=/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-464c-45bf-bb0f-3980a0267658/scratchpad/mut-be/.tmp TMPDIR=/private/tmp/claude-501/-Users-strelia-projects-courses/9307c360-464c-45bf-bb0f-3980a0267658/scratchpad/mut-be/.tmp; mkdir -p $GOTMPDIR` (both git-excluded
 in the copy). Integration tests: `. /Users/strelia/project-data/courses-kiri/environment.sh` first (DOCKER_HOST is the Kiri socket).
 If Docker is unreachable from your sandbox, record SQL constructs as INCONCLUSIVE with the error and continue with unit tests.
+
+## Survivor confirmation (added after parts fe-a/be-a)
+Before classifying a survivor, rerun that one mutation against `go test ./...` (whole backend, unit) and, if the construct touches
+SQL or a repository, the integration tests of every package that imports the mutated package. GAP only if all stay green.
+Record that second command and result in the row.
