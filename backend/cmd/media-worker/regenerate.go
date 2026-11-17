@@ -59,6 +59,6 @@ func regenerate(ctx context.Context, logger *slog.Logger) error {
 // the ffmpeg master writer over root — exactly as the API's rename path does.
 func regenerateMasters(ctx context.Context, database *pgxpool.Pool, root string) (mediaapplication.MasterRegeneration, error) {
 	repository := mediapostgres.NewRepository(database)
-	tracks := mediaapplication.NewAudioTracks(repository, mediaffmpeg.New(root), time.Now)
+	tracks := mediaapplication.NewAudioTracks(repository, mediaffmpeg.New(root), false, time.Now)
 	return tracks.RegenerateAllMasters(ctx)
 }

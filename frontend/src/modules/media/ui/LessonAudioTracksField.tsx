@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   acceptedAudioFileTypes,
@@ -21,6 +21,7 @@ import {
   FileUpload,
   ProgressBar,
   Select,
+  Switch,
   TextField,
 } from '../../../presentation/ui';
 
@@ -29,7 +30,7 @@ export type LessonAudioTracksActionResult = AudioTrackErrorCode | null;
 export type LessonAudioTracksActions = {
   upload(
     videoId: string,
-    metadata: { readonly language: string; readonly label: string },
+    metadata: { readonly language: string; readonly label: string; readonly multilingual: boolean },
     file: File,
     onProgress: (progress: AudioTransferProgress) => void,
   ): Promise<LessonAudioTracksActionResult>;
@@ -43,6 +44,7 @@ export type LessonAudioTracksActions = {
     track: AudioTrack,
     language: string,
     label: string,
+    multilingual: boolean,
   ): Promise<LessonAudioTracksActionResult>;
   setDefault(track: AudioTrack): Promise<LessonAudioTracksActionResult>;
   remove(track: AudioTrack): Promise<LessonAudioTracksActionResult>;
@@ -51,6 +53,7 @@ export type LessonAudioTracksActions = {
 export type LessonAudioTracksState = {
   readonly data: readonly AudioTrack[] | undefined;
   readonly isLoading: boolean;
+  readonly multilingualDefault?: boolean;
   readonly error?: AudioTrackErrorCode;
 };
 
@@ -150,6 +153,9 @@ export function LessonAudioTracksView({
   const [actionError, setActionError] = useState<AudioTrackErrorCode>();
   const [language, setLanguage] = useState<string>();
   const [label, setLabel] = useState('');
+  const [chosenMultilingual, setMultilingual] = useState<boolean>();
+  const multilingual = chosenMultilingual ?? state.multilingualDefault ?? false;
+  const descriptionId = useId();
   const tracks = state.data ?? [];
   const offered = availableAudioLanguages(tracks);
   const chosenLanguage =
@@ -176,12 +182,13 @@ export function LessonAudioTracksView({
     if (file === undefined || chosenLanguage === undefined || !validAudioLabel(label)) return;
     setProgress({ receivedBytes: 0, declaredBytes: file.size });
     const code = await run(() =>
-      actions.upload(videoId, { language: chosenLanguage, label }, file, setProgress),
+      actions.upload(videoId, { language: chosenLanguage, label, multilingual }, file, setProgress),
     );
     setProgress(undefined);
     if (code === null) {
       setLanguage(undefined);
       setLabel('');
+      setMultilingual(undefined);
     }
   }
 
@@ -255,6 +262,23 @@ export function LessonAudioTracksView({
                 onSelectionChange={(key) => setLanguage(key === null ? undefined : String(key))}
                 isDisabled={isBusy}
               />
+              <div>
+                <Switch
+                  isSelected={multilingual}
+                  aria-disabled={isBusy}
+                  isReadOnly={isBusy}
+                  inputRef={(input) => input?.setAttribute('aria-disabled', String(isBusy))}
+                  aria-describedby={descriptionId}
+                  onChange={(value) => {
+                    if (!isBusy) setMultilingual(value);
+                  }}
+                >
+                  {t('administration.audio.multilingual')}
+                </Switch>
+                <p id={descriptionId} className="admin-video-hint">
+                  {t('administration.audio.multilingualHint')}
+                </p>
+              </div>
               <TextField
                 label={t('administration.audio.nameLabel')}
                 value={label}
@@ -299,6 +323,7 @@ function AudioTrackRow({
   readonly actions: LessonAudioTracksActions;
 }) {
   const { t } = useTranslation();
+  const descriptionId = useId();
   const interrupted = isInterruptedAudioTrack(track) && !isBusy;
   const deletable = canDeleteAudioTrack(tracks, track.trackId, assetState);
   const name = `${track.label} (${languageName(track.language, t)})`;
@@ -314,6 +339,25 @@ function AudioTrackRow({
           <span className="admin-audio-default">{t('administration.audio.default')}</span>
         )}
       </div>
+      <Switch
+        isSelected={track.multilingual}
+        aria-disabled={isBusy}
+        isReadOnly={isBusy}
+        // RAC filters aria-disabled from its input; read-only blocks changes without dropping focus.
+        inputRef={(input) => input?.setAttribute('aria-disabled', String(isBusy))}
+        // Named per row, like Make default and Delete: the new-track form has its own switch.
+        aria-label={t('administration.audio.multilingualNamed', { name })}
+        aria-describedby={descriptionId}
+        onChange={(multilingual) => {
+          if (!isBusy)
+            void run(() => actions.rename(track, track.language, track.label, multilingual));
+        }}
+      >
+        {t('administration.audio.multilingual')}
+      </Switch>
+      <p id={descriptionId} className="admin-video-hint">
+        {t('administration.audio.multilingualHint')}
+      </p>
       {(track.state === 'queued' || track.state === 'processing') && (
         <ProgressBar label={t('administration.audio.processing', { name })} isIndeterminate />
       )}
@@ -413,9 +457,12 @@ function RenameDialog({
           className="admin-audio-edit"
           onSubmit={(event) => {
             event.preventDefault();
+            // Portaled, but React bubbles submit through the component tree into the course
+            // editor's <form>, which would save the course too.
+            event.stopPropagation();
             if (!valid) return;
             close();
-            void run(() => actions.rename(track, language, label));
+            void run(() => actions.rename(track, language, label, track.multilingual));
           }}
         >
           <Select

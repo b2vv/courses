@@ -85,10 +85,10 @@ func (repository *Repository) Publish(
 	}
 	if embedded != nil {
 		if _, err := tx.Exec(ctx, `INSERT INTO audio_tracks(
-			id,video_asset_id,kind,language,label,is_default,state,source_leaf,created_at,updated_at)
-			VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			id,video_asset_id,kind,language,label,is_default,state,source_leaf,created_at,updated_at,multilingual)
+			VALUES($1::text::uuid,$2::text::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
 			embedded.ID, embedded.VideoAssetID, string(embedded.Kind), embedded.Language, embedded.Label,
-			embedded.IsDefault, string(embedded.State), embedded.SourceLeaf, storeTime(embedded.CreatedAt), storeTime(embedded.UpdatedAt)); err != nil {
+			embedded.IsDefault, string(embedded.State), embedded.SourceLeaf, storeTime(embedded.CreatedAt), storeTime(embedded.UpdatedAt), embedded.Multilingual); err != nil {
 			if mapped, ok := audioTrackConflict(err); ok {
 				return domain.VideoAsset{}, nil, mapped
 			}

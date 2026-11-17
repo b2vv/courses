@@ -163,7 +163,7 @@ func (h *tusHarness) testAudioUploadLandsSourceAndQueues(t *testing.T) {
 	h.reset(t)
 	h.insertAsset(t, tusAssetOne, tusLessonOne, domain.Uploading, 64, 0, tusNow.Add(time.Hour), nil)
 	source := []byte("any-audio-bytes-no-container-sniff")
-	track, err := h.repository.MintAudioTrack(h.ctx, domain.Actor{UserID: tusInstructorID}, tusAssetOne, int64(len(source)), "track.aac", "uk", "Українська", tusNow.Add(time.Hour), tusNow)
+	track, err := h.repository.MintAudioTrack(h.ctx, domain.Actor{UserID: tusInstructorID}, tusAssetOne, int64(len(source)), "track.aac", "uk", "Українська", false, tusNow.Add(time.Hour), tusNow)
 	if err != nil {
 		t.Fatalf("MintAudioTrack: %v", err)
 	}
@@ -604,7 +604,7 @@ func (h *tusHarness) serverConfigured(t *testing.T, configure func(*tusStorage))
 	uploadServer := tus.NewServer(upload)
 	audioUpload := application.NewAudioUpload(h.repository, mediaStorage, queue, func() time.Time { return tusNow })
 	audioServer := tus.NewAudioServer(audioUpload)
-	audioTracks := application.NewAudioTracks(h.repository, &tusMasterWriter{}, func() time.Time { return tusNow })
+	audioTracks := application.NewAudioTracks(h.repository, &tusMasterWriter{}, false, func() time.Time { return tusNow })
 	mediaHandler := mediahttp.NewHandler(tickets, audioTracks)
 	return storage, queue, httpserver.NewHandler(httpserver.Options{Service: "upload", Register: func(mux *http.ServeMux) {
 		uploadServer.Register(mux)

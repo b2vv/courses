@@ -20,6 +20,11 @@ export function createMemoryTranscriptHistory(): TranscriptHistoryStore {
       snapshots.delete(key);
       return Promise.resolve();
     },
+    clearIfVersion: (key, revision) => {
+      if (snapshots.get(key)?.revision !== revision) return Promise.resolve(false);
+      snapshots.delete(key);
+      return Promise.resolve(true);
+    },
     keys: () => Promise.resolve([...snapshots.keys()]),
   };
 }

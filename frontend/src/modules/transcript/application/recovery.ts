@@ -27,11 +27,23 @@ export type TranscriptDraftLine = {
   readonly documentIds: readonly string[];
 };
 
+export type AcceptedTranscriptSource = {
+  readonly key: string;
+  readonly revision: string;
+};
+
+export const maximumAcceptedTranscriptSources = 8;
+
+/** A captured editor retains cleanup ownership of the detached version it restored. */
 export type TranscriptSnapshot = {
+  readonly acceptedSource?: readonly AcceptedTranscriptSource[];
   readonly key: string;
   readonly capturedAt: number;
+  readonly revision: string;
   /** The editor language at capture time. Older snapshots may omit this field. */
   readonly language?: string;
+  /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
+  readonly baseLanguage?: string;
   /**
    * The server token the edits were made against. `undefined` is a real value: it means the
    * lesson had no transcript when the author started typing, which is exactly what the write
@@ -48,8 +60,11 @@ export type TranscriptSnapshot = {
 };
 
 export type TranscriptBaseline = {
+  readonly acceptedSource?: readonly AcceptedTranscriptSource[] | undefined;
   /** The editor language used for newly captured snapshots. */
   readonly language?: string;
+  /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
+  readonly baseLanguage?: string;
   readonly expectedUpdatedAt: string | undefined;
   /** The current ASR draft generation, when the editor's lines came from a draft. */
   readonly draftUpdatedAt?: string;
@@ -177,6 +192,82 @@ export async function forgetOtherAuthors(
 export function transcriptHistoryKey(parts: {
   readonly userId: string;
   readonly lessonId: string;
+  readonly instanceId?: string;
 }): string {
-  return `${parts.userId}:${parts.lessonId}`;
+  return `${parts.userId}:${parts.lessonId}${parts.instanceId ? `:${parts.instanceId}` : ''}`;
+}
+
+/** Current product tab identities, independent of media-module types. Empty means one editor. */
+export type TranscriptRecoveryTab = {
+  readonly kind: 'track' | 'orphan';
+  readonly instanceId: string;
+  readonly language: string;
+  readonly isDefault: boolean;
+};
+
+export type DetachedTranscriptSnapshot = {
+  readonly instanceId: string;
+  readonly legacy: boolean;
+  readonly snapshot: TranscriptSnapshot;
+};
+
+export function isLessonHistoryKey(key: string, lessonKey: string): boolean {
+  return key === lessonKey || key.startsWith(`${lessonKey}:`);
+}
+
+/** Read-only placement: never migrate or write a snapshot under another tab's key. */
+export function detachedTranscriptSnapshots(
+  lessonKey: string,
+  keys: readonly string[],
+  snapshots: readonly TranscriptSnapshot[],
+  tabs: readonly TranscriptRecoveryTab[],
+): readonly DetachedTranscriptSnapshot[] {
+  const storedKeys = new Set(keys.filter((key) => isLessonHistoryKey(key, lessonKey)));
+  const ownKeys = new Set(
+    tabs.length === 0 ? [lessonKey] : tabs.map((tab) => `${lessonKey}:${tab.instanceId}`),
+  );
+  // plan-ms2-3.md:406-407: the track tab with the snapshot's language, else the default-track
+  // tab; an orphan `lang:*` tab is never a destination. With tabs but no default track yet (all
+  // tracks still processing), nothing is offered: the snapshot stays stored and is offered once
+  // a track tab exists. No tabs at all is the single editor, which owns the legacy key.
+  const tracks = tabs.filter((tab) => tab.kind === 'track');
+  const fallback = tracks.find((tab) => tab.isDefault);
+  return snapshots
+    .filter((snapshot) => storedKeys.has(snapshot.key) && !ownKeys.has(snapshot.key))
+    .sort((a, b) => b.capturedAt - a.capturedAt || a.key.localeCompare(b.key))
+    .flatMap((snapshot) => {
+      const target =
+        tracks.find((tab) => tab.language.toLowerCase() === snapshot.language?.toLowerCase()) ??
+        fallback;
+      if (tabs.length > 0 && target === undefined) return [];
+      return [
+        { instanceId: target?.instanceId ?? '', legacy: snapshot.key === lessonKey, snapshot },
+      ];
+    });
+}
+
+/** A Save may retire only the exact detached copy it accepted, while no mounted tab owns it. */
+export async function clearAcceptedTranscriptSnapshot(
+  store: TranscriptHistoryStore,
+  accepted: TranscriptSnapshot | AcceptedTranscriptSource,
+  isOwned: () => boolean,
+): Promise<void> {
+  try {
+    const stored = await store.read(accepted.key);
+    if (
+      !isOwned() &&
+      stored !== null &&
+      stored.key === accepted.key &&
+      stored.revision === accepted.revision &&
+      (!('lines' in accepted) ||
+        (stored.language === accepted.language &&
+          stored.baseLanguage === accepted.baseLanguage &&
+          stored.expectedUpdatedAt === accepted.expectedUpdatedAt &&
+          stored.draftUpdatedAt === accepted.draftUpdatedAt &&
+          sameLines(stored.lines, accepted.lines)))
+    )
+      await store.clearIfVersion(accepted.key, accepted.revision);
+  } catch {
+    // A failed read is not permission to delete; atomic cleanup preserves intervening captures.
+  }
 }

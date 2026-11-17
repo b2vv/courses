@@ -1,5 +1,5 @@
-import { transcriptHistoryKey } from '../application/recovery';
-import { useEffect } from 'react';
+import { type DetachedTranscriptSnapshot, transcriptHistoryKey } from '../application/recovery';
+import { useEffect, useState } from 'react';
 import type {
   LessonTranscript,
   TranscriptDocument,
@@ -15,7 +15,10 @@ export type CourseEditorTranscripts = {
    * needs one of them. */
   /** A real hook, named as one: it is called during this component's render, and calling it
    * anything else would hide that from the rules that check hook usage. */
-  readonly useLessonTranscript: (lessonId: string) => {
+  readonly useLessonTranscript: (
+    lessonId: string,
+    language?: string,
+  ) => {
     readonly data: LessonTranscript | undefined;
     readonly isLoading: boolean;
   };
@@ -43,6 +46,11 @@ export type CourseEditorTranscripts = {
 
 type LessonTranscriptFieldProps = CourseEditorTranscripts & {
   readonly lessonId: string;
+  readonly instanceId?: string;
+  readonly detachedSnapshots?: readonly DetachedTranscriptSnapshot[];
+  readonly mountedHistoryKeys?: readonly string[];
+  readonly fixedLanguage?: string;
+  readonly editorSave?: import('./TranscriptEditor').TranscriptEditorActions['save'];
   /** An ASR draft loaded for this lesson, if the author asked for one — see `TranscriptEditor`. */
   readonly draftOffer?: TranscriptDraftOffer;
   readonly draftUpdatedAt?: string;
@@ -52,6 +60,11 @@ type LessonTranscriptFieldProps = CourseEditorTranscripts & {
 
 export function LessonTranscriptField({
   lessonId,
+  instanceId = '',
+  detachedSnapshots,
+  mountedHistoryKeys,
+  fixedLanguage,
+  editorSave,
   useLessonTranscript,
   documents,
   history,
@@ -61,7 +74,7 @@ export function LessonTranscriptField({
   onDraftOfferHandled,
   onTranscriptKnown,
 }: LessonTranscriptFieldProps) {
-  const { data, isLoading } = useLessonTranscript(lessonId);
+  const { data, isLoading } = useLessonTranscript(lessonId, fixedLanguage);
 
   useEffect(() => {
     if (!isLoading)
@@ -73,30 +86,47 @@ export function LessonTranscriptField({
   // saved". Two status elements on one page make that message ambiguous to a screen reader and to
   // any test that asks the page for its status. A field that appears when it is ready costs the
   // author nothing here: the editor is far below the fold of the lesson they just saved.
-  if (isLoading) return null;
+  const [hasLoaded, setHasLoaded] = useState(!isLoading);
+  if (!isLoading && !hasLoaded) setHasLoaded(true);
+  // A track rename changes the query key. Once mounted, keep the editor through that initial
+  // load of the new language: returning null here would destroy its unsaved React state.
+  if (isLoading && !hasLoaded) return null;
 
   // A lesson with no transcript yet still gets an editor: the author is expected to receive a
   // machine-made draft and correct it, but nothing stops them writing the first lines by hand
   // before that exists. The token is absent, which is exactly what the write path reads as
   // "the author believes nothing is there".
-  const language = data?.language ?? 'uk';
+  const language = fixedLanguage ?? data?.language ?? 'uk';
   const expectedUpdatedAt = data?.updatedAt ?? undefined;
 
   return (
     <TranscriptEditor
-      key={`${lessonId}-${expectedUpdatedAt ?? 'new'}`}
+      key={instanceId}
+      instanceId={instanceId}
+      {...(detachedSnapshots === undefined ? {} : { detachedSnapshots })}
+      {...(mountedHistoryKeys === undefined ? {} : { mountedHistoryKeys })}
+      fixedLanguage={fixedLanguage !== undefined}
       lessonId={lessonId}
       language={language}
+      baseLanguage={data?.language ?? language}
       {...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt })}
       segments={data?.segments ?? []}
       documents={documents}
       history={{
         store: history.store,
-        key: transcriptHistoryKey({ userId: history.authorId, lessonId }),
+        key: transcriptHistoryKey({ userId: history.authorId, lessonId, instanceId }),
       }}
       hasSavedTranscript={data?.language !== undefined && data.language !== null}
       actions={{
-        save: (nextLanguage, token, segments) => save(lessonId, nextLanguage, token, segments),
+        save:
+          editorSave ??
+          ((nextLanguage, token, segments, tokenLanguage) =>
+            save(
+              lessonId,
+              nextLanguage,
+              nextLanguage === tokenLanguage ? token : undefined,
+              segments,
+            )),
       }}
       {...(draftOffer === undefined ? {} : { draftOffer })}
       {...(draftUpdatedAt === undefined ? {} : { draftUpdatedAt })}

@@ -93,7 +93,18 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ErrorResponse'
-            description: Recognition is already running for the lesson's current video asset.
+            description: Recognition is already running for the requested track.
+            headers:
+                Cache-Control:
+                    $ref: '#/components/headers/NoStore'
+                X-Request-ID:
+                    $ref: '#/components/headers/RequestID'
+        DraftSourceNotFound:
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+            description: The lesson was not found (lesson_not_found), or the track is not ready on the lesson's latest Ready asset (track_not_found).
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/NoStore'
@@ -1577,6 +1588,7 @@ components:
                                 - slug_immutable
                                 - slug_taken
                                 - token_used
+                                - track_not_found
                                 - transcript_document_exists
                                 - transcript_document_limit
                                 - transcript_document_referenced
@@ -1961,7 +1973,6 @@ components:
             properties:
                 assetId:
                     format: uuid
-                    nullable: true
                     type: string
                 failure:
                     maxLength: 200
@@ -1971,7 +1982,6 @@ components:
                 generation:
                     format: int32
                     minimum: 1
-                    nullable: true
                     type: integer
                 language:
                     maxLength: 35
@@ -1979,41 +1989,57 @@ components:
                     nullable: true
                     pattern: ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
                     type: string
-                lessonId:
-                    format: uuid
-                    type: string
                 segments:
                     items:
                         $ref: '#/components/schemas/DraftSegment'
                     maxItems: 5000
                     type: array
                 stale:
-                    description: True when the draft was made from a previous ready video generation.
+                    description: True when current track language or multilingual mode differs from the claim snapshot (und-family language snapshots remain valid).
                     type: boolean
                 state:
-                    description: Null when recognition has not created a draft row yet.
                     enum:
                         - queued
                         - running
                         - ready
                         - failed
                         - no_speech
-                    nullable: true
                     type: string
+                trackId:
+                    format: uuid
+                    type: string
+                trackLanguage:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
+                    type: string
+                trackMultilingual:
+                    type: boolean
                 updatedAt:
                     format: date-time
-                    nullable: true
                     type: string
             required:
                 - assetId
                 - failure
                 - generation
                 - language
-                - lessonId
                 - segments
                 - stale
                 - state
+                - trackId
+                - trackLanguage
+                - trackMultilingual
                 - updatedAt
+            type: object
+        LessonDrafts:
+            additionalProperties: false
+            properties:
+                drafts:
+                    items:
+                        $ref: '#/components/schemas/LessonDraft'
+                    type: array
+            required:
+                - drafts
             type: object
         LessonRichText:
             additionalProperties: false
@@ -2118,6 +2144,37 @@ components:
                 - stale
                 - updatedAt
             type: object
+        LessonTranscriptInventory:
+            additionalProperties: false
+            properties:
+                isPrimary:
+                    type: boolean
+                language:
+                    maxLength: 35
+                    minLength: 2
+                    pattern: ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
+                    type: string
+                stale:
+                    type: boolean
+                updatedAt:
+                    format: date-time
+                    type: string
+            required:
+                - isPrimary
+                - language
+                - stale
+                - updatedAt
+            type: object
+        LessonTranscripts:
+            additionalProperties: false
+            properties:
+                transcripts:
+                    items:
+                        $ref: '#/components/schemas/LessonTranscriptInventory'
+                    type: array
+            required:
+                - transcripts
+            type: object
         LoginRequest:
             additionalProperties: false
             properties:
@@ -2147,6 +2204,8 @@ components:
                     minLength: 2
                     pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
+                multilingual:
+                    type: boolean
             required:
                 - label
                 - language
@@ -2164,6 +2223,8 @@ components:
                     minLength: 2
                     pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
+                multilingual:
+                    type: boolean
                 originalName:
                     type: string
             required:
@@ -2191,6 +2252,8 @@ components:
                     minLength: 2
                     pattern: ^[A-Za-z][A-Za-z0-9]{1,7}(-[A-Za-z0-9]{1,8})*$
                     type: string
+                multilingual:
+                    type: boolean
                 state:
                     enum:
                         - created
@@ -2214,6 +2277,7 @@ components:
                 - kind
                 - label
                 - language
+                - multilingual
                 - state
                 - trackId
                 - updatedAt
@@ -2226,8 +2290,11 @@ components:
                     items:
                         $ref: '#/components/schemas/MediaAudioTrack'
                     type: array
+                multilingualDefault:
+                    type: boolean
             required:
                 - items
+                - multilingualDefault
             type: object
         MediaAudioUploadTicket:
             additionalProperties: false
@@ -2843,13 +2910,6 @@ components:
             required:
                 - expectedUpdatedAt
             type: object
-        PublishLessonDraftRequest:
-            additionalProperties: false
-            properties:
-                expectedUpdatedAt:
-                    format: date-time
-                    type: string
-            type: object
         PurchaseOrder:
             additionalProperties: false
             properties:
@@ -2987,15 +3047,6 @@ components:
                     type: array
             required:
                 - items
-            type: object
-        RegenerateLessonDraftRequest:
-            additionalProperties: false
-            properties:
-                language:
-                    maxLength: 35
-                    minLength: 2
-                    pattern: ^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$
-                    type: string
             type: object
         RegisterRequest:
             additionalProperties: false
@@ -4165,10 +4216,10 @@ paths:
                     $ref: '#/components/responses/InternalError'
                 "503":
                     $ref: '#/components/responses/Unavailable'
-    /api/v1/admin/lessons/{lessonId}/draft:
+    /api/v1/admin/lessons/{lessonId}/drafts:
         get:
-            description: 'Returns the machine-produced draft for an editable lesson. A lesson without a draft is still a successful read: state, language, failure, updatedAt, assetId and generation are null and segments is empty. Responses are never cached.'
-            operationId: getLessonDraft
+            description: Returns drafts of the latest Ready asset, default first, then embedded, then language and track ID. No Ready asset or no drafts returns an empty drafts array. Track metadata is the claim snapshot; stale compares it with current metadata. Course editor access; responses are never cached.
+            operationId: getLessonDrafts
             parameters:
                 - in: path
                   name: lessonId
@@ -4181,8 +4232,8 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/LessonDraft'
-                    description: The lesson draft, or the empty draft state.
+                                $ref: '#/components/schemas/LessonDrafts'
+                    description: The per-track lesson drafts, or an empty drafts array.
                     headers:
                         Cache-Control:
                             $ref: '#/components/headers/NoStore'
@@ -4198,58 +4249,10 @@ paths:
                     $ref: '#/components/responses/LessonNotFound'
                 "503":
                     $ref: '#/components/responses/Unavailable'
-            summary: Get a lesson recognition draft
-    /api/v1/admin/lessons/{lessonId}/draft/publish:
+            summary: List lesson recognition drafts
+    /api/v1/admin/lessons/{lessonId}/drafts/{trackId}/regenerate:
         post:
-            description: Authenticated same-origin mutation for the course owner or an admin. It publishes through the normal transcript write path and uses expectedUpdatedAt as its optimistic-lock token. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
-            operationId: publishLessonDraft
-            parameters:
-                - in: path
-                  name: lessonId
-                  required: true
-                  schema:
-                    format: uuid
-                    type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/PublishLessonDraftRequest'
-            responses:
-                "200":
-                    content:
-                        application/json:
-                            schema:
-                                additionalProperties: false
-                                properties:
-                                    updatedAt:
-                                        format: date-time
-                                        type: string
-                                required:
-                                    - updatedAt
-                                type: object
-                    description: The draft was published as the lesson transcript.
-                    headers:
-                        Cache-Control:
-                            $ref: '#/components/headers/NoStore'
-                        X-Request-ID:
-                            $ref: '#/components/headers/RequestID'
-                "400":
-                    $ref: '#/components/responses/InvalidRequest'
-                "401":
-                    $ref: '#/components/responses/Unauthenticated'
-                "403":
-                    $ref: '#/components/responses/AdminMutationForbidden'
-                "404":
-                    $ref: '#/components/responses/LessonNotFound'
-                "409":
-                    $ref: '#/components/responses/TranscriptConflict'
-                "503":
-                    $ref: '#/components/responses/Unavailable'
-            summary: Publish a lesson recognition draft
-    /api/v1/admin/lessons/{lessonId}/draft/regenerate:
-        post:
-            description: Authenticated same-origin mutation for the course owner or an admin. An omitted language asks the recognizer to detect it. The body is optional, accepts no unknown members and is limited to 1 KiB. Responses are never cached.
+            description: Authenticated same-origin mutation for the course owner or an admin. Accepts no body; any byte is invalid_request. Only a ready track of the latest Ready asset can be regenerated. A running draft returns already_running. Responses are never cached.
             operationId: regenerateLessonDraft
             parameters:
                 - in: path
@@ -4258,11 +4261,12 @@ paths:
                   schema:
                     format: uuid
                     type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RegenerateLessonDraftRequest'
+                - in: path
+                  name: trackId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
             responses:
                 "202":
                     description: Recognition was queued.
@@ -4278,7 +4282,7 @@ paths:
                 "403":
                     $ref: '#/components/responses/AdminMutationForbidden'
                 "404":
-                    $ref: '#/components/responses/LessonNotFound'
+                    $ref: '#/components/responses/DraftSourceNotFound'
                 "409":
                     $ref: '#/components/responses/DraftConflict'
                 "503":
@@ -4335,6 +4339,42 @@ paths:
                 "503":
                     $ref: '#/components/responses/Unavailable'
             summary: Replace a lesson transcript
+    /api/v1/admin/lessons/{lessonId}/transcripts:
+        get:
+            description: Course editor access, identical to admin PUT transcript. Ordered by language; stale compares the authored generation with the latest Ready non-evicted asset. Responses are never cached.
+            operationId: listLessonTranscripts
+            parameters:
+                - in: path
+                  name: lessonId
+                  required: true
+                  schema:
+                    format: uuid
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LessonTranscripts'
+                    description: Published language metadata, or an empty transcripts array.
+                    headers:
+                        Cache-Control:
+                            $ref: '#/components/headers/NoStore'
+                        X-Request-ID:
+                            $ref: '#/components/headers/RequestID'
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "401":
+                    $ref: '#/components/responses/Unauthenticated'
+                "403":
+                    $ref: '#/components/responses/LearningForbidden'
+                "404":
+                    $ref: '#/components/responses/NotFound'
+                "500":
+                    $ref: '#/components/responses/InternalError'
+                "503":
+                    $ref: '#/components/responses/Unavailable'
+            summary: List published transcript languages
     /api/v1/admin/lessons/{lessonId}/video:
         post:
             description: Admins may mint for any saved lesson; instructors may mint only for lessons in courses they own. The minted video asset ID is also the single-use upload ticket ID. Requires one matching Origin header. Bodies are limited to 8 KiB, accept no duplicate or unknown members, and responses are never cached. The API records metadata only and does not access media storage.
@@ -4840,7 +4880,7 @@ paths:
             summary: Block or restore an account
     /api/v1/admin/videos/{videoId}/audio-tracks:
         get:
-            description: Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached.
+            description: Returns all audio tracks (embedded and uploaded) of the asset. Admins may read any asset; instructors may read only assets in courses they own. Query parameters are not supported and responses are never cached. Each item includes multilingual; multilingualDefault reports the configured upload default.
             operationId: listAdminAudioTracks
             parameters:
                 - in: path
@@ -4875,7 +4915,7 @@ paths:
                     $ref: '#/components/responses/Unavailable'
             summary: List audio tracks for a video asset
         post:
-            description: Creates an uploaded audio track for the asset and returns its tus upload target. Admins may mint for any asset; instructors only for assets in courses they own. The track language must be unique on the asset.
+            description: Creates an uploaded audio track for the asset and returns its tus upload target. Admins may mint for any asset; instructors only for assets in courses they own. The track language must be unique on the asset. Optional multilingual defaults to the configured ASR_MULTILINGUAL_DEFAULT when omitted.
             operationId: mintAdminAudioTicket
             parameters:
                 - in: path
@@ -4951,7 +4991,7 @@ paths:
                     $ref: '#/components/responses/Unavailable'
             summary: Delete an audio track
         patch:
-            description: Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock.
+            description: Updates the language tag and display label of an audio track. A language clash with another non-failed track on the same asset returns 409. Requires one matching Origin header, accepts no query parameters, and responses are never cached. The master manifest is regenerated under the asset lock only when language or label changes. Optional multilingual is unchanged when omitted; changing only that flag does not rewrite the master.
             operationId: renameAdminAudioTrack
             parameters:
                 - in: path

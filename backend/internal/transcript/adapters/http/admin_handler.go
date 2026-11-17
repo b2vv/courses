@@ -40,6 +40,8 @@ func (handler *AdminHandler) RegisterAdmin(
 	authenticate func(http.Handler) http.Handler,
 	sameOrigin func(http.Handler) http.Handler,
 ) {
+	mux.Handle("GET /api/v1/admin/lessons/{lessonId}/transcripts",
+		authenticate(http.HandlerFunc(handler.listTranscripts)))
 	mux.Handle("PUT /api/v1/admin/lessons/{lessonId}/transcript",
 		authenticate(sameOrigin(http.HandlerFunc(handler.save))))
 	mux.Handle("GET /api/v1/admin/courses/{courseId}/documents",
@@ -191,4 +193,32 @@ func (handler *AdminHandler) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, saveResult{UpdatedAt: updatedAt})
+}
+
+type transcriptInventoryDTO struct {
+	Language  string `json:"language"`
+	UpdatedAt string `json:"updatedAt"`
+	Stale     bool   `json:"stale"`
+	IsPrimary bool   `json:"isPrimary"`
+}
+type transcriptsDTO struct {
+	Transcripts []transcriptInventoryDTO `json:"transcripts"`
+}
+
+func (handler *AdminHandler) listTranscripts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	actor, ok := handler.adminActor(w, r)
+	if !ok {
+		return
+	}
+	items, err := handler.authoring.List(r.Context(), actor, r.PathValue("lessonId"))
+	if err != nil {
+		writeTranscriptError(w, r, err)
+		return
+	}
+	result := transcriptsDTO{Transcripts: make([]transcriptInventoryDTO, 0, len(items))}
+	for _, item := range items {
+		result.Transcripts = append(result.Transcripts, transcriptInventoryDTO{Language: string(item.Language), UpdatedAt: item.UpdatedAt, Stale: item.Stale, IsPrimary: item.IsPrimary})
+	}
+	httpserver.WriteJSON(w, http.StatusOK, result)
 }

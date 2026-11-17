@@ -1,0 +1,287 @@
+import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { z } from 'zod';
+import { authStatePath } from '/Users/strelia/projects/courses/frontend/e2e/auth';
+
+// MS3 design-pass evidence: language tabs, detached offer, orphan tab, und dialog, audio-track
+// rows with the multilingual switch, rename dialog — at 390/768/1024/1440, 200% text, 320 reflow.
+const adminID = '40000000-0000-4000-8000-000000000003';
+const fixtures = '/Users/strelia/projects/courses/frontend/playwright/.fixtures';
+const speechVideo = path.join(fixtures, 'e2e-speech-640x360.mp4');
+const speechTrack = path.join(fixtures, 'e2e-speech-dub.m4a');
+const evidence = path.join(import.meta.dirname, 'evidence');
+const ns = `dp-ms3-${Date.now().toString(36)}`;
+const idToken = z.object({ id: z.string(), updatedAt: z.string() });
+const created: string[] = [];
+const results: Record<string, unknown>[] = [];
+
+const viewports = [
+  { name: '390', width: 390, height: 844, text: 1 },
+  { name: '768', width: 768, height: 1024, text: 1 },
+  { name: '1024', width: 1024, height: 768, text: 1 },
+  { name: '1440', width: 1440, height: 900, text: 1 },
+  { name: '1440-text200', width: 1440, height: 900, text: 2 },
+  { name: '390-text200', width: 390, height: 844, text: 2 },
+  { name: '320', width: 320, height: 640, text: 1 },
+];
+
+test.use({ storageState: authStatePath('admin'), actionTimeout: 30_000 });
+
+async function measure(page: Page, scope: Locator) {
+  return scope.evaluate((root) => {
+    const vw = document.documentElement.clientWidth;
+    const all = [root, ...root.querySelectorAll('*')].filter((el) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && !el.closest('[inert]');
+    });
+    const outside = all
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.right <= vw + 0.5 && r.left >= -0.5) return false;
+        // An element inside its own horizontal scroller is reachable, not clipped.
+        for (let p = el.parentElement; p && p !== root.parentElement; p = p.parentElement) {
+          const o = getComputedStyle(p).overflowX;
+          if (o === 'auto' || o === 'scroll') return false;
+        }
+        return true;
+      })
+      .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)}`);
+    const controls = all.filter((el) =>
+      el.matches('button, [role="tab"], [role="switch"], a[href], input:not([type="file"]), select'),
+    );
+    const small = controls
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        const target =
+          el.matches('[role="switch"], input[type="checkbox"]') && el.closest('label')
+            ? el.closest('label')!.getBoundingClientRect()
+            : r;
+        return { el, w: target.width, h: target.height };
+      })
+      .filter(({ w, h }) => h < 44 || w < 44)
+      .map(
+        ({ el, w, h }) =>
+          `${el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 30)} ${Math.round(w)}x${Math.round(h)}`,
+      );
+    const ids = [...document.querySelectorAll('[id]')].map((el) => el.id);
+    const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
+    return {
+      viewport: vw,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      scope: Math.round(root.getBoundingClientRect().width),
+      outside,
+      smallTargets: small,
+      duplicateIds: [...new Set(duplicates)],
+      controls: controls.length,
+    };
+  });
+}
+
+async function shoot(page: Page, state: string, scope: Locator) {
+  for (const vp of viewports) {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await page.evaluate((scale) => {
+      document.documentElement.style.fontSize = scale === 1 ? '' : `${scale * 100}%`;
+    }, vp.text);
+    await page.waitForTimeout(300);
+    await scope.scrollIntoViewIfNeeded();
+    const file = path.join(evidence, `${state}-${vp.name}.png`);
+    await scope.screenshot({ path: file });
+    results.push({ state, viewport: vp.name, file: path.basename(file), ...(await measure(page, scope)) });
+  }
+  await page.evaluate(() => (document.documentElement.style.fontSize = ''));
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+function tablist(page: Page) {
+  return page.getByRole('tablist', { name: 'Мови транскрипту' });
+}
+function languageSection(page: Page) {
+  return tablist(page).locator('xpath=ancestor::*[.//*[@role="tabpanel"]][1]');
+}
+async function focusState(page: Page) {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return null;
+    const s = getComputedStyle(el);
+    return {
+      role: el.getAttribute('role') ?? el.tagName.toLowerCase(),
+      name: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
+      focusVisible: el.matches(':focus-visible'),
+      outline: `${s.outlineStyle} ${s.outlineWidth}`,
+      boxShadow: s.boxShadow.slice(0, 60),
+    };
+  });
+}
+
+test.afterAll(async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
+  const headers = { Origin: new URL(baseURL ?? 'http://localhost:8080').origin };
+  for (const id of created) {
+    const current = await context.request.get(`/api/v1/admin/courses/${id}`);
+    const fresh = idToken.parse(await current.json());
+    const del = await context.request.delete(`/api/v1/admin/courses/${id}`, {
+      data: { expectedUpdatedAt: fresh.updatedAt },
+      headers,
+    });
+    results.push({ cleanup: id, status: del.status() });
+  }
+  await context.close();
+  await writeFile(path.join(evidence, 'measurements.json'), JSON.stringify(results, null, 2));
+});
+
+test('MS3 design-pass evidence', async ({ page, baseURL }) => {
+  await mkdir(evidence, { recursive: true });
+  const headers = { Origin: new URL(baseURL ?? '').origin };
+  const courseID = randomUUID();
+  const lessonID = randomUUID();
+  const draft = {
+    slug: `${ns}-${courseID.slice(0, 8)}`,
+    title: `Design-pass MS3 ${ns}`,
+    summary: 'Design-pass fixture.',
+    description: 'Run-scoped course for MS3 design-pass evidence.',
+    instructorId: adminID,
+  };
+  const c = await page.request.post('/api/v1/admin/courses', { data: draft, headers });
+  expect(c.status(), await c.text()).toBe(201);
+  const course = idToken.parse(await c.json());
+  created.push(course.id);
+  const saved = await page.request.put(`/api/v1/admin/courses/${course.id}`, {
+    data: {
+      expectedUpdatedAt: course.updatedAt,
+      course: draft,
+      modules: [{ id: randomUUID(), title: 'Модуль', lessons: [{ id: lessonID, title: 'Урок' }] }],
+    },
+    headers,
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+  // Orphan transcript in uk (no uk track) → orphan tab.
+  const t = await page.request.put(`/api/v1/admin/lessons/${lessonID}/transcript`, {
+    data: {
+      language: 'uk',
+      segments: [{ id: randomUUID(), startMs: 0, endMs: 1000, text: 'Початковий текст уроку', documentIds: [] }],
+    },
+    headers,
+  });
+  expect(t.status(), await t.text()).toBe(200);
+
+  await page.goto(`/admin/courses/${course.id}`);
+  await page.getByRole('tab', { name: 'Уроки' }).click();
+  const up = page.waitForResponse((r) => r.url().endsWith('/video') && r.request().method() === 'POST');
+  await page.locator('input[type="file"]:not(.admin-audio-field input)').first().setInputFiles(speechVideo);
+  expect((await up).status()).toBe(201);
+  await expect(page.locator('[data-video-state="ready"]')).toBeVisible({ timeout: 300_000 });
+
+  const audio = page.getByRole('region', { name: 'Аудіодоріжки' });
+  const form = audio.locator('fieldset');
+  await form.getByRole('button', { name: /Мова доріжки/ }).click();
+  await page.getByRole('option', { name: 'Англійська', exact: true }).click();
+  await form.getByRole('textbox', { name: 'Назва доріжки' }).fill('English dub');
+  const minted = page.waitForResponse((r) => r.url().endsWith('/audio-tracks') && r.request().method() === 'POST');
+  await form.locator('input[type="file"]').setInputFiles(speechTrack);
+  expect((await minted).status()).toBe(201);
+  await expect(audio.locator('li[data-audio-track-state="ready"]')).toHaveCount(2, { timeout: 300_000 });
+
+  // Draft on the default und tab, loaded into the editor.
+  await tablist(page).getByRole('tab', { name: /^Невідома мова/ }).click();
+  let panel = page.getByRole('tabpanel').filter({ has: page.getByRole('heading', { name: 'Транскрипт уроку', exact: true }) }).last();
+  const gen = panel.getByRole('button', { name: 'Згенерувати транскрипт', exact: true });
+  await expect.poll(async () => (await gen.isVisible()) || (await panel.locator('[data-draft-state]').count()) > 0, { timeout: 30_000 }).toBe(true);
+  if (await gen.isVisible()) await gen.click();
+  await expect(panel.locator('[data-draft-state="ready"]')).toBeVisible({ timeout: 300_000 });
+
+  // S1 tabs + default und panel with a ready draft.
+  await shoot(page, 's1-tabs-und-draft', languageSection(page));
+  // S5 audio-track rows (multilingual switch, default badge).
+  await shoot(page, 's5-audio-tracks', audio);
+
+  // Keyboard: focus the selected tab, ArrowRight moves selection with visible focus.
+  const keyboard: Record<string, unknown> = {};
+  await tablist(page).getByRole('tab', { selected: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  keyboard.afterArrowRight = await focusState(page);
+  keyboard.selected = await tablist(page).getByRole('tab', { selected: true }).innerText();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Tab');
+  keyboard.afterTabIntoPanel = await focusState(page);
+  results.push({ keyboard });
+
+  // S4 und dialog: load the draft, Save → language confirmation.
+  await panel.getByRole('button', { name: 'Завантажити чернетку в редактор', exact: true }).click();
+  await panel.getByRole('button', { name: 'Завантажити чернетку', exact: true }).click();
+  await panel.getByRole('button', { name: 'Зберегти транскрипт', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const undDialog = page.getByRole('dialog', { name: 'Підтвердьте мову транскрипту' });
+  await expect(undDialog).toBeVisible();
+  results.push({ undDialogFocus: await focusState(page) });
+  await shoot(page, 's4-und-dialog', undDialog);
+  await page.keyboard.press('Escape');
+  await expect(undDialog).toBeHidden();
+  results.push({ undDialogEscapeFocus: await focusState(page) });
+
+  // S3 orphan uk tab.
+  await tablist(page).getByRole('tab', { name: /^Українська/ }).click();
+  await shoot(page, 's3-orphan-uk', languageSection(page));
+
+  // S6 rename dialog from the English dub row.
+  const row = audio.getByRole('listitem').filter({ has: page.getByText('English dub', { exact: true }) });
+  const edit = row.getByRole('button', { name: /^Змінити доріжку/ });
+  await edit.focus();
+  await page.keyboard.press('Enter');
+  const rename = page.getByRole('dialog');
+  await expect(rename).toBeVisible();
+  results.push({ renameDialogFocus: await focusState(page) });
+  await shoot(page, 's6-rename-dialog', rename);
+  await page.keyboard.press('Escape');
+  await expect(rename).toBeHidden();
+  results.push({ renameEscapeFocus: await focusState(page) });
+
+  // S2 detached snapshot from a gone track, language en → offered in the English track tab.
+  const key = `${adminID}:${lessonID}:track:${randomUUID()}`;
+  await page.evaluate(
+    (key) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('courses-transcript-history');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const tx = open.result.transaction('snapshots', 'readwrite');
+          tx.objectStore('snapshots').put({
+            key,
+            capturedAt: Date.now(),
+            revision: crypto.randomUUID(),
+            language: 'en',
+            expectedUpdatedAt: undefined,
+            lines: [{ id: crypto.randomUUID(), startMs: '0', endMs: '1000', text: 'Detached English line', documentIds: [] }],
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    key,
+  );
+  await page.reload();
+  await page.getByRole('tab', { name: 'Уроки' }).click();
+  await tablist(page).getByRole('tab', { name: /^Англійська/ }).click();
+  panel = page.getByRole('tabpanel').filter({ has: page.getByRole('heading', { name: 'Транскрипт уроку', exact: true }) }).last();
+  await expect(panel.getByText(/Незбережені рядки з іншої вкладки/)).toBeVisible();
+  await shoot(page, 's2-detached-offer-en', languageSection(page));
+
+  // Clean this lesson's snapshots.
+  await page.evaluate(
+    (prefix) =>
+      new Promise<void>((resolve) => {
+        const open = indexedDB.open('courses-transcript-history');
+        open.onsuccess = () => {
+          const tx = open.result.transaction('snapshots', 'readwrite');
+          const store = tx.objectStore('snapshots');
+          const keys = store.getAllKeys();
+          keys.onsuccess = () => keys.result.map(String).filter((k) => k.startsWith(prefix)).forEach((k) => store.delete(k));
+          tx.oncomplete = () => resolve();
+        };
+      }),
+    `${adminID}:${lessonID}`,
+  );
+});

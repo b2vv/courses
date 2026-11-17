@@ -22,6 +22,7 @@ function track(trackId: string, state: AudioTrack['state'], isDefault = false): 
     language: 'en',
     label: 'English',
     isDefault,
+    multilingual: false,
     state,
     updatedAt: '2026-11-13T12:00:00.000000Z',
   };

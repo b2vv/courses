@@ -1,0 +1,14 @@
+Blocker: none. Major: none. Minor: none.
+
+Reviewed the scoped uncommitted MS2b changes at `4e789d2`, including the specified untracked files.
+
+- **Hints:** [engine.go:75](/Users/strelia/projects/courses/backend/internal/transcript/adapters/whisper/engine.go:75) correctly handles multilingual, the `und` family, lowercased first subtags and unsupported tags. The 100-code set matches [faster-whisper 1.2.1](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/tokenizer.py). The new warning carries only the tag; existing audio-path/stderr logging is unchanged.
+- **Python boundary:** [transcribe.py:51](/Users/strelia/projects/courses/backend/internal/transcript/adapters/whisper/transcribe.py:51) passes the correct `language` and `multilingual` kwargs for the [pinned API](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/transcribe.py). [engine_test.go:218](/Users/strelia/projects/courses/backend/internal/transcript/adapters/whisper/engine_test.go:218) invokes the real script through python3, fatals when unavailable, and asserts all three required cases through the stdlib-only stub.
+- **Claim and queue:** [recognize.go:84](/Users/strelia/projects/courses/backend/internal/transcript/application/recognize.go:84) passes the claim snapshot. Language overrides are removed from job, payload and Regenerate. [queue_test.go:74](/Users/strelia/projects/courses/backend/internal/transcript/adapters/asynq/queue_test.go:74) covers distinct track IDs and legacy-task rejection with zero retries.
+- **Legacy HTTP:** [draft_handler.go:124](/Users/strelia/projects/courses/backend/internal/transcript/adapters/http/draft_handler.go:124) deliberately retains validation/error behavior while discarding the override, matching the MS2c deferral.
+- **Configuration and persistence:** strict parsing and startup refusal are wired into both roots; Compose and `.env.example` agree. Mint and embedded creation carry the configured boolean, with both values asserted in [regenerate_test.go:73](/Users/strelia/projects/courses/backend/internal/media/application/regenerate_test.go:73) and [transcode_test.go:814](/Users/strelia/projects/courses/backend/internal/media/application/transcode_test.go:814).
+- **`media-masters`:** passing false is correct: [audiotrack.go:88](/Users/strelia/projects/courses/backend/internal/media/application/audiotrack.go:88) only regenerates existing manifests and never reads the creation default.
+
+No stale caller signatures or architecture violations found. Tests, builds and Docker were not run. Bookworm image inheritance supports Python 3.11 availability; execution inside the exact `golang:1.27.3-bookworm` image remains unverified.
+
+VERDICT: SHIP

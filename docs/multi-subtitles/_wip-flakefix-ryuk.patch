@@ -1,0 +1,64 @@
+diff --git a/backend/internal/testsupport/containers/start.go b/backend/internal/testsupport/containers/start.go
+index bdd0eb8..0c19482 100644
+--- a/backend/internal/testsupport/containers/start.go
++++ b/backend/internal/testsupport/containers/start.go
+@@ -1,4 +1,5 @@
+-// Package containers retries the temporary testcontainers-go Ryuk create-to-start race.
++// Package containers retries the temporary testcontainers-go Ryuk races: a reaper seen in the
++// "created" state, and two packages creating the same session reaper name at once.
+ //
+ // TEMPORARY(testcontainers-go#3868): remove this package and its call sites when a
+ // testcontainers-go release contains PR #3868; then run the integration gate three times.
+@@ -109,7 +110,16 @@ func Start[T testcontainers.Container](ctx context.Context, start func(context.C
+ 
+ func isReaperRace(err error) bool {
+ 	message := err.Error()
+-	return strings.Contains(message, "wait for reaper") && strings.Contains(message, `unexpected container status "created"`)
++	createdRace := strings.Contains(message, "wait for reaper") &&
++		strings.Contains(message, `unexpected container status "created"`)
++	// Second shape (gate 2026-11-17, cmd/media-worker): packages of one `go test` share a session
++	// id, so two of them can both miss the reaper in reuseOrCreate (reaper.go:311-330) and race to
++	// create the same `reaper_<session>` name. The loser's create fails with a name conflict; on the
++	// next attempt lookupContainer finds the winner's reaper and reuses it.
++	nameRace := strings.Contains(message, "new reaper") &&
++		strings.Contains(message, "Conflict.") &&
++		strings.Contains(message, "is already in use")
++	return createdRace || nameRace
+ }
+ 
+ func retryExhausted(err error) error {
+diff --git a/backend/internal/testsupport/containers/start_test.go b/backend/internal/testsupport/containers/start_test.go
+index 65b9eaa..dd61345 100644
+--- a/backend/internal/testsupport/containers/start_test.go
++++ b/backend/internal/testsupport/containers/start_test.go
+@@ -113,3 +113,30 @@ func withTinyRetryConfig(t *testing.T) {
+ 	retryConfig = retrySettings{initialBackoff: time.Millisecond, maxBackoff: time.Millisecond, budget: 100 * time.Millisecond, wait: old.wait}
+ 	t.Cleanup(func() { retryConfig = old })
+ }
++
++func TestStartRetriesTheReaperNameConflictRace(t *testing.T) {
++	withTinyRetryConfig(t)
++	calls := 0
++	got, err := Start(context.Background(), func(context.Context) (*fakeContainer, error) {
++		calls++
++		if calls == 1 {
++			return nil, errors.New(`run postgres: generic container: create container: reaper: new reaper: run container: container create: Error response from daemon: Conflict. The container name "/reaper_abc" is already in use by container "123". You have to remove (or rename) that container to be able to reuse that name.`)
++		}
++		return &fakeContainer{}, nil
++	})
++	if err != nil || got == nil || calls != 2 {
++		t.Fatalf("Start() = (%p, %v), calls=%d; want a retried success", got, err, calls)
++	}
++}
++
++func TestStartDoesNotRetryAConflictOutsideTheReaper(t *testing.T) {
++	withTinyRetryConfig(t)
++	calls := 0
++	_, err := Start(context.Background(), func(context.Context) (*fakeContainer, error) {
++		calls++
++		return nil, errors.New(`Error response from daemon: Conflict. The container name "/postgres_x" is already in use`)
++	})
++	if err == nil || calls != 1 {
++		t.Fatalf("Start() err=%v calls=%d; want one attempt and the error", err, calls)
++	}
++}

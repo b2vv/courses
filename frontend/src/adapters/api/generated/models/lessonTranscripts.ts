@@ -5,7 +5,8 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { LessonTranscriptInventory } from './lessonTranscriptInventory.ts';
 
-export interface PublishLessonDraftRequest {
-  expectedUpdatedAt?: string;
+export interface LessonTranscripts {
+  transcripts: LessonTranscriptInventory[];
 }

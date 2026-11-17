@@ -1,0 +1,803 @@
+diff --git a/backend/cmd/api/main_test.go b/backend/cmd/api/main_test.go
+new file mode 100644
+index 0000000..5571c45
+--- /dev/null
++++ b/backend/cmd/api/main_test.go
+@@ -0,0 +1,44 @@
++package main
++
++import (
++	"context"
++	"os"
++	"os/exec"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestAPIStartupHelper(t *testing.T) {
++	if os.Getenv("API_STARTUP_TEST_HELPER") == "1" {
++		main()
++		os.Exit(0)
++	}
++}
++
++func TestAPIRejectsInvalidMultilingualBeforeDependencies(t *testing.T) {
++	binary, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, value := range []string{"invalid", "true", "false"} {
++		t.Run(value, func(t *testing.T) {
++			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++			defer cancel()
++			cmd := exec.CommandContext(ctx, binary, "-test.run=^TestAPIStartupHelper$")
++			// Isolated environment: valid preceding startup settings, no ambient credentials or network endpoints.
++			cmd.Env = []string{"API_STARTUP_TEST_HELPER=1", "APP_ENV=test", "COOKIE_SECURE=false", "PUBLIC_ORIGIN=http://localhost", "SMTP_HOST=localhost", "MAIL_FROM=test@example.test", "IDENTITY_2FA_SECRET_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "ASR_MULTILINGUAL_DEFAULT=" + value}
++			output, err := cmd.CombinedOutput()
++			if ctx.Err() != nil {
++				t.Fatal(ctx.Err())
++			}
++			want := "POSTGRES_HOST is required"
++			if value == "invalid" {
++				want = "ASR_MULTILINGUAL_DEFAULT must be true or false"
++			}
++			if err == nil || !strings.Contains(string(output), want) {
++				t.Fatalf("startup ASR=%s error=%v output=%s; want %q", value, err, output, want)
++			}
++		})
++	}
++}
+diff --git a/backend/cmd/media-worker/main_test.go b/backend/cmd/media-worker/main_test.go
+new file mode 100644
+index 0000000..7a09454
+--- /dev/null
++++ b/backend/cmd/media-worker/main_test.go
+@@ -0,0 +1,26 @@
++package main
++
++import (
++	"context"
++	"io"
++	"log/slog"
++	"strings"
++	"testing"
++)
++
++func TestWorkerRejectsInvalidMultilingualBeforeDependencies(t *testing.T) {
++	t.Setenv("POSTGRES_HOST", "")
++	for _, value := range []string{"invalid", "true", "false"} {
++		t.Run(value, func(t *testing.T) {
++			t.Setenv("ASR_MULTILINGUAL_DEFAULT", value)
++			err := run(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)))
++			want := "POSTGRES_HOST is required"
++			if value == "invalid" {
++				want = "ASR_MULTILINGUAL_DEFAULT must be true or false"
++			}
++			if err == nil || !strings.Contains(err.Error(), want) {
++				t.Fatalf("worker startup ASR=%s error=%v; want %q", value, err, want)
++			}
++		})
++	}
++}
+diff --git a/backend/internal/media/adapters/postgres/audio_track_metadata_integration_test.go b/backend/internal/media/adapters/postgres/audio_track_metadata_integration_test.go
+new file mode 100644
+index 0000000..837b4eb
+--- /dev/null
++++ b/backend/internal/media/adapters/postgres/audio_track_metadata_integration_test.go
+@@ -0,0 +1,252 @@
++//go:build integration
++
++package postgres
++
++import (
++	"context"
++	"errors"
++	"strings"
++	"testing"
++	"time"
++
++	"courses/internal/media/domain"
++	"github.com/jackc/pgx/v5"
++	"github.com/jackc/pgx/v5/pgxpool"
++)
++
++func (h *mediaHarness) assertMultilingualMode(t *testing.T, track domain.AudioTrack, want bool) {
++	t.Helper()
++	var stored bool
++	if err := h.pool.QueryRow(h.ctx, `SELECT multilingual FROM audio_tracks WHERE id=$1`, track.ID).Scan(&stored); err != nil {
++		t.Fatal(err)
++	}
++	loaded, err := h.repository.LoadAudioTrack(h.ctx, track.VideoAssetID, track.ID)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if track.Multilingual != want || stored != want || loaded.Multilingual != want {
++		t.Fatalf("multilingual returned=%v SQL=%v loaded=%v want=%v", track.Multilingual, stored, loaded.Multilingual, want)
++	}
++}
++
++func (h *mediaHarness) testMultilingualPersistence(t *testing.T) {
++	for _, want := range []bool{false, true} {
++		t.Run(map[bool]string{false: "false", true: "true"}[want], func(t *testing.T) {
++			t.Run("create", func(t *testing.T) {
++				h.reset(t)
++				h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++				track, err := domain.NewUploadedTrack(domain.AudioTrack{ID: mediaTrackOne, VideoAssetID: mediaAssetOne, Kind: domain.UploadedTrack, Language: "uk", Label: "Ukr", State: domain.Created, SourceLeaf: domain.AudioLeafPrefix + mediaTrackOne, DeclaredBytes: 1024, OriginalName: "audio.aac", ExpiresAt: mediaNow.Add(time.Hour), CreatedAt: mediaNow, UpdatedAt: mediaNow, Multilingual: want})
++				if err != nil {
++					t.Fatal(err)
++				}
++				stored, err := h.repository.CreateAudioTrack(h.ctx, track)
++				if err != nil {
++					t.Fatal(err)
++				}
++				h.assertMultilingualMode(t, stored, want)
++			})
++			t.Run("mint", func(t *testing.T) {
++				h.reset(t)
++				h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++				stored, err := h.repository.MintAudioTrack(h.ctx, ownerActor(), mediaAssetOne, 1024, "audio.aac", "uk", "Ukr", want, mediaNow.Add(time.Hour), mediaNow)
++				if err != nil {
++					t.Fatal(err)
++				}
++				h.assertMultilingualMode(t, stored, want)
++			})
++			t.Run("publish", func(t *testing.T) {
++				h.reset(t)
++				h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Processing, mediaNow.Add(time.Hour), nil)
++				track := embeddedTrackFor(mediaAssetOne)
++				track.Multilingual = want
++				if _, _, err := h.repository.Publish(h.ctx, mediaAssetOne, mediaClaimA, []domain.Rendition{domain.Rendition360p}, nil, mediaNow, track, func(domain.VideoAsset) error { return nil }); err != nil {
++					t.Fatal(err)
++				}
++				tracks, err := h.repository.ListAudioTracks(h.ctx, ownerActor(), mediaAssetOne)
++				if err != nil || len(tracks) != 1 {
++					t.Fatalf("published tracks=%+v err=%v", tracks, err)
++				}
++				h.assertMultilingualMode(t, tracks[0], want)
++			})
++		})
++	}
++}
++
++func (h *mediaHarness) testTrackMetadata(t *testing.T) {
++	h.reset(t)
++	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
++	h.insertTrack(t, mediaTrackTwo, mediaAssetOne, string(domain.UploadedTrack), "uk", "Ukr", false, domain.Ready, mediaNow.Add(time.Minute))
++	calls := 0
++	for _, track := range []struct{ id, language, label string }{{mediaTrackOne, "en", "Original"}, {mediaTrackTwo, "uk", "Ukr"}} {
++		_, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, track.id, track.language, track.label, nil, mediaNow.Add(time.Hour), func([]domain.AudioTrack) error { calls++; return nil })
++		if err != nil {
++			t.Fatal(err)
++		}
++	}
++	if calls != 0 {
++		t.Fatalf("metadata no-ops rewrote master %d times; want 0", calls)
++	}
++	_, err := h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "New label", nil, mediaNow.Add(time.Hour), func(tracks []domain.AudioTrack) error {
++		calls++
++		if len(tracks) != 2 || tracks[1].ID != mediaTrackTwo || tracks[1].Label != "New label" {
++			t.Fatalf("label-only rewrite saw %+v", tracks)
++		}
++		return nil
++	})
++	if err != nil || calls != 1 {
++		t.Fatalf("label-only rewrite calls=%d err=%v; want 1 and nil", calls, err)
++	}
++	diskFull := errors.New("disk full")
++	_, err = h.repository.UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "Rejected label", nil, mediaNow.Add(time.Hour), func([]domain.AudioTrack) error { return diskFull })
++	if !errors.Is(err, diskFull) {
++		t.Fatalf("label-only rewrite error=%v want disk full", err)
++	}
++	track, err := h.repository.LoadAudioTrack(h.ctx, mediaAssetOne, mediaTrackTwo)
++	if err != nil || track.Label != "New label" {
++		t.Fatalf("rollback label=%q err=%v want New label", track.Label, err)
++	}
++}
++
++func (h *mediaHarness) lockTrackRow(t *testing.T, id string) pgx.Tx {
++	t.Helper()
++	tx, err := h.pool.Begin(h.ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
++	if _, err := tx.Exec(h.ctx, `SELECT id FROM audio_tracks WHERE id=$1 FOR UPDATE`, id); err != nil {
++		t.Fatal(err)
++	}
++	return tx
++}
++
++func (h *mediaHarness) testTrackMetadataForeignLock(t *testing.T) {
++	h.reset(t)
++	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++	h.insertAsset(t, mediaAssetTwo, mediaLessonTwo, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++	h.insertTrack(t, mediaTrackOne, mediaAssetTwo, string(domain.EmbeddedTrack), "en", "Foreign", true, domain.Ready, mediaNow)
++	h.lockTrackRow(t, mediaTrackOne) // completed SELECT establishes the foreign row lock before the call
++	ctx, cancel := context.WithTimeout(h.ctx, 2*time.Second)
++	defer cancel()
++	_, err := h.repository.UpdateAudioTrackMetadata(ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "en", "Foreign", nil, mediaNow, noMasterRewrite)
++	if !errors.Is(err, domain.ErrVideoNotFound) {
++		t.Fatalf("foreign locked track error=%v want video_not_found", err)
++	}
++}
++
++// Observe PostgreSQL's actual contested lock, rather than inferring scheduling from elapsed time.
++func (h *mediaHarness) waitForTrackLock(ctx context.Context, fragment string, done <-chan error) (bool, error) {
++	for ctx.Err() == nil {
++		select {
++		case err := <-done:
++			return false, err
++		default:
++		}
++		var blocked bool
++		err := h.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND position($1 in query)>0)`, fragment).Scan(&blocked)
++		if err != nil {
++			return false, err
++		}
++		if blocked {
++			return true, nil
++		}
++	}
++	return false, ctx.Err()
++}
++
++func (h *mediaHarness) testTrackMetadataLockQueryFailure(t *testing.T) {
++	h.reset(t)
++	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
++	tx := h.lockTrackRow(t, mediaTrackOne)
++	ctx, cancel := context.WithCancel(h.ctx)
++	defer cancel()
++	done := make(chan error, 1)
++	go func() {
++		_, err := h.repository.UpdateAudioTrackMetadata(ctx, ownerActor(), mediaAssetOne, mediaTrackOne, "en", "Original", nil, mediaNow, noMasterRewrite)
++		done <- err
++	}()
++	observe, stop := context.WithTimeout(h.ctx, 5*time.Second)
++	defer stop()
++	blocked, err := h.waitForTrackLock(observe, "FROM audio_tracks", done)
++	cancel()
++	if !blocked {
++		_ = tx.Rollback(h.ctx)
++		t.Fatalf("prior-read lock was not reached: %v", err)
++	}
++	failure := <-done
++	_ = tx.Rollback(h.ctx)
++	if err := failure; !errors.Is(err, domain.ErrDependencyUnavailable) {
++		t.Fatalf("prior-read failure=%v want dependency_unavailable", err)
++	}
++}
++
++type trackReadKey struct{}
++type trackReadTracer struct{ reached, release chan struct{} }
++
++func (tr *trackReadTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
++	if strings.HasPrefix(data.SQL, "SELECT ") && strings.Contains(data.SQL, " FROM audio_tracks\n WHERE ") {
++		return context.WithValue(ctx, trackReadKey{}, true)
++	}
++	return ctx
++}
++func (tr *trackReadTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryEndData) {
++	if marked, _ := ctx.Value(trackReadKey{}).(bool); marked {
++		close(tr.reached)
++		<-tr.release
++	}
++}
++
++func (h *mediaHarness) testTrackMetadataExcludesSweep(t *testing.T) {
++	h.reset(t)
++	h.insertAsset(t, mediaAssetOne, mediaLessonOne, 1, domain.Ready, mediaNow.Add(time.Hour), nil)
++	h.insertTrack(t, mediaTrackOne, mediaAssetOne, string(domain.EmbeddedTrack), "en", "Original", true, domain.Ready, mediaNow)
++	h.insertUploadTrack(t, mediaTrackTwo, mediaAssetOne, "uk", domain.Failed, 1024, 0, mediaNow.Add(-time.Hour), mediaNow)
++	cfg, err := pgxpool.ParseConfig(h.connection)
++	if err != nil {
++		t.Fatal(err)
++	}
++	tr := &trackReadTracer{make(chan struct{}), make(chan struct{})}
++	cfg.ConnConfig.Tracer = tr
++	pool, err := pgxpool.NewWithConfig(h.ctx, cfg)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer pool.Close()
++	defer func() {
++		select {
++		case <-tr.release:
++		default:
++			close(tr.release)
++		}
++	}()
++	metadata := make(chan error, 1)
++	go func() {
++		_, err := NewRepository(pool).UpdateAudioTrackMetadata(h.ctx, ownerActor(), mediaAssetOne, mediaTrackTwo, "uk", "New label", nil, mediaNow.Add(time.Hour), noMasterRewrite)
++		metadata <- err
++	}()
++	select {
++	case <-tr.reached:
++	case <-time.After(5 * time.Second):
++		t.Fatal("metadata prior read not reached")
++	}
++	sweep := make(chan error, 1)
++	go func() {
++		sweep <- h.repository.DeleteSweptAudioTrackLocked(h.ctx, mediaTrackTwo, mediaNow, func() error { return nil })
++	}()
++	observe, stop := context.WithTimeout(h.ctx, 5*time.Second)
++	defer stop()
++	blocked, sweepErr := h.waitForTrackLock(observe, "SELECT EXISTS (", sweep)
++	close(tr.release)
++	metaErr := <-metadata
++	if blocked {
++		sweepErr = <-sweep
++	}
++	if !blocked {
++		t.Fatalf("sweeper entered before metadata completed: sweep=%v metadata=%v; want contested row lock", sweepErr, metaErr)
++	}
++	if metaErr != nil || sweepErr != nil {
++		t.Fatalf("serialized metadata=%v sweep=%v", metaErr, sweepErr)
++	}
++}
+diff --git a/backend/internal/media/adapters/postgres/repository_integration_test.go b/backend/internal/media/adapters/postgres/repository_integration_test.go
+index 72813cc..c77feda 100644
+--- a/backend/internal/media/adapters/postgres/repository_integration_test.go
++++ b/backend/internal/media/adapters/postgres/repository_integration_test.go
+@@ -164,6 +164,11 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
+ 	defer pool.Close()
+ 	harness := &mediaHarness{ctx: ctx, connection: connection, pool: pool, repository: NewRepository(pool)}
+ 
++	t.Run("audio track: multilingual persistence", harness.testMultilingualPersistence)
++	t.Run("audio track: metadata siblings and label rollback", harness.testTrackMetadata)
++	t.Run("audio track: metadata foreign lock scope", harness.testTrackMetadataForeignLock)
++	t.Run("audio track: metadata lock query failure", harness.testTrackMetadataLockQueryFailure)
++	t.Run("audio track: metadata lock excludes sweep", harness.testTrackMetadataExcludesSweep)
+ 	t.Run("P06 replacing a video keeps two ready generations", harness.testTwoReadyGenerations)
+ 	t.Run("B16 only expired uploads are taken over", harness.testExpiredUploadTakeover)
+ 	t.Run("B22 generation remains monotonic after eviction", harness.testMonotonicGeneration)
+diff --git a/backend/internal/testsupport/startup/wiring_integration_test.go b/backend/internal/testsupport/startup/wiring_integration_test.go
+new file mode 100644
+index 0000000..e0e6eca
+--- /dev/null
++++ b/backend/internal/testsupport/startup/wiring_integration_test.go
+@@ -0,0 +1,276 @@
++//go:build integration
++
++package startup_test
++
++import (
++	"context"
++	"crypto/sha256"
++	"database/sql"
++	"encoding/base64"
++	"encoding/json"
++	"fmt"
++	"io"
++	"net/http"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++	"time"
++
++	containers "courses/internal/testsupport/containers"
++	"github.com/jackc/pgx/v5/pgxpool"
++	_ "github.com/jackc/pgx/v5/stdlib"
++	"github.com/pressly/goose/v3"
++	"github.com/testcontainers/testcontainers-go"
++	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
++	"github.com/testcontainers/testcontainers-go/network"
++	"github.com/testcontainers/testcontainers-go/wait"
++)
++
++const (
++	userID   = "49000000-0000-4000-8000-000000000001"
++	courseID = "19000000-0000-4000-8000-000000000001"
++	moduleID = "69000000-0000-4000-8000-000000000001"
++	lessonID = "79000000-0000-4000-8000-000000000001"
++	assetID  = "89000000-0000-4000-8000-000000000001"
++)
++
++// Exercises the actual executables, not a test copy of their composition code.
++// The runtime image is the same ffmpeg-equipped runner provisioned by integration.sh.
++func TestExecutableMultilingualWiring(t *testing.T) {
++	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
++	defer cancel()
++	netw, err := network.New(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() {
++		if err := netw.Remove(context.Background()); err != nil {
++			t.Error(err)
++		}
++	})
++	pg, err := containers.Start(ctx, func(ctx context.Context) (*postgrescontainer.PostgresContainer, error) {
++		return postgrescontainer.Run(ctx, "postgres:17.5", postgrescontainer.WithDatabase("startup"), postgrescontainer.WithUsername("courses"), postgrescontainer.WithPassword("ephemeral-test-only"), network.WithNetwork([]string{"db"}, netw), testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2)))
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() {
++		if err := pg.Terminate(context.Background()); err != nil {
++			t.Error(err)
++		}
++	})
++	redis, err := containers.Start(ctx, func(ctx context.Context) (testcontainers.Container, error) {
++		return testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: testcontainers.ContainerRequest{Image: "redis:7.4-bookworm", Cmd: []string{"redis-server", "--requirepass", "ephemeral-test-only"}, Networks: []string{netw.Name}, NetworkAliases: map[string][]string{netw.Name: {"cache"}}, WaitingFor: wait.ForLog("Ready to accept connections")}, Started: true})
++	})
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() {
++		if err := redis.Terminate(context.Background()); err != nil {
++			t.Error(err)
++		}
++	})
++	connection, err := pg.ConnectionString(ctx, "sslmode=disable")
++	if err != nil {
++		t.Fatal(err)
++	}
++	db, err := sql.Open("pgx", connection)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
++	if err != nil {
++		t.Fatal(err)
++	}
++	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS(filepath.Join(root, "migrations")), goose.WithDisableGlobalRegistry(true))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err := provider.Up(ctx); err != nil {
++		t.Fatal(err)
++	}
++	pool, err := pgxpool.New(ctx, connection)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer pool.Close()
++	if _, err := pool.Exec(ctx, `CREATE FUNCTION startup_notify() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_notify('startup_track', NEW.id::text); RETURN NEW; END $$; CREATE TRIGGER startup_notify AFTER UPDATE ON video_assets FOR EACH ROW EXECUTE FUNCTION startup_notify()`); err != nil {
++		t.Fatal(err)
++	}
++	rawToken := make([]byte, 32)
++	for i := range rawToken {
++		rawToken[i] = byte(i + 1)
++	}
++	digest := sha256.Sum256(rawToken)
++	token := base64.RawURLEncoding.EncodeToString(rawToken)
++	execSQL := func(query string, args ...interface{}) {
++		t.Helper()
++		if _, err := pool.Exec(ctx, query, args...); err != nil {
++			t.Fatal(err)
++		}
++	}
++	execSQL(`INSERT INTO users(id,email,display_name,role,password_hash,email_verified,created_at,updated_at) VALUES($1,'startup@example.test','Startup','instructor','$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',true,now(),now())`, userID)
++	execSQL(`INSERT INTO user_sessions(id,user_id,token_digest,created_at,expires_at) VALUES('59000000-0000-4000-8000-000000000001',$1,$2,now(),now()+interval '1 hour')`, userID, digest[:])
++	execSQL(`INSERT INTO courses(id,instructor_id,slug,title,summary,description,status,created_at,updated_at) VALUES($1,$2,'startup','Startup','Summary','Description','draft',now(),now())`, courseID, userID)
++	execSQL(`INSERT INTO course_modules(id,course_id,title,position,created_at,updated_at) VALUES($1,$2,'Module',0,now(),now())`, moduleID, courseID)
++	execSQL(`INSERT INTO course_lessons(id,module_id,title,position,created_at,updated_at) VALUES($1,$2,'Lesson',0,now(),now())`, lessonID, moduleID)
++	networkIP := func(container testcontainers.Container) string {
++		t.Helper()
++		info, err := container.Inspect(ctx)
++		if err != nil {
++			t.Fatal(err)
++		}
++		endpoint := info.NetworkSettings.Networks[netw.Name]
++		if endpoint == nil || !endpoint.IPAddress.IsValid() {
++			t.Fatalf("missing fixture network endpoint: %+v", info.NetworkSettings.Networks)
++		}
++		return endpoint.IPAddress.String()
++	}
++	pgIP, redisIP := networkIP(pg), networkIP(redis)
++	env := map[string]string{"POSTGRES_HOST": pgIP, "POSTGRES_USER": "courses", "POSTGRES_PASSWORD": "ephemeral-test-only", "POSTGRES_DB": "startup", "REDIS_HOST": redisIP, "REDIS_PASSWORD": "ephemeral-test-only", "APP_ENV": "test", "COOKIE_SECURE": "false", "PUBLIC_ORIGIN": "http://localhost", "SMTP_HOST": "localhost", "MAIL_FROM": "startup@example.test", "IDENTITY_2FA_SECRET_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "HTTP_ADDR": ":8080"}
++	for _, program := range []string{"api", "media-worker"} {
++		t.Run(program, func(t *testing.T) {
++			binary := filepath.Join(t.TempDir(), program)
++			build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/"+program)
++			build.Dir = root
++			build.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
++			if output, err := build.CombinedOutput(); err != nil {
++				t.Fatalf("build executable: %v\n%s", err, output)
++			}
++			for _, want := range []bool{true, false} {
++				t.Run(fmt.Sprint(want), func(t *testing.T) {
++					currentAssetID := assetID
++					if !want {
++						currentAssetID = "89000000-0000-4000-8000-000000000002"
++					}
++					execSQL(`DELETE FROM video_assets WHERE lesson_id=$1`, lessonID)
++					state := "ready"
++					if program == "media-worker" {
++						state = "queued"
++					}
++					execSQL(`INSERT INTO video_assets(id,lesson_id,generation,state,declared_bytes,received_bytes,original_name,renditions,expires_at,created_at,updated_at) VALUES($1,$2,1,$3,1024,1024,'fixture.mp4',ARRAY['360p'],now()+interval '1 hour',now()-interval '1 hour',now()-interval '1 hour')`, currentAssetID, lessonID, state)
++					runEnv := map[string]string{}
++					for k, v := range env {
++						runEnv[k] = v
++					}
++					runEnv["ASR_MULTILINGUAL_DEFAULT"] = fmt.Sprint(want)
++					command := "mkdir -p /media; exec /fixture-program"
++					if program == "media-worker" {
++						// Produce a real two-second audio-bearing source, then let startup recovery enqueue it.
++						command = "mkdir -p /media/source/" + currentAssetID + "; ffmpeg -v error -f lavfi -i color=c=black:s=640x360:r=10 -f lavfi -i sine=frequency=440 -t 2 -c:v libx264 -pix_fmt yuv420p -c:a aac -f mp4 /media/source/" + currentAssetID + "/original && exec /fixture-program"
++					}
++					process, err := containers.Start(ctx, func(ctx context.Context) (testcontainers.Container, error) {
++						return testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: testcontainers.ContainerRequest{Image: "courses-integration-go:1.27.2-ffmpeg", Entrypoint: []string{"/bin/sh", "-c"}, Cmd: []string{command}, Env: runEnv, Files: []testcontainers.ContainerFile{{HostFilePath: binary, ContainerFilePath: "/fixture-program", FileMode: 0755}}, ExposedPorts: []string{"8080/tcp"}, Networks: []string{netw.Name}, WaitingFor: wait.ForHTTP("/readyz").WithPort("8080/tcp").WithStartupTimeout(30 * time.Second)}, Started: true})
++					})
++					if process != nil {
++						defer func() {
++							if err := process.Terminate(context.Background()); err != nil {
++								t.Error(err)
++							}
++						}()
++					}
++					if err != nil {
++						pgLogs, _ := pg.Logs(ctx)
++						if pgLogs != nil {
++							output, _ := io.ReadAll(pgLogs)
++							pgLogs.Close()
++							t.Logf("postgres logs: %s", output)
++						}
++						if process != nil {
++							logs, _ := process.Logs(ctx)
++							if logs != nil {
++								defer logs.Close()
++								output, _ := io.ReadAll(logs)
++								t.Logf("process logs: %s", output)
++							}
++						}
++						t.Fatal(err)
++					}
++					if program == "api" {
++						host, err := process.Host(ctx)
++						if err != nil {
++							t.Fatal(err)
++						}
++						port, err := process.MappedPort(ctx, "8080/tcp")
++						if err != nil {
++							t.Fatal(err)
++						}
++						endpoint := "http://" + host + ":" + port.Port() + "/api/v1/admin/videos/" + currentAssetID + "/audio-tracks"
++						client := &http.Client{Timeout: 5 * time.Second}
++						request := func(method, body string) *http.Response {
++							t.Helper()
++							req, err := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(body))
++							if err != nil {
++								t.Fatal(err)
++							}
++							req.AddCookie(&http.Cookie{Name: "courseforge_session", Value: token})
++							req.Header.Set("Origin", "http://localhost")
++							req.Header.Set("Content-Type", "application/json")
++							response, err := client.Do(req)
++							if err != nil {
++								t.Fatal(err)
++							}
++							return response
++						}
++						response := request("GET", "")
++						var list struct {
++							MultilingualDefault *bool `json:"multilingualDefault"`
++						}
++						err = json.NewDecoder(response.Body).Decode(&list)
++						response.Body.Close()
++						if response.StatusCode != 200 || err != nil || list.MultilingualDefault == nil || *list.MultilingualDefault != want {
++							t.Fatalf("API default=%v status=%d err=%v want=%v", list.MultilingualDefault, response.StatusCode, err, want)
++						}
++						response = request("POST", `{"declaredBytes":1024,"originalName":"audio.aac","language":"uk","label":"Ukr"}`)
++						output, _ := io.ReadAll(response.Body)
++						response.Body.Close()
++						if response.StatusCode != 201 {
++							t.Fatalf("mint status=%d body=%s", response.StatusCode, output)
++						}
++						var stored bool
++						if err := pool.QueryRow(ctx, `SELECT multilingual FROM audio_tracks WHERE video_asset_id=$1`, currentAssetID).Scan(&stored); err != nil {
++							t.Fatal(err)
++						}
++						if stored != want {
++							t.Fatalf("API minted multilingual=%v want=%v", stored, want)
++						}
++					} else {
++						// LISTEN/NOTIFY provides a completion event from the persisted production write.
++						// The row may already be ready by the time LISTEN is installed, so check it before waiting.
++						listener, err := pool.Acquire(ctx)
++						if err != nil {
++							t.Fatal(err)
++						}
++						defer listener.Release()
++						if _, err := listener.Exec(ctx, "LISTEN startup_track"); err != nil {
++							t.Fatal(err)
++						}
++						done, stop := context.WithTimeout(ctx, 45*time.Second)
++						defer stop()
++						for {
++							var stored bool
++							var state string
++							err := pool.QueryRow(done, `SELECT a.state,t.multilingual FROM video_assets a LEFT JOIN audio_tracks t ON t.video_asset_id=a.id WHERE a.id=$1`, currentAssetID).Scan(&state, &stored)
++							if err == nil && state == "ready" {
++								if stored != want {
++									t.Fatalf("worker embedded multilingual=%v want=%v", stored, want)
++								}
++								break
++							}
++							if state == "failed" {
++								t.Fatalf("worker transcode failed: %v", err)
++							}
++							if _, err := listener.Conn().WaitForNotification(done); err != nil {
++								t.Fatalf("embedded track not published: %v (state=%s)", err, state)
++							}
++						}
++					}
++				})
++			}
++		})
++	}
++}
+diff --git a/frontend/src/adapters/api/e2e-reset.test.ts b/frontend/src/adapters/api/e2e-reset.test.ts
+new file mode 100644
+index 0000000..e0d596c
+--- /dev/null
++++ b/frontend/src/adapters/api/e2e-reset.test.ts
+@@ -0,0 +1,113 @@
++import { test, expect } from '@rstest/core';
++import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { resolve, join } from 'node:path';
++import { spawnSync } from 'node:child_process';
++import { z } from 'zod';
++
++const resultSchema = z.object({
++  volumes: z.array(z.tuple([z.string(), z.string(), z.string()])),
++  calls: z.array(z.array(z.string())),
++  lists: z.number(),
++});
++
++for (const name of [
++  'partial resolver failure',
++  'absent lookup failure',
++  'sorted matches',
++  'resolved summary',
++  'project key collision',
++  'missing volumes diagnostic',
++  'renamed label match',
++]) {
++  test(`e2e-reset ${name}`, () => {
++    const project = name === 'project key collision' ? 'postgres-data' : 'resolved-project';
++    const configured: Record<string, { name: string } | null> = {
++      'postgres-data': { name: 'custom-postgres-data' },
++      'redis-data': { name: 'custom-redis-data' },
++      'media-data': { name: 'custom-media-data' },
++      'prometheus-data': { name: 'custom-prometheus-data' },
++    };
++    const volumes = [
++      ['custom-postgres-data', '', ''],
++      ['custom-redis-data', '', ''],
++      ['custom-media-data', '', ''],
++      ['custom-prometheus-data', project, 'prometheus-data'],
++      ['foreign', 'another-project', 'postgres-data'],
++    ];
++    if (name === 'partial resolver failure') configured.zbad = null;
++    if (name === 'absent lookup failure') volumes.splice(0);
++    if (name === 'sorted matches')
++      volumes.unshift(
++        ['alias-2', project, 'postgres-data'],
++        ['alias-10', project, 'postgres-data'],
++      );
++    if (name === 'renamed label match') volumes[1] = ['renamed-redis', project, 'redis-data'];
++    const dir = mkdtempSync(join(tmpdir(), 'courses-reset-'));
++    try {
++      const statePath = join(dir, 'state.json');
++      writeFileSync(
++        statePath,
++        JSON.stringify({
++          config:
++            name === 'missing volumes diagnostic'
++              ? { name: project }
++              : { name: project, volumes: configured },
++          volumes,
++          calls: [],
++          lists: 0,
++          failFirstList: name === 'absent lookup failure',
++        }),
++      );
++      writeFileSync(join(dir, 'docker'), '#!/bin/sh\nexec "$RESET_NODE" "$RESET_HELPER" "$@"\n', {
++        mode: 0o700,
++      });
++      const run = spawnSync(
++        'make',
++        ['--no-print-directory', '-f', resolve('..', 'Makefile'), 'e2e-reset'],
++        {
++          cwd: dir,
++          encoding: 'utf8',
++          timeout: 20000,
++          env: {
++            ...process.env,
++            PATH: `${dir}:${process.env.PATH}`,
++            RESET_NODE: process.execPath,
++            RESET_HELPER: resolve('src/adapters/api/test-fixtures/reset-docker.mjs'),
++            RESET_TEST_STATE: statePath,
++            COMPOSE_PROJECT_NAME: 'wrong-environment-project',
++            MAKEFLAGS: '',
++            MFLAGS: '',
++          },
++        },
++      );
++      expect(run.error).toBeUndefined();
++      const output = run.stdout + run.stderr;
++      const final = resultSchema.parse(JSON.parse(readFileSync(statePath, 'utf8')));
++      if (name === 'partial resolver failure') {
++        expect(run.status, output).not.toBe(0);
++        expect(final.lists, 'resolver failure must abort before listing').toBe(0);
++      } else if (name === 'absent lookup failure') {
++        expect(run.status, 'failed empty lookup must fail').not.toBe(0);
++        expect(output).toContain('cannot list volumes');
++      } else if (name === 'missing volumes diagnostic') {
++        expect(run.status).not.toBe(0);
++        expect(final.lists).toBe(0);
++        expect(output).toContain('postgres-data is not a volume of project resolved-project');
++      } else {
++        expect(run.status, output).toBe(0);
++        expect(final.volumes, 'only prometheus and foreign volumes remain').toEqual([
++          ['custom-prometheus-data', project, 'prometheus-data'],
++          ['foreign', 'another-project', 'postgres-data'],
++        ]);
++        expect(output).toContain(`e2e-reset: project ${project} done (prometheus-data kept)`);
++        if (name === 'sorted matches') {
++          const removal = final.calls.find((call) => call[0] === 'volume' && call[1] === 'rm');
++          expect(removal).toEqual(['volume', 'rm', 'alias-10', 'alias-2', 'custom-postgres-data']);
++        }
++      }
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++}
+diff --git a/frontend/src/adapters/api/test-fixtures/reset-docker.mjs b/frontend/src/adapters/api/test-fixtures/reset-docker.mjs
+new file mode 100644
+index 0000000..863bdb4
+--- /dev/null
++++ b/frontend/src/adapters/api/test-fixtures/reset-docker.mjs
+@@ -0,0 +1,40 @@
++// Fake Docker for the reset subprocess test; never calls a real Docker daemon.
++import { readFileSync, writeFileSync } from 'node:fs';
++const path = process.env.RESET_TEST_STATE;
++const state = JSON.parse(readFileSync(path, 'utf8'));
++const args = process.argv.slice(2);
++state.calls.push(args);
++function finish(code = 0) {
++  writeFileSync(path, JSON.stringify(state));
++  process.exit(code);
++}
++if (args[0] === 'compose') {
++  if (
++    JSON.stringify(args.slice(1, 5)) !==
++    JSON.stringify(['-f', 'docker-compose.yml', '-f', 'docker-compose.e2e.yml'])
++  )
++    finish(90);
++  if (JSON.stringify(args.slice(5)) === JSON.stringify(['down', '--remove-orphans'])) finish();
++  if (JSON.stringify(args.slice(5)) !== JSON.stringify(['config', '--format', 'json'])) finish(91);
++  console.log(JSON.stringify(state.config));
++  finish();
++}
++if (args[0] === 'volume' && args[1] === 'ls' && args[2] === '--format' && args.length === 4) {
++  state.lists++;
++  if (state.failFirstList && state.lists === 1) finish(8);
++  for (const [name, project, volume] of state.volumes) {
++    console.log(
++      args[3]
++        .replaceAll('{{.Name}}', name)
++        .replaceAll('{{.Label "com.docker.compose.project"}}', project)
++        .replaceAll('{{.Label "com.docker.compose.volume"}}', volume),
++    );
++  }
++  finish();
++}
++if (args[0] === 'volume' && args[1] === 'rm' && args.length > 2) {
++  state.volumes = state.volumes.filter(([name]) => !args.slice(2).includes(name));
++  finish();
++}
++console.error('Unexpected Docker command', args);
++finish(92);

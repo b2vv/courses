@@ -36,9 +36,9 @@ type Transcriber interface {
 	// stop the subprocess: a task that outlives its deadline holds a slot for tens of minutes
 	// (D8-9), and a cancelled context that only abandons the pipe would leak the engine.
 	//
-	// `languageHint` is empty when the author chose `auto`. A non-empty hint is the author
-	// overriding detection, not a suggestion.
-	Transcribe(ctx context.Context, audioPath string, languageHint domain.Language) (Recognition, error)
+	// Track language and multilingual mode come from the claim snapshot. The engine adapter
+	// derives its language hint from that track (MS-D4), without an author override.
+	Transcribe(ctx context.Context, audioPath string, trackLanguage domain.Language, multilingual bool) (Recognition, error)
 }
 
 // AudioSource extracts the audio the engine needs from the video the media module owns.

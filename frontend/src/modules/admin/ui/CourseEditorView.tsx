@@ -22,7 +22,6 @@ import type {
   CourseTreeEdit,
   InstructorOption,
 } from '../../../contracts/course';
-import type { DraftSegment } from '../../transcript';
 import type { AuthenticatedUser } from '../../identity';
 import {
   Button,
@@ -36,13 +35,12 @@ import {
   TextField,
 } from '../../../presentation/ui';
 import { CoursePriceField } from './CoursePriceField';
-import { LessonDraftField } from '../../transcript';
+import { LessonLanguageTabs } from './LessonLanguageTabs';
+import type { LessonLanguageServices } from './LessonLanguageTabs';
 import type { CourseEditorDrafts } from '../../transcript';
 import { LessonVideoField } from '../../media';
 import { DocumentLibrary } from './DocumentLibrary';
-import { LessonTranscriptField } from '../../transcript';
 import type { CourseEditorTranscripts } from '../../transcript';
-import type { TranscriptDraftOffer } from '../../transcript';
 import type { CourseEditorVideo } from '../../media';
 
 const statusVariant: Record<CourseStatus, string> = {
@@ -80,6 +78,7 @@ type CourseEditorViewProps = {
   video?: CourseEditorVideo;
   drafts?: CourseEditorDrafts;
   transcripts?: CourseEditorTranscripts;
+  languages?: LessonLanguageServices;
   /** Admin-only sections, rendered after the course's own (e.g. granting access). */
   adminTools?: ReactNode;
 };
@@ -295,15 +294,6 @@ function OwnerField({
   );
 }
 
-/**
- * A draft segment carries no `documentIds` — ASR has no way to know about the course's document
- * library — so a loaded draft always starts with none, exactly like a line the author adds by
- * hand.
- */
-function toTranscriptSegment(segment: DraftSegment) {
-  return { ...segment, documentIds: [] };
-}
-
 function PreviewField({
   control,
   name,
@@ -328,6 +318,7 @@ function LessonFields({
   video,
   drafts,
   transcripts,
+  languages,
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
@@ -336,6 +327,7 @@ function LessonFields({
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
+  languages: LessonLanguageServices | undefined;
   onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
@@ -348,17 +340,9 @@ function LessonFields({
     .watch('modules')
     .reduce((total, module) => total + module.lessons.length, 0);
 
-  // A draft the author asked to load, keyed by lesson: `LessonDraftField` and
-  // `LessonTranscriptField` are siblings below, and this is the shortest-lived state that can
-  // pass one's callback to the other's prop without either knowing about the other.
-  const [loadedDrafts, setLoadedDrafts] = useState<Record<string, TranscriptDraftOffer>>({});
-  const [draftTokens, setDraftTokens] = useState<Record<string, string | undefined>>({});
-
   return (
     <div className="admin-lessons">
       {lessons.fields.map((lesson, lessonIndex) => {
-        const draftOffer = loadedDrafts[lesson.id];
-        const currentDraftUpdatedAt = draftTokens[lesson.id];
         return (
           <fieldset className="admin-lesson" key={lesson.formKey}>
             <legend>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</legend>
@@ -389,46 +373,14 @@ function LessonFields({
                 {...video}
               />
             )}
-            {drafts !== undefined && savedLessonIds.has(lesson.id) && (
-              <LessonDraftField
+            {savedLessonIds.has(lesson.id) && (
+              <LessonLanguageTabs
                 lessonId={lesson.id}
-                {...drafts}
-                onLoadDraft={(segments, language, updatedAt) =>
-                  setLoadedDrafts((current) => ({
-                    ...current,
-                    [lesson.id]: {
-                      segments: segments.map(toTranscriptSegment),
-                      language,
-                      updatedAt,
-                    },
-                  }))
-                }
-                onDraftTokenChange={(updatedAt) =>
-                  setDraftTokens((current) =>
-                    current[lesson.id] === updatedAt
-                      ? current
-                      : { ...current, [lesson.id]: updatedAt },
-                  )
-                }
-              />
-            )}
-            {transcripts !== undefined && savedLessonIds.has(lesson.id) && (
-              <LessonTranscriptField
-                lessonId={lesson.id}
-                {...transcripts}
-                {...(draftOffer === undefined ? {} : { draftOffer })}
-                {...(currentDraftUpdatedAt === undefined
-                  ? {}
-                  : { draftUpdatedAt: currentDraftUpdatedAt })}
+                video={video}
+                drafts={drafts}
+                transcripts={transcripts}
+                languages={languages}
                 onTranscriptKnown={onTranscriptKnown}
-                onDraftOfferHandled={() =>
-                  setLoadedDrafts((current) => {
-                    if (current[lesson.id] === undefined) return current;
-                    const next = { ...current };
-                    delete next[lesson.id];
-                    return next;
-                  })
-                }
               />
             )}
             <div className="admin-row-actions">
@@ -482,6 +434,7 @@ function ModuleFields({
   video,
   drafts,
   transcripts,
+  languages,
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
@@ -489,6 +442,7 @@ function ModuleFields({
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
   transcripts: CourseEditorTranscripts | undefined;
+  languages: LessonLanguageServices | undefined;
   onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
@@ -521,6 +475,7 @@ function ModuleFields({
               video={video}
               drafts={drafts}
               transcripts={transcripts}
+              languages={languages}
               onTranscriptKnown={onTranscriptKnown}
             />
             <div className="admin-row-actions">
@@ -579,6 +534,7 @@ export function CourseEditorView({
   video,
   drafts,
   transcripts,
+  languages,
   adminTools,
 }: CourseEditorViewProps) {
   const { t } = useTranslation();
@@ -904,6 +860,7 @@ export function CourseEditorView({
                 video={video}
                 drafts={drafts}
                 transcripts={transcripts}
+                languages={languages}
                 onTranscriptKnown={onTranscriptKnown}
               />
             </div>

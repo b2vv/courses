@@ -16,6 +16,7 @@ import (
 	mediafilesystem "courses/internal/media/adapters/filesystem"
 	mediapostgres "courses/internal/media/adapters/postgres"
 	mediaapplication "courses/internal/media/application"
+	"courses/platform/config"
 	"courses/platform/httpserver"
 	"courses/platform/observability"
 	redisinfrastructure "courses/platform/redis"
@@ -49,6 +50,10 @@ func main() {
 }
 
 func run(ctx context.Context, logger *slog.Logger) error {
+	multilingualDefault, err := config.ASRMultilingualDefault(os.Getenv)
+	if err != nil {
+		return err
+	}
 	dependencies, err := runtime.Open(ctx, "media-worker", logger)
 	if err != nil {
 		return err
@@ -69,7 +74,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}()
 	repository := mediapostgres.NewRepository(dependencies.Database)
 	queue := mediaasynq.NewQueue(dependencies.Redis)
-	transcode := mediaapplication.NewTranscode(repository, storage, mediaffmpeg.New(mediaRoot), queue, time.Now)
+	transcode := mediaapplication.NewTranscode(repository, storage, mediaffmpeg.New(mediaRoot), queue, multilingualDefault, time.Now)
 	if err := transcode.Recover(ctx); err != nil {
 		return errors.New("media recovery failed")
 	}

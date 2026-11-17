@@ -138,6 +138,12 @@ func TestRegenerateMastersAfterLegacyRelabel(t *testing.T) {
 		t.Fatalf("live track language after 00030 = %q, %v; want uk", language, err)
 	}
 
+	// The relabel assertions above belong to v30; the current repository also reads
+	// multilingual (v31), so run the production command on the current schema.
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatalf("upgrade before current repository: %v", err)
+	}
+
 	result, err := regenerateMasters(ctx, pool, root)
 	if err != nil || result.Regenerated != 1 || len(result.Failed) != 0 || len(result.Skipped) != 0 {
 		t.Fatalf("first run = %+v, %v; want exactly the live asset regenerated", result, err)

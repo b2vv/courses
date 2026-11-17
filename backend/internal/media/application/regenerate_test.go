@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestRegenerateAllMastersKeepsGoingAndClassifies(t *testing.T) {
 		written = append(written, assetID)
 		return nil
 	}}
-	service := application.NewAudioTracks(repository, writer, func() time.Time { return time.Now() })
+	service := application.NewAudioTracks(repository, writer, false, func() time.Time { return time.Now() })
 
 	result, err := service.RegenerateAllMasters(context.Background())
 	if err != nil {
@@ -64,5 +65,22 @@ func TestRegenerateAllMastersKeepsGoingAndClassifies(t *testing.T) {
 	repository.listReadyAssetIDs = func(context.Context) ([]string, error) { return nil, errors.New("database down") }
 	if _, err := service.RegenerateAllMasters(context.Background()); err == nil {
 		t.Fatal("a failed listing must be an error")
+	}
+}
+
+func TestMintAudioTicketCarriesMultilingualDefault(t *testing.T) {
+	t.Parallel()
+	for _, multilingual := range []bool{false, true} {
+		t.Run(fmt.Sprint(multilingual), func(t *testing.T) {
+			repository := &fakeRepository{}
+			service := application.NewAudioTracks(repository, nil, multilingual, func() time.Time { return time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC) })
+			track, err := service.MintAudioTicket(context.Background(), domain.Actor{}, mediaAssetID, 12, "dub.aac", "de", "Deutsch", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if repository.mintedMultilingual != multilingual || track.Multilingual != multilingual {
+				t.Fatalf("repository=%v returned=%v want %v", repository.mintedMultilingual, track.Multilingual, multilingual)
+			}
+		})
 	}
 }

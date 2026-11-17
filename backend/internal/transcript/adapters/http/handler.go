@@ -126,6 +126,8 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 		// The same answer whether the transcript exists or not, so that the refusal does not tell
 		// the caller which of the two it was.
 		httpserver.WriteError(w, r, http.StatusForbidden, "course_forbidden", "Course is not available to this account")
+	case errors.Is(err, domain.ErrTrackNotFound):
+		httpserver.WriteError(w, r, http.StatusNotFound, "track_not_found", "Track was not found")
 	case errors.Is(err, domain.ErrNotFound):
 		httpserver.WriteError(w, r, http.StatusNotFound, "lesson_not_found", "Lesson was not found")
 	case errors.Is(err, domain.ErrTranscriptModified):
@@ -133,7 +135,7 @@ func writeTranscriptError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, domain.ErrTranscriptExists):
 		httpserver.WriteError(w, r, http.StatusConflict, "transcript_exists", "This lesson already has a transcript in that language")
 	case errors.Is(err, domain.ErrAlreadyRunning):
-		httpserver.WriteError(w, r, http.StatusConflict, "already_running", "Recognition is already running for this asset")
+		httpserver.WriteError(w, r, http.StatusConflict, "already_running", "Recognition is already running for this track")
 	case errors.Is(err, domain.ErrSegmentLimit):
 		httpserver.WriteError(w, r, http.StatusBadRequest, "transcript_segment_limit", "A transcript accepts at most 5000 segments")
 	case errors.Is(err, domain.ErrTextLimit):

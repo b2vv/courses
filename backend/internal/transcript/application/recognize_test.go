@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 var testLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 const (
+	trackID    = "70000000-0000-4000-8000-000000000001"
 	lessonID   = "11111111-1111-4111-8111-111111111111"
 	assetID    = "22222222-2222-4222-8222-222222222222"
 	generation = int32(1)
@@ -60,24 +62,22 @@ type fakeDrafts struct {
 	completeCalls      int
 	completeContextErr error
 	claimRequested     []bool
+	claimTracks        []string
 }
 
-func (f *fakeDrafts) GetLessonDraft(context.Context, string) (ports.LessonDraft, error) {
-	return ports.LessonDraft{}, nil
+func (f *fakeDrafts) ListLessonDrafts(context.Context, string) ([]ports.LessonDraft, error) {
+	return nil, nil
 }
 
 func (f *fakeDrafts) PendingRecognitions(_ context.Context, _ int) ([]ports.PendingRecognition, error) {
 	return f.pendingResult, f.pendingErr
 }
 
-func (f *fakeDrafts) Claim(_ context.Context, _, _ string, _ int32, requested bool, _ time.Time) (ports.ClaimedDraft, error) {
+func (f *fakeDrafts) Claim(_ context.Context, _, _ string, _ int32, track string, requested bool, _ time.Time) (ports.ClaimedDraft, error) {
 	f.claimCalls++
+	f.claimTracks = append(f.claimTracks, track)
 	f.claimRequested = append(f.claimRequested, requested)
 	return f.claimResult, f.claimErr
-}
-
-func (f *fakeDrafts) SaveDraft(context.Context, domain.TranscriptDraft, string, time.Time) (string, error) {
-	return "", nil
 }
 
 func (f *fakeDrafts) Complete(ctx context.Context, draft domain.TranscriptDraft, token string, _ time.Time) error {
@@ -92,16 +92,19 @@ func (f *fakeDrafts) Recover(context.Context, time.Time, int) ([]ports.Recovered
 	return f.recoverResult, f.recoverErr
 }
 
-func (f *fakeDrafts) LessonAsset(context.Context, string) (*ports.PendingRecognition, error) {
+func (f *fakeDrafts) LessonTrack(context.Context, string, string) (*ports.PendingRecognition, error) {
 	return nil, nil
 }
 
 type fakeTranscriber struct {
-	result ports.Recognition
-	err    error
+	result       ports.Recognition
+	err          error
+	language     domain.Language
+	multilingual bool
 }
 
-func (f *fakeTranscriber) Transcribe(context.Context, string, domain.Language) (ports.Recognition, error) {
+func (f *fakeTranscriber) Transcribe(_ context.Context, _ string, language domain.Language, multilingual bool) (ports.Recognition, error) {
+	f.language, f.multilingual = language, multilingual
 	return f.result, f.err
 }
 
@@ -109,10 +112,12 @@ type fakeAudio struct {
 	path     string
 	err      error
 	released bool
+	calls    int
 	leaf     string
 }
 
 func (f *fakeAudio) Extract(_ context.Context, _, leaf string) (string, func(), error) {
+	f.calls++
 	f.leaf = leaf
 	if f.err != nil {
 		return "", nil, f.err
@@ -139,14 +144,14 @@ func TestProcessHappyPath(t *testing.T) {
 	t.Parallel()
 	segments := testSegments(2)
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{Language: "uk", Segments: segments, SpeechSeconds: 30.0},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +181,7 @@ func TestProcessNotClaimedReturnsNil(t *testing.T) {
 	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil || outcome.Failed {
 		t.Fatalf("err=%v outcome=%+v", err, outcome)
@@ -189,14 +194,14 @@ func TestProcessNotClaimedReturnsNil(t *testing.T) {
 func TestProcessNoSpeech(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{SpeechSeconds: 0.3},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil || outcome.Failed {
 		t.Fatalf("err=%v outcome=%+v", err, outcome)
@@ -207,19 +212,22 @@ func TestProcessNoSpeech(t *testing.T) {
 	if drafts.completedDraft.State != domain.DraftNoSpeech {
 		t.Fatalf("state=%s want=no_speech", drafts.completedDraft.State)
 	}
+	if drafts.completeCalls != 1 || drafts.completedDraft.TrackID != trackID {
+		t.Fatalf("no-speech completion calls=%d track=%q; want one completion for 70000000-0000-4000-8000-000000000001", drafts.completeCalls, drafts.completedDraft.TrackID)
+	}
 }
 
 func TestProcessSourceNotFound(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{
 		err: domain.ErrNotFound,
 	}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -235,14 +243,14 @@ func TestProcessSourceNotFound(t *testing.T) {
 func TestProcessEngineError(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		err: errors.New("engine crashed"),
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +266,7 @@ func TestProcessEngineError(t *testing.T) {
 func TestProcessContextCancelledDuringTranscribe(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -267,7 +275,7 @@ func TestProcessContextCancelledDuringTranscribe(t *testing.T) {
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	_, err := r.Process(ctx, ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err=%v want=context.Canceled", err)
@@ -280,7 +288,7 @@ func TestProcessContextCancelledDuringTranscribe(t *testing.T) {
 func TestProcessContextCancelledDuringExtract(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -289,7 +297,7 @@ func TestProcessContextCancelledDuringExtract(t *testing.T) {
 	}, &fakeQueue{}, testClock, testLogger)
 
 	_, err := r.Process(ctx, ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err=%v want=context.Canceled", err)
@@ -298,12 +306,12 @@ func TestProcessContextCancelledDuringExtract(t *testing.T) {
 
 func TestProcessDeadlineDuringExtractFailsDraft(t *testing.T) {
 	t.Parallel()
-	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken}}
+	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}}}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{err: context.DeadlineExceeded}, &fakeQueue{}, testClock, testLogger)
 
-	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation})
+	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID})
 	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
 		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
 	}
@@ -317,12 +325,12 @@ func TestProcessDeadlineDuringExtractFailsDraft(t *testing.T) {
 
 func TestProcessDeadlineDuringTranscribeFailsDraft(t *testing.T) {
 	t.Parallel()
-	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken}}
+	drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}}}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	r := NewRecognize(drafts, &fakeTranscriber{err: context.DeadlineExceeded}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
-	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation})
+	outcome, err := r.Process(ctx, ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID})
 	if err != nil || !outcome.Failed || outcome.Reason != "timeout" {
 		t.Fatalf("outcome=%+v err=%v want failed timeout", outcome, err)
 	}
@@ -346,14 +354,14 @@ func TestProcessSegmentLimitPermanent(t *testing.T) {
 		}
 	}
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{Language: "uk", Segments: segments, SpeechSeconds: 3600},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -369,7 +377,7 @@ func TestProcessSegmentLimitPermanent(t *testing.T) {
 func TestProcessSupersededOnComplete(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 		completeErr: domain.ErrDraftSuperseded,
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
@@ -377,7 +385,7 @@ func TestProcessSupersededOnComplete(t *testing.T) {
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil || outcome.Failed {
 		t.Fatalf("superseded must be silent success: err=%v outcome=%+v", err, outcome)
@@ -387,7 +395,7 @@ func TestProcessSupersededOnComplete(t *testing.T) {
 func TestProcessNotFoundOnComplete(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 		completeErr: domain.ErrNotFound,
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
@@ -395,7 +403,7 @@ func TestProcessNotFoundOnComplete(t *testing.T) {
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil || outcome.Failed {
 		t.Fatalf("not-found must be silent success: err=%v outcome=%+v", err, outcome)
@@ -406,14 +414,14 @@ func TestProcessReleasesAudioOnSuccess(t *testing.T) {
 	t.Parallel()
 	audio := &fakeAudio{path: "/tmp/audio.wav"}
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 5.0},
 	}, audio, &fakeQueue{}, testClock, testLogger)
 
 	r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if !audio.released {
 		t.Fatal("audio must be released after transcription")
@@ -424,66 +432,51 @@ func TestProcessReleasesAudioOnEngineError(t *testing.T) {
 	t.Parallel()
 	audio := &fakeAudio{path: "/tmp/audio.wav"}
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		err: errors.New("engine failed"),
 	}, audio, &fakeQueue{}, testClock, testLogger)
 
 	r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if !audio.released {
 		t.Fatal("audio must be released after engine error")
 	}
 }
 
-func TestProcessPassesLanguageHint(t *testing.T) {
+func TestProcessPassesClaimTrackSnapshot(t *testing.T) {
 	t.Parallel()
-	var passedHint domain.Language
-	transcriber := &fakeTranscriber{
-		result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 5.0},
+	for _, multilingual := range []bool{false, true} {
+		t.Run(fmt.Sprint(multilingual), func(t *testing.T) {
+			transcriber := &fakeTranscriber{result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 5}}
+			drafts := &fakeDrafts{claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "de", TrackMultilingual: multilingual}}}
+			r := NewRecognize(drafts, transcriber, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
+			if _, err := r.Process(context.Background(), ports.RecognitionJob{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID}); err != nil {
+				t.Fatal(err)
+			}
+			if transcriber.language != "de" || transcriber.multilingual != multilingual {
+				t.Fatalf("engine received %q/%v, want claim de/%v", transcriber.language, transcriber.multilingual, multilingual)
+			}
+			if drafts.completedDraft.TrackLanguage != "de" || drafts.completedDraft.TrackMultilingual != multilingual {
+				t.Fatalf("completed draft lost claim snapshot: %+v", drafts.completedDraft)
+			}
+		})
 	}
-	original := transcriber.Transcribe
-	_ = original
-	captureTranscriber := &capturingTranscriber{
-		inner:  transcriber,
-		onCall: func(hint domain.Language) { passedHint = hint },
-	}
-	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
-	}
-	r := NewRecognize(drafts, captureTranscriber, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
-
-	r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation, Language: "uk",
-	})
-	if passedHint != "uk" {
-		t.Fatalf("hint=%q want=uk", passedHint)
-	}
-}
-
-type capturingTranscriber struct {
-	inner  *fakeTranscriber
-	onCall func(domain.Language)
-}
-
-func (c *capturingTranscriber) Transcribe(ctx context.Context, path string, hint domain.Language) (ports.Recognition, error) {
-	c.onCall(hint)
-	return c.inner.Transcribe(ctx, path, hint)
 }
 
 func TestProcessNoSpeechOutcomeFlag(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{SpeechSeconds: 0.3},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -499,14 +492,14 @@ func TestProcessNoSpeechOutcomeFlag(t *testing.T) {
 func TestProcessBoundaryAtExactlyOneSecond(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{Language: "uk", Segments: testSegments(1), SpeechSeconds: 1.0},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -527,7 +520,7 @@ func TestProcessClaimError(t *testing.T) {
 	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
 
 	_, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if !errors.Is(err, domain.ErrDependencyUnavailable) {
 		t.Fatalf("err=%v want=dependency_unavailable", err)
@@ -540,14 +533,14 @@ func TestProcessInvalidOutput(t *testing.T) {
 		ID: "", StartMs: 0, EndMs: 1000, Text: "hello",
 	}
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{
 		result: ports.Recognition{Language: "uk", Segments: []domain.Segment{badSegment}, SpeechSeconds: 5.0},
 	}, &fakeAudio{path: "/tmp/audio.wav"}, &fakeQueue{}, testClock, testLogger)
 
 	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
-		LessonID: lessonID, AssetID: assetID, Generation: generation,
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -564,7 +557,7 @@ func TestEnqueuePendingEnqueuesJobs(t *testing.T) {
 	dur := float64(120)
 	drafts := &fakeDrafts{
 		pendingResult: []ports.PendingRecognition{
-			{LessonID: lessonID, AssetID: assetID, Generation: generation, DurationSeconds: &dur},
+			{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, DurationSeconds: &dur},
 		},
 	}
 	queue := &fakeQueue{}
@@ -584,9 +577,9 @@ func TestEnqueuePendingEnqueuesJobs(t *testing.T) {
 func TestEnqueuePendingFailsNilDuration(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
-		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken},
+		claimResult: ports.ClaimedDraft{Claimed: true, Token: claimToken, Draft: domain.TranscriptDraft{TrackID: trackID, TrackLanguage: "uk"}},
 		pendingResult: []ports.PendingRecognition{
-			{LessonID: lessonID, AssetID: assetID, Generation: generation, DurationSeconds: nil},
+			{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, DurationSeconds: nil},
 		},
 	}
 	queue := &fakeQueue{}
@@ -615,8 +608,8 @@ func TestEnqueuePendingContinuesOnQueueError(t *testing.T) {
 	dur2 := float64(120)
 	drafts := &fakeDrafts{
 		pendingResult: []ports.PendingRecognition{
-			{LessonID: lessonID, AssetID: assetID, Generation: 1, DurationSeconds: &dur1},
-			{LessonID: "33333333-3333-4333-8333-333333333333", AssetID: "44444444-4444-4444-8444-444444444444", Generation: 1, DurationSeconds: &dur2},
+			{LessonID: lessonID, AssetID: assetID, Generation: 1, TrackID: trackID, DurationSeconds: &dur1},
+			{LessonID: "33333333-3333-4333-8333-333333333333", AssetID: "44444444-4444-4444-8444-444444444444", Generation: 1, TrackID: trackID, DurationSeconds: &dur2},
 		},
 	}
 	callCount := 0
@@ -647,8 +640,8 @@ func TestEnqueuePendingSkipsAlreadyRunningAndContinues(t *testing.T) {
 	secondLesson := "33333333-3333-4333-8333-333333333333"
 	secondAsset := "44444444-4444-4444-8444-444444444444"
 	drafts := &fakeDrafts{pendingResult: []ports.PendingRecognition{
-		{LessonID: lessonID, AssetID: assetID, Generation: 1, DurationSeconds: &dur},
-		{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, DurationSeconds: &dur},
+		{LessonID: lessonID, AssetID: assetID, Generation: 1, TrackID: trackID, DurationSeconds: &dur},
+		{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, TrackID: trackID, DurationSeconds: &dur},
 	}}
 	queue := &fakeQueue{}
 	callCount := 0
@@ -693,7 +686,7 @@ func TestRecoverFailsTimedOutDraft(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
 		recoverResult: []ports.RecoveredDraft{
-			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, State: domain.DraftRunning}, Token: claimToken},
 		},
 	}
 	r := NewRecognize(drafts, &fakeTranscriber{}, &fakeAudio{}, &fakeQueue{}, testClock, testLogger)
@@ -743,7 +736,7 @@ func TestRecoverSupersededIsSilent(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
 		recoverResult: []ports.RecoveredDraft{
-			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, State: domain.DraftRunning}, Token: claimToken},
 		},
 		completeErr: domain.ErrDraftSuperseded,
 	}
@@ -758,7 +751,7 @@ func TestRecoverNotFoundIsSilent(t *testing.T) {
 	t.Parallel()
 	drafts := &fakeDrafts{
 		recoverResult: []ports.RecoveredDraft{
-			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, State: domain.DraftRunning}, Token: claimToken},
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID, State: domain.DraftRunning}, Token: claimToken},
 		},
 		completeErr: domain.ErrNotFound,
 	}
@@ -776,8 +769,8 @@ func TestRecoverContinuesOnCompleteError(t *testing.T) {
 	completeCallCount := 0
 	drafts := &fakeDrafts{
 		recoverResult: []ports.RecoveredDraft{
-			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: 1, State: domain.DraftRunning}, Token: "tok1"},
-			{Draft: domain.TranscriptDraft{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, State: domain.DraftRunning}, Token: "tok2"},
+			{Draft: domain.TranscriptDraft{LessonID: lessonID, AssetID: assetID, Generation: 1, TrackID: trackID, State: domain.DraftRunning}, Token: "tok1"},
+			{Draft: domain.TranscriptDraft{LessonID: secondLesson, AssetID: secondAsset, Generation: 1, TrackID: trackID, State: domain.DraftRunning}, Token: "tok2"},
 		},
 	}
 	errOnce := &errorOnceDrafts{
@@ -805,17 +798,14 @@ type errorOnceDrafts struct {
 	onComplete func() error
 }
 
-func (e *errorOnceDrafts) GetLessonDraft(ctx context.Context, id string) (ports.LessonDraft, error) {
-	return e.inner.GetLessonDraft(ctx, id)
+func (e *errorOnceDrafts) ListLessonDrafts(ctx context.Context, id string) ([]ports.LessonDraft, error) {
+	return e.inner.ListLessonDrafts(ctx, id)
 }
 func (e *errorOnceDrafts) PendingRecognitions(ctx context.Context, limit int) ([]ports.PendingRecognition, error) {
 	return e.inner.PendingRecognitions(ctx, limit)
 }
-func (e *errorOnceDrafts) Claim(ctx context.Context, l, a string, g int32, requested bool, now time.Time) (ports.ClaimedDraft, error) {
-	return e.inner.Claim(ctx, l, a, g, requested, now)
-}
-func (e *errorOnceDrafts) SaveDraft(ctx context.Context, d domain.TranscriptDraft, t string, now time.Time) (string, error) {
-	return e.inner.SaveDraft(ctx, d, t, now)
+func (e *errorOnceDrafts) Claim(ctx context.Context, l, a string, g int32, track string, requested bool, now time.Time) (ports.ClaimedDraft, error) {
+	return e.inner.Claim(ctx, l, a, g, track, requested, now)
 }
 func (e *errorOnceDrafts) Complete(ctx context.Context, d domain.TranscriptDraft, t string, now time.Time) error {
 	return e.onComplete()
@@ -823,8 +813,8 @@ func (e *errorOnceDrafts) Complete(ctx context.Context, d domain.TranscriptDraft
 func (e *errorOnceDrafts) Recover(ctx context.Context, now time.Time, limit int) ([]ports.RecoveredDraft, error) {
 	return e.inner.Recover(ctx, now, limit)
 }
-func (e *errorOnceDrafts) LessonAsset(ctx context.Context, id string) (*ports.PendingRecognition, error) {
-	return e.inner.LessonAsset(ctx, id)
+func (e *errorOnceDrafts) LessonTrack(ctx context.Context, id, track string) (*ports.PendingRecognition, error) {
+	return e.inner.LessonTrack(ctx, id, track)
 }
 
 // --- TaskTimeout tests ---
@@ -862,4 +852,29 @@ func padHex(n int) string {
 		n /= 16
 	}
 	return string(hex)
+}
+
+func TestProcessSupersededOnClaim(t *testing.T) {
+	testProcessTerminalClaim(t, domain.ErrDraftSuperseded)
+}
+
+func TestProcessNotFoundOnClaim(t *testing.T) {
+	testProcessTerminalClaim(t, domain.ErrNotFound)
+}
+
+func testProcessTerminalClaim(t *testing.T, claimErr error) {
+	t.Helper()
+	t.Parallel()
+	drafts := &fakeDrafts{claimErr: claimErr}
+	audio := &fakeAudio{}
+	r := NewRecognize(drafts, &fakeTranscriber{}, audio, &fakeQueue{}, testClock, testLogger)
+	outcome, err := r.Process(context.Background(), ports.RecognitionJob{
+		LessonID: lessonID, AssetID: assetID, Generation: generation, TrackID: trackID,
+	})
+	if err != nil || outcome != (RecognizeOutcome{}) {
+		t.Fatalf("terminal Claim must be done: outcome=%+v err=%v", outcome, err)
+	}
+	if audio.calls != 0 || drafts.completeCalls != 0 {
+		t.Fatalf("Extract calls=%d Complete calls=%d; want neither", audio.calls, drafts.completeCalls)
+	}
 }

@@ -22,6 +22,7 @@ export const idleCaptureMs = 90_000;
 
 export type TranscriptRecovery = {
   readonly offer: RecoveryOffer;
+  readonly isLoaded: boolean;
   /** Restart the idle timer. Called on every edit; writes nothing by itself. */
   readonly noteChange: (lines: readonly TranscriptDraftLine[]) => void;
   /** Capture now, because the author left a field. */
@@ -32,6 +33,8 @@ export type TranscriptRecovery = {
   readonly dismiss: () => void;
   /** Only after a save the server accepted: drop the local copy and the dismissal with it. */
   readonly finalize: () => void;
+  /** Flush pending author edits, then suspend capture during a save/dialog. */
+  readonly setCapturing: (enabled: boolean) => void;
 };
 
 export type TranscriptRecoveryOptions = {
@@ -53,6 +56,21 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
   const { historyKey, store, baseline } = options;
 
   const [offer, setOffer] = useState<RecoveryOffer>({ kind: 'none' });
+  const [loaded, setLoaded] = useState<{
+    historyKey: string;
+    store: TranscriptHistoryStore;
+  } | null>(null);
+  const isLoaded = loaded?.historyKey === historyKey && loaded.store === store;
+  const hasRead = useRef(false);
+  // Ownership is scoped to this key/store visit, never inferred from a later storage read.
+  const ownership = useRef<{
+    historyKey: string;
+    store: TranscriptHistoryStore;
+    seen?: { revision: string; ready: Promise<void> };
+    written?: { revision: string; ready: Promise<void> };
+  }>({ historyKey, store });
+  const pendingLines = useRef<readonly TranscriptDraftLine[]>([]);
+  const capturing = useRef(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Props are read through a ref so that the capture callbacks stay stable: a callback that
@@ -71,14 +89,27 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
     // Read only after mount. IndexedDB does not exist during SSR, and the read is asynchronous,
     // so there is nothing for the first render to show anyway.
     let cancelled = false;
+    hasRead.current = false;
+    const owner = { historyKey, store };
+    ownership.current = owner;
     void (async () => {
       try {
         const stored = await store.read(historyKey);
         if (cancelled) return;
-        setOffer(recoveryOffer(stored, latest.current.baseline, wasDismissed(historyKey)));
+        if (stored !== null)
+          ownership.current.seen = { revision: stored.revision, ready: Promise.resolve() };
+        const next = recoveryOffer(stored, latest.current.baseline, wasDismissed(historyKey));
+        setOffer(next);
       } catch {
         // No local copy is a normal outcome, not an error worth showing.
-        if (!cancelled) setOffer({ kind: 'none' });
+        if (!cancelled) {
+          setOffer({ kind: 'none' });
+        }
+      } finally {
+        if (!cancelled) {
+          hasRead.current = true;
+          setLoaded({ historyKey, store });
+        }
       }
     })();
     return () => {
@@ -86,36 +117,87 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
     };
   }, [historyKey, store]);
 
-  useEffect(
-    () => () => {
-      if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+  const retire = useCallback(
+    async (
+      owner: typeof ownership.current,
+      version: typeof ownership.current.seen,
+      refresh: boolean,
+    ) => {
+      if (version === undefined) return;
+      try {
+        // A write may still be completing when blur/Save asks to retire it.
+        await version.ready;
+        if (await owner.store.clearIfVersion(owner.historyKey, version.revision)) return;
+        if (!refresh) return; // Save leaves a newer foreign capture for the next visit.
+        const stored = await owner.store.read(owner.historyKey);
+        if (ownership.current !== owner) return;
+        if (stored !== null) {
+          owner.seen = { revision: stored.revision, ready: Promise.resolve() };
+          forgetDismissal(owner.historyKey);
+        }
+        setOffer(recoveryOffer(stored, latest.current.baseline, false));
+      } catch {
+        // Refused storage never prevents editing or a successful server Save.
+      }
     },
     [],
   );
 
-  const capture = useCallback((lines: readonly TranscriptDraftLine[]) => {
-    const current = latest.current;
-    const directive = captureDirective(lines, current.baseline);
-    const write =
-      directive.kind === 'clear'
-        ? current.store.clear(current.historyKey)
-        : current.store.write({
-            key: current.historyKey,
-            capturedAt: Date.now(),
-            ...(current.baseline.language === undefined
-              ? {}
-              : { language: current.baseline.language }),
-            expectedUpdatedAt: current.baseline.expectedUpdatedAt,
-            ...(current.baseline.draftUpdatedAt === undefined
-              ? {}
-              : { draftUpdatedAt: current.baseline.draftUpdatedAt }),
-            lines,
+  const capture = useCallback(
+    (lines: readonly TranscriptDraftLine[]) => {
+      if (!capturing.current) return;
+      const current = latest.current;
+      const owner = ownership.current;
+      if (owner.historyKey !== current.historyKey || owner.store !== current.store) return;
+      const directive = captureDirective(lines, current.baseline);
+      if (directive.kind === 'clear') {
+        if (hasRead.current) void retire(owner, owner.seen, true);
+        return;
+      }
+      try {
+        const capturedAt = Date.now();
+        const revision = crypto.randomUUID();
+        const ready = current.store.write({
+          key: current.historyKey,
+          capturedAt,
+          revision,
+          ...(current.baseline.language === undefined
+            ? {}
+            : { language: current.baseline.language }),
+          ...(current.baseline.baseLanguage === undefined
+            ? {}
+            : { baseLanguage: current.baseline.baseLanguage }),
+          expectedUpdatedAt: current.baseline.expectedUpdatedAt,
+          ...(current.baseline.draftUpdatedAt === undefined
+            ? {}
+            : { draftUpdatedAt: current.baseline.draftUpdatedAt }),
+          ...(current.baseline.acceptedSource === undefined
+            ? {}
+            : { acceptedSource: current.baseline.acceptedSource }),
+          lines,
+        });
+        owner.seen = owner.written = { revision, ready };
+        void ready
+          .then(() => forgetDismissal(current.historyKey))
+          .catch(() => {
+            // Best-effort capture: a refused/full store must never interrupt typing.
           });
-    write.catch(() => {
-      // A quota breach is the realistic one here, because the domain permits 5000 segments of
-      // 1000 runes. It is swallowed on purpose: the author is typing, not saving.
-    });
-  }, []);
+      } catch {
+        // A store may also refuse synchronously; capture remains best-effort.
+      }
+    },
+    [retire],
+  );
+
+  useEffect(
+    () => () => {
+      if (idleTimer.current === null) return;
+      clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+      capture(pendingLines.current);
+    },
+    [capture],
+  );
 
   const captureNow = useCallback(
     (lines: readonly TranscriptDraftLine[]) => {
@@ -131,6 +213,9 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
   const noteChange = useCallback(
     (lines: readonly TranscriptDraftLine[]) => {
       if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+      if (!capturing.current) return;
+      pendingLines.current = lines;
       idleTimer.current = setTimeout(() => {
         idleTimer.current = null;
         capture(lines);
@@ -144,11 +229,14 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
   }, []);
 
   const dismiss = useCallback(() => {
-    rememberDismissal(latest.current.historyKey);
+    const owner = ownership.current;
+    rememberDismissal(owner.historyKey);
     setOffer({ kind: 'none' });
-  }, []);
+    void retire(owner, owner.seen, true);
+  }, [retire]);
 
   const finalize = useCallback(() => {
+    if (!hasRead.current) return;
     const current = latest.current;
     if (idleTimer.current !== null) {
       clearTimeout(idleTimer.current);
@@ -156,10 +244,30 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
     }
     forgetDismissal(current.historyKey);
     setOffer({ kind: 'none' });
-    current.store.clear(current.historyKey).catch(() => {
-      // Nothing to do: the save already succeeded, which is what the author asked for.
-    });
-  }, []);
+    const owner = ownership.current;
+    void retire(owner, owner.written, false);
+  }, [retire]);
 
-  return { offer, noteChange, captureNow, accept, dismiss, finalize };
+  const setCapturing = useCallback(
+    (enabled: boolean) => {
+      if (!enabled && idleTimer.current !== null) {
+        clearTimeout(idleTimer.current);
+        idleTimer.current = null;
+        capture(pendingLines.current);
+      }
+      capturing.current = enabled;
+    },
+    [capture],
+  );
+
+  return {
+    offer: isLoaded ? offer : { kind: 'none' },
+    isLoaded,
+    noteChange,
+    captureNow,
+    accept,
+    dismiss,
+    finalize,
+    setCapturing,
+  };
 }

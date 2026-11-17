@@ -67,7 +67,7 @@ type AssetRepository interface {
 	// verifying the actor may edit the asset's lesson's course (D-S5L1-3). The
 	// track begins in Created with the declared upload size and expiry.
 	MintAudioTrack(ctx context.Context, actor domain.Actor, assetID string,
-		declaredBytes int64, originalName, language, label string,
+		declaredBytes int64, originalName, language, label string, multilingual bool,
 		expiresAt, now time.Time) (domain.AudioTrack, error)
 
 	// AppendAudioChunk mirrors AppendChunk for an uploaded audio track: locks the
@@ -102,8 +102,10 @@ type AssetRepository interface {
 	// resulting Ready set under the asset lock before commit (D7).
 	SetDefaultAudioTrack(ctx context.Context, actor domain.Actor, assetID, trackID string, now time.Time, rewrite func(ready []domain.AudioTrack) error) error
 	// UpdateAudioTrackMetadata renames a track; a language clash with another
-	// non-failed track of the asset is ErrDuplicateLanguage (D6).
-	UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error)
+	// non-failed track of the asset is ErrDuplicateLanguage (D6). A nil multilingual
+	// preserves the stored flag. rewrite is called only when language or label changes,
+	// decided under the asset lock; a mode-only change never rewrites the master.
+	UpdateAudioTrackMetadata(ctx context.Context, actor domain.Actor, assetID, trackID, language, label string, multilingual *bool, now time.Time, rewrite func(ready []domain.AudioTrack) error) (domain.AudioTrack, error)
 	// DeleteAudioTrack removes a track, re-electing a default and regenerating the
 	// master from the remaining Ready set (rewrite) under the lock; it refuses to
 	// drop the last Ready track of a Ready asset.

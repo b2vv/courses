@@ -1,0 +1,16 @@
+import { defineConfig, devices } from '@playwright/test';
+
+// Temporary design-pass harness for MS3 (not committed). Same stand and locale as the e2e suite.
+export default defineConfig({
+  testDir: '.',
+  testMatch: ['ms3-designpass.spec.ts'],
+  workers: 1,
+  retries: 0,
+  timeout: 1_500_000,
+  outputDir: './out',
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
+    locale: 'uk-UA',
+    ...devices['Desktop Chrome'],
+  },
+});

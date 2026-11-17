@@ -1,0 +1,1148 @@
+diff --git a/frontend/src/modules/transcript/adapters/draft-repository.test.ts b/frontend/src/modules/transcript/adapters/draft-repository.test.ts
+index ffc1a88..4557c0c 100644
+--- a/frontend/src/modules/transcript/adapters/draft-repository.test.ts
++++ b/frontend/src/modules/transcript/adapters/draft-repository.test.ts
+@@ -57,6 +57,11 @@ describe('draft API repository', () => {
+   test.each([
+     { name: 'unknown envelope key', response: { drafts: [wireDraft], extra: true } },
+     { name: 'missing drafts', response: {} },
++    { name: 'null envelope', response: null },
++    { name: 'obsolete lessonId', response: { drafts: [{ ...wireDraft, lessonId }] } },
++    { name: 'fractional generation', response: { drafts: [{ ...wireDraft, generation: 1.5 }] } },
++    { name: 'zero generation', response: { drafts: [{ ...wireDraft, generation: 0 }] } },
++    { name: 'negative generation', response: { drafts: [{ ...wireDraft, generation: -1 }] } },
+     { name: 'unknown first-item key', response: { drafts: [{ ...wireDraft, extra: true }] } },
+     {
+       name: 'unknown later-item key',
+@@ -88,7 +93,7 @@ describe('draft API repository', () => {
+     },
+   ])('rejects the whole list for $name', async ({ response }) => {
+     server.use(http.get(api, () => HttpResponse.json(response)));
+-    expect(await createApiDraftRepository().listDrafts(lessonId)).toEqual(invalid);
++    await expect(createApiDraftRepository().listDrafts(lessonId)).resolves.toEqual(invalid);
+   });
+ 
+   test('maps queued to pending and permits RFC3339 timestamps with no fractional seconds', async () => {
+@@ -192,3 +197,35 @@ describe('transcript inventory', () => {
+     });
+   });
+ });
++
++test('GAP inventory cancellation reports request_cancelled after request starts', async () => {
++  const controller = new AbortController();
++  const { promise: started, resolve: markStarted } = deferred<void>();
++  const { promise: response, resolve: releaseResponse } = deferred<void>();
++  server.use(
++    http.get(`${apiOrigin()}/api/v1/admin/lessons/${lessonId}/transcripts`, async () => {
++      markStarted();
++      await response;
++      return HttpResponse.json({ transcripts: [] });
++    }),
++  );
++  const pending = createApiDraftRepository().listTranscripts(lessonId, controller.signal);
++  await started;
++  controller.abort();
++  releaseResponse();
++  expect(await pending).toEqual({ ok: false, error: { code: 'request_cancelled' } });
++});
++
++function deferred<T>() {
++  let resolve: (value: T) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  let reject: (reason: unknown) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
++    resolve = resolvePromise;
++    reject = rejectPromise;
++  });
++  return { promise, resolve, reject };
++}
+diff --git a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
+index de09df1..302ed0c 100644
+--- a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
++++ b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
+@@ -73,13 +73,17 @@ for (const source of [
+   });
+ }
+ 
+-for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
++for (const outcome of ['same', 'newer', 'missing', 'wrong-key', 'error', 'abort'] as const) {
+   test(`MS3b fix4 atomic IndexedDB cleanup ${outcome} uses one readwrite transaction and waits for commit`, async () => {
+     const transaction = new EventTarget();
+     const value =
+       outcome === 'missing'
+         ? undefined
+-        : { ...snapshot, revision: outcome === 'newer' ? 'newer-revision' : snapshot.revision };
++        : {
++            ...snapshot,
++            key: outcome === 'wrong-key' ? 'different-key' : snapshot.key,
++            revision: outcome === 'newer' ? 'newer-revision' : snapshot.revision,
++          };
+     const request = Object.assign(new EventTarget(), { result: value });
+     const remove = rstest.fn();
+     const get = rstest.fn(() => request);
+@@ -106,13 +110,16 @@ for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
+     expect(get).toHaveBeenCalledExactlyOnceWith(snapshot.key);
+     expect(remove).not.toHaveBeenCalled();
+     request.dispatchEvent(new Event('success'));
+-    if (outcome === 'same' || outcome === 'abort')
++    if (outcome === 'same' || outcome === 'abort' || outcome === 'error')
+       expect(remove).toHaveBeenCalledExactlyOnceWith(snapshot.key);
+     else expect(remove).not.toHaveBeenCalled();
+     expect(start).toHaveBeenCalledTimes(1);
+     await Promise.resolve();
+     expect(settled).toBe(false);
+-    if (outcome === 'abort') {
++    if (outcome === 'error') {
++      transaction.dispatchEvent(new Event('error'));
++      await expect(observed).rejects.toThrow('transaction failed');
++    } else if (outcome === 'abort') {
+       transaction.dispatchEvent(new Event('abort'));
+       await expect(observed).rejects.toThrow('transaction aborted');
+     } else {
+@@ -197,3 +204,31 @@ test('MS3d IndexedDB cleanup preserves a replacement with equal capturedAt and d
+   expect(await store.clearIfVersion(second.key, second.revision)).toBe(true);
+   expect(await store.read(snapshot.key)).toBeNull();
+ });
++
++test.each([
++  { name: 'missing key', value: { ...snapshot, key: undefined } },
++  { name: 'missing capturedAt', value: { ...snapshot, capturedAt: undefined } },
++  { name: 'numeric language', value: { ...snapshot, language: 42 } },
++  { name: 'numeric expectedUpdatedAt', value: { ...snapshot, expectedUpdatedAt: 42 } },
++  { name: 'numeric draftUpdatedAt', value: { ...snapshot, draftUpdatedAt: 42 } },
++  { name: 'numeric line id', value: { ...snapshot, lines: [{ ...snapshot.lines[0], id: 42 }] } },
++  {
++    name: 'numeric startMs',
++    value: { ...snapshot, lines: [{ ...snapshot.lines[0], startMs: 42 }] },
++  },
++  { name: 'numeric endMs', value: { ...snapshot, lines: [{ ...snapshot.lines[0], endMs: 42 }] } },
++  { name: 'numeric text', value: { ...snapshot, lines: [{ ...snapshot.lines[0], text: 42 }] } },
++  {
++    name: 'numeric documentIds',
++    value: { ...snapshot, lines: [{ ...snapshot.lines[0], documentIds: [42] }] },
++  },
++])('GAP IndexedDB rejects $name without offering corrupt recovery', async ({ value }) => {
++  storedValue(value);
++  expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toBeNull();
++});
++
++test('GAP IndexedDB preserves the ASR draft token alongside valid recovery text', async () => {
++  const value = { ...snapshot, draftUpdatedAt: 'D1' };
++  storedValue(value);
++  expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toEqual(value);
++});
+diff --git a/frontend/src/modules/transcript/application/recovery.test.ts b/frontend/src/modules/transcript/application/recovery.test.ts
+index b44c2f4..2f2cc95 100644
+--- a/frontend/src/modules/transcript/application/recovery.test.ts
++++ b/frontend/src/modules/transcript/application/recovery.test.ts
+@@ -1,4 +1,4 @@
+-import { expect, test } from '@rstest/core';
++import { expect, rstest, test } from '@rstest/core';
+ import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
+ import {
+   captureDirective,
+@@ -441,3 +441,24 @@ test('MS3d detached uk snapshot skips a matching orphan: matching track, else de
+   // No tabs at all: the single editor.
+   expect(place([detached], [])[0]?.instanceId).toBe('');
+ });
++
++test.each([
++  { key: 'another-key' },
++  { language: 'es' },
++  { baseLanguage: 'fr' },
++  { expectedUpdatedAt: 'T2' },
++  { draftUpdatedAt: 'D2' },
++])('GAP accepted cleanup preserves a same-revision snapshot differing in %j', async (change) => {
++  const accepted = snapshot({ baseLanguage: 'en', draftUpdatedAt: 'D1' });
++  const replacement = { ...accepted, ...change };
++  const memory = createMemoryTranscriptHistory();
++  await memory.write(replacement);
++  const clearIfVersion = rstest.fn(async () => true);
++  await clearAcceptedTranscriptSnapshot(
++    { ...memory, read: async () => replacement, clearIfVersion },
++    accepted,
++    () => false,
++  );
++  expect(clearIfVersion).not.toHaveBeenCalled();
++  expect(await memory.read(replacement.key)).toEqual(replacement);
++});
+diff --git a/frontend/src/modules/transcript/ui/LessonDraftField.test.tsx b/frontend/src/modules/transcript/ui/LessonDraftField.test.tsx
+index 30aa313..5c238bc 100644
+--- a/frontend/src/modules/transcript/ui/LessonDraftField.test.tsx
++++ b/frontend/src/modules/transcript/ui/LessonDraftField.test.tsx
+@@ -265,3 +265,11 @@ describe('lesson draft field', () => {
+     expect(output.getAttribute('data-draft-state')).toBe('ready');
+   });
+ });
++
++it('GAP a missing shown track reports not found after Regenerate', async () => {
++  renderField(draft('ready'), draftActions({ regenerate: async () => 'track_not_found' }));
++  await userEvent.setup().click(screen.getByRole('button', { name: 'Regenerate transcript' }));
++  expect((await screen.findByRole('alert')).textContent).toBe(
++    'Save the course and upload a video before generating.',
++  );
++});
+diff --git a/frontend/src/modules/transcript/ui/LessonTranscriptField.test.tsx b/frontend/src/modules/transcript/ui/LessonTranscriptField.test.tsx
+new file mode 100644
+index 0000000..e7f1029
+--- /dev/null
++++ b/frontend/src/modules/transcript/ui/LessonTranscriptField.test.tsx
+@@ -0,0 +1,72 @@
++import { expect, rstest, test } from '@rstest/core';
++import { act, fireEvent, render, screen } from '@testing-library/react';
++import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
++import type { LessonTranscript } from '../domain/transcript';
++import { LessonTranscriptField } from './LessonTranscriptField';
++
++const data: LessonTranscript = {
++  lessonId: 'lesson',
++  language: 'en',
++  updatedAt: 'T1',
++  stale: false,
++  segments: [{ id: 'line', startMs: 0, endMs: 1000, text: 'Server', documentIds: [] }],
++  documents: [],
++};
++
++test('GAP first transcript load then renamed-language load retains the dirty editor instance', async () => {
++  const store = createMemoryTranscriptHistory();
++  let loading = true;
++  const useLessonTranscript = () => ({ data: loading ? undefined : data, isLoading: loading });
++  const props = {
++    lessonId: 'lesson',
++    instanceId: 'track:one',
++    fixedLanguage: 'en',
++    useLessonTranscript,
++    documents: [],
++    history: { store, authorId: 'author' },
++    library: { add: async () => null, remove: async () => null },
++    save: async () => null,
++  };
++  const f = render(<LessonTranscriptField {...props} />);
++  expect(screen.queryByLabelText('Текст репліки 1')).toBeNull();
++  loading = false;
++  f.rerender(<LessonTranscriptField {...props} />);
++  await act(async () => {});
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.change(text, { target: { value: 'Unsaved' } });
++  loading = true;
++  f.rerender(<LessonTranscriptField {...props} fixedLanguage="es" />);
++  expect(screen.getByLabelText('Текст репліки 1')).toBe(text);
++  expect(screen.getByDisplayValue('Unsaved')).toBe(text);
++});
++
++test('GAP fixed tab language keeps the returned transcript token attached to its real base language', async () => {
++  const store = createMemoryTranscriptHistory();
++  const editorSave = rstest.fn(async () => null);
++  render(
++    <LessonTranscriptField
++      lessonId="lesson"
++      instanceId="track:one"
++      fixedLanguage="es"
++      useLessonTranscript={() => ({ data, isLoading: false })}
++      documents={[]}
++      history={{ store, authorId: 'author' }}
++      library={{ add: async () => null, remove: async () => null }}
++      save={async () => null}
++      editorSave={editorSave}
++    />,
++  );
++  await act(async () => {});
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.change(text, { target: { value: 'Spanish edit' } });
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  expect(await store.read('author:lesson:track:one')).toMatchObject({
++    language: 'es',
++    baseLanguage: 'en',
++    expectedUpdatedAt: 'T1',
++  });
++  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
++  await act(async () => {});
++  expect(editorSave).toHaveBeenCalledWith('es', 'T1', expect.any(Array), 'en');
++});
+diff --git a/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx b/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
+index e125072..7f76376 100644
+--- a/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
++++ b/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
+@@ -5,6 +5,7 @@ import { createI18n, I18nProvider } from '../../../app/providers/i18n';
+ import type { TranscriptErrorCode, TranscriptSegment } from '../domain/transcript';
+ import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
+ import { TranscriptEditor } from './TranscriptEditor';
++import type { TranscriptSnapshot } from '../application/recovery';
+ 
+ const lessonId = '30000000-0000-4000-8000-000000000001';
+ const documentId = '60000000-0000-4000-8000-000000000001';
+@@ -19,6 +20,9 @@ const segments: TranscriptSegment[] = [
+   },
+ ];
+ 
++const firstSegment = segments[0];
++if (firstSegment === undefined) throw new Error('editor fixture requires one segment');
++
+ async function editor(
+   save: TranscriptEditorActionsSave,
+   overrides: Partial<Parameters<typeof TranscriptEditor>[0]> = {},
+@@ -618,6 +622,7 @@ test('MS3b fix 5 a clean track rename followed by editing is not a dirty track r
+     history: { key: 'author:lesson:track:one', store: createMemoryTranscriptHistory() },
+   };
+   const view = render(<TranscriptEditor {...props} />);
++  await act(async () => {});
+   // A cached base can remain while the new-language query is in flight.
+   view.rerender(<TranscriptEditor {...props} language="en" />);
+   fireEvent.change(screen.getByLabelText('Текст репліки 1'), {
+@@ -822,6 +827,11 @@ test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only
+   const hint = await screen.findByText('Restore or discard the unsaved changes first');
+   const text = screen.getByRole('textbox', { name: 'Line 1 text' });
+   expect(text.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id);
++  for (const name of ['Line 1 start, ms', 'Line 1 end, ms']) {
++    expect(
++      screen.getByRole('textbox', { name }).getAttribute('aria-describedby')?.split(' '),
++    ).toContain(hint.id);
++  }
+   text.focus();
+   expect(document.activeElement).toBe(text);
+   expect(text).toHaveProperty('readOnly', true);
+@@ -1366,3 +1376,449 @@ test('MS3b fix6 failed Save preserves a newer capture without recapturing old li
+   expect(write).not.toHaveBeenCalled();
+   expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'A');
+ });
++
++function gapEditorProps(store = createMemoryTranscriptHistory(), key = 'author:gap-editor') {
++  return {
++    lessonId,
++    language: 'uk',
++    baseLanguage: 'uk',
++    expectedUpdatedAt: 'T1',
++    segments,
++    documents: [],
++    actions: { save: rstest.fn(async () => null) },
++    history: { key, store },
++  };
++}
++function gapSource(key: string, text = 'Detached'): TranscriptSnapshot {
++  return {
++    key,
++    revision: `revision:${key}`,
++    capturedAt: 1,
++    language: 'uk',
++    baseLanguage: 'uk',
++    expectedUpdatedAt: 'T1',
++    lines: [{ ...storedLine, text }],
++  };
++}
++function detachedOffer(snapshot: TranscriptSnapshot) {
++  return { instanceId: '', legacy: false, snapshot };
++}
++const clickSave = () =>
++  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
++const clickRestore = () => fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
++
++// Keep all unchanged props by reference so each case reaches just its own rebase guard.
++for (const change of ['base language', 'token', 'segments'] as const) {
++  test(`GAP a clean editor adopts a server change to only ${change}`, async () => {
++    const props = gapEditorProps();
++    const view = render(<TranscriptEditor {...props} />);
++    await act(async () => {});
++    view.rerender(
++      <TranscriptEditor
++        {...props}
++        baseLanguage={change === 'base language' ? 'en' : 'uk'}
++        expectedUpdatedAt={change === 'token' ? 'T2' : 'T1'}
++        segments={change === 'segments' ? [{ ...firstSegment, text: 'New server' }] : segments}
++      />,
++    );
++    if (change === 'segments')
++      expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'New server');
++    fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Edited' } });
++    clickSave();
++    await act(async () => {});
++    expect(props.actions.save).toHaveBeenCalledWith(
++      'uk',
++      change === 'token' ? 'T2' : 'T1',
++      expect.arrayContaining([expect.objectContaining({ text: 'Edited' })]),
++      change === 'base language' ? 'en' : 'uk',
++    );
++  });
++}
++
++test('GAP a completed Save lets the next canonical server token become the next edit base', async () => {
++  const props = gapEditorProps();
++  const view = render(<TranscriptEditor {...props} />);
++  await act(async () => {});
++  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saved A' } });
++  clickSave();
++  await act(async () => {});
++  expect(screen.getByText('Транскрипт збережено.')).toBeTruthy();
++  view.rerender(
++    <TranscriptEditor
++      {...props}
++      expectedUpdatedAt="T2"
++      segments={[{ ...firstSegment, text: 'Saved A' }]}
++    />,
++  );
++  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Edit B' } });
++  clickSave();
++  await act(async () => {});
++  expect(props.actions.save).toHaveBeenLastCalledWith('uk', 'T2', expect.any(Array), 'uk');
++});
++
++test('GAP dirty edits compare against their retained base after a server prop refresh', async () => {
++  const props = gapEditorProps();
++  const view = render(<TranscriptEditor {...props} />);
++  await act(async () => {});
++  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Dirty first' } });
++  // A new recognition generation reruns baseline memoization while the dirty editor keeps T1.
++  view.rerender(
++    <TranscriptEditor
++      {...props}
++      expectedUpdatedAt="T2"
++      draftUpdatedAt="D2"
++      segments={[{ ...firstSegment, text: 'Server moved' }]}
++    />,
++  );
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.change(text, { target: { value: 'Server moved' } });
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  expect(await props.history.store.read(props.history.key)).toMatchObject({
++    expectedUpdatedAt: 'T1',
++    lines: [{ text: 'Server moved' }],
++  });
++});
++
++test('GAP a pending Save locks fields, documents, line controls and repeat Save', async () => {
++  const pending = deferred<null>();
++  const save = rstest.fn(() => pending.promise);
++  await editor(save, {
++    draftOffer: { language: 'uk', updatedAt: 'D1', segments: [{ ...firstSegment, text: 'ASR' }] },
++  });
++  fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saving A' } });
++  clickSave();
++  for (const label of ['Початок репліки 1, мс', 'Кінець репліки 1, мс', 'Текст репліки 1']) {
++    const field = screen.getByLabelText(label);
++    expect(field).toHaveProperty('readOnly', true);
++    fireEvent.change(field, { target: { value: '99' } });
++  }
++  fireEvent.click(screen.getByRole('checkbox', { name: 'Довідка' }));
++  for (const name of [
++    'Додати репліку',
++    'Видалити репліку 1',
++    'Завантажити чернетку',
++    'Зберегти транскрипт',
++  ]) {
++    const button = screen.getByRole('button', { name });
++    fireEvent.click(button);
++  }
++  expect(screen.getAllByRole('listitem')).toHaveLength(1);
++  expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'Saving A');
++  expect(screen.getByLabelText('Початок репліки 1, мс')).toHaveProperty('value', '0');
++  expect(screen.getByRole('checkbox', { name: 'Довідка' })).toHaveProperty('checked', false);
++  expect(save).toHaveBeenCalledTimes(1);
++  await act(async () => pending.resolve(null));
++});
++
++for (const action of ['Restore', 'Discard'] as const) {
++  test(`GAP detached ${action} during pending Save cannot change text or ownership`, async () => {
++    const props = gapEditorProps();
++    const source = gapSource(`${props.history.key}:source`);
++    await props.history.store.write(source);
++    const clear = rstest.spyOn(props.history.store, 'clearIfVersion');
++    const pending = deferred<null>();
++    const save = rstest.fn(() => pending.promise);
++    render(
++      <TranscriptEditor
++        {...props}
++        actions={{ save }}
++        detachedSnapshots={[detachedOffer(source)]}
++      />,
++    );
++    await act(async () => {});
++    fireEvent.change(screen.getByLabelText('Текст репліки 1'), { target: { value: 'Saving own' } });
++    clickSave();
++    fireEvent.click(
++      screen.getByRole('button', {
++        name: action === 'Restore' ? 'Відновити зміни' : 'Не відновлювати',
++      }),
++    );
++    await act(async () => {});
++    expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'Saving own');
++    expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
++    expect(clear.mock.calls.filter(([key]) => key === source.key)).toEqual([]);
++    expect(await props.history.store.read(source.key)).toEqual(source);
++    await act(async () => pending.resolve(null));
++    expect(await props.history.store.read(source.key)).toEqual(source);
++  });
++}
++
++test('GAP ancestry distinguishes two revisions of the same key within its eight-source limit', async () => {
++  const props = gapEditorProps();
++  const source = {
++    ...gapSource('source'),
++    revision: 'new',
++    acceptedSource: [
++      { key: 'source', revision: 'old' },
++      { key: 'source', revision: 'new' },
++      { key: 'a', revision: 'a1' },
++      { key: 'b', revision: 'b1' },
++      { key: 'c', revision: 'c1' },
++      { key: 'd', revision: 'd1' },
++      { key: 'e', revision: 'e1' },
++      { key: 'f', revision: 'f1' },
++      { key: 'overflow', revision: 'o1' },
++    ],
++  };
++  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
++  await act(async () => {});
++  clickRestore();
++  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
++  await act(async () => {});
++  expect((await props.history.store.read(props.history.key))?.acceptedSource).toEqual([
++    { key: 'source', revision: 'new' },
++    { key: 'source', revision: 'old' },
++    { key: 'a', revision: 'a1' },
++    { key: 'b', revision: 'b1' },
++    { key: 'c', revision: 'c1' },
++    { key: 'd', revision: 'd1' },
++    { key: 'e', revision: 'e1' },
++    { key: 'f', revision: 'f1' },
++  ]);
++});
++
++test('GAP ancestry dedup retains the full restored snapshot for content-aware cleanup', async () => {
++  const props = gapEditorProps();
++  const source = gapSource('duplicate-source');
++  const offered = { ...source, acceptedSource: [{ key: source.key, revision: source.revision }] };
++  await props.history.store.write(offered);
++  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(offered)]} />);
++  await act(async () => {});
++  clickRestore();
++  const replacement = {
++    ...offered,
++    lines: [{ ...storedLine, text: 'Changed with same revision' }],
++  };
++  await props.history.store.write(replacement);
++  clickSave();
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toEqual(replacement);
++});
++
++test('GAP restoring a descendant handles all concurrently offered ancestors', async () => {
++  const props = gapEditorProps();
++  const a = gapSource('ancestor-a');
++  const b = gapSource('ancestor-b');
++  const c = {
++    ...gapSource('descendant-c'),
++    acceptedSource: [
++      { key: a.key, revision: a.revision },
++      { key: b.key, revision: b.revision },
++    ],
++  };
++  render(<TranscriptEditor {...props} detachedSnapshots={[c, a, b].map(detachedOffer)} />);
++  await act(async () => {});
++  clickRestore();
++  expect(screen.queryByRole('button', { name: 'Відновити зміни' })).toBeNull();
++  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
++  await act(async () => {});
++  expect((await props.history.store.read(props.history.key))?.acceptedSource).toHaveLength(3);
++});
++
++test('GAP loading ASR after a detached restore releases and reoffers the old source', async () => {
++  const props = gapEditorProps();
++  const source = gapSource('pre-asr-source');
++  await props.history.store.write(source);
++  render(
++    <TranscriptEditor
++      {...props}
++      detachedSnapshots={[detachedOffer(source)]}
++      draftOffer={{
++        language: 'uk',
++        updatedAt: 'D2',
++        segments: [{ ...firstSegment, text: 'ASR replacement' }],
++      }}
++    />,
++  );
++  await act(async () => {});
++  clickRestore();
++  const load = screen.getByRole('button', { name: 'Завантажити чернетку' });
++  fireEvent.click(load);
++  expect(screen.getByLabelText('Текст репліки 1')).toHaveProperty('value', 'ASR replacement');
++  expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
++  clickSave();
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toEqual(source);
++});
++
++test('GAP legacy recovery keeps the loaded ASR generation and current editor language', async () => {
++  const props = gapEditorProps();
++  const source = {
++    key: props.history.key,
++    revision: 'legacy',
++    capturedAt: 1,
++    expectedUpdatedAt: 'T1',
++    draftUpdatedAt: 'D1',
++    lines: [storedLine],
++  };
++  await props.history.store.write(source);
++  const view = render(<TranscriptEditor {...props} draftUpdatedAt="D2" />);
++  await act(async () => {});
++  clickRestore();
++  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toMatchObject({
++    language: 'uk',
++    draftUpdatedAt: 'D1',
++    lines: [storedLine],
++  });
++  view.unmount();
++  const revisit = render(<TranscriptEditor {...props} draftUpdatedAt="D2" />);
++  await act(async () => {});
++  expect(
++    screen.getByText(
++      'На цьому пристрої лишилися незбережені зміни, але транскрипт на сервері відтоді змінився. Якщо відновити й зберегти, новіший текст буде перезаписано.',
++    ),
++  ).toBeTruthy();
++  clickRestore();
++  clickSave();
++  await act(async () => {});
++  expect(props.actions.save).toHaveBeenCalledWith('uk', 'T1', expect.any(Array), '');
++  revisit.unmount();
++});
++
++test('GAP a rejected Save reports unavailable, retains recovery and resumes later captures', async () => {
++  const props = gapEditorProps();
++  const save = rstest.fn(async () => {
++    throw new Error('network refused');
++  });
++  render(<TranscriptEditor {...props} actions={{ save }} />);
++  await act(async () => {});
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.change(text, { target: { value: 'Before failure' } });
++  clickSave();
++  await act(async () => {});
++  expect(screen.getByText('Сервіс недоступний. Спробуйте ще раз.')).toBeTruthy();
++  expect(screen.queryByText('Транскрипт збережено.')).toBeNull();
++  expect(await props.history.store.read(props.history.key)).toMatchObject({
++    lines: [{ text: 'Before failure' }],
++  });
++  fireEvent.change(text, { target: { value: 'After failure' } });
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  expect(await props.history.store.read(props.history.key)).toMatchObject({
++    lines: [{ text: 'After failure' }],
++  });
++});
++
++test('GAP a source acquired by a mounted tab is removed from captured cleanup ancestry', async () => {
++  const props = gapEditorProps();
++  const source = gapSource('acquired-source');
++  await props.history.store.write(source);
++  const offers = [detachedOffer(source)];
++  const view = render(<TranscriptEditor {...props} detachedSnapshots={offers} />);
++  await act(async () => {});
++  clickRestore();
++  view.rerender(
++    <TranscriptEditor {...props} detachedSnapshots={offers} mountedHistoryKeys={[source.key]} />,
++  );
++  fireEvent.focusOut(screen.getByLabelText('Текст репліки 1'));
++  await act(async () => {});
++  expect((await props.history.store.read(props.history.key))?.acceptedSource).toBeUndefined();
++  view.rerender(<TranscriptEditor {...props} detachedSnapshots={offers} mountedHistoryKeys={[]} />);
++  clickSave();
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toEqual(source);
++});
++
++test('GAP source cleanup rechecks newly mounted ownership after its deferred read', async () => {
++  const memory = createMemoryTranscriptHistory();
++  const props = gapEditorProps(memory);
++  const source = gapSource('newly-mounted-source');
++  await memory.write(source);
++  const pending = deferred<TranscriptSnapshot | null>();
++  const started = deferred<void>();
++  const store = {
++    ...memory,
++    read: async (key: string) => {
++      if (key === source.key) {
++        started.resolve();
++        return pending.promise;
++      }
++      return memory.read(key);
++    },
++  };
++  const clear = rstest.spyOn(store, 'clearIfVersion');
++  const offers = [detachedOffer(source)];
++  const view = render(
++    <TranscriptEditor
++      {...props}
++      history={{ key: props.history.key, store }}
++      detachedSnapshots={offers}
++    />,
++  );
++  await act(async () => {});
++  clickRestore();
++  clickSave();
++  await started.promise;
++  view.rerender(
++    <TranscriptEditor
++      {...props}
++      history={{ key: props.history.key, store }}
++      detachedSnapshots={offers}
++      mountedHistoryKeys={[source.key]}
++    />,
++  );
++  await act(async () => pending.resolve(source));
++  expect(clear.mock.calls.filter(([key]) => key === source.key)).toEqual([]);
++  expect(await memory.read(source.key)).toEqual(source);
++});
++
++test('GAP successful detached Save removes ancestry from subsequent author captures', async () => {
++  const props = gapEditorProps();
++  const source = gapSource('saved-source');
++  await props.history.store.write(source);
++  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
++  await act(async () => {});
++  clickRestore();
++  clickSave();
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toBeNull();
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.change(text, { target: { value: 'New edit after successful Save' } });
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  expect(await props.history.store.read(props.history.key)).toMatchObject({
++    lines: [{ text: 'New edit after successful Save' }],
++  });
++  expect((await props.history.store.read(props.history.key))?.acceptedSource).toBeUndefined();
++});
++
++test('GAP Discard of a refreshed own offer releases an earlier detached restoration', async () => {
++  const props = gapEditorProps();
++  const source = gapSource('released-after-discard');
++  await props.history.store.write(source);
++  render(<TranscriptEditor {...props} detachedSnapshots={[detachedOffer(source)]} />);
++  await act(async () => {});
++  clickRestore();
++  const text = screen.getByLabelText('Текст репліки 1');
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  const newer = gapSource(props.history.key, 'Other window C');
++  await props.history.store.write(newer);
++  fireEvent.change(text, { target: { value: 'Перша' } });
++  fireEvent.focusOut(text);
++  await act(async () => {});
++  expect(screen.getByText(recoveryLockHint)).toBeTruthy();
++  fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' }));
++  await act(async () => {});
++  expect(screen.getByRole('button', { name: 'Відновити зміни' })).toBeTruthy();
++  clickSave();
++  await act(async () => {});
++  expect(await props.history.store.read(source.key)).toEqual(source);
++});
++
++function deferred<T>() {
++  let resolve: (value: T) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  let reject: (reason: unknown) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
++    resolve = resolvePromise;
++    reject = rejectPromise;
++  });
++  return { promise, resolve, reject };
++}
+diff --git a/frontend/src/modules/transcript/ui/use-detached-transcript-recovery.test.tsx b/frontend/src/modules/transcript/ui/use-detached-transcript-recovery.test.tsx
+new file mode 100644
+index 0000000..48d864c
+--- /dev/null
++++ b/frontend/src/modules/transcript/ui/use-detached-transcript-recovery.test.tsx
+@@ -0,0 +1,147 @@
++import { afterEach, expect, rstest, test } from '@rstest/core';
++import { act, renderHook } from '@testing-library/react';
++import { createMemoryTranscriptHistory } from '../adapters/transcript-history-memory';
++import type { TranscriptRecoveryTab, TranscriptSnapshot } from '../application/recovery';
++import { useDetachedTranscriptRecovery } from './use-detached-transcript-recovery';
++
++const snapshot: TranscriptSnapshot = {
++  key: 'author:lesson:track:gone',
++  revision: 'A',
++  capturedAt: 1,
++  language: 'en',
++  expectedUpdatedAt: 'T1',
++  lines: [{ id: 'line', startMs: '0', endMs: '1000', text: 'A', documentIds: [] }],
++};
++const tabs = [{ kind: 'track', instanceId: 'track:en', language: 'en', isDefault: true }] as const;
++afterEach(() => {
++  rstest.restoreAllMocks();
++});
++
++test('GAP disabled detached inventory performs no storage IO', async () => {
++  const store = createMemoryTranscriptHistory();
++  const keys = rstest.spyOn(store, 'keys');
++  const read = rstest.spyOn(store, 'read');
++  const f = renderHook(() =>
++    useDetachedTranscriptRecovery('lesson', { authorId: 'author', store }, tabs, false),
++  );
++  await act(async () => {});
++  expect(keys).not.toHaveBeenCalled();
++  expect(read).not.toHaveBeenCalled();
++  expect(f.result.current).toEqual([]);
++});
++
++test('GAP detached inventory ignores a read result belonging to a different listed key', async () => {
++  const store = createMemoryTranscriptHistory();
++  rstest.spyOn(store, 'keys').mockResolvedValue(['author:lesson:track:listed']);
++  const read = rstest.spyOn(store, 'read').mockResolvedValue(snapshot);
++  const f = renderHook(() =>
++    useDetachedTranscriptRecovery('lesson', { authorId: 'author', store }, tabs),
++  );
++  await act(async () => {});
++  expect(read).toHaveBeenCalledExactlyOnceWith('author:lesson:track:listed');
++  expect(f.result.current).toEqual([]);
++});
++
++test('GAP obsolete detached inventory cannot erase the completed current inventory', async () => {
++  const store = createMemoryTranscriptHistory();
++  const old = deferred<readonly string[]>();
++  await store.write(snapshot);
++  rstest.spyOn(store, 'keys').mockReturnValueOnce(old.promise);
++  const f = renderHook(
++    ({ lesson }) => useDetachedTranscriptRecovery(lesson, { authorId: 'author', store }, tabs),
++    { initialProps: { lesson: 'old' } },
++  );
++  f.rerender({ lesson: 'lesson' });
++  await act(async () => {});
++  expect(f.result.current.map((offer) => offer.snapshot)).toEqual([snapshot]);
++  await act(async () => old.resolve([]));
++  expect(f.result.current.map((offer) => offer.snapshot)).toEqual([snapshot]);
++});
++
++for (const change of ['store', 'tabs', 'disabled'] as const) {
++  test(`GAP detached inventory hides stale same-lesson offers after ${change} changes`, async () => {
++    const store = createMemoryTranscriptHistory();
++    await store.write(snapshot);
++    const pending = deferred<readonly string[]>();
++    const other = { ...createMemoryTranscriptHistory(), keys: () => pending.promise };
++    const f = renderHook(
++      ({ source, currentTabs, enabled }) =>
++        useDetachedTranscriptRecovery(
++          'lesson',
++          { authorId: 'author', store: source },
++          currentTabs,
++          enabled,
++        ),
++      {
++        initialProps: {
++          source: store,
++          currentTabs: [...tabs] as TranscriptRecoveryTab[],
++          enabled: true,
++        },
++      },
++    );
++    await act(async () => {});
++    expect(f.result.current).toHaveLength(1);
++    if (change === 'tabs') rstest.spyOn(store, 'keys').mockReturnValue(pending.promise);
++    f.rerender({
++      source: change === 'store' ? other : store,
++      currentTabs: change === 'tabs' ? [{ ...tabs[0], language: 'es' }] : [...tabs],
++      enabled: change !== 'disabled',
++    });
++    expect(f.result.current).toEqual([]);
++    await act(async () => pending.resolve([]));
++  });
++}
++
++test('GAP one refused detached read does not suppress a different valid recovery', async () => {
++  const store = createMemoryTranscriptHistory();
++  rstest.spyOn(store, 'keys').mockResolvedValue(['author:lesson:track:bad', snapshot.key]);
++  const read = rstest
++    .spyOn(store, 'read')
++    .mockRejectedValueOnce(new Error('read refused'))
++    .mockResolvedValueOnce(snapshot);
++  const f = renderHook(() =>
++    useDetachedTranscriptRecovery('lesson', { authorId: 'author', store }, tabs),
++  );
++  await act(async () => {});
++  expect(read).toHaveBeenCalledTimes(2);
++  expect(f.result.current.map((offer) => offer.snapshot)).toEqual([snapshot]);
++});
++
++test('GAP inventory refusal remains best effort without an escaped rejection', async () => {
++  const store = createMemoryTranscriptHistory();
++  const keys = rstest.spyOn(store, 'keys').mockRejectedValue(new Error('keys refused'));
++  // Observe escaped promise rejections in this named test, rather than counting a global
++  // failed file as a mutation kill. setImmediate is an event-loop barrier, not a race delay.
++  const escaped: unknown[] = [];
++  const onRejection = (reason: unknown) => {
++    escaped.push(reason);
++  };
++  process.on('unhandledRejection', onRejection);
++  try {
++    const f = renderHook(() =>
++      useDetachedTranscriptRecovery('lesson', { authorId: 'author', store }, tabs),
++    );
++    await act(async () => {});
++    await new Promise<void>((resolve) => setImmediate(resolve));
++    expect(keys).toHaveBeenCalledTimes(1);
++    expect(f.result.current).toEqual([]);
++    expect(escaped).toEqual([]);
++  } finally {
++    process.off('unhandledRejection', onRejection);
++  }
++});
++
++function deferred<T>() {
++  let resolve: (value: T) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  let reject: (reason: unknown) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
++    resolve = resolvePromise;
++    reject = rejectPromise;
++  });
++  return { promise, resolve, reject };
++}
+diff --git a/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx b/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
+index 1202a0f..2ffdb11 100644
+--- a/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
++++ b/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
+@@ -208,6 +208,8 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const)
+       }
+       await act(async () => {});
+       expect(await store.read(key)).toEqual(version === 'same' ? null : c);
++      if (version === 'newer' && path === 'Save')
++        expect(f.result.current.offer).toEqual({ kind: 'none' });
+       if (version === 'newer' && path !== 'unmount' && path !== 'Save')
+         expect(f.result.current.offer).toMatchObject({ kind: 'offer', snapshot: c });
+       f.unmount();
+@@ -258,3 +260,224 @@ test('MS3d hook captures unique revisions in one millisecond and Save preserves
+   first.unmount();
+   second.unmount();
+ });
++
++function recoverySnapshot(key: string, text = 'Recovered'): TranscriptSnapshot {
++  return {
++    key,
++    revision: `revision:${key}:${text}`,
++    capturedAt: 1,
++    language: 'uk',
++    baseLanguage: 'en',
++    expectedUpdatedAt: 'T1',
++    lines: [{ ...line, text }],
++  };
++}
++
++test('GAP switching a loaded visit hides its offer until the new store read resolves', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = recoverySnapshot('gap-switch:a');
++  await store.write(a);
++  const next = deferred<TranscriptSnapshot | null>();
++  const other = { ...createMemoryTranscriptHistory(), read: () => next.promise };
++  const f = renderHook(
++    ({ key, source }) => useTranscriptRecovery({ historyKey: key, store: source, baseline }),
++    { initialProps: { key: a.key, source: store } },
++  );
++  await act(async () => {});
++  expect(f.result.current.offer).toMatchObject({ snapshot: a });
++  f.rerender({ key: 'gap-switch:b', source: other });
++  expect(f.result.current.isLoaded).toBe(false);
++  expect(f.result.current.offer).toEqual({ kind: 'none' });
++  await act(async () => next.resolve(null));
++  expect(f.result.current.isLoaded).toBe(true);
++});
++
++for (const outcome of ['resolve', 'reject'] as const) {
++  test(`GAP obsolete initial read ${outcome} cannot replace the current visit offer`, async () => {
++    const store = createMemoryTranscriptHistory();
++    const old = deferred<TranscriptSnapshot | null>();
++    const b = recoverySnapshot(`gap-obsolete-${outcome}:b`);
++    await store.write(b);
++    const read = rstest.spyOn(store, 'read').mockReturnValueOnce(old.promise);
++    const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
++      initialProps: { key: `gap-obsolete-${outcome}:a` },
++    });
++    f.rerender({ key: b.key });
++    await act(async () => {});
++    expect(f.result.current.offer).toMatchObject({ snapshot: b });
++    await act(async () => {
++      if (outcome === 'resolve') old.resolve(recoverySnapshot('obsolete-a'));
++      else old.reject(new Error('obsolete read refused'));
++    });
++    expect(read).toHaveBeenCalledTimes(2);
++    expect(f.result.current.offer).toMatchObject({ snapshot: b });
++    expect(f.result.current.isLoaded).toBe(true);
++  });
++}
++
++test('GAP obsolete read completion cannot authorize retirement in an unread visit', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = deferred<TranscriptSnapshot | null>();
++  const b = deferred<TranscriptSnapshot | null>();
++  rstest.spyOn(store, 'read').mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
++  const clear = rstest.spyOn(store, 'clearIfVersion');
++  const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
++    initialProps: { key: 'gap-unread:a' },
++  });
++  f.rerender({ key: 'gap-unread:b' });
++  await act(async () => a.resolve(null));
++  act(() => f.result.current.captureNow([{ ...line, text: 'own B' }]));
++  await act(async () => {});
++  act(() => f.result.current.finalize());
++  await act(async () => {});
++  expect(clear).not.toHaveBeenCalled();
++  await act(async () => b.resolve(null));
++});
++
++for (const action of ['finalize', 'clean capture'] as const) {
++  test(`GAP ${action} cannot retire an own write before the initial read finishes`, async () => {
++    const store = createMemoryTranscriptHistory();
++    const pending = deferred<TranscriptSnapshot | null>();
++    rstest.spyOn(store, 'read').mockReturnValueOnce(pending.promise);
++    const clear = rstest.spyOn(store, 'clearIfVersion');
++    const key = `gap-initial:${action}`;
++    sessionStorage.setItem(`transcript-recovery-dismissed:${key}`, '1');
++    const f = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
++    act(() => f.result.current.captureNow([{ ...line, text: 'own dirty' }]));
++    await act(async () => {});
++    // Successful capture clears a previous dismissal; reinstate it to observe finalize's guard.
++    sessionStorage.setItem(`transcript-recovery-dismissed:${key}`, '1');
++    act(() => {
++      if (action === 'finalize') f.result.current.finalize();
++      else f.result.current.captureNow([line]);
++    });
++    await act(async () => {});
++    expect(clear).not.toHaveBeenCalled();
++    expect(sessionStorage.getItem(`transcript-recovery-dismissed:${key}`)).toBe('1');
++    await act(async () => pending.resolve(null));
++    sessionStorage.removeItem(`transcript-recovery-dismissed:${key}`);
++  });
++}
++
++test('GAP finalization waits for its write commit before conditional retirement', async () => {
++  const memory = createMemoryTranscriptHistory();
++  const commit = deferred<void>();
++  const write = rstest.fn(async (snapshot: TranscriptSnapshot) => {
++    await commit.promise;
++    await memory.write(snapshot);
++  });
++  const clear = rstest.spyOn(memory, 'clearIfVersion');
++  const store = { ...memory, write };
++  const f = renderHook(() => useTranscriptRecovery({ historyKey: 'gap-commit', store, baseline }));
++  await act(async () => {});
++  act(() => f.result.current.captureNow([{ ...line, text: 'Own' }]));
++  act(() => f.result.current.finalize());
++  await act(async () => {});
++  expect(write).toHaveBeenCalledTimes(1);
++  expect(clear).not.toHaveBeenCalled();
++  await act(async () => commit.resolve());
++  expect(clear).toHaveBeenCalledExactlyOnceWith('gap-commit', write.mock.calls[0]?.[0].revision);
++  expect(await memory.read('gap-commit')).toBeNull();
++});
++
++test('GAP finalization without an own write retains the accepted recovery source', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = recoverySnapshot('gap-accepted');
++  await store.write(a);
++  const clear = rstest.spyOn(store, 'clearIfVersion');
++  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
++  await act(async () => {});
++  act(() => f.result.current.accept());
++  act(() => f.result.current.finalize());
++  await act(async () => {});
++  expect(clear).not.toHaveBeenCalled();
++  expect(await store.read(a.key)).toEqual(a);
++});
++
++test('GAP mismatch refresh from an obsolete visit cannot replace the current offer', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = recoverySnapshot('gap-refresh:a');
++  const b = recoverySnapshot('gap-refresh:b');
++  await store.write(a);
++  await store.write(b);
++  const delayed = deferred<TranscriptSnapshot | null>();
++  const read = rstest.spyOn(store, 'read');
++  const clear = rstest.spyOn(store, 'clearIfVersion').mockResolvedValue(false);
++  const f = renderHook(({ key }) => useTranscriptRecovery({ historyKey: key, store, baseline }), {
++    initialProps: { key: a.key },
++  });
++  await act(async () => {});
++  read.mockReturnValueOnce(delayed.promise);
++  act(() => f.result.current.dismiss());
++  await act(async () => {});
++  expect(clear).toHaveBeenCalledExactlyOnceWith(a.key, a.revision);
++  expect(read).toHaveBeenCalledTimes(2);
++  f.rerender({ key: b.key });
++  await act(async () => {});
++  expect(f.result.current.offer).toMatchObject({ snapshot: b });
++  await act(async () =>
++    delayed.resolve({ ...a, revision: 'foreign', lines: [{ ...line, text: 'foreign' }] }),
++  );
++  expect(f.result.current.offer).toMatchObject({ snapshot: b });
++});
++
++test('GAP repeated Discard retires the refreshed revision rather than its predecessor', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = recoverySnapshot('gap-discard');
++  const c = { ...a, revision: 'C', lines: [{ ...line, text: 'C' }] };
++  await store.write(a);
++  const clear = rstest.spyOn(store, 'clearIfVersion');
++  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
++  await act(async () => {});
++  await store.write(c);
++  act(() => f.result.current.dismiss());
++  await act(async () => {});
++  expect(f.result.current.offer).toMatchObject({ snapshot: c });
++  clear.mockClear();
++  act(() => f.result.current.dismiss());
++  await act(async () => {});
++  expect(clear).toHaveBeenCalledExactlyOnceWith(c.key, 'C');
++  expect(await store.read(c.key)).toBeNull();
++});
++
++test('GAP a vanished mismatch closes the stale own recovery prompt', async () => {
++  const store = createMemoryTranscriptHistory();
++  const a = recoverySnapshot('gap-vanished');
++  await store.write(a);
++  const f = renderHook(() => useTranscriptRecovery({ historyKey: a.key, store, baseline }));
++  await act(async () => {});
++  expect(f.result.current.offer.kind).toBe('offer');
++  await store.clear(a.key);
++  act(() => f.result.current.captureNow([line]));
++  await act(async () => {});
++  expect(f.result.current.offer).toEqual({ kind: 'none' });
++});
++
++for (const action of ['captureNow', 'noteChange'] as const) {
++  test(`GAP suspended ${action} does not arm capture when resumed or unmounted`, async () => {
++    const f = fixture();
++    await act(async () => {});
++    rstest.useFakeTimers();
++    act(() => f.result.current.setCapturing(false));
++    act(() => f.result.current[action]([{ ...line, text: 'suspended edit' }]));
++    expect(f.write).not.toHaveBeenCalled();
++    act(() => f.result.current.setCapturing(true));
++    act(() => rstest.advanceTimersByTime(idleCaptureMs));
++    f.unmount();
++    expect(f.write).not.toHaveBeenCalled();
++  });
++}
++
++function deferred<T>() {
++  let resolve: (value: T) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  let reject: (reason: unknown) => void = () => {
++    throw new Error('Deferred promise not initialized');
++  };
++  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
++    resolve = resolvePromise;
++    reject = rejectPromise;
++  });
++  return { promise, resolve, reject };
++}
