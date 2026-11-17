@@ -113,3 +113,35 @@ func withTinyRetryConfig(t *testing.T) {
 	retryConfig = retrySettings{initialBackoff: time.Millisecond, maxBackoff: time.Millisecond, budget: 100 * time.Millisecond, wait: old.wait}
 	t.Cleanup(func() { retryConfig = old })
 }
+
+func TestStartRetriesTheReaperNameConflictRace(t *testing.T) {
+	withTinyRetryConfig(t)
+	calls := 0
+	// Like the real failure, the first attempt returns the target it already created.
+	orphan := &fakeContainer{}
+	got, err := Start(context.Background(), func(context.Context) (*fakeContainer, error) {
+		calls++
+		if calls == 1 {
+			return orphan, errors.New(`run postgres: generic container: create container: reaper: new reaper: run container: container create: Error response from daemon: Conflict. The container name "/reaper_abc" is already in use by container "123". You have to remove (or rename) that container to be able to reuse that name.`)
+		}
+		if orphan.terminated != 1 {
+			t.Fatalf("retry started before the first target was terminated (terminated=%d)", orphan.terminated)
+		}
+		return &fakeContainer{}, nil
+	})
+	if err != nil || got == nil || got == orphan || calls != 2 {
+		t.Fatalf("Start() = (%p, %v), calls=%d; want a retried success", got, err, calls)
+	}
+}
+
+func TestStartDoesNotRetryAConflictOutsideTheReaper(t *testing.T) {
+	withTinyRetryConfig(t)
+	calls := 0
+	_, err := Start(context.Background(), func(context.Context) (*fakeContainer, error) {
+		calls++
+		return nil, errors.New(`Error response from daemon: Conflict. The container name "/postgres_x" is already in use`)
+	})
+	if err == nil || calls != 1 {
+		t.Fatalf("Start() err=%v calls=%d; want one attempt and the error", err, calls)
+	}
+}
