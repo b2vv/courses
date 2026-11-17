@@ -1,0 +1,1066 @@
+diff --git a/frontend/src/modules/admin/ui/LessonLanguageTabs.test.tsx b/frontend/src/modules/admin/ui/LessonLanguageTabs.test.tsx
+index b75b093..37e23b5 100644
+--- a/frontend/src/modules/admin/ui/LessonLanguageTabs.test.tsx
++++ b/frontend/src/modules/admin/ui/LessonLanguageTabs.test.tsx
+@@ -663,6 +663,7 @@ test('snapshot recovery uses a tab key and retains the old optimistic token (R13
+   const f = fixture();
+   await f.historyStore.write({
+     key: 'author:lesson:track:one',
++    revision: crypto.randomUUID(),
+     capturedAt: Date.now(),
+     language: 'en',
+     baseLanguage: 'en',
+@@ -757,6 +758,7 @@ for (const targetExists of [false, true]) {
+     if (targetExists) f.state.freshInventory = [item('es', 'E2')];
+     await f.historyStore.write({
+       key: 'author:lesson:track:one',
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       language: 'es',
+       baseLanguage: 'en',
+@@ -790,6 +792,7 @@ for (const targetExists of [false, true]) {
+     f.state.freshInventory = targetExists ? [item('en', 'T2')] : [];
+     await f.historyStore.write({
+       key: 'author:lesson:track:one',
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       language: 'en',
+       expectedUpdatedAt: 'T0',
+@@ -817,6 +820,7 @@ function recoverySnapshot(
+ ) {
+   return {
+     key,
++    revision: crypto.randomUUID(),
+     capturedAt,
+     ...(language === null ? {} : { language }),
+     baseLanguage: 'en',
+@@ -846,7 +850,8 @@ test('M3-R6 own offer first, then detached newest one at a time; Discard clears
+ 
+ test('M3-R6 Restore + successful Save clears accepted detached AND finalizes own key', async () => {
+   const f = fixture();
+-  await f.historyStore.write(recoverySnapshot('author:lesson:track:gone', 'recovered'));
++  const source = recoverySnapshot('author:lesson:track:gone', 'recovered');
++  await f.historyStore.write(source);
+   const write = rstest.spyOn(f.historyStore, 'write');
+   const clear = rstest.spyOn(f.historyStore, 'clear');
+   const clearIfVersion = rstest.spyOn(f.historyStore, 'clearIfVersion');
+@@ -865,9 +870,9 @@ test('M3-R6 Restore + successful Save clears accepted detached AND finalizes own
+   expect(clear).not.toHaveBeenCalled();
+   expect(clearIfVersion).toHaveBeenCalledWith(
+     'author:lesson:track:one',
+-    write.mock.calls.at(-1)?.[0].capturedAt,
++    write.mock.calls.at(-1)?.[0].revision,
+   );
+-  expect(clearIfVersion).toHaveBeenCalledWith('author:lesson:track:gone', 1);
++  expect(clearIfVersion).toHaveBeenCalledWith('author:lesson:track:gone', source.revision);
+   view.unmount();
+   expect(await f.historyStore.read('author:lesson:track:one')).toBeNull();
+ });
+diff --git a/frontend/src/modules/admin/ui/LessonLanguageTabs.tsx b/frontend/src/modules/admin/ui/LessonLanguageTabs.tsx
+index fe5caab..a6cb921 100644
+--- a/frontend/src/modules/admin/ui/LessonLanguageTabs.tsx
++++ b/frontend/src/modules/admin/ui/LessonLanguageTabs.tsx
+@@ -156,6 +156,7 @@ function ReadyLanguageTabs({
+     lessonId,
+     props.transcripts?.history,
+     tabs.map((tab) => ({
++      kind: tab.track === undefined ? 'orphan' : 'track',
+       instanceId: tab.id,
+       language: tab.language,
+       isDefault: tab.track?.isDefault ?? false,
+diff --git a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
+index 1e9133a..de09df1 100644
+--- a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
++++ b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.test.ts
+@@ -29,6 +29,7 @@ afterEach(() => {
+ 
+ const snapshot = {
+   key: 'author:lesson:track:one',
++  revision: crypto.randomUUID(),
+   capturedAt: 1,
+   language: 'es',
+   expectedUpdatedAt: 'T1',
+@@ -52,22 +53,19 @@ for (const value of [null, { ...snapshot, baseLanguage: 42 }, { ...snapshot, lin
+   });
+ }
+ 
+-for (const source of [{ key: 'author:lesson:lang:es', capturedAt: 4 }, undefined]) {
++for (const source of [[{ key: 'author:lesson:lang:es', revision: 'source-revision' }], undefined]) {
+   test(`MS3b fix4 IndexedDB roundtrips acceptedSource=${JSON.stringify(source)}`, async () => {
+     const value = { ...snapshot, ...(source === undefined ? {} : { acceptedSource: source }) };
+     storedValue(value);
+-    expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toEqual({
+-      ...value,
+-      ...(source === undefined ? {} : { acceptedSource: [source] }),
+-    });
++    expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toEqual(value);
+   });
+ }
+ for (const source of [
+   null,
+-  { key: 42, capturedAt: 1 },
+-  { key: 'k', capturedAt: '1' },
+-  { key: 'k', capturedAt: Infinity },
+-  { key: 'k' },
++  [{ key: 42, revision: 'source' }],
++  [{ key: 'k', revision: 1 }],
++  [{ key: 'k' }],
++  { key: 'k', capturedAt: 1 },
+ ]) {
+   test(`MS3b fix4 IndexedDB rejects malformed acceptedSource=${JSON.stringify(source)}`, async () => {
+     storedValue({ ...snapshot, acceptedSource: source });
+@@ -79,7 +77,9 @@ for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
+   test(`MS3b fix4 atomic IndexedDB cleanup ${outcome} uses one readwrite transaction and waits for commit`, async () => {
+     const transaction = new EventTarget();
+     const value =
+-      outcome === 'missing' ? undefined : { ...snapshot, capturedAt: outcome === 'newer' ? 2 : 1 };
++      outcome === 'missing'
++        ? undefined
++        : { ...snapshot, revision: outcome === 'newer' ? 'newer-revision' : snapshot.revision };
+     const request = Object.assign(new EventTarget(), { result: value });
+     const remove = rstest.fn();
+     const get = rstest.fn(() => request);
+@@ -94,7 +94,7 @@ for (const outcome of ['same', 'newer', 'missing', 'abort'] as const) {
+     const store = createIndexedDbTranscriptHistory();
+     if (store === null) throw new Error('test requires IndexedDB stub');
+     let settled = false;
+-    const pending = store.clearIfVersion(snapshot.key, snapshot.capturedAt);
++    const pending = store.clearIfVersion(snapshot.key, snapshot.revision);
+     const observed = pending.then((value) => {
+       settled = true;
+       return value;
+@@ -126,7 +126,7 @@ for (const count of [0, 1, 8]) {
+   test(`MS3b fix5 IndexedDB validates ancestry list length ${count}`, async () => {
+     const acceptedSource = Array.from({ length: count }, (_, index) => ({
+       key: `ancestor-${index}`,
+-      capturedAt: index,
++      revision: crypto.randomUUID(),
+     }));
+     const value = { ...snapshot, acceptedSource };
+     storedValue(value);
+@@ -135,12 +135,65 @@ for (const count of [0, 1, 8]) {
+ }
+ for (const acceptedSource of [
+   [null],
+-  [{ key: 'k', capturedAt: Infinity }],
+-  [{ key: 'k', capturedAt: '1' }],
+-  Array.from({ length: 9 }, (_, index) => ({ key: `ancestor-${index}`, capturedAt: index })),
++  [{ key: 'k', revision: Infinity }],
++  [{ key: 'k', revision: 1 }],
++  Array.from({ length: 9 }, (_, index) => ({ key: `ancestor-${index}`, revision: String(index) })),
+ ]) {
+   test(`MS3b fix5 IndexedDB rejects malformed or unbounded ancestry ${JSON.stringify(acceptedSource)}`, async () => {
+     storedValue({ ...snapshot, acceptedSource });
+     expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toBeNull();
+   });
+ }
++
++test('MS3d IndexedDB rejects a stored snapshot without revision', async () => {
++  const { revision: _revision, ...legacy } = snapshot;
++  storedValue(legacy);
++  expect(await createIndexedDbTranscriptHistory()?.read(snapshot.key)).toBeNull();
++});
++
++test('MS3d IndexedDB cleanup preserves a replacement with equal capturedAt and different revision', async () => {
++  // Stateful request/event boundary: production write/read/atomic cleanup all execute.
++  let stored: unknown;
++  const transaction = () => {
++    const tx = new EventTarget();
++    const request = (action: () => unknown) => {
++      const req = Object.assign(new EventTarget(), { result: stored });
++      queueMicrotask(() => {
++        req.result = action();
++        req.dispatchEvent(new Event('success'));
++        queueMicrotask(() => tx.dispatchEvent(new Event('complete')));
++      });
++      return req;
++    };
++    return Object.assign(tx, {
++      objectStore: () => ({
++        put: (value: unknown) =>
++          request(() => {
++            stored = value;
++            return snapshot.key;
++          }),
++        get: () => request(() => stored),
++        delete: () =>
++          request(() => {
++            stored = undefined;
++          }),
++      }),
++    });
++  };
++  rstest.stubGlobal('indexedDB', {
++    open: () => {
++      const req = Object.assign(new EventTarget(), { result: { transaction } });
++      queueMicrotask(() => req.dispatchEvent(new Event('success')));
++      return req;
++    },
++  });
++  const store = createIndexedDbTranscriptHistory();
++  if (store === null) throw new Error('test requires IndexedDB stub');
++  const second = { ...snapshot, revision: 'replacement' };
++  await store.write(snapshot);
++  await store.write(second);
++  expect(await store.clearIfVersion(snapshot.key, snapshot.revision)).toBe(false);
++  expect(await store.read(snapshot.key)).toEqual(second);
++  expect(await store.clearIfVersion(second.key, second.revision)).toBe(true);
++  expect(await store.read(snapshot.key)).toBeNull();
++});
+diff --git a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.ts b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.ts
+index c85d81b..5fc1665 100644
+--- a/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.ts
++++ b/frontend/src/modules/transcript/adapters/transcript-history-indexed-database.ts
+@@ -4,16 +4,12 @@ import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
+ 
+ const databaseName = 'courses-transcript-history';
+ const databaseVersion = 1;
+-const acceptedSourceSchema = z.object({ key: z.string(), capturedAt: z.number().finite() });
++const acceptedSourceSchema = z.object({ key: z.string(), revision: z.string() });
+ const snapshotSchema = z.object({
+   key: z.string(),
+   capturedAt: z.number().finite(),
+-  acceptedSource: z
+-    .union([
+-      z.array(acceptedSourceSchema).max(maximumAcceptedTranscriptSources),
+-      acceptedSourceSchema.transform((source) => [source]), // Pre-list snapshots remain readable.
+-    ])
+-    .optional(),
++  revision: z.string(),
++  acceptedSource: z.array(acceptedSourceSchema).max(maximumAcceptedTranscriptSources).optional(),
+   language: z.string().optional(),
+   baseLanguage: z.string().optional(),
+   expectedUpdatedAt: z.string().optional(),
+@@ -107,6 +103,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
+         return {
+           key: snapshot.key,
+           capturedAt: snapshot.capturedAt,
++          revision: snapshot.revision,
+           lines: snapshot.lines,
+           ...(snapshot.acceptedSource === undefined
+             ? {}
+@@ -122,7 +119,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
+     write: (snapshot) =>
+       run<IDBValidKey>('readwrite', (store) => store.put(snapshot)).then(() => undefined),
+     clear: (key) => run<undefined>('readwrite', (store) => store.delete(key)),
+-    clearIfVersion: (key, capturedAt) =>
++    clearIfVersion: (key, revision) =>
+       open().then(
+         (connection) =>
+           new Promise<boolean>((resolve, reject) => {
+@@ -132,11 +129,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
+             const request = store.get(key);
+             request.addEventListener('success', () => {
+               const result = snapshotSchema.safeParse(request.result);
+-              if (
+-                result.success &&
+-                result.data.key === key &&
+-                result.data.capturedAt === capturedAt
+-              ) {
++              if (result.success && result.data.key === key && result.data.revision === revision) {
+                 // Queue delete in the get callback, while this SAME transaction is active.
+                 store.delete(key);
+                 deleted = true;
+diff --git a/frontend/src/modules/transcript/adapters/transcript-history-memory.ts b/frontend/src/modules/transcript/adapters/transcript-history-memory.ts
+index b30405e..2a2f840 100644
+--- a/frontend/src/modules/transcript/adapters/transcript-history-memory.ts
++++ b/frontend/src/modules/transcript/adapters/transcript-history-memory.ts
+@@ -20,8 +20,8 @@ export function createMemoryTranscriptHistory(): TranscriptHistoryStore {
+       snapshots.delete(key);
+       return Promise.resolve();
+     },
+-    clearIfVersion: (key, capturedAt) => {
+-      if (snapshots.get(key)?.capturedAt !== capturedAt) return Promise.resolve(false);
++    clearIfVersion: (key, revision) => {
++      if (snapshots.get(key)?.revision !== revision) return Promise.resolve(false);
+       snapshots.delete(key);
+       return Promise.resolve(true);
+     },
+diff --git a/frontend/src/modules/transcript/application/recovery.test.ts b/frontend/src/modules/transcript/application/recovery.test.ts
+index b66eb43..5dab556 100644
+--- a/frontend/src/modules/transcript/application/recovery.test.ts
++++ b/frontend/src/modules/transcript/application/recovery.test.ts
+@@ -9,6 +9,7 @@ import {
+   recoveryOffer,
+   transcriptHistoryKey,
+   type TranscriptDraftLine,
++  type TranscriptRecoveryTab,
+   type TranscriptSnapshot,
+ } from './recovery';
+ 
+@@ -23,6 +24,7 @@ const line = (overrides: Partial<TranscriptDraftLine> = {}): TranscriptDraftLine
+ 
+ const snapshot = (overrides: Partial<TranscriptSnapshot> = {}): TranscriptSnapshot => ({
+   key: 'user:lesson',
++  revision: 'snapshot-revision',
+   capturedAt: 1_700_000_000_000,
+   language: 'uk',
+   expectedUpdatedAt: '2026-09-18T10:00:00Z',
+@@ -185,6 +187,7 @@ test('the sweep removes exactly the foreign keys and survives a store that refus
+   const store = createMemoryTranscriptHistory();
+   const snapshotFor = (key: string) => ({
+     key,
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: undefined,
+     lines: [line()],
+@@ -210,9 +213,9 @@ test('the sweep removes exactly the foreign keys and survives a store that refus
+   await expect(forgetOtherAuthors(refusing, 'author-1')).resolves.toBeUndefined();
+ });
+ 
+-const tabs = [
+-  { instanceId: 'track:en', language: 'en', isDefault: true },
+-  { instanceId: 'track:uk', language: 'uk', isDefault: false },
++const tabs: TranscriptRecoveryTab[] = [
++  { kind: 'track', instanceId: 'track:en', language: 'en', isDefault: true },
++  { kind: 'track', instanceId: 'track:uk', language: 'uk', isDefault: false },
+ ];
+ function place(snapshots: readonly TranscriptSnapshot[], currentTabs = tabs) {
+   return detachedTranscriptSnapshots(
+@@ -248,8 +251,12 @@ test('M3-R6 gone tracks go to their language/default; own keys and another lesso
+ });
+ 
+ test('M3-R6 multiple detached snapshots are newest first and only keys actually listed are used', () => {
+-  const old = snapshot({ capturedAt: 1 });
+-  const newest = snapshot({ key: 'user:lesson:track:gone', capturedAt: 3 });
++  const old = snapshot({ revision: crypto.randomUUID(), capturedAt: 1 });
++  const newest = snapshot({
++    key: 'user:lesson:track:gone',
++    revision: crypto.randomUUID(),
++    capturedAt: 3,
++  });
+   expect(place([old, newest]).map((s) => s.snapshot.capturedAt)).toEqual([3, 1]);
+   expect(detachedTranscriptSnapshots('user:lesson', [], [old], tabs)).toEqual([]);
+ });
+@@ -266,7 +273,10 @@ test('M3-R6 single editor owns the legacy key and receives detached track/lang s
+ test('M3-R12 c orphan attached by track rename is detached and placed in that track', () => {
+   const orphan = snapshot({ key: 'user:lesson:lang:uk' });
+   expect(
+-    place([orphan], [...tabs, { instanceId: 'lang:uk', language: 'uk', isDefault: false }]),
++    place(
++      [orphan],
++      [...tabs, { kind: 'orphan', instanceId: 'lang:uk', language: 'uk', isDefault: false }],
++    ),
+   ).toEqual([]);
+   expect(place([orphan])[0]?.instanceId).toBe('track:uk');
+ });
+@@ -290,7 +300,7 @@ for (const version of ['same', 'newer', 'same-time-content', 'read-fails', 'owne
+     const accepted = snapshot();
+     const stored =
+       version === 'newer'
+-        ? { ...accepted, capturedAt: accepted.capturedAt + 1 }
++        ? { ...accepted, revision: crypto.randomUUID(), capturedAt: accepted.capturedAt }
+         : version === 'same-time-content'
+           ? { ...accepted, lines: [line({ text: 'C' })] }
+           : accepted;
+@@ -305,9 +315,9 @@ for (const version of ['same', 'newer', 'same-time-content', 'read-fails', 'owne
+                 throw new Error('blocked');
+               }
+             : store.read,
+-        clearIfVersion: async (key, capturedAt) => {
++        clearIfVersion: async (key, revision) => {
+           clears.push(key);
+-          return store.clearIfVersion(key, capturedAt);
++          return store.clearIfVersion(key, revision);
+         },
+       },
+       accepted,
+@@ -341,7 +351,12 @@ test('MS3b fix3 compare-delete rechecks mounted ownership after deferred read',
+ test('MS3b fix4 atomic cleanup preserves capture C between read A and conditional delete', async () => {
+   const store = createMemoryTranscriptHistory();
+   const accepted = snapshot();
+-  const newer = { ...accepted, capturedAt: accepted.capturedAt + 1, lines: [line({ text: 'C' })] };
++  const newer = {
++    ...accepted,
++    revision: crypto.randomUUID(),
++    capturedAt: accepted.capturedAt,
++    lines: [line({ text: 'C' })],
++  };
+   await store.write(accepted);
+   await clearAcceptedTranscriptSnapshot(
+     {
+@@ -356,8 +371,8 @@ test('MS3b fix4 atomic cleanup preserves capture C between read A and conditiona
+     () => false,
+   );
+   expect(await store.read(accepted.key)).toEqual(newer);
+-  expect(await store.clearIfVersion(accepted.key, accepted.capturedAt)).toBe(false);
+-  expect(await store.clearIfVersion(newer.key, newer.capturedAt)).toBe(true);
++  expect(await store.clearIfVersion(accepted.key, accepted.revision)).toBe(false);
++  expect(await store.clearIfVersion(newer.key, newer.revision)).toBe(true);
+   expect(await store.read(newer.key)).toBeNull();
+ });
+ 
+@@ -365,8 +380,12 @@ test('MS3b fix4 atomic cleanup preserves capture C between read A and conditiona
+ for (const version of ['same', 'newer'] as const) {
+   test(`MS3b fix6 viewer sweep exception / ${version}`, async () => {
+     const store = createMemoryTranscriptHistory();
+-    const own = snapshot({ key: 'viewer:lesson', capturedAt: 1 });
+-    const foreign = snapshot({ key: 'other:lesson', capturedAt: version === 'same' ? 1 : 2 });
++    const own = snapshot({ key: 'viewer:lesson', revision: crypto.randomUUID(), capturedAt: 1 });
++    const foreign = snapshot({
++      key: 'other:lesson',
++      revision: crypto.randomUUID(),
++      capturedAt: version === 'same' ? 1 : 2,
++    });
+     await store.write(own);
+     await store.write(foreign);
+     await forgetOtherAuthors(store, 'viewer');
+@@ -374,3 +393,56 @@ for (const version of ['same', 'newer'] as const) {
+     expect(await store.read(foreign.key)).toBeNull();
+   });
+ }
++
++test('MS3d memory cleanup preserves a replacement with equal capturedAt and different revision', async () => {
++  const store = createMemoryTranscriptHistory();
++  const first = snapshot({ revision: 'first' });
++  const second = { ...first, revision: 'second' };
++  await store.write(first);
++  await store.write(second);
++  expect(await store.clearIfVersion(first.key, first.revision)).toBe(false);
++  expect(await store.read(first.key)).toEqual(second);
++  expect(await store.clearIfVersion(second.key, second.revision)).toBe(true);
++  expect(await store.read(second.key)).toBeNull();
++});
++
++test('MS3d detached uk snapshot skips a matching orphan for default or first track', () => {
++  const detached = snapshot({ key: 'user:lesson:track:gone', language: 'UK' });
++  const orphan: TranscriptRecoveryTab = {
++    kind: 'orphan',
++    instanceId: 'lang:uk',
++    language: 'uk',
++    isDefault: false,
++  };
++  const first: TranscriptRecoveryTab = {
++    kind: 'track',
++    instanceId: 'track:fr',
++    language: 'fr',
++    isDefault: false,
++  };
++  const defaultTrack: TranscriptRecoveryTab = {
++    kind: 'track',
++    instanceId: 'track:en',
++    language: 'en',
++    isDefault: true,
++  };
++  expect(place([detached], [defaultTrack, orphan])[0]?.instanceId).toBe('track:en');
++  expect(place([detached], [orphan, first, defaultTrack])[0]?.instanceId).toBe('track:en');
++  expect(place([detached], [{ ...orphan, isDefault: true }, first])[0]?.instanceId).toBe(
++    'track:fr',
++  );
++  expect(
++    place(
++      [detached],
++      [first, defaultTrack, { ...first, instanceId: 'track:uk', language: 'uk' }],
++    )[0]?.instanceId,
++  ).toBe('track:uk');
++  // With no tracks, preserve the existing language/default/single-editor behavior.
++  expect(
++    place(
++      [detached],
++      [{ ...orphan, instanceId: 'lang:en', language: 'en', isDefault: true }, orphan],
++    )[0]?.instanceId,
++  ).toBe('lang:uk');
++  expect(place([detached], [])[0]?.instanceId).toBe('');
++});
+diff --git a/frontend/src/modules/transcript/application/recovery.ts b/frontend/src/modules/transcript/application/recovery.ts
+index e453abf..b569e0f 100644
+--- a/frontend/src/modules/transcript/application/recovery.ts
++++ b/frontend/src/modules/transcript/application/recovery.ts
+@@ -29,7 +29,7 @@ export type TranscriptDraftLine = {
+ 
+ export type AcceptedTranscriptSource = {
+   readonly key: string;
+-  readonly capturedAt: number;
++  readonly revision: string;
+ };
+ 
+ export const maximumAcceptedTranscriptSources = 8;
+@@ -39,6 +39,7 @@ export type TranscriptSnapshot = {
+   readonly acceptedSource?: readonly AcceptedTranscriptSource[];
+   readonly key: string;
+   readonly capturedAt: number;
++  readonly revision: string;
+   /** The editor language at capture time. Older snapshots may omit this field. */
+   readonly language?: string;
+   /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
+@@ -198,6 +199,7 @@ export function transcriptHistoryKey(parts: {
+ 
+ /** Current product tab identities, independent of media-module types. Empty means one editor. */
+ export type TranscriptRecoveryTab = {
++  readonly kind: 'track' | 'orphan';
+   readonly instanceId: string;
+   readonly language: string;
+   readonly isDefault: boolean;
+@@ -224,17 +226,16 @@ export function detachedTranscriptSnapshots(
+   const ownKeys = new Set(
+     tabs.length === 0 ? [lessonKey] : tabs.map((tab) => `${lessonKey}:${tab.instanceId}`),
+   );
+-  const fallback = tabs.find((tab) => tab.isDefault) ?? tabs[0];
++  const tracks = tabs.filter((tab) => tab.kind === 'track');
++  const destinations = tracks.length === 0 ? tabs : tracks;
++  const fallback = destinations.find((tab) => tab.isDefault) ?? destinations[0];
+   return snapshots
+     .filter((snapshot) => storedKeys.has(snapshot.key) && !ownKeys.has(snapshot.key))
+     .sort((a, b) => b.capturedAt - a.capturedAt || a.key.localeCompare(b.key))
+     .map((snapshot) => {
+-      const matches = tabs.filter(
++      const target = destinations.find(
+         (tab) => tab.language.toLowerCase() === snapshot.language?.toLowerCase(),
+       );
+-      // Construction excludes a track and orphan with the same language; prefer the track
+-      // defensively if a caller supplies both.
+-      const target = matches.find((tab) => tab.instanceId.startsWith('track:')) ?? matches[0];
+       return {
+         instanceId: (target ?? fallback)?.instanceId ?? '',
+         legacy: snapshot.key === lessonKey,
+@@ -255,7 +256,7 @@ export async function clearAcceptedTranscriptSnapshot(
+       !isOwned() &&
+       stored !== null &&
+       stored.key === accepted.key &&
+-      stored.capturedAt === accepted.capturedAt &&
++      stored.revision === accepted.revision &&
+       (!('lines' in accepted) ||
+         (stored.language === accepted.language &&
+           stored.baseLanguage === accepted.baseLanguage &&
+@@ -263,7 +264,7 @@ export async function clearAcceptedTranscriptSnapshot(
+           stored.draftUpdatedAt === accepted.draftUpdatedAt &&
+           sameLines(stored.lines, accepted.lines)))
+     )
+-      await store.clearIfVersion(accepted.key, accepted.capturedAt);
++      await store.clearIfVersion(accepted.key, accepted.revision);
+   } catch {
+     // A failed read is not permission to delete; atomic cleanup preserves intervening captures.
+   }
+diff --git a/frontend/src/modules/transcript/ports/TranscriptHistoryStore.ts b/frontend/src/modules/transcript/ports/TranscriptHistoryStore.ts
+index c7c4261..bc77ffe 100644
+--- a/frontend/src/modules/transcript/ports/TranscriptHistoryStore.ts
++++ b/frontend/src/modules/transcript/ports/TranscriptHistoryStore.ts
+@@ -14,7 +14,7 @@ export interface TranscriptHistoryStore {
+   write(snapshot: TranscriptSnapshot): Promise<void>;
+   clear(key: string): Promise<void>;
+   /** Atomically delete only the captured version; newer captures must survive. */
+-  clearIfVersion(key: string, capturedAt: number): Promise<boolean>;
++  clearIfVersion(key: string, revision: string): Promise<boolean>;
+   /**
+    * Every key held, so that a change of viewer can sweep what is no longer theirs. The store
+    * returns keys and nothing else: which of them are foreign is a decision, and it lives in
+diff --git a/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx b/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
+index f20bd85..e125072 100644
+--- a/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
++++ b/frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx
+@@ -149,6 +149,7 @@ type TranscriptHistoryStoreForTest = ReturnType<typeof createMemoryTranscriptHis
+ test('unsaved lines left on this device are offered back, never restored on their own', async () => {
+   await editorWithSnapshot({
+     key: 'author:lesson',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: '2026-09-18T00:00:00Z',
+     lines: [storedLine],
+@@ -172,6 +173,7 @@ test('a snapshot identical to the server is not offered', async () => {
+   // disarms it for the one time it matters.
+   await editorWithSnapshot({
+     key: 'author:lesson',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: '2026-09-18T00:00:00Z',
+     lines: [{ ...storedLine, text: 'Перша' }],
+@@ -185,6 +187,7 @@ test('a snapshot taken against an older server version is offered as an overwrit
+   // base the snapshot was taken against is not the base it would land on.
+   await editorWithSnapshot({
+     key: 'author:lesson',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: '2026-09-17T00:00:00Z',
+     lines: [storedLine],
+@@ -199,6 +202,7 @@ test('a snapshot taken against an older server version is offered as an overwrit
+ test('a save the server accepted drops the local copy; nothing else does', async () => {
+   const { store } = await editorWithSnapshot({
+     key: 'author:lesson',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: '2026-09-18T00:00:00Z',
+     lines: [storedLine],
+@@ -278,6 +282,7 @@ test('a recovery snapshot restores its language after a reload', async () => {
+   await editorWithSnapshot(
+     {
+       key: 'author:lesson',
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       language: 'en',
+       expectedUpdatedAt: '2026-09-18T00:00:00Z',
+@@ -401,6 +406,7 @@ test('an unsaved local edit outranks a draft offer: only one prompt shows at a t
+   await editorWithSnapshot(
+     {
+       key: 'author:lesson',
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       expectedUpdatedAt: '2026-09-18T00:00:00Z',
+       lines: [storedLine],
+@@ -431,8 +437,20 @@ for (const legacy of [true, false]) {
+   test(`M3-R6 Ukrainian detached unknown-language copy (legacy=${legacy}); Discard continues after refused clear`, async () => {
+     const store = createMemoryTranscriptHistory();
+     const key = legacy ? 'author:lesson' : 'author:lesson:track:gone';
+-    const snapshot = { key, capturedAt: 2, expectedUpdatedAt: undefined, lines: [storedLine] };
+-    const next = { ...snapshot, key: 'author:lesson:lang:fr', capturedAt: 1, language: 'fr' };
++    const snapshot = {
++      key,
++      revision: crypto.randomUUID(),
++      capturedAt: 2,
++      expectedUpdatedAt: undefined,
++      lines: [storedLine],
++    };
++    const next = {
++      ...snapshot,
++      key: 'author:lesson:lang:fr',
++      revision: crypto.randomUUID(),
++      capturedAt: 1,
++      language: 'fr',
++    };
+     const clear = rstest.spyOn(store, 'clearIfVersion').mockRejectedValue(new Error('blocked'));
+     await editor(async () => null, {
+       instanceId: 'track:uk',
+@@ -450,7 +468,7 @@ for (const legacy of [true, false]) {
+     });
+     fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' }));
+     await screen.findByRole('heading', { name: 'Незбережені рядки з іншої вкладки (мова: fr)' });
+-    expect(clear).toHaveBeenCalledExactlyOnceWith(key, snapshot.capturedAt);
++    expect(clear).toHaveBeenCalledExactlyOnceWith(key, snapshot.revision);
+   });
+ }
+ 
+@@ -458,6 +476,7 @@ test('MS3b fix 1 / M3-R6 Restore A then B saves only B and offers A again', asyn
+   const store = createMemoryTranscriptHistory();
+   const a = {
+     key: 'author:lesson:track:gone-a',
++    revision: crypto.randomUUID(),
+     capturedAt: 2,
+     language: 'uk',
+     expectedUpdatedAt: undefined,
+@@ -466,6 +485,7 @@ test('MS3b fix 1 / M3-R6 Restore A then B saves only B and offers A again', asyn
+   const b = {
+     ...a,
+     key: 'author:lesson:track:gone-b',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     lines: [{ ...storedLine, text: 'B' }],
+   };
+@@ -500,6 +520,7 @@ test('MS3b fix2 / M3-R6 locked own offer survives clean rename, blur, unmount an
+   const key = 'author:lesson:track:uk';
+   const snapshot = {
+     key,
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     language: 'uk',
+     expectedUpdatedAt: undefined,
+@@ -571,6 +592,7 @@ for (const instanceId of ['lang:uk', 'track:uk']) {
+     await editorWithSnapshot(
+       {
+         key: 'author:lesson',
++        revision: crypto.randomUUID(),
+         capturedAt: 1,
+         language: 'uk',
+         expectedUpdatedAt: undefined,
+@@ -642,6 +664,7 @@ for (const resolution of ['restore', 'discard'] as const) {
+       const key = `author:lesson:track:fix2-${resolution}-${stale}`;
+       const snapshot = {
+         key,
++        revision: crypto.randomUUID(),
+         capturedAt: 1,
+         language: 'uk',
+         expectedUpdatedAt: stale ? 'old' : '2026-09-18T00:00:00Z',
+@@ -684,6 +707,7 @@ for (const outcome of ['snapshot', 'none', 'reject'] as const) {
+     const key = `author:lesson:track:fix2-initial-${outcome}`;
+     const snapshot = {
+       key,
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       expectedUpdatedAt: '2026-09-18T00:00:00Z',
+       lines: [storedLine],
+@@ -748,6 +772,7 @@ test('MS3b fix2 / M3-R6 detached offer keeps editing enabled and captures only t
+   const key = 'author:lesson:track:fix2-detached-own';
+   const snapshot = {
+     key: 'author:lesson:track:gone',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: undefined,
+     lines: [storedLine],
+@@ -775,7 +800,13 @@ test('MS3b fix2 / M3-R6 detached offer keeps editing enabled and captures only t
+ test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only fields', async () => {
+   const store = createMemoryTranscriptHistory();
+   const key = 'author:lesson:track:fix2-english';
+-  await store.write({ key, capturedAt: 1, expectedUpdatedAt: undefined, lines: [storedLine] });
++  await store.write({
++    key,
++    revision: crypto.randomUUID(),
++    capturedAt: 1,
++    expectedUpdatedAt: undefined,
++    lines: [storedLine],
++  });
+   render(
+     <I18nProvider instance={createI18n('en')}>
+       <TranscriptEditor
+@@ -799,7 +830,13 @@ test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only
+ test('MS3b fix2 / M3-R6 Discard without new edits retires only the discarded version across remount', async () => {
+   const store = createMemoryTranscriptHistory();
+   const key = 'author:lesson:track:fix2-dismiss-old';
+-  const snapshot = { key, capturedAt: 1, expectedUpdatedAt: undefined, lines: [storedLine] };
++  const snapshot = {
++    key,
++    revision: crypto.randomUUID(),
++    capturedAt: 1,
++    expectedUpdatedAt: undefined,
++    lines: [storedLine],
++  };
+   await store.write(snapshot);
+   const write = rstest.spyOn(store, 'write');
+   const props = { history: { key, store } };
+@@ -821,6 +858,7 @@ for (const source of ['own', 'detached'] as const) {
+         const ownKey = `author:focus:${source}:${action}:${empty}`;
+         const snapshot = {
+           key: source === 'own' ? ownKey : `${ownKey}:track:gone`,
++          revision: crypto.randomUUID(),
+           capturedAt: 1,
+           language: 'uk',
+           baseLanguage: 'uk',
+@@ -861,13 +899,19 @@ for (const source of ['own', 'detached'] as const) {
+       const ownKey = `author:focus-next:${source}:${action}`;
+       const snapshot = {
+         key: source === 'own' ? ownKey : `${ownKey}:track:gone`,
++        revision: crypto.randomUUID(),
+         capturedAt: 2,
+         language: 'uk',
+         expectedUpdatedAt: '2026-09-18T00:00:00Z',
+         lines: [storedLine],
+       };
+       if (source === 'own') await store.write(snapshot);
+-      const next = { ...snapshot, key: 'author:lesson:track:next', capturedAt: 1 };
++      const next = {
++        ...snapshot,
++        key: 'author:lesson:track:next',
++        revision: crypto.randomUUID(),
++        capturedAt: 1,
++      };
+       await editor(async () => null, {
+         history: { key: ownKey, store },
+         detachedSnapshots: [
+@@ -891,6 +935,7 @@ for (const newerSource of [false, true]) {
+     const key = `author:fix4-${newerSource}:track:own`;
+     const source = {
+       key: `author:fix4-${newerSource}:lang:uk`,
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       language: 'uk',
+       baseLanguage: 'uk',
+@@ -923,7 +968,12 @@ for (const newerSource of [false, true]) {
+     const capturedSource = (await store.read(key))?.acceptedSource;
+     const second = await editor(save, await props());
+     fireEvent.click(await screen.findByRole('button', { name: 'Відновити зміни' }));
+-    const newer = { ...source, capturedAt: 2, lines: [{ ...storedLine, text: 'Newer C' }] };
++    const newer = {
++      ...source,
++      revision: crypto.randomUUID(),
++      capturedAt: 2,
++      lines: [{ ...storedLine, text: 'Newer C' }],
++    };
+     if (newerSource) await store.write(newer);
+     fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+     await screen.findByText('Транскрипт збережено.');
+@@ -943,7 +993,7 @@ for (const newerSource of [false, true]) {
+       expect(await store.read(source.key)).toEqual(newerSource ? newer : null);
+       view.unmount();
+     }
+-    expect(capturedSource).toEqual([{ key: source.key, capturedAt: source.capturedAt }]);
++    expect(capturedSource).toEqual([{ key: source.key, revision: source.revision }]);
+   });
+ }
+ 
+@@ -1064,6 +1114,7 @@ for (const newerAncestor of [false, true]) {
+     fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
+     const newer = {
+       ...a,
++      revision: crypto.randomUUID(),
+       capturedAt: a.capturedAt + 1,
+       lines: [{ ...storedLine, text: 'Newer ancestor' }],
+     };
+@@ -1114,6 +1165,7 @@ for (const mode of ['deduplicate', 'cap'] as const) {
+     const key = `author:fix5-bound-${mode}:track:own`;
+     const source = {
+       key: `${key}:source`,
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       expectedUpdatedAt: undefined,
+       lines: [storedLine],
+@@ -1121,12 +1173,12 @@ for (const mode of ['deduplicate', 'cap'] as const) {
+     const chain =
+       mode === 'deduplicate'
+         ? [
+-            { key: source.key, capturedAt: source.capturedAt },
+-            { key: source.key, capturedAt: source.capturedAt },
++            { key: source.key, revision: source.revision },
++            { key: source.key, revision: source.revision },
+           ]
+         : Array.from({ length: 8 }, (_, index) => ({
+             key: `${key}:ancestor-${index}`,
+-            capturedAt: index,
++            revision: crypto.randomUUID(),
+           }));
+     for (const entry of chain) await store.write({ ...source, ...entry });
+     const snapshot = { ...source, acceptedSource: chain };
+@@ -1138,7 +1190,7 @@ for (const mode of ['deduplicate', 'cap'] as const) {
+     fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
+     first.unmount();
+     const expected = [
+-      { key: source.key, capturedAt: source.capturedAt },
++      { key: source.key, revision: source.revision },
+       ...(mode === 'cap' ? chain.slice(0, 7) : []),
+     ];
+     expect((await store.read(key))?.acceptedSource).toEqual(expected);
+@@ -1161,6 +1213,7 @@ test('MS3b fix5 Discard mismatch with refused refresh leaves the key unresolved
+   const store = createMemoryTranscriptHistory();
+   const source = {
+     key: 'author:fix5-refused-refresh:old',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     language: 'uk',
+     expectedUpdatedAt: undefined,
+@@ -1171,7 +1224,12 @@ test('MS3b fix5 Discard mismatch with refused refresh leaves the key unresolved
+     history: { key: `${source.key}:own`, store },
+     detachedSnapshots: [{ instanceId: '', legacy: false, snapshot: source }],
+   });
+-  const c = { ...source, capturedAt: 2, lines: [{ ...storedLine, text: 'C after read refusal' }] };
++  const c = {
++    ...source,
++    revision: crypto.randomUUID(),
++    capturedAt: 2,
++    lines: [{ ...storedLine, text: 'C after read refusal' }],
++  };
+   await store.write(c);
+   const read = rstest.spyOn(store, 'read').mockRejectedValueOnce(new Error('read refused'));
+   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' })));
+@@ -1188,6 +1246,7 @@ for (const newer of [false, true]) {
+     const store = createMemoryTranscriptHistory();
+     const source = {
+       key: `author:fix6-focus:${newer}:old`,
++      revision: crypto.randomUUID(),
+       capturedAt: 1,
+       language: 'uk',
+       expectedUpdatedAt: undefined,
+@@ -1213,10 +1272,11 @@ for (const newer of [false, true]) {
+     await userEvent.setup().keyboard('{Enter}');
+     const elsewhere = within(other.container).getByRole('button', { name: 'Elsewhere' });
+     act(() => elsewhere.focus());
+-    if (newer) await store.write({ ...source, capturedAt: 2 });
++    const replacement = { ...source, revision: crypto.randomUUID(), capturedAt: 2 };
++    if (newer) await store.write(replacement);
+     await act(async () => complete());
+     expect(document.activeElement).toBe(elsewhere);
+-    expect(await store.read(source.key)).toEqual(newer ? { ...source, capturedAt: 2 } : null);
++    expect(await store.read(source.key)).toEqual(newer ? replacement : null);
+   });
+ }
+ 
+@@ -1227,6 +1287,7 @@ for (const path of ['own Save', 'accepted-source Save'] as const) {
+       const ownKey = `author:fix6-matrix:${path}:${version}:own`;
+       const source = {
+         key: `${ownKey}:detached`,
++        revision: crypto.randomUUID(),
+         capturedAt: 1,
+         language: 'uk',
+         expectedUpdatedAt: undefined,
+@@ -1256,6 +1317,7 @@ for (const path of ['own Save', 'accepted-source Save'] as const) {
+       expect(save).toHaveBeenCalledTimes(1);
+       const c = {
+         ...owned,
++        revision: crypto.randomUUID(),
+         capturedAt: owned.capturedAt + 1000,
+         lines: [{ ...storedLine, text: 'C during Save' }],
+       };
+@@ -1293,6 +1355,7 @@ test('MS3b fix6 failed Save preserves a newer capture without recapturing old li
+   if (a === null) throw new Error('pending lines must be captured before Save');
+   const c = {
+     ...a,
++    revision: crypto.randomUUID(),
+     capturedAt: a.capturedAt + 1000,
+     lines: [{ ...storedLine, text: 'C after Save began' }],
+   };
+diff --git a/frontend/src/modules/transcript/ui/TranscriptEditor.tsx b/frontend/src/modules/transcript/ui/TranscriptEditor.tsx
+index a0b4221..49eb1eb 100644
+--- a/frontend/src/modules/transcript/ui/TranscriptEditor.tsx
++++ b/frontend/src/modules/transcript/ui/TranscriptEditor.tsx
+@@ -165,7 +165,7 @@ export function TranscriptEditor({
+     get acceptedSource() {
+       return acceptedDetached.current.length === 0
+         ? undefined
+-        : acceptedDetached.current.map(({ key, capturedAt }) => ({ key, capturedAt }));
++        : acceptedDetached.current.map(({ key, revision }) => ({ key, revision }));
+     },
+   };
+   const recovery = useTranscriptRecovery({
+@@ -256,13 +256,13 @@ export function TranscriptEditor({
+         .filter(
+           (source, index) =>
+             sources.findIndex(
+-              (other) => other.key === source.key && other.capturedAt === source.capturedAt,
++              (other) => other.key === source.key && other.revision === source.revision,
+             ) === index,
+         )
+         .slice(0, maximumAcceptedTranscriptSources);
+     } else {
+       try {
+-        if (!(await history.store.clearIfVersion(key, detached.snapshot.capturedAt))) {
++        if (!(await history.store.clearIfVersion(key, detached.snapshot.revision))) {
+           const latest = await history.store.read(key).catch(() => undefined);
+           if (latest !== null) {
+             focusAfterRecovery.current = initiatingControl;
+diff --git a/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx b/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
+index f4f9316..1202a0f 100644
+--- a/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
++++ b/frontend/src/modules/transcript/ui/use-transcript-recovery.test.tsx
+@@ -23,6 +23,7 @@ const baseline: TranscriptBaseline = {
+ };
+ afterEach(() => {
+   rstest.useRealTimers();
++  rstest.restoreAllMocks();
+ });
+ 
+ function fixture() {
+@@ -83,6 +84,7 @@ test('M3-R6 capture in A leaves B untouched', async () => {
+   const f = fixture();
+   await f.store.write({
+     key: 'user:lesson:track:b',
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: 'B1',
+     lines: [{ ...line, text: 'B' }],
+@@ -114,6 +116,7 @@ test('MS3b fix2 / M3-R6 resolved own offer allows ordinary capture and accepted-
+   const key = 'user:lesson:track:a';
+   const snapshot = {
+     key,
++    revision: crypto.randomUUID(),
+     capturedAt: 1,
+     expectedUpdatedAt: 'T1',
+     lines: [{ ...line, text: 'Recovered' }],
+@@ -164,7 +167,13 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const)
+     test(`MS3b fix6 ownership ${path} / ${version}`, async () => {
+       const store = createMemoryTranscriptHistory();
+       const key = `fix6:${path}:${version}`;
+-      const a = { key, capturedAt: 1, expectedUpdatedAt: 'T1', lines: [{ ...line, text: 'A' }] };
++      const a = {
++        key,
++        revision: crypto.randomUUID(),
++        capturedAt: 1,
++        expectedUpdatedAt: 'T1',
++        lines: [{ ...line, text: 'A' }],
++      };
+       await store.write(a);
+       const f = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
+       await waitFor(() => expect(f.result.current.offer.kind).toBe('offer'));
+@@ -177,7 +186,12 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const)
+         if (captured === null) throw new Error('Save must have its own capture');
+         owned = captured;
+       }
+-      const c = { ...owned, capturedAt: owned.capturedAt + 1, lines: [{ ...line, text: 'C' }] };
++      const c = {
++        ...owned,
++        revision: crypto.randomUUID(),
++        capturedAt: owned.capturedAt,
++        lines: [{ ...line, text: 'C' }],
++      };
+       if (version === 'newer') await store.write(c);
+       if (path === 'own Discard') act(() => f.result.current.dismiss());
+       else if (path === 'Save') act(() => f.result.current.finalize());
+@@ -210,6 +224,7 @@ test('MS3b fix6 unknown version never deletes another window capture', async ()
+   await waitFor(() => expect(f.result.current.isLoaded).toBe(true));
+   const c = {
+     key: 'user:lesson:track:a',
++    revision: crypto.randomUUID(),
+     capturedAt: 2,
+     expectedUpdatedAt: 'T1',
+     lines: [{ ...line, text: 'C' }],
+@@ -220,3 +235,26 @@ test('MS3b fix6 unknown version never deletes another window capture', async ()
+   await act(async () => {});
+   expect(await f.store.read(c.key)).toEqual(c);
+ });
++
++test('MS3d hook captures unique revisions in one millisecond and Save preserves the other window', async () => {
++  const store = createMemoryTranscriptHistory();
++  const key = 'ms3d:lesson:track:one';
++  const first = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
++  const second = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
++  await waitFor(() =>
++    expect(first.result.current.isLoaded && second.result.current.isLoaded).toBe(true),
++  );
++  rstest.spyOn(Date, 'now').mockReturnValue(42);
++  act(() => first.result.current.captureNow([{ ...line, text: 'first window' }]));
++  const a = await store.read(key);
++  act(() => second.result.current.captureNow([{ ...line, text: 'second window' }]));
++  const b = await store.read(key);
++  if (a === null || b === null) throw new Error('Both captures must exist');
++  expect(a.capturedAt).toBe(b.capturedAt);
++  expect(a.revision).not.toBe(b.revision);
++  act(() => first.result.current.finalize());
++  await act(async () => {});
++  expect(await store.read(key)).toEqual(b);
++  first.unmount();
++  second.unmount();
++});
+diff --git a/frontend/src/modules/transcript/ui/use-transcript-recovery.ts b/frontend/src/modules/transcript/ui/use-transcript-recovery.ts
+index c0ee8cd..a61fd21 100644
+--- a/frontend/src/modules/transcript/ui/use-transcript-recovery.ts
++++ b/frontend/src/modules/transcript/ui/use-transcript-recovery.ts
+@@ -66,8 +66,8 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
+   const ownership = useRef<{
+     historyKey: string;
+     store: TranscriptHistoryStore;
+-    seen?: { capturedAt: number; ready: Promise<void> };
+-    written?: { capturedAt: number; ready: Promise<void> };
++    seen?: { revision: string; ready: Promise<void> };
++    written?: { revision: string; ready: Promise<void> };
+   }>({ historyKey, store });
+   const pendingLines = useRef<readonly TranscriptDraftLine[]>([]);
+   const capturing = useRef(true);
+@@ -97,7 +97,7 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
+         const stored = await store.read(historyKey);
+         if (cancelled) return;
+         if (stored !== null)
+-          ownership.current.seen = { capturedAt: stored.capturedAt, ready: Promise.resolve() };
++          ownership.current.seen = { revision: stored.revision, ready: Promise.resolve() };
+         const next = recoveryOffer(stored, latest.current.baseline, wasDismissed(historyKey));
+         setOffer(next);
+       } catch {
+@@ -127,12 +127,12 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
+       try {
+         // A write may still be completing when blur/Save asks to retire it.
+         await version.ready;
+-        if (await owner.store.clearIfVersion(owner.historyKey, version.capturedAt)) return;
++        if (await owner.store.clearIfVersion(owner.historyKey, version.revision)) return;
+         if (!refresh) return; // Save leaves a newer foreign capture for the next visit.
+         const stored = await owner.store.read(owner.historyKey);
+         if (ownership.current !== owner) return;
+         if (stored !== null) {
+-          owner.seen = { capturedAt: stored.capturedAt, ready: Promise.resolve() };
++          owner.seen = { revision: stored.revision, ready: Promise.resolve() };
+           forgetDismissal(owner.historyKey);
+         }
+         setOffer(recoveryOffer(stored, latest.current.baseline, false));
+@@ -156,9 +156,11 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
+       }
+       try {
+         const capturedAt = Date.now();
++        const revision = crypto.randomUUID();
+         const ready = current.store.write({
+           key: current.historyKey,
+           capturedAt,
++          revision,
+           ...(current.baseline.language === undefined
+             ? {}
+             : { language: current.baseline.language }),
+@@ -174,7 +176,7 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
+             : { acceptedSource: current.baseline.acceptedSource }),
+           lines,
+         });
+-        owner.seen = owner.written = { capturedAt, ready };
++        owner.seen = owner.written = { revision, ready };
+         void ready
+           .then(() => forgetDismissal(current.historyKey))
+           .catch(() => {
