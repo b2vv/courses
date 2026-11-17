@@ -4,16 +4,12 @@ import type { TranscriptHistoryStore } from '../ports/TranscriptHistoryStore';
 
 const databaseName = 'courses-transcript-history';
 const databaseVersion = 1;
-const acceptedSourceSchema = z.object({ key: z.string(), capturedAt: z.number().finite() });
+const acceptedSourceSchema = z.object({ key: z.string(), revision: z.string() });
 const snapshotSchema = z.object({
   key: z.string(),
   capturedAt: z.number().finite(),
-  acceptedSource: z
-    .union([
-      z.array(acceptedSourceSchema).max(maximumAcceptedTranscriptSources),
-      acceptedSourceSchema.transform((source) => [source]), // Pre-list snapshots remain readable.
-    ])
-    .optional(),
+  revision: z.string(),
+  acceptedSource: z.array(acceptedSourceSchema).max(maximumAcceptedTranscriptSources).optional(),
   language: z.string().optional(),
   baseLanguage: z.string().optional(),
   expectedUpdatedAt: z.string().optional(),
@@ -107,6 +103,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
         return {
           key: snapshot.key,
           capturedAt: snapshot.capturedAt,
+          revision: snapshot.revision,
           lines: snapshot.lines,
           ...(snapshot.acceptedSource === undefined
             ? {}
@@ -122,7 +119,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
     write: (snapshot) =>
       run<IDBValidKey>('readwrite', (store) => store.put(snapshot)).then(() => undefined),
     clear: (key) => run<undefined>('readwrite', (store) => store.delete(key)),
-    clearIfVersion: (key, capturedAt) =>
+    clearIfVersion: (key, revision) =>
       open().then(
         (connection) =>
           new Promise<boolean>((resolve, reject) => {
@@ -132,11 +129,7 @@ export function createIndexedDbTranscriptHistory(): TranscriptHistoryStore | nul
             const request = store.get(key);
             request.addEventListener('success', () => {
               const result = snapshotSchema.safeParse(request.result);
-              if (
-                result.success &&
-                result.data.key === key &&
-                result.data.capturedAt === capturedAt
-              ) {
+              if (result.success && result.data.key === key && result.data.revision === revision) {
                 // Queue delete in the get callback, while this SAME transaction is active.
                 store.delete(key);
                 deleted = true;

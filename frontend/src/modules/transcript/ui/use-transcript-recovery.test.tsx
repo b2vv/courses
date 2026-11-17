@@ -23,6 +23,7 @@ const baseline: TranscriptBaseline = {
 };
 afterEach(() => {
   rstest.useRealTimers();
+  rstest.restoreAllMocks();
 });
 
 function fixture() {
@@ -83,6 +84,7 @@ test('M3-R6 capture in A leaves B untouched', async () => {
   const f = fixture();
   await f.store.write({
     key: 'user:lesson:track:b',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: 'B1',
     lines: [{ ...line, text: 'B' }],
@@ -114,6 +116,7 @@ test('MS3b fix2 / M3-R6 resolved own offer allows ordinary capture and accepted-
   const key = 'user:lesson:track:a';
   const snapshot = {
     key,
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: 'T1',
     lines: [{ ...line, text: 'Recovered' }],
@@ -164,7 +167,13 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const) 
     test(`MS3b fix6 ownership ${path} / ${version}`, async () => {
       const store = createMemoryTranscriptHistory();
       const key = `fix6:${path}:${version}`;
-      const a = { key, capturedAt: 1, expectedUpdatedAt: 'T1', lines: [{ ...line, text: 'A' }] };
+      const a = {
+        key,
+        revision: crypto.randomUUID(),
+        capturedAt: 1,
+        expectedUpdatedAt: 'T1',
+        lines: [{ ...line, text: 'A' }],
+      };
       await store.write(a);
       const f = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
       await waitFor(() => expect(f.result.current.offer.kind).toBe('offer'));
@@ -177,7 +186,12 @@ for (const path of ['blur', 'idle', 'unmount', 'own Discard', 'Save'] as const) 
         if (captured === null) throw new Error('Save must have its own capture');
         owned = captured;
       }
-      const c = { ...owned, capturedAt: owned.capturedAt + 1, lines: [{ ...line, text: 'C' }] };
+      const c = {
+        ...owned,
+        revision: crypto.randomUUID(),
+        capturedAt: owned.capturedAt,
+        lines: [{ ...line, text: 'C' }],
+      };
       if (version === 'newer') await store.write(c);
       if (path === 'own Discard') act(() => f.result.current.dismiss());
       else if (path === 'Save') act(() => f.result.current.finalize());
@@ -210,6 +224,7 @@ test('MS3b fix6 unknown version never deletes another window capture', async () 
   await waitFor(() => expect(f.result.current.isLoaded).toBe(true));
   const c = {
     key: 'user:lesson:track:a',
+    revision: crypto.randomUUID(),
     capturedAt: 2,
     expectedUpdatedAt: 'T1',
     lines: [{ ...line, text: 'C' }],
@@ -219,4 +234,27 @@ test('MS3b fix6 unknown version never deletes another window capture', async () 
   act(() => f.result.current.finalize());
   await act(async () => {});
   expect(await f.store.read(c.key)).toEqual(c);
+});
+
+test('MS3d hook captures unique revisions in one millisecond and Save preserves the other window', async () => {
+  const store = createMemoryTranscriptHistory();
+  const key = 'ms3d:lesson:track:one';
+  const first = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
+  const second = renderHook(() => useTranscriptRecovery({ historyKey: key, store, baseline }));
+  await waitFor(() =>
+    expect(first.result.current.isLoaded && second.result.current.isLoaded).toBe(true),
+  );
+  rstest.spyOn(Date, 'now').mockReturnValue(42);
+  act(() => first.result.current.captureNow([{ ...line, text: 'first window' }]));
+  const a = await store.read(key);
+  act(() => second.result.current.captureNow([{ ...line, text: 'second window' }]));
+  const b = await store.read(key);
+  if (a === null || b === null) throw new Error('Both captures must exist');
+  expect(a.capturedAt).toBe(b.capturedAt);
+  expect(a.revision).not.toBe(b.revision);
+  act(() => first.result.current.finalize());
+  await act(async () => {});
+  expect(await store.read(key)).toEqual(b);
+  first.unmount();
+  second.unmount();
 });

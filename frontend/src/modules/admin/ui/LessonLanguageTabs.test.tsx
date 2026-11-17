@@ -663,6 +663,7 @@ test('snapshot recovery uses a tab key and retains the old optimistic token (R13
   const f = fixture();
   await f.historyStore.write({
     key: 'author:lesson:track:one',
+    revision: crypto.randomUUID(),
     capturedAt: Date.now(),
     language: 'en',
     baseLanguage: 'en',
@@ -757,6 +758,7 @@ for (const targetExists of [false, true]) {
     if (targetExists) f.state.freshInventory = [item('es', 'E2')];
     await f.historyStore.write({
       key: 'author:lesson:track:one',
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       language: 'es',
       baseLanguage: 'en',
@@ -790,6 +792,7 @@ for (const targetExists of [false, true]) {
     f.state.freshInventory = targetExists ? [item('en', 'T2')] : [];
     await f.historyStore.write({
       key: 'author:lesson:track:one',
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       language: 'en',
       expectedUpdatedAt: 'T0',
@@ -817,6 +820,7 @@ function recoverySnapshot(
 ) {
   return {
     key,
+    revision: crypto.randomUUID(),
     capturedAt,
     ...(language === null ? {} : { language }),
     baseLanguage: 'en',
@@ -846,7 +850,8 @@ test('M3-R6 own offer first, then detached newest one at a time; Discard clears 
 
 test('M3-R6 Restore + successful Save clears accepted detached AND finalizes own key', async () => {
   const f = fixture();
-  await f.historyStore.write(recoverySnapshot('author:lesson:track:gone', 'recovered'));
+  const source = recoverySnapshot('author:lesson:track:gone', 'recovered');
+  await f.historyStore.write(source);
   const write = rstest.spyOn(f.historyStore, 'write');
   const clear = rstest.spyOn(f.historyStore, 'clear');
   const clearIfVersion = rstest.spyOn(f.historyStore, 'clearIfVersion');
@@ -865,9 +870,9 @@ test('M3-R6 Restore + successful Save clears accepted detached AND finalizes own
   expect(clear).not.toHaveBeenCalled();
   expect(clearIfVersion).toHaveBeenCalledWith(
     'author:lesson:track:one',
-    write.mock.calls.at(-1)?.[0].capturedAt,
+    write.mock.calls.at(-1)?.[0].revision,
   );
-  expect(clearIfVersion).toHaveBeenCalledWith('author:lesson:track:gone', 1);
+  expect(clearIfVersion).toHaveBeenCalledWith('author:lesson:track:gone', source.revision);
   view.unmount();
   expect(await f.historyStore.read('author:lesson:track:one')).toBeNull();
 });

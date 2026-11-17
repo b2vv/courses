@@ -66,8 +66,8 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
   const ownership = useRef<{
     historyKey: string;
     store: TranscriptHistoryStore;
-    seen?: { capturedAt: number; ready: Promise<void> };
-    written?: { capturedAt: number; ready: Promise<void> };
+    seen?: { revision: string; ready: Promise<void> };
+    written?: { revision: string; ready: Promise<void> };
   }>({ historyKey, store });
   const pendingLines = useRef<readonly TranscriptDraftLine[]>([]);
   const capturing = useRef(true);
@@ -97,7 +97,7 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
         const stored = await store.read(historyKey);
         if (cancelled) return;
         if (stored !== null)
-          ownership.current.seen = { capturedAt: stored.capturedAt, ready: Promise.resolve() };
+          ownership.current.seen = { revision: stored.revision, ready: Promise.resolve() };
         const next = recoveryOffer(stored, latest.current.baseline, wasDismissed(historyKey));
         setOffer(next);
       } catch {
@@ -127,12 +127,12 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
       try {
         // A write may still be completing when blur/Save asks to retire it.
         await version.ready;
-        if (await owner.store.clearIfVersion(owner.historyKey, version.capturedAt)) return;
+        if (await owner.store.clearIfVersion(owner.historyKey, version.revision)) return;
         if (!refresh) return; // Save leaves a newer foreign capture for the next visit.
         const stored = await owner.store.read(owner.historyKey);
         if (ownership.current !== owner) return;
         if (stored !== null) {
-          owner.seen = { capturedAt: stored.capturedAt, ready: Promise.resolve() };
+          owner.seen = { revision: stored.revision, ready: Promise.resolve() };
           forgetDismissal(owner.historyKey);
         }
         setOffer(recoveryOffer(stored, latest.current.baseline, false));
@@ -156,9 +156,11 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
       }
       try {
         const capturedAt = Date.now();
+        const revision = crypto.randomUUID();
         const ready = current.store.write({
           key: current.historyKey,
           capturedAt,
+          revision,
           ...(current.baseline.language === undefined
             ? {}
             : { language: current.baseline.language }),
@@ -174,7 +176,7 @@ export function useTranscriptRecovery(options: TranscriptRecoveryOptions): Trans
             : { acceptedSource: current.baseline.acceptedSource }),
           lines,
         });
-        owner.seen = owner.written = { capturedAt, ready };
+        owner.seen = owner.written = { revision, ready };
         void ready
           .then(() => forgetDismissal(current.historyKey))
           .catch(() => {

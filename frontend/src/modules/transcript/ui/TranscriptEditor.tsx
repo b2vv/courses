@@ -165,7 +165,7 @@ export function TranscriptEditor({
     get acceptedSource() {
       return acceptedDetached.current.length === 0
         ? undefined
-        : acceptedDetached.current.map(({ key, capturedAt }) => ({ key, capturedAt }));
+        : acceptedDetached.current.map(({ key, revision }) => ({ key, revision }));
     },
   };
   const recovery = useTranscriptRecovery({
@@ -256,13 +256,13 @@ export function TranscriptEditor({
         .filter(
           (source, index) =>
             sources.findIndex(
-              (other) => other.key === source.key && other.capturedAt === source.capturedAt,
+              (other) => other.key === source.key && other.revision === source.revision,
             ) === index,
         )
         .slice(0, maximumAcceptedTranscriptSources);
     } else {
       try {
-        if (!(await history.store.clearIfVersion(key, detached.snapshot.capturedAt))) {
+        if (!(await history.store.clearIfVersion(key, detached.snapshot.revision))) {
           const latest = await history.store.read(key).catch(() => undefined);
           if (latest !== null) {
             focusAfterRecovery.current = initiatingControl;

@@ -9,6 +9,7 @@ import {
   recoveryOffer,
   transcriptHistoryKey,
   type TranscriptDraftLine,
+  type TranscriptRecoveryTab,
   type TranscriptSnapshot,
 } from './recovery';
 
@@ -23,6 +24,7 @@ const line = (overrides: Partial<TranscriptDraftLine> = {}): TranscriptDraftLine
 
 const snapshot = (overrides: Partial<TranscriptSnapshot> = {}): TranscriptSnapshot => ({
   key: 'user:lesson',
+  revision: 'snapshot-revision',
   capturedAt: 1_700_000_000_000,
   language: 'uk',
   expectedUpdatedAt: '2026-09-18T10:00:00Z',
@@ -185,6 +187,7 @@ test('the sweep removes exactly the foreign keys and survives a store that refus
   const store = createMemoryTranscriptHistory();
   const snapshotFor = (key: string) => ({
     key,
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: undefined,
     lines: [line()],
@@ -210,9 +213,9 @@ test('the sweep removes exactly the foreign keys and survives a store that refus
   await expect(forgetOtherAuthors(refusing, 'author-1')).resolves.toBeUndefined();
 });
 
-const tabs = [
-  { instanceId: 'track:en', language: 'en', isDefault: true },
-  { instanceId: 'track:uk', language: 'uk', isDefault: false },
+const tabs: TranscriptRecoveryTab[] = [
+  { kind: 'track', instanceId: 'track:en', language: 'en', isDefault: true },
+  { kind: 'track', instanceId: 'track:uk', language: 'uk', isDefault: false },
 ];
 function place(snapshots: readonly TranscriptSnapshot[], currentTabs = tabs) {
   return detachedTranscriptSnapshots(
@@ -248,8 +251,12 @@ test('M3-R6 gone tracks go to their language/default; own keys and another lesso
 });
 
 test('M3-R6 multiple detached snapshots are newest first and only keys actually listed are used', () => {
-  const old = snapshot({ capturedAt: 1 });
-  const newest = snapshot({ key: 'user:lesson:track:gone', capturedAt: 3 });
+  const old = snapshot({ revision: crypto.randomUUID(), capturedAt: 1 });
+  const newest = snapshot({
+    key: 'user:lesson:track:gone',
+    revision: crypto.randomUUID(),
+    capturedAt: 3,
+  });
   expect(place([old, newest]).map((s) => s.snapshot.capturedAt)).toEqual([3, 1]);
   expect(detachedTranscriptSnapshots('user:lesson', [], [old], tabs)).toEqual([]);
 });
@@ -266,7 +273,10 @@ test('M3-R6 single editor owns the legacy key and receives detached track/lang s
 test('M3-R12 c orphan attached by track rename is detached and placed in that track', () => {
   const orphan = snapshot({ key: 'user:lesson:lang:uk' });
   expect(
-    place([orphan], [...tabs, { instanceId: 'lang:uk', language: 'uk', isDefault: false }]),
+    place(
+      [orphan],
+      [...tabs, { kind: 'orphan', instanceId: 'lang:uk', language: 'uk', isDefault: false }],
+    ),
   ).toEqual([]);
   expect(place([orphan])[0]?.instanceId).toBe('track:uk');
 });
@@ -290,7 +300,7 @@ for (const version of ['same', 'newer', 'same-time-content', 'read-fails', 'owne
     const accepted = snapshot();
     const stored =
       version === 'newer'
-        ? { ...accepted, capturedAt: accepted.capturedAt + 1 }
+        ? { ...accepted, revision: crypto.randomUUID(), capturedAt: accepted.capturedAt }
         : version === 'same-time-content'
           ? { ...accepted, lines: [line({ text: 'C' })] }
           : accepted;
@@ -305,9 +315,9 @@ for (const version of ['same', 'newer', 'same-time-content', 'read-fails', 'owne
                 throw new Error('blocked');
               }
             : store.read,
-        clearIfVersion: async (key, capturedAt) => {
+        clearIfVersion: async (key, revision) => {
           clears.push(key);
-          return store.clearIfVersion(key, capturedAt);
+          return store.clearIfVersion(key, revision);
         },
       },
       accepted,
@@ -341,7 +351,12 @@ test('MS3b fix3 compare-delete rechecks mounted ownership after deferred read', 
 test('MS3b fix4 atomic cleanup preserves capture C between read A and conditional delete', async () => {
   const store = createMemoryTranscriptHistory();
   const accepted = snapshot();
-  const newer = { ...accepted, capturedAt: accepted.capturedAt + 1, lines: [line({ text: 'C' })] };
+  const newer = {
+    ...accepted,
+    revision: crypto.randomUUID(),
+    capturedAt: accepted.capturedAt,
+    lines: [line({ text: 'C' })],
+  };
   await store.write(accepted);
   await clearAcceptedTranscriptSnapshot(
     {
@@ -356,8 +371,8 @@ test('MS3b fix4 atomic cleanup preserves capture C between read A and conditiona
     () => false,
   );
   expect(await store.read(accepted.key)).toEqual(newer);
-  expect(await store.clearIfVersion(accepted.key, accepted.capturedAt)).toBe(false);
-  expect(await store.clearIfVersion(newer.key, newer.capturedAt)).toBe(true);
+  expect(await store.clearIfVersion(accepted.key, accepted.revision)).toBe(false);
+  expect(await store.clearIfVersion(newer.key, newer.revision)).toBe(true);
   expect(await store.read(newer.key)).toBeNull();
 });
 
@@ -365,8 +380,12 @@ test('MS3b fix4 atomic cleanup preserves capture C between read A and conditiona
 for (const version of ['same', 'newer'] as const) {
   test(`MS3b fix6 viewer sweep exception / ${version}`, async () => {
     const store = createMemoryTranscriptHistory();
-    const own = snapshot({ key: 'viewer:lesson', capturedAt: 1 });
-    const foreign = snapshot({ key: 'other:lesson', capturedAt: version === 'same' ? 1 : 2 });
+    const own = snapshot({ key: 'viewer:lesson', revision: crypto.randomUUID(), capturedAt: 1 });
+    const foreign = snapshot({
+      key: 'other:lesson',
+      revision: crypto.randomUUID(),
+      capturedAt: version === 'same' ? 1 : 2,
+    });
     await store.write(own);
     await store.write(foreign);
     await forgetOtherAuthors(store, 'viewer');
@@ -374,3 +393,51 @@ for (const version of ['same', 'newer'] as const) {
     expect(await store.read(foreign.key)).toBeNull();
   });
 }
+
+test('MS3d memory cleanup preserves a replacement with equal capturedAt and different revision', async () => {
+  const store = createMemoryTranscriptHistory();
+  const first = snapshot({ revision: 'first' });
+  const second = { ...first, revision: 'second' };
+  await store.write(first);
+  await store.write(second);
+  expect(await store.clearIfVersion(first.key, first.revision)).toBe(false);
+  expect(await store.read(first.key)).toEqual(second);
+  expect(await store.clearIfVersion(second.key, second.revision)).toBe(true);
+  expect(await store.read(second.key)).toBeNull();
+});
+
+test('MS3d detached uk snapshot skips a matching orphan: matching track, else default track', () => {
+  const detached = snapshot({ key: 'user:lesson:track:gone', language: 'UK' });
+  const orphan: TranscriptRecoveryTab = {
+    kind: 'orphan',
+    instanceId: 'lang:uk',
+    language: 'uk',
+    isDefault: false,
+  };
+  const other: TranscriptRecoveryTab = {
+    kind: 'track',
+    instanceId: 'track:fr',
+    language: 'fr',
+    isDefault: false,
+  };
+  const defaultTrack: TranscriptRecoveryTab = {
+    kind: 'track',
+    instanceId: 'track:en',
+    language: 'en',
+    isDefault: true,
+  };
+  expect(place([detached], [defaultTrack, orphan])[0]?.instanceId).toBe('track:en');
+  expect(place([detached], [orphan, other, defaultTrack])[0]?.instanceId).toBe('track:en');
+  expect(
+    place(
+      [detached],
+      [other, defaultTrack, { ...other, instanceId: 'track:uk', language: 'uk' }],
+    )[0]?.instanceId,
+  ).toBe('track:uk');
+  // No default track (tracks still processing, or only orphans): never an orphan or a
+  // non-default track; the snapshot waits in storage.
+  expect(place([detached], [{ ...orphan, isDefault: true }, other])).toEqual([]);
+  expect(place([detached], [orphan])).toEqual([]);
+  // No tabs at all: the single editor.
+  expect(place([detached], [])[0]?.instanceId).toBe('');
+});

@@ -149,6 +149,7 @@ type TranscriptHistoryStoreForTest = ReturnType<typeof createMemoryTranscriptHis
 test('unsaved lines left on this device are offered back, never restored on their own', async () => {
   await editorWithSnapshot({
     key: 'author:lesson',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [storedLine],
@@ -172,6 +173,7 @@ test('a snapshot identical to the server is not offered', async () => {
   // disarms it for the one time it matters.
   await editorWithSnapshot({
     key: 'author:lesson',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [{ ...storedLine, text: 'Перша' }],
@@ -185,6 +187,7 @@ test('a snapshot taken against an older server version is offered as an overwrit
   // base the snapshot was taken against is not the base it would land on.
   await editorWithSnapshot({
     key: 'author:lesson',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-17T00:00:00Z',
     lines: [storedLine],
@@ -199,6 +202,7 @@ test('a snapshot taken against an older server version is offered as an overwrit
 test('a save the server accepted drops the local copy; nothing else does', async () => {
   const { store } = await editorWithSnapshot({
     key: 'author:lesson',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: '2026-09-18T00:00:00Z',
     lines: [storedLine],
@@ -278,6 +282,7 @@ test('a recovery snapshot restores its language after a reload', async () => {
   await editorWithSnapshot(
     {
       key: 'author:lesson',
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       language: 'en',
       expectedUpdatedAt: '2026-09-18T00:00:00Z',
@@ -401,6 +406,7 @@ test('an unsaved local edit outranks a draft offer: only one prompt shows at a t
   await editorWithSnapshot(
     {
       key: 'author:lesson',
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       expectedUpdatedAt: '2026-09-18T00:00:00Z',
       lines: [storedLine],
@@ -431,8 +437,20 @@ for (const legacy of [true, false]) {
   test(`M3-R6 Ukrainian detached unknown-language copy (legacy=${legacy}); Discard continues after refused clear`, async () => {
     const store = createMemoryTranscriptHistory();
     const key = legacy ? 'author:lesson' : 'author:lesson:track:gone';
-    const snapshot = { key, capturedAt: 2, expectedUpdatedAt: undefined, lines: [storedLine] };
-    const next = { ...snapshot, key: 'author:lesson:lang:fr', capturedAt: 1, language: 'fr' };
+    const snapshot = {
+      key,
+      revision: crypto.randomUUID(),
+      capturedAt: 2,
+      expectedUpdatedAt: undefined,
+      lines: [storedLine],
+    };
+    const next = {
+      ...snapshot,
+      key: 'author:lesson:lang:fr',
+      revision: crypto.randomUUID(),
+      capturedAt: 1,
+      language: 'fr',
+    };
     const clear = rstest.spyOn(store, 'clearIfVersion').mockRejectedValue(new Error('blocked'));
     await editor(async () => null, {
       instanceId: 'track:uk',
@@ -450,7 +468,7 @@ for (const legacy of [true, false]) {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' }));
     await screen.findByRole('heading', { name: 'Незбережені рядки з іншої вкладки (мова: fr)' });
-    expect(clear).toHaveBeenCalledExactlyOnceWith(key, snapshot.capturedAt);
+    expect(clear).toHaveBeenCalledExactlyOnceWith(key, snapshot.revision);
   });
 }
 
@@ -458,6 +476,7 @@ test('MS3b fix 1 / M3-R6 Restore A then B saves only B and offers A again', asyn
   const store = createMemoryTranscriptHistory();
   const a = {
     key: 'author:lesson:track:gone-a',
+    revision: crypto.randomUUID(),
     capturedAt: 2,
     language: 'uk',
     expectedUpdatedAt: undefined,
@@ -466,6 +485,7 @@ test('MS3b fix 1 / M3-R6 Restore A then B saves only B and offers A again', asyn
   const b = {
     ...a,
     key: 'author:lesson:track:gone-b',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     lines: [{ ...storedLine, text: 'B' }],
   };
@@ -500,6 +520,7 @@ test('MS3b fix2 / M3-R6 locked own offer survives clean rename, blur, unmount an
   const key = 'author:lesson:track:uk';
   const snapshot = {
     key,
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     language: 'uk',
     expectedUpdatedAt: undefined,
@@ -571,6 +592,7 @@ for (const instanceId of ['lang:uk', 'track:uk']) {
     await editorWithSnapshot(
       {
         key: 'author:lesson',
+        revision: crypto.randomUUID(),
         capturedAt: 1,
         language: 'uk',
         expectedUpdatedAt: undefined,
@@ -642,6 +664,7 @@ for (const resolution of ['restore', 'discard'] as const) {
       const key = `author:lesson:track:fix2-${resolution}-${stale}`;
       const snapshot = {
         key,
+        revision: crypto.randomUUID(),
         capturedAt: 1,
         language: 'uk',
         expectedUpdatedAt: stale ? 'old' : '2026-09-18T00:00:00Z',
@@ -684,6 +707,7 @@ for (const outcome of ['snapshot', 'none', 'reject'] as const) {
     const key = `author:lesson:track:fix2-initial-${outcome}`;
     const snapshot = {
       key,
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       expectedUpdatedAt: '2026-09-18T00:00:00Z',
       lines: [storedLine],
@@ -748,6 +772,7 @@ test('MS3b fix2 / M3-R6 detached offer keeps editing enabled and captures only t
   const key = 'author:lesson:track:fix2-detached-own';
   const snapshot = {
     key: 'author:lesson:track:gone',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     expectedUpdatedAt: undefined,
     lines: [storedLine],
@@ -775,7 +800,13 @@ test('MS3b fix2 / M3-R6 detached offer keeps editing enabled and captures only t
 test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only fields', async () => {
   const store = createMemoryTranscriptHistory();
   const key = 'author:lesson:track:fix2-english';
-  await store.write({ key, capturedAt: 1, expectedUpdatedAt: undefined, lines: [storedLine] });
+  await store.write({
+    key,
+    revision: crypto.randomUUID(),
+    capturedAt: 1,
+    expectedUpdatedAt: undefined,
+    lines: [storedLine],
+  });
   render(
     <I18nProvider instance={createI18n('en')}>
       <TranscriptEditor
@@ -799,7 +830,13 @@ test('MS3b fix2 / M3-R6 English recovery hint describes the focusable read-only 
 test('MS3b fix2 / M3-R6 Discard without new edits retires only the discarded version across remount', async () => {
   const store = createMemoryTranscriptHistory();
   const key = 'author:lesson:track:fix2-dismiss-old';
-  const snapshot = { key, capturedAt: 1, expectedUpdatedAt: undefined, lines: [storedLine] };
+  const snapshot = {
+    key,
+    revision: crypto.randomUUID(),
+    capturedAt: 1,
+    expectedUpdatedAt: undefined,
+    lines: [storedLine],
+  };
   await store.write(snapshot);
   const write = rstest.spyOn(store, 'write');
   const props = { history: { key, store } };
@@ -821,6 +858,7 @@ for (const source of ['own', 'detached'] as const) {
         const ownKey = `author:focus:${source}:${action}:${empty}`;
         const snapshot = {
           key: source === 'own' ? ownKey : `${ownKey}:track:gone`,
+          revision: crypto.randomUUID(),
           capturedAt: 1,
           language: 'uk',
           baseLanguage: 'uk',
@@ -861,13 +899,19 @@ for (const source of ['own', 'detached'] as const) {
       const ownKey = `author:focus-next:${source}:${action}`;
       const snapshot = {
         key: source === 'own' ? ownKey : `${ownKey}:track:gone`,
+        revision: crypto.randomUUID(),
         capturedAt: 2,
         language: 'uk',
         expectedUpdatedAt: '2026-09-18T00:00:00Z',
         lines: [storedLine],
       };
       if (source === 'own') await store.write(snapshot);
-      const next = { ...snapshot, key: 'author:lesson:track:next', capturedAt: 1 };
+      const next = {
+        ...snapshot,
+        key: 'author:lesson:track:next',
+        revision: crypto.randomUUID(),
+        capturedAt: 1,
+      };
       await editor(async () => null, {
         history: { key: ownKey, store },
         detachedSnapshots: [
@@ -891,6 +935,7 @@ for (const newerSource of [false, true]) {
     const key = `author:fix4-${newerSource}:track:own`;
     const source = {
       key: `author:fix4-${newerSource}:lang:uk`,
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       language: 'uk',
       baseLanguage: 'uk',
@@ -923,7 +968,12 @@ for (const newerSource of [false, true]) {
     const capturedSource = (await store.read(key))?.acceptedSource;
     const second = await editor(save, await props());
     fireEvent.click(await screen.findByRole('button', { name: 'Відновити зміни' }));
-    const newer = { ...source, capturedAt: 2, lines: [{ ...storedLine, text: 'Newer C' }] };
+    const newer = {
+      ...source,
+      revision: crypto.randomUUID(),
+      capturedAt: 2,
+      lines: [{ ...storedLine, text: 'Newer C' }],
+    };
     if (newerSource) await store.write(newer);
     fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
     await screen.findByText('Транскрипт збережено.');
@@ -943,7 +993,7 @@ for (const newerSource of [false, true]) {
       expect(await store.read(source.key)).toEqual(newerSource ? newer : null);
       view.unmount();
     }
-    expect(capturedSource).toEqual([{ key: source.key, capturedAt: source.capturedAt }]);
+    expect(capturedSource).toEqual([{ key: source.key, revision: source.revision }]);
   });
 }
 
@@ -1064,6 +1114,7 @@ for (const newerAncestor of [false, true]) {
     fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
     const newer = {
       ...a,
+      revision: crypto.randomUUID(),
       capturedAt: a.capturedAt + 1,
       lines: [{ ...storedLine, text: 'Newer ancestor' }],
     };
@@ -1114,6 +1165,7 @@ for (const mode of ['deduplicate', 'cap'] as const) {
     const key = `author:fix5-bound-${mode}:track:own`;
     const source = {
       key: `${key}:source`,
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       expectedUpdatedAt: undefined,
       lines: [storedLine],
@@ -1121,12 +1173,12 @@ for (const mode of ['deduplicate', 'cap'] as const) {
     const chain =
       mode === 'deduplicate'
         ? [
-            { key: source.key, capturedAt: source.capturedAt },
-            { key: source.key, capturedAt: source.capturedAt },
+            { key: source.key, revision: source.revision },
+            { key: source.key, revision: source.revision },
           ]
         : Array.from({ length: 8 }, (_, index) => ({
             key: `${key}:ancestor-${index}`,
-            capturedAt: index,
+            revision: crypto.randomUUID(),
           }));
     for (const entry of chain) await store.write({ ...source, ...entry });
     const snapshot = { ...source, acceptedSource: chain };
@@ -1138,7 +1190,7 @@ for (const mode of ['deduplicate', 'cap'] as const) {
     fireEvent.click(screen.getByRole('button', { name: 'Відновити зміни' }));
     first.unmount();
     const expected = [
-      { key: source.key, capturedAt: source.capturedAt },
+      { key: source.key, revision: source.revision },
       ...(mode === 'cap' ? chain.slice(0, 7) : []),
     ];
     expect((await store.read(key))?.acceptedSource).toEqual(expected);
@@ -1161,6 +1213,7 @@ test('MS3b fix5 Discard mismatch with refused refresh leaves the key unresolved 
   const store = createMemoryTranscriptHistory();
   const source = {
     key: 'author:fix5-refused-refresh:old',
+    revision: crypto.randomUUID(),
     capturedAt: 1,
     language: 'uk',
     expectedUpdatedAt: undefined,
@@ -1171,7 +1224,12 @@ test('MS3b fix5 Discard mismatch with refused refresh leaves the key unresolved 
     history: { key: `${source.key}:own`, store },
     detachedSnapshots: [{ instanceId: '', legacy: false, snapshot: source }],
   });
-  const c = { ...source, capturedAt: 2, lines: [{ ...storedLine, text: 'C after read refusal' }] };
+  const c = {
+    ...source,
+    revision: crypto.randomUUID(),
+    capturedAt: 2,
+    lines: [{ ...storedLine, text: 'C after read refusal' }],
+  };
   await store.write(c);
   const read = rstest.spyOn(store, 'read').mockRejectedValueOnce(new Error('read refused'));
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Не відновлювати' })));
@@ -1188,6 +1246,7 @@ for (const newer of [false, true]) {
     const store = createMemoryTranscriptHistory();
     const source = {
       key: `author:fix6-focus:${newer}:old`,
+      revision: crypto.randomUUID(),
       capturedAt: 1,
       language: 'uk',
       expectedUpdatedAt: undefined,
@@ -1213,10 +1272,11 @@ for (const newer of [false, true]) {
     await userEvent.setup().keyboard('{Enter}');
     const elsewhere = within(other.container).getByRole('button', { name: 'Elsewhere' });
     act(() => elsewhere.focus());
-    if (newer) await store.write({ ...source, capturedAt: 2 });
+    const replacement = { ...source, revision: crypto.randomUUID(), capturedAt: 2 };
+    if (newer) await store.write(replacement);
     await act(async () => complete());
     expect(document.activeElement).toBe(elsewhere);
-    expect(await store.read(source.key)).toEqual(newer ? { ...source, capturedAt: 2 } : null);
+    expect(await store.read(source.key)).toEqual(newer ? replacement : null);
   });
 }
 
@@ -1227,6 +1287,7 @@ for (const path of ['own Save', 'accepted-source Save'] as const) {
       const ownKey = `author:fix6-matrix:${path}:${version}:own`;
       const source = {
         key: `${ownKey}:detached`,
+        revision: crypto.randomUUID(),
         capturedAt: 1,
         language: 'uk',
         expectedUpdatedAt: undefined,
@@ -1256,6 +1317,7 @@ for (const path of ['own Save', 'accepted-source Save'] as const) {
       expect(save).toHaveBeenCalledTimes(1);
       const c = {
         ...owned,
+        revision: crypto.randomUUID(),
         capturedAt: owned.capturedAt + 1000,
         lines: [{ ...storedLine, text: 'C during Save' }],
       };
@@ -1293,6 +1355,7 @@ test('MS3b fix6 failed Save preserves a newer capture without recapturing old li
   if (a === null) throw new Error('pending lines must be captured before Save');
   const c = {
     ...a,
+    revision: crypto.randomUUID(),
     capturedAt: a.capturedAt + 1000,
     lines: [{ ...storedLine, text: 'C after Save began' }],
   };

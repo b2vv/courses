@@ -156,6 +156,7 @@ function ReadyLanguageTabs({
     lessonId,
     props.transcripts?.history,
     tabs.map((tab) => ({
+      kind: tab.track === undefined ? 'orphan' : 'track',
       instanceId: tab.id,
       language: tab.language,
       isDefault: tab.track?.isDefault ?? false,

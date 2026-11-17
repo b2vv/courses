@@ -29,7 +29,7 @@ export type TranscriptDraftLine = {
 
 export type AcceptedTranscriptSource = {
   readonly key: string;
-  readonly capturedAt: number;
+  readonly revision: string;
 };
 
 export const maximumAcceptedTranscriptSources = 8;
@@ -39,6 +39,7 @@ export type TranscriptSnapshot = {
   readonly acceptedSource?: readonly AcceptedTranscriptSource[];
   readonly key: string;
   readonly capturedAt: number;
+  readonly revision: string;
   /** The editor language at capture time. Older snapshots may omit this field. */
   readonly language?: string;
   /** Language owning expectedUpdatedAt; absent on legacy snapshots. */
@@ -198,6 +199,7 @@ export function transcriptHistoryKey(parts: {
 
 /** Current product tab identities, independent of media-module types. Empty means one editor. */
 export type TranscriptRecoveryTab = {
+  readonly kind: 'track' | 'orphan';
   readonly instanceId: string;
   readonly language: string;
   readonly isDefault: boolean;
@@ -224,22 +226,23 @@ export function detachedTranscriptSnapshots(
   const ownKeys = new Set(
     tabs.length === 0 ? [lessonKey] : tabs.map((tab) => `${lessonKey}:${tab.instanceId}`),
   );
-  const fallback = tabs.find((tab) => tab.isDefault) ?? tabs[0];
+  // plan-ms2-3.md:406-407: the track tab with the snapshot's language, else the default-track
+  // tab; an orphan `lang:*` tab is never a destination. With tabs but no default track yet (all
+  // tracks still processing), nothing is offered: the snapshot stays stored and is offered once
+  // a track tab exists. No tabs at all is the single editor, which owns the legacy key.
+  const tracks = tabs.filter((tab) => tab.kind === 'track');
+  const fallback = tracks.find((tab) => tab.isDefault);
   return snapshots
     .filter((snapshot) => storedKeys.has(snapshot.key) && !ownKeys.has(snapshot.key))
     .sort((a, b) => b.capturedAt - a.capturedAt || a.key.localeCompare(b.key))
-    .map((snapshot) => {
-      const matches = tabs.filter(
-        (tab) => tab.language.toLowerCase() === snapshot.language?.toLowerCase(),
-      );
-      // Construction excludes a track and orphan with the same language; prefer the track
-      // defensively if a caller supplies both.
-      const target = matches.find((tab) => tab.instanceId.startsWith('track:')) ?? matches[0];
-      return {
-        instanceId: (target ?? fallback)?.instanceId ?? '',
-        legacy: snapshot.key === lessonKey,
-        snapshot,
-      };
+    .flatMap((snapshot) => {
+      const target =
+        tracks.find((tab) => tab.language.toLowerCase() === snapshot.language?.toLowerCase()) ??
+        fallback;
+      if (tabs.length > 0 && target === undefined) return [];
+      return [
+        { instanceId: target?.instanceId ?? '', legacy: snapshot.key === lessonKey, snapshot },
+      ];
     });
 }
 
@@ -255,7 +258,7 @@ export async function clearAcceptedTranscriptSnapshot(
       !isOwned() &&
       stored !== null &&
       stored.key === accepted.key &&
-      stored.capturedAt === accepted.capturedAt &&
+      stored.revision === accepted.revision &&
       (!('lines' in accepted) ||
         (stored.language === accepted.language &&
           stored.baseLanguage === accepted.baseLanguage &&
@@ -263,7 +266,7 @@ export async function clearAcceptedTranscriptSnapshot(
           stored.draftUpdatedAt === accepted.draftUpdatedAt &&
           sameLines(stored.lines, accepted.lines)))
     )
-      await store.clearIfVersion(accepted.key, accepted.capturedAt);
+      await store.clearIfVersion(accepted.key, accepted.revision);
   } catch {
     // A failed read is not permission to delete; atomic cleanup preserves intervening captures.
   }
