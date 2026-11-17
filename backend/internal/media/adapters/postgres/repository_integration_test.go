@@ -164,6 +164,11 @@ func TestMediaRepositoryAgainstPostgreSQL(t *testing.T) {
 	defer pool.Close()
 	harness := &mediaHarness{ctx: ctx, connection: connection, pool: pool, repository: NewRepository(pool)}
 
+	t.Run("audio track: multilingual persistence", harness.testMultilingualPersistence)
+	t.Run("audio track: metadata siblings and label rollback", harness.testTrackMetadata)
+	t.Run("audio track: metadata foreign lock scope", harness.testTrackMetadataForeignLock)
+	t.Run("audio track: metadata lock query failure", harness.testTrackMetadataLockQueryFailure)
+	t.Run("audio track: metadata lock excludes sweep", harness.testTrackMetadataExcludesSweep)
 	t.Run("P06 replacing a video keeps two ready generations", harness.testTwoReadyGenerations)
 	t.Run("B16 only expired uploads are taken over", harness.testExpiredUploadTakeover)
 	t.Run("B22 generation remains monotonic after eviction", harness.testMonotonicGeneration)
