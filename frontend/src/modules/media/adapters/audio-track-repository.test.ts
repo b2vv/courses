@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from '@rstest/core';
+import { afterAll, afterEach, beforeAll, describe, expect, rstest, test } from '@rstest/core';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { createAudioTracks } from '../application/audio-tracks';
@@ -103,6 +103,14 @@ describe('audio track API repository', () => {
       response: { items: [{ ...wireTrack, multilingual: undefined }], multilingualDefault: false },
     },
     { name: 'missing list multilingualDefault', response: { items: [wireTrack] } },
+    ...['false', null, 1].map((multilingualDefault) => ({
+      name: `invalid list multilingualDefault ${multilingualDefault}`,
+      response: { items: [wireTrack], multilingualDefault },
+    })),
+    {
+      name: 'unknown envelope key',
+      response: { items: [wireTrack], multilingualDefault: false, extra: true },
+    },
     {
       name: 'invalid track multilingual',
       response: { items: [{ ...wireTrack, multilingual: 'false' }], multilingualDefault: false },
@@ -341,4 +349,21 @@ describe('audio track API repository', () => {
       `courses.media.upload-fingerprint.v1.${trackId}`,
     );
   });
+});
+
+test('rename forwards the same cancellation signal as the sixth repository argument', async () => {
+  const repository = createApiAudioTrackRepository();
+  const rename = rstest
+    .spyOn(repository, 'rename')
+    .mockResolvedValue({ ok: true, value: { ...wireTrack, kind: 'uploaded', state: 'ready' } });
+  const controller = new AbortController();
+  await createAudioTracks(repository).rename(
+    videoId,
+    trackId,
+    'en',
+    'English',
+    true,
+    controller.signal,
+  );
+  expect(rename).toHaveBeenCalledWith(videoId, trackId, 'en', 'English', true, controller.signal);
 });

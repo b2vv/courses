@@ -121,7 +121,7 @@ function fixture() {
       },
     },
   };
-  const video: CourseEditorVideo = {
+  let video: CourseEditorVideo = {
     rows: [
       {
         videoId: 'video',
@@ -176,7 +176,18 @@ function fixture() {
       </form>
     </I18nProvider>
   );
-  return { state, node, historyStore, drafts };
+  return {
+    state,
+    node,
+    historyStore,
+    drafts,
+    video,
+    languages,
+    transcripts,
+    setVideo: (next: CourseEditorVideo) => {
+      video = next;
+    },
+  };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save the transcript' }));
 const edit = () =>
@@ -517,6 +528,7 @@ test('M3-R4 options use fresh track/inventory reads, excluding und and taken lan
     'Spanish',
   ]);
   await user.click(screen.getByRole('option', { name: 'Spanish' }));
+  expect(within(dialog).queryByRole('alert')).toBeNull();
   await user.click(confirm);
   await waitFor(() => expect(f.state.puts).toHaveLength(1));
   expect(f.state.operations).toEqual(['PATCH', 'PUT']);
@@ -1158,3 +1170,240 @@ for (const newerCapture of [true, false]) {
     );
   });
 }
+
+test('orphan languages sort after tracks and uppercase track language never duplicates an orphan', () => {
+  expect(
+    lessonLanguageTabs([track('one', 'EN')], [item('uk'), item('en'), item('de'), item('fr')]).map(
+      (tab) => tab.id,
+    ),
+  ).toEqual(['track:one', 'lang:de', 'lang:fr', 'lang:uk']);
+});
+
+test('tabs select newest Ready generation of this lesson, ignoring foreign and processing videos', async () => {
+  const f = fixture();
+  const original = f.video.rows[0];
+  if (!original || !f.video.audio) throw new Error('fixture video missing');
+  f.setVideo({
+    ...f.video,
+    rows: [
+      { ...original, videoId: 'foreign', lessonId: 'foreign', generation: 99 },
+      { ...original, videoId: 'older', generation: 1 },
+      { ...original, videoId: 'newest-ready', generation: 2 },
+      { ...original, videoId: 'processing', state: 'processing', generation: 3 },
+    ],
+  });
+  const asked = rstest.spyOn(f.video.audio, 'useTracks');
+  await mount(f);
+  expect([...new Set(asked.mock.calls.map(([id]) => id))]).toEqual(['newest-ready']);
+});
+
+test('only processing videos and missing optional audio both retain the single editor', async () => {
+  const f = fixture();
+  f.setVideo({ ...f.video, rows: f.video.rows.map((row) => ({ ...row, state: 'processing' })) });
+  const first = await mount(f);
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Lesson transcript' })).toBeTruthy();
+  first.unmount();
+  const { audio: _audio, ...withoutAudio } = f.video;
+  f.setVideo(withoutAudio);
+  await expect(mount(f)).resolves.toBeDefined();
+  expect(screen.queryByRole('tablist')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Lesson transcript' })).toBeTruthy();
+});
+
+test('single editor known state comes from complete inventory: loading, empty, and other language', async () => {
+  const f = fixture();
+  f.state.bases.clear();
+  f.languages.useInventory = () => ({ data: undefined });
+  const view = await mount(f, false);
+  expect(f.state.known).toEqual([]);
+  f.languages.useInventory = () => ({ data: [] });
+  view.refresh();
+  expect(f.state.known).toEqual([false]);
+  f.languages.useInventory = () => ({ data: [item('fr')] });
+  view.refresh();
+  expect(f.state.known.at(-1)).toBe(true);
+  expect(f.state.known.filter((known) => !known)).toHaveLength(1);
+});
+
+test('recovery waits for both lists before reading and choosing ownership', async () => {
+  const f = fixture();
+  await f.historyStore.write(recoverySnapshot('author:lesson:track:gone', 'Saved recovery'));
+  f.state.tracksLoading = true;
+  const keys = rstest.spyOn(f.historyStore, 'keys');
+  const read = rstest.spyOn(f.historyStore, 'read');
+  const view = await mount(f);
+  expect(keys).not.toHaveBeenCalled();
+  expect(read).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Restore changes' })).toBeNull();
+  f.state.tracksLoading = false;
+  view.refresh();
+  await screen.findByRole('button', { name: 'Restore changes' });
+  expect(keys).toHaveBeenCalledTimes(1);
+});
+
+test('only default track includes Default in its accessible tab name', async () => {
+  const f = fixture();
+  f.state.tracks.push(track('two', 'uk', { isDefault: false }));
+  await mount(f);
+  expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+    'English · Default',
+    'Ukrainian',
+  ]);
+});
+
+test.each([
+  { name: 'different id in same language', fresh: track('two', 'en') },
+  { name: 'processing', fresh: track('one', 'en', { state: 'processing' }) },
+  { name: 'queued', fresh: track('one', 'en', { state: 'queued' }) },
+  { name: 'failed', fresh: track('one', 'en', { state: 'failed' }) },
+])('fresh Save rejects $name and retains lines', async ({ fresh }) => {
+  const f = fixture();
+  f.state.freshTracks = [fresh];
+  await mount(f);
+  edit();
+  save();
+  await screen.findByText('The track changed or was removed. Reload the tracks and try again.');
+  expect(f.state.puts).toHaveLength(0);
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty('value', 'My edit');
+});
+
+test('thrown rename retains own recovery and lines without PUT', async () => {
+  const f = undFixture();
+  if (!f.video.audio) throw new Error('no audio');
+  f.video.audio.actions.rename = async () => {
+    f.state.operations.push('PATCH');
+    throw new Error('network');
+  };
+  await mount(f);
+  loadUndDraft();
+  edit();
+  save();
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Rename track and save' }));
+  await screen.findByText('Could not rename the track — try again.');
+  expect(f.state.operations).toEqual(['PATCH']);
+  expect(f.state.puts).toHaveLength(0);
+  expect((await f.historyStore.read('author:lesson:track:one'))?.lines[0]?.text).toBe('My edit');
+});
+
+test('und restored token is never forwarded to newly chosen language', async () => {
+  const f = undFixture();
+  await f.historyStore.write({
+    ...recoverySnapshot('author:lesson:track:one', 'Recovered', 1, 'und-x'),
+    baseLanguage: 'und-x',
+    expectedUpdatedAt: 'SOURCE',
+  });
+  await mount(f);
+  fireEvent.click(await screen.findByRole('button', { name: 'Restore changes' }));
+  save();
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Rename track and save' }));
+  await screen.findByText('Transcript saved.');
+  expect(f.state.operations).toEqual(['PATCH', 'PUT']);
+  expect(f.state.puts[0]?.slice(0, 3)).toEqual(['lesson', 'en', undefined]);
+});
+
+test('post-confirmation track read failure retains lines without PUT', async () => {
+  const f = fixture();
+  const view = await mount(f);
+  edit();
+  f.state.tracks = [track('one', 'fr')];
+  f.state.freshInventory = [item('fr', 'F1')];
+  view.refresh();
+  save();
+  await screen.findByRole('dialog');
+  f.state.tracksFailure = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+  await screen.findByText('Could not verify the track — try again.');
+  expect(f.state.puts).toHaveLength(0);
+  expect(screen.getByRole('textbox', { name: 'Line 1 text' })).toHaveProperty('value', 'My edit');
+});
+
+test('orphan has transcript editor but no ASR controls even when draft service exists', async () => {
+  const f = fixture();
+  f.state.inventory.push(item('fr'));
+  f.state.bases.set('fr', transcript('fr'));
+  await mount(f);
+  fireEvent.click(screen.getByRole('tab', { name: 'French' }));
+  expect(screen.getByRole('heading', { name: 'Lesson transcript' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Speech recognition' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Generate transcript' })).toBeNull();
+});
+
+test('loaded ASR lines save with an explicit empty document list', async () => {
+  const f = undFixture();
+  await mount(f);
+  loadUndDraft();
+  save();
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Rename track and save' }));
+  await screen.findByText('Transcript saved.');
+  expect(f.state.puts[0]?.[3]).toEqual([
+    { id: expect.any(String), startMs: 0, endMs: 1000, text: 'Original', documentIds: [] },
+  ]);
+});
+
+test('manual recovery captures the current draft token after a draft-only refresh', async () => {
+  const f = fixture();
+  f.state.draft = readyDraft({ trackLanguage: 'en', updatedAt: 'D1' });
+  const view = await mount(f);
+  edit();
+  fireEvent.focusOut(screen.getByRole('textbox', { name: 'Line 1 text' }));
+  expect(await f.historyStore.read('author:lesson:track:one')).toMatchObject({
+    draftUpdatedAt: 'D1',
+  });
+  f.state.draft = { ...f.state.draft, updatedAt: 'D2' };
+  view.refresh();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Line 1 text' }), {
+    target: { value: 'Second edit' },
+  });
+  fireEvent.focusOut(screen.getByRole('textbox', { name: 'Line 1 text' }));
+  expect(await f.historyStore.read('author:lesson:track:one')).toMatchObject({
+    draftUpdatedAt: 'D2',
+    lines: [{ text: 'Second edit' }],
+  });
+});
+
+test('handled draft offer never reappears on language editor rerender', async () => {
+  const f = fixture();
+  f.state.draft = readyDraft({ trackLanguage: 'en' });
+  const view = await mount(f);
+  edit();
+  fireEvent.click(screen.getByRole('button', { name: 'Load draft into editor' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+  view.refresh();
+  expect(screen.queryByRole('button', { name: 'Load the draft' })).toBeNull();
+});
+
+test('orphan replacement confirmation never performs a track read', async () => {
+  const f = fixture();
+  f.state.inventory.push(item('fr', 'TARGET'));
+  f.state.bases.set('fr', transcript('fr', 'Target', 'TARGET'));
+  await f.historyStore.write({
+    ...recoverySnapshot('author:lesson:lang:fr', 'Recovered', 1, 'fr'),
+    baseLanguage: 'en',
+  });
+  await mount(f);
+  fireEvent.click(screen.getByRole('tab', { name: 'French' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Restore changes' }));
+  save();
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+  await screen.findByText('Transcript saved.');
+  expect(f.state.reads).toEqual(['inventory']);
+  expect(f.state.puts[0]?.slice(0, 3)).toEqual(['lesson', 'fr', 'TARGET']);
+});
+
+test('detached copy of orphan language is offered only to a track, preserving mounted orphan ownership', async () => {
+  const f = fixture();
+  f.state.inventory.push(item('uk'));
+  f.state.bases.set('uk', transcript('uk'));
+  await f.historyStore.write(recoverySnapshot('author:lesson:track:gone', 'Detached uk', 2, 'uk'));
+  await mount(f);
+  await screen.findByRole('heading', { name: 'Unsaved lines from another tab (language: uk)' });
+  fireEvent.click(screen.getByRole('tab', { name: 'Ukrainian' }));
+  expect(screen.queryByRole('button', { name: 'Restore changes' })).toBeNull();
+  expect(await f.historyStore.read('author:lesson:track:gone')).not.toBeNull();
+});

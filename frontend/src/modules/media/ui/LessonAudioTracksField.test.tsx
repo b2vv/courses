@@ -438,6 +438,7 @@ it('row switch toggles with Space, sends complete metadata and keeps focus while
   await user.keyboard(' ');
   expect(calls).toEqual([[row, row.language, row.label, false]]);
   expect(toggle.getAttribute('aria-disabled')).toBe('true');
+  expect(toggle.getAttribute('aria-readonly')).toBe('true');
   expect(document.activeElement).toBe(toggle);
   await user.keyboard(' ');
   expect(calls).toHaveLength(1);
@@ -446,4 +447,83 @@ it('row switch toggles with Space, sends complete metadata and keeps focus while
   expect(await screen.findByRole('alert')).toBeTruthy();
   await waitFor(() => expect(toggle.getAttribute('aria-disabled')).toBe('false'));
   expect(document.activeElement).toBe(toggle);
+});
+
+it('upload and row switches have distinct hints, and successful upload resets the server default', async () => {
+  const user = userEvent.setup();
+  let finish: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const metadata: unknown[] = [];
+  const { container } = renderView(
+    [embedded, track(dubId, 'ready')],
+    actions({
+      upload: async (_id, input) => {
+        metadata.push(input);
+        await pending;
+        return null;
+      },
+    }).value,
+    'ready',
+    { multilingualDefault: true },
+  );
+  const upload = screen.getByRole('switch', { name: 'Multiple languages' });
+  const switches = screen.getAllByRole('switch');
+  const descriptions = switches.map((toggle) => toggle.getAttribute('aria-describedby'));
+  expect(new Set(descriptions).size).toBe(3);
+  for (const id of descriptions) {
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id ?? '')?.textContent).toBe(
+      'Recognition detects the language of each passage.',
+    );
+  }
+  expect(upload).toHaveProperty('checked', true);
+  await user.click(upload);
+  await user.click(screen.getByRole('button', { name: /Choose a language Track language/ }));
+  await user.click(screen.getByRole('option', { name: 'Polish' }));
+  await user.type(screen.getByRole('textbox', { name: 'Track name' }), 'Dub');
+  await user.upload(fileInput(container), new File(['audio'], 'dub.m4a', { type: 'audio/mp4' }));
+  await waitFor(() => expect(metadata).toHaveLength(1));
+  // Upload progress replaces the new-track form until the transfer finishes.
+  expect(screen.queryByRole('switch', { name: 'Multiple languages' })).toBeNull();
+  if (!finish) throw new Error('upload not started');
+  finish();
+  const reset = await screen.findByRole('switch', { name: 'Multiple languages' });
+  expect(reset).toHaveProperty('checked', true);
+  await user.click(screen.getByRole('button', { name: /Choose a language Track language/ }));
+  await user.click(screen.getByRole('option', { name: 'Polish' }));
+  await user.type(screen.getByRole('textbox', { name: 'Track name' }), 'Again');
+  await user.upload(fileInput(container), new File(['audio'], 'again.m4a', { type: 'audio/mp4' }));
+  await waitFor(() => expect(metadata).toHaveLength(2));
+  expect(metadata).toEqual([
+    { language: 'pl', label: 'Dub', multilingual: false },
+    { language: 'pl', label: 'Again', multilingual: true },
+  ]);
+});
+
+it('pending row action makes the visible upload switch read-only without dropping focus', async () => {
+  const user = userEvent.setup();
+  let finish: ((code: null) => void) | undefined;
+  renderView(
+    [embedded],
+    actions({
+      rename: async () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    }).value,
+  );
+  const upload = screen.getByRole('switch', { name: 'Multiple languages' });
+  await user.click(screen.getByRole('switch', { name: /Multiple languages in track/ }));
+  upload.focus();
+  expect(upload.getAttribute('aria-readonly')).toBe('true');
+  expect(upload.getAttribute('aria-disabled')).toBe('true');
+  await user.keyboard(' ');
+  await user.click(upload);
+  expect(upload).toHaveProperty('checked', false);
+  expect(document.activeElement).toBe(upload);
+  if (!finish) throw new Error('rename not started');
+  finish(null);
+  await waitFor(() => expect(upload.getAttribute('aria-disabled')).toBe('false'));
 });

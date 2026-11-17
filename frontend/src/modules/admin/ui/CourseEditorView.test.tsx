@@ -980,3 +980,51 @@ describe('course price and previews', () => {
     await waitFor(() => expect(prices).toEqual([null]));
   });
 });
+
+it('new unsaved lesson never invokes transcript, inventory or draft service hooks', async () => {
+  const reads: string[] = [];
+  const user = userEvent.setup();
+  render(
+    <I18nProvider instance={createI18n('en')}>
+      <CourseEditorView
+        course={tree}
+        actor={admin}
+        ownerOptions={null}
+        onSave={async (current) => current}
+        onTransition={async (current) => current}
+        onDelete={async () => {}}
+        onAuthenticationRequired={() => {}}
+        drafts={{
+          useLessonDraft: (id) => {
+            reads.push(`draft:${id}`);
+            return { data: undefined, isLoading: false };
+          },
+          actions: { regenerate: async () => null },
+        }}
+        transcripts={{
+          useLessonTranscript: (id) => {
+            reads.push(`transcript:${id}`);
+            return { data: undefined, isLoading: false };
+          },
+          documents: [],
+          history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+          library: { add: async () => null, remove: async () => null },
+          save: async () => null,
+        }}
+        languages={{
+          useInventory: (id) => {
+            reads.push(`inventory:${id}`);
+            return { data: [] };
+          },
+          readInventory: async () => [],
+          readTracks: async () => [],
+        }}
+      />
+    </I18nProvider>,
+  );
+  await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+  await user.click(screen.getByRole('button', { name: 'Add module' }));
+  await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+  expect(screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' })).toBeTruthy();
+  expect(reads).toEqual([]);
+});

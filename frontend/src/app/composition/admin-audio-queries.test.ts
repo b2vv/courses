@@ -1,5 +1,5 @@
-import { describe, expect, test } from '@rstest/core';
-import { QueryClient } from '@tanstack/react-query';
+import { describe, expect, rstest, test } from '@rstest/core';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { createAudioTracks } from '../../modules/media';
 import type { AudioTrack, AudioTrackRepository } from '../../modules/media';
 import {
@@ -195,3 +195,84 @@ test('mint forwards multilingual to the audio port', async () => {
   ]);
   client.clear();
 });
+
+test('terminal audio transition refetches only the affected mounted draft', async () => {
+  const unavailable = async () =>
+    ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+  let state: AudioTrack['state'] = 'processing';
+  const repository: AudioTrackRepository = {
+    list: async () => ({ ok: true, value: { items: [track(state)], multilingualDefault: false } }),
+    mint: unavailable,
+    rename: unavailable,
+    remove: unavailable,
+    setDefault: unavailable,
+    transfer: unavailable,
+    cancelUpload: unavailable,
+  };
+  const client = new QueryClient();
+  client.setQueryData(adminCourseVideosQueryKey(courseId), [{ videoId, lessonId: 'lesson' }]);
+  let affectedReads = 0;
+  let siblingReads = 0;
+  const affected = new QueryObserver(client, {
+    queryKey: lessonDraftQueryKey('lesson'),
+    queryFn: async () => ++affectedReads,
+  });
+  const sibling = new QueryObserver(client, {
+    queryKey: lessonDraftQueryKey('sibling'),
+    queryFn: async () => ++siblingReads,
+  });
+  const stop = affected.subscribe(() => {});
+  const stopSibling = sibling.subscribe(() => {});
+  try {
+    await affected.refetch();
+    await sibling.refetch();
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    await client.fetchQuery(queries.list(courseId, videoId));
+    const before = affectedReads;
+    const siblingBefore = siblingReads;
+    state = 'ready';
+    await client.fetchQuery(queries.list(courseId, videoId));
+    expect(affectedReads).toBe(before + 1);
+    expect(siblingReads).toBe(siblingBefore);
+  } finally {
+    stop();
+    stopSibling();
+    client.clear();
+  }
+});
+
+test.each(['queued', 'processing'] as const)(
+  'list envelope with %s audio schedules another port read',
+  async (state) => {
+    rstest.useFakeTimers();
+    const unavailable = async () =>
+      ({ ok: false, error: { code: 'dependency_unavailable' } }) as const;
+    let reads = 0;
+    const repository: AudioTrackRepository = {
+      list: async () => {
+        reads++;
+        return { ok: true, value: { items: [track(state)], multilingualDefault: false } };
+      },
+      mint: unavailable,
+      rename: unavailable,
+      remove: unavailable,
+      setDefault: unavailable,
+      transfer: unavailable,
+      cancelUpload: unavailable,
+    };
+    const client = new QueryClient();
+    const queries = createAdminAudioQueries(createAudioTracks(repository));
+    const observer = new QueryObserver(client, queries.list(courseId, videoId));
+    const stop = observer.subscribe(() => {});
+    try {
+      await observer.refetch();
+      const before = reads;
+      await rstest.advanceTimersByTimeAsync(videoPollMs);
+      expect(reads).toBe(before + 1);
+    } finally {
+      stop();
+      client.clear();
+      rstest.useRealTimers();
+    }
+  },
+);

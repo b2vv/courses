@@ -6,13 +6,14 @@ import {
   draftPollMs,
   draftTaskTimeoutMs,
   DraftQueryError,
+  lessonDraftQueryKey,
 } from './admin-draft-queries';
 import type { DraftRepository, LessonDraft } from '../../modules/transcript';
 
 const lessonId = 'lesson';
 const trackT = 'T';
 const trackU = 'U';
-function draft(trackId: string, overrides: Partial<LessonDraft> = {}): LessonDraft {
+function draft(trackId: string | null, overrides: Partial<LessonDraft> = {}): LessonDraft {
   return {
     lessonId,
     trackId,
@@ -206,5 +207,154 @@ test('inventory is per lesson and does not poll', async () => {
   expect(h.queries.inventory('other').queryKey).not.toEqual(options.queryKey);
   stop();
   h.unsubscribe();
+  h.client.clear();
+});
+
+function isolatedQueries(initial: LessonDraft[] = []) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const repository: DraftRepository = {
+    listDrafts: async () => ({ ok: true, value: initial }),
+    listTranscripts: async () => ({ ok: true, value: [] }),
+    regenerate: async () => ({ ok: true, value: undefined }),
+  };
+  const queries = createDraftQueries(repository);
+  const options = queries.lesson(lessonId, client);
+  const read = () => client.fetchQuery(options);
+  const regenerate = () =>
+    client
+      .getMutationCache()
+      .build(client, queries.regenerate(client))
+      .execute({ lessonId, trackId: trackT });
+  const interval = (id = lessonId) => {
+    const opts = queries.lesson(id, client);
+    const query = client
+      .getQueryCache()
+      .build<LessonDraft[], Error, LessonDraft[], ReturnType<typeof lessonDraftQueryKey>>(
+        client,
+        opts,
+      );
+    if (typeof opts.refetchInterval !== 'function') throw new Error('Missing query');
+    return opts.refetchInterval(query);
+  };
+  return { client, repository, queries, read, regenerate, interval };
+}
+
+test('regeneration retains the complete prior snapshot but clears its server timestamp', async () => {
+  const previous = draft(trackT, {
+    language: 'fr',
+    failure: 'recognition_failed',
+    stale: true,
+    generation: 7,
+    segments: [{ id: 'line', startMs: 10, endMs: 300, text: 'Bonjour' }],
+  });
+  const h = isolatedQueries([previous]);
+  await h.read();
+  await h.regenerate();
+  expect(await h.read()).toEqual([{ ...previous, state: 'pending', updatedAt: null }]);
+  h.client.clear();
+});
+
+test.each([false, true])(
+  'interval expiry restores cache without a fetch; prior snapshot=%s',
+  async (exists) => {
+    rstest.useFakeTimers();
+    rstest.setSystemTime(1000);
+    const previous = draft(trackT);
+    const h = isolatedQueries(exists ? [previous] : []);
+    await h.read();
+    await h.regenerate();
+    await h.read();
+    expect(h.client.getQueryData(h.queries.lesson(lessonId, h.client).queryKey)).toMatchObject([
+      { state: 'pending', updatedAt: null },
+    ]);
+    rstest.setSystemTime(1000 + draftTaskTimeoutMs);
+    expect(h.interval()).toBe(false);
+    expect(h.client.getQueryData(h.queries.lesson(lessonId, h.client).queryKey)).toEqual(
+      exists ? [previous] : [],
+    );
+    h.client.clear();
+  },
+);
+
+test('markers never leak rows or polling into a sibling lesson', async () => {
+  const h = isolatedQueries();
+  await h.read();
+  await h.regenerate();
+  const sibling = h.queries.lesson('sibling', h.client);
+  expect(await h.client.fetchQuery(sibling)).toEqual([]);
+  expect(h.interval('sibling')).toBe(false);
+  h.client.clear();
+});
+
+test('running with the same timestamp acknowledges the claim and terminal data stops polling', async () => {
+  const h = isolatedQueries([draft(trackT)]);
+  await h.read();
+  await h.regenerate();
+  h.repository.listDrafts = async () => ({
+    ok: true,
+    value: [draft(trackT, { state: 'running' })],
+  });
+  expect(await h.read()).toMatchObject([{ state: 'running' }]);
+  h.repository.listDrafts = async () => ({ ok: true, value: [draft(trackT)] });
+  expect(await h.read()).toEqual([draft(trackT)]);
+  expect(h.interval()).toBe(false);
+  h.client.clear();
+});
+
+test('repeated regeneration keeps the original fifteen-minute queue deadline', async () => {
+  rstest.useFakeTimers();
+  rstest.setSystemTime(1000);
+  const h = isolatedQueries();
+  await h.read();
+  await h.regenerate();
+  await h.read();
+  rstest.setSystemTime(1000 + 10 * 60 * 1000);
+  await h.regenerate();
+  rstest.setSystemTime(1000 + draftTaskTimeoutMs);
+  expect(h.interval()).toBe(false);
+  expect(h.client.getQueryData(h.queries.lesson(lessonId, h.client).queryKey)).toEqual([]);
+  h.client.clear();
+});
+
+test.each(['inventory', 'lesson'] as const)('%s errors preserve their named code', async (kind) => {
+  const h = isolatedQueries();
+  h.repository.listTranscripts = async () => ({
+    ok: false,
+    error: { code: 'dependency_unavailable' },
+  });
+  h.repository.listDrafts = async () => ({ ok: false, error: { code: 'dependency_unavailable' } });
+  const read =
+    kind === 'inventory'
+      ? h.client.fetchQuery(h.queries.inventory(lessonId))
+      : h.client.fetchQuery(h.queries.lesson(lessonId, h.client));
+  await expect(read).rejects.toMatchObject({
+    name: 'DraftQueryError',
+    code: 'dependency_unavailable',
+  });
+  h.client.clear();
+});
+
+test('failed regeneration never creates a pending row or starts polling', async () => {
+  const h = isolatedQueries();
+  await h.read();
+  h.repository.regenerate = async () => ({ ok: false, error: { code: 'dependency_unavailable' } });
+  await expect(h.regenerate()).rejects.toMatchObject({ code: 'dependency_unavailable' });
+  expect(await h.read()).toEqual([]);
+  expect(h.interval()).toBe(false);
+  h.client.clear();
+});
+
+test('null-track placeholder does not rewrite the cache while a requested marker waits', async () => {
+  rstest.useFakeTimers();
+  rstest.setSystemTime(1000);
+  const h = isolatedQueries([draft(null, { updatedAt: null, assetId: null, generation: null })]);
+  await h.read();
+  await h.regenerate();
+  const key = h.queries.lesson(lessonId, h.client).queryKey;
+  const before = h.client.getQueryState(key)?.dataUpdatedAt;
+  rstest.setSystemTime(2000);
+  expect(h.interval()).toBe(draftPollMs);
+  expect(h.client.getQueryState(key)?.dataUpdatedAt).toBe(before);
+  expect(h.client.getQueryData(key)).toHaveLength(1);
   h.client.clear();
 });
