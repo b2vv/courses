@@ -44,7 +44,15 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
   format-check, lint, typecheck, test (0 failed / 0 skipped), integration (130 Go packages ok) and check-generated passed;
   `build` FAILED with `no space left on device` while exporting the `asr-worker` image (Whisper large-v3-turbo model
   layer). The Kiri VM disk (63 GB) had 13 GB free at the start and the uncached build cache grew 12.3 GB. Infrastructure,
-  not code. Owner decision 2026-11-18: grow the Kiri disk, then rerun. Ux18 BLOCKED until that rerun.
+  not code. Owner decision 2026-11-18: grow the Kiri disk, then rerun.
+- **Attempt 2** on `8f7923ad` (after the owner dropped the old images and restarted Kiri; 50.1 GB free, 21:03→21:27):
+  everything through smoke passed, including the full uncached image build and a real `e2e-reset`. e2e did not start: the
+  host's `~/Library/Caches/ms-playwright` was gone (`Executable doesn't exist`, 105 failed at 0 ms, 57 did not run).
+  With the owner's consent, Chromium for Playwright 1.62.1 was reinstalled.
+- **Attempt 3 — GREEN** on `8f7923ad` (2026-11-18 22:21→22:51, `GATE_EXIT=0`): format-check, lint, typecheck, unit
+  1482 passed / 0 failed / 0 skipped, integration 130 Go packages ok / 0 FAIL, check-generated, build, `e2e-reset`
+  (postgres, redis and media volumes removed), up, drain-queue, seed, smoke, e2e **168 passed** / 0 failed / 0 flaky /
+  0 skipped (24.2 min). Ux18 PASS.
 
 ## 3. Non-obvious findings
 - **F1 — a defect this phase introduced and the gates missed.** U3's `@container transcript-editor` stalled Chromium
@@ -87,4 +95,4 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
 - **Kiri disk.** 63 GB at 74–99 % used during the phase. The build cache regrows about 17 GB per few builds.
 
 ## 6. Next
-Ordered `make check` on the final revision (owner consent), then the PR and merge (owner approval).
+PR, independent PR review, then merge on the owner's go.
