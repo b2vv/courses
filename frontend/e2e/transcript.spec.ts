@@ -253,6 +253,8 @@ test.describe('with a real two-second video', () => {
     baseURL,
   }) => {
     test.setTimeout(300_000);
+    page.setDefaultTimeout(5_000);
+    page.setDefaultNavigationTimeout(10_000);
     if (baseURL === undefined) throw new Error('Playwright baseURL is required');
     const headers = { Origin: new URL(baseURL).origin };
     const slug = `${runNamespace}-video`;
@@ -286,14 +288,18 @@ test.describe('with a real two-second video', () => {
     await page.goto(`/admin/courses/${course.id}`);
     // Per-lesson video upload lives on the Lessons tab (view-3 layout).
     await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    const lesson = page
+      .getByRole('group', { name: 'Модуль 1', exact: true })
+      .getByRole('group', { name: 'Урок 1', exact: true });
+    await expect(
+      lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+    ).toBeVisible();
     const minted = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/admin/lessons/${videoLessonID}/video` &&
         response.request().method() === 'POST',
     );
-    await page
-      .getByRole('group', { name: 'Модуль 1' })
-      .getByRole('group', { name: 'Урок 1' })
+    await lesson
       .locator('input[type="file"]:not(.admin-audio-field input)')
       .setInputFiles(shortVideo);
     expect((await minted).status()).toBe(201);
@@ -309,7 +315,7 @@ test.describe('with a real two-second video', () => {
       )
       .toBe('ready');
 
-    // O7 predicts the embedded language before Play; make it match the authored transcript.
+    // Keep the embedded default language until the populated Ukrainian orphan tab is activated.
     const videosResponse = await page.request.get(`/api/v1/admin/courses/${course.id}/videos`);
     expect(videosResponse.status()).toBe(200);
     const video = z
@@ -330,14 +336,6 @@ test.describe('with a real two-second video', () => {
       .parse(await tracksResponse.json())
       .items.find((track) => track.kind === 'embedded');
     if (!embedded) throw new Error('Missing embedded track');
-    const patched = await page.request.patch(
-      `/api/v1/admin/videos/${video.videoId}/audio-tracks/${embedded.trackId}`,
-      {
-        headers,
-        data: { language: 'uk', label: 'Українська' },
-      },
-    );
-    expect(patched.status(), await patched.text()).toBe(200);
 
     const publishedResponse = await page.request.post(`/api/v1/admin/courses/${course.id}/status`, {
       data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
@@ -367,7 +365,56 @@ test.describe('with a real two-second video', () => {
     });
     expect(written.status(), await written.text()).toBe(200);
 
+    // F1: the Ready video keeps its default embedded track, so the populated Ukrainian
+    // transcript starts in an inactive, force-mounted panel. Activating it used to hang
+    // Chromium in the native container-query visibility check. A material preserves the
+    // reported course composition; the single lesson starts expanded (D4).
+    const material = await page.request.post(`/api/v1/admin/courses/${course.id}/documents`, {
+      headers,
+      data: {
+        id: randomUUID(),
+        label: 'Renderer regression material',
+        url: 'https://example.test/transcript-renderer',
+      },
+    });
+    expect(material.status()).toBe(201);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload({ timeout: 10_000 });
+    await page.getByRole('tab', { name: 'Уроки', exact: true }).click({ timeout: 5_000 });
+    const ukrainian = lesson.getByRole('tab', { name: 'Українська', exact: true });
+    await expect(ukrainian).toHaveAttribute('aria-selected', 'false', { timeout: 5_000 });
+    await ukrainian.click({ timeout: 5_000 });
+    await expect(ukrainian).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 });
+    await expect(page.locator('.transcript-editor-lines > li:visible')).toHaveCount(2, {
+      timeout: 5_000,
+    });
+    await expect(page.getByRole('textbox', { name: 'Текст репліки 1' })).toHaveValue(
+      'Перша секунда',
+      { timeout: 5_000 },
+    );
+
+    // D4 keeps the active populated panel mounted through collapse and expansion.
+    const toggle = lesson.locator('.admin-lesson-summary button[aria-expanded][aria-controls]');
+    await toggle.click({ timeout: 5_000 });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false', { timeout: 5_000 });
+    await toggle.click({ timeout: 5_000 });
+    await expect(lesson.locator('.transcript-editor-lines > li:visible')).toHaveCount(2, {
+      timeout: 5_000,
+    });
+
+    // O7 predicts the embedded language before Play; now match the authored transcript.
+    const patched = await page.request.patch(
+      `/api/v1/admin/videos/${video.videoId}/audio-tracks/${embedded.trackId}`,
+      {
+        headers,
+        data: { language: 'uk', label: 'Українська' },
+      },
+    );
+    expect(patched.status(), await patched.text()).toBe(200);
+
     const context = await openStudent(browser, baseURL);
+    context.setDefaultTimeout(5_000);
+    context.setDefaultNavigationTimeout(10_000);
     try {
       const studentPage = await context.newPage();
       await studentPage.goto(`/learn/${slug}/${videoLessonID}`);

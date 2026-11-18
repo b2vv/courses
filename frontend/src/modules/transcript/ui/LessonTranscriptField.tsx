@@ -77,8 +77,7 @@ export function LessonTranscriptField({
   const { data, isLoading } = useLessonTranscript(lessonId, fixedLanguage);
 
   useEffect(() => {
-    if (!isLoading)
-      onTranscriptKnown?.(lessonId, data?.language !== undefined && data.language !== null);
+    if (!isLoading && data !== undefined) onTranscriptKnown?.(lessonId, data.language !== null);
   }, [data, isLoading, lessonId, onTranscriptKnown]);
 
   // Nothing while loading, deliberately NOT a skeleton. `Skeleton` renders an <output>, whose

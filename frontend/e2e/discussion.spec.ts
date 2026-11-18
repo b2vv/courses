@@ -78,14 +78,20 @@ async function createCourse(
 
 async function publishVideo(page: Page, course: CourseToken, lessonID: string, slug: string) {
   await page.goto(`/admin/courses/${course.id}`);
+  await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+  const lesson = page
+    .getByRole('group', { name: 'Модуль 1', exact: true })
+    .getByRole('group', { name: 'Урок 1', exact: true });
+  await expect(
+    lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+  ).toBeVisible();
   const minted = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/admin/lessons/${lessonID}/video` &&
       response.request().method() === 'POST',
   );
-  await page
+  await lesson
     .locator('input[type="file"]:not(.admin-audio-field input)')
-    .first()
     .setInputFiles(shortVideo);
   expect((await minted).status()).toBe(201);
   await expect

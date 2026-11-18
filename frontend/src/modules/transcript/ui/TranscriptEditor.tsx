@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatTranscriptTime } from '../application/format-transcript-time';
 import {
   clearAcceptedTranscriptSnapshot,
   maximumAcceptedTranscriptSources,
@@ -189,6 +190,27 @@ export function TranscriptEditor({
   // JSX handler: `focusout` bubbles natively, so one listener covers every field without each of
   // them knowing about recovery, and a section is not an element that should carry a handler.
   const root = useRef<HTMLElement | null>(null);
+  const [wideLines, setWideLines] = useState(false);
+  useEffect(() => {
+    const editor = root.current;
+    if (editor === null) return;
+    const documentRoot = editor.ownerDocument.documentElement;
+    // A native size query here recurses during React Aria's visibility/layout check of
+    // force-mounted Ukrainian panels (F1 Compose regression). Keep the same 40rem
+    // breakpoint without that query; height-only feedback must not trigger another render.
+    const measure = () => {
+      const fontSize = Number.parseFloat(getComputedStyle(documentRoot).fontSize);
+      const unit = Number.isFinite(fontSize) ? fontSize : 16;
+      const next = editor.getBoundingClientRect().width >= 40 * unit;
+      setWideLines((current) => (current === next ? current : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(editor);
+    // Text enlargement can change rem even if the editor's width stays the same.
+    observer.observe(documentRoot);
+    return () => observer.disconnect();
+  }, []);
   const focusAfterRecovery = useRef<Element | null>(null);
   const firstLineText = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
@@ -287,8 +309,8 @@ export function TranscriptEditor({
       ? 'administration.transcriptEditor.recovery.staleHeading'
       : 'administration.transcriptEditor.recovery.heading';
 
-  // Times are held as TEXT while editing and parsed only on save. Parsing on every keystroke turns
-  // a half-typed "1" into a real value and reorders the lines under the author's cursor.
+  // Times stay TEXT while editing. Parsing for the readout must never replace the raw buffer:
+  // coercing a half-typed time into a real value can reorder lines under the author's cursor.
   const update = (index: number, change: Partial<DraftLine>) => {
     if (readOnly) return;
     setStatus('idle');
@@ -318,6 +340,7 @@ export function TranscriptEditor({
     <section
       ref={root}
       className="transcript-editor"
+      data-wide-lines={wideLines || undefined}
       aria-labelledby={`transcript-editor-${identity}`}
     >
       <h4 id={`transcript-editor-${identity}`}>{t('administration.transcriptEditor.heading')}</h4>
@@ -440,57 +463,77 @@ export function TranscriptEditor({
       <ol className="transcript-editor-lines">
         {lines.map((line, index) => (
           <li key={line.id}>
-            <TextField
-              isReadOnly={readOnly}
-              {...(recoveryLocked
-                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
-                : {})}
-              label={t('administration.transcriptEditor.start', { line: index + 1 })}
-              value={line.startMs}
-              onChange={(value) => update(index, { startMs: value })}
-            />
-            <TextField
-              isReadOnly={readOnly}
-              {...(recoveryLocked
-                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
-                : {})}
-              label={t('administration.transcriptEditor.end', { line: index + 1 })}
-              value={line.endMs}
-              onChange={(value) => update(index, { endMs: value })}
-            />
-            <TextArea
-              {...(index === 0 ? { ref: firstLineText } : {})}
-              isReadOnly={readOnly}
-              {...(recoveryLocked
-                ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
-                : {})}
-              label={t('administration.transcriptEditor.text', { line: index + 1 })}
-              value={line.text}
-              onChange={(value) => update(index, { text: value })}
-            />
-            <fieldset>
-              <legend>{t('administration.transcriptEditor.documents', { line: index + 1 })}</legend>
-              {documents.map((document) => (
-                <label key={document.id}>
-                  <input
-                    type="checkbox"
-                    aria-disabled={readOnly}
-                    checked={line.documentIds.includes(document.id)}
-                    onChange={(event) =>
-                      update(index, {
-                        documentIds: event.target.checked
-                          ? [...line.documentIds, document.id]
-                          : line.documentIds.filter((id) => id !== document.id),
-                      })
-                    }
-                  />
-                  {document.label}
-                </label>
-              ))}
-            </fieldset>
+            <div className="transcript-editor-time transcript-editor-time--start">
+              <TextField
+                isReadOnly={readOnly}
+                {...(recoveryLocked
+                  ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                  : {})}
+                label={t('administration.transcriptEditor.start', { line: index + 1 })}
+                value={line.startMs}
+                description={
+                  line.startMs.trim() === ''
+                    ? ''
+                    : (formatTranscriptTime(Number(line.startMs)) ?? '')
+                }
+                onChange={(value) => update(index, { startMs: value })}
+              />
+            </div>
+            <div className="transcript-editor-time transcript-editor-time--end">
+              <TextField
+                isReadOnly={readOnly}
+                {...(recoveryLocked
+                  ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                  : {})}
+                label={t('administration.transcriptEditor.end', { line: index + 1 })}
+                value={line.endMs}
+                description={
+                  line.endMs.trim() === '' ? '' : (formatTranscriptTime(Number(line.endMs)) ?? '')
+                }
+                onChange={(value) => update(index, { endMs: value })}
+              />
+            </div>
+            <div className="transcript-editor-text">
+              <TextArea
+                {...(index === 0 ? { ref: firstLineText } : {})}
+                isReadOnly={readOnly}
+                {...(recoveryLocked
+                  ? { 'aria-describedby': `transcript-recovery-lock-${identity}` }
+                  : {})}
+                label={t('administration.transcriptEditor.text', { line: index + 1 })}
+                value={line.text}
+                onChange={(value) => update(index, { text: value })}
+              />
+            </div>
+            {documents.length > 0 && (
+              <fieldset>
+                <legend>
+                  {t('administration.transcriptEditor.documents', { line: index + 1 })}
+                </legend>
+                {documents.map((document) => (
+                  <label key={document.id}>
+                    <input
+                      type="checkbox"
+                      aria-disabled={readOnly}
+                      checked={line.documentIds.includes(document.id)}
+                      onChange={(event) =>
+                        update(index, {
+                          documentIds: event.target.checked
+                            ? [...line.documentIds, document.id]
+                            : line.documentIds.filter((id) => id !== document.id),
+                        })
+                      }
+                    />
+                    {document.label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
             <Button
               type="button"
               variant="secondary"
+              className="transcript-editor-remove"
+              aria-label={t('administration.transcriptEditor.remove', { line: index + 1 })}
               aria-disabled={readOnly}
               onPress={() => {
                 if (readOnly) return;
@@ -498,7 +541,19 @@ export function TranscriptEditor({
                 changeLines(lines.filter((_, at) => at !== index));
               }}
             >
-              {t('administration.transcriptEditor.remove', { line: index + 1 })}
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+              </svg>
             </Button>
           </li>
         ))}

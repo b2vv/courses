@@ -1,0 +1,179 @@
+{
+  "date": "2026-11-18",
+  "ownerDecision": "Courses 1: no Chromium-in-rstest infrastructure",
+  "supersedes": "fix-verification.json nested-browser-unit proof and 1483/117 count; all prior numeric visual evidence retained",
+  "removed": [
+    "frontend/scripts/test-course-editor-layout.mjs",
+    "frontend/src/modules/admin/ui/CourseEditorView.layout.test.ts",
+    "frontend/e2e/fixtures/course-editor-layout.tsx"
+  ],
+  "controlledObserverUnit": "40rem threshold, rem enlargement, <=1 commit over 100 callbacks, disconnect",
+  "invocation": {
+    "cwd": "frontend",
+    "command": "/Users/strelia/project-data/courses-kiri/courses-kiri env COMPOSE_FILE=docker-compose.yml:docker-compose.e2e.yml npx playwright test --config /private/tmp/admin-editor-fix/transcript.config.ts",
+    "test": "with a real two-second video / the browser parses our WebVTT, and lines are reachable by keyboard",
+    "actionsMs": 5000,
+    "navigationMs": 10000,
+    "globalTimeoutMs": 120000,
+    "trace": "off",
+    "video": "off",
+    "screenshot": "off"
+  },
+  "fixture": {
+    "viewport": [
+      390,
+      844
+    ],
+    "readyVideoSeconds": 2,
+    "embeddedLanguageBeforeActivation": "und",
+    "transcriptLanguage": "uk",
+    "label": "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
+    "rows": 2,
+    "materials": 1,
+    "lessonInitiallyExpanded": true,
+    "collapseReopenAsserted": true
+  },
+  "nonReproducingExperiment": {
+    "viewport": [
+      1280,
+      720
+    ],
+    "exit": 0,
+    "elapsedSeconds": 7.8,
+    "course": "f6648f4f-4c51-4ff1-9b77-80f447174a19"
+  },
+  "red": {
+    "phase": "red-390",
+    "created": [
+      {
+        "id": "7f132b18-887c-44ed-a253-d70f8065805f",
+        "leftover": 0
+      }
+    ],
+    "image": "084a0d649211c1724cf1fcdeba50bbf2adc618cf19289784f170c644d8e5e466",
+    "exit": 1,
+    "elapsedSeconds": 15.2
+  },
+  "green": {
+    "phase": "green",
+    "created": [
+      {
+        "id": "f1d737e2-803b-4be6-b1e6-0663173b37c5",
+        "leftover": 0
+      }
+    ],
+    "image": "90763e230b2e7c01e66d78810cf3e0576f4c2acd0aad4ca372ec623aaf715a99",
+    "exit": 0,
+    "elapsedSeconds": 7.8
+  },
+  "redFailure": {
+    "historicalLine": "frontend/e2e/transcript.spec.ts:384:21",
+    "finalLine": "frontend/e2e/transcript.spec.ts:386:21",
+    "statement": "await ukrainian.click({ timeout: 5_000 });",
+    "message": "TimeoutError: locator.click: Timeout 5000ms exceeded.",
+    "callLog": [
+      "locator resolved aria-selected=false",
+      "visible, enabled and stable",
+      "done scrolling",
+      "performing click action"
+    ],
+    "loaderError": false
+  },
+  "rebuilds": {
+    "redExit": 0,
+    "greenExit": 0,
+    "scope": "frontend only, --no-deps --build --wait"
+  },
+  "exactFixRestoredSHA256": {
+    "frontend/src/app/styles/main.css": "d2da12883dd01b3c8dbe3f14d2151a014dafb6f81fa4d28c53daacabb6f070fb",
+    "frontend/src/modules/transcript/ui/TranscriptEditor.tsx": "b1b6e5732bfafb716fef21f732563b8e336cecb16c0cad59c7fefdb2291eab42"
+  },
+  "sourceSHA256": {
+    "frontend/e2e/transcript.spec.ts": "4629fddf6987eb0864b8db8d57e14faf63524211f46ebcb15facc673d656d1a7",
+    "frontend/src/app/styles/main.css": "d2da12883dd01b3c8dbe3f14d2151a014dafb6f81fa4d28c53daacabb6f070fb",
+    "frontend/src/modules/admin/ui/CourseEditorView.tsx": "0980f2f8afa7bbc101e7fdda674dd6d02ab2768c1e42f232a04ba52afe569989",
+    "frontend/src/modules/admin/ui/CourseEditorView.test.tsx": "1133485c0497f2f7c217d0939c12940c33195948cc8d48eee7f64f9c68f51766",
+    "frontend/src/modules/transcript/ui/TranscriptEditor.tsx": "b1b6e5732bfafb716fef21f732563b8e336cecb16c0cad59c7fefdb2291eab42",
+    "frontend/src/modules/transcript/ui/TranscriptEditor.test.tsx": "90f51048d491804a5aabe3db6dcc4831d7553a9b9bddaf986ac3bba76b64a624"
+  },
+  "commands": [
+    {
+      "command": "npm run format",
+      "exit": 0
+    },
+    {
+      "command": "npm run format:check",
+      "exit": 0
+    },
+    {
+      "command": "npm run typecheck",
+      "exit": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0
+    },
+    {
+      "command": "npx rstest run src --testTimeout 30000",
+      "exit": 0
+    }
+  ],
+  "rstest": {
+    "files": 116,
+    "tests": 1482,
+    "failed": 0,
+    "skipped": 0
+  },
+  "cleanup": {
+    "revisionCreatedCourseIds": [
+      "f6648f4f-4c51-4ff1-9b77-80f447174a19",
+      "7f132b18-887c-44ed-a253-d70f8065805f",
+      "f1d737e2-803b-4be6-b1e6-0663173b37c5"
+    ],
+    "allAuditedCourseIds": [
+      "021ccee5-116a-4d7c-8f0e-86a531833bc2",
+      "1b29801b-4955-41ae-ad29-a83e70d6ff07",
+      "1cd32c0a-cbac-4e40-ba6c-6268e7592d5a",
+      "287f917f-c8ea-456f-a0d4-bc01411a2b7a",
+      "41db3a2d-9d00-499e-8b63-4919faec4709",
+      "54ce7f38-ad96-485d-8fde-9a5e86f401f1",
+      "5ab08630-ef64-482b-8e1b-e0bcfa839b0e",
+      "6894f0e1-5af5-41a6-8708-02554ba52df4",
+      "6eb4322d-0d70-4746-9ccb-f004a285acf7",
+      "71e9a31a-3f5e-48cd-aa63-def289a45823",
+      "725280b9-1a6f-4ab6-be97-400dc824b3b0",
+      "73f5527a-c602-41c4-b796-aca813f3316a",
+      "74214068-f688-4ec1-aee8-696786ae35a9",
+      "7660d21a-3752-4fc8-b602-ce01feec2595",
+      "7a808211-3a61-46a7-964b-f9b27936a715",
+      "7e2db6d2-a88c-404c-a9e1-53e616905ee4",
+      "7edf025c-d138-43d2-bc81-bddf232e584f",
+      "8a4fd270-7148-41b1-90a9-f0d6a8a2b414",
+      "978dea35-1256-497c-980a-8d9432f4c531",
+      "9c788e91-68a2-48b4-ab95-d30d6f51adb4",
+      "abfb4441-680c-427b-95ef-c77046cff370",
+      "aeb84643-a937-4409-bb2c-fee1ca6632dd",
+      "b2a78ee6-fbcc-415c-a50c-18b78c023925",
+      "c248c1ba-eef6-44bb-aefa-893c927006a4",
+      "c899e737-3321-4a70-835f-c105b2a1ef2b",
+      "c9456c46-ef21-45d9-9844-08bf57c3f267",
+      "d2fe59e8-dfea-4cfd-adc8-d491288304b4",
+      "d5f5ab32-3826-4e82-8fd5-b7fa943f40fd",
+      "d5f668bb-98eb-4ca0-b8cb-cfd4737b8bf5",
+      "e935f706-a21f-4140-95f7-8705f46fcb63",
+      "fdf4036d-76a1-42ed-ad9e-d165e3b4a2d4",
+      "f6648f4f-4c51-4ff1-9b77-80f447174a19",
+      "7f132b18-887c-44ed-a253-d70f8065805f",
+      "f1d737e2-803b-4be6-b1e6-0663173b37c5"
+    ],
+    "auditedCount": 34,
+    "courses": 0,
+    "courseGrants": 0,
+    "orders": 0
+  },
+  "limitations": [
+    "Full make check/full e2e/Ux18 not run in this revision",
+    "Prior D5 unsupported translucent paint measurement remains NOT_TESTED"
+  ],
+  "visualEvidence": "Previous seven-viewport D1/D3/sticky measurements unchanged; product fix restored exactly (only TranscriptEditor comment changed since previous visual snapshot)."
+}

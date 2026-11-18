@@ -56,10 +56,16 @@ export const Route = createRootRouteWithContext<RootRouteContext>()({
 
 function NotFound() {
   const { t } = useTranslation();
+  const onAdminPath = useRouterState({
+    select: (state) =>
+      state.location.pathname === '/admin' || state.location.pathname.startsWith('/admin/'),
+  });
   return (
     <section className="notice">
       <h1>{t('page.notFound')}</h1>
-      <a href="/courses">{t('catalog.goToCatalog')}</a>
+      <a href={onAdminPath ? '/admin' : '/courses'}>
+        {t(onAdminPath ? 'page.goToAdmin' : 'catalog.goToCatalog')}
+      </a>
     </section>
   );
 }

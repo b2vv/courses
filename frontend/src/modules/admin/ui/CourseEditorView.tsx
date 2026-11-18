@@ -28,11 +28,13 @@ import {
   Checkbox,
   Dialog,
   Link,
+  LessonSectionHeader,
   PageHeader,
   Select,
   Skeleton,
   TextArea,
   TextField,
+  Tooltip,
 } from '../../../presentation/ui';
 import { CoursePriceField } from './CoursePriceField';
 import { LessonLanguageTabs } from './LessonLanguageTabs';
@@ -311,9 +313,112 @@ function PreviewField({
   );
 }
 
+type MoveDirection = 'up' | 'down';
+
+function MoveRowButton({
+  direction,
+  label,
+  onMove,
+}: {
+  direction: MoveDirection;
+  label: string;
+  onMove: () => void;
+}) {
+  return (
+    <Tooltip content={label}>
+      <Button
+        type="button"
+        variant="secondary"
+        aria-label={label}
+        data-move={direction}
+        onPress={onMove}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d={direction === 'up' ? 'M8 13V3M3 8l5-5 5 5' : 'M8 3v10M3 8l5 5 5-5'} />
+        </svg>
+      </Button>
+    </Tooltip>
+  );
+}
+
+function focusMovedRow(container: HTMLElement | null, id: string, direction: MoveDirection) {
+  const row = container?.querySelector(`[data-row-id="${id}"]`);
+  const opposite = direction === 'up' ? 'down' : 'up';
+  const button =
+    row?.querySelector(
+      `:scope > .admin-row-actions [data-move="${direction}"], :scope > .admin-lesson-body > .admin-row-actions [data-move="${direction}"]`,
+    ) ??
+    row?.querySelector(
+      `:scope > .admin-row-actions [data-move="${opposite}"], :scope > .admin-lesson-body > .admin-row-actions [data-move="${opposite}"]`,
+    );
+  if (button instanceof HTMLElement) button.focus();
+}
+
+function DeleteRowButton({
+  label,
+  confirmLabel,
+  isSaved,
+  onRemove,
+}: {
+  label: string;
+  confirmLabel: string;
+  isSaved: boolean;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!isSaved)
+    return (
+      <Button type="button" variant="danger" onPress={onRemove}>
+        {label}
+      </Button>
+    );
+  return (
+    <Dialog
+      triggerLabel={label}
+      trigger={
+        <Button type="button" variant="danger">
+          {label}
+        </Button>
+      }
+      title={label}
+      closeLabel={t('common.cancel')}
+    >
+      {(close) => (
+        <>
+          <p>{t('administration.deleteRowHint')}</p>
+          <Button
+            type="button"
+            variant="danger"
+            onPress={() => {
+              close();
+              onRemove();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 function LessonFields({
   form,
+  courseId,
+  transcriptKnowledge,
   moduleIndex,
+  expanded,
+  setExpanded,
   savedLessonIds,
   video,
   drafts,
@@ -322,7 +427,11 @@ function LessonFields({
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
+  courseId: string;
+  transcriptKnowledge: Readonly<Record<string, boolean>>;
   moduleIndex: number;
+  expanded: Readonly<Record<string, boolean>>;
+  setExpanded: (id: string, expanded: boolean) => void;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
@@ -331,21 +440,40 @@ function LessonFields({
   onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const [videoStatus, setVideoStatus] = useState<Record<string, string>>({});
+  const onVideoStatus = useCallback((id: string, status: string) => {
+    setVideoStatus((current) => (current[id] === status ? current : { ...current, [id]: status }));
+  }, []);
   const lessons = useFieldArray({
     control: form.control,
     name: `modules.${moduleIndex}.lessons`,
     keyName: 'formKey',
   });
+  const rows = useRef<HTMLDivElement>(null);
+  function move(index: number, direction: MoveDirection) {
+    const id = lessons.fields[index]?.id;
+    flushSync(() => lessons.move(index, index + (direction === 'up' ? -1 : 1)));
+    if (id !== undefined) focusMovedRow(rows.current, id, direction);
+  }
+  function remove(index: number) {
+    flushSync(() => lessons.remove(index));
+    const count = form.getValues(`modules.${moduleIndex}.lessons`).length;
+    if (count > 0)
+      form.setFocus(`modules.${moduleIndex}.lessons.${Math.min(index, count - 1)}.title`);
+    else rows.current?.querySelector<HTMLButtonElement>(':scope > [data-add-row]')?.focus();
+  }
   const lessonCount = form
     .watch('modules')
     .reduce((total, module) => total + module.lessons.length, 0);
 
   return (
-    <div className="admin-lessons">
+    <div className="admin-lessons" ref={rows}>
       {lessons.fields.map((lesson, lessonIndex) => {
         return (
-          <fieldset className="admin-lesson" key={lesson.formKey}>
-            <legend>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</legend>
+          <fieldset className="admin-lesson" key={lesson.formKey} data-row-id={lesson.id}>
+            <legend>
+              <h3>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</h3>
+            </legend>
             <div className="admin-editor-grid">
               <StringField
                 control={form.control}
@@ -366,52 +494,112 @@ function LessonFields({
                 })}
               />
             </div>
-            {video !== undefined && (
-              <LessonVideoField
-                lessonId={lesson.id}
-                isSaved={savedLessonIds.has(lesson.id)}
-                {...video}
-              />
-            )}
-            {savedLessonIds.has(lesson.id) && (
-              <LessonLanguageTabs
-                lessonId={lesson.id}
-                video={video}
-                drafts={drafts}
-                transcripts={transcripts}
-                languages={languages}
-                onTranscriptKnown={onTranscriptKnown}
-              />
-            )}
-            <div className="admin-row-actions">
+            <div className="admin-lesson-summary">
+              {videoStatus[lesson.id] !== undefined && (
+                <span className="admin-video-state">
+                  {t('administration.lessonVideoStatus', { status: videoStatus[lesson.id] })}
+                </span>
+              )}
+              {transcriptKnowledge[lesson.id] !== undefined && (
+                <span className="admin-video-state">
+                  {t(
+                    transcriptKnowledge[lesson.id]
+                      ? 'administration.lessonTranscriptYes'
+                      : 'administration.lessonTranscriptNo',
+                  )}
+                </span>
+              )}
+              {savedLessonIds.has(lesson.id) && (
+                <Link
+                  href={`/admin/courses/${courseId}/lessons/${lesson.id}`}
+                  aria-label={t('administration.editLessonContentLabel', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                >
+                  {t('administration.editLessonContent')}
+                </Link>
+              )}
               <Button
                 type="button"
                 variant="secondary"
-                isDisabled={lessonIndex === 0}
-                onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
+                aria-label={t(
+                  expanded[lesson.id]
+                    ? 'administration.collapseLessonLabel'
+                    : 'administration.expandLessonLabel',
+                  { lesson: lessonIndex + 1, module: moduleIndex + 1 },
+                )}
+                aria-expanded={expanded[lesson.id] === true}
+                aria-controls={`lesson-body-${lesson.id}`}
+                onPress={() => setExpanded(lesson.id, !expanded[lesson.id])}
               >
-                {t('administration.moveLessonUp', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
+                {t(
+                  expanded[lesson.id]
+                    ? 'administration.collapseLesson'
+                    : 'administration.expandLesson',
+                )}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={lessonIndex === lessons.fields.length - 1}
-                onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
-              >
-                {t('administration.moveLessonDown', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
-              </Button>
-              <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
-                {t('administration.deleteLesson', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
-              </Button>
+            </div>
+            <div
+              id={`lesson-body-${lesson.id}`}
+              className="admin-lesson-body"
+              hidden={!expanded[lesson.id]}
+            >
+              {video !== undefined && (
+                <LessonVideoField
+                  lessonId={lesson.id}
+                  isSaved={savedLessonIds.has(lesson.id)}
+                  {...video}
+                  onStatusKnown={onVideoStatus}
+                />
+              )}
+              {savedLessonIds.has(lesson.id) && (
+                <section className="admin-lesson-languages">
+                  <LessonSectionHeader
+                    title={t('administration.lessonLanguages')}
+                    status={t('administration.savedImmediately')}
+                  />
+                  <LessonLanguageTabs
+                    lessonId={lesson.id}
+                    video={video}
+                    drafts={drafts}
+                    transcripts={transcripts}
+                    languages={languages}
+                    onTranscriptKnown={onTranscriptKnown}
+                  />
+                </section>
+              )}
+              <div className="admin-row-actions">
+                {lessonIndex > 0 && (
+                  <MoveRowButton
+                    direction="up"
+                    label={t('administration.moveLessonUp', {
+                      lesson: lessonIndex + 1,
+                      module: moduleIndex + 1,
+                    })}
+                    onMove={() => move(lessonIndex, 'up')}
+                  />
+                )}
+                {lessonIndex < lessons.fields.length - 1 && (
+                  <MoveRowButton
+                    direction="down"
+                    label={t('administration.moveLessonDown', {
+                      lesson: lessonIndex + 1,
+                      module: moduleIndex + 1,
+                    })}
+                    onMove={() => move(lessonIndex, 'down')}
+                  />
+                )}
+                <DeleteRowButton
+                  label={t('administration.deleteLesson', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                  confirmLabel={t('administration.confirmDeleteLesson')}
+                  isSaved={savedLessonIds.has(lesson.id)}
+                  onRemove={() => remove(lessonIndex)}
+                />
+              </div>
             </div>
           </fieldset>
         );
@@ -419,8 +607,13 @@ function LessonFields({
       <Button
         type="button"
         variant="secondary"
+        data-add-row
         isDisabled={lessonCount >= 120}
-        onPress={() => lessons.append({ id: newLessonId(), title: '', isPreview: false })}
+        onPress={() => {
+          const id = newLessonId();
+          setExpanded(id, true);
+          lessons.append({ id, title: '', isPreview: false });
+        }}
       >
         {t('administration.addLesson', { number: moduleIndex + 1 })}
       </Button>
@@ -430,6 +623,8 @@ function LessonFields({
 
 function ModuleFields({
   form,
+  courseId,
+  transcriptKnowledge,
   savedLessonIds,
   video,
   drafts,
@@ -438,6 +633,8 @@ function ModuleFields({
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
+  courseId: string;
+  transcriptKnowledge: Readonly<Record<string, boolean>>;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
@@ -447,19 +644,39 @@ function ModuleFields({
 }) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
+  const rows = useRef<HTMLElement>(null);
+  function move(index: number, direction: MoveDirection) {
+    const id = modules.fields[index]?.id;
+    flushSync(() => modules.move(index, index + (direction === 'up' ? -1 : 1)));
+    if (id !== undefined) focusMovedRow(rows.current, id, direction);
+  }
+  function remove(index: number) {
+    flushSync(() => modules.remove(index));
+    const count = form.getValues('modules').length;
+    if (count > 0) form.setFocus(`modules.${Math.min(index, count - 1)}.title`);
+    else rows.current?.querySelector<HTMLButtonElement>(':scope > [data-add-row]')?.focus();
+  }
+
+  const [expanded, updateExpanded] = useState<Record<string, boolean>>(() => {
+    const ids = form
+      .getValues('modules')
+      .flatMap((module) => module.lessons.map((lesson) => lesson.id));
+    return Object.fromEntries(ids.map((id) => [id, ids.length === 1]));
+  });
+  const setExpanded = (id: string, value: boolean) =>
+    updateExpanded((current) => ({ ...current, [id]: value }));
 
   return (
-    <section className="admin-program ui-card" aria-labelledby="course-program-heading">
+    <section className="admin-program ui-card" aria-labelledby="course-program-heading" ref={rows}>
       <div className="admin-section-heading">
         <div>
-          <p className="eyebrow">{t('administration.structure')}</p>
           <h2 id="course-program-heading">{t('administration.program')}</h2>
         </div>
         <span>{t('administration.moduleCount', { count: modules.fields.length })}</span>
       </div>
       <div className="admin-modules">
         {modules.fields.map((module, moduleIndex) => (
-          <fieldset className="admin-module" key={module.formKey}>
+          <fieldset className="admin-module" key={module.formKey} data-row-id={module.id}>
             <legend>{t('administration.moduleNumber', { number: moduleIndex + 1 })}</legend>
             <StringField
               control={form.control}
@@ -471,6 +688,10 @@ function ModuleFields({
             <LessonFields
               form={form}
               moduleIndex={moduleIndex}
+              courseId={courseId}
+              transcriptKnowledge={transcriptKnowledge}
+              expanded={expanded}
+              setExpanded={setExpanded}
               savedLessonIds={savedLessonIds}
               video={video}
               drafts={drafts}
@@ -479,25 +700,28 @@ function ModuleFields({
               onTranscriptKnown={onTranscriptKnown}
             />
             <div className="admin-row-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={moduleIndex === 0}
-                onPress={() => modules.move(moduleIndex, moduleIndex - 1)}
-              >
-                {t('administration.moveModuleUp', { number: moduleIndex + 1 })}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={moduleIndex === modules.fields.length - 1}
-                onPress={() => modules.move(moduleIndex, moduleIndex + 1)}
-              >
-                {t('administration.moveModuleDown', { number: moduleIndex + 1 })}
-              </Button>
-              <Button type="button" variant="danger" onPress={() => modules.remove(moduleIndex)}>
-                {t('administration.deleteModule', { number: moduleIndex + 1 })}
-              </Button>
+              {moduleIndex > 0 && (
+                <MoveRowButton
+                  direction="up"
+                  label={t('administration.moveModuleUp', { number: moduleIndex + 1 })}
+                  onMove={() => move(moduleIndex, 'up')}
+                />
+              )}
+              {moduleIndex < modules.fields.length - 1 && (
+                <MoveRowButton
+                  direction="down"
+                  label={t('administration.moveModuleDown', { number: moduleIndex + 1 })}
+                  onMove={() => move(moduleIndex, 'down')}
+                />
+              )}
+              <DeleteRowButton
+                label={t('administration.deleteModule', { number: moduleIndex + 1 })}
+                confirmLabel={t('administration.confirmDeleteModule')}
+                isSaved={form
+                  .getValues(`modules.${moduleIndex}.lessons`)
+                  .some((lesson) => savedLessonIds.has(lesson.id))}
+                onRemove={() => remove(moduleIndex)}
+              />
             </div>
           </fieldset>
         ))}
@@ -505,6 +729,7 @@ function ModuleFields({
       <Button
         type="button"
         variant="secondary"
+        data-add-row
         isDisabled={modules.fields.length >= 40}
         onPress={() => modules.append({ id: newModuleId(), title: '', lessons: [] })}
       >
@@ -544,6 +769,56 @@ export function CourseEditorView({
   const [transcriptKnowledge, setTranscriptKnowledge] = useState<Record<string, boolean>>({});
   const [savedLessonIds, setSavedLessonIds] = useState(() => lessonIds(course));
   const [tab, setTab] = useState<'overview' | 'lessons' | 'access'>('overview');
+  const saveBar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = saveBar.current;
+    if (bar === null) return;
+    // The page scrolls at the document root. Measure wrapping/text enlargement as well as
+    // tab visibility so focused fields reserve the actual sticky footer height (R4).
+    const style = bar.ownerDocument.documentElement.style;
+    const property = '--admin-editor-save-height';
+    const fieldProperty = '--admin-editor-field-height';
+    const previous = style.getPropertyValue(property);
+    const previousField = style.getPropertyValue(fieldProperty);
+    const formElement = bar.closest('form');
+    const update = () => {
+      const rect = bar.getBoundingClientRect();
+      style.setProperty(property, `${rect.height}px`);
+      // Native textarea focus scrolls its caret, not its entire box. Reserve the visible
+      // textarea height too, before the next Tab; a focusin correction would be too late.
+      const fieldHeight = Math.max(
+        0,
+        ...Array.from(
+          formElement?.querySelectorAll('textarea') ?? [],
+          (field) => field.getBoundingClientRect().height,
+        ),
+      );
+      style.setProperty(fieldProperty, `${fieldHeight}px`);
+      const focused = bar.ownerDocument.activeElement;
+      // A larger inset alone cannot move a field that was already focused before the resize.
+      // Keep the bar's own controls in place, and scroll only a field it now covers.
+      if (
+        rect.height > 0 &&
+        focused instanceof HTMLElement &&
+        bar.closest('form')?.contains(focused) &&
+        !bar.contains(focused) &&
+        focused.getBoundingClientRect().bottom > rect.top
+      ) {
+        focused.scrollIntoView({ block: 'nearest' });
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    if (formElement !== null) observer.observe(formElement);
+    return () => {
+      observer.disconnect();
+      if (previous) style.setProperty(property, previous);
+      else style.removeProperty(property);
+      if (previousField) style.setProperty(fieldProperty, previousField);
+      else style.removeProperty(fieldProperty);
+    };
+  }, []);
   const form = useForm<CourseFormValues>({
     defaultValues: formValues(course),
     mode: 'onBlur',
@@ -721,7 +996,11 @@ export function CourseEditorView({
           hidden={tab === 'access'}
         >
           <FormErrorSummary form={form} fields={summaryFields} onSelect={focusField} />
-          <Aria.TabPanel id="overview" shouldForceMount className="ui-tab-panel">
+          <Aria.TabPanel
+            id="overview"
+            shouldForceMount
+            className="ui-tab-panel course-editor-panel"
+          >
             <div className="course-form-layout">
               <section
                 className="admin-editor-details ui-card course-details-form"
@@ -815,7 +1094,6 @@ export function CourseEditorView({
                 </section>
                 {course.status === 'draft' && (
                   <section className="ui-card danger-panel" aria-labelledby="course-danger-heading">
-                    <p className="eyebrow">{t('administration.dangerZone')}</p>
                     <h2 id="course-danger-heading">{t('administration.deleteCourse')}</h2>
                     <p>{t('administration.dangerHint')}</p>
                     <Dialog
@@ -849,12 +1127,14 @@ export function CourseEditorView({
               </div>
             </div>
           </Aria.TabPanel>
-          <Aria.TabPanel id="lessons" shouldForceMount className="ui-tab-panel">
+          <Aria.TabPanel id="lessons" shouldForceMount className="ui-tab-panel course-editor-panel">
             <div className="course-lessons-panel">
               {transcripts !== undefined && (
                 <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
               )}
               <ModuleFields
+                courseId={course.id}
+                transcriptKnowledge={transcriptKnowledge}
                 form={form}
                 savedLessonIds={savedLessonIds}
                 video={video}
@@ -865,7 +1145,10 @@ export function CourseEditorView({
               />
             </div>
           </Aria.TabPanel>
-          <div className="admin-editor-save">
+          <div className="admin-editor-save" ref={saveBar}>
+            <output aria-live="polite" aria-atomic="true">
+              {form.formState.isDirty ? t('administration.unsavedChanges') : ''}
+            </output>
             <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
               {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}
             </Button>
@@ -882,7 +1165,7 @@ export function CourseEditorView({
             />
           </div>
         )}
-        <Aria.TabPanel id="access" shouldForceMount className="ui-tab-panel">
+        <Aria.TabPanel id="access" shouldForceMount className="ui-tab-panel course-editor-panel">
           {adminTools}
         </Aria.TabPanel>
       </Aria.Tabs>

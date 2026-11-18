@@ -588,6 +588,22 @@ test('R35 returns to login with the editor address when the session ends mid-edi
   );
 });
 
+test('Ux03 unmatched /admin paths show the root NotFound and admin return link', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const router = createTestRouter('/admin/nope-xyz', admin);
+  await router.load();
+  renderRouter(router);
+
+  expect(screen.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeTruthy();
+  expect(
+    screen.getByRole('link', { name: 'Повернутися до адміністрування' }).getAttribute('href'),
+  ).toBe('/admin');
+  expect(screen.getByRole('complementary')).toBeTruthy();
+  expect(router.state.location.pathname).toBe('/admin/nope-xyz');
+  expect(observedAdminQueries).toEqual([]);
+});
+
 test('G04 gives a student the same not-found answer for /admin as an unknown address', async () => {
   const student = user('student');
   answerWith(student);
@@ -812,6 +828,8 @@ test.each([
 test.each([
   ['/learn/go/intro?lesson=3', null, '/login?returnTo=%2Flearn%2Fgo%2Fintro%3Flesson%3D3'],
   ['/admin/courses', null, '/login?returnTo=%2Fadmin%2Fcourses'],
+  ['/admin/nope-xyz?from=ux03', null, '/login?returnTo=%2Fadmin%2Fnope-xyz%3Ffrom%3Dux03'],
+  ['/admin/nope-xyz?from=ux03', user('admin'), '/login?returnTo=%2Fadmin%2Fnope-xyz%3Ffrom%3Dux03'],
 ] as const)('G06 redirects anonymous nested address %s', async (href, cached, expected) => {
   answerWith(null);
   const router = createTestRouter(href, cached);

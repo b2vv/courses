@@ -1,0 +1,78 @@
+import {chromium,type Page} from '@playwright/test';import {writeFile} from 'node:fs/promises';
+async function measure(page: Page) {
+  return page.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    const roots = [...document.querySelectorAll('.admin-editor, [role=dialog], main')];
+    const visible = (e: Element) => {
+      const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+      if(!(r.width>0&&r.height>0&&s.visibility!=='hidden'))return false;for(let p:Element|null=e;p;p=p.parentElement){const st=getComputedStyle(p);if(st.clipPath!=='none'||(st.clip!=='auto'&&st.clip!==''))return false;}return true;
+    };
+    const all = [...new Set(roots.flatMap(r => [r, ...r.querySelectorAll('*')]))].filter(visible);
+    const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
+    const name = (e: Element) => e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 100) ?? '';
+    const outside = all.filter(e => {
+      const r = e.getBoundingClientRect();
+      if (r.right <= vw + 0.5) return false;
+      for (let p = e.parentElement; p; p = p.parentElement) {
+        if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return false;
+      }
+      return true;
+    }).map(e => ({ tag: e.tagName, class: String(e.className).slice(0, 90), text: name(e), ...rect(e) }));
+    const targets = all.filter(e => e.matches('.admin-lesson-summary button, .admin-lesson-summary a, button[data-move], .transcript-editor-remove, .admin-editor-save button, [role=dialog] button, .document-library > button'))
+      .map(e => ({ name: name(e), ...rect(e), min44: e.getBoundingClientRect().width >= 44 && e.getBoundingClientRect().height >= 44 }));
+    // Selected new text and comparison text; measurements do not infer glyph ink clipping.
+    const texts = all.filter(e => e.matches('.admin-video-state, .admin-video-filename, .transcript-editor-time .ui-description, .admin-editor-save output, .admin-save-hint, .lesson-section-heading p, .admin-lesson-summary a, .admin-lesson-summary button, .document-library > button, [role=dialog] p, [role=dialog] button, main h1, main a[href="/admin"]'));
+    const clipping = texts.map(e => ({ text: name(e), tag: e.tagName, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight, clippedX: e.scrollWidth > e.clientWidth, clippedY:e.scrollHeight>e.clientHeight, ...rect(e) }));
+    const rgb = (s: string) => {
+      const m = s.match(/^rgba?\(([^)]+)\)$/);
+      if (!m) return null;
+      const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+      return v.length >= 3 && v.every(Number.isFinite) ? [v[0], v[1], v[2], v[3] ?? 1] : null;
+    };
+    const lum = (v: number[]) => v.slice(0,3).map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((n,c,i) => n + c * [.2126,.7152,.0722][i], 0);
+    const contrast = texts.map(e => {
+      const cs = getComputedStyle(e), fg = rgb(cs.color);
+      let bg: number[] | null = null, bgCSS = '', reason = '', backgroundElement = '';
+      const er = e.getBoundingClientRect();
+      const textRects: DOMRect[] = [];
+      const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange(); range.selectNodeContents(node);
+        textRects.push(...Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0));
+      }
+      if (!textRects.length) reason = 'no rendered text rectangles';
+      for (let p: Element | null = e; p; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (Number(s.opacity) !== 1 || s.filter !== 'none' || s.backdropFilter !== 'none' || s.mixBlendMode !== 'normal') { reason = 'ancestor opacity/filter/compositing unsupported'; break; }
+        if (!bg) {
+          if (s.backgroundImage !== 'none') { reason = 'background image/gradient unsupported'; break; }
+          const b = rgb(s.backgroundColor);
+          if (!b) { reason = `unsupported background colour ${s.backgroundColor}`; break; }
+          if (b[3] > 0 && b[3] < 1) { reason = 'translucent background unsupported'; break; }
+          if (b[3] === 1) {
+            const r = p.getBoundingClientRect();
+            if (textRects.some(t => t.left < r.left - .5 || t.right > r.right + .5 || t.top < r.top - .5 || t.bottom > r.bottom + .5)) { reason = 'text outside solid background bounds'; break; }
+            bg = b; bgCSS = s.backgroundColor; backgroundElement = `${p.tagName}.${p.className}`;
+          }
+        }
+      }
+      const popover = document.querySelector('.lesson-player-settings');
+      if (popover && !popover.contains(e)) { const pr = popover.getBoundingClientRect(); if (textRects.some(t => t.left < pr.right && t.right > pr.left && t.top < pr.bottom && t.bottom > pr.top)) reason ||= 'text box overlaps open popover (paint obscured)'; }
+      if (!fg || fg[3] !== 1) reason ||= 'foreground not opaque sRGB';
+      if (!bg) reason ||= 'no opaque solid background found';
+      const ratio = !reason && fg && bg ? (Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05) : null;
+      return { text: name(e), foreground: cs.color, background: bgCSS, backgroundElement, fontSize: cs.fontSize, textRects: textRects.map(t => ({x:t.x,y:t.y,width:t.width,height:t.height})), ratio, status: ratio === null ? 'NOT_TESTED' : ratio >= 4.5 ? 'PASS' : 'FAIL', reason };
+    });
+    const panels = [...document.querySelectorAll('.course-editor-panel')].map(e=>({id:e.id,inert:e.hasAttribute('inert'),display:getComputedStyle(e).display,visible:visible(e),...rect(e)}));
+    return { viewport: { width: innerWidth, height: innerHeight, clientWidth: vw }, htmlFontSize: getComputedStyle(document.documentElement).fontSize,
+      documentScrollWidth: document.documentElement.scrollWidth, overflowPASS: document.documentElement.scrollWidth <= vw && outside.length === 0, outside,
+      roots: roots.map(e => ({selector:`${e.tagName}.${e.className}`,...rect(e)})), targets, clipping, contrast, panels,
+      displayedPanelCount: panels.filter(p=>p.visible).length,
+      theme: { dataTheme: document.documentElement.getAttribute('data-theme'), colorScheme: getComputedStyle(document.documentElement).colorScheme },
+    };
+  });
+}
+
+const b=await chromium.launch();const results=[];
+try{for(const vp of [{name:'390',width:390,height:844,text:1},{name:'768',width:768,height:1024,text:1},{name:'1024',width:1024,height:768,text:1},{name:'1440',width:1440,height:900,text:1},{name:'1440-text200',width:1440,height:900,text:2},{name:'390-text200',width:390,height:844,text:2},{name:'320',width:320,height:640,text:1}]){const c=await b.newContext({storageState:'/Users/strelia/projects/courses/frontend/playwright/.auth/admin.json',viewport:{width:vp.width,height:vp.height},colorScheme:'dark',locale:'uk-UA'});const p=await c.newPage();await p.goto('http://localhost:8080/admin/dp-unknown-ux17');await p.evaluate(s=>document.documentElement.style.fontSize=s===1?'':`${s*100}%`,vp.text);await p.evaluate(()=>document.fonts.ready);results.push({state:'D8-return-link-supplement',viewportName:vp.name,...await measure(p)});await c.close();}await writeFile('/private/tmp/admin-editor-dp-n4q51t4e/evidence/admin404-supplement.json',JSON.stringify(results));}finally{await b.close();}

@@ -41,18 +41,26 @@ test('a material is a real link that opens safely', () => {
   expect(link.getAttribute('rel')).toContain('noopener');
 });
 
-test('adding is refused until both fields are filled', () => {
-  library();
-  const add = screen.getByRole('button', { name: 'Додати матеріал' });
-  expect(add.hasAttribute('disabled')).toBe(true);
-
-  fireEvent.change(screen.getByLabelText('Назва матеріалу'), { target: { value: 'Нове' } });
-  expect(add.hasAttribute('disabled')).toBe(true);
-
-  fireEvent.change(screen.getByLabelText('Посилання'), {
-    target: { value: 'https://example.test/b' },
+test('Ux14 reveals the form and explains missing fields through validation', async () => {
+  let calls = 0;
+  library({
+    add: async () => {
+      calls += 1;
+      return null;
+    },
   });
+  expect(screen.queryByLabelText('Назва матеріалу')).toBeNull();
+  const toggle = screen.getByRole('button', { name: 'Додати матеріал' });
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  const add = screen.getByRole('button', { name: 'Зберегти матеріал' });
   expect(add.hasAttribute('disabled')).toBe(false);
+  fireEvent.click(add);
+  expect(await screen.findAllByText('Введіть значення.')).toHaveLength(2);
+  expect(calls).toBe(0);
+  fireEvent.click(toggle);
+  expect(screen.queryByLabelText('Назва матеріалу')).toBeNull();
 });
 
 test('a referenced material names why it cannot be removed', async () => {
@@ -69,11 +77,12 @@ test('a referenced material names why it cannot be removed', async () => {
 
 test('a bad link is named by its rule, not by a generic failure', async () => {
   library({ add: async () => 'invalid_request' });
+  fireEvent.click(screen.getByRole('button', { name: 'Додати матеріал' }));
   fireEvent.change(screen.getByLabelText('Назва матеріалу'), { target: { value: 'Погане' } });
   fireEvent.change(screen.getByLabelText('Посилання'), {
     target: { value: 'javascript:alert(1)' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Додати матеріал' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти матеріал' }));
   expect(
     await screen.findByText('Посилання має починатися з http:// або https:// і не вести в медіа.'),
   ).toBeTruthy();
@@ -87,19 +96,20 @@ test('the fields clear only after a successful add', async () => {
       return attempt === 1 ? 'transcript_document_limit' : null;
     },
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Додати матеріал' }));
   const label = screen.getByLabelText('Назва матеріалу');
   fireEvent.change(label, { target: { value: 'Нове' } });
   fireEvent.change(screen.getByLabelText('Посилання'), {
     target: { value: 'https://example.test/b' },
   });
 
-  fireEvent.click(screen.getByRole('button', { name: 'Додати матеріал' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти матеріал' }));
   await screen.findByText('Забагато матеріалів: щонайбільше 200 на курс.');
   // A refused add must keep what the author typed: clearing it would make them retype a link the
   // server never objected to.
   expect((label as HTMLInputElement).value).toBe('Нове');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Додати матеріал' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти матеріал' }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect((label as HTMLInputElement).value).toBe('');
 });

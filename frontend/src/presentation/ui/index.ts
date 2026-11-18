@@ -22,3 +22,5 @@ export { EmptyState, ErrorState, Skeleton } from './states';
 export { StatTile } from './StatTile';
 export { TrendChart } from './TrendChart';
 export type { TrendPoint } from './TrendChart';
+
+export { LessonSectionHeader } from './LessonSectionHeader';
