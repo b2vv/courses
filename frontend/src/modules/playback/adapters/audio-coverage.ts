@@ -6,7 +6,21 @@ type Attempt = {
   failed: boolean;
   completed: boolean;
   language: string | undefined;
+  /** Languages of completed labels this attempt overwrote. */
+  replaced: readonly string[];
+  /** Media time before which this attempt's audio may not be audible yet. */
+  settleUntil: number | undefined;
 };
+
+/**
+ * Replacing audio of ANOTHER language just ahead of the playhead does not change what is heard at
+ * once: Chromium keeps already decoded samples of the old track in its decode/render pipeline. MS4 E4b
+ * (2026-11-18, Chromium on Kiri, audio tap of the real player) heard the old track for 0.62-0.93 s of
+ * media time after the replacing append completed. The selection stays pending for this window after
+ * such a replacement, so a caption never shows over the old language; 1.5 s keeps a margin over the
+ * measured lag. Same-language appends (ordinary playback) are not affected.
+ */
+export const REPLACEMENT_SETTLE_SECONDS = 1.5;
 export type AudioRanges = {
   readonly length: number;
   start(index: number): number;
@@ -33,12 +47,24 @@ export function createAudioCoverage() {
 
   return {
     appending(frag: AudioFragment) {
+      const replaced = spans.flatMap((label) =>
+        label.end > frag.start &&
+        label.start < frag.end &&
+        label.attempt.completed &&
+        label.attempt.appended &&
+        !label.attempt.failed &&
+        label.attempt.language !== undefined
+          ? [label.attempt.language.toLowerCase()]
+          : [],
+      );
       forget(frag);
       const attempt: Attempt = {
         appended: false,
         failed: dispatchErrors.has(frag),
         completed: false,
         language: undefined,
+        replaced,
+        settleUntil: undefined,
       };
       attempts.set(frag, attempt);
       // Span ownership prevents a late completion from relabelling a newer overlapping append.
@@ -49,12 +75,21 @@ export function createAudioCoverage() {
       if (!attempt) return;
       attempt.appended = true;
     },
-    buffered(frag: AudioFragment, language: string | undefined) {
+    buffered(frag: AudioFragment, language: string | undefined, currentTime: number) {
       const attempt = attempts.get(frag);
       // Empty/gap/no-media fragments never change an existing label.
       if (!attempt) return;
       attempt.completed = true;
       attempt.language = language;
+      const replacesAnother = attempt.replaced.some(
+        (previous) => previous !== language?.toLowerCase(),
+      );
+      if (
+        replacesAnother &&
+        frag.end > currentTime &&
+        frag.start < currentTime + REPLACEMENT_SETTLE_SECONDS
+      )
+        attempt.settleUntil = currentTime + REPLACEMENT_SETTLE_SECONDS;
     },
     error(frag: AudioFragment) {
       dispatchErrors.add(frag);
@@ -88,6 +123,7 @@ export function createAudioCoverage() {
           !attempt?.completed ||
           !attempt.appended ||
           attempt.failed ||
+          (attempt.settleUntil !== undefined && currentTime < attempt.settleUntil) ||
           attempt.language?.toLowerCase() !== selected.toLowerCase()
         )
           return { state: 'pending' };

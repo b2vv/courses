@@ -399,3 +399,21 @@ test('destroy removes media listeners and never reports from queued or late even
   await Promise.resolve();
   expect(selections).toEqual([{ state: 'pending' }]);
 });
+
+// MS4 E6 (2026-11-18): a fresh upload's master names its embedded rendition without LANGUAGE. That
+// track is of unknown language, so the selection confirms `und` (no captions, D1) instead of staying
+// pending forever; the S7 menu still gets no value for it.
+test('a rendition without LANGUAGE confirms und and adds no menu value', async () => {
+  const { media, hls, selections, menu, manifest, created, append } = hlsFixture(null);
+  hls.audioTracks = [{ lang: '', name: 'audio_0', default: true }];
+  media.load('/master');
+  manifest();
+  created();
+  // The real controller selects the default after AUDIO_TRACKS_UPDATED and emits SWITCHING.
+  hls.audioTrack = 0;
+  append();
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'und' });
+  expect(menu).toEqual([]);
+  media.destroy();
+});

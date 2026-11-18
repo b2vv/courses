@@ -53,6 +53,16 @@ function selectionReporter(callbacks: PlaybackMediaCallbacks) {
   };
 }
 
+/**
+ * The caption language of a manifest rendition. A rendition without LANGUAGE (the master ffmpeg
+ * writes for a fresh upload, before any track rename regenerates it) is a track of unknown language:
+ * `und`, which has no captions (D1). Without this the selection never confirms and the panel stays
+ * loading (MS4 E6, 2026-11-18).
+ */
+export function captionLanguageOf(lang: string | undefined): string {
+  return lang === undefined || lang === '' ? 'und' : lang;
+}
+
 function audioTracksOf(tracks: readonly ManifestAudioTrack[]): PlaybackAudioTrack[] {
   return tracks.flatMap((track) =>
     track.lang === undefined || track.lang === ''
@@ -116,7 +126,12 @@ export function createHlsMedia(
   });
   hls.on(Events.FRAG_BUFFERED, (_event, data) => {
     if (data.id !== 'audio') return;
-    coverage.buffered(data.frag, hls.audioTracks[data.frag.level]?.lang);
+    const track = hls.audioTracks[data.frag.level];
+    coverage.buffered(
+      data.frag,
+      track === undefined ? undefined : captionLanguageOf(track.lang),
+      video.currentTime,
+    );
     recompute();
   });
   hls.on(Events.BUFFER_FLUSHED, recompute);
@@ -134,12 +149,14 @@ export function createHlsMedia(
     const start = predictedAudioLanguage(audioTracksOf(data.audioTracks), wanted);
     const index = exactAudioTrackIndex(data.audioTracks, start);
     if (index !== -1 && hls.audioTrack !== index) hls.audioTrack = index;
-    selected = hls.audioTracks[hls.audioTrack]?.lang ?? null;
+    const current = hls.audioTracks[hls.audioTrack];
+    selected = current === undefined ? null : captionLanguageOf(current.lang);
     recompute();
   });
   hls.on(Events.AUDIO_TRACK_SWITCHING, (_event, data) => {
-    selected = data.lang || null;
-    if (selected !== null) callbacks.onAudioTrack(selected);
+    selected = captionLanguageOf(data.lang);
+    // The menu value (S7) still names only tracks the manifest gives a language.
+    if (data.lang !== undefined && data.lang !== '') callbacks.onAudioTrack(data.lang);
     recompute();
   });
   hls.attachMedia(video);
