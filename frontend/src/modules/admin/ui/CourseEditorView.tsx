@@ -769,6 +769,40 @@ export function CourseEditorView({
   const [transcriptKnowledge, setTranscriptKnowledge] = useState<Record<string, boolean>>({});
   const [savedLessonIds, setSavedLessonIds] = useState(() => lessonIds(course));
   const [tab, setTab] = useState<'overview' | 'lessons' | 'access'>('overview');
+  const saveBar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = saveBar.current;
+    if (bar === null) return;
+    // The page scrolls at the document root. Measure wrapping/text enlargement as well as
+    // tab visibility so focused fields reserve the actual sticky footer height (R4).
+    const style = bar.ownerDocument.documentElement.style;
+    const property = '--admin-editor-save-height';
+    const previous = style.getPropertyValue(property);
+    const update = () => {
+      const rect = bar.getBoundingClientRect();
+      style.setProperty(property, `${rect.height}px`);
+      const focused = bar.ownerDocument.activeElement;
+      // A larger inset alone cannot move a field that was already focused before the resize.
+      // Keep the bar's own controls in place, and scroll only a field it now covers.
+      if (
+        rect.height > 0 &&
+        focused instanceof HTMLElement &&
+        bar.closest('form')?.contains(focused) &&
+        !bar.contains(focused) &&
+        focused.getBoundingClientRect().bottom > rect.top
+      ) {
+        focused.scrollIntoView({ block: 'nearest' });
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      if (previous) style.setProperty(property, previous);
+      else style.removeProperty(property);
+    };
+  }, []);
   const form = useForm<CourseFormValues>({
     defaultValues: formValues(course),
     mode: 'onBlur',
@@ -1095,7 +1129,10 @@ export function CourseEditorView({
               />
             </div>
           </Aria.TabPanel>
-          <div className="admin-editor-save">
+          <div className="admin-editor-save" ref={saveBar}>
+            <output aria-live="polite" aria-atomic="true">
+              {form.formState.isDirty ? t('administration.unsavedChanges') : ''}
+            </output>
             <Button type="submit" isDisabled={form.formState.isSubmitting || lifecyclePending}>
               {form.formState.isSubmitting ? t('administration.saving') : t('administration.save')}
             </Button>

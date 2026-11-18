@@ -32,8 +32,9 @@ export function DocumentLibrary({ documents, actions }: DocumentLibraryProps) {
 
   return (
     <section className="document-library ui-card" aria-labelledby="document-library-heading">
-      <div className="card-heading">
+      <div className="card-heading admin-immediate-heading">
         <h2 id="document-library-heading">{t('administration.documentLibrary.heading')}</h2>
+        <p className="admin-save-hint">{t('administration.savedImmediately')}</p>
       </div>
 
       {documents.length === 0 ? <p>{t('administration.documentLibrary.empty')}</p> : null}

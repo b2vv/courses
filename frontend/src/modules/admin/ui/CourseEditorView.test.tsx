@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from '@rstest/core';
+import { readFileSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, describe, expect, it, rstest } from '@rstest/core';
 import { QueryClient } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -8,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { http, HttpResponse } from 'msw';
@@ -35,6 +36,8 @@ import type { LessonLanguageServices } from './LessonLanguageTabs';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
 import { CourseGrantPanel } from './CourseGrantPanel';
+import { CoursePriceField } from './CoursePriceField';
+import { DocumentLibrary } from './DocumentLibrary';
 
 const admin: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000003',
@@ -388,9 +391,10 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    expect((await screen.findByRole('status')).textContent).toContain(
-      'Missing transcripts will appear automatically',
-    );
+    expect(
+      (await within(screen.getByRole('region', { name: 'Course status' })).findByRole('status'))
+        .textContent,
+    ).toContain('Missing transcripts will appear automatically');
     expect(screen.getByRole('button', { name: 'Publish' }).hasAttribute('disabled')).toBe(false);
   });
 
@@ -468,7 +472,11 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('region', { name: 'Course status' })).queryByRole('status'),
+      ).toBeNull(),
+    );
   });
 
   it('P19 saves newly added modules and lessons with the loaded concurrency token', async () => {
@@ -1589,4 +1597,212 @@ describe('U4 row actions', () => {
       expect(container.querySelectorAll('.eyebrow')).toHaveLength(1);
     }
   });
+});
+
+describe('U5 save feedback', () => {
+  it.each([
+    {
+      locale: 'en',
+      title: 'Title',
+      save: 'Save changes',
+      dirty: 'Unsaved changes',
+      lessons: 'Lessons',
+      access: 'Access',
+    },
+    {
+      locale: 'uk',
+      title: 'Назва',
+      save: 'Зберегти зміни',
+      dirty: 'Незбережені зміни',
+      lessons: 'Уроки',
+      access: 'Доступ',
+    },
+  ] as const)('Ux11 tracks dirty state, submits and hides on Access ($locale)', async (copy) => {
+    const user = userEvent.setup();
+    const edits: CourseTreeEdit[] = [];
+    const { container } = render(
+      <I18nProvider instance={createI18n(copy.locale)}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current, edit) => {
+            edits.push(edit);
+            return savedTree(current, edit);
+          }}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const bar = container.querySelector('.admin-editor-save');
+    if (!(bar instanceof HTMLElement)) throw new Error('Missing save bar');
+    expect(bar.closest('form')?.classList.contains('admin-editor-form')).toBe(true);
+    const feedback = within(bar).getByRole('status');
+    expect(within(bar).getAllByRole('status')).toHaveLength(1);
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(feedback.textContent).toBe('');
+    const title = screen.getByRole('textbox', { name: copy.title });
+    await user.type(title, '!');
+    expect(feedback.textContent).toBe(copy.dirty);
+    await user.click(screen.getByRole('tab', { name: copy.lessons }));
+    expect(feedback.textContent).toBe(copy.dirty);
+    expect(bar.closest('[hidden]')).toBeNull();
+    await user.click(screen.getByRole('tab', { name: copy.access }));
+    expect(bar.closest('form')?.hidden).toBe(true);
+    expect(screen.queryByRole('button', { name: copy.save })).toBeNull();
+    await user.click(screen.getByRole('tab', { name: copy.lessons }));
+    await user.click(within(bar).getByRole('button', { name: copy.save }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0]?.title).toBe('Go basics!');
+    await waitFor(() => expect(feedback.textContent).toBe(''));
+    expect(within(bar).getAllByRole('status')).toHaveLength(1);
+    expect(within(bar).queryByRole('button', { name: /Discard|Відкинути/ })).toBeNull();
+  });
+
+  it('Ux11 supplies the document-scroller inset hook for the sticky bar (browser proves focus visibility)', () => {
+    const css = readFileSync('src/app/styles/main.css', 'utf8');
+    expect(css).toMatch(/:root:has\(\.admin-editor-form:not\(\[hidden\]\)\)/);
+    expect(css).toMatch(/scroll-padding-bottom:.*var\(--admin-editor-save-height/);
+    expect(css).toMatch(/\.admin-editor-save\s*\{[^}]*position: sticky;[^}]*bottom: 0;/);
+  });
+
+  it('SPEC-1 reserves a status line even while clean', () => {
+    const css = readFileSync('src/app/styles/main.css', 'utf8');
+    expect(css).toMatch(/\.admin-editor-save output\s*\{[^}]*min-block-size: 1lh;/);
+  });
+
+  it('SPEC-1 updates the inset before scrolling only an overlapped form field and disconnects on unmount', () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const style = document.documentElement.style;
+    const property = '--admin-editor-save-height';
+    const previous = style.getPropertyValue(property);
+    const observations = new Map<Element, ControlledObserver>();
+    class ControlledObserver implements ResizeObserver {
+      constructor(readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observations.set(target, this);
+      }
+      unobserve(target: Element) {
+        observations.delete(target);
+      }
+      disconnect = rstest.fn();
+      notify() {
+        this.callback([], this);
+      }
+    }
+    globalThis.ResizeObserver = ControlledObserver;
+    style.setProperty(property, '17px');
+    try {
+      const { container, unmount } = render(
+        <I18nProvider instance={createI18n('en')}>
+          <CourseEditorView
+            course={tree}
+            actor={admin}
+            ownerOptions={null}
+            onSave={async (current) => current}
+            onTransition={async (current) => current}
+            onDelete={async () => {}}
+            onAuthenticationRequired={() => {}}
+          />
+        </I18nProvider>,
+      );
+      const bar = container.querySelector('.admin-editor-save');
+      if (!(bar instanceof HTMLElement)) throw new Error('Missing save bar');
+      const observer = observations.get(bar);
+      if (observer === undefined) throw new Error('Save bar was not observed');
+      const barRect = rstest.spyOn(bar, 'getBoundingClientRect');
+      const field = screen.getByRole('textbox', { name: 'Title' });
+      const fieldRect = rstest.spyOn(field, 'getBoundingClientRect');
+      const scroll = rstest.spyOn(field, 'scrollIntoView').mockImplementation(() => {
+        // The scroll must see the resized inset, not the previous height.
+        expect(style.getPropertyValue(property)).toBe('100px');
+      });
+      act(() => field.focus());
+      fieldRect.mockReturnValue(new DOMRect(0, 620, 100, 40));
+      barRect.mockReturnValue(new DOMRect(0, 700, 300, 64));
+      observer.notify();
+      expect(style.getPropertyValue(property)).toBe('64px');
+      expect(scroll).not.toHaveBeenCalled();
+      barRect.mockReturnValue(new DOMRect(0, 640, 300, 100));
+      observer.notify();
+      expect(style.getPropertyValue(property)).toBe('100px');
+      expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest' });
+      scroll.mockClear();
+      fieldRect.mockReturnValue(new DOMRect(0, 600, 100, 40));
+      observer.notify(); // A field ending at the bar's top does not overlap.
+      expect(scroll).not.toHaveBeenCalled();
+      const outside = screen.getByRole('tab', { name: 'Overview' });
+      const outsideScroll = rstest.spyOn(outside, 'scrollIntoView');
+      act(() => outside.focus());
+      observer.notify();
+      expect(outsideScroll).not.toHaveBeenCalled();
+      const save = within(bar).getByRole('button', { name: 'Save changes' });
+      rstest.spyOn(save, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 650, 100, 44));
+      const saveScroll = rstest.spyOn(save, 'scrollIntoView');
+      act(() => save.focus());
+      observer.notify(); // The bar's own button must not trigger corrective scrolling.
+      expect(saveScroll).not.toHaveBeenCalled();
+      unmount();
+      expect(observer.disconnect).toHaveBeenCalledTimes(1);
+      expect(style.getPropertyValue(property)).toBe('17px');
+    } finally {
+      cleanup();
+      rstest.restoreAllMocks();
+      globalThis.ResizeObserver = originalObserver;
+      if (previous) style.setProperty(property, previous);
+      else style.removeProperty(property);
+    }
+  });
+
+  it.each([
+    {
+      locale: 'en',
+      hint: 'Saved immediately',
+      materials: 'Course materials',
+      price: 'Course price',
+      access: 'Grant course access',
+    },
+    {
+      locale: 'uk',
+      hint: 'Зберігається одразу',
+      materials: 'Матеріали курсу',
+      price: 'Ціна курсу',
+      access: 'Видати доступ до курсу',
+    },
+  ] as const)(
+    'Ux12 explains independent persistence under each h2 ($locale)',
+    ({ locale, hint, ...headings }) => {
+      render(
+        <I18nProvider instance={createI18n(locale)}>
+          <DocumentLibrary
+            documents={[]}
+            actions={{ add: async () => null, remove: async () => null }}
+          />
+          <CoursePriceField
+            course={tree}
+            hasUnsavedChanges={false}
+            isBusy={false}
+            onSetPrice={async () => {}}
+          />
+          <CourseGrantPanel
+            users={[]}
+            isUserSearchPending={false}
+            onSearch={() => {}}
+            onGrant={async () => null}
+          />
+        </I18nProvider>,
+      );
+      for (const heading of Object.values(headings)) {
+        const h2 = screen.getByRole('heading', { name: heading, level: 2 });
+        const header = h2.parentElement;
+        if (header === null) throw new Error('Missing section header');
+        expect(within(header).getAllByText(hint)).toHaveLength(1);
+        expect(h2.nextElementSibling?.textContent).toBe(hint);
+        // Informative header text must not add more live regions to the page.
+        expect(within(header).queryByRole('status')).toBeNull();
+      }
+    },
+  );
 });

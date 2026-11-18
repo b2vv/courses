@@ -745,6 +745,7 @@ export const en = {
       lessonTranscriptYes: 'Transcript: Yes',
       lessonTranscriptNo: 'Transcript: No',
       lessonLanguages: 'Lesson languages',
+      unsavedChanges: 'Unsaved changes',
       savedImmediately: 'Saved immediately',
       lessonNumber: 'Lesson {{number}}',
       lessonTitle: 'Lesson {{lesson}} title in module {{module}}',

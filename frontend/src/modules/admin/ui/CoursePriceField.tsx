@@ -53,8 +53,9 @@ export function CoursePriceField({
 
   return (
     <section className="admin-lifecycle admin-price ui-card" aria-labelledby="course-price-heading">
-      <div>
+      <div className="admin-immediate-heading">
         <h2 id="course-price-heading">{t('administration.price.heading')}</h2>
+        <p className="admin-save-hint">{t('administration.savedImmediately')}</p>
         <p className="admin-price-current">
           {course.price === null
             ? t('administration.price.free')

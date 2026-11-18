@@ -754,6 +754,7 @@ export const uk = {
       lessonTranscriptYes: 'Транскрипт: Є',
       lessonTranscriptNo: 'Транскрипт: Немає',
       lessonLanguages: 'Мови уроку',
+      unsavedChanges: 'Незбережені зміни',
       savedImmediately: 'Зберігається одразу',
       lessonNumber: 'Урок {{number}}',
       lessonTitle: 'Назва уроку {{lesson}} у модулі {{module}}',
