@@ -1664,7 +1664,9 @@ describe('U5 save feedback', () => {
   it('Ux11 supplies the document-scroller inset hook for the sticky bar (browser proves focus visibility)', () => {
     const css = readFileSync('src/app/styles/main.css', 'utf8');
     expect(css).toMatch(/:root:has\(\.admin-editor-form:not\(\[hidden\]\)\)/);
-    expect(css).toMatch(/scroll-padding-bottom:.*var\(--admin-editor-save-height/);
+    expect(css).toMatch(
+      /scroll-padding-bottom:[^;]*var\(--admin-editor-save-height[^;]*var\(--admin-editor-field-height/,
+    );
     expect(css).toMatch(/\.admin-editor-save\s*\{[^}]*position: sticky;[^}]*bottom: 0;/);
   });
 
@@ -1677,7 +1679,9 @@ describe('U5 save feedback', () => {
     const originalObserver = globalThis.ResizeObserver;
     const style = document.documentElement.style;
     const property = '--admin-editor-save-height';
+    const fieldProperty = '--admin-editor-field-height';
     const previous = style.getPropertyValue(property);
+    const previousField = style.getPropertyValue(fieldProperty);
     const observations = new Map<Element, ControlledObserver>();
     class ControlledObserver implements ResizeObserver {
       constructor(readonly callback: ResizeObserverCallback) {}
@@ -1694,6 +1698,7 @@ describe('U5 save feedback', () => {
     }
     globalThis.ResizeObserver = ControlledObserver;
     style.setProperty(property, '17px');
+    style.setProperty(fieldProperty, '29px');
     try {
       const { container, unmount } = render(
         <I18nProvider instance={createI18n('en')}>
@@ -1712,12 +1717,20 @@ describe('U5 save feedback', () => {
       if (!(bar instanceof HTMLElement)) throw new Error('Missing save bar');
       const observer = observations.get(bar);
       if (observer === undefined) throw new Error('Save bar was not observed');
+      const formElement = bar.closest('form');
+      if (formElement === null) throw new Error('Save bar has no form');
+      expect(observations.get(formElement)).toBe(observer);
+      const textarea = screen.getByRole('textbox', { name: 'Summary' });
+      const textareaRect = rstest
+        .spyOn(textarea, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 200, 128));
       const barRect = rstest.spyOn(bar, 'getBoundingClientRect');
       const field = screen.getByRole('textbox', { name: 'Title' });
       const fieldRect = rstest.spyOn(field, 'getBoundingClientRect');
       const scroll = rstest.spyOn(field, 'scrollIntoView').mockImplementation(() => {
         // The scroll must see the resized inset, not the previous height.
         expect(style.getPropertyValue(property)).toBe('100px');
+        expect(style.getPropertyValue(fieldProperty)).toBe('128px');
       });
       act(() => field.focus());
       fieldRect.mockReturnValue(new DOMRect(0, 620, 100, 40));
@@ -1725,6 +1738,7 @@ describe('U5 save feedback', () => {
       observer.notify();
       expect(style.getPropertyValue(property)).toBe('64px');
       expect(scroll).not.toHaveBeenCalled();
+      expect(style.getPropertyValue(fieldProperty)).toBe('128px');
       barRect.mockReturnValue(new DOMRect(0, 640, 300, 100));
       observer.notify();
       expect(style.getPropertyValue(property)).toBe('100px');
@@ -1744,15 +1758,21 @@ describe('U5 save feedback', () => {
       act(() => save.focus());
       observer.notify(); // The bar's own button must not trigger corrective scrolling.
       expect(saveScroll).not.toHaveBeenCalled();
+      textareaRect.mockReturnValue(new DOMRect(0, 0, 200, 256));
+      observer.notify(); // A resized textarea changes the region before the next native Tab.
+      expect(style.getPropertyValue(fieldProperty)).toBe('256px');
       unmount();
       expect(observer.disconnect).toHaveBeenCalledTimes(1);
       expect(style.getPropertyValue(property)).toBe('17px');
+      expect(style.getPropertyValue(fieldProperty)).toBe('29px');
     } finally {
       cleanup();
       rstest.restoreAllMocks();
       globalThis.ResizeObserver = originalObserver;
       if (previous) style.setProperty(property, previous);
       else style.removeProperty(property);
+      if (previousField) style.setProperty(fieldProperty, previousField);
+      else style.removeProperty(fieldProperty);
     }
   });
 

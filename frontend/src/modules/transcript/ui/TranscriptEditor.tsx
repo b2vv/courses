@@ -190,6 +190,27 @@ export function TranscriptEditor({
   // JSX handler: `focusout` bubbles natively, so one listener covers every field without each of
   // them knowing about recovery, and a section is not an element that should carry a handler.
   const root = useRef<HTMLElement | null>(null);
+  const [wideLines, setWideLines] = useState(false);
+  useEffect(() => {
+    const editor = root.current;
+    if (editor === null) return;
+    const documentRoot = editor.ownerDocument.documentElement;
+    // A native size query here recurses during React Aria's visibility/layout check of
+    // force-mounted Ukrainian panels (F1 Compose regression). Keep the same 40rem
+    // breakpoint without that query; height-only feedback must not trigger another render.
+    const measure = () => {
+      const fontSize = Number.parseFloat(getComputedStyle(documentRoot).fontSize);
+      const unit = Number.isFinite(fontSize) ? fontSize : 16;
+      const next = editor.getBoundingClientRect().width >= 40 * unit;
+      setWideLines((current) => (current === next ? current : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(editor);
+    // Text enlargement can change rem even if the editor's width stays the same.
+    observer.observe(documentRoot);
+    return () => observer.disconnect();
+  }, []);
   const focusAfterRecovery = useRef<Element | null>(null);
   const firstLineText = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
@@ -319,6 +340,7 @@ export function TranscriptEditor({
     <section
       ref={root}
       className="transcript-editor"
+      data-wide-lines={wideLines || undefined}
       aria-labelledby={`transcript-editor-${identity}`}
     >
       <h4 id={`transcript-editor-${identity}`}>{t('administration.transcriptEditor.heading')}</h4>

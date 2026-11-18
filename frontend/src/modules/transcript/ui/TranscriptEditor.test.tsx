@@ -1,4 +1,5 @@
 import { setImmediate } from 'node:timers/promises';
+import { Profiler } from 'react';
 import { expect, test, rstest } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -49,6 +50,78 @@ type TranscriptEditorActionsSave = (
   expectedUpdatedAt: string | undefined,
   segments: readonly TranscriptSegment[],
 ) => Promise<TranscriptErrorCode | null>;
+
+test('F1 width observer preserves the 40rem breakpoint without height feedback renders', async () => {
+  const originalObserver = globalThis.ResizeObserver;
+  const originalFont = document.documentElement.style.fontSize;
+  const observers: ControlledObserver[] = [];
+  class ControlledObserver implements ResizeObserver {
+    readonly targets = new Set<Element>();
+    constructor(readonly callback: ResizeObserverCallback) {
+      observers.push(this);
+    }
+    observe(target: Element) {
+      this.targets.add(target);
+    }
+    unobserve(target: Element) {
+      this.targets.delete(target);
+    }
+    disconnect = rstest.fn();
+    notify() {
+      this.callback([], this);
+    }
+  }
+  globalThis.ResizeObserver = ControlledObserver;
+  document.documentElement.style.fontSize = '16px';
+  let commits = 0;
+  const view = render(
+    <Profiler
+      id="transcript"
+      onRender={() => {
+        commits++;
+      }}
+    >
+      <TranscriptEditor
+        lessonId={lessonId}
+        language="uk"
+        segments={segments}
+        documents={[]}
+        actions={{ save: async () => null }}
+        history={{ key: 'width-unit', store: createMemoryTranscriptHistory() }}
+      />
+    </Profiler>,
+  );
+  try {
+    await act(async () => {});
+    const root = view.container.querySelector('.transcript-editor');
+    if (root === null) throw new Error('Missing editor');
+    const observer = observers.find((candidate) => candidate.targets.has(root));
+    if (observer === undefined) throw new Error('Missing editor observer');
+    expect(observer.targets.has(document.documentElement)).toBe(true);
+    const rect = rstest.spyOn(root, 'getBoundingClientRect');
+    rect.mockReturnValue(new DOMRect(0, 0, 640, 100));
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(true);
+    const before = commits;
+    act(() => {
+      for (let i = 0; i < 100; i++) observer.notify();
+    });
+    expect(commits - before).toBeLessThanOrEqual(1);
+    document.documentElement.style.fontSize = '32px';
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(false);
+    rect.mockReturnValue(new DOMRect(0, 0, 1280, 100));
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(true);
+    rect.mockRestore();
+    view.unmount();
+    expect(observer.disconnect).toHaveBeenCalledOnce();
+  } finally {
+    view.unmount();
+    globalThis.ResizeObserver = originalObserver;
+    document.documentElement.style.fontSize = originalFont;
+  }
+});
 
 test('the optimistic-lock token travels with the save', async () => {
   let seen: string | undefined = 'unset';

@@ -777,10 +777,23 @@ export function CourseEditorView({
     // tab visibility so focused fields reserve the actual sticky footer height (R4).
     const style = bar.ownerDocument.documentElement.style;
     const property = '--admin-editor-save-height';
+    const fieldProperty = '--admin-editor-field-height';
     const previous = style.getPropertyValue(property);
+    const previousField = style.getPropertyValue(fieldProperty);
+    const formElement = bar.closest('form');
     const update = () => {
       const rect = bar.getBoundingClientRect();
       style.setProperty(property, `${rect.height}px`);
+      // Native textarea focus scrolls its caret, not its entire box. Reserve the visible
+      // textarea height too, before the next Tab; a focusin correction would be too late.
+      const fieldHeight = Math.max(
+        0,
+        ...Array.from(
+          formElement?.querySelectorAll('textarea') ?? [],
+          (field) => field.getBoundingClientRect().height,
+        ),
+      );
+      style.setProperty(fieldProperty, `${fieldHeight}px`);
       const focused = bar.ownerDocument.activeElement;
       // A larger inset alone cannot move a field that was already focused before the resize.
       // Keep the bar's own controls in place, and scroll only a field it now covers.
@@ -797,10 +810,13 @@ export function CourseEditorView({
     update();
     const observer = new ResizeObserver(update);
     observer.observe(bar);
+    if (formElement !== null) observer.observe(formElement);
     return () => {
       observer.disconnect();
       if (previous) style.setProperty(property, previous);
       else style.removeProperty(property);
+      if (previousField) style.setProperty(fieldProperty, previousField);
+      else style.removeProperty(fieldProperty);
     };
   }, []);
   const form = useForm<CourseFormValues>({

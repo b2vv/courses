@@ -1379,10 +1379,13 @@ nav a {
 .admin-price .admin-row-actions {
   align-items: end;
 }
-/* The document is the editor's scroller. Keep room for the measured bar plus the focus outline;
+/* The document is the editor's scroller. Native textarea focus reveals its caret, so reserve
+ * the measured textarea height as well as the bar and focus outline;
  * :has scopes the inset to the mounted, visible course form (not Access or another page). */
 :root:has(.admin-editor-form:not([hidden])) {
-  scroll-padding-bottom: calc(var(--admin-editor-save-height, 0px) + 8px);
+  scroll-padding-bottom: calc(
+    var(--admin-editor-save-height, 0px) + var(--admin-editor-field-height, 0px) + 8px
+  );
 }
 .admin-editor-save {
   position: sticky;
@@ -1469,10 +1472,14 @@ nav a {
 }
 .course-side-panels {
   display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 .course-side-panels > .ui-card {
   display: grid;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   gap: var(--space-4);
   justify-items: start;
 }
@@ -3680,7 +3687,7 @@ button.transcript-line-body:hover {
 }
 
 .transcript-editor {
-  container: transcript-editor / inline-size;
+  min-inline-size: 0;
 }
 .transcript-editor-lines {
   display: grid;
@@ -3738,13 +3745,11 @@ button.transcript-line-body:hover {
   padding: var(--space-2);
 }
 /* Match the editor's available width, including nested lesson panels and enlarged text. */
-@container transcript-editor (min-width: 40rem) {
-  .transcript-editor-lines > li {
-    grid-template-columns: 8rem 8rem minmax(0, 1fr) auto;
-    grid-template-areas:
-      'start end text remove'
-      'materials materials materials materials';
-  }
+.transcript-editor[data-wide-lines] .transcript-editor-lines > li {
+  grid-template-columns: 8rem 8rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    'start end text remove'
+    'materials materials materials materials';
 }
 /* The document fieldset keeps the UA min-content width; author labels can be 200 characters. */
 .transcript-editor-lines fieldset {
