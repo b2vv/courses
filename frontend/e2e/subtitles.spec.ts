@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 import { z } from 'zod';
+import { openLesson } from './course-editor';
 import { authStatePath } from './auth';
 import { cleanupSubtitlesCourse } from './subtitles-cleanup';
 
@@ -591,9 +592,10 @@ test.describe('MS4 captions follow decoded audio', () => {
       await page.goto(`/admin/courses/${courseID}`);
       await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
       for (const [index, lesson] of Object.values(ids).entries()) {
-        const group = page
-          .getByRole('group', { name: 'Модуль 1' })
-          .getByRole('group', { name: `Урок ${index + 1}`, exact: true });
+        const group = await openLesson(page, 1, index + 1);
+        await expect(
+          group.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+        ).toBeVisible();
         const minted = page.waitForResponse(
           (r) =>
             r.url().endsWith(`/admin/lessons/${lesson}/video`) && r.request().method() === 'POST',

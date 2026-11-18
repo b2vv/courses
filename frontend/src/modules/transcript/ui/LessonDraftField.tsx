@@ -125,7 +125,7 @@ export function LessonDraftField({
       aria-busy={isBusy || isRunning}
       aria-labelledby={`lesson-draft-${identity}`}
     >
-      <h3 id={`lesson-draft-${identity}`}>{t('administration.asr.title')}</h3>
+      <h4 id={`lesson-draft-${identity}`}>{t('administration.asr.title')}</h4>
       {actionError !== undefined && (
         <p className="admin-draft-error" role="alert">
           {errorMessage(actionError, t)}

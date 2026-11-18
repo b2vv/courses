@@ -18,6 +18,7 @@ import type {
   ErrorResponseError,
   MediaUploadTicket,
 } from '../src/adapters/api/generated/models';
+import { openLesson } from './course-editor';
 import { authStatePath, trackPageRequests } from './auth';
 import { contractField } from './contract';
 
@@ -178,7 +179,7 @@ async function recordedProgress(field: Locator): Promise<number[]> {
 }
 
 async function upload(page: Page, lesson: (typeof lessons)[keyof typeof lessons], file: string) {
-  const field = lessonField(page, lesson.index);
+  const field = await openLesson(page, 1, lesson.index);
   await expect(field.getByRole('button', { name: 'Завантажити відео' })).toBeVisible();
   const minted = page.waitForResponse((response) => {
     return (
@@ -364,7 +365,7 @@ test.describe('the first real video through the whole chain', () => {
       throw new Error('Media course was not created');
     await page.goto(`/admin/courses/${course.id}`);
     await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
-    const field = lessonField(page, lessons.main.index);
+    const field = await openLesson(page, 1, lessons.main.index);
     await installProgressRecorder(field);
     const uploaded = await upload(page, lessons.main, fixture('640x360'));
     mainVideoId = uploaded.videoId;
@@ -403,6 +404,7 @@ test.describe('the first real video through the whole chain', () => {
 
     await page.reload();
     await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    await openLesson(page, 1, lessons.main.index);
     await expect(
       lessonField(page, lessons.main.index).locator('[data-video-state]'),
     ).toHaveAttribute('data-video-state', 'ready');
@@ -416,7 +418,7 @@ test.describe('the first real video through the whole chain', () => {
     const videoId = mainVideoId;
     await page.goto(`/admin/courses/${course.id}`);
     await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
-    const field = lessonField(page, lessons.main.index);
+    const field = await openLesson(page, 1, lessons.main.index);
     const section = audioSection(field);
     // The source carried a sound stream, so the worker created one embedded Ready track.
     await expect(section.locator('li[data-audio-track-state="ready"]')).toHaveCount(1);

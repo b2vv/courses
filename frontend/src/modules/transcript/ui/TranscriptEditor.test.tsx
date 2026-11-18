@@ -1,4 +1,5 @@
 import { setImmediate } from 'node:timers/promises';
+import { Profiler } from 'react';
 import { expect, test, rstest } from '@rstest/core';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -49,6 +50,78 @@ type TranscriptEditorActionsSave = (
   expectedUpdatedAt: string | undefined,
   segments: readonly TranscriptSegment[],
 ) => Promise<TranscriptErrorCode | null>;
+
+test('F1 width observer preserves the 40rem breakpoint without height feedback renders', async () => {
+  const originalObserver = globalThis.ResizeObserver;
+  const originalFont = document.documentElement.style.fontSize;
+  const observers: ControlledObserver[] = [];
+  class ControlledObserver implements ResizeObserver {
+    readonly targets = new Set<Element>();
+    constructor(readonly callback: ResizeObserverCallback) {
+      observers.push(this);
+    }
+    observe(target: Element) {
+      this.targets.add(target);
+    }
+    unobserve(target: Element) {
+      this.targets.delete(target);
+    }
+    disconnect = rstest.fn();
+    notify() {
+      this.callback([], this);
+    }
+  }
+  globalThis.ResizeObserver = ControlledObserver;
+  document.documentElement.style.fontSize = '16px';
+  let commits = 0;
+  const view = render(
+    <Profiler
+      id="transcript"
+      onRender={() => {
+        commits++;
+      }}
+    >
+      <TranscriptEditor
+        lessonId={lessonId}
+        language="uk"
+        segments={segments}
+        documents={[]}
+        actions={{ save: async () => null }}
+        history={{ key: 'width-unit', store: createMemoryTranscriptHistory() }}
+      />
+    </Profiler>,
+  );
+  try {
+    await act(async () => {});
+    const root = view.container.querySelector('.transcript-editor');
+    if (root === null) throw new Error('Missing editor');
+    const observer = observers.find((candidate) => candidate.targets.has(root));
+    if (observer === undefined) throw new Error('Missing editor observer');
+    expect(observer.targets.has(document.documentElement)).toBe(true);
+    const rect = rstest.spyOn(root, 'getBoundingClientRect');
+    rect.mockReturnValue(new DOMRect(0, 0, 640, 100));
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(true);
+    const before = commits;
+    act(() => {
+      for (let i = 0; i < 100; i++) observer.notify();
+    });
+    expect(commits - before).toBeLessThanOrEqual(1);
+    document.documentElement.style.fontSize = '32px';
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(false);
+    rect.mockReturnValue(new DOMRect(0, 0, 1280, 100));
+    act(() => observer.notify());
+    expect(root.hasAttribute('data-wide-lines')).toBe(true);
+    rect.mockRestore();
+    view.unmount();
+    expect(observer.disconnect).toHaveBeenCalledOnce();
+  } finally {
+    view.unmount();
+    globalThis.ResizeObserver = originalObserver;
+    document.documentElement.style.fontSize = originalFont;
+  }
+});
 
 test('the optimistic-lock token travels with the save', async () => {
   let seen: string | undefined = 'unset';
@@ -123,6 +196,41 @@ test('a line can be added and removed, and a document attached', async () => {
   expect(saved[0]?.documentIds).toEqual([documentId]);
 });
 
+test('Ux07 compact lines keep named controls and omit the materials picker for an empty course library', async () => {
+  const view = await editor(async () => null, { documents: [] });
+  expect(screen.queryByRole('group', { name: 'Матеріали репліки 1' })).toBeNull();
+  const remove = screen.getByRole('button', { name: 'Видалити репліку 1' });
+  expect(remove.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  expect(screen.getByLabelText('Початок репліки 1, мс')).toBeTruthy();
+  expect(screen.getByLabelText('Кінець репліки 1, мс')).toBeTruthy();
+  expect(screen.getByLabelText('Текст репліки 1')).toBeTruthy();
+  view.unmount();
+  await editor(async () => null);
+  expect(screen.getByRole('group', { name: 'Матеріали репліки 1' })).toBeTruthy();
+  expect(screen.getByRole('checkbox', { name: 'Довідка' })).toBeTruthy();
+});
+
+test('Ux07 readouts describe raw time fields and disappear for invalid or incomplete text', async () => {
+  await editor(async () => null);
+  const start = screen.getByLabelText('Початок репліки 1, мс');
+  const end = screen.getByLabelText('Кінець репліки 1, мс');
+  expect(screen.getByText('0:00.0').id).toBe(start.getAttribute('aria-describedby'));
+  expect(screen.getByText('0:01.0').id).toBe(end.getAttribute('aria-describedby'));
+  for (const value of ['1.5', '-1', 'NaN', '1e', '', ' ']) {
+    fireEvent.change(start, { target: { value } });
+    expect(
+      start.closest('.transcript-editor-time')?.querySelector('.ui-description'),
+      value,
+    ).toBeNull();
+    expect(screen.getByLabelText<HTMLInputElement>('Початок репліки 1, мс').value).toBe(value);
+    expect(screen.queryByText('0:00.0'), value).toBeNull();
+    expect(screen.getByText('0:01.0')).toBeTruthy();
+  }
+  fireEvent.change(start, { target: { value: '1234' } });
+  expect(screen.getByText('0:01.2').id).toBe(start.getAttribute('aria-describedby'));
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
 // --- local recovery ------------------------------------------------------------------------
 // The editor keeps its lines in component state, so a reload used to lose them without a word.
 // These pin the offer, not the storage: the store is the in-memory adapter, which is exactly why
@@ -150,6 +258,59 @@ async function editorWithSnapshot(
 }
 
 type TranscriptHistoryStoreForTest = ReturnType<typeof createMemoryTranscriptHistory>;
+
+test('Ux08 restored raw-ms text and sub-100ms precision survive the rounded readout and save', async () => {
+  let saved: readonly TranscriptSegment[] = [];
+  await editorWithSnapshot(
+    {
+      key: 'author:lesson',
+      revision: crypto.randomUUID(),
+      capturedAt: 1,
+      expectedUpdatedAt: '2026-09-18T00:00:00Z',
+      lines: [{ ...storedLine, startMs: '01234', endMs: '5678' }],
+    },
+    {
+      actions: {
+        save: async (_language, _token, next) => {
+          saved = next;
+          return null;
+        },
+      },
+    },
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Відновити зміни' }));
+  expect(screen.getByText('0:01.2')).toBeTruthy();
+  expect(screen.getByText('0:05.7')).toBeTruthy();
+  expect(screen.getByLabelText<HTMLInputElement>('Початок репліки 1, мс').value).toBe('01234');
+  expect(screen.getByLabelText<HTMLInputElement>('Кінець репліки 1, мс').value).toBe('5678');
+  fireEvent.click(screen.getByRole('button', { name: 'Зберегти транскрипт' }));
+  await screen.findByText('Транскрипт збережено.');
+  expect(saved.map(({ startMs, endMs }) => ({ startMs, endMs }))).toEqual([
+    { startMs: 1234, endMs: 5678 },
+  ]);
+});
+
+test('Ux08 half-typed raw-ms text is recovered without a readout or coercion', async () => {
+  const { store, rendered } = await editorWithSnapshot(null);
+  expect(screen.getByText('0:00.0')).toBeTruthy();
+  const start = screen.getByLabelText('Початок репліки 1, мс');
+  fireEvent.change(start, { target: { value: '1e' } });
+  fireEvent.blur(start);
+  await waitFor(async () =>
+    expect((await store.read('author:lesson'))?.lines[0]?.startMs).toBe('1e'),
+  );
+  rendered.unmount();
+  await editor(async () => null, { history: { key: 'author:lesson', store } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Відновити зміни' }));
+  expect(screen.getByLabelText<HTMLInputElement>('Початок репліки 1, мс').value).toBe('1e');
+  expect(screen.queryByText('0:00.0')).toBeNull();
+  expect(
+    screen
+      .getByLabelText('Початок репліки 1, мс')
+      .closest('.transcript-editor-time')
+      ?.querySelector('.ui-description'),
+  ).toBeNull();
+});
 
 test('unsaved lines left on this device are offered back, never restored on their own', async () => {
   await editorWithSnapshot({

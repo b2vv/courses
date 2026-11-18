@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TranscriptDocument, TranscriptErrorCode } from '../../transcript';
 import { Button, TextField } from '../../../presentation/ui';
@@ -15,6 +15,9 @@ type DocumentLibraryProps = {
 
 export function DocumentLibrary({ documents, actions }: DocumentLibraryProps) {
   const { t } = useTranslation();
+  const formId = useId();
+  const [isOpen, setIsOpen] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [label, setLabel] = useState('');
   const [url, setUrl] = useState('');
   const [failure, setFailure] = useState<TranscriptErrorCode | null>(null);
@@ -29,8 +32,9 @@ export function DocumentLibrary({ documents, actions }: DocumentLibraryProps) {
 
   return (
     <section className="document-library ui-card" aria-labelledby="document-library-heading">
-      <div className="card-heading">
+      <div className="card-heading admin-immediate-heading">
         <h2 id="document-library-heading">{t('administration.documentLibrary.heading')}</h2>
+        <p className="admin-save-hint">{t('administration.savedImmediately')}</p>
       </div>
 
       {documents.length === 0 ? <p>{t('administration.documentLibrary.empty')}</p> : null}
@@ -57,30 +61,54 @@ export function DocumentLibrary({ documents, actions }: DocumentLibraryProps) {
         ))}
       </ul>
 
-      <div className="document-library-add">
-        <TextField
-          label={t('administration.documentLibrary.label')}
-          value={label}
-          onChange={setLabel}
-        />
-        <TextField label={t('administration.documentLibrary.url')} value={url} onChange={setUrl} />
-        <Button
-          type="button"
-          isDisabled={pending || label.trim() === '' || url.trim() === ''}
-          onPress={async () => {
-            setPending(true);
-            const error = await actions.add({ id: crypto.randomUUID(), label, url });
-            setFailure(error);
-            setPending(false);
-            if (error === null) {
-              setLabel('');
-              setUrl('');
-            }
-          }}
-        >
-          {t('administration.documentLibrary.add')}
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        aria-expanded={isOpen}
+        aria-controls={formId}
+        onPress={() => setIsOpen((open) => !open)}
+      >
+        {t('administration.documentLibrary.add')}
+      </Button>
+      {isOpen && (
+        <div className="document-library-add" id={formId}>
+          <TextField
+            label={t('administration.documentLibrary.label')}
+            value={label}
+            onChange={setLabel}
+            isRequired
+            isInvalid={submitted && label.trim() === ''}
+            errorMessage={t('administration.validation.required')}
+          />
+          <TextField
+            label={t('administration.documentLibrary.url')}
+            value={url}
+            onChange={setUrl}
+            isRequired
+            isInvalid={submitted && url.trim() === ''}
+            errorMessage={t('administration.validation.required')}
+          />
+          <Button
+            type="button"
+            isDisabled={pending}
+            onPress={async () => {
+              setSubmitted(true);
+              if (label.trim() === '' || url.trim() === '') return;
+              setPending(true);
+              const error = await actions.add({ id: crypto.randomUUID(), label, url });
+              setFailure(error);
+              setPending(false);
+              if (error === null) {
+                setSubmitted(false);
+                setLabel('');
+                setUrl('');
+              }
+            }}
+          >
+            {t('administration.documentLibrary.save')}
+          </Button>
+        </div>
+      )}
 
       {failure === null ? null : (
         <output className="document-library-error">{message(failure)}</output>

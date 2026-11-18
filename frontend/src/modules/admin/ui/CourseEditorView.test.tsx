@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from '@rstest/core';
+import { readFileSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, describe, expect, it, rstest } from '@rstest/core';
 import { QueryClient } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -8,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { http, HttpResponse } from 'msw';
@@ -25,9 +26,18 @@ import { asBrandedId } from '../../../contracts/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../../contracts/course';
 import type { AuthenticatedUser } from '../../identity';
 import type { LessonDraft } from '../../transcript';
-import type { LessonTranscript } from '../../transcript';
+import type {
+  CourseEditorTranscripts,
+  LessonTranscript,
+  TranscriptInventoryItem,
+} from '../../transcript';
+import type { CourseEditorVideo } from '../../media';
+import type { LessonLanguageServices } from './LessonLanguageTabs';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
+import { CourseGrantPanel } from './CourseGrantPanel';
+import { CoursePriceField } from './CoursePriceField';
+import { DocumentLibrary } from './DocumentLibrary';
 
 const admin: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000003',
@@ -64,6 +74,87 @@ function savedTree(current: CourseTree, edit: CourseTreeEdit): CourseTree {
 }
 
 describe('course editor', () => {
+  it('Ux01 keeps all three panels mounted and only the selected panel active', async () => {
+    const browser = userEvent.setup();
+    const { container } = render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const panels = Array.from(container.querySelectorAll('.course-editor-panel'));
+    expect(panels).toHaveLength(3);
+    for (const selection of ['Overview', 'Lessons', 'Access']) {
+      const tab = screen.getByRole('tab', { name: selection });
+      await browser.click(tab);
+      expect(tab.getAttribute('aria-selected')).toBe('true');
+      for (const panel of panels) {
+        const selected = panel.id === tab.getAttribute('aria-controls');
+        expect(panel.classList.contains('ui-tab-panel')).toBe(true);
+        expect(panel.classList.contains('course-editor-panel')).toBe(true);
+        expect(panel.hasAttribute('inert')).toBe(!selected);
+        if (selected) expect(panel.closest('[hidden]')).toBeNull();
+      }
+      expect(panels.filter((panel) => !panel.hasAttribute('inert'))).toHaveLength(1);
+      expect(container.querySelectorAll('.course-editor-panel')).toHaveLength(3);
+    }
+  });
+
+  it.each([
+    { field: 'Lesson 1 title in module 1', from: 'Overview', to: 'Lessons' },
+    { field: 'Title', from: 'Lessons', to: 'Overview' },
+  ])(
+    'Ux02 reveals and focuses $field from $from through the summary',
+    async ({ field, from, to }) => {
+      const browser = userEvent.setup();
+      let saves = 0;
+      render(
+        <I18nProvider instance={createI18n('en')}>
+          <CourseEditorView
+            course={tree}
+            actor={admin}
+            ownerOptions={null}
+            onSave={async (current) => {
+              saves += 1;
+              return current;
+            }}
+            onTransition={async (current) => current}
+            onDelete={async () => {}}
+            onAuthenticationRequired={() => {}}
+          />
+        </I18nProvider>,
+      );
+      const courseTitle = screen.getByRole('textbox', { name: 'Title' });
+      await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
+      await browser.click(screen.getByRole('button', { name: 'Add module' }));
+      await browser.type(screen.getByRole('textbox', { name: 'Module 1 title' }), 'Module');
+      await browser.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+      const lessonTitle = screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' });
+      if (to === 'Overview') await browser.type(lessonTitle, 'Lesson');
+      await browser.click(screen.getByRole('tab', { name: 'Overview' }));
+      if (to === 'Overview') await browser.clear(courseTitle);
+      await browser.click(screen.getByRole('tab', { name: from }));
+      const input = to === 'Lessons' ? lessonTitle : courseTitle;
+      expect(input.closest('.course-editor-panel')?.hasAttribute('inert')).toBe(true);
+      await browser.click(screen.getByRole('button', { name: 'Save changes' }));
+      const summary = await screen.findByRole('alert');
+      await waitFor(() => expect(document.activeElement).toBe(summary));
+      expect(screen.getByRole('tab', { name: from }).getAttribute('aria-selected')).toBe('true');
+      await browser.click(within(summary).getByRole('link', { name: field }));
+      expect(screen.getByRole('tab', { name: to }).getAttribute('aria-selected')).toBe('true');
+      expect(input.closest('.course-editor-panel')?.hasAttribute('inert')).toBe(false);
+      expect(document.activeElement).toBe(input);
+      expect(saves).toBe(0);
+    },
+  );
+
   it('S2b focuses the summary after each invalid submit and every mounted invalid field from its links', async () => {
     const browser = userEvent.setup();
     let saves = 0;
@@ -245,6 +336,8 @@ describe('course editor', () => {
     );
 
     await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 1 in module 1' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 1' }));
     await browser.click(screen.getByRole('button', { name: 'Load draft into editor' }));
     const editors = screen.getAllByRole('heading', { name: 'Lesson transcript' }).map((heading) => {
       const section = heading.closest('section');
@@ -298,9 +391,10 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    expect((await screen.findByRole('status')).textContent).toContain(
-      'Missing transcripts will appear automatically',
-    );
+    expect(
+      (await within(screen.getByRole('region', { name: 'Course status' })).findByRole('status'))
+        .textContent,
+    ).toContain('Missing transcripts will appear automatically');
     expect(screen.getByRole('button', { name: 'Publish' }).hasAttribute('disabled')).toBe(false);
   });
 
@@ -378,7 +472,11 @@ describe('course editor', () => {
       </I18nProvider>,
     );
 
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('region', { name: 'Course status' })).queryByRole('status'),
+      ).toBeNull(),
+    );
   });
 
   it('P19 saves newly added modules and lessons with the loaded concurrency token', async () => {
@@ -470,8 +568,13 @@ describe('course editor', () => {
 
     await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Move module 2 up' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Move lesson 2 in module 2 up' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Delete lesson 2 in module 2' }));
+    await browser.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm lesson deletion' }),
+    );
     await browser.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(saved?.modules.map((module) => module.title)).toEqual(['Second module', 'First module']);
@@ -1027,4 +1130,699 @@ it('new unsaved lesson never invokes transcript, inventory or draft service hook
   await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
   expect(screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' })).toBeTruthy();
   expect(reads).toEqual([]);
+});
+
+describe('U2 lesson rows', () => {
+  function fixture(
+    count = 2,
+    extra: {
+      video?: CourseEditorVideo;
+      languages?: LessonLanguageServices;
+      transcripts?: CourseEditorTranscripts;
+    } = {},
+    locale: 'en' | 'uk' = 'en',
+  ) {
+    const course: CourseTree = {
+      ...tree,
+      modules: [
+        {
+          id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
+          title: 'Module',
+          lessons: Array.from({ length: count }, (_, index) => ({
+            id: asBrandedId(
+              `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+              'lesson',
+            ),
+            title: `Lesson ${index + 1}`,
+            isPreview: false,
+          })),
+        },
+      ],
+    };
+    const view = () => (
+      <I18nProvider instance={createI18n(locale)}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+          {...extra}
+        />
+      </I18nProvider>
+    );
+    const result = render(view());
+    return { ...result, course, refresh: () => result.rerender(view()) };
+  }
+  const video: CourseEditorVideo = {
+    rows: [],
+    isLoading: false,
+    actions: {
+      upload: async () => null,
+      resume: async () => null,
+      retry: async () => null,
+      cancel: async () => null,
+    },
+  };
+  function body(toggle: HTMLElement) {
+    const id = toggle.getAttribute('aria-controls');
+    expect(id).toBeTruthy();
+    const element = document.getElementById(id ?? '');
+    if (element === null) throw new Error('Missing controlled lesson body');
+    return element;
+  }
+
+  it.each(['en', 'uk'] as const)(
+    'T1 toggle accessible name starts with its visible action in both states (%s)',
+    async (locale) => {
+      const user = userEvent.setup();
+      fixture(2, {}, locale);
+      await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+      const row = screen.getByRole('group', { name: locale === 'en' ? 'Lesson 1' : 'Урок 1' });
+      const toggle = row.querySelector('button[aria-expanded]');
+      if (!(toggle instanceof HTMLElement)) throw new Error('Missing lesson toggle');
+      const context = locale === 'en' ? 'lesson 1 in module 1' : 'урок 1 у модулі 1';
+      for (const action of locale === 'en' ? ['Expand', 'Collapse'] : ['Розгорнути', 'Згорнути']) {
+        expect(toggle.textContent?.trim()).toBe(action);
+        expect(within(row).getByRole('button', { name: `${action} ${context}` })).toBe(toggle);
+        await user.click(toggle);
+      }
+    },
+  );
+
+  it.each([1, 2])(
+    'Ux04 defaults %i saved lessons once and keeps header controls visible',
+    async (count) => {
+      const user = userEvent.setup();
+      fixture(count);
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      const toggle = screen.getByRole('button', {
+        name: count === 1 ? 'Collapse lesson 1 in module 1' : 'Expand lesson 1 in module 1',
+      });
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count === 1));
+      expect(body(toggle).hidden).toBe(count > 1);
+      expect(
+        screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' }).closest('[hidden]'),
+      ).toBeNull();
+      expect(
+        screen
+          .getByRole('checkbox', { name: 'Open before purchase — lesson 1, module 1' })
+          .closest('[hidden]'),
+      ).toBeNull();
+      await user.click(toggle);
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count !== 1));
+      expect(body(toggle).hidden).toBe(count === 1);
+      await user.click(screen.getByRole('tab', { name: 'Overview' }));
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count !== 1));
+    },
+  );
+
+  it('Ux04 expands a newly added lesson without expanding saved rows', async () => {
+    const user = userEvent.setup();
+    fixture();
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    const toggle = screen.getByRole('button', { name: 'Collapse lesson 3 in module 1' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(body(toggle).hidden).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: 'Expand lesson 1 in module 1' })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
+  });
+
+  it('Ux05 preserves the actual video field and in-flight progress through collapse', async () => {
+    const user = userEvent.setup();
+    let finish: (() => void) | undefined;
+    let uploads = 0;
+    const pendingVideo: CourseEditorVideo = {
+      ...video,
+      actions: {
+        ...video.actions,
+        upload: async (_id, _file, progress) => {
+          uploads += 1;
+          progress({ receivedBytes: 4, declaredBytes: 10 });
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          return null;
+        },
+      },
+    };
+    fixture(1, { video: pendingVideo });
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    const toggle = screen.getByRole('button', { name: 'Collapse lesson 1 in module 1' });
+    const content = body(toggle);
+    const input = content.querySelector('input[type="file"]');
+    if (input === null) throw new Error('Missing upload input');
+    fireEvent.change(input, {
+      target: {
+        files: { item: () => new File(['0123456789'], 'video.mp4', { type: 'video/mp4' }) },
+      },
+    });
+    const progress = await screen.findByRole('progressbar', { name: 'Uploading video' });
+    expect(progress.getAttribute('aria-valuenow')).toBe('40');
+    const row = screen.getByRole('group', { name: 'Lesson 1' });
+    expect(within(row).getByText('Video: Uploading')).toBeTruthy();
+    await user.click(toggle);
+    expect(content.hidden).toBe(true);
+    expect(content.contains(progress)).toBe(true);
+    await user.click(toggle);
+    expect(screen.getByRole('progressbar', { name: 'Uploading video' })).toBe(progress);
+    expect(progress.getAttribute('aria-valuenow')).toBe('40');
+    expect(uploads).toBe(1);
+    await act(async () => finish?.());
+  });
+
+  it.each([true, false])(
+    'Ux04 transcript knowledge starts unknown, becomes %s and survives failed refresh',
+    async (known) => {
+      const user = userEvent.setup();
+      let data: readonly TranscriptInventoryItem[] | undefined;
+      let isError = false;
+      const languages: LessonLanguageServices = {
+        useInventory: () => ({ data, isError }),
+        readInventory: async () => [],
+        readTracks: async () => [],
+      };
+      const result = fixture(1, { languages });
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(screen.queryByText(/^Transcript: /)).toBeNull();
+      data = known ? [{ language: 'en', updatedAt: 'T1', stale: false, isPrimary: true }] : [];
+      result.refresh();
+      const label = known ? 'Transcript: Yes' : 'Transcript: No';
+      await screen.findByText(label);
+      data = undefined;
+      isError = true;
+      result.refresh();
+      expect(screen.getByText(label)).toBeTruthy();
+    },
+  );
+
+  it.each(['en', 'uk'] as const)(
+    'Ux13 links only saved lessons to the content editor (%s)',
+    async (locale) => {
+      const user = userEvent.setup();
+      const { course } = fixture(2, {}, locale);
+      await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+      const link = screen.getByRole('link', {
+        name:
+          locale === 'en'
+            ? 'Edit lesson content — lesson 1, module 1'
+            : 'Редагувати вміст уроку — урок 1, модуль 1',
+      });
+      expect(link.getAttribute('href')).toBe(
+        `/admin/courses/${course.id}/lessons/${course.modules[0]?.lessons[0]?.id}`,
+      );
+      await user.click(
+        screen.getByRole('button', {
+          name: locale === 'en' ? 'Add lesson to module 1' : 'Додати урок до модуля 1',
+        }),
+      );
+      expect(
+        screen.getAllByRole('link', {
+          name: locale === 'en' ? /Edit lesson content — lesson/ : /Редагувати вміст уроку — урок/,
+        }),
+      ).toHaveLength(2);
+    },
+  );
+
+  it.each([true, false])(
+    'Ux04 fallback transcript unknown then %s remains known after failed refresh',
+    async (known) => {
+      const user = userEvent.setup();
+      let data: LessonTranscript | undefined;
+      const transcripts: CourseEditorTranscripts = {
+        useLessonTranscript: () => ({ data, isLoading: false }),
+        documents: [],
+        history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+        library: { add: async () => null, remove: async () => null },
+        save: async () => null,
+      };
+      const result = fixture(1, { transcripts });
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(screen.queryByText(/^Transcript: /)).toBeNull();
+      data = {
+        lessonId: result.course.modules[0]?.lessons[0]?.id ?? '',
+        language: known ? 'en' : null,
+        updatedAt: known ? 'T1' : null,
+        stale: false,
+        segments: [],
+        documents: [],
+      };
+      result.refresh();
+      const label = known ? 'Transcript: Yes' : 'Transcript: No';
+      await screen.findByText(label);
+      data = undefined;
+      result.refresh();
+      expect(screen.getByText(label)).toBeTruthy();
+    },
+  );
+
+  it('Ux06 uses h2 program, h3 lesson and shared h4 section headers with status lines', async () => {
+    const user = userEvent.setup();
+    fixture(1, { video });
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    expect(screen.getByRole('heading', { name: 'Modules and lessons', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Lesson 1', level: 3 })).toBeTruthy();
+    for (const name of ['Lesson video', 'Lesson languages']) {
+      const heading = screen.getByRole('heading', { name, level: 4 });
+      expect(heading.parentElement?.classList.contains('lesson-section-heading')).toBe(true);
+      expect(heading.parentElement?.querySelector('p')?.textContent).toBe('Saved immediately');
+    }
+  });
+});
+
+describe('U4 row actions', () => {
+  async function fixture(
+    moduleCount = 1,
+    lessonCount = 3,
+    locale: 'en' | 'uk' = 'en',
+    withPanels = false,
+  ) {
+    const course: CourseTree = {
+      ...tree,
+      modules: Array.from({ length: moduleCount }, (_, m) => ({
+        id: asBrandedId(`10000000-0000-4000-8000-${String(m + 1).padStart(12, '0')}`, 'module'),
+        title: `Module ${m + 1}`,
+        lessons: Array.from({ length: lessonCount }, (_, l) => ({
+          id: asBrandedId(
+            `20000000-0000-4000-8000-${String(m * 10 + l + 1).padStart(12, '0')}`,
+            'lesson',
+          ),
+          title: `Lesson ${l + 1}`,
+          isPreview: false,
+        })),
+      })),
+    };
+    const result = render(
+      <I18nProvider instance={createI18n(locale)}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={null}
+          {...(withPanels
+            ? {
+                onSetPrice: async (current: CourseTree) => current,
+                adminTools: (
+                  <CourseGrantPanel
+                    users={[]}
+                    isUserSearchPending={false}
+                    onSearch={() => {}}
+                    onGrant={async () => null}
+                  />
+                ),
+              }
+            : {})}
+          onSave={async (current, edit) => savedTree(current, edit)}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+    for (const toggle of screen.queryAllByRole('button', {
+      name: /^Expand lesson|^Розгорнути урок/,
+    })) {
+      await user.click(toggle);
+    }
+    return { ...result, user };
+  }
+
+  it.each(['lesson', 'module'] as const)(
+    'Ux09 %s icons retain full names, omit edges and follow the moved row',
+    async (kind) => {
+      const { user } = await fixture(kind === 'module' ? 3 : 1);
+      const name = (position: number, direction: string) =>
+        kind === 'lesson'
+          ? `Move lesson ${position} in module 1 ${direction}`
+          : `Move module ${position} ${direction}`;
+      const title = (position: number) =>
+        kind === 'lesson' ? `Lesson ${position} title in module 1` : `Module ${position} title`;
+      expect(screen.queryByRole('button', { name: name(1, 'up') })).toBeNull();
+      expect(screen.queryByRole('button', { name: name(3, 'down') })).toBeNull();
+      const up = screen.getByRole('button', { name: name(2, 'up') });
+      expect(up.textContent?.trim()).toBe('');
+      expect(up.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+      await user.click(up);
+      expect(screen.getByRole('textbox', { name: title(1) }).getAttribute('value')).toBe(
+        kind === 'lesson' ? 'Lesson 2' : 'Module 2',
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(1, 'down') })),
+      );
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(2, 'down') })),
+      );
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(3, 'up') })),
+      );
+      expect(screen.queryByRole('button', { name: name(3, 'down') })).toBeNull();
+    },
+  );
+
+  it.each(['lesson', 'module'] as const)(
+    'Ux10 saved %s cancel preserves row and trigger focus; confirmed delete focuses next, previous, then add',
+    async (kind) => {
+      const { user } = await fixture(kind === 'module' ? 3 : 1);
+      const label = (position: number) =>
+        kind === 'lesson' ? `Delete lesson ${position} in module 1` : `Delete module ${position}`;
+      const title = (position: number) =>
+        kind === 'lesson' ? `Lesson ${position} title in module 1` : `Module ${position} title`;
+      const keptTitle = screen.getByRole('textbox', { name: title(2) });
+      const trigger = screen.getByRole('button', { name: label(2) });
+      await user.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: label(2) });
+      expect(keptTitle.isConnected).toBe(true);
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+      for (const [position, count] of [
+        [2, 2],
+        [2, 1],
+        [1, 0],
+      ] as const) {
+        await user.click(screen.getByRole('button', { name: label(position) }));
+        await user.click(
+          within(screen.getByRole('dialog')).getByRole('button', {
+            name: kind === 'lesson' ? 'Confirm lesson deletion' : 'Confirm module deletion',
+          }),
+        );
+        const remaining = screen.queryAllByRole('textbox', {
+          name: kind === 'lesson' ? /^Lesson \d+ title in module 1$/ : /^Module \d+ title$/,
+        });
+        expect(remaining).toHaveLength(count);
+        const target =
+          remaining.length > 0
+            ? screen.getByRole('textbox', { name: title(Math.min(position, remaining.length)) })
+            : screen.getByRole('button', {
+                name: kind === 'lesson' ? 'Add lesson to module 1' : 'Add module',
+              });
+        await waitFor(() => expect(document.activeElement).toBe(target));
+      }
+    },
+  );
+
+  it.each(['lesson', 'module'] as const)('Ux10 unsaved %s removes immediately', async (kind) => {
+    const { user } = await fixture(1, 0);
+    if (kind === 'lesson')
+      await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: kind === 'lesson' ? 'Delete lesson 1 in module 1' : 'Delete module 1',
+      }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.queryByRole('textbox', {
+        name: kind === 'lesson' ? 'Lesson 1 title in module 1' : 'Module 1 title',
+      }),
+    ).toBeNull();
+  });
+
+  it('Ux10 Ukrainian saved lesson confirmation keeps the row on cancel', async () => {
+    const { user } = await fixture(1, 1, 'uk');
+    await user.click(screen.getByRole('button', { name: 'Видалити урок 1 у модулі 1' }));
+    const dialog = screen.getByRole('dialog', { name: 'Видалити урок 1 у модулі 1' });
+    expect(
+      within(dialog).getByRole('button', { name: 'Підтвердити видалення уроку' }),
+    ).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Скасувати' }));
+    expect(screen.getByRole('textbox', { name: 'Назва уроку 1 у модулі 1' })).toBeTruthy();
+  });
+
+  it('Ux10 a module whose new lesson was saved now requires confirmation', async () => {
+    const { user } = await fixture(1, 0);
+    await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' }),
+      'New saved lesson',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByRole('link', { name: 'Edit lesson content — lesson 1, module 1' });
+    await user.click(screen.getByRole('button', { name: 'Delete module 1' }));
+    expect(screen.getByRole('dialog', { name: 'Delete module 1' })).toBeTruthy();
+  });
+
+  it('Ux10 a module without any remaining saved lessons removes immediately', async () => {
+    const { user } = await fixture(1, 1);
+    await user.click(screen.getByRole('button', { name: 'Delete lesson 1 in module 1' }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm lesson deletion' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete module 1' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Module 1 title' })).toBeNull();
+  });
+
+  it('Ux15 retains only the page eyebrow with price and access panels across all tabs', async () => {
+    const { container, user } = await fixture(1, 3, 'en', true);
+    for (const [tab, heading] of [
+      ['Overview', 'Course price'],
+      ['Lessons', 'Modules and lessons'],
+      ['Access', 'Grant course access'],
+    ] as const) {
+      await user.click(screen.getByRole('tab', { name: tab }));
+      expect(screen.getByRole('heading', { name: heading, level: 2 })).toBeTruthy();
+      // Include every mounted section, even sections on inactive tabs.
+      expect(container.querySelectorAll('section .eyebrow')).toHaveLength(0);
+      expect(container.querySelectorAll('.eyebrow')).toHaveLength(1);
+    }
+  });
+});
+
+describe('U5 save feedback', () => {
+  it.each([
+    {
+      locale: 'en',
+      title: 'Title',
+      save: 'Save changes',
+      dirty: 'Unsaved changes',
+      lessons: 'Lessons',
+      access: 'Access',
+    },
+    {
+      locale: 'uk',
+      title: 'Назва',
+      save: 'Зберегти зміни',
+      dirty: 'Незбережені зміни',
+      lessons: 'Уроки',
+      access: 'Доступ',
+    },
+  ] as const)('Ux11 tracks dirty state, submits and hides on Access ($locale)', async (copy) => {
+    const user = userEvent.setup();
+    const edits: CourseTreeEdit[] = [];
+    const { container } = render(
+      <I18nProvider instance={createI18n(copy.locale)}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current, edit) => {
+            edits.push(edit);
+            return savedTree(current, edit);
+          }}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const bar = container.querySelector('.admin-editor-save');
+    if (!(bar instanceof HTMLElement)) throw new Error('Missing save bar');
+    expect(bar.closest('form')?.classList.contains('admin-editor-form')).toBe(true);
+    const feedback = within(bar).getByRole('status');
+    expect(within(bar).getAllByRole('status')).toHaveLength(1);
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(feedback.textContent).toBe('');
+    const title = screen.getByRole('textbox', { name: copy.title });
+    await user.type(title, '!');
+    expect(feedback.textContent).toBe(copy.dirty);
+    await user.click(screen.getByRole('tab', { name: copy.lessons }));
+    expect(feedback.textContent).toBe(copy.dirty);
+    expect(bar.closest('[hidden]')).toBeNull();
+    await user.click(screen.getByRole('tab', { name: copy.access }));
+    expect(bar.closest('form')?.hidden).toBe(true);
+    expect(screen.queryByRole('button', { name: copy.save })).toBeNull();
+    await user.click(screen.getByRole('tab', { name: copy.lessons }));
+    await user.click(within(bar).getByRole('button', { name: copy.save }));
+    await waitFor(() => expect(edits).toHaveLength(1));
+    expect(edits[0]?.title).toBe('Go basics!');
+    await waitFor(() => expect(feedback.textContent).toBe(''));
+    expect(within(bar).getAllByRole('status')).toHaveLength(1);
+    expect(within(bar).queryByRole('button', { name: /Discard|Відкинути/ })).toBeNull();
+  });
+
+  it('Ux11 supplies the document-scroller inset hook for the sticky bar (browser proves focus visibility)', () => {
+    const css = readFileSync('src/app/styles/main.css', 'utf8');
+    expect(css).toMatch(/:root:has\(\.admin-editor-form:not\(\[hidden\]\)\)/);
+    expect(css).toMatch(
+      /scroll-padding-bottom:[^;]*var\(--admin-editor-save-height[^;]*var\(--admin-editor-field-height/,
+    );
+    expect(css).toMatch(/\.admin-editor-save\s*\{[^}]*position: sticky;[^}]*bottom: 0;/);
+  });
+
+  it('SPEC-1 reserves a status line even while clean', () => {
+    const css = readFileSync('src/app/styles/main.css', 'utf8');
+    expect(css).toMatch(/\.admin-editor-save output\s*\{[^}]*min-block-size: 1lh;/);
+  });
+
+  it('SPEC-1 updates the inset before scrolling only an overlapped form field and disconnects on unmount', () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const style = document.documentElement.style;
+    const property = '--admin-editor-save-height';
+    const fieldProperty = '--admin-editor-field-height';
+    const previous = style.getPropertyValue(property);
+    const previousField = style.getPropertyValue(fieldProperty);
+    const observations = new Map<Element, ControlledObserver>();
+    class ControlledObserver implements ResizeObserver {
+      constructor(readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observations.set(target, this);
+      }
+      unobserve(target: Element) {
+        observations.delete(target);
+      }
+      disconnect = rstest.fn();
+      notify() {
+        this.callback([], this);
+      }
+    }
+    globalThis.ResizeObserver = ControlledObserver;
+    style.setProperty(property, '17px');
+    style.setProperty(fieldProperty, '29px');
+    try {
+      const { container, unmount } = render(
+        <I18nProvider instance={createI18n('en')}>
+          <CourseEditorView
+            course={tree}
+            actor={admin}
+            ownerOptions={null}
+            onSave={async (current) => current}
+            onTransition={async (current) => current}
+            onDelete={async () => {}}
+            onAuthenticationRequired={() => {}}
+          />
+        </I18nProvider>,
+      );
+      const bar = container.querySelector('.admin-editor-save');
+      if (!(bar instanceof HTMLElement)) throw new Error('Missing save bar');
+      const observer = observations.get(bar);
+      if (observer === undefined) throw new Error('Save bar was not observed');
+      const formElement = bar.closest('form');
+      if (formElement === null) throw new Error('Save bar has no form');
+      expect(observations.get(formElement)).toBe(observer);
+      const textarea = screen.getByRole('textbox', { name: 'Summary' });
+      const textareaRect = rstest
+        .spyOn(textarea, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 200, 128));
+      const barRect = rstest.spyOn(bar, 'getBoundingClientRect');
+      const field = screen.getByRole('textbox', { name: 'Title' });
+      const fieldRect = rstest.spyOn(field, 'getBoundingClientRect');
+      const scroll = rstest.spyOn(field, 'scrollIntoView').mockImplementation(() => {
+        // The scroll must see the resized inset, not the previous height.
+        expect(style.getPropertyValue(property)).toBe('100px');
+        expect(style.getPropertyValue(fieldProperty)).toBe('128px');
+      });
+      act(() => field.focus());
+      fieldRect.mockReturnValue(new DOMRect(0, 620, 100, 40));
+      barRect.mockReturnValue(new DOMRect(0, 700, 300, 64));
+      observer.notify();
+      expect(style.getPropertyValue(property)).toBe('64px');
+      expect(scroll).not.toHaveBeenCalled();
+      expect(style.getPropertyValue(fieldProperty)).toBe('128px');
+      barRect.mockReturnValue(new DOMRect(0, 640, 300, 100));
+      observer.notify();
+      expect(style.getPropertyValue(property)).toBe('100px');
+      expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest' });
+      scroll.mockClear();
+      fieldRect.mockReturnValue(new DOMRect(0, 600, 100, 40));
+      observer.notify(); // A field ending at the bar's top does not overlap.
+      expect(scroll).not.toHaveBeenCalled();
+      const outside = screen.getByRole('tab', { name: 'Overview' });
+      const outsideScroll = rstest.spyOn(outside, 'scrollIntoView');
+      act(() => outside.focus());
+      observer.notify();
+      expect(outsideScroll).not.toHaveBeenCalled();
+      const save = within(bar).getByRole('button', { name: 'Save changes' });
+      rstest.spyOn(save, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 650, 100, 44));
+      const saveScroll = rstest.spyOn(save, 'scrollIntoView');
+      act(() => save.focus());
+      observer.notify(); // The bar's own button must not trigger corrective scrolling.
+      expect(saveScroll).not.toHaveBeenCalled();
+      textareaRect.mockReturnValue(new DOMRect(0, 0, 200, 256));
+      observer.notify(); // A resized textarea changes the region before the next native Tab.
+      expect(style.getPropertyValue(fieldProperty)).toBe('256px');
+      unmount();
+      expect(observer.disconnect).toHaveBeenCalledTimes(1);
+      expect(style.getPropertyValue(property)).toBe('17px');
+      expect(style.getPropertyValue(fieldProperty)).toBe('29px');
+    } finally {
+      cleanup();
+      rstest.restoreAllMocks();
+      globalThis.ResizeObserver = originalObserver;
+      if (previous) style.setProperty(property, previous);
+      else style.removeProperty(property);
+      if (previousField) style.setProperty(fieldProperty, previousField);
+      else style.removeProperty(fieldProperty);
+    }
+  });
+
+  it.each([
+    {
+      locale: 'en',
+      hint: 'Saved immediately',
+      materials: 'Course materials',
+      price: 'Course price',
+      access: 'Grant course access',
+    },
+    {
+      locale: 'uk',
+      hint: 'Зберігається одразу',
+      materials: 'Матеріали курсу',
+      price: 'Ціна курсу',
+      access: 'Видати доступ до курсу',
+    },
+  ] as const)(
+    'Ux12 explains independent persistence under each h2 ($locale)',
+    ({ locale, hint, ...headings }) => {
+      render(
+        <I18nProvider instance={createI18n(locale)}>
+          <DocumentLibrary
+            documents={[]}
+            actions={{ add: async () => null, remove: async () => null }}
+          />
+          <CoursePriceField
+            course={tree}
+            hasUnsavedChanges={false}
+            isBusy={false}
+            onSetPrice={async () => {}}
+          />
+          <CourseGrantPanel
+            users={[]}
+            isUserSearchPending={false}
+            onSearch={() => {}}
+            onGrant={async () => null}
+          />
+        </I18nProvider>,
+      );
+      for (const heading of Object.values(headings)) {
+        const h2 = screen.getByRole('heading', { name: heading, level: 2 });
+        const header = h2.parentElement;
+        if (header === null) throw new Error('Missing section header');
+        expect(within(header).getAllByText(hint)).toHaveLength(1);
+        expect(h2.nextElementSibling?.textContent).toBe(hint);
+        // Informative header text must not add more live regions to the page.
+        expect(within(header).queryByRole('status')).toBeNull();
+      }
+    },
+  );
 });

@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
+import { openLesson } from './course-editor';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
 
@@ -86,13 +87,11 @@ async function seed(request: APIRequestContext, baseURL: string): Promise<Course
   return course;
 }
 
-function lessonGroup(page: Page, number: number): Locator {
-  return page
-    .getByRole('group', { name: 'Модуль 1' })
-    .getByRole('group', { name: `Урок ${number}` });
-}
-
-async function uploadVideo(page: Page, lesson: Locator, lessonID: string, file: string) {
+async function uploadVideo(page: Page, lessonNumber: number, lessonID: string, file: string) {
+  const lesson = await openLesson(page, 1, lessonNumber);
+  await expect(
+    lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+  ).toBeVisible();
   const minted = page.waitForResponse(
     (candidate) =>
       candidate.url().endsWith(`/api/v1/admin/lessons/${lessonID}/video`) &&
@@ -109,12 +108,13 @@ const longLabel = 'Deutsche Synchronfassungsbearbeitung mit einem langen Namen T
 
 async function addTrack(
   page: Page,
-  lesson: Locator,
+  lessonNumber: number,
   language: string,
   label: string,
   file: string,
   readyCount: number,
 ) {
+  const lesson = await openLesson(page, 1, lessonNumber);
   const section = lesson.getByRole('region', { name: 'Аудіодоріжки' });
   await section.getByRole('button', { name: /Мова доріжки/ }).click();
   await page.getByRole('option', { name: language }).click();
@@ -260,12 +260,11 @@ test.describe('multi-audio S7 player audio tracks', () => {
       const seeded = await seed(page.request, baseURL);
       await page.goto(`/admin/courses/${seeded.id}`);
       await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
-      const dual = lessonGroup(page, 1);
-      await uploadVideo(page, dual, seeded.dual, dualVideo);
-      await addTrack(page, dual, 'Англійська', 'English dub', dubTrack, 2);
+      await uploadVideo(page, 1, seeded.dual, dualVideo);
+      await addTrack(page, 1, 'Англійська', 'English dub', dubTrack, 2);
       // A third track whose label is as long as the backend allows, for the narrow-screen check.
-      await addTrack(page, dual, 'Німецька', longLabel, dubTrack, 3);
-      await uploadVideo(page, lessonGroup(page, 2), seeded.single, singleVideo);
+      await addTrack(page, 1, 'Німецька', longLabel, dubTrack, 3);
+      await uploadVideo(page, 2, seeded.single, singleVideo);
       await publishAndGrant(page.request, baseURL, seeded.id);
     } finally {
       await context.close();

@@ -1226,6 +1226,42 @@ nav a {
   padding-inline: min(var(--space-4), 2.5vw) 0;
   border-inline-start: 1px solid var(--color-border);
 }
+.admin-lesson > legend h3 {
+  margin: 0;
+  font: inherit;
+}
+.admin-lesson-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.admin-lesson-summary > * {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+.admin-lesson-summary .ui-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+.admin-lesson-body,
+.admin-lesson-languages {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-4);
+}
+.admin-lesson-body[hidden] {
+  display: none;
+}
+.lesson-section-heading h4,
+.lesson-section-heading p {
+  margin: 0;
+}
+.lesson-section-heading p {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
 .admin-video-field {
   display: grid;
   justify-items: start;
@@ -1235,9 +1271,15 @@ nav a {
 .admin-video-field.ui-card {
   padding-inline: min(var(--card-padding), 2.5vw);
 }
-.admin-video-field h3,
+.admin-video-field h4,
 .admin-video-field p {
   margin: 0;
+}
+.admin-video-filename {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .admin-video-field .ui-progress {
   inline-size: min(100%, 32rem);
@@ -1337,13 +1379,41 @@ nav a {
 .admin-price .admin-row-actions {
   align-items: end;
 }
-/* The save action is the editor form's footer: a top rule ties it to the fields above instead of
- * leaving the button floating free-standing below the two-column Overview grid. */
+/* The document is the editor's scroller. Native textarea focus reveals its caret, so reserve
+ * the measured textarea height as well as the bar and focus outline;
+ * :has scopes the inset to the mounted, visible course form (not Access or another page). */
+:root:has(.admin-editor-form:not([hidden])) {
+  scroll-padding-bottom: calc(
+    var(--admin-editor-save-height, 0px) + var(--admin-editor-field-height, 0px) + 8px
+  );
+}
 .admin-editor-save {
-  justify-content: end;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  align-items: center;
+  justify-content: space-between;
   margin-block-start: var(--space-2);
-  padding-block-start: var(--space-4);
+  padding: var(--space-3);
   border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.admin-editor-save output {
+  /* The clean, empty status still reserves its line in the narrow stacked bar. */
+  min-block-size: 1lh;
+  margin: 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.admin-editor-save .ui-button {
+  min-block-size: var(--control-min-size);
+}
+.card-heading.admin-immediate-heading {
+  display: block;
+}
+.admin-save-hint {
+  margin-block: var(--space-1) 0;
+  color: var(--color-muted);
 }
 .admin-readonly-field {
   display: grid;
@@ -1402,10 +1472,14 @@ nav a {
 }
 .course-side-panels {
   display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 .course-side-panels > .ui-card {
   display: grid;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   gap: var(--space-4);
   justify-items: start;
 }
@@ -1458,6 +1532,9 @@ nav a {
   }
 }
 @media (max-width: 40rem) {
+  .admin-editor-save {
+    flex-direction: column;
+  }
   .admin-list-actions,
   .admin-editor-save {
     align-items: stretch;
@@ -3609,13 +3686,82 @@ button.transcript-line-body:hover {
   white-space: nowrap;
 }
 
-/* Transcript editor line: the document fieldset keeps the UA min-content width, and document labels
-   are author text up to 200 characters; both must shrink with the lesson (F3). */
+.transcript-editor {
+  min-inline-size: 0;
+}
+.transcript-editor-lines {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+.transcript-editor-lines > li {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  grid-template-areas:
+    'start end remove'
+    'text text text'
+    'materials materials materials';
+  align-items: start;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--color-hairline);
+}
+.transcript-editor-time--start {
+  grid-area: start;
+}
+.transcript-editor-time--end {
+  grid-area: end;
+}
+.transcript-editor-text {
+  grid-area: text;
+}
+.transcript-editor-lines :is(.ui-field, .transcript-editor-time, .transcript-editor-text) {
+  min-inline-size: 0;
+}
+.transcript-editor-lines .ui-field {
+  margin: 0;
+  gap: var(--space-1);
+}
+.transcript-editor-lines .ui-field > label {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.transcript-editor-time .ui-description {
+  color: var(--color-muted);
+  font-family: var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.transcript-editor-lines .ui-textarea {
+  block-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  resize: vertical;
+}
+.transcript-editor-remove {
+  grid-area: remove;
+  min-inline-size: var(--control-min-size);
+  min-block-size: var(--control-min-size);
+  padding: var(--space-2);
+}
+/* Match the editor's available width, including nested lesson panels and enlarged text. */
+.transcript-editor[data-wide-lines] .transcript-editor-lines > li {
+  grid-template-columns: 8rem 8rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    'start end text remove'
+    'materials materials materials materials';
+}
+/* The document fieldset keeps the UA min-content width; author labels can be 200 characters. */
 .transcript-editor-lines fieldset {
+  grid-area: materials;
   min-inline-size: 0;
   margin-inline: 0;
 }
 .transcript-editor-lines fieldset label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--control-min-size);
   overflow-wrap: anywhere;
 }
 /* Course document labels are author text up to 200 characters; an unbroken one widened the whole
@@ -3625,7 +3771,11 @@ button.transcript-line-body:hover {
   overflow-wrap: anywhere;
 }
 
-/* Force-mounted lesson editors keep local state while leaving inactive tabs inaccessible. */
+/* Force-mounted editors keep local state while leaving inactive tabs inaccessible. */
+.course-editor-panel[inert] {
+  display: none;
+}
+
 .lesson-language-panel[inert] {
   display: none;
 }

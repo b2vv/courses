@@ -66,9 +66,9 @@ export function CourseGrantPanel({
 
   return (
     <section className="admin-lifecycle admin-grant ui-card" aria-labelledby="course-grant-heading">
-      <div>
-        <p className="eyebrow">{t('administration.grant.eyebrow')}</p>
+      <div className="admin-immediate-heading">
         <h2 id="course-grant-heading">{t('administration.grant.heading')}</h2>
+        <p className="admin-save-hint">{t('administration.savedImmediately')}</p>
         <p className="admin-price-note">{t('administration.grant.hint')}</p>
       </div>
       <form
