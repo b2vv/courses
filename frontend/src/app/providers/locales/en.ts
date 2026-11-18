@@ -1289,6 +1289,7 @@ export const en = {
     },
     page: {
       notFound: 'Page not found',
+      goToAdmin: 'Back to administration',
       failure: 'Could not open the page',
       failureHint: 'Reload the page to try again.',
     },

@@ -286,14 +286,18 @@ test.describe('with a real two-second video', () => {
     await page.goto(`/admin/courses/${course.id}`);
     // Per-lesson video upload lives on the Lessons tab (view-3 layout).
     await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
+    const lesson = page
+      .getByRole('group', { name: 'Модуль 1', exact: true })
+      .getByRole('group', { name: 'Урок 1', exact: true });
+    await expect(
+      lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+    ).toBeVisible();
     const minted = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/admin/lessons/${videoLessonID}/video` &&
         response.request().method() === 'POST',
     );
-    await page
-      .getByRole('group', { name: 'Модуль 1' })
-      .getByRole('group', { name: 'Урок 1' })
+    await lesson
       .locator('input[type="file"]:not(.admin-audio-field input)')
       .setInputFiles(shortVideo);
     expect((await minted).status()).toBe(201);

@@ -106,6 +106,88 @@ test.describe('with a stored admin session', () => {
 
       await page.reload();
       await expect(page.getByLabel('Назва', { exact: true })).toHaveValue(draft.title);
+
+      await page.goto('/admin/nope-xyz');
+      await expect(page.getByRole('heading', { name: 'Сторінку не знайдено' })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Повернутися до адміністрування', exact: true }),
+      ).toHaveAttribute('href', '/admin');
+    } finally {
+      try {
+        if (course !== undefined) await deleteAdminDraft(adminContext, baseURL, course);
+      } finally {
+        await adminContext.close();
+      }
+    }
+  });
+
+  test('Ux02 summary reveals Lessons and focuses an invalid lesson title from Overview', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+    const unique = randomUUID();
+    const draft: Draft = {
+      slug: `e2e-hidden-lesson-${unique}`,
+      title: `Ux02 summary ${unique}`,
+      summary: 'Перехід до помилкового поля прихованої вкладки.',
+      description: 'Тимчасова чернетка для перевірки валідації уроку з вкладки огляду.',
+    };
+    const adminContext = await openAdminContext(browser, baseURL);
+    let course: CreatedCourse | undefined;
+    try {
+      course = await createAdminDraft(adminContext, baseURL, draft);
+      await page.goto(`/admin/courses/${course.id}`);
+      await expect(page.getByRole('heading', { name: draft.title, exact: true })).toBeVisible();
+      const lessonsTab = page.getByRole('tab', { name: 'Уроки', exact: true });
+      const overviewTab = page.getByRole('tab', { name: 'Огляд', exact: true });
+      const courseTabs = page
+        .getByRole('tablist', { name: 'Розділи курсу', exact: true })
+        .locator('..');
+      // Inactive panels lose their ID and role, but remain direct children of the tabs or form.
+      const inactivePanels = courseTabs.locator(':scope > form > [inert], :scope > [inert]');
+      for (const tab of [
+        overviewTab,
+        lessonsTab,
+        page.getByRole('tab', { name: 'Доступ', exact: true }),
+      ]) {
+        await tab.click();
+        await expect(tab).toHaveAttribute('aria-selected', 'true');
+        const panelId = await tab.getAttribute('aria-controls');
+        if (panelId === null) throw new Error('Selected course tab must control a panel');
+        const selectedPanel = courseTabs.locator(`[id="${panelId}"]`);
+        await expect(selectedPanel).toHaveCount(1);
+        await expect(selectedPanel).toBeVisible();
+        await expect(inactivePanels).toHaveCount(2);
+        await expect(inactivePanels.nth(0)).toBeHidden();
+        await expect(inactivePanels.nth(1)).toBeHidden();
+      }
+      await lessonsTab.click();
+      await page.getByRole('button', { name: 'Додати модуль', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Назва модуля 1', exact: true }).fill('Модуль');
+      await page.getByRole('button', { name: 'Додати урок до модуля 1', exact: true }).click();
+      const lessonTitle = page.getByRole('textbox', {
+        name: 'Назва уроку 1 у модулі 1',
+        exact: true,
+      });
+      await lessonTitle.fill('');
+      await overviewTab.click();
+      await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+      await expect(lessonTitle).toBeHidden();
+      await page.getByRole('button', { name: 'Зберегти зміни', exact: true }).click();
+      const summary = page.getByRole('alert').filter({ hasText: 'Виправте помилки у формі' });
+      await expect(summary).toBeVisible();
+      await expect(summary).toBeFocused();
+      await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+      await summary.getByRole('link', { name: 'Назва уроку 1 у модулі 1', exact: true }).click();
+      await expect(lessonsTab).toHaveAttribute('aria-selected', 'true');
+      await expect(overviewTab).toHaveAttribute('aria-selected', 'false');
+      await expect(lessonTitle).toBeVisible();
+      await expect(lessonTitle).toBeFocused();
+      await page.reload();
+      await lessonsTab.click();
+      await expect(page.getByRole('group', { name: 'Модуль 1', exact: true })).toHaveCount(0);
     } finally {
       try {
         if (course !== undefined) await deleteAdminDraft(adminContext, baseURL, course);

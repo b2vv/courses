@@ -64,6 +64,87 @@ function savedTree(current: CourseTree, edit: CourseTreeEdit): CourseTree {
 }
 
 describe('course editor', () => {
+  it('Ux01 keeps all three panels mounted and only the selected panel active', async () => {
+    const browser = userEvent.setup();
+    const { container } = render(
+      <I18nProvider instance={createI18n('en')}>
+        <CourseEditorView
+          course={tree}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const panels = Array.from(container.querySelectorAll('.course-editor-panel'));
+    expect(panels).toHaveLength(3);
+    for (const selection of ['Overview', 'Lessons', 'Access']) {
+      const tab = screen.getByRole('tab', { name: selection });
+      await browser.click(tab);
+      expect(tab.getAttribute('aria-selected')).toBe('true');
+      for (const panel of panels) {
+        const selected = panel.id === tab.getAttribute('aria-controls');
+        expect(panel.classList.contains('ui-tab-panel')).toBe(true);
+        expect(panel.classList.contains('course-editor-panel')).toBe(true);
+        expect(panel.hasAttribute('inert')).toBe(!selected);
+        if (selected) expect(panel.closest('[hidden]')).toBeNull();
+      }
+      expect(panels.filter((panel) => !panel.hasAttribute('inert'))).toHaveLength(1);
+      expect(container.querySelectorAll('.course-editor-panel')).toHaveLength(3);
+    }
+  });
+
+  it.each([
+    { field: 'Lesson 1 title in module 1', from: 'Overview', to: 'Lessons' },
+    { field: 'Title', from: 'Lessons', to: 'Overview' },
+  ])(
+    'Ux02 reveals and focuses $field from $from through the summary',
+    async ({ field, from, to }) => {
+      const browser = userEvent.setup();
+      let saves = 0;
+      render(
+        <I18nProvider instance={createI18n('en')}>
+          <CourseEditorView
+            course={tree}
+            actor={admin}
+            ownerOptions={null}
+            onSave={async (current) => {
+              saves += 1;
+              return current;
+            }}
+            onTransition={async (current) => current}
+            onDelete={async () => {}}
+            onAuthenticationRequired={() => {}}
+          />
+        </I18nProvider>,
+      );
+      const courseTitle = screen.getByRole('textbox', { name: 'Title' });
+      await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
+      await browser.click(screen.getByRole('button', { name: 'Add module' }));
+      await browser.type(screen.getByRole('textbox', { name: 'Module 1 title' }), 'Module');
+      await browser.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+      const lessonTitle = screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' });
+      if (to === 'Overview') await browser.type(lessonTitle, 'Lesson');
+      await browser.click(screen.getByRole('tab', { name: 'Overview' }));
+      if (to === 'Overview') await browser.clear(courseTitle);
+      await browser.click(screen.getByRole('tab', { name: from }));
+      const input = to === 'Lessons' ? lessonTitle : courseTitle;
+      expect(input.closest('.course-editor-panel')?.hasAttribute('inert')).toBe(true);
+      await browser.click(screen.getByRole('button', { name: 'Save changes' }));
+      const summary = await screen.findByRole('alert');
+      await waitFor(() => expect(document.activeElement).toBe(summary));
+      expect(screen.getByRole('tab', { name: from }).getAttribute('aria-selected')).toBe('true');
+      await browser.click(within(summary).getByRole('link', { name: field }));
+      expect(screen.getByRole('tab', { name: to }).getAttribute('aria-selected')).toBe('true');
+      expect(input.closest('.course-editor-panel')?.hasAttribute('inert')).toBe(false);
+      expect(document.activeElement).toBe(input);
+      expect(saves).toBe(0);
+    },
+  );
+
   it('S2b focuses the summary after each invalid submit and every mounted invalid field from its links', async () => {
     const browser = userEvent.setup();
     let saves = 0;

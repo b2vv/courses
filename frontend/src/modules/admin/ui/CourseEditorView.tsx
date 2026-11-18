@@ -721,7 +721,11 @@ export function CourseEditorView({
           hidden={tab === 'access'}
         >
           <FormErrorSummary form={form} fields={summaryFields} onSelect={focusField} />
-          <Aria.TabPanel id="overview" shouldForceMount className="ui-tab-panel">
+          <Aria.TabPanel
+            id="overview"
+            shouldForceMount
+            className="ui-tab-panel course-editor-panel"
+          >
             <div className="course-form-layout">
               <section
                 className="admin-editor-details ui-card course-details-form"
@@ -849,7 +853,7 @@ export function CourseEditorView({
               </div>
             </div>
           </Aria.TabPanel>
-          <Aria.TabPanel id="lessons" shouldForceMount className="ui-tab-panel">
+          <Aria.TabPanel id="lessons" shouldForceMount className="ui-tab-panel course-editor-panel">
             <div className="course-lessons-panel">
               {transcripts !== undefined && (
                 <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
@@ -882,7 +886,7 @@ export function CourseEditorView({
             />
           </div>
         )}
-        <Aria.TabPanel id="access" shouldForceMount className="ui-tab-panel">
+        <Aria.TabPanel id="access" shouldForceMount className="ui-tab-panel course-editor-panel">
           {adminTools}
         </Aria.TabPanel>
       </Aria.Tabs>

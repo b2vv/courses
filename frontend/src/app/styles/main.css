@@ -3625,7 +3625,11 @@ button.transcript-line-body:hover {
   overflow-wrap: anywhere;
 }
 
-/* Force-mounted lesson editors keep local state while leaving inactive tabs inaccessible. */
+/* Force-mounted editors keep local state while leaving inactive tabs inaccessible. */
+.course-editor-panel[inert] {
+  display: none;
+}
+
 .lesson-language-panel[inert] {
   display: none;
 }

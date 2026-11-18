@@ -188,6 +188,9 @@ test('En04 En10 nginx media bytes require membership except for a published prev
     const lesson = editor
       .getByRole('group', { name: 'Модуль 1', exact: true })
       .getByRole('group', { name: 'Урок 1', exact: true });
+    await expect(
+      lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+    ).toBeVisible();
     const minted = editor.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/admin/lessons/${course.lessonID}/video` &&

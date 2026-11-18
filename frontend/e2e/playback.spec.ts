@@ -292,6 +292,9 @@ async function uploadReady(
   const lesson = module.getByRole('group', {
     name: `Урок ${target.lessonNumber}`,
   });
+  await expect(
+    lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
+  ).toBeVisible();
   const minted = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/admin/lessons/${target.lessonID}/video` &&
