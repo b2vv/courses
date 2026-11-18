@@ -40,7 +40,11 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
   - The focused field stays above the sticky bar at 390/200 % and 320 after F2.
   - Keyboard: toggle, D3 focus after move/delete, dialog Escape and focus return, and the summary link across tabs.
   - Leftover fixture courses: 0 (34 created across runs).
-- **Final ordered `make check` (Ux18):** NOT RUN yet. It needs the owner's consent for this run.
+- **Final ordered `make check` (Ux18), attempt 1** on `d9f1d25f` (owner consent 2026-11-18, 19:41→19:55):
+  format-check, lint, typecheck, test (0 failed / 0 skipped), integration (130 Go packages ok) and check-generated passed;
+  `build` FAILED with `no space left on device` while exporting the `asr-worker` image (Whisper large-v3-turbo model
+  layer). The Kiri VM disk (63 GB) had 13 GB free at the start and the uncached build cache grew 12.3 GB. Infrastructure,
+  not code. Owner decision 2026-11-18: grow the Kiri disk, then rerun. Ux18 BLOCKED until that rerun.
 
 ## 3. Non-obvious findings
 - **F1 — a defect this phase introduced and the gates missed.** U3's `@container transcript-editor` stalled Chromium
