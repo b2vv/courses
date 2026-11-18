@@ -41,7 +41,7 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
   - Keyboard: toggle, D3 focus after move/delete, dialog Escape and focus return, and the summary link across tabs.
   - Leftover fixture courses: 0 (34 created across runs).
 - **Final ordered `make check` (Ux18), attempt 1** on `d9f1d25f` (owner consent 2026-11-18, 19:41→19:55):
-  format-check, lint, typecheck, test (0 failed / 0 skipped), integration (130 Go packages ok) and check-generated passed;
+  format-check, lint, typecheck, test (0 failed / 0 skipped), Go 130 ok results (61 test + 69 integration) and check-generated passed;
   `build` FAILED with `no space left on device` while exporting the `asr-worker` image (Whisper large-v3-turbo model
   layer). The Kiri VM disk (63 GB) had 13 GB free at the start and the uncached build cache grew 12.3 GB. Infrastructure,
   not code. Owner decision 2026-11-18: grow the Kiri disk, then rerun.
@@ -50,7 +50,7 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
   host's `~/Library/Caches/ms-playwright` was gone (`Executable doesn't exist`, 105 failed at 0 ms, 57 did not run).
   With the owner's consent, Chromium for Playwright 1.62.1 was reinstalled.
 - **Attempt 3 — GREEN** on `8f7923ad` (2026-11-18 22:21→22:51, `GATE_EXIT=0`): format-check, lint, typecheck, unit
-  1482 passed / 0 failed / 0 skipped, integration 130 Go packages ok / 0 FAIL, check-generated, build, `e2e-reset`
+  1482 passed / 0 failed / 0 skipped, Go 130 ok results (61 test + 69 integration) / 0 FAIL, check-generated, build, `e2e-reset`
   (postgres, redis and media volumes removed), up, drain-queue, seed, smoke, e2e **168 passed** / 0 failed / 0 flaky /
   0 skipped (24.2 min). Ux18 PASS. Derived run record: `gate-make-check-8f7923ad.txt` (extracted from the full log,
   its sha256 recorded there; PR review S1).
