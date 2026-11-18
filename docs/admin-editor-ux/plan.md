@@ -178,3 +178,8 @@ Final: ordered `make check` (owner consent per run), design-pass, report `docs/a
   10436cdf.
 - review_mode=independent_subagent (Codex read-only review per slice); writer Courses 1 via Codex write run.
 - Next: U1 READY (no open question); U2–U5 READY by the same verdict; U6 needs owner consent for `make check`.
+- Owner 2026-11-18: standing permission, until this phase closes, to prune the Kiri build cache
+  (`docker buildx prune --builder kiri-build -f`) before a build or e2e; images and volumes are not touched.
+  The eight untagged images on Kiri are the 2026-11-16 cutover snapshot
+  (`courses-kiri-cutover-20261116/images.txt`) and stay. `courses-integration-go` removed with owner consent
+  (rebuilt by the next `make integration`).
