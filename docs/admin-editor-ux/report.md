@@ -52,7 +52,8 @@ Every slice had an independent Codex review (spec + standards) that ended SHIP o
 - **Attempt 3 — GREEN** on `8f7923ad` (2026-11-18 22:21→22:51, `GATE_EXIT=0`): format-check, lint, typecheck, unit
   1482 passed / 0 failed / 0 skipped, integration 130 Go packages ok / 0 FAIL, check-generated, build, `e2e-reset`
   (postgres, redis and media volumes removed), up, drain-queue, seed, smoke, e2e **168 passed** / 0 failed / 0 flaky /
-  0 skipped (24.2 min). Ux18 PASS.
+  0 skipped (24.2 min). Ux18 PASS. Derived run record: `gate-make-check-8f7923ad.txt` (extracted from the full log,
+  its sha256 recorded there; PR review S1).
 
 ## 3. Non-obvious findings
 - **F1 — a defect this phase introduced and the gates missed.** U3's `@container transcript-editor` stalled Chromium

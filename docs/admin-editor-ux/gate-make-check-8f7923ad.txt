@@ -1,0 +1,166 @@
+# Derived summary of the ordered make check (attempt 3) — extracted from the full run log; no request bodies or credentials.
+# Source log: Courses 1 session scratchpad aeu-make-check-3.log (1836 lines, sha256 86e9b7768addb017d3e8f5a28805206ffc5fd3f41e5cb2b55e7c9e6ddebf0bd5)
+START 2026-11-18 22:21:34 HEAD=8f7923ad DISK=31.3G
+## make targets in order
+cd frontend && npm run format:check
+cd frontend && npm run lint
+cd frontend && npm run typecheck
+sh infrastructure/tests/integration.sh
+docker compose build
+docker compose up -d --build --wait --wait-timeout 180
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backend/sql/seed-identities.sql
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backend/sql/seed.sql
+sh infrastructure/tests/smoke.sh
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 180 api frontend wayforpay-stub nginx
+## unit (rstest summary)
+    "testFiles": 116,
+    "failedFiles": 0,
+    "failedTests": 0,
+    "passedTests": 1482,
+    "skippedTests": 0,
+    "todoTests": 0
+## Go packages
+ok=130 FAIL=0
+ok courses/cmd/api
+ok courses/cmd/asr-worker
+ok courses/cmd/media-worker
+ok courses/cmd/migrate
+ok courses/internal/adminstats/adapters/http
+ok courses/internal/adminstats/domain
+ok courses/internal/clientlog/adapters/http
+ok courses/internal/clientlog/domain
+ok courses/internal/contracts/access
+ok courses/internal/contracts/language
+ok courses/internal/contracts/rating
+ok courses/internal/course/adapters/http
+ok courses/internal/course/adapters/postgres
+ok courses/internal/course/application
+ok courses/internal/course/domain
+ok courses/internal/discussion/adapters/http
+ok courses/internal/discussion/application
+ok courses/internal/discussion/domain
+ok courses/internal/identity/adapters/argon2id
+ok courses/internal/identity/adapters/http
+ok courses/internal/identity/adapters/identitycrypto
+ok courses/internal/identity/adapters/mail
+ok courses/internal/identity/adapters/redis
+ok courses/internal/identity/application
+ok courses/internal/identity/domain
+ok courses/internal/image/adapters/filesystem
+ok courses/internal/image/adapters/http
+ok courses/internal/image/application
+ok courses/internal/image/domain
+ok courses/internal/media/adapters/asynq
+ok courses/internal/media/adapters/ffmpeg
+ok courses/internal/media/adapters/filesystem
+ok courses/internal/media/adapters/http
+ok courses/internal/media/adapters/tus
+ok courses/internal/media/application
+ok courses/internal/media/domain
+ok courses/internal/openapispec
+ok courses/internal/orders/adapters/http
+ok courses/internal/orders/adapters/wayforpay
+ok courses/internal/orders/application
+ok courses/internal/orders/domain
+ok courses/internal/platform/openapigen
+ok courses/internal/playback/adapters/http
+ok courses/internal/playback/adapters/postgres
+ok courses/internal/playback/adapters/redis
+ok courses/internal/playback/application
+ok courses/internal/playback/domain
+ok courses/internal/testsupport/containers
+ok courses/internal/testsupport/coursevisibility
+ok courses/internal/transcript/adapters/asynq
+ok courses/internal/transcript/adapters/http
+ok courses/internal/transcript/adapters/media
+ok courses/internal/transcript/adapters/whisper
+ok courses/internal/transcript/application
+ok courses/internal/transcript/domain
+ok courses/platform/architecture
+ok courses/platform/config
+ok courses/platform/httpserver
+ok courses/platform/jsonbody
+ok courses/platform/mail
+ok courses/platform/observability
+ok courses/cmd/api
+ok courses/cmd/asr-worker
+ok courses/cmd/media-worker
+ok courses/cmd/migrate
+ok courses/internal/adminstats/adapters/http
+ok courses/internal/adminstats/adapters/postgres
+ok courses/internal/adminstats/domain
+ok courses/internal/clientlog/adapters/http
+ok courses/internal/clientlog/domain
+ok courses/internal/contracts/access
+ok courses/internal/contracts/language
+ok courses/internal/contracts/rating
+ok courses/internal/course/adapters/http
+ok courses/internal/course/adapters/postgres
+ok courses/internal/course/application
+ok courses/internal/course/domain
+ok courses/internal/discussion/adapters/http
+ok courses/internal/discussion/adapters/postgres
+ok courses/internal/discussion/application
+ok courses/internal/discussion/domain
+ok courses/internal/identity/adapters/argon2id
+ok courses/internal/identity/adapters/http
+ok courses/internal/identity/adapters/identitycrypto
+ok courses/internal/identity/adapters/mail
+ok courses/internal/identity/adapters/postgres
+ok courses/internal/identity/adapters/redis
+ok courses/internal/identity/application
+ok courses/internal/identity/domain
+ok courses/internal/image/adapters/filesystem
+ok courses/internal/image/adapters/http
+ok courses/internal/image/adapters/postgres
+ok courses/internal/image/application
+ok courses/internal/image/domain
+ok courses/internal/media/adapters/asynq
+ok courses/internal/media/adapters/ffmpeg
+ok courses/internal/media/adapters/filesystem
+ok courses/internal/media/adapters/http
+ok courses/internal/media/adapters/postgres
+ok courses/internal/media/adapters/tus
+ok courses/internal/media/application
+ok courses/internal/media/domain
+ok courses/internal/openapispec
+ok courses/internal/orders/adapters/http
+ok courses/internal/orders/adapters/postgres
+ok courses/internal/orders/adapters/wayforpay
+ok courses/internal/orders/application
+ok courses/internal/orders/domain
+ok courses/internal/platform/openapigen
+ok courses/internal/playback/adapters/http
+ok courses/internal/playback/adapters/postgres
+ok courses/internal/playback/adapters/redis
+ok courses/internal/playback/application
+ok courses/internal/playback/domain
+ok courses/internal/testsupport/containers
+ok courses/internal/testsupport/coursevisibility
+ok courses/internal/testsupport/startup
+ok courses/internal/transcript/adapters/asynq
+ok courses/internal/transcript/adapters/http
+ok courses/internal/transcript/adapters/media
+ok courses/internal/transcript/adapters/postgres
+ok courses/internal/transcript/adapters/whisper
+ok courses/internal/transcript/application
+ok courses/internal/transcript/domain
+ok courses/platform/architecture
+ok courses/platform/config
+ok courses/platform/httpserver
+ok courses/platform/jsonbody
+ok courses/platform/mail
+ok courses/platform/observability
+## e2e-reset
+e2e-reset: postgres-data: removed courses_postgres-data
+e2e-reset: redis-data: removed courses_redis-data
+e2e-reset: media-data: removed courses_media-data
+e2e-reset: project courses done (prometheus-data kept)
+## smoke/drain
+drain-queue: asynq:{media}:* keys before=0 after=0
+drain-queue: asynq:{asr}:* keys before=0 after=0
+sh infrastructure/tests/smoke.sh
+## e2e
+Running 168 tests using 1 worker
+  168 passed (24.2m)
+GATE_EXIT=0 END 2026-11-18 22:51:41
