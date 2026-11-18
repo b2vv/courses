@@ -163,6 +163,7 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			reflect.TypeFor[learningCourseDTO]():            "LearningCourse",
 			reflect.TypeFor[learningModuleDTO]():            "LearningModule",
 			reflect.TypeFor[learningLessonDTO]():            "LearningLesson",
+			reflect.TypeFor[learningAudioTrackDTO]():        "LearningAudioTrack",
 			reflect.TypeFor[transitionAdminCourseRequest](): "AdminCourseStatusRequest",
 			reflect.TypeFor[courseDTO]():                    "Course", reflect.TypeFor[courseDetailDTO](): "CourseDetail",
 			reflect.TypeFor[priceDTO](): "Price", reflect.TypeFor[ratingDTO](): "Rating",
@@ -189,6 +190,7 @@ func OpenAPIContribution() openapigen.ModuleContribution {
 			{Type: reflect.TypeFor[transitionAdminCourseRequest](), Name: "ExpectedUpdatedAt"}: "AdminTimestamp",
 		},
 		NullableFields: map[openapigen.Field]bool{
+			{Type: reflect.TypeFor[learningLessonDTO](), Name: "AudioTracks"}:              false,
 			{Type: reflect.TypeFor[adminCoursePageDTO](), Name: "Items"}:                   false,
 			{Type: reflect.TypeFor[adminCourseTreeDTO](), Name: "Modules"}:                 false,
 			{Type: reflect.TypeFor[adminModuleDTO](), Name: "Lessons"}:                     false,

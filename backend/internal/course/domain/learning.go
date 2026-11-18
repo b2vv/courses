@@ -21,7 +21,13 @@ const (
 // LearningVideoStates contains the ordered non-absent states emitted to clients.
 var LearningVideoStates = []LearningVideoState{VideoProcessing, VideoReady, VideoFailed}
 
+type LearningAudioTrack struct {
+	Language  string
+	IsDefault bool
+}
+
 type LearningLesson struct {
+	AudioTracks    []LearningAudioTrack
 	ID             string
 	Title          string
 	VideoState     LearningVideoState

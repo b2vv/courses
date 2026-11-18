@@ -23,6 +23,7 @@ import type {
   PlaybackSession,
 } from '../domain/playback';
 import type {
+  CaptionSelection,
   CreatePlaybackMedia,
   PlaybackAudioTrack,
   PlaybackMedia,
@@ -36,6 +37,8 @@ import {
   type PlayerPreferences,
 } from '../application/preferences';
 import { PlayerSettingsMenu } from './PlayerSettingsMenu';
+import { exactAudioTrackIndex, predictedAudioLanguage } from '../application/audio-language';
+import type { CaptionSelectionEvent } from '../application/caption-state';
 
 export type LessonPlayerActions = {
   play(): Promise<PlaybackResult<PlaybackSession>>;
@@ -44,10 +47,17 @@ export type LessonPlayerActions = {
 };
 
 type LessonPlayerProps = {
+  readonly mount: symbol;
   readonly courseTitle: string;
   readonly lesson: LearningLesson;
   readonly actions: LessonPlayerActions;
   readonly createMedia: CreatePlaybackMedia;
+  /** Selection identity belongs to this mount and its monotonically increasing load generation. */
+  readonly onCaptionSelection?: (event: CaptionSelectionEvent) => void;
+  /** WebVTT is supplied only for a matching, confirmed transcript after load. */
+  readonly captions?: string;
+  readonly captionsLanguage?: string;
+  readonly captionsNoneForTrack?: boolean;
   /**
    * The channel the transcript needs, handed out rather than read from the outside.
    *
@@ -56,14 +66,6 @@ type LessonPlayerProps = {
    * else is worse than one that is unavailable. Position travels through a ref-style callback so
    * that a transcript re-rendering on every frame cannot re-render the player with it.
    */
-  /**
-   * WebVTT for this lesson, or undefined when there is no transcript. It becomes a real <track>,
-   * which is what finally removes the jsx-a11y suppression this file carried since Phase 6: the
-   * suppression said an empty track would be misleading, and it was right — the fix was never to
-   * silence the rule but to have captions.
-   */
-  readonly captions?: string;
-  readonly captionsLanguage?: string;
   readonly onPlaybackChannel?: (channel: {
     readonly positionMs: number;
     readonly seek: ((positionMs: number) => void) | null;
@@ -128,24 +130,40 @@ function audioTrackOptions(tracks: readonly PlaybackAudioTrack[]) {
 }
 
 export function LessonPlayer({
+  mount,
   courseTitle,
   lesson,
   actions,
   createMedia,
   captions,
   captionsLanguage,
+  captionsNoneForTrack = false,
   onPlaybackChannel,
+  onCaptionSelection,
   nextLesson,
   onPlayNext,
 }: LessonPlayerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trackRef = useRef<HTMLTrackElement>(null);
+  const [captionSelection, setCaptionSelection] = useState<CaptionSelection>({ state: 'pending' });
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const attachVideo = useCallback((video: HTMLVideoElement | null) => {
     videoRef.current = video;
     setVideoElement(video);
   }, []);
   const mediaRef = useRef<PlaybackMedia | undefined>(undefined);
+  const generationRef = useRef(0);
+  const captionSelectionRef = useRef(onCaptionSelection);
+  useEffect(() => {
+    captionSelectionRef.current = onCaptionSelection;
+  }, [onCaptionSelection]);
+  const loadMedia = useCallback((source: string) => {
+    const media = mediaRef.current;
+    if (media === undefined) return;
+    generationRef.current += 1;
+    media.load(source);
+  }, []);
   const sessionRef = useRef<PlaybackSession | undefined>(undefined);
   const clientSeqRef = useRef(lesson.clientSeq + 1);
   // A finished lesson reopens from the beginning (A25). The saved position stays in
@@ -292,7 +310,7 @@ export function LessonPlayer({
           sessionRef.current = result.value;
           clientSeqRef.current = result.value.clientSeq + 1;
           heartbeatStoppedRef.current = false;
-          mediaRef.current?.load(result.value.mediaPath);
+          loadMedia(result.value.mediaPath);
           return;
         }
       })().finally(() => {
@@ -302,7 +320,7 @@ export function LessonPlayer({
       mintRef.current = mint;
       return mint;
     },
-    [actions, terminalFailure],
+    [actions, loadMedia, terminalFailure],
   );
 
   const queueHeartbeatRef = useRef<
@@ -356,13 +374,13 @@ export function LessonPlayer({
         mediaRef.current?.stopLoad();
         mediaRetryTimerRef.current = setTimeout(() => {
           pendingTimeRef.current = resumeAt;
-          mediaRef.current?.load(session.mediaPath);
+          loadMedia(session.mediaPath);
         }, directive.delayMs);
         return;
       }
       terminalFailure('unavailable', directive.refresh);
     },
-    [actions, loadSession, terminalFailure],
+    [actions, loadMedia, loadSession, terminalFailure],
   );
 
   useEffect(() => {
@@ -387,6 +405,10 @@ export function LessonPlayer({
         onLevels: setQualities,
         onAudioTracks: setAudioTracks,
         onAudioTrack: setSelectedAudio,
+        onCaptionSelection(selection) {
+          setCaptionSelection(selection);
+          captionSelectionRef.current?.({ mount, generation: generationRef.current, selection });
+        },
         onError: handleMediaError,
       },
       { audioLanguage: audioLanguageRef.current },
@@ -405,7 +427,7 @@ export function LessonPlayer({
       setAudioTracks([]);
       setSelectedAudio(null);
     };
-  }, [createMedia, handleMediaError, lesson.videoState, videoElement]);
+  }, [createMedia, handleMediaError, lesson.videoState, videoElement, mount]);
 
   const heartbeatNow = useCallback(
     async (reason: PlaybackHeartbeatReason): Promise<'continue' | 'stop'> => {
@@ -593,12 +615,10 @@ export function LessonPlayer({
   // Drive the caption track from the remembered toggle rather than the <track default> attribute, so
   // the student's last choice wins. Re-applied when the track element appears (captions prop set).
   useEffect(() => {
-    const video = videoRef.current;
-    if (video === null) return;
-    const track = video.textTracks[0];
+    const track = trackRef.current?.track;
     if (track === undefined) return;
     track.mode = captionsOn && captions !== undefined ? 'showing' : 'hidden';
-  }, [captionsOn, captions, videoElement]);
+  }, [captionsOn, captions, captionsLanguage, videoElement]);
 
   // A brief ±10s indicator over the frame, the on-screen echo of a keyboard/gesture skip (YouTube's
   // double-tap ripple, Apple TV's skip badge). Purely decorative; the slider announces real seeks.
@@ -885,9 +905,8 @@ export function LessonPlayer({
 
   const audioOptions = audioTrackOptions(audioTracks);
   const shownAudio =
-    selectedAudio ??
-    audioTracks.find((track) => track.isDefault)?.language ??
-    audioTracks[0]?.language ??
+    audioTracks[exactAudioTrackIndex(audioTracks, selectedAudio)]?.language ??
+    predictedAudioLanguage(audioTracks, null) ??
     '';
 
   const speedOptions = PLAYBACK_RATES.map((value) => ({
@@ -897,7 +916,15 @@ export function LessonPlayer({
   const boundedDuration = Math.max(1, duration);
 
   return (
-    <section className="lesson-player" aria-labelledby="lesson-player-title">
+    <section
+      className="lesson-player"
+      aria-labelledby="lesson-player-title"
+      data-caption-selection={
+        captionSelection.state === 'confirmed'
+          ? `confirmed:${captionSelection.language.toLowerCase()}`
+          : captionSelection.state
+      }
+    >
       <header className="lesson-player-head">
         <p className="lesson-player-course">{courseTitle}</p>
         <h1 id="lesson-player-title">{lesson.title}</h1>
@@ -986,13 +1013,15 @@ export function LessonPlayer({
             }}
             playsInline
           >
-            {captionsUrl === null ? null : (
+            {captionsUrl === null || captionsLanguage === undefined ? null : (
               // No `default`: the caption track starts hidden and the remembered toggle in the gear
               // menu drives its mode (see the captions effect above), so the student's choice wins.
               <track
+                key={captionsLanguage}
+                ref={trackRef}
                 kind="captions"
                 src={captionsUrl}
-                srcLang={captionsLanguage ?? 'uk'}
+                srcLang={captionsLanguage}
                 label={t('learn.transcript.heading')}
               />
             )}
@@ -1242,7 +1271,10 @@ export function LessonPlayer({
                       },
                     }
                   : {})}
-                {...(captionsUrl === null
+                {...(captionsNoneForTrack
+                  ? { captionsNoneForTrack: t('learn.video.captionsNoneForTrack') }
+                  : {})}
+                {...(captionsUrl === null || captionsNoneForTrack
                   ? {}
                   : {
                       captions: {

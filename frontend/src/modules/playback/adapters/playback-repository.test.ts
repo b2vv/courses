@@ -5,6 +5,7 @@ import { setupServer } from 'msw/node';
 import { primeAv1Probe, takeAv1ProbeResult } from '../../../app/composition/av1-probe';
 import { apiOrigin } from '../../../adapters/api/api-origin';
 import { createApiPlaybackRepository } from './playback-repository';
+import { learningCourseSchema } from './playback-schema';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
 const playbackId = '0123456789abcdef0123456789abcdef';
@@ -36,6 +37,10 @@ const course = {
           position: 12,
           completed: false,
           clientSeq: 4,
+          audioTracks: [
+            { language: 'en-US', isDefault: true },
+            { language: 'uk', isDefault: false },
+          ],
           isPreview: false,
           locked: false,
         },
@@ -228,4 +233,52 @@ test.each([
     code === null ? { ok: true, value: undefined } : { ok: false, error: { code } },
   );
   expect(requestBody).toEqual(heartbeat);
+});
+
+test('learning schema requires audioTracks and preserves valid language case and default flags', () => {
+  expect(learningCourseSchema.safeParse(course).success).toBe(true);
+  const lesson = course.modules[0].lessons[0];
+  const withLesson = (value: unknown) => ({
+    ...course,
+    modules: [{ ...course.modules[0], lessons: [value] }],
+  });
+  const { audioTracks: _tracks, ...missing } = lesson;
+  expect(learningCourseSchema.safeParse(withLesson(missing)).success).toBe(false);
+  expect(learningCourseSchema.safeParse(withLesson({ ...lesson, audioTracks: [] })).success).toBe(
+    true,
+  );
+  expect(learningCourseSchema.safeParse(withLesson({ ...lesson, audioTracks: null })).success).toBe(
+    false,
+  );
+  for (const language of ['e', 'en_US', '-en', 'en--US', '123', 'en-123456789', 'en-'.repeat(12)]) {
+    expect(
+      learningCourseSchema.safeParse(
+        withLesson({
+          ...lesson,
+          audioTracks: [{ language, isDefault: true }],
+        }),
+      ).success,
+      language,
+    ).toBe(false);
+  }
+  expect(
+    learningCourseSchema.safeParse(
+      withLesson({
+        ...lesson,
+        audioTracks: [{ language: 'en', isDefault: true, extra: true }],
+      }),
+    ).success,
+  ).toBe(false);
+  // The media domain imposes no per-asset track-count cap.
+  expect(
+    learningCourseSchema.safeParse(
+      withLesson({
+        ...lesson,
+        audioTracks: Array.from({ length: 17 }, (_, index) => ({
+          language: `en-x-${index}`,
+          isDefault: index === 0,
+        })),
+      }),
+    ).success,
+  ).toBe(true);
 });

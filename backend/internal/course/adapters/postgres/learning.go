@@ -41,7 +41,8 @@ const getLearningCourse = `SELECT
   current_video.duration_seconds,
   COALESCE(progress.position_seconds, 0)::double precision,
   (progress.completed_at IS NOT NULL),
-  COALESCE(progress.client_seq, 0)
+  COALESCE(progress.client_seq, 0),
+  current_audio.tracks
 FROM courses
 LEFT JOIN course_grants AS grants
   ON grants.user_id = $1::text::uuid AND grants.course_id = courses.id
@@ -55,12 +56,20 @@ LEFT JOIN course_lessons AS lessons ON lessons.module_id = modules.id
 LEFT JOIN LATERAL (
   -- This is the sorting form, unlike transcript, playback and discussion, which need only the
   -- playable ready asset. It reports the best state for the learning UI during an upload.
-  SELECT assets.state, assets.duration_seconds
+  SELECT assets.id, assets.state, assets.duration_seconds
   FROM video_assets AS assets
   WHERE assets.lesson_id = lessons.id AND assets.evicted_at IS NULL
   ORDER BY CASE WHEN assets.state = 'ready' THEN 0 ELSE 1 END, assets.generation DESC, assets.id
   LIMIT 1
 ) AS current_video ON true
+LEFT JOIN LATERAL (
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'language', tracks.language, 'isDefault', tracks.is_default
+  ) ORDER BY tracks.id), '[]'::jsonb) AS tracks
+  FROM audio_tracks AS tracks
+  WHERE tracks.video_asset_id = current_video.id
+    AND current_video.state = 'ready' AND tracks.state = 'ready'
+) AS current_audio ON true
 LEFT JOIN lesson_progress AS progress
   ON progress.user_id = $1::text::uuid AND progress.lesson_id = lessons.id
 WHERE courses.slug = $2
@@ -94,13 +103,17 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			position                                                       float64
 			completed                                                      bool
 			clientSequence                                                 int64
+			audioTracks                                                    []struct {
+				Language  string `json:"language"`
+				IsDefault bool   `json:"isDefault"`
+			}
 		)
 		if err := rows.Scan(
 			&courseRow.id, &courseRow.slug, &courseRow.title, &courseRow.summary, &courseRow.description, &courseRow.status,
 			&courseRow.createdAt, &courseRow.updatedAt, &courseRow.publishedAt, &courseRow.instructorID,
 			&courseRow.priceMinor, &courseRow.currency, &courseRow.membership, &courseRow.reviewCount, &courseRow.reviewStarsSum, &courseRow.preview,
 			&storedModuleID, &moduleTitle, &lessonID, &lessonTitle, &videoState,
-			&duration, &position, &completed, &clientSequence,
+			&duration, &position, &completed, &clientSequence, &audioTracks,
 		); err != nil {
 			return domain.LearningCourse{}, persistenceError(err)
 		}
@@ -131,10 +144,14 @@ func (repository *Repository) GetLearningCourse(ctx context.Context, userID, slu
 			if durationValue.Valid {
 				durationSeconds = &durationValue.Float64
 			}
+			tracks := make([]domain.LearningAudioTrack, 0, len(audioTracks))
+			for _, track := range audioTracks {
+				tracks = append(tracks, domain.LearningAudioTrack{Language: track.Language, IsDefault: track.IsDefault})
+			}
 			lesson := domain.NewLearningLesson(domain.LearningLesson{
 				ID: lessonID, Title: lessonTitle, VideoState: domain.LearningVideoState(videoState),
 				Position: position, Completed: completed, ClientSequence: clientSequence,
-				IsPreview: courseRow.preview,
+				IsPreview: courseRow.preview, AudioTracks: tracks,
 			}, durationSeconds)
 			result.Modules[len(result.Modules)-1].Lessons = append(result.Modules[len(result.Modules)-1].Lessons, lesson)
 		}

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import axe from 'axe-core';
+import { z } from 'zod';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
@@ -308,6 +309,36 @@ test.describe('with a real two-second video', () => {
       )
       .toBe('ready');
 
+    // O7 predicts the embedded language before Play; make it match the authored transcript.
+    const videosResponse = await page.request.get(`/api/v1/admin/courses/${course.id}/videos`);
+    expect(videosResponse.status()).toBe(200);
+    const video = z
+      .object({
+        items: z.array(z.object({ videoId: z.string(), lessonId: z.string() })),
+      })
+      .parse(await videosResponse.json())
+      .items.find((item) => item.lessonId === videoLessonID);
+    if (!video) throw new Error('Missing Ready video');
+    const tracksResponse = await page.request.get(
+      `/api/v1/admin/videos/${video.videoId}/audio-tracks`,
+    );
+    expect(tracksResponse.status()).toBe(200);
+    const embedded = z
+      .object({
+        items: z.array(z.object({ trackId: z.string(), kind: z.string() })),
+      })
+      .parse(await tracksResponse.json())
+      .items.find((track) => track.kind === 'embedded');
+    if (!embedded) throw new Error('Missing embedded track');
+    const patched = await page.request.patch(
+      `/api/v1/admin/videos/${video.videoId}/audio-tracks/${embedded.trackId}`,
+      {
+        headers,
+        data: { language: 'uk', label: 'Українська' },
+      },
+    );
+    expect(patched.status(), await patched.text()).toBe(200);
+
     const publishedResponse = await page.request.post(`/api/v1/admin/courses/${course.id}/status`, {
       data: { expectedUpdatedAt: tree.updatedAt, status: 'published' },
       headers,
@@ -346,22 +377,40 @@ test.describe('with a real two-second video', () => {
       // THE EXTERNAL ANCHOR. A round trip through our own parser proves only that we agree with
       // ourselves; here the browser parses the file, so the judge is not our code. This is the one
       // measurement in the phase that passes through none of it.
-      const captions = await studentPage.evaluate(async () => {
-        const video = document.querySelector('video');
-        if (video === null) return { tracks: 0, cues: 0, kind: '' };
-        const track = video.textTracks[0];
-        if (track === undefined) return { tracks: video.textTracks.length, cues: 0, kind: '' };
-        track.mode = 'showing';
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
-        return { tracks: video.textTracks.length, cues: track.cues?.length ?? 0, kind: track.kind };
-      });
-      expect(captions.tracks, 'the video carries a caption track').toBe(1);
-      expect(captions.kind).toBe('captions');
-      expect(captions.cues, 'the browser parsed our WebVTT into cues').toBe(2);
-
-      // Seeking becomes possible once the duration is known, and only then does a line become a
-      // control. Keyboard traversal over real lines is measurable exactly here.
+      await expect(studentPage.locator('video track')).toHaveCount(0);
       await studentPage.getByRole('button', { name: 'Відтворити' }).click();
+      await expect(studentPage.locator('section.lesson-player')).toHaveAttribute(
+        'data-caption-selection',
+        'confirmed:uk',
+      );
+      await studentPage.getByRole('button', { name: 'Налаштування' }).click();
+      const captionsToggle = studentPage.getByRole('switch', { name: 'Субтитри', exact: true });
+      await studentPage.locator('label').filter({ has: captionsToggle }).click();
+      await expect(captionsToggle).toBeChecked();
+      await studentPage.keyboard.press('Escape');
+      await expect
+        .poll(() =>
+          studentPage.evaluate(() => {
+            const element = document.querySelector('video track');
+            if (!(element instanceof HTMLTrackElement)) return null;
+            return {
+              language: element.srclang,
+              mode: element.track.mode,
+              kind: element.track.kind,
+              cues: Array.from(element.track.cues ?? []).map((cue) =>
+                cue instanceof VTTCue ? cue.text : '',
+              ),
+            };
+          }),
+        )
+        .toEqual({
+          language: 'uk',
+          mode: 'showing',
+          kind: 'captions',
+          cues: ['Перша секунда', 'Друга секунда'],
+        });
+
+      // Seeking becomes possible once the duration is known.
       const firstLine = transcript.getByRole('button', { name: 'Перейти до 00:00' });
       await expect(firstLine).toBeVisible();
       await transcript.getByRole('searchbox').focus();

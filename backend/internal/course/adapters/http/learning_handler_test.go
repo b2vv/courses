@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -334,5 +335,63 @@ func learningHTTPFixtureWithLessons(lessons []domain.LearningLesson) domain.Lear
 		},
 		InstructorID: learningHTTPOwnerID,
 		Modules:      []domain.LearningModule{{ID: learningHTTPModuleID, Title: "Module", Lessons: lessons}},
+	}
+}
+
+func TestLearningHTTPAudioTracksContract(t *testing.T) {
+	for _, tracks := range [][]domain.LearningAudioTrack{
+		nil,
+		{{Language: "en-US", IsDefault: true}, {Language: "uk", IsDefault: false}},
+	} {
+		name := "empty"
+		if len(tracks) != 0 {
+			name = "populated"
+		}
+		t.Run(name, func(t *testing.T) {
+			course := learningHTTPFixture()
+			if len(tracks) != 0 {
+				course.Modules[0].Lessons[0].VideoState = domain.VideoReady
+			}
+			course.Modules[0].Lessons[0].AudioTracks = tracks
+			repository := &learningReadRepository{course: course}
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/learn/courses/learning-course", nil)
+			response := httptest.NewRecorder()
+			learningHTTPHandler(repository, learningAuthenticated(httpserver.Actor{UserID: learningHTTPViewerID, Role: "student"})).ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			var body struct {
+				Modules []struct {
+					Lessons []struct {
+						AudioTracks json.RawMessage `json:"audioTracks"`
+					} `json:"lessons"`
+				} `json:"modules"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			wire := body.Modules[0].Lessons[0].AudioTracks
+			if len(tracks) == 0 {
+				if string(wire) != "[]" {
+					t.Fatalf("audioTracks=%s want []", wire)
+				}
+			} else {
+				var got []struct {
+					Language  string `json:"language"`
+					IsDefault bool   `json:"isDefault"`
+				}
+				if err := json.Unmarshal(wire, &got); err != nil {
+					t.Fatal(err)
+				}
+				mapped := make([]domain.LearningAudioTrack, 0, len(got))
+				for _, track := range got {
+					mapped = append(mapped, domain.LearningAudioTrack{Language: track.Language, IsDefault: track.IsDefault})
+				}
+				if !reflect.DeepEqual(mapped, tracks) {
+					t.Fatalf("audioTracks=%s want %+v", wire, tracks)
+				}
+			}
+			assertLearningHTTPContract(t, request, response, true)
+		})
 	}
 }

@@ -9,6 +9,7 @@ export * from './domain/draft';
 
 // Application: recovery offer/snapshot/baseline and capture directives.
 export * from './application/recovery';
+export * from './application/panel-state';
 
 // Ports: the I/O contracts this feature depends on.
 export type { TranscriptDraft, TranscriptRepository } from './ports/TranscriptRepository';

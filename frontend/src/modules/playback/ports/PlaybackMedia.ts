@@ -17,12 +17,19 @@ export type PlaybackMediaError = {
   readonly url: string | undefined;
 };
 
+export type CaptionSelection =
+  | { readonly state: 'pending'; readonly requested?: string }
+  | { readonly state: 'confirmed'; readonly language: string }
+  | { readonly state: 'unavailable' };
+
 export type PlaybackMediaCallbacks = {
   onReady(): void;
   onLevels(levels: readonly PlaybackQuality[]): void;
   onAudioTracks(tracks: readonly PlaybackAudioTrack[]): void;
   /** The track the player has selected (not necessarily audible yet). */
   onAudioTrack(language: string): void;
+  /** Latest selected language, confirmed only when audio under the playhead has that language. */
+  onCaptionSelection(selection: CaptionSelection): void;
   onError(error: PlaybackMediaError): void;
 };
 
