@@ -1011,5 +1011,13 @@ States S1 transcript, S2 loading, S3 none-for-track + gear row, S4 error + retry
 Evidence pruned to keep the tree small: composite contact sheets and the dark copies of the unchanged S1/S5 dropped,
 JPEG q45 (7.4 MB). All 3 design-pass courses deleted (leftover 0).
 
-### Gate
-The ordered `make check` on the final revision is pending the owner's consent (it resets the dev volumes).
+### Gate — ordered `make check` on `5b4569a3` (owner: "Запускай make check", 2026-11-18)
+- **`GATE_EXIT=0`**, 09:41:33 → 10:13:19, Kiri stack, `COMPOSE_FILE=docker-compose.yml:…/local-runtime.override.json`.
+- `e2e-reset` really removed `courses_postgres-data`, `courses_redis-data`, `courses_media-data` (log lines 738–740).
+- Frontend: format-check, lint, typecheck clean; rstest **1435 passed, 0 failed** (default 5 s timeout).
+- Go: **130 packages `ok`**, 0 FAIL; `make integration` green; `check-generated` clean.
+- **e2e: 166 passed, 0 failed, 0 skipped/flaky/did not run (25.1 min)**, including all 15 `subtitles.spec.ts` rows.
+- **§4 rows:** M25 (existing e2e green) and M26 (design-pass) now proven on the final revision; MS4 has no open row.
+- Limits (plan-ms4 §6): up to 1.5 s without captions after a cross-language replacement near the playhead; native HLS
+  unit-tested only; an orphan transcript is never shown to the learner; a Ready manifest without audio stays loading.
+  Existing debt recorded above: +5 px overflow of the normal transcript panel at 390 px / 200 % text.
