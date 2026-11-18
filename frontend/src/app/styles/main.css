@@ -1275,6 +1275,12 @@ nav a {
 .admin-video-field p {
   margin: 0;
 }
+.admin-video-filename {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .admin-video-field .ui-progress {
   inline-size: min(100%, 32rem);
 }

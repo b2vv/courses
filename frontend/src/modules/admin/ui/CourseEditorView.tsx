@@ -34,6 +34,7 @@ import {
   Skeleton,
   TextArea,
   TextField,
+  Tooltip,
 } from '../../../presentation/ui';
 import { CoursePriceField } from './CoursePriceField';
 import { LessonLanguageTabs } from './LessonLanguageTabs';
@@ -312,6 +313,105 @@ function PreviewField({
   );
 }
 
+type MoveDirection = 'up' | 'down';
+
+function MoveRowButton({
+  direction,
+  label,
+  onMove,
+}: {
+  direction: MoveDirection;
+  label: string;
+  onMove: () => void;
+}) {
+  return (
+    <Tooltip content={label}>
+      <Button
+        type="button"
+        variant="secondary"
+        aria-label={label}
+        data-move={direction}
+        onPress={onMove}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d={direction === 'up' ? 'M8 13V3M3 8l5-5 5 5' : 'M8 3v10M3 8l5 5 5-5'} />
+        </svg>
+      </Button>
+    </Tooltip>
+  );
+}
+
+function focusMovedRow(container: HTMLElement | null, id: string, direction: MoveDirection) {
+  const row = container?.querySelector(`[data-row-id="${id}"]`);
+  const opposite = direction === 'up' ? 'down' : 'up';
+  const button =
+    row?.querySelector(
+      `:scope > .admin-row-actions [data-move="${direction}"], :scope > .admin-lesson-body > .admin-row-actions [data-move="${direction}"]`,
+    ) ??
+    row?.querySelector(
+      `:scope > .admin-row-actions [data-move="${opposite}"], :scope > .admin-lesson-body > .admin-row-actions [data-move="${opposite}"]`,
+    );
+  if (button instanceof HTMLElement) button.focus();
+}
+
+function DeleteRowButton({
+  label,
+  confirmLabel,
+  isSaved,
+  onRemove,
+}: {
+  label: string;
+  confirmLabel: string;
+  isSaved: boolean;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!isSaved)
+    return (
+      <Button type="button" variant="danger" onPress={onRemove}>
+        {label}
+      </Button>
+    );
+  return (
+    <Dialog
+      triggerLabel={label}
+      trigger={
+        <Button type="button" variant="danger">
+          {label}
+        </Button>
+      }
+      title={label}
+      closeLabel={t('common.cancel')}
+    >
+      {(close) => (
+        <>
+          <p>{t('administration.deleteRowHint')}</p>
+          <Button
+            type="button"
+            variant="danger"
+            onPress={() => {
+              close();
+              onRemove();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 function LessonFields({
   form,
   courseId,
@@ -349,15 +449,28 @@ function LessonFields({
     name: `modules.${moduleIndex}.lessons`,
     keyName: 'formKey',
   });
+  const rows = useRef<HTMLDivElement>(null);
+  function move(index: number, direction: MoveDirection) {
+    const id = lessons.fields[index]?.id;
+    flushSync(() => lessons.move(index, index + (direction === 'up' ? -1 : 1)));
+    if (id !== undefined) focusMovedRow(rows.current, id, direction);
+  }
+  function remove(index: number) {
+    flushSync(() => lessons.remove(index));
+    const count = form.getValues(`modules.${moduleIndex}.lessons`).length;
+    if (count > 0)
+      form.setFocus(`modules.${moduleIndex}.lessons.${Math.min(index, count - 1)}.title`);
+    else rows.current?.querySelector<HTMLButtonElement>(':scope > [data-add-row]')?.focus();
+  }
   const lessonCount = form
     .watch('modules')
     .reduce((total, module) => total + module.lessons.length, 0);
 
   return (
-    <div className="admin-lessons">
+    <div className="admin-lessons" ref={rows}>
       {lessons.fields.map((lesson, lessonIndex) => {
         return (
-          <fieldset className="admin-lesson" key={lesson.formKey}>
+          <fieldset className="admin-lesson" key={lesson.formKey} data-row-id={lesson.id}>
             <legend>
               <h3>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</h3>
             </legend>
@@ -457,34 +570,35 @@ function LessonFields({
                 </section>
               )}
               <div className="admin-row-actions">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  isDisabled={lessonIndex === 0}
-                  onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
-                >
-                  {t('administration.moveLessonUp', {
+                {lessonIndex > 0 && (
+                  <MoveRowButton
+                    direction="up"
+                    label={t('administration.moveLessonUp', {
+                      lesson: lessonIndex + 1,
+                      module: moduleIndex + 1,
+                    })}
+                    onMove={() => move(lessonIndex, 'up')}
+                  />
+                )}
+                {lessonIndex < lessons.fields.length - 1 && (
+                  <MoveRowButton
+                    direction="down"
+                    label={t('administration.moveLessonDown', {
+                      lesson: lessonIndex + 1,
+                      module: moduleIndex + 1,
+                    })}
+                    onMove={() => move(lessonIndex, 'down')}
+                  />
+                )}
+                <DeleteRowButton
+                  label={t('administration.deleteLesson', {
                     lesson: lessonIndex + 1,
                     module: moduleIndex + 1,
                   })}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  isDisabled={lessonIndex === lessons.fields.length - 1}
-                  onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
-                >
-                  {t('administration.moveLessonDown', {
-                    lesson: lessonIndex + 1,
-                    module: moduleIndex + 1,
-                  })}
-                </Button>
-                <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
-                  {t('administration.deleteLesson', {
-                    lesson: lessonIndex + 1,
-                    module: moduleIndex + 1,
-                  })}
-                </Button>
+                  confirmLabel={t('administration.confirmDeleteLesson')}
+                  isSaved={savedLessonIds.has(lesson.id)}
+                  onRemove={() => remove(lessonIndex)}
+                />
               </div>
             </div>
           </fieldset>
@@ -493,6 +607,7 @@ function LessonFields({
       <Button
         type="button"
         variant="secondary"
+        data-add-row
         isDisabled={lessonCount >= 120}
         onPress={() => {
           const id = newLessonId();
@@ -529,6 +644,18 @@ function ModuleFields({
 }) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
+  const rows = useRef<HTMLElement>(null);
+  function move(index: number, direction: MoveDirection) {
+    const id = modules.fields[index]?.id;
+    flushSync(() => modules.move(index, index + (direction === 'up' ? -1 : 1)));
+    if (id !== undefined) focusMovedRow(rows.current, id, direction);
+  }
+  function remove(index: number) {
+    flushSync(() => modules.remove(index));
+    const count = form.getValues('modules').length;
+    if (count > 0) form.setFocus(`modules.${Math.min(index, count - 1)}.title`);
+    else rows.current?.querySelector<HTMLButtonElement>(':scope > [data-add-row]')?.focus();
+  }
 
   const [expanded, updateExpanded] = useState<Record<string, boolean>>(() => {
     const ids = form
@@ -540,17 +667,16 @@ function ModuleFields({
     updateExpanded((current) => ({ ...current, [id]: value }));
 
   return (
-    <section className="admin-program ui-card" aria-labelledby="course-program-heading">
+    <section className="admin-program ui-card" aria-labelledby="course-program-heading" ref={rows}>
       <div className="admin-section-heading">
         <div>
-          <p className="eyebrow">{t('administration.structure')}</p>
           <h2 id="course-program-heading">{t('administration.program')}</h2>
         </div>
         <span>{t('administration.moduleCount', { count: modules.fields.length })}</span>
       </div>
       <div className="admin-modules">
         {modules.fields.map((module, moduleIndex) => (
-          <fieldset className="admin-module" key={module.formKey}>
+          <fieldset className="admin-module" key={module.formKey} data-row-id={module.id}>
             <legend>{t('administration.moduleNumber', { number: moduleIndex + 1 })}</legend>
             <StringField
               control={form.control}
@@ -574,25 +700,28 @@ function ModuleFields({
               onTranscriptKnown={onTranscriptKnown}
             />
             <div className="admin-row-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={moduleIndex === 0}
-                onPress={() => modules.move(moduleIndex, moduleIndex - 1)}
-              >
-                {t('administration.moveModuleUp', { number: moduleIndex + 1 })}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={moduleIndex === modules.fields.length - 1}
-                onPress={() => modules.move(moduleIndex, moduleIndex + 1)}
-              >
-                {t('administration.moveModuleDown', { number: moduleIndex + 1 })}
-              </Button>
-              <Button type="button" variant="danger" onPress={() => modules.remove(moduleIndex)}>
-                {t('administration.deleteModule', { number: moduleIndex + 1 })}
-              </Button>
+              {moduleIndex > 0 && (
+                <MoveRowButton
+                  direction="up"
+                  label={t('administration.moveModuleUp', { number: moduleIndex + 1 })}
+                  onMove={() => move(moduleIndex, 'up')}
+                />
+              )}
+              {moduleIndex < modules.fields.length - 1 && (
+                <MoveRowButton
+                  direction="down"
+                  label={t('administration.moveModuleDown', { number: moduleIndex + 1 })}
+                  onMove={() => move(moduleIndex, 'down')}
+                />
+              )}
+              <DeleteRowButton
+                label={t('administration.deleteModule', { number: moduleIndex + 1 })}
+                confirmLabel={t('administration.confirmDeleteModule')}
+                isSaved={form
+                  .getValues(`modules.${moduleIndex}.lessons`)
+                  .some((lesson) => savedLessonIds.has(lesson.id))}
+                onRemove={() => remove(moduleIndex)}
+              />
             </div>
           </fieldset>
         ))}
@@ -600,6 +729,7 @@ function ModuleFields({
       <Button
         type="button"
         variant="secondary"
+        data-add-row
         isDisabled={modules.fields.length >= 40}
         onPress={() => modules.append({ id: newModuleId(), title: '', lessons: [] })}
       >
@@ -914,7 +1044,6 @@ export function CourseEditorView({
                 </section>
                 {course.status === 'draft' && (
                   <section className="ui-card danger-panel" aria-labelledby="course-danger-heading">
-                    <p className="eyebrow">{t('administration.dangerZone')}</p>
                     <h2 id="course-danger-heading">{t('administration.deleteCourse')}</h2>
                     <p>{t('administration.dangerHint')}</p>
                     <Dialog

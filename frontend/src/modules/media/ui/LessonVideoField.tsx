@@ -248,6 +248,7 @@ export function LessonVideoField({
               {t(`administration.video.state.${current.state}`)}
             </output>
           )}
+          {current?.originalName && <p className="admin-video-filename">{current.originalName}</p>}
           {progress !== undefined && (
             <ProgressBar
               label={t('administration.video.uploading')}

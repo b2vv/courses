@@ -3,6 +3,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator } from '@
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authFixtures, authStatePath, trackPageRequests } from './auth';
 import { contractField } from './contract';
+import { openLesson } from './course-editor';
 
 const runNamespace = `e2e-admin-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const adminID = '40000000-0000-4000-8000-000000000003';
@@ -251,6 +252,28 @@ test.describe('with a stored admin session', () => {
           row.getByRole('textbox', { name: `Назва уроку ${number} у модулі 1` }),
         ).toBeVisible();
       }
+      // Ux10: a saved lesson cannot disappear without confirmation; cancel preserves its title.
+      const firstLesson = await openLesson(page, 1, 1);
+      const deleteLesson = firstLesson.getByRole('button', {
+        name: 'Видалити урок 1 у модулі 1',
+        exact: true,
+      });
+      await deleteLesson.click();
+      const confirmation = page.getByRole('dialog', {
+        name: 'Видалити урок 1 у модулі 1',
+        exact: true,
+      });
+      await expect(confirmation).toBeVisible();
+      await expect(
+        confirmation.getByRole('button', { name: 'Підтвердити видалення уроку', exact: true }),
+      ).toBeVisible();
+      await confirmation.getByRole('button', { name: 'Скасувати', exact: true }).click();
+      await expect(confirmation).toBeHidden();
+      await expect(deleteLesson).toBeFocused();
+      await expect(
+        firstLesson.getByRole('textbox', { name: 'Назва уроку 1 у модулі 1' }),
+      ).toHaveValue('First lesson');
+      await expect(page.locator('.admin-lesson')).toHaveCount(2);
       const link = page.getByRole('link', {
         name: 'Редагувати вміст уроку — урок 1, модуль 1',
         exact: true,

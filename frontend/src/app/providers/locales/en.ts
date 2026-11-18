@@ -569,6 +569,7 @@ export const en = {
         label: 'Material name',
         url: 'Link',
         add: 'Add a material',
+        save: 'Save material',
         remove: 'Remove material "{{label}}"',
         errors: {
           invalid_request:
@@ -796,6 +797,9 @@ export const en = {
       archive: 'Archive',
       restore: 'Restore',
       validationSummary: 'Fix the errors in the form',
+      confirmDeleteLesson: 'Confirm lesson deletion',
+      confirmDeleteModule: 'Confirm module deletion',
+      deleteRowHint: 'This row will be removed when you save the course. Continue?',
       confirmDeleteCourse: 'Confirm course deletion',
       deleteCourse: 'Delete draft',
       statusChanged: 'Course status updated.',

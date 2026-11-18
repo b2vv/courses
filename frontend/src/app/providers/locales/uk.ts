@@ -577,6 +577,7 @@ export const uk = {
         label: 'Назва матеріалу',
         url: 'Посилання',
         add: 'Додати матеріал',
+        save: 'Зберегти матеріал',
         remove: 'Видалити матеріал «{{label}}»',
         errors: {
           invalid_request: 'Посилання має починатися з http:// або https:// і не вести в медіа.',
@@ -805,6 +806,9 @@ export const uk = {
       archive: 'Архівувати',
       restore: 'Відновити',
       validationSummary: 'Виправте помилки у формі',
+      confirmDeleteLesson: 'Підтвердити видалення уроку',
+      confirmDeleteModule: 'Підтвердити видалення модуля',
+      deleteRowHint: 'Рядок буде видалено після збереження курсу. Продовжити?',
       confirmDeleteCourse: 'Підтвердити видалення курсу',
       deleteCourse: 'Видалити чернетку',
       statusChanged: 'Статус курсу оновлено.',

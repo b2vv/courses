@@ -34,6 +34,7 @@ import type { CourseEditorVideo } from '../../media';
 import type { LessonLanguageServices } from './LessonLanguageTabs';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
+import { CourseGrantPanel } from './CourseGrantPanel';
 
 const admin: AuthenticatedUser = {
   id: '40000000-0000-4000-8000-000000000003',
@@ -563,6 +564,9 @@ describe('course editor', () => {
     await browser.click(screen.getByRole('button', { name: 'Move lesson 2 in module 2 up' }));
     await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Delete lesson 2 in module 2' }));
+    await browser.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm lesson deletion' }),
+    );
     await browser.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(saved?.modules.map((module) => module.title)).toEqual(['Second module', 'First module']);
@@ -1381,6 +1385,208 @@ describe('U2 lesson rows', () => {
       const heading = screen.getByRole('heading', { name, level: 4 });
       expect(heading.parentElement?.classList.contains('lesson-section-heading')).toBe(true);
       expect(heading.parentElement?.querySelector('p')?.textContent).toBe('Saved immediately');
+    }
+  });
+});
+
+describe('U4 row actions', () => {
+  async function fixture(
+    moduleCount = 1,
+    lessonCount = 3,
+    locale: 'en' | 'uk' = 'en',
+    withPanels = false,
+  ) {
+    const course: CourseTree = {
+      ...tree,
+      modules: Array.from({ length: moduleCount }, (_, m) => ({
+        id: asBrandedId(`10000000-0000-4000-8000-${String(m + 1).padStart(12, '0')}`, 'module'),
+        title: `Module ${m + 1}`,
+        lessons: Array.from({ length: lessonCount }, (_, l) => ({
+          id: asBrandedId(
+            `20000000-0000-4000-8000-${String(m * 10 + l + 1).padStart(12, '0')}`,
+            'lesson',
+          ),
+          title: `Lesson ${l + 1}`,
+          isPreview: false,
+        })),
+      })),
+    };
+    const result = render(
+      <I18nProvider instance={createI18n(locale)}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={null}
+          {...(withPanels
+            ? {
+                onSetPrice: async (current: CourseTree) => current,
+                adminTools: (
+                  <CourseGrantPanel
+                    users={[]}
+                    isUserSearchPending={false}
+                    onSearch={() => {}}
+                    onGrant={async () => null}
+                  />
+                ),
+              }
+            : {})}
+          onSave={async (current, edit) => savedTree(current, edit)}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+        />
+      </I18nProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+    for (const toggle of screen.queryAllByRole('button', {
+      name: /^Expand lesson|^Розгорнути урок/,
+    })) {
+      await user.click(toggle);
+    }
+    return { ...result, user };
+  }
+
+  it.each(['lesson', 'module'] as const)(
+    'Ux09 %s icons retain full names, omit edges and follow the moved row',
+    async (kind) => {
+      const { user } = await fixture(kind === 'module' ? 3 : 1);
+      const name = (position: number, direction: string) =>
+        kind === 'lesson'
+          ? `Move lesson ${position} in module 1 ${direction}`
+          : `Move module ${position} ${direction}`;
+      const title = (position: number) =>
+        kind === 'lesson' ? `Lesson ${position} title in module 1` : `Module ${position} title`;
+      expect(screen.queryByRole('button', { name: name(1, 'up') })).toBeNull();
+      expect(screen.queryByRole('button', { name: name(3, 'down') })).toBeNull();
+      const up = screen.getByRole('button', { name: name(2, 'up') });
+      expect(up.textContent?.trim()).toBe('');
+      expect(up.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+      await user.click(up);
+      expect(screen.getByRole('textbox', { name: title(1) }).getAttribute('value')).toBe(
+        kind === 'lesson' ? 'Lesson 2' : 'Module 2',
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(1, 'down') })),
+      );
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(2, 'down') })),
+      );
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: name(3, 'up') })),
+      );
+      expect(screen.queryByRole('button', { name: name(3, 'down') })).toBeNull();
+    },
+  );
+
+  it.each(['lesson', 'module'] as const)(
+    'Ux10 saved %s cancel preserves row and trigger focus; confirmed delete focuses next, previous, then add',
+    async (kind) => {
+      const { user } = await fixture(kind === 'module' ? 3 : 1);
+      const label = (position: number) =>
+        kind === 'lesson' ? `Delete lesson ${position} in module 1` : `Delete module ${position}`;
+      const title = (position: number) =>
+        kind === 'lesson' ? `Lesson ${position} title in module 1` : `Module ${position} title`;
+      const keptTitle = screen.getByRole('textbox', { name: title(2) });
+      const trigger = screen.getByRole('button', { name: label(2) });
+      await user.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: label(2) });
+      expect(keptTitle.isConnected).toBe(true);
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+      for (const [position, count] of [
+        [2, 2],
+        [2, 1],
+        [1, 0],
+      ] as const) {
+        await user.click(screen.getByRole('button', { name: label(position) }));
+        await user.click(
+          within(screen.getByRole('dialog')).getByRole('button', {
+            name: kind === 'lesson' ? 'Confirm lesson deletion' : 'Confirm module deletion',
+          }),
+        );
+        const remaining = screen.queryAllByRole('textbox', {
+          name: kind === 'lesson' ? /^Lesson \d+ title in module 1$/ : /^Module \d+ title$/,
+        });
+        expect(remaining).toHaveLength(count);
+        const target =
+          remaining.length > 0
+            ? screen.getByRole('textbox', { name: title(Math.min(position, remaining.length)) })
+            : screen.getByRole('button', {
+                name: kind === 'lesson' ? 'Add lesson to module 1' : 'Add module',
+              });
+        await waitFor(() => expect(document.activeElement).toBe(target));
+      }
+    },
+  );
+
+  it.each(['lesson', 'module'] as const)('Ux10 unsaved %s removes immediately', async (kind) => {
+    const { user } = await fixture(1, 0);
+    if (kind === 'lesson')
+      await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    await user.click(
+      screen.getByRole('button', {
+        name: kind === 'lesson' ? 'Delete lesson 1 in module 1' : 'Delete module 1',
+      }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.queryByRole('textbox', {
+        name: kind === 'lesson' ? 'Lesson 1 title in module 1' : 'Module 1 title',
+      }),
+    ).toBeNull();
+  });
+
+  it('Ux10 Ukrainian saved lesson confirmation keeps the row on cancel', async () => {
+    const { user } = await fixture(1, 1, 'uk');
+    await user.click(screen.getByRole('button', { name: 'Видалити урок 1 у модулі 1' }));
+    const dialog = screen.getByRole('dialog', { name: 'Видалити урок 1 у модулі 1' });
+    expect(
+      within(dialog).getByRole('button', { name: 'Підтвердити видалення уроку' }),
+    ).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Скасувати' }));
+    expect(screen.getByRole('textbox', { name: 'Назва уроку 1 у модулі 1' })).toBeTruthy();
+  });
+
+  it('Ux10 a module whose new lesson was saved now requires confirmation', async () => {
+    const { user } = await fixture(1, 0);
+    await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' }),
+      'New saved lesson',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByRole('link', { name: 'Edit lesson content — lesson 1, module 1' });
+    await user.click(screen.getByRole('button', { name: 'Delete module 1' }));
+    expect(screen.getByRole('dialog', { name: 'Delete module 1' })).toBeTruthy();
+  });
+
+  it('Ux10 a module without any remaining saved lessons removes immediately', async () => {
+    const { user } = await fixture(1, 1);
+    await user.click(screen.getByRole('button', { name: 'Delete lesson 1 in module 1' }));
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm lesson deletion' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete module 1' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Module 1 title' })).toBeNull();
+  });
+
+  it('Ux15 retains only the page eyebrow with price and access panels across all tabs', async () => {
+    const { container, user } = await fixture(1, 3, 'en', true);
+    for (const [tab, heading] of [
+      ['Overview', 'Course price'],
+      ['Lessons', 'Modules and lessons'],
+      ['Access', 'Grant course access'],
+    ] as const) {
+      await user.click(screen.getByRole('tab', { name: tab }));
+      expect(screen.getByRole('heading', { name: heading, level: 2 })).toBeTruthy();
+      // Include every mounted section, even sections on inactive tabs.
+      expect(container.querySelectorAll('section .eyebrow')).toHaveLength(0);
+      expect(container.querySelectorAll('.eyebrow')).toHaveLength(1);
     }
   });
 });

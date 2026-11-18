@@ -145,6 +145,11 @@ design-pass browser evidence)
 - R4 Sticky bar overlaps focused fields at 200 % / 320 (WCAG 2.4.11 Focus Not Obscured). DP must check
   focus visibility of the last field under the bar; `scroll-padding-bottom` on the scroller.
 
+- R5 (found 2026-11-18, outside this diff): `lesson-builder`, `refund` and `teach-editor` e2e leave PUBLISHED
+  `e2e-lb-*`, `e2e-refund-*`, `e2e-te-*` courses behind (4 each after four `chromium` project runs without a
+  reset: 28 of 31 published rows), which pushes the seeded course off catalog page 1 and fails catalog.spec:3.
+  Harmless after `e2e-reset` (every full run here started from one); a hygiene follow-up, not this phase.
+
 ## 6. Verification
 Per slice: `cd frontend && npm run format && npm run format:check && npm run typecheck && npm run lint &&
 npx rstest run src`; owner session rebuilds `frontend` on Kiri and runs a browser look. U1 and U2 change

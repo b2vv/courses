@@ -295,3 +295,9 @@ describe('lesson video field', () => {
     expect(screen.getByRole('button', { name: 'Upload video' })).toBeTruthy();
   });
 });
+
+it('Ux16 shows the original filename of the selected video, including long unbroken names', () => {
+  const originalName = `${'a'.repeat(245)}.mp4`;
+  renderField([video('ready', { originalName, receivedBytes: 12 })]);
+  expect(screen.getByText(originalName).classList.contains('admin-video-filename')).toBe(true);
+});

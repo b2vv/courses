@@ -54,7 +54,6 @@ export function CoursePriceField({
   return (
     <section className="admin-lifecycle admin-price ui-card" aria-labelledby="course-price-heading">
       <div>
-        <p className="eyebrow">{t('administration.price.eyebrow')}</p>
         <h2 id="course-price-heading">{t('administration.price.heading')}</h2>
         <p className="admin-price-current">
           {course.price === null
