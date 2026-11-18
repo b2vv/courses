@@ -1,0 +1,314 @@
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { expect, test, type Page, type Browser, type Route } from '@playwright/test';
+import { z } from 'zod';
+import { authStatePath } from '/Users/strelia/projects/courses/frontend/e2e/auth';
+import { cleanupSubtitlesCourse } from '/Users/strelia/projects/courses/frontend/e2e/subtitles-cleanup';
+
+// Standalone M26 evidence on af483ce6. Not part of e2e suite. Never records traces/media bodies.
+const repo = '/Users/strelia/projects/courses';
+const evidence = path.join(import.meta.dirname, 'evidence');
+const working = path.join(repo, 'docs/multi-subtitles/_wip-ms4-dp.md');
+const fixtures = path.join(repo, 'frontend/playwright/.fixtures');
+const ns = `dp-ms4-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const lesson = randomUUID();
+const created: string[] = [];
+const execute = promisify(execFile);
+const token = z.object({ id: z.string(), updatedAt: z.string() });
+const videoSchema = z.object({ items: z.array(z.object({ videoId: z.string(), lessonId: z.string(), state: z.string() })) });
+const tracksSchema = z.object({ items: z.array(z.object({ trackId: z.string(), kind: z.string(), language: z.string(), state: z.string() })) });
+const measurements: Record<string, unknown>[] = [];
+const keyboard: Record<string, unknown>[] = [];
+const requests: object[] = [];
+const viewports = [
+  { name: '390', width: 390, height: 844, text: 1 },
+  { name: '768', width: 768, height: 1024, text: 1 },
+  { name: '1024', width: 1024, height: 768, text: 1 },
+  { name: '1440', width: 1440, height: 900, text: 1 },
+  { name: '1440-text200', width: 1440, height: 900, text: 2 },
+  { name: '390-text200', width: 390, height: 844, text: 2 },
+  { name: '320', width: 320, height: 640, text: 1 },
+];
+const player = (p: Page) => p.locator('section.lesson-player');
+const panel = (p: Page) => p.getByRole('region', { name: 'Транскрипт', exact: true });
+const gear = (p: Page) => p.getByRole('button', { name: 'Налаштування', exact: true });
+const menu = (p: Page) => p.getByRole('dialog', { name: 'Налаштування', exact: true });
+const log = (s: string) => appendFile(working, `${s}\n`);
+const flush = () => writeFile(path.join(evidence, 'measurements.json'), JSON.stringify({
+  revision: 'af483ce6efcc7d3aafe959f7870d83b821b47edb', namespace: ns, created,
+  textMethod: 'html.style.fontSize = 200%; browser zoom 100%; px descendants may not enlarge',
+  contrastMinimum: 4.5, contrastSource: 'WCAG 1.4.3 AA normal text (conservative for larger text)',
+  measurements, keyboard, requests,
+}, null, 2));
+
+async function measure(page: Page) {
+  return page.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    const roots = [...document.querySelectorAll('section.lesson-player, section.transcript, .lesson-player-settings')];
+    const visible = (e: Element) => {
+      const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+      return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.clipPath !== 'inset(50%)';
+    };
+    const all = [...new Set(roots.flatMap(r => [r, ...r.querySelectorAll('*')]))].filter(visible);
+    const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
+    const name = (e: Element) => e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 100) ?? '';
+    const outside = all.filter(e => {
+      const r = e.getBoundingClientRect();
+      if (r.right <= vw + 0.5 && r.left >= -0.5) return false;
+      for (let p = e.parentElement; p; p = p.parentElement) {
+        if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return false;
+      }
+      return true;
+    }).map(e => ({ tag: e.tagName, class: String(e.className).slice(0, 90), text: name(e), ...rect(e) }));
+    const targets = all.filter(e => e.matches('.transcript > button, .lesson-player-settings label.ui-choice, .lesson-player-settings label.ui-switch, button[aria-label="Налаштування"]'))
+      .map(e => ({ name: name(e), ...rect(e), min44: e.getBoundingClientRect().width >= 44 && e.getBoundingClientRect().height >= 44 }));
+    // Selected new text and comparison text; measurements do not infer glyph ink clipping.
+    const texts = all.filter(e => e.matches('.transcript-empty, .transcript > button, .lesson-player-settings-panel > p, .transcript-text, .lesson-player-settings-panel label.ui-choice'));
+    const clipping = texts.map(e => ({ text: name(e), tag: e.tagName, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight, clippedX: e.scrollWidth > e.clientWidth, ...rect(e) }));
+    const rgb = (s: string) => {
+      const m = s.match(/^rgba?\(([^)]+)\)$/);
+      if (!m) return null;
+      const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+      return v.length >= 3 && v.every(Number.isFinite) ? [v[0], v[1], v[2], v[3] ?? 1] : null;
+    };
+    const lum = (v: number[]) => v.slice(0,3).map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((n,c,i) => n + c * [.2126,.7152,.0722][i], 0);
+    const contrast = texts.map(e => {
+      const cs = getComputedStyle(e), fg = rgb(cs.color);
+      let bg: number[] | null = null, bgCSS = '', reason = '', backgroundElement = '';
+      const er = e.getBoundingClientRect();
+      const textRects: DOMRect[] = [];
+      const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange(); range.selectNodeContents(node);
+        textRects.push(...Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0));
+      }
+      if (!textRects.length) reason = 'no rendered text rectangles';
+      for (let p: Element | null = e; p; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (Number(s.opacity) !== 1 || s.filter !== 'none' || s.backdropFilter !== 'none' || s.mixBlendMode !== 'normal') { reason = 'ancestor opacity/filter/compositing unsupported'; break; }
+        if (!bg) {
+          if (s.backgroundImage !== 'none') { reason = 'background image/gradient unsupported'; break; }
+          const b = rgb(s.backgroundColor);
+          if (!b) { reason = `unsupported background colour ${s.backgroundColor}`; break; }
+          if (b[3] > 0 && b[3] < 1) { reason = 'translucent background unsupported'; break; }
+          if (b[3] === 1) {
+            const r = p.getBoundingClientRect();
+            if (textRects.some(t => t.left < r.left - .5 || t.right > r.right + .5 || t.top < r.top - .5 || t.bottom > r.bottom + .5)) { reason = 'text outside solid background bounds'; break; }
+            bg = b; bgCSS = s.backgroundColor; backgroundElement = `${p.tagName}.${p.className}`;
+          }
+        }
+      }
+      const popover = document.querySelector('.lesson-player-settings');
+      if (popover && !popover.contains(e)) { const pr = popover.getBoundingClientRect(); if (textRects.some(t => t.left < pr.right && t.right > pr.left && t.top < pr.bottom && t.bottom > pr.top)) reason ||= 'text box overlaps open popover (paint obscured)'; }
+      if (!fg || fg[3] !== 1) reason ||= 'foreground not opaque sRGB';
+      if (!bg) reason ||= 'no opaque solid background found';
+      const ratio = !reason && fg && bg ? (Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05) : null;
+      return { text: name(e), foreground: cs.color, background: bgCSS, backgroundElement, fontSize: cs.fontSize, textRects: textRects.map(t => ({x:t.x,y:t.y,width:t.width,height:t.height})), ratio, status: ratio === null ? 'NOT_TESTED' : ratio >= 4.5 ? 'PASS' : 'FAIL', reason };
+    });
+    const live = [...document.querySelectorAll('section.transcript [role="status"], section.transcript [role="alert"]')].map(e => ({ role: e.getAttribute('role'), text: name(e) }));
+    const track = document.querySelector('video track');
+    const video = document.querySelector('video');
+    return { viewport: { width: innerWidth, height: innerHeight, clientWidth: vw }, htmlFontSize: getComputedStyle(document.documentElement).fontSize,
+      documentScrollWidth: document.documentElement.scrollWidth, overflowPASS: document.documentElement.scrollWidth <= vw && outside.length === 0, outside,
+      roots: roots.map(e => ({ selector: `${e.tagName}.${e.className}`, ...rect(e) })), targets, clipping, live, contrast,
+      selection: document.querySelector('section.lesson-player')?.getAttribute('data-caption-selection'),
+      caption: track instanceof HTMLTrackElement ? { language: track.srclang, mode: track.track.mode, cues: track.track.cues?.length } : null,
+      video: video instanceof HTMLVideoElement ? { paused: video.paused, time: video.currentTime, readyState: video.readyState } : null,
+      theme: { dataTheme: document.documentElement.getAttribute('data-theme'), colorScheme: getComputedStyle(document.documentElement).colorScheme },
+    };
+  });
+}
+async function capture(page: Page, state: string, vp: typeof viewports[number]) {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.waitForTimeout(300);
+    const file = `${state}-${vp.name}-${theme}.png`;
+    await page.screenshot({ path: path.join(evidence, file), fullPage: true });
+    measurements.push({ state, viewportName: vp.name, themeName: theme, file, ...(await measure(page)) });
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  await flush();
+  await log(`FACT: Captured ${state} × ${vp.name} light/dark screenshots and geometry/targets/clipping/live/contrast measurements (temporary evidence/${state}-${vp.name}-*.png).`);
+}
+async function focusState(page: Page) {
+  return page.evaluate(() => {
+    const e = document.activeElement as HTMLElement | null;
+    if (!e) return null;
+    const s = getComputedStyle(e), r = e.getBoundingClientRect();
+    return { tag: e.tagName, role: e.getAttribute('role'), name: e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 90), focusVisible: e.matches(':focus-visible'), outlineWidth: s.outlineWidth, outlineStyle: s.outlineStyle, outlineColor: s.outlineColor, outlineOffset: s.outlineOffset, boxShadow: s.boxShadow, rect: { x:r.x, y:r.y, width:r.width, height:r.height } };
+  });
+}
+async function choose(page: Page, label: string) {
+  await gear(page).click();
+  await page.getByRole('radiogroup', { name: 'Аудіо', exact: true }).locator('label', { hasText: label }).click();
+  await page.keyboard.press('Escape');
+}
+async function open(browser: Browser, baseURL: string, vp: typeof viewports[number]) {
+  // Isolate resume progress between contexts/viewport observations, exactly this lesson only.
+  await execute('docker', ['compose','exec','-T','postgres','sh','-eu','-c',
+    `exec psql -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM lesson_progress WHERE lesson_id = '${lesson}'"`], {cwd:repo,timeout:60_000});
+
+  const context = await browser.newContext({ baseURL, storageState: authStatePath('student'), locale: 'uk-UA', viewport: { width: vp.width, height: vp.height }, colorScheme: 'light', reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  page.on('request', r => { const u = new URL(r.url()); if (u.pathname.endsWith('/transcript')) requests.push({ viewport: vp.name, kind:'request', pathname:u.pathname, language:u.searchParams.get('language'), at: Date.now() }); });
+  page.on('response', r => { const u = new URL(r.url()); if (u.pathname.endsWith('/transcript')) requests.push({ viewport: vp.name, kind:'response', pathname:u.pathname, language:u.searchParams.get('language'), status:r.status(), at: Date.now() }); });
+  await page.addInitScript(() => localStorage.setItem('courses.player.prefs.v1', JSON.stringify({ volume:1, muted:false, rate:1, captionsOn:true, autoplayNext:false, audioLanguage:'en' })));
+  await page.goto(`/learn/${ns}/${lesson}`);
+  await page.evaluate(scale => document.documentElement.style.fontSize = scale === 1 ? '' : `${scale * 100}%`, vp.text);
+  await page.getByRole('button', { name:'Відтворити', exact:true }).click();
+  await expect(player(page)).toHaveAttribute('data-caption-selection','confirmed:en',{timeout:60_000});
+  await expect(panel(page).getByText('English caption 440', {exact:true})).toBeVisible();
+  await expect.poll(() => page.locator('video track').evaluate((e: HTMLTrackElement) => e.track.mode)).toBe('showing');
+  await log(`FACT: Open ${vp.name}: reset only own lesson progress; confirmed en with showing captions at ${await page.locator('video').evaluate((e: HTMLVideoElement) => e.currentTime)}s.`);
+  return { context, page };
+}
+const pause = (p: Page) => p.locator('video').evaluate((e: HTMLVideoElement) => e.pause());
+const play = (p: Page) => p.locator('video').evaluate((e: HTMLVideoElement) => e.play());
+const deURL = (u: URL) => u.pathname === `/api/v1/learn/lessons/${lesson}/transcript` && u.searchParams.get('language') === 'de';
+
+// Cleanup executes even if any readiness assertion fails. It never enumerates unrelated courses.
+test.afterAll(async () => {
+  await mkdir(evidence, {recursive:true});
+  for (const id of created) {
+    await cleanupSubtitlesCourse(id);
+    await log(`FACT: cleanupSubtitlesCourse completed for run-scoped course ${id}.`);
+  }
+  const sql = `SELECT count(*) FROM courses WHERE id IN (${created.map(id => `'${id}'`).join(',') || 'NULL'});`;
+  const {stdout} = await execute('docker', ['compose','exec','-T','postgres','sh','-eu','-c',`exec psql -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"`,'ms4-leftovers',sql], { cwd:repo, timeout:60_000 });
+  const leftoverCount = Number(stdout.trim());
+  measurements.push({ cleanup: true, createdCount: created.length, leftoverCount });
+  await flush();
+  await log(`FACT: SQL leftover course count = ${leftoverCount}; created ${created.length}.`);
+  expect(leftoverCount).toBe(0);
+});
+
+test('M26 MS4 design-pass evidence', async ({ browser, baseURL }) => {
+  await mkdir(evidence, {recursive:true});
+  if (!baseURL) throw new Error('baseURL required');
+  const headers = { Origin:new URL(baseURL).origin };
+  const admin = await browser.newContext({baseURL, storageState:authStatePath('admin'), locale:'uk-UA'});
+  const ap = await admin.newPage();
+  try {
+    const draft = { slug:ns, title:'MS4 design-pass fixture', summary:'Run-scoped evidence fixture', description:'Temporary MS4 evidence; removed after capture.', instructorId:'40000000-0000-4000-8000-000000000003' };
+    const c = await admin.request.post('/api/v1/admin/courses',{headers,data:draft});
+    expect(c.status()).toBe(201);
+    const body = await c.json();
+    created.push(z.object({id:z.string()}).parse(body).id);
+    await writeFile(path.join(import.meta.dirname,'created.json'), JSON.stringify(created));
+    const course = token.parse(body);
+    const saved = await admin.request.put(`/api/v1/admin/courses/${course.id}`, {headers,data:{expectedUpdatedAt:course.updatedAt,course:draft,modules:[{id:randomUUID(),title:'MS4',lessons:[{id:lesson,title:'Captions lesson'}]}]}});
+    expect(saved.status()).toBe(200);
+    await ap.goto(`/admin/courses/${course.id}`);
+    await ap.getByRole('tab',{name:'Уроки',exact:true}).click();
+    const upload = ap.waitForResponse(r => r.url().endsWith(`/lessons/${lesson}/video`) && r.request().method() === 'POST');
+    await ap.locator('input[type="file"]:not(.admin-audio-field input)').first().setInputFiles(path.join(fixtures,'e2e-640x360-30s.mp4'));
+    expect((await upload).status()).toBe(201);
+    await expect(ap.locator('[data-video-state="ready"]')).toBeVisible({timeout:240_000});
+    const videos = videoSchema.parse(await (await admin.request.get(`/api/v1/admin/courses/${course.id}/videos`)).json());
+    const video = videos.items.find(v => v.lessonId === lesson && v.state === 'ready');
+    if (!video) throw new Error('No Ready video');
+    const tracksURL = `/api/v1/admin/videos/${video.videoId}/audio-tracks`;
+    const embedded = tracksSchema.parse(await (await admin.request.get(tracksURL)).json()).items.find(t => t.kind === 'embedded');
+    if (!embedded) throw new Error('No embedded audio');
+    expect((await admin.request.patch(`${tracksURL}/${embedded.trackId}`, {headers,data:{language:'en',label:'English'}})).status()).toBe(200);
+    for (const [language,label,file,count] of [['Німецька','Deutsch','e2e-tone-30s.m4a',2],['Французька','Français','e2e-tone-1320-30s.m4a',3]] as const) {
+      const audio = ap.getByRole('region',{name:'Аудіодоріжки'});
+      await audio.getByRole('button',{name:/Мова доріжки/}).click();
+      await ap.getByRole('option',{name:language,exact:true}).click();
+      await audio.getByRole('textbox',{name:'Назва доріжки'}).fill(label);
+      const up = ap.waitForResponse(r => r.url().endsWith('/audio-tracks') && r.request().method() === 'POST');
+      await audio.locator('input[type="file"]').setInputFiles(path.join(fixtures,file));
+      expect((await up).status()).toBe(201);
+      await expect(audio.locator('li[data-audio-track-state="ready"]')).toHaveCount(count,{timeout:240_000});
+    }
+    for (const language of ['en','de']) expect((await admin.request.put(`/api/v1/admin/lessons/${lesson}/transcript`,{headers,data:{language,segments:[{id:randomUUID(),startMs:0,endMs:30_000,text:language === 'en' ? 'English caption 440' : 'Deutscher Untertitel 880',documentIds:[]}]}})).status()).toBe(200);
+    const fresh = token.parse(await (await admin.request.get(`/api/v1/admin/courses/${course.id}`)).json());
+    expect((await admin.request.post(`/api/v1/admin/courses/${course.id}/status`,{headers,data:{expectedUpdatedAt:fresh.updatedAt,status:'published'}})).status()).toBe(200);
+    expect((await admin.request.post(`/api/v1/admin/courses/${course.id}/grants`,{headers,data:{userId:'40000000-0000-4000-8000-000000000001',reason:'MS4 design-pass'}})).status()).toBe(201);
+    await log(`FACT: Created ${course.id}, one Ready lesson, embedded en PATCH, Ready de/fr uploads, en/de transcripts; student grant. No credential/session/media bodies recorded.`);
+  } finally { await admin.close(); }
+
+  for (const vp of viewports) {
+    await log(`NEXT: Capture S1–S5 at ${vp.width}×${vp.height}, html text ×${vp.text}, keyboard journey at this viewport.`);
+    const {page,context} = await open(browser,baseURL,vp);
+    let release = () => {};
+    try {
+      await pause(page);
+      await capture(page,'S1-transcript-en',vp);
+      await gear(page).click();
+      const captionsSwitch = page.getByRole('switch',{name:'Субтитри',exact:true});
+      await expect(captionsSwitch).toBeChecked();
+      await page.locator('label').filter({has:captionsSwitch}).scrollIntoViewIfNeeded();
+      await expect(captionsSwitch).toBeVisible();
+      await capture(page,'S5-menu-normal',vp);
+      await page.keyboard.press('Escape');
+      let requested = false;
+      const held = new Promise<void>(resolve => release = resolve);
+      const handler = async (route: Route) => { requested = true; await held; await route.continue(); };
+      await page.route(deURL,handler);
+      await play(page);
+      await choose(page,'Deutsch');
+      await expect.poll(() => requested).toBe(true);
+      await expect(panel(page).getByRole('status')).toHaveText('Завантаження');
+      await expect(player(page)).toHaveAttribute('data-caption-selection','confirmed:de',{timeout:60_000});
+      await pause(page);
+      await capture(page,'S2-loading-de',vp);
+      release();
+      await expect(panel(page).getByText('Deutscher Untertitel 880',{exact:true})).toBeVisible();
+      await page.unroute(deURL,handler);
+      await play(page);
+      await choose(page,'Français');
+      await expect(player(page)).toHaveAttribute('data-caption-selection','confirmed:fr',{timeout:60_000});
+      await expect(panel(page).getByRole('status')).toHaveText('Немає субтитрів для цієї доріжки');
+      await pause(page);
+      // Reach gear using Tab starting at the player frame, then Enter (not pointer).
+      await page.locator('.lesson-player-stage').focus();
+      const tabSequence: unknown[] = [];
+      for (let i=0;i<30;i++) { await page.keyboard.press('Tab'); tabSequence.push(await focusState(page)); if (await gear(page).evaluate(e => e === document.activeElement)) break; }
+      const gearReached = await gear(page).evaluate(e => e === document.activeElement);
+      await page.keyboard.press('Enter');
+      await expect(menu(page)).toBeVisible();
+      const none = menu(page).getByText('Субтитри: немає для цієї доріжки',{exact:true});
+      await expect(none).toBeVisible();
+      const semantics = await none.evaluate(e => ({tag:e.tagName,role:e.getAttribute('role'),tabIndex:(e as HTMLElement).tabIndex,actionable:e.matches('button,a[href],input,[role="button"],[role="switch"]'),text:e.textContent}));
+      const accessibility = await menu(page).ariaSnapshot();
+      const itemSequence: unknown[] = [await focusState(page)];
+      for (const key of ['ArrowDown','Tab','ArrowDown','Tab','ArrowDown','Tab','Tab','Tab','Tab']) { await page.keyboard.press(key); itemSequence.push({key,focus:await focusState(page)}); }
+      const rowFocused = await none.evaluate(e => e === document.activeElement || e.contains(document.activeElement));
+      // Return to same visible menu for screenshot if Tab traversal dismissed it.
+      if (!(await menu(page).isVisible())) await gear(page).click();
+      await capture(page,'S3-none-fr-menu',vp);
+      await page.keyboard.press('Escape');
+      const escape = {hidden:!(await menu(page).isVisible()),focus:await focusState(page),returnsToGear:await gear(page).evaluate(e => e === document.activeElement)};
+      keyboard.push({viewport:vp.name,state:'S3',gearReached,tabSequence,semantics,accessibility,itemSequence,rowFocused,escape});
+      await log(`FACT: S3 keyboard ${vp.name}: Tab reached gear=${gearReached}, none row tabIndex=${semantics.tabIndex}, actionable=${semantics.actionable}, rowFocused=${rowFocused}; Escape hidden=${escape.hidden}, returnsToGear=${escape.returnsToGear}.`);
+    } finally { release(); await context.close(); }
+
+    const err = await open(browser,baseURL,vp);
+    try {
+      let deRequests = 0;
+      await err.page.route(deURL,async route => { deRequests++; await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'unavailable',message:'Design-pass forced 503'}})}); });
+      await choose(err.page,'Deutsch');
+      await expect(panel(err.page).getByRole('alert')).toBeVisible({timeout:60_000});
+      await pause(err.page);
+      await capture(err.page,'S4-error-de',vp);
+      await err.page.locator('.lesson-player-stage').focus();
+      const sequence: unknown[] = [];
+      const retry = panel(err.page).getByRole('button',{name:'Спробувати ще',exact:true});
+      for (let i=0;i<35;i++) { await err.page.keyboard.press('Tab'); sequence.push(await focusState(err.page)); if (await retry.evaluate(e => e === document.activeElement)) break; }
+      const retryReached = await retry.evaluate(e => e === document.activeElement);
+      const focus = await focusState(err.page);
+      const file = `S4-retry-focus-${vp.name}-light.png`;
+      await err.page.screenshot({path:path.join(evidence,file),fullPage:true});
+      const before = deRequests;
+      if (retryReached) { await err.page.keyboard.press('Enter'); await expect.poll(() => deRequests).toBeGreaterThan(before); }
+      keyboard.push({viewport:vp.name,state:'S4',retryReached,sequence,focus,file,deRequestsBefore:before,deRequestsAfter:deRequests,enterRerequests:deRequests>before});
+      await flush();
+      await log(`FACT: S4 keyboard ${vp.name}: Tab retry=${retryReached}; focus ${JSON.stringify(focus)}; Enter de requests ${before}→${deRequests}.`);
+    } finally { await err.context.close(); }
+  }
+});

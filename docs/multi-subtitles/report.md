@@ -946,3 +946,70 @@ Verification, in the requested order, on final frontend bytes:
 The helper tables cover M4/M5, foreign mounts, A generation 2→B generation 1, older same-mount generations, and no return to prediction after load. Real route tests cover actual primary/exact repository calls, prediction/preferences, gating, und-family, foreign responses, held matching response, retry, and navigation with late callbacks. Player/panel units cover M07/M09 including track identity/current-ref mode, preference persistence, and both key resets. Earlier author failures and their fixes are retained in the work log; the final full suite above includes those cases.
 
 Limits / next: this is unit/route proof for run (c), not browser/audio/cue proof or full MS4 acceptance. No E2E, default-timeout run, browser design-pass, independent review, backend gate or ordered `make check` was run here. Run (d) owns E2E M9/M10; independent review/design-pass/final phase gate remain pending. No phase closure is claimed.
+
+## MS4 fix 2 — wave-2 remediation (2026-11-18, uncommitted on `3da8fb0f`)
+
+Scope: owner-requested fixes to spec wave-2 #1, the Courses 1 same-language refetch decision, and standards wave-2 #5. Working evidence: [_wip-ms4-fix2.md](_wip-ms4-fix2.md). No independent PASS or MS4 closure is claimed.
+
+- Audio coverage records the attempted language at `BUFFER_APPENDING`, using `captionLanguageOf` on the fragment's audio track. An uncertain overlapping span contributes its attempted language plus inherited replacement history. Thus `de [0,6) → en APPENDING/APPENDED/ERROR at 2.5 → de success at 2.6` stays pending until 4.1. Coverage and HLS event-wiring regressions both failed before the fix (immediate `confirmed:de`) and passed afterward; focused set 68/68.
+- The route uses `isPending` alone. The held same-language `de` background-refetch regression failed before the fix (transcript disappeared) and passes afterward, retaining the caption track and panel search/follow state during and after refetch. New-language loading remains covered by the existing held exact-query regression; no `keepPreviousData` was added. The dated owner decision is recorded in plan-ms4.md M5.
+- E2E course IDs are registered immediately after ID parsing, before timestamp validation/further setup. `afterAll` calls the portable Compose SQL cleanup in `frontend/e2e/subtitles-cleanup.ts`: audit → grants → video assets → course, transactionally. Assets require explicit deletion because migration 00005 uses `ON DELETE SET NULL`; progress/transcript/segments and audio cascade per 00006/00007/00025. Request disposal runs in `finally`.
+- `frontend/scripts/check-subtitles-cleanup.mts` exercises the same cleanup against real PostgreSQL for complete and partial setup, including repeated cleanup. Archive-only behavior failed with ten retained rows for the full fixture and one for partial setup; deletion passed with ten zero counts in both cases. Run with the normal Compose environment: `node --experimental-strip-types scripts/check-subtitles-cleanup.mts`. On this machine it was run through the Kiri wrapper (exit 0), without browser tests or image builds.
+- Removed the 12 previously retained, archived `e2e-subtitles*` courses with the same helper after verifying there were no non-archived matches or orders. Verified their 36 captured video asset IDs were absent. Final query `SELECT count(*) FROM courses WHERE slug LIKE 'e2e-subtitles%'` returned **0**, including after the full frontend test run.
+
+Verification in `frontend/`, in the requested order:
+
+| Command | Real result |
+|---|---|
+| `npm run format` | exit 0; 416 files |
+| `npm run format:check` | exit 0 |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0; architecture boundaries 244 files |
+| `npx rstest run src --testTimeout 30000` | exit 0; 1435 passed, 114 files, 0 failed/skipped |
+
+Limits / next: owner session rebuilds `frontend` and runs the browser checks, including cleanup verification after the real subtitles journey. No images were rebuilt here; no Playwright run, backend/full ordered gate, design-pass M26 or final M25 gate was run. Unit/event tests do not prove decoder timing. No commits, staging or branch changes; unrelated WIP preserved.
+
+## MS4 — review and design-pass (2026-11-18)
+
+Branch `ms4-player-captions`: plan `895403f` (Codex plan-critic r9 ACCEPTED), runs a `b397662`, b `2297320`, c `092ff1b7`,
+d `fc37aa2b`, review fixes `3da8fb0f`, `af483ce6`.
+
+### Defects found by the e2e and the review, all closed
+- **E6** (run d): a fresh upload's master names its rendition without `LANGUAGE`; the selection never confirmed, the panel
+  stayed "loading" forever. Fix: such a rendition is `und` (`captionLanguageOf`), unit + E6 green.
+- **E4b** (run d): returning to `en` after `de` was buffered showed an `en` cue over 880 Hz audio at 2.621/2.929 s — Chromium
+  keeps playing decoded samples of the replaced track for 0.62–0.93 s of media time. Fix (dated decision, plan-ms4 E4b):
+  an append replacing another language within 1.5 s of the playhead keeps the selection pending for 1.5 s. Two full runs:
+  0 mismatches, `en` cue 1741/1788 ms after release.
+- Review w1 (both axes BLOCK): settle history lost on a failed retry; machine-specific Kiri path in the e2e (would ENOENT
+  on CI); the new language was requested only after confirmation (M1: at SWITCHING); panel states without live regions;
+  fixed sleep in E9. Review w2 (both BLOCK): an uncertain span forgot its attempted language; the e2e only archived its
+  course (admin stats count archived rows) → now deletes it (0 `e2e-subtitles-%` left). Owner-session decision
+  (2026-11-18, plan-ms4 M5): a same-language background refetch is not "loading" (`isPending` only) — `isFetching` dropped
+  captions and the panel's search on a window-focus refetch.
+- Review w3: **SHIP on both axes** (`_wip-ms4-review3-codex-{spec,standards}.md`).
+
+### e2e (targeted, final code)
+`subtitles.spec.ts` E1–E14 (15 rows) 15/15 in two consecutive full runs before the review fixes; after each fix wave
+`subtitles.spec.ts` + `transcript.spec.ts` 23 passed. E7 (Chromium on Kiri, 300 ms audio sampling): click → confirmed `de`
+1782 / 1588 ms, → first showing `de` cue 1799 / 1624 ms — an observation, not a guarantee.
+
+### design-pass (M26) — [ms4-design-pass/](ms4-design-pass/), journal `_wip-ms4-dp.md`
+States S1 transcript, S2 loading, S3 none-for-track + gear row, S4 error + retry, S5 normal gear × 390/768/1024/1440,
+1440 and 390 at 200 % text, 320 px; light and dark for the new states S2–S4.
+| Check | Result |
+|---|---|
+| New states S2–S4: no horizontal overflow at any size, incl. 320 px and 390 @ 200 % | PASS |
+| Retry button and gear items ≥ 44 px (88 px at 200 %) | PASS |
+| New texts not clipped; gear "none" row wraps inside the menu at 390 @ 200 % | PASS (screenshot inspected) |
+| Live regions: loading/none `role=status`, error `role=alert`, one per panel | PASS |
+| Keyboard: Tab → gear, Enter opens, "none" row is a non-focusable paragraph, Escape returns focus; Tab → "Спробувати ще", 3 px focus outline, Enter re-requests (1 → 2 requests) | PASS |
+| Contrast of the new texts (dark) | PASS where the background is solid (15.51:1 menu); the active transcript line has a translucent background → NOT_TESTED (unchanged by MS4) |
+| S1/S5 normal transcript at 390 @ 200 %: document 395 px vs 390 px (+5 px), transcript header/search/list | **Existing debt, not an MS4 regression:** the transcript branch's markup and CSS are unchanged since `f50f6ec` (`git diff f50f6ec -- TranscriptPanel.tsx` touches only the new state branches; no CSS change). Recorded for a follow-up. |
+| S1/S5 "no live region" (harness brief asked for one on every state) | N/A: a transcript is content, not a status message; the brief over-specified it. |
+| Gear "none" row text starts ~10 px left of the radio circles above it | MINOR visual, not fixed |
+Evidence pruned to keep the tree small: composite contact sheets and the dark copies of the unchanged S1/S5 dropped,
+JPEG q45 (7.4 MB). All 3 design-pass courses deleted (leftover 0).
+
+### Gate
+The ordered `make check` on the final revision is pending the owner's consent (it resets the dev volumes).

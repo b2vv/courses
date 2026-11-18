@@ -1,0 +1,7 @@
+import { defineConfig, devices } from '@playwright/test';
+export default defineConfig({
+  testDir: '.', testMatch: ['harness.spec.ts'], workers: 1, retries: 0,
+  timeout: 1_500_000, outputDir: './out', reporter: 'line',
+  use: { baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080', locale: 'uk-UA',
+    ...devices['Desktop Chrome'], trace: 'off', video: 'off', screenshot: 'off', actionTimeout: 30_000 },
+});
