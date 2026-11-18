@@ -23,6 +23,7 @@ import type {
   PlaybackSession,
 } from '../domain/playback';
 import type {
+  CaptionSelection,
   CreatePlaybackMedia,
   PlaybackAudioTrack,
   PlaybackMedia,
@@ -36,6 +37,7 @@ import {
   type PlayerPreferences,
 } from '../application/preferences';
 import { PlayerSettingsMenu } from './PlayerSettingsMenu';
+import { exactAudioTrackIndex, predictedAudioLanguage } from '../application/audio-language';
 
 export type LessonPlayerActions = {
   play(): Promise<PlaybackResult<PlaybackSession>>;
@@ -62,6 +64,10 @@ type LessonPlayerProps = {
    * suppression said an empty track would be misleading, and it was right — the fix was never to
    * silence the rule but to have captions.
    */
+  readonly onCaptionSelection?: (event: {
+    generation: number;
+    selection: CaptionSelection;
+  }) => void;
   readonly captions?: string;
   readonly captionsLanguage?: string;
   readonly onPlaybackChannel?: (channel: {
@@ -135,6 +141,7 @@ export function LessonPlayer({
   captions,
   captionsLanguage,
   onPlaybackChannel,
+  onCaptionSelection,
   nextLesson,
   onPlayNext,
 }: LessonPlayerProps) {
@@ -146,6 +153,17 @@ export function LessonPlayer({
     setVideoElement(video);
   }, []);
   const mediaRef = useRef<PlaybackMedia | undefined>(undefined);
+  const generationRef = useRef(0);
+  const captionSelectionRef = useRef(onCaptionSelection);
+  useEffect(() => {
+    captionSelectionRef.current = onCaptionSelection;
+  }, [onCaptionSelection]);
+  const loadMedia = useCallback((source: string) => {
+    const media = mediaRef.current;
+    if (media === undefined) return;
+    generationRef.current += 1;
+    media.load(source);
+  }, []);
   const sessionRef = useRef<PlaybackSession | undefined>(undefined);
   const clientSeqRef = useRef(lesson.clientSeq + 1);
   // A finished lesson reopens from the beginning (A25). The saved position stays in
@@ -292,7 +310,7 @@ export function LessonPlayer({
           sessionRef.current = result.value;
           clientSeqRef.current = result.value.clientSeq + 1;
           heartbeatStoppedRef.current = false;
-          mediaRef.current?.load(result.value.mediaPath);
+          loadMedia(result.value.mediaPath);
           return;
         }
       })().finally(() => {
@@ -302,7 +320,7 @@ export function LessonPlayer({
       mintRef.current = mint;
       return mint;
     },
-    [actions, terminalFailure],
+    [actions, loadMedia, terminalFailure],
   );
 
   const queueHeartbeatRef = useRef<
@@ -356,13 +374,13 @@ export function LessonPlayer({
         mediaRef.current?.stopLoad();
         mediaRetryTimerRef.current = setTimeout(() => {
           pendingTimeRef.current = resumeAt;
-          mediaRef.current?.load(session.mediaPath);
+          loadMedia(session.mediaPath);
         }, directive.delayMs);
         return;
       }
       terminalFailure('unavailable', directive.refresh);
     },
-    [actions, loadSession, terminalFailure],
+    [actions, loadMedia, loadSession, terminalFailure],
   );
 
   useEffect(() => {
@@ -387,6 +405,9 @@ export function LessonPlayer({
         onLevels: setQualities,
         onAudioTracks: setAudioTracks,
         onAudioTrack: setSelectedAudio,
+        onCaptionSelection(selection) {
+          captionSelectionRef.current?.({ generation: generationRef.current, selection });
+        },
         onError: handleMediaError,
       },
       { audioLanguage: audioLanguageRef.current },
@@ -885,9 +906,8 @@ export function LessonPlayer({
 
   const audioOptions = audioTrackOptions(audioTracks);
   const shownAudio =
-    selectedAudio ??
-    audioTracks.find((track) => track.isDefault)?.language ??
-    audioTracks[0]?.language ??
+    audioTracks[exactAudioTrackIndex(audioTracks, selectedAudio)]?.language ??
+    predictedAudioLanguage(audioTracks, null) ??
     '';
 
   const speedOptions = PLAYBACK_RATES.map((value) => ({

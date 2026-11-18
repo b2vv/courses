@@ -10,11 +10,13 @@ import type {
   PlaybackSession,
 } from '../domain/playback';
 import type {
+  CaptionSelection,
   CreatePlaybackMedia,
   PlaybackMedia,
   PlaybackMediaCallbacks,
 } from '../ports/PlaybackMedia';
 import { LessonPlayer, type LessonPlayerActions } from './LessonPlayer';
+import { predictedAudioLanguage } from '../application/audio-language';
 
 const lessonId = '30000000-0000-4000-8000-000000000001';
 const playbackId = '0123456789abcdef0123456789abcdef';
@@ -56,6 +58,7 @@ function renderPlayer(
   state: LearningLesson['videoState'],
   playerActions = actions(),
   createMedia?: CreatePlaybackMedia,
+  onCaptionSelection?: (event: { generation: number; selection: CaptionSelection }) => void,
 ) {
   const mediaFactory: CreatePlaybackMedia =
     createMedia ??
@@ -69,6 +72,7 @@ function renderPlayer(
         lesson={lesson(state)}
         actions={playerActions}
         createMedia={mediaFactory}
+        {...(onCaptionSelection === undefined ? {} : { onCaptionSelection })}
       />
     </I18nProvider>,
   );
@@ -109,6 +113,7 @@ describe('lesson player states', () => {
             { id: 0, label: '360p' },
             { id: 1, label: '720p' },
           ]);
+          registeredCallbacks.onCaptionSelection({ state: 'pending' });
           registeredCallbacks.onReady();
         },
         stopLoad() {},
@@ -198,6 +203,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -246,6 +252,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -283,6 +290,7 @@ describe('lesson player states', () => {
         kind: 'hls',
         load() {
           loads += 1;
+          registeredCallbacks.onCaptionSelection({ state: 'pending' });
           registeredCallbacks.onReady();
         },
         stopLoad() {},
@@ -332,6 +340,7 @@ describe('lesson player states', () => {
         kind: 'hls',
         load(source) {
           loads.push(source);
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -374,6 +383,7 @@ describe('lesson player states', () => {
         kind: 'hls',
         load(source) {
           loads.push(source);
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -414,6 +424,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -453,6 +464,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -523,6 +535,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -602,6 +615,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -668,6 +682,7 @@ describe('lesson player states', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -709,6 +724,7 @@ describe('A2 Up Next autoplay', () => {
       return {
         kind: 'hls',
         load() {
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},
@@ -780,6 +796,56 @@ describe('A2 Up Next autoplay', () => {
   });
 });
 
+describe('MS4 caption selection channel', () => {
+  it('increments before every load, including media retries and session remints', async () => {
+    rstest.useFakeTimers();
+    const events: Array<{ generation: number; selection: CaptionSelection }> = [];
+    let registered: PlaybackMediaCallbacks | undefined;
+    let loads = 0;
+    const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+      registered = callbacks;
+      Object.defineProperty(video, 'play', { configurable: true, value: () => Promise.resolve() });
+      return {
+        kind: 'hls',
+        load() {
+          loads += 1;
+          callbacks.onCaptionSelection({ state: 'pending' });
+          callbacks.onReady();
+        },
+        stopLoad() {},
+        selectLevel() {},
+        selectAudioTrack: () => false,
+        destroy() {},
+      };
+    };
+    const playerActions = actions({
+      play: async () => ({ ok: true, value: { ...session, heartbeatSeconds: 1 } }),
+      heartbeat: async () => ({ ok: false, error: { code: 'playback_session_expired' } }),
+    });
+    const { container } = renderPlayer('ready', playerActions, createMedia, (event) =>
+      events.push(event),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await act(async () => {});
+    if (registered === undefined) throw new Error('Media callbacks not registered');
+    expect(events).toEqual([{ generation: 1, selection: { state: 'pending' } }]);
+    registered.onCaptionSelection({ state: 'confirmed', language: 'en' });
+    expect(events.at(-1)).toEqual({
+      generation: 1,
+      selection: { state: 'confirmed', language: 'en' },
+    });
+    registered.onError({ status: 503, retryable: true, url: undefined });
+    await act(async () => rstest.advanceTimersByTimeAsync(500));
+    expect(events.at(-1)).toEqual({ generation: 2, selection: { state: 'pending' } });
+    const video = container.querySelector('video');
+    if (video === null) throw new Error('Missing video');
+    fireEvent.playing(video);
+    await act(async () => rstest.advanceTimersByTimeAsync(1_000));
+    expect(loads).toBe(3);
+    expect(events.at(-1)).toEqual({ generation: 3, selection: { state: 'pending' } });
+  });
+});
+
 describe('multi-audio S7: the audio track menu', () => {
   type AudioFake = {
     readonly selected: string[];
@@ -805,10 +871,9 @@ describe('multi-audio S7: the audio track menu', () => {
         kind,
         load() {
           callbacks.onAudioTracks(tracks);
-          const start =
-            tracks.find((track) => track.language === options?.audioLanguage) ??
-            tracks.find((track) => track.isDefault);
-          if (start !== undefined) callbacks.onAudioTrack(start.language);
+          const start = predictedAudioLanguage(tracks, options?.audioLanguage ?? null);
+          if (start !== null) callbacks.onAudioTrack(start);
+          callbacks.onCaptionSelection({ state: 'pending' });
           callbacks.onReady();
         },
         stopLoad() {},

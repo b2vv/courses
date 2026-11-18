@@ -8,9 +8,11 @@ export * from './domain/playback';
 
 // Application: heartbeat/mint/media failure directives and backoff maths.
 export * from './application/recovery';
+export { predictedAudioLanguage } from './application/audio-language';
 
 // Ports: the I/O contracts this feature depends on.
 export type {
+  CaptionSelection,
   CreatePlaybackMedia,
   PlaybackAudioTrack,
   PlaybackMedia,
