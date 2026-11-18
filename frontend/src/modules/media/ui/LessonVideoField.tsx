@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { acceptedVideoFileTypes } from '../domain/video';
 import type {
@@ -7,7 +7,7 @@ import type {
   VideoFailureReason,
   VideoTransferProgress,
 } from '../domain/video';
-import { Button, FileUpload, ProgressBar } from '../../../presentation/ui';
+import { Button, FileUpload, LessonSectionHeader, ProgressBar } from '../../../presentation/ui';
 import { LessonAudioTracksField } from './LessonAudioTracksField';
 import type { CourseEditorAudio } from './LessonAudioTracksField';
 
@@ -43,6 +43,7 @@ export type CourseEditorVideo = {
 type LessonVideoFieldProps = CourseEditorVideo & {
   readonly lessonId: string;
   readonly isSaved: boolean;
+  readonly onStatusKnown?: (lessonId: string, status: string) => void;
 };
 
 function shownVideo(rows: readonly LessonVideo[]): LessonVideo | undefined {
@@ -144,6 +145,7 @@ export function LessonVideoField({
   error,
   actions,
   audio,
+  onStatusKnown,
 }: LessonVideoFieldProps) {
   const { t } = useTranslation();
   const [progress, setProgress] = useState<VideoTransferProgress>();
@@ -208,9 +210,27 @@ export function LessonVideoField({
     (current.state === 'created' || current.state === 'uploading') &&
     progress === undefined;
 
+  const status = !isSaved
+    ? t('administration.video.unsavedHint')
+    : progress !== undefined
+      ? t('administration.video.state.uploading')
+      : current !== undefined
+        ? t(`administration.video.state.${current.state}`)
+        : isLoading
+          ? t('administration.video.loading')
+          : error !== undefined
+            ? errorMessage(error, t)
+            : t('administration.video.empty');
+  useEffect(() => {
+    onStatusKnown?.(lessonId, status);
+  }, [lessonId, status, onStatusKnown]);
+
   return (
     <section className="admin-video-field ui-card" aria-busy={isBusy}>
-      <h3>{t('administration.video.title')}</h3>
+      <LessonSectionHeader
+        title={t('administration.video.title')}
+        status={t('administration.savedImmediately')}
+      />
       {!isSaved ? (
         <p className="admin-video-hint">{t('administration.video.unsavedHint')}</p>
       ) : (

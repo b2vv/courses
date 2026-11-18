@@ -23,6 +23,7 @@ import type {
   PlaybackHeartbeatRequest,
   PlaybackSession as PlaybackSessionContract,
 } from '../src/adapters/api/generated/models';
+import { openLesson } from './course-editor';
 import { authStatePath, trackPageRequests } from './auth';
 import { contractField } from './contract';
 
@@ -286,12 +287,7 @@ async function uploadReady(
   await page.goto(`/admin/courses/${targetCourseID}`);
   // Modules/lessons sit on the Lessons tab of the course editor (view-3 layout).
   await page.getByRole('tab', { name: /Lessons|Уроки/ }).click();
-  const module = page.getByRole('group', {
-    name: `Модуль ${target.moduleNumber}`,
-  });
-  const lesson = module.getByRole('group', {
-    name: `Урок ${target.lessonNumber}`,
-  });
+  const lesson = await openLesson(page, target.moduleNumber, target.lessonNumber);
   await expect(
     lesson.getByRole('button', { name: /^(Завантажити відео|Замінити відео)$/ }),
   ).toBeVisible();

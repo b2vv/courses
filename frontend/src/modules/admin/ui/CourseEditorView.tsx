@@ -28,6 +28,7 @@ import {
   Checkbox,
   Dialog,
   Link,
+  LessonSectionHeader,
   PageHeader,
   Select,
   Skeleton,
@@ -313,7 +314,11 @@ function PreviewField({
 
 function LessonFields({
   form,
+  courseId,
+  transcriptKnowledge,
   moduleIndex,
+  expanded,
+  setExpanded,
   savedLessonIds,
   video,
   drafts,
@@ -322,7 +327,11 @@ function LessonFields({
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
+  courseId: string;
+  transcriptKnowledge: Readonly<Record<string, boolean>>;
   moduleIndex: number;
+  expanded: Readonly<Record<string, boolean>>;
+  setExpanded: (id: string, expanded: boolean) => void;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
@@ -331,6 +340,10 @@ function LessonFields({
   onTranscriptKnown: (lessonId: string, hasTranscript: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const [videoStatus, setVideoStatus] = useState<Record<string, string>>({});
+  const onVideoStatus = useCallback((id: string, status: string) => {
+    setVideoStatus((current) => (current[id] === status ? current : { ...current, [id]: status }));
+  }, []);
   const lessons = useFieldArray({
     control: form.control,
     name: `modules.${moduleIndex}.lessons`,
@@ -345,7 +358,9 @@ function LessonFields({
       {lessons.fields.map((lesson, lessonIndex) => {
         return (
           <fieldset className="admin-lesson" key={lesson.formKey}>
-            <legend>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</legend>
+            <legend>
+              <h3>{t('administration.lessonNumber', { number: lessonIndex + 1 })}</h3>
+            </legend>
             <div className="admin-editor-grid">
               <StringField
                 control={form.control}
@@ -366,52 +381,111 @@ function LessonFields({
                 })}
               />
             </div>
-            {video !== undefined && (
-              <LessonVideoField
-                lessonId={lesson.id}
-                isSaved={savedLessonIds.has(lesson.id)}
-                {...video}
-              />
-            )}
-            {savedLessonIds.has(lesson.id) && (
-              <LessonLanguageTabs
-                lessonId={lesson.id}
-                video={video}
-                drafts={drafts}
-                transcripts={transcripts}
-                languages={languages}
-                onTranscriptKnown={onTranscriptKnown}
-              />
-            )}
-            <div className="admin-row-actions">
+            <div className="admin-lesson-summary">
+              {videoStatus[lesson.id] !== undefined && (
+                <span className="admin-video-state">
+                  {t('administration.lessonVideoStatus', { status: videoStatus[lesson.id] })}
+                </span>
+              )}
+              {transcriptKnowledge[lesson.id] !== undefined && (
+                <span className="admin-video-state">
+                  {t(
+                    transcriptKnowledge[lesson.id]
+                      ? 'administration.lessonTranscriptYes'
+                      : 'administration.lessonTranscriptNo',
+                  )}
+                </span>
+              )}
+              {savedLessonIds.has(lesson.id) && (
+                <Link
+                  href={`/admin/courses/${courseId}/lessons/${lesson.id}`}
+                  aria-label={t('administration.editLessonContentLabel', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                >
+                  {t('administration.editLessonContent')}
+                </Link>
+              )}
               <Button
                 type="button"
                 variant="secondary"
-                isDisabled={lessonIndex === 0}
-                onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
+                aria-label={t(
+                  expanded[lesson.id]
+                    ? 'administration.collapseLessonLabel'
+                    : 'administration.expandLessonLabel',
+                  { lesson: lessonIndex + 1, module: moduleIndex + 1 },
+                )}
+                aria-expanded={expanded[lesson.id] === true}
+                aria-controls={`lesson-body-${lesson.id}`}
+                onPress={() => setExpanded(lesson.id, !expanded[lesson.id])}
               >
-                {t('administration.moveLessonUp', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
+                {t(
+                  expanded[lesson.id]
+                    ? 'administration.collapseLesson'
+                    : 'administration.expandLesson',
+                )}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                isDisabled={lessonIndex === lessons.fields.length - 1}
-                onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
-              >
-                {t('administration.moveLessonDown', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
-              </Button>
-              <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
-                {t('administration.deleteLesson', {
-                  lesson: lessonIndex + 1,
-                  module: moduleIndex + 1,
-                })}
-              </Button>
+            </div>
+            <div
+              id={`lesson-body-${lesson.id}`}
+              className="admin-lesson-body"
+              hidden={!expanded[lesson.id]}
+            >
+              {video !== undefined && (
+                <LessonVideoField
+                  lessonId={lesson.id}
+                  isSaved={savedLessonIds.has(lesson.id)}
+                  {...video}
+                  onStatusKnown={onVideoStatus}
+                />
+              )}
+              {savedLessonIds.has(lesson.id) && (
+                <section className="admin-lesson-languages">
+                  <LessonSectionHeader
+                    title={t('administration.lessonLanguages')}
+                    status={t('administration.savedImmediately')}
+                  />
+                  <LessonLanguageTabs
+                    lessonId={lesson.id}
+                    video={video}
+                    drafts={drafts}
+                    transcripts={transcripts}
+                    languages={languages}
+                    onTranscriptKnown={onTranscriptKnown}
+                  />
+                </section>
+              )}
+              <div className="admin-row-actions">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  isDisabled={lessonIndex === 0}
+                  onPress={() => lessons.move(lessonIndex, lessonIndex - 1)}
+                >
+                  {t('administration.moveLessonUp', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  isDisabled={lessonIndex === lessons.fields.length - 1}
+                  onPress={() => lessons.move(lessonIndex, lessonIndex + 1)}
+                >
+                  {t('administration.moveLessonDown', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                </Button>
+                <Button type="button" variant="danger" onPress={() => lessons.remove(lessonIndex)}>
+                  {t('administration.deleteLesson', {
+                    lesson: lessonIndex + 1,
+                    module: moduleIndex + 1,
+                  })}
+                </Button>
+              </div>
             </div>
           </fieldset>
         );
@@ -420,7 +494,11 @@ function LessonFields({
         type="button"
         variant="secondary"
         isDisabled={lessonCount >= 120}
-        onPress={() => lessons.append({ id: newLessonId(), title: '', isPreview: false })}
+        onPress={() => {
+          const id = newLessonId();
+          setExpanded(id, true);
+          lessons.append({ id, title: '', isPreview: false });
+        }}
       >
         {t('administration.addLesson', { number: moduleIndex + 1 })}
       </Button>
@@ -430,6 +508,8 @@ function LessonFields({
 
 function ModuleFields({
   form,
+  courseId,
+  transcriptKnowledge,
   savedLessonIds,
   video,
   drafts,
@@ -438,6 +518,8 @@ function ModuleFields({
   onTranscriptKnown,
 }: {
   form: UseFormReturn<CourseFormValues>;
+  courseId: string;
+  transcriptKnowledge: Readonly<Record<string, boolean>>;
   savedLessonIds: ReadonlySet<string>;
   video: CourseEditorVideo | undefined;
   drafts: CourseEditorDrafts | undefined;
@@ -447,6 +529,15 @@ function ModuleFields({
 }) {
   const { t } = useTranslation();
   const modules = useFieldArray({ control: form.control, name: 'modules', keyName: 'formKey' });
+
+  const [expanded, updateExpanded] = useState<Record<string, boolean>>(() => {
+    const ids = form
+      .getValues('modules')
+      .flatMap((module) => module.lessons.map((lesson) => lesson.id));
+    return Object.fromEntries(ids.map((id) => [id, ids.length === 1]));
+  });
+  const setExpanded = (id: string, value: boolean) =>
+    updateExpanded((current) => ({ ...current, [id]: value }));
 
   return (
     <section className="admin-program ui-card" aria-labelledby="course-program-heading">
@@ -471,6 +562,10 @@ function ModuleFields({
             <LessonFields
               form={form}
               moduleIndex={moduleIndex}
+              courseId={courseId}
+              transcriptKnowledge={transcriptKnowledge}
+              expanded={expanded}
+              setExpanded={setExpanded}
               savedLessonIds={savedLessonIds}
               video={video}
               drafts={drafts}
@@ -859,6 +954,8 @@ export function CourseEditorView({
                 <DocumentLibrary documents={transcripts.documents} actions={transcripts.library} />
               )}
               <ModuleFields
+                courseId={course.id}
+                transcriptKnowledge={transcriptKnowledge}
                 form={form}
                 savedLessonIds={savedLessonIds}
                 video={video}

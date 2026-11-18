@@ -63,6 +63,10 @@ editor), the lesson document editor itself, light theme (admin is dark-only), th
   switches, resets on reload.
 - D5 One lesson-section header component (M5): `h4` + one-line status, used by video, language tabs
   (audio/ASR/transcript inside), materials. Headings keep a valid outline (h2 program → h3 lesson → h4 section).
+- D5a (2026-11-18, Courses 1, closes U2 review S1): the shared lesson-section header covers LESSON sections only
+  (video, language tabs). Course materials are course-level and keep their h2 (critique r1 already flagged
+  that D5 must not move them into lessons); their one-line "Saved immediately" status arrives with D7 in U5,
+  not as an h4. Check: U5 unit asserts the materials status line; U2 asserts h3 lesson → h4 sections.
 - D6 Compact transcript line (M2): one row per line — start/end inputs, text inline, icon remove with
   accessible name `Remove line N`; line materials picker only when the course has ≥1 material. The inputs
   STAY raw milliseconds (stored, restored and edited exactly as today); next to each input a read-only

@@ -8,7 +8,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { http, HttpResponse } from 'msw';
@@ -25,7 +25,13 @@ import { asBrandedId } from '../../../contracts/course';
 import type { AdminCourseDraft, CourseTree, CourseTreeEdit } from '../../../contracts/course';
 import type { AuthenticatedUser } from '../../identity';
 import type { LessonDraft } from '../../transcript';
-import type { LessonTranscript } from '../../transcript';
+import type {
+  CourseEditorTranscripts,
+  LessonTranscript,
+  TranscriptInventoryItem,
+} from '../../transcript';
+import type { CourseEditorVideo } from '../../media';
+import type { LessonLanguageServices } from './LessonLanguageTabs';
 import { CourseCreateDialog, CourseEditorView } from './CourseEditorView';
 import { CourseListFailure } from './CourseListView';
 
@@ -326,6 +332,8 @@ describe('course editor', () => {
     );
 
     await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 1 in module 1' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 1' }));
     await browser.click(screen.getByRole('button', { name: 'Load draft into editor' }));
     const editors = screen.getAllByRole('heading', { name: 'Lesson transcript' }).map((heading) => {
       const section = heading.closest('section');
@@ -551,7 +559,9 @@ describe('course editor', () => {
 
     await browser.click(screen.getByRole('tab', { name: 'Lessons' }));
     await browser.click(screen.getByRole('button', { name: 'Move module 2 up' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Move lesson 2 in module 2 up' }));
+    await browser.click(screen.getByRole('button', { name: 'Expand lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Delete lesson 2 in module 2' }));
     await browser.click(screen.getByRole('button', { name: 'Save changes' }));
 
@@ -1108,4 +1118,269 @@ it('new unsaved lesson never invokes transcript, inventory or draft service hook
   await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
   expect(screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' })).toBeTruthy();
   expect(reads).toEqual([]);
+});
+
+describe('U2 lesson rows', () => {
+  function fixture(
+    count = 2,
+    extra: {
+      video?: CourseEditorVideo;
+      languages?: LessonLanguageServices;
+      transcripts?: CourseEditorTranscripts;
+    } = {},
+    locale: 'en' | 'uk' = 'en',
+  ) {
+    const course: CourseTree = {
+      ...tree,
+      modules: [
+        {
+          id: asBrandedId('10000000-0000-4000-8000-000000000101', 'module'),
+          title: 'Module',
+          lessons: Array.from({ length: count }, (_, index) => ({
+            id: asBrandedId(
+              `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+              'lesson',
+            ),
+            title: `Lesson ${index + 1}`,
+            isPreview: false,
+          })),
+        },
+      ],
+    };
+    const view = () => (
+      <I18nProvider instance={createI18n(locale)}>
+        <CourseEditorView
+          course={course}
+          actor={admin}
+          ownerOptions={null}
+          onSave={async (current) => current}
+          onTransition={async (current) => current}
+          onDelete={async () => {}}
+          onAuthenticationRequired={() => {}}
+          {...extra}
+        />
+      </I18nProvider>
+    );
+    const result = render(view());
+    return { ...result, course, refresh: () => result.rerender(view()) };
+  }
+  const video: CourseEditorVideo = {
+    rows: [],
+    isLoading: false,
+    actions: {
+      upload: async () => null,
+      resume: async () => null,
+      retry: async () => null,
+      cancel: async () => null,
+    },
+  };
+  function body(toggle: HTMLElement) {
+    const id = toggle.getAttribute('aria-controls');
+    expect(id).toBeTruthy();
+    const element = document.getElementById(id ?? '');
+    if (element === null) throw new Error('Missing controlled lesson body');
+    return element;
+  }
+
+  it.each(['en', 'uk'] as const)(
+    'T1 toggle accessible name starts with its visible action in both states (%s)',
+    async (locale) => {
+      const user = userEvent.setup();
+      fixture(2, {}, locale);
+      await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+      const row = screen.getByRole('group', { name: locale === 'en' ? 'Lesson 1' : 'Урок 1' });
+      const toggle = row.querySelector('button[aria-expanded]');
+      if (!(toggle instanceof HTMLElement)) throw new Error('Missing lesson toggle');
+      const context = locale === 'en' ? 'lesson 1 in module 1' : 'урок 1 у модулі 1';
+      for (const action of locale === 'en' ? ['Expand', 'Collapse'] : ['Розгорнути', 'Згорнути']) {
+        expect(toggle.textContent?.trim()).toBe(action);
+        expect(within(row).getByRole('button', { name: `${action} ${context}` })).toBe(toggle);
+        await user.click(toggle);
+      }
+    },
+  );
+
+  it.each([1, 2])(
+    'Ux04 defaults %i saved lessons once and keeps header controls visible',
+    async (count) => {
+      const user = userEvent.setup();
+      fixture(count);
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      const toggle = screen.getByRole('button', {
+        name: count === 1 ? 'Collapse lesson 1 in module 1' : 'Expand lesson 1 in module 1',
+      });
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count === 1));
+      expect(body(toggle).hidden).toBe(count > 1);
+      expect(
+        screen.getByRole('textbox', { name: 'Lesson 1 title in module 1' }).closest('[hidden]'),
+      ).toBeNull();
+      expect(
+        screen
+          .getByRole('checkbox', { name: 'Open before purchase — lesson 1, module 1' })
+          .closest('[hidden]'),
+      ).toBeNull();
+      await user.click(toggle);
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count !== 1));
+      expect(body(toggle).hidden).toBe(count === 1);
+      await user.click(screen.getByRole('tab', { name: 'Overview' }));
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(count !== 1));
+    },
+  );
+
+  it('Ux04 expands a newly added lesson without expanding saved rows', async () => {
+    const user = userEvent.setup();
+    fixture();
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    await user.click(screen.getByRole('button', { name: 'Add lesson to module 1' }));
+    const toggle = screen.getByRole('button', { name: 'Collapse lesson 3 in module 1' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(body(toggle).hidden).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: 'Expand lesson 1 in module 1' })
+        .getAttribute('aria-expanded'),
+    ).toBe('false');
+  });
+
+  it('Ux05 preserves the actual video field and in-flight progress through collapse', async () => {
+    const user = userEvent.setup();
+    let finish: (() => void) | undefined;
+    let uploads = 0;
+    const pendingVideo: CourseEditorVideo = {
+      ...video,
+      actions: {
+        ...video.actions,
+        upload: async (_id, _file, progress) => {
+          uploads += 1;
+          progress({ receivedBytes: 4, declaredBytes: 10 });
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          return null;
+        },
+      },
+    };
+    fixture(1, { video: pendingVideo });
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    const toggle = screen.getByRole('button', { name: 'Collapse lesson 1 in module 1' });
+    const content = body(toggle);
+    const input = content.querySelector('input[type="file"]');
+    if (input === null) throw new Error('Missing upload input');
+    fireEvent.change(input, {
+      target: {
+        files: { item: () => new File(['0123456789'], 'video.mp4', { type: 'video/mp4' }) },
+      },
+    });
+    const progress = await screen.findByRole('progressbar', { name: 'Uploading video' });
+    expect(progress.getAttribute('aria-valuenow')).toBe('40');
+    const row = screen.getByRole('group', { name: 'Lesson 1' });
+    expect(within(row).getByText('Video: Uploading')).toBeTruthy();
+    await user.click(toggle);
+    expect(content.hidden).toBe(true);
+    expect(content.contains(progress)).toBe(true);
+    await user.click(toggle);
+    expect(screen.getByRole('progressbar', { name: 'Uploading video' })).toBe(progress);
+    expect(progress.getAttribute('aria-valuenow')).toBe('40');
+    expect(uploads).toBe(1);
+    await act(async () => finish?.());
+  });
+
+  it.each([true, false])(
+    'Ux04 transcript knowledge starts unknown, becomes %s and survives failed refresh',
+    async (known) => {
+      const user = userEvent.setup();
+      let data: readonly TranscriptInventoryItem[] | undefined;
+      let isError = false;
+      const languages: LessonLanguageServices = {
+        useInventory: () => ({ data, isError }),
+        readInventory: async () => [],
+        readTracks: async () => [],
+      };
+      const result = fixture(1, { languages });
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(screen.queryByText(/^Transcript: /)).toBeNull();
+      data = known ? [{ language: 'en', updatedAt: 'T1', stale: false, isPrimary: true }] : [];
+      result.refresh();
+      const label = known ? 'Transcript: Yes' : 'Transcript: No';
+      await screen.findByText(label);
+      data = undefined;
+      isError = true;
+      result.refresh();
+      expect(screen.getByText(label)).toBeTruthy();
+    },
+  );
+
+  it.each(['en', 'uk'] as const)(
+    'Ux13 links only saved lessons to the content editor (%s)',
+    async (locale) => {
+      const user = userEvent.setup();
+      const { course } = fixture(2, {}, locale);
+      await user.click(screen.getByRole('tab', { name: locale === 'en' ? 'Lessons' : 'Уроки' }));
+      const link = screen.getByRole('link', {
+        name:
+          locale === 'en'
+            ? 'Edit lesson content — lesson 1, module 1'
+            : 'Редагувати вміст уроку — урок 1, модуль 1',
+      });
+      expect(link.getAttribute('href')).toBe(
+        `/admin/courses/${course.id}/lessons/${course.modules[0]?.lessons[0]?.id}`,
+      );
+      await user.click(
+        screen.getByRole('button', {
+          name: locale === 'en' ? 'Add lesson to module 1' : 'Додати урок до модуля 1',
+        }),
+      );
+      expect(
+        screen.getAllByRole('link', {
+          name: locale === 'en' ? /Edit lesson content — lesson/ : /Редагувати вміст уроку — урок/,
+        }),
+      ).toHaveLength(2);
+    },
+  );
+
+  it.each([true, false])(
+    'Ux04 fallback transcript unknown then %s remains known after failed refresh',
+    async (known) => {
+      const user = userEvent.setup();
+      let data: LessonTranscript | undefined;
+      const transcripts: CourseEditorTranscripts = {
+        useLessonTranscript: () => ({ data, isLoading: false }),
+        documents: [],
+        history: { store: createMemoryTranscriptHistory(), authorId: admin.id },
+        library: { add: async () => null, remove: async () => null },
+        save: async () => null,
+      };
+      const result = fixture(1, { transcripts });
+      await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+      expect(screen.queryByText(/^Transcript: /)).toBeNull();
+      data = {
+        lessonId: result.course.modules[0]?.lessons[0]?.id ?? '',
+        language: known ? 'en' : null,
+        updatedAt: known ? 'T1' : null,
+        stale: false,
+        segments: [],
+        documents: [],
+      };
+      result.refresh();
+      const label = known ? 'Transcript: Yes' : 'Transcript: No';
+      await screen.findByText(label);
+      data = undefined;
+      result.refresh();
+      expect(screen.getByText(label)).toBeTruthy();
+    },
+  );
+
+  it('Ux06 uses h2 program, h3 lesson and shared h4 section headers with status lines', async () => {
+    const user = userEvent.setup();
+    fixture(1, { video });
+    await user.click(screen.getByRole('tab', { name: 'Lessons' }));
+    expect(screen.getByRole('heading', { name: 'Modules and lessons', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Lesson 1', level: 3 })).toBeTruthy();
+    for (const name of ['Lesson video', 'Lesson languages']) {
+      const heading = screen.getByRole('heading', { name, level: 4 });
+      expect(heading.parentElement?.classList.contains('lesson-section-heading')).toBe(true);
+      expect(heading.parentElement?.querySelector('p')?.textContent).toBe('Saved immediately');
+    }
+  });
 });

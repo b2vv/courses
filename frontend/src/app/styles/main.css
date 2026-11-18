@@ -1226,6 +1226,42 @@ nav a {
   padding-inline: min(var(--space-4), 2.5vw) 0;
   border-inline-start: 1px solid var(--color-border);
 }
+.admin-lesson > legend h3 {
+  margin: 0;
+  font: inherit;
+}
+.admin-lesson-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.admin-lesson-summary > * {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+.admin-lesson-summary .ui-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+}
+.admin-lesson-body,
+.admin-lesson-languages {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-4);
+}
+.admin-lesson-body[hidden] {
+  display: none;
+}
+.lesson-section-heading h4,
+.lesson-section-heading p {
+  margin: 0;
+}
+.lesson-section-heading p {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
 .admin-video-field {
   display: grid;
   justify-items: start;
@@ -1235,7 +1271,7 @@ nav a {
 .admin-video-field.ui-card {
   padding-inline: min(var(--card-padding), 2.5vw);
 }
-.admin-video-field h3,
+.admin-video-field h4,
 .admin-video-field p {
   margin: 0;
 }
