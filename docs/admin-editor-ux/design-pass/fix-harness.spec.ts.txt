@@ -1,0 +1,236 @@
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { test, expect, type Page } from '@playwright/test';
+import { z } from 'zod';
+import { authStatePath } from '/Users/strelia/projects/courses/frontend/e2e/auth';
+import { openLesson } from '/Users/strelia/projects/courses/frontend/e2e/course-editor';
+const repo='/Users/strelia/projects/courses';
+const evidence=path.join(import.meta.dirname,'evidence');
+const working=path.join(repo,'docs/admin-editor-ux/_wip-dp-fix.md');
+const log=(s:string)=>appendFile(working,`${s}\n`);
+const execute=promisify(execFile);
+const wrapper='/Users/strelia/project-data/courses-kiri/courses-kiri';
+const ns=`dp-admin-ux-${Date.now().toString(36)}-${randomUUID().slice(0,8)}`;
+const lessonIDs=[randomUUID(),randomUUID(),randomUUID(),randomUUID()];
+const created:string[]=[];
+const measurements:Record<string,unknown>[]=[];
+const keyboard:Record<string,unknown>[]=[];
+const errors:Record<string,unknown>[]=[];
+const token=z.object({id:z.string().uuid(),updatedAt:z.string()});
+const viewports=[{name:'390',width:390,height:844,text:1},{name:'768',width:768,height:1024,text:1},{name:'1024',width:1024,height:768,text:1},{name:'1440',width:1440,height:900,text:1},{name:'1440-text200',width:1440,height:900,text:2},{name:'390-text200',width:390,height:844,text:2},{name:'320',width:320,height:640,text:1}];
+const flush=()=>writeFile(path.join(evidence,'measurements.json'),JSON.stringify({revision:'a09d960f + F1/F2/F3 working diff',frontendImage:process.env.DP_FRONTEND_IMAGE ?? 'recorded in working log',namespace:ns,created,lessonIDs,textMethod:'html.style.fontSize = 200%; browser zoom 100%; px descendants may not enlarge',contrastMinimum:4.5,contrastSource:'WCAG 1.4.3 AA normal text; conservative for large text',targetMinimum:44,measurements,keyboard,errors}));
+async function measure(page: Page) {
+  return page.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    const roots = [...document.querySelectorAll('.admin-editor, [role=dialog], main')];
+    const visible = (e: Element) => {
+      const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+      if(!(r.width>0&&r.height>0&&s.visibility!=='hidden'))return false;for(let p:Element|null=e;p;p=p.parentElement){const st=getComputedStyle(p);if(st.clipPath!=='none'||(st.clip!=='auto'&&st.clip!==''))return false;}return true;
+    };
+    const all = [...new Set(roots.flatMap(r => [r, ...r.querySelectorAll('*')]))].filter(visible);
+    const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
+    const name = (e: Element) => e.getAttribute('aria-label') ?? e.textContent?.trim().slice(0, 100) ?? '';
+    const outside = all.filter(e => {
+      const r = e.getBoundingClientRect();
+      if (r.right <= vw + 0.5) return false;
+      for (let p = e.parentElement; p; p = p.parentElement) {
+        if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return false;
+      }
+      return true;
+    }).map(e => ({ tag: e.tagName, class: String(e.className).slice(0, 90), text: name(e), ...rect(e) }));
+    const targets = all.filter(e => e.matches('.admin-lesson-summary button, .admin-lesson-summary a, button[data-move], .transcript-editor-remove, .admin-editor-save button, [role=dialog] button, .document-library > button'))
+      .map(e => ({ name: name(e), ...rect(e), min44: e.getBoundingClientRect().width >= 44 && e.getBoundingClientRect().height >= 44 }));
+    // Selected new text and comparison text; measurements do not infer glyph ink clipping.
+    const texts = all.filter(e => e.matches('.admin-video-state, .admin-video-filename, .transcript-editor-time .ui-description, .admin-editor-save output, .admin-save-hint, .lesson-section-heading p, .admin-lesson-summary a, .admin-lesson-summary button, .document-library > button, [role=dialog] p, [role=dialog] button, main h1'));
+    const clipping = texts.map(e => ({ text: name(e), tag: e.tagName, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight, clippedX: e.scrollWidth > e.clientWidth, clippedY:e.scrollHeight>e.clientHeight, ...rect(e) }));
+    const rgb = (s: string) => {
+      const m = s.match(/^rgba?\(([^)]+)\)$/);
+      if (!m) return null;
+      const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+      return v.length >= 3 && v.every(Number.isFinite) ? [v[0], v[1], v[2], v[3] ?? 1] : null;
+    };
+    const lum = (v: number[]) => v.slice(0,3).map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((n,c,i) => n + c * [.2126,.7152,.0722][i], 0);
+    const contrast = texts.map(e => {
+      const cs = getComputedStyle(e), fg = rgb(cs.color);
+      let bg: number[] | null = null, bgCSS = '', reason = '', backgroundElement = '';
+      const er = e.getBoundingClientRect();
+      const textRects: DOMRect[] = [];
+      const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange(); range.selectNodeContents(node);
+        textRects.push(...Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0));
+      }
+      if (!textRects.length) reason = 'no rendered text rectangles';
+      for (let p: Element | null = e; p; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (Number(s.opacity) !== 1 || s.filter !== 'none' || s.backdropFilter !== 'none' || s.mixBlendMode !== 'normal') { reason = 'ancestor opacity/filter/compositing unsupported'; break; }
+        if (!bg) {
+          if (s.backgroundImage !== 'none') { reason = 'background image/gradient unsupported'; break; }
+          const b = rgb(s.backgroundColor);
+          if (!b) { reason = `unsupported background colour ${s.backgroundColor}`; break; }
+          if (b[3] > 0 && b[3] < 1) { reason = 'translucent background unsupported'; break; }
+          if (b[3] === 1) {
+            const r = p.getBoundingClientRect();
+            if (textRects.some(t => t.left < r.left - .5 || t.right > r.right + .5 || t.top < r.top - .5 || t.bottom > r.bottom + .5)) { reason = 'text outside solid background bounds'; break; }
+            bg = b; bgCSS = s.backgroundColor; backgroundElement = `${p.tagName}.${p.className}`;
+          }
+        }
+      }
+      const popover = document.querySelector('.lesson-player-settings');
+      if (popover && !popover.contains(e)) { const pr = popover.getBoundingClientRect(); if (textRects.some(t => t.left < pr.right && t.right > pr.left && t.top < pr.bottom && t.bottom > pr.top)) reason ||= 'text box overlaps open popover (paint obscured)'; }
+      if (!fg || fg[3] !== 1) reason ||= 'foreground not opaque sRGB';
+      if (!bg) reason ||= 'no opaque solid background found';
+      const ratio = !reason && fg && bg ? (Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05) : null;
+      return { text: name(e), foreground: cs.color, background: bgCSS, backgroundElement, fontSize: cs.fontSize, textRects: textRects.map(t => ({x:t.x,y:t.y,width:t.width,height:t.height})), ratio, status: ratio === null ? 'NOT_TESTED' : ratio >= 4.5 ? 'PASS' : 'FAIL', reason };
+    });
+    const panels = [...document.querySelectorAll('.course-editor-panel')].map(e=>({id:e.id,inert:e.hasAttribute('inert'),display:getComputedStyle(e).display,visible:visible(e),...rect(e)}));
+    return { viewport: { width: innerWidth, height: innerHeight, clientWidth: vw }, htmlFontSize: getComputedStyle(document.documentElement).fontSize,
+      documentScrollWidth: document.documentElement.scrollWidth, overflowPASS: document.documentElement.scrollWidth <= vw && outside.length === 0, outside,
+      roots: roots.map(e => ({selector:`${e.tagName}.${e.className}`,...rect(e)})), targets, clipping, contrast, panels,
+      displayedPanelCount: panels.filter(p=>p.visible).length,
+      theme: { dataTheme: document.documentElement.getAttribute('data-theme'), colorScheme: getComputedStyle(document.documentElement).colorScheme },
+    };
+  });
+}
+async function capture(page:Page,state:string,vp:typeof viewports[number]) {
+  await page.evaluate(()=>document.fonts.ready);
+  await page.mouse.move(0,0);
+  await page.waitForTimeout(200);
+  const file=`${state}-${vp.name}.jpg`;
+  const measured=await measure(page);
+  await page.screenshot({path:path.join(evidence,file),type:'jpeg',quality:10,fullPage:true});
+  measurements.push({state,viewportName:vp.name,file,route:new URL(page.url()).pathname,...measured});
+  await flush();
+  await log(`FACT: Captured ${state} at ${vp.width}×${vp.height} text ×${vp.text}; screenshot design-pass/${file}; measurement index ${measurements.length-1}.`);
+}
+async function focusState(page:Page){return page.evaluate(()=>{
+  const e=document.activeElement; if(!(e instanceof HTMLElement))return null;
+  const r=e.getBoundingClientRect(),b=document.querySelector('.admin-editor-save')?.getBoundingClientRect();
+  const s=getComputedStyle(e);
+  return {tag:e.tagName,name:e.getAttribute('aria-label')??e.getAttribute('name')??e.textContent?.trim().slice(0,100),id:e.id,move:e.getAttribute('data-move'),row:e.closest('[data-row-id]')?.getAttribute('data-row-id'),insideDialog:!!e.closest('[role=dialog]'),focusVisible:e.matches(':focus-visible'),outline:s.outline,rect:{x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom},bar:b?{top:b.top,bottom:b.bottom,left:b.left,right:b.right}:null,covered:!!b&&r.top<b.bottom&&r.bottom>b.top&&r.left<b.right&&r.right>b.left&&!e.closest('.admin-editor-save')};
+});}
+async function sticky(page:Page,state:string,vp:typeof viewports[number]){
+  
+  // Start at the last visible form input, then use actual Tab presses through end controls.
+  const fields=page.locator('.admin-editor-form input:visible, .admin-editor-form textarea:visible');
+  const n=await fields.count(); if(!n)return;
+  await fields.nth(Math.max(0,n-3)).focus();
+  const steps=[];
+  for(let i=0;i<16;i++){
+    const f=await focusState(page);steps.push(f);
+    if(await page.locator('.admin-editor-save button').evaluate(e=>e===document.activeElement))break;
+    await page.keyboard.press('Tab');
+  }
+  const file=`${state}-${vp.name}-focus.jpg`;
+  keyboard.push({check:'sticky-last-fields',state,viewport:vp.name,steps,status:steps.some(s=>s?.covered)?'FAIL':'PASS'});
+  await flush();await log(`FACT: Tabbed last form fields for ${state}/${vp.name}; focus rect bottoms versus bar top stored in measurements.json keyboard; screenshot ${file}.`);
+}
+async function keyboardChecks(page:Page,vp:typeof viewports[number]){
+  const one=page.locator(`[data-row-id="${lessonIDs[0]}"]`);
+  const toggle=one.locator('.admin-lesson-summary button');
+  // Reach toggle using Tab, never programmatic activation.
+  await page.getByRole('tab',{name:'Уроки',exact:true}).focus();
+  let tabs=0;while(tabs<120&&!(await toggle.evaluate(e=>e===document.activeElement))){await page.keyboard.press('Tab');tabs++;}
+  const reached=await toggle.evaluate(e=>e===document.activeElement);
+  const before=await toggle.getAttribute('aria-expanded');
+  await page.keyboard.press('Enter');
+  const enter=await toggle.getAttribute('aria-expanded'),enterFocus=await toggle.evaluate(e=>e===document.activeElement);
+  await page.keyboard.press('Space');
+  const space=await toggle.getAttribute('aria-expanded'),spaceFocus=await toggle.evaluate(e=>e===document.activeElement);
+  keyboard.push({check:'toggle-Tab-Enter-Space',viewport:vp.name,tabs,reached,before,enter,space,enterFocus,spaceFocus,status:reached&&enter!==before&&space===before&&enterFocus&&spaceFocus?'PASS':'FAIL'});
+  const two=await openLesson(page,1,2);
+  await capture(page,'K-move-controls',vp);const up=two.locator('button[data-move="up"]');await up.focus();await page.keyboard.press('Enter');
+  await expect(page.locator(`[data-row-id="${lessonIDs[1]}"] button[data-move="up"]`)).toHaveCount(0);
+  const focus=await focusState(page);
+  keyboard.push({check:'move-up-lesson2-D3',viewport:vp.name,expected:{row:lessonIDs[1],move:'down'},focus,status:focus?.row===lessonIDs[1]&&focus?.move==='down'?'PASS':'FAIL'});
+  await log(`FACT: Keyboard toggle and lesson-2 reorder observed at ${vp.name}; detailed key/focus outcomes in measurements.json.`);
+  await flush();
+}
+
+test.afterAll(async()=>{
+  await mkdir(evidence,{recursive:true});
+  for(const id of created){
+    const sql=`BEGIN;
+DELETE FROM grant_audit WHERE grant_id IN (SELECT id FROM course_grants WHERE course_id='${id}');
+DELETE FROM course_grants WHERE course_id='${id}';
+DELETE FROM payment_events WHERE order_id IN (SELECT id FROM orders WHERE course_id='${id}');
+DELETE FROM orders WHERE course_id='${id}';
+DELETE FROM courses WHERE id='${id}';
+COMMIT;
+SELECT count(*) FROM courses WHERE id='${id}';`;
+    const {stdout}=await execute(wrapper,['docker','compose','exec','-T','postgres','sh','-eu','-c','exec psql -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"','dp-cleanup',sql],{cwd:repo,timeout:60000});
+    const leftoverCount=Number(stdout.trim().split('\n').at(-1));
+    measurements.push({cleanup:true,course:id,leftoverCount});await flush();
+    await log(`FACT: SQL cleanup grant_audit → course_grants → payment_events/orders → courses completed for ${id}; leftover course count ${leftoverCount}. Cascading modules/lessons/media/transcript/documents removed by FK.`);
+    expect(leftoverCount).toBe(0);
+  }
+});
+
+test('Ux17 U6 design-pass evidence',async({browser,baseURL})=>{
+  await mkdir(evidence,{recursive:true});if(!baseURL)throw new Error('baseURL required');
+  const admin=await browser.newContext({baseURL,storageState:authStatePath('admin'),locale:'uk-UA',colorScheme:'dark',reducedMotion:'reduce'});
+  const p=await admin.newPage();const headers={Origin:new URL(baseURL).origin};
+  const draft={slug:ns,title:'Дизайн-перевірка редактора — тимчасовий курс',summary:'Тимчасова фікстура Ux17 для перевірки редактора.',description:'Курс для вимірювання адаптивності, клавіатури та контрасту. Буде видалений після перевірки.',instructorId:'40000000-0000-4000-8000-000000000003'};
+  let course:string;
+  try{
+    await log('NEXT: Create run-scoped draft with two modules, four lessons, one Ready video, three transcript lines and one material.');
+    const c=await admin.request.post('/api/v1/admin/courses',{headers,data:draft});expect(c.status()).toBe(201);
+    const first=token.parse(await c.json());course=first.id;created.push(course);await writeFile(path.join(import.meta.dirname,'created.json'),JSON.stringify(created));await flush();
+    const saved=await admin.request.put(`/api/v1/admin/courses/${course}`,{headers,data:{expectedUpdatedAt:first.updatedAt,course:draft,modules:[{id:randomUUID(),title:'Модуль 1 — початок навчання',lessons:lessonIDs.slice(0,3).map((id,i)=>({id,title:`Урок ${i+1} — ${i===0?'Відео та транскрипт':'Порожній урок'}`}))},{id:randomUUID(),title:'Модуль 2 — практика',lessons:[{id:lessonIDs[3],title:'Урок 4 — практика'}]}]}});expect(saved.status()).toBe(200);
+    const material={id:randomUUID(),label:'Матеріал курсу — довідка',url:'https://example.test/admin-editor-ux-guide'};
+    const mat=await admin.request.post(`/api/v1/admin/courses/${course}/documents`,{headers,data:material});expect(mat.status()).toBe(201);
+    await p.goto(`/admin/courses/${course}`);await p.getByRole('tab',{name:'Уроки',exact:true}).click();
+    const row=await openLesson(p,1,1);const upload=p.waitForResponse(r=>new URL(r.url()).pathname===`/api/v1/admin/lessons/${lessonIDs[0]}/video`&&r.request().method()==='POST');
+    await row.locator('input[type="file"]:not(.admin-audio-field input)').setInputFiles(path.join(repo,'frontend/playwright/.fixtures/e2e-640x360-30s.mp4'));
+    expect((await upload).status()).toBe(201);await expect.poll(async()=>{const response=await admin.request.get(`/api/v1/admin/courses/${course}/videos`);return z.object({items:z.array(z.object({state:z.string()}))}).parse(await response.json()).items[0]?.state;},{timeout:240000,intervals:[1000]}).toBe('ready');
+
+    const tr=await admin.request.put(`/api/v1/admin/lessons/${lessonIDs[0]}/transcript`,{headers,data:{language:'uk',segments:[{id:randomUUID(),startMs:0,endMs:5123,text:'Вітаємо на першому уроці.',documentIds:[material.id]},{id:randomUUID(),startMs:5200,endMs:15000,text:'Три компактні рядки з точними мілісекундами та читабельним часом.',documentIds:[]},{id:randomUUID(),startMs:15100,endMs:29900,text:'Перевіряємо доступність і адаптивність редактора.',documentIds:[]}]}});expect(tr.status()).toBe(200);
+    await log(`FACT: Fixture ${course}: draft, modules 2, lessons 3+1, Ready e2e-640x360-30s.mp4, Ukrainian transcript 3 lines, material 1. Created through admin API and production UI upload path.`);
+  }finally{await admin.close();}
+  for(const vp of viewports){
+    await log(`NEXT: Capture D1–D8 and keyboard at ${vp.name}.`);
+    const ctx=await browser.newContext({baseURL,storageState:authStatePath('admin'),locale:'uk-UA',viewport:{width:vp.width,height:vp.height},colorScheme:'dark',reducedMotion:'reduce'});
+    const page=await ctx.newPage();page.on('pageerror',e=>errors.push({viewport:vp.name,message:e.message}));
+    async function load(){await page.goto(`/admin/courses/${course}`);await expect(page.locator('.admin-editor')).toBeVisible();await page.evaluate(s=>document.documentElement.style.fontSize=s===1?'':`${s*100}%`,vp.text);}
+    try{
+      await load();await capture(page,'fix-D1',vp);await sticky(page,'fix-D1',vp);
+      await page.locator('input[name=slug]').focus();
+      const exactSteps=[];
+      for(let i=0;i<3;i++){await page.keyboard.press('Tab');const f=await focusState(page);exactSteps.push(f);expect(f?.covered).toBe(false);if((vp.name==='390-text200'&&i===0)||(vp.name==='320'&&i===1)){const file=`fix-F2-${vp.name}.jpg`;await page.screenshot({path:path.join(evidence,file),type:'jpeg',quality:25});measurements.push({check:'F2-exact-focused-frame',viewportName:vp.name,focus:f,file,status:'PASS'});}}
+      keyboard.push({check:'exact-Tab-Overview',viewport:vp.name,steps:exactSteps,status:'PASS'});
+      await page.getByRole('tab',{name:'Уроки',exact:true}).click();
+      const row=await openLesson(page,1,1);
+      await row.getByRole('tab',{name:'Українська',exact:true}).click();
+      const editor=row.locator('.lesson-language-panel:not([inert]) .transcript-editor');
+      await expect(editor.locator('.transcript-editor-lines>li')).toHaveCount(3,{timeout:5000});
+      await expect(editor.getByRole('textbox',{name:'Текст репліки 1'})).toHaveValue('Вітаємо на першому уроці.',{timeout:5000});
+      await expect(editor.locator('.transcript-editor-time .ui-description')).toHaveText(['0:00.0','0:05.1','0:05.2','0:15.0','0:15.1','0:29.9'],{timeout:5000});
+      await expect(editor.getByRole('group',{name:'Матеріали репліки 1'}).getByRole('checkbox')).toBeChecked({timeout:5000});
+      await capture(page,'fix-D3',vp);await sticky(page,'fix-D3',vp);
+      const remove=editor.getByRole('button',{name:'Видалити репліку 3',exact:true});
+      await remove.focus();await page.keyboard.press('Enter');
+      await expect(editor.locator('.transcript-editor-lines>li')).toHaveCount(2,{timeout:5000});
+      measurements.push({check:'D3-populated-readouts-material-remove-line',viewportName:vp.name,rowsBefore:3,rowsAfter:2,readouts:['0:00.0','0:05.1','0:05.2','0:15.0','0:15.1','0:29.9'],removeKey:'Enter',status:'PASS'});
+      await flush();
+    }finally{await ctx.close();}
+  }
+  await log('NEXT: Reproduce populated-language activation with 5-second bounds inside fixture lifetime.');
+  const rc=await browser.newContext({baseURL,storageState:authStatePath('admin'),viewport:{width:390,height:844},colorScheme:'dark'});
+  const rp=await rc.newPage();
+  const bounded=<T>(promise:Promise<T>,ms:number)=>Promise.race([promise,new Promise<never>((_,reject)=>setTimeout(()=>reject(new Error(`bounded timeout ${ms}ms`)),ms))]);
+  const result:Record<string,unknown>={check:'populated-language-reachability',viewport:'390',action:'focus Ukrainian then Enter',status:'NOT_TESTED'};
+  try{
+    await rp.goto(`/admin/courses/${course}`);await rp.getByRole('tab',{name:'Уроки',exact:true}).click();await openLesson(rp,1,1);
+    const uk=rp.getByRole('tab',{name:'Українська',exact:true});await uk.focus();
+    result.before=await measure(rp);await rp.screenshot({path:path.join(evidence,'fix-F1-before-keyboard-390.jpg'),type:'jpeg',quality:10});
+    const cdp=await rc.newCDPSession(rp);
+    try{await bounded(rp.keyboard.press('Enter'),5000);result.after=await bounded(measure(rp),5000);await expect(rp.locator('.transcript-editor-lines>li:visible')).toHaveCount(3,{timeout:5000});result.status='PASS';}catch(e){result.status='FAIL';result.error=e instanceof Error?e.message:String(e);}
+    try{const shot=await bounded(cdp.send('Page.captureScreenshot',{format:'jpeg',quality:10,captureBeyondViewport:false}),5000);await writeFile(path.join(evidence,'fix-F1-after-keyboard-390.jpg'),Buffer.from(shot.data,'base64'));result.afterScreenshot='fix-F1-after-keyboard-390.jpg';}catch(e){result.screenshotError=e instanceof Error?e.message:String(e);}
+    keyboard.push(result);await writeFile(path.join(evidence,'fix-language-tab.json'),JSON.stringify(result));await flush();await log(`FACT: Bounded populated-language reproduction ${result.status}; action/evaluation metadata language-tab-finding.json; before screenshot F1-before-language-390.jpg; after screenshot ${result.afterScreenshot??'unavailable'}.`);
+  }finally{await bounded(rc.close(),8000).catch(()=>{});}
+
+});

@@ -1,0 +1,2 @@
+import { defineConfig, devices } from '@playwright/test';
+export default defineConfig({testDir:'.',testMatch:['harness.spec.ts'],workers:1,retries:0,timeout:1500000,outputDir:'./out',reporter:'line',use:{baseURL:'http://localhost:8080',...devices['Desktop Chrome'],locale:'uk-UA',colorScheme:'dark',reducedMotion:'reduce',trace:'off',video:'off',screenshot:'off',actionTimeout:15000}});
