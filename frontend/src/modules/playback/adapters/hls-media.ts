@@ -122,7 +122,8 @@ export function createHlsMedia(
   });
   hls.on(Events.BUFFER_APPENDING, (_event, data) => {
     if (data.type !== 'audio') return;
-    coverage.appending(data.frag);
+    const track = hls.audioTracks[data.frag.level];
+    coverage.appending(data.frag, track === undefined ? undefined : captionLanguageOf(track.lang));
     recompute();
   });
   hls.on(Events.BUFFER_APPENDED, (_event, data) => {

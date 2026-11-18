@@ -179,6 +179,7 @@ event поточного mount без порівняння generation [r3-2]; `e
 | відповідь іншої мови | ніколи не рендериться → «немає» | |
 | помилка запиту | нема; відтворення триває | «Не вдалося завантажити транскрипт» + «Спробувати ще» (`refetch`) |
 Без `keepPreviousData`/`placeholderData`. У режимі `exact` запит `learn.lesson(lessonId, мова)` і `enabled` лише з мовою [r3-13].
+Рішення власника (Courses 1, 2026-11-18): «запит у польоті» означає нову мову без даних (`isPending`); фоновий refetch тієї самої мови зберігає транскрипт, captions і стан search/follow (перевірка: route regression «MS4 same-language background refetch»), без `keepPreviousData`.
 До Play субтитрів нема в жодному рядку (медіа не завантажене).
 
 ### M6. `<track>`, `captionsOn`, шестерня [r1-6, r1-10]

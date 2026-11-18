@@ -456,6 +456,39 @@ test('an immediate failed replacement retry stays pending through the audio even
   media.destroy();
 });
 
+test('failed partially appended en cannot immediately reconfirm de on return', async () => {
+  const { media, hls, video, selections, buffer, manifest, created, append } = hlsFixture('de');
+  video.currentTime = 0;
+  buffer.buffered = ranges(0, 6);
+  media.load('/master');
+  manifest();
+  created();
+  append({ start: 0, end: 6, level: 1 });
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'de' });
+  video.currentTime = 2.5;
+  hls.audioTrack = 0;
+  const failed = { start: 0, end: 6, level: 0 };
+  hls.emit(Events.BUFFER_APPENDING, { type: 'audio', frag: failed });
+  hls.emit(Events.BUFFER_APPENDED, { type: 'audio', frag: failed });
+  hls.emit(Events.ERROR, { frag: failed, fatal: false, details: 'bufferAppendError' });
+  await Promise.resolve();
+  video.currentTime = 2.6;
+  hls.audioTrack = 1;
+  append({ start: 0, end: 6, level: 1 });
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'de' });
+  video.currentTime = 4.09;
+  video.dispatchEvent(new Event('timeupdate'));
+  await Promise.resolve();
+  expect(selections.at(-1)?.state).toBe('pending');
+  video.currentTime = 4.1;
+  video.dispatchEvent(new Event('timeupdate'));
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'de' });
+  media.destroy();
+});
+
 test('initial selection and successive SWITCHING languages report requested before any confirmation', async () => {
   const { media, hls, selections, manifest } = hlsFixture();
   media.load('/master');

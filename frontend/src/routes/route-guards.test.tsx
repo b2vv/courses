@@ -2246,6 +2246,81 @@ test('MS4 SWITCHING requests ?language=de before confirmation while the panel an
   expect(document.querySelector('track')).toBeNull();
 });
 
+test('MS4 same-language background refetch keeps de captions and panel search/follow state', async () => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  let holdRefetch = false;
+  const f = await captionRouteFixture({
+    remembered: 'de',
+    read: async (id, language) => {
+      reads += 1;
+      if (holdRefetch) await held;
+      return {
+        ok: true,
+        value: {
+          lessonId: id,
+          language: language ?? null,
+          updatedAt: null,
+          stale: false,
+          segments: [
+            {
+              id: '70000000-0000-4000-8000-000000000001',
+              startMs: 0,
+              endMs: 1000,
+              text: 'Caption de',
+              documentIds: [],
+            },
+          ],
+          documents: [],
+        },
+      };
+    },
+  });
+  await screen.findByText('Caption de');
+  const queryKey = lessonTranscriptQueryKey('30000000-0000-4000-8000-000000000001', 'de');
+  const client = f.router.options.context.queryClient;
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(f.media.callbacks).toBeDefined());
+  await act(async () => {
+    f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'de' });
+  });
+  await waitFor(() => expect(client.getQueryState(queryKey)?.fetchStatus).toBe('idle'));
+  const search = await screen.findByRole('searchbox');
+  const panel = screen.getByRole('region', { name: 'Transcript' });
+  fireEvent.wheel(within(panel).getByRole('list'));
+  expect(within(panel).getByRole('button', { name: 'Follow playback' })).toBeTruthy();
+  fireEvent.change(search, { target: { value: 'Caption' } });
+  const track = document.querySelector('track');
+  expect(track?.getAttribute('srclang')).toBe('de');
+  const beforeRefetch = reads;
+  holdRefetch = true;
+  let refetch: Promise<void> | undefined;
+  act(() => {
+    refetch = client.refetchQueries({ queryKey, exact: true });
+  });
+  try {
+    await waitFor(() => expect(reads).toBe(beforeRefetch + 1));
+    await waitFor(() => expect(client.getQueryState(queryKey)?.fetchStatus).toBe('fetching'));
+    await act(async () => {});
+    expect(screen.queryByText('Caption de')).toBeTruthy();
+    expect(document.querySelector('track')).toBe(track);
+    expect(within(panel).getByRole('searchbox')).toBe(search);
+    expect(within(panel).getByDisplayValue('Caption')).toBe(search);
+  } finally {
+    await act(async () => {
+      release();
+      await refetch;
+    });
+  }
+  expect(within(panel).getByDisplayValue('Caption')).toBe(search);
+  fireEvent.change(search, { target: { value: '' } });
+  expect(within(panel).getByRole('button', { name: 'Follow playback' })).toBeTruthy();
+  expect(document.querySelector('track')).toBe(track);
+});
+
 test('MS4 error retry refetches the exact transcript without stopping the player', async () => {
   let fail = true;
   const f = await captionRouteFixture({

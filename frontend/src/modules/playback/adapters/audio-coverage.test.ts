@@ -277,6 +277,29 @@ test.each(['failed', 'in-flight', 'completed-then-failed'] as const)(
   },
 );
 
+test('returning to de after a partially appended failed en attempt waits for the new settle window', () => {
+  const map = createAudioCoverage();
+  const seg = { start: 0, end: 6 };
+  const buffered = () => ranges([0, 6]);
+  map.appending(seg, 'de');
+  map.appended(seg);
+  map.buffered(seg, 'de', FAR_AHEAD);
+  map.endDispatch();
+  map.appending(seg, 'en');
+  map.appended(seg);
+  map.error(seg); // Some en samples may already be decoded; no clean FRAG_BUFFERED.
+  map.endDispatch();
+  expect(map.selection('en', 2.5, buffered)).toEqual(pending);
+  map.appending(seg, 'de');
+  map.appended(seg);
+  map.buffered(seg, 'de', 2.6);
+  map.endDispatch();
+  const deadline = 2.6 + REPLACEMENT_SETTLE_SECONDS;
+  expect(map.selection('de', 2.6, buffered)).toEqual(pending);
+  expect(map.selection('de', deadline - 0.01, buffered)).toEqual(pending);
+  expect(map.selection('de', deadline, buffered)).toEqual({ state: 'confirmed', language: 'de' });
+});
+
 test.each(['en', 'fr'])(
   'overlapping %s append inherits the latest deadline even when its own window ends earlier',
   (language) => {

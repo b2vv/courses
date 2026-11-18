@@ -223,7 +223,7 @@ function OpenLesson({
         : transcriptPanelState({
             language,
             data: transcriptQuery.data,
-            isPending: transcriptQuery.isPending || transcriptQuery.isFetching,
+            isPending: transcriptQuery.isPending,
             isError: transcriptQuery.isError,
             onRetry: () => void transcriptQuery.refetch(),
           });

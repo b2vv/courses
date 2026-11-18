@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 import { z } from 'zod';
 import { authStatePath } from './auth';
+import { cleanupSubtitlesCourse } from './subtitles-cleanup';
 
 // MS4 r9 M9/M10. Run the entire file: beforeAll prepares the course, E8 patches E6's lesson.
 // A failed serial row stops that run; run the remaining rows with --no-deps -g after setup,
@@ -32,6 +33,7 @@ const tracksSchema = z.object({
   ),
 });
 let courseID = '';
+const cleanupCourseIDs = new Set<string>();
 let deID = '';
 let admin: APIRequestContext;
 let headers: { Origin: string };
@@ -562,8 +564,11 @@ test.describe('MS4 captions follow decoded audio', () => {
       };
       const created = await admin.post('/api/v1/admin/courses', { headers, data: draft });
       expect(created.status(), await created.text()).toBe(201);
-      const first = tokenSchema.parse(await created.json());
-      courseID = first.id;
+      const payload: unknown = await created.json();
+      courseID = tokenSchema.pick({ id: true }).parse(payload).id;
+      // Register before timestamp validation or any further setup can fail.
+      cleanupCourseIDs.add(courseID);
+      const first = tokenSchema.parse(payload);
       const saved = await admin.put(`/api/v1/admin/courses/${courseID}`, {
         headers,
         data: {
@@ -644,15 +649,11 @@ test.describe('MS4 captions follow decoded audio', () => {
     }
   });
   test.afterAll(async () => {
-    if (!courseID || !admin) return;
-    const current = await admin.get(`/api/v1/admin/courses/${courseID}`);
-    const { updatedAt } = tokenSchema.parse(await current.json());
-    const archived = await admin.post(`/api/v1/admin/courses/${courseID}/status`, {
-      headers,
-      data: { expectedUpdatedAt: updatedAt, status: 'archived' },
-    });
-    expect(archived.status(), await archived.text()).toBe(200);
-    await admin.dispose();
+    try {
+      for (const id of cleanupCourseIDs) await cleanupSubtitlesCourse(id);
+    } finally {
+      await admin?.dispose();
+    }
   });
   test.beforeEach(async ({ page }) => {
     await resetProgress();

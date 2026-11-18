@@ -5,6 +5,7 @@ type Attempt = {
   appended: boolean;
   failed: boolean;
   completed: boolean;
+  attemptedLanguage: string | undefined;
   language: string | undefined;
   /** Languages overwritten directly or inherited through an uncertain overlapping attempt. */
   replaced: readonly string[];
@@ -46,7 +47,7 @@ export function createAudioCoverage() {
   }
 
   return {
-    appending(frag: AudioFragment) {
+    appending(frag: AudioFragment, attemptedLanguage?: string) {
       const replaced = new Set<string>();
       let settleUntil: number | undefined;
       for (const label of spans) {
@@ -57,7 +58,10 @@ export function createAudioCoverage() {
             ? previous.language === undefined
               ? []
               : [previous.language.toLowerCase()]
-            : previous.replaced;
+            : [
+                ...previous.replaced,
+                ...(previous.attemptedLanguage === undefined ? [] : [previous.attemptedLanguage]),
+              ];
         for (const language of languages) replaced.add(language);
         if (previous.settleUntil !== undefined)
           settleUntil = Math.max(settleUntil ?? -Infinity, previous.settleUntil);
@@ -67,6 +71,7 @@ export function createAudioCoverage() {
         appended: false,
         failed: dispatchErrors.has(frag),
         completed: false,
+        attemptedLanguage: attemptedLanguage?.toLowerCase(),
         language: undefined,
         replaced: [...replaced],
         settleUntil,
