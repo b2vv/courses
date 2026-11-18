@@ -13,7 +13,6 @@ import { authStatePath } from './auth';
 const namespace = `e2e-subtitles-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fixtures');
 const execute = promisify(execFile);
-const kiri = '/Users/strelia/project-data/courses-kiri/courses-kiri';
 const root = path.resolve(import.meta.dirname, '../..');
 const ids = { a: randomUUID(), b: randomUUID(), und: randomUUID() };
 const tokenSchema = z.object({ id: z.string().uuid(), updatedAt: z.string() });
@@ -87,9 +86,8 @@ async function renameEmbedded(lesson: string, language: string) {
 async function resetProgress() {
   // Only this run's lessons. No seed reset and no global Docker context change.
   await execute(
-    kiri,
+    'docker',
     [
-      'docker',
       'compose',
       'exec',
       '-T',
@@ -1058,8 +1056,9 @@ test.describe('MS4 captions follow decoded audio', () => {
     ).toBeVisible({ timeout: 60_000 });
     await noShowing(page);
     const before = (await peak(page)).time;
-    await page.waitForTimeout(900);
-    expect((await peak(page)).time).toBeGreaterThan(before);
+    await expect
+      .poll(async () => (await peak(page)).time, { timeout: 15_000 })
+      .toBeGreaterThan(before);
     await page.unrouteAll({ behavior: 'wait' });
     await panel(page).getByRole('button', { name: 'Спробувати ще', exact: true }).click();
     await showing(page, 'de');

@@ -38,6 +38,21 @@ test.each([
     { mode: 'off', panel: 'loading' },
   ],
   [
+    'pending requested language starts exact query',
+    { record: event(1, { state: 'pending', requested: 'DE' }) },
+    { mode: 'exact', language: 'de', pending: true },
+  ],
+  [
+    'pending und never requests',
+    { record: event(1, { state: 'pending', requested: 'UND' }) },
+    { mode: 'off', panel: 'none-for-track' },
+  ],
+  [
+    'pending und family never requests',
+    { record: event(1, { state: 'pending', requested: 'uNd-x-original' }) },
+    { mode: 'off', panel: 'none-for-track' },
+  ],
+  [
     'unavailable',
     { record: event(1, { state: 'unavailable' }) },
     { mode: 'off', panel: 'none-for-track' },

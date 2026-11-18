@@ -218,13 +218,15 @@ function OpenLesson({
       ? query.panel === 'hidden'
         ? null
         : { kind: query.panel }
-      : transcriptPanelState({
-          language,
-          data: transcriptQuery.data,
-          isPending: transcriptQuery.isPending || transcriptQuery.isFetching,
-          isError: transcriptQuery.isError,
-          onRetry: () => void transcriptQuery.refetch(),
-        });
+      : query.mode === 'exact' && query.pending
+        ? { kind: 'loading' as const }
+        : transcriptPanelState({
+            language,
+            data: transcriptQuery.data,
+            isPending: transcriptQuery.isPending || transcriptQuery.isFetching,
+            isError: transcriptQuery.isError,
+            onRetry: () => void transcriptQuery.refetch(),
+          });
   const transcript = panelState?.kind === 'transcript' ? panelState.transcript : undefined;
   const captionsLoaded = lesson.videoState === 'ready' && captionRecord?.mount === mount;
   // The document body is additive and not suspended on either: a reader failure must not stop the

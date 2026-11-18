@@ -247,3 +247,64 @@ test('a same-language re-append and a far-ahead replacement are not delayed', ()
   expect(map.selection('en', 2.1, buffered)).toEqual(en);
   expect(map.selection('en', 12.1, buffered)).toEqual(en);
 });
+
+test.each(['failed', 'in-flight', 'completed-then-failed'] as const)(
+  'replacement history survives an overlapping %s attempt until the retry settles',
+  (state) => {
+    const map = createAudioCoverage();
+    const seg = { start: 0, end: 6 };
+    const buffered = () => ranges([0, 6]);
+    map.appending(seg);
+    map.appended(seg);
+    map.buffered(seg, 'de', FAR_AHEAD);
+    map.endDispatch();
+    map.appending(seg);
+    if (state === 'completed-then-failed') {
+      map.appended(seg);
+      map.buffered(seg, 'en', 2.5);
+    }
+    if (state !== 'in-flight') map.error(seg);
+    map.endDispatch();
+    const retry = { start: 0, end: 6 };
+    map.appending(retry);
+    map.appended(retry);
+    map.buffered(retry, 'en', 2.6);
+    map.endDispatch();
+    const deadline = 2.6 + REPLACEMENT_SETTLE_SECONDS;
+    expect(map.selection('en', 2.6, buffered).state).toBe('pending');
+    expect(map.selection('en', deadline - 0.01, buffered).state).toBe('pending');
+    expect(map.selection('en', deadline, buffered)).toEqual(en);
+  },
+);
+
+test.each(['en', 'fr'])(
+  'overlapping %s append inherits the latest deadline even when its own window ends earlier',
+  (language) => {
+    const map = createAudioCoverage();
+    const seg = { start: 0, end: 6 };
+    const buffered = () => ranges([0, 6]);
+    map.appending(seg);
+    map.appended(seg);
+    map.buffered(seg, 'de', FAR_AHEAD);
+    map.endDispatch();
+    // Two outstanding replacements with different deadlines. A seek back makes the next window
+    // earlier; a fresh append must never shorten the outstanding decode/render guard.
+    for (const [start, end, now] of [
+      [0, 3, 2],
+      [3, 6, 3.5],
+    ] as const) {
+      const part = { start, end };
+      map.appending(part);
+      map.appended(part);
+      map.buffered(part, 'en', now);
+      map.endDispatch();
+    }
+    map.appending(seg);
+    map.appended(seg);
+    map.buffered(seg, language, 2.6);
+    map.endDispatch();
+    const deadline = 3.5 + REPLACEMENT_SETTLE_SECONDS;
+    expect(map.selection(language, deadline - 0.01, buffered).state).toBe('pending');
+    expect(map.selection(language, deadline, buffered)).toEqual({ state: 'confirmed', language });
+  },
+);

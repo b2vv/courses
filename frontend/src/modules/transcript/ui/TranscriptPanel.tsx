@@ -32,7 +32,7 @@ export function TranscriptPanel({ state, positionMs, onSeek }: TranscriptPanelPr
   return (
     <section className="transcript" aria-labelledby="transcript-heading">
       <h2 id="transcript-heading">{t('learn.transcript.heading')}</h2>
-      <p className="transcript-empty" {...(state.kind === 'loading' ? { role: 'status' } : {})}>
+      <p className="transcript-empty" role={state.kind === 'error' ? 'alert' : 'status'}>
         {state.kind === 'loading'
           ? t('common.loading')
           : state.kind === 'error'

@@ -25,7 +25,10 @@ import { createAdminAudioQueries } from '../app/composition/admin-audio-queries'
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
-import { createMemoryTranscriptHistory } from '../modules/transcript';
+import {
+  createApiTranscriptRepository,
+  createMemoryTranscriptHistory,
+} from '../modules/transcript';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import {
   createAdminDocumentQueries,
@@ -2186,6 +2189,61 @@ test('MS4 post-load pending does not fall back to prediction; confirmed language
   );
   expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
   expect(f.requests).toEqual(['en', 'de']);
+});
+
+test('MS4 SWITCHING requests ?language=de before confirmation while the panel and track stay gated', async () => {
+  const urls: string[] = [];
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/lessons/:lessonId/transcript`, ({ request, params }) => {
+      urls.push(request.url);
+      const language = new URL(request.url).searchParams.get('language');
+      return HttpResponse.json({
+        lessonId: params.lessonId,
+        language,
+        updatedAt: null,
+        stale: false,
+        segments: [
+          {
+            id: '70000000-0000-4000-8000-000000000001',
+            startMs: 0,
+            endMs: 1000,
+            text: `Wire caption ${language}`,
+            documentIds: [],
+          },
+        ],
+        documents: [],
+      });
+    }),
+  );
+  const f = await captionRouteFixture({
+    read: createApiTranscriptRepository().getLessonTranscript,
+  });
+  await screen.findByText('Wire caption en');
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(screen.queryByText('Wire caption en')).toBeNull());
+  // The adapter unit drives the real SWITCHING event; this boundary drives its callback payload.
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'pending', requested: 'DE' }));
+  await waitFor(() => expect(urls.some((url) => url.endsWith('?language=de'))).toBe(true));
+  await waitFor(() =>
+    expect(
+      f.router.options.context.queryClient.getQueryState(
+        lessonTranscriptQueryKey('30000000-0000-4000-8000-000000000001', 'de'),
+      )?.status,
+    ).toBe('success'),
+  );
+  const panel = within(screen.getByRole('region', { name: 'Transcript' }));
+  expect(panel.getByRole('status').textContent).toBe('Loading');
+  expect(screen.queryByText('Wire caption de')).toBeNull();
+  expect(document.querySelector('track')).toBeNull();
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'DE' }));
+  expect(await screen.findByText('Wire caption de')).toBeTruthy();
+  expect(document.querySelector('track')?.getAttribute('srclang')).toBe('de');
+  act(() =>
+    f.media.callbacks?.onCaptionSelection({ state: 'pending', requested: 'UND-x-original' }),
+  );
+  expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
+  expect(urls).toHaveLength(2);
+  expect(document.querySelector('track')).toBeNull();
 });
 
 test('MS4 error retry refetches the exact transcript without stopping the player', async () => {

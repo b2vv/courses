@@ -188,13 +188,17 @@ test('paused map changes confirm only once; selection cancellation needs no SWIT
   created();
   append();
   await Promise.resolve();
-  expect(selections).toEqual([{ state: 'pending' }, { state: 'confirmed', language: 'en' }]);
+  expect(selections).toEqual([
+    { state: 'pending' },
+    { state: 'pending', requested: 'en' },
+    { state: 'confirmed', language: 'en' },
+  ]);
   video.dispatchEvent(new Event('pause'));
   hls.emit(Events.BUFFER_APPENDED, { type: 'audio', frag });
   await Promise.resolve();
-  expect(selections).toHaveLength(2);
+  expect(selections).toHaveLength(3);
   expect(media.selectAudioTrack('DE')).toBe(true);
-  expect(selections.at(-1)).toEqual({ state: 'pending' });
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'de' });
   expect(media.selectAudioTrack('EN')).toBe(true);
   await Promise.resolve();
   expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'en' });
@@ -204,7 +208,7 @@ test('paused map changes confirm only once; selection cancellation needs no SWIT
   video.currentTime = 15;
   video.dispatchEvent(new Event('timeupdate'));
   await Promise.resolve();
-  expect(selections.at(-1)).toEqual({ state: 'pending' });
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
   media.destroy();
 });
 
@@ -224,7 +228,7 @@ test.each(['before', 'after'] as const)(
     hls.emit(Events.BUFFER_APPENDING, { type: 'audio', frag });
     hls.emit(Events.BUFFER_APPENDED, { type: 'audio', frag });
     await Promise.resolve();
-    expect(selections).toEqual([{ state: 'pending' }]);
+    expect(selections).toEqual([{ state: 'pending' }, { state: 'pending', requested: 'en' }]);
     media.destroy();
   },
 );
@@ -239,7 +243,7 @@ test('nested FRAG_BUFFERED before our APPENDED listener confirms only after disp
   created();
   hls.emit(Events.BUFFER_APPENDING, { type: 'audio', frag });
   hls.emit(Events.BUFFER_APPENDED, { type: 'audio', frag });
-  expect(selections).toEqual([{ state: 'pending' }]);
+  expect(selections).toEqual([{ state: 'pending' }, { state: 'pending', requested: 'en' }]);
   await Promise.resolve();
   expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'en' });
   media.destroy();
@@ -264,7 +268,7 @@ test.each([
   buffer.buffered = ranges(0, 4); // video.buffered may still include 5, especially at EOS
   if (event.startsWith('hls')) hls.emit(event);
   else video.dispatchEvent(new Event(event));
-  expect(selections.at(-1)).toEqual({ state: 'pending' });
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
   await Promise.resolve();
   media.destroy();
 });
@@ -282,10 +286,10 @@ test.each([Events.BUFFER_RESET, Events.MEDIA_DETACHING, 'load'])(
       media.load('/again');
       manifest();
     } else hls.emit(event);
-    expect(selections.at(-1)).toEqual({ state: 'pending' });
+    expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
     append(); // the old SourceBuffer reference must not be enough
     await Promise.resolve();
-    expect(selections.at(-1)).toEqual({ state: 'pending' });
+    expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
     created();
     await Promise.resolve();
     expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'en' });
@@ -321,14 +325,17 @@ function nativeFixture() {
 test('native pending precedes load; loadedmetadata confirms exactly one enabled nonempty language', () => {
   const { video, media, selections } = nativeFixture();
   Object.defineProperty(video, 'load', {
-    value: () => expect(selections.at(-1)).toEqual({ state: 'pending' }),
+    value: () => expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' }),
   });
   expect(selections).toEqual([]);
   media.load('/native');
   video.dispatchEvent(new Event('loadedmetadata'));
-  expect(selections).toEqual([{ state: 'pending' }, { state: 'confirmed', language: 'en' }]);
+  expect(selections).toEqual([
+    { state: 'pending', requested: 'en' },
+    { state: 'confirmed', language: 'en' },
+  ]);
   media.load('/again');
-  expect(selections.at(-1)).toEqual({ state: 'pending' });
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
   media.destroy();
 });
 
@@ -397,7 +404,7 @@ test('destroy removes media listeners and never reports from queued or late even
   hls.emit(Events.MEDIA_DETACHING);
   video.dispatchEvent(new Event('progress'));
   await Promise.resolve();
-  expect(selections).toEqual([{ state: 'pending' }]);
+  expect(selections).toEqual([{ state: 'pending' }, { state: 'pending', requested: 'en' }]);
 });
 
 // MS4 E6 (2026-11-18): a fresh upload's master names its embedded rendition without LANGUAGE. That
@@ -415,5 +422,62 @@ test('a rendition without LANGUAGE confirms und and adds no menu value', async (
   await Promise.resolve();
   expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'und' });
   expect(menu).toEqual([]);
+  media.destroy();
+});
+
+test('an immediate failed replacement retry stays pending through the audio event tap', async () => {
+  const { media, hls, video, selections, buffer, manifest, created, append } = hlsFixture('de');
+  video.currentTime = 0;
+  buffer.buffered = ranges(0, 6);
+  media.load('/master');
+  manifest();
+  created();
+  append({ start: 0, end: 6, level: 1 });
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'de' });
+  video.currentTime = 2.5;
+  hls.audioTrack = 0;
+  const retry = { start: 0, end: 6, level: 0 };
+  hls.emit(Events.BUFFER_APPENDING, { type: 'audio', frag: retry });
+  hls.emit(Events.ERROR, { frag: retry, fatal: false, details: 'bufferAppendError' });
+  await Promise.resolve();
+  video.currentTime = 2.6;
+  append(retry);
+  await Promise.resolve();
+  expect(selections.at(-1)?.state).toBe('pending');
+  video.currentTime = 4;
+  video.dispatchEvent(new Event('timeupdate'));
+  await Promise.resolve();
+  expect(selections.at(-1)?.state).toBe('pending');
+  video.currentTime = 4.1;
+  video.dispatchEvent(new Event('timeupdate'));
+  await Promise.resolve();
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'en' });
+  media.destroy();
+});
+
+test('initial selection and successive SWITCHING languages report requested before any confirmation', async () => {
+  const { media, hls, selections, manifest } = hlsFixture();
+  media.load('/master');
+  manifest();
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
+  hls.audioTrack = 1;
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'de' });
+  const count = selections.length;
+  hls.audioTrack = 1;
+  await Promise.resolve();
+  expect(selections).toHaveLength(count);
+  hls.audioTrack = 0;
+  expect(selections.at(-1)).toEqual({ state: 'pending', requested: 'en' });
+  expect(selections.every((selection) => selection.state === 'pending')).toBe(true);
+  media.destroy();
+});
+
+test('native load reports a known requested language before metadata confirms it', () => {
+  const { media, video, selections } = nativeFixture();
+  media.load('/native');
+  expect(selections).toEqual([{ state: 'pending', requested: 'en' }]);
+  video.dispatchEvent(new Event('loadedmetadata'));
+  expect(selections.at(-1)).toEqual({ state: 'confirmed', language: 'en' });
   media.destroy();
 });

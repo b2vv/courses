@@ -151,14 +151,20 @@ test.each([
   [{ kind: 'none' }, 'У цього уроку ще немає транскрипту.'],
 ] as const)('M09 renders $kind state', (state, copy) => {
   render(<TranscriptPanel state={state} positionMs={0} />);
-  expect(screen.getByText(copy)).toBeTruthy();
+  const panel = within(screen.getByRole('region', { name: 'Транскрипт' }));
+  expect(panel.getAllByRole('status')).toHaveLength(1);
+  expect(panel.getByRole('status').textContent).toBe(copy);
+  expect(panel.queryByRole('alert')).toBeNull();
   expect(screen.queryByRole('searchbox')).toBeNull();
 });
 
 test('M09 error offers retry', () => {
   const onRetry = rstest.fn();
   render(<TranscriptPanel state={{ kind: 'error', onRetry }} positionMs={0} />);
-  expect(screen.getByText('Не вдалося завантажити транскрипт')).toBeTruthy();
+  const panel = within(screen.getByRole('region', { name: 'Транскрипт' }));
+  expect(panel.getAllByRole('alert')).toHaveLength(1);
+  expect(panel.getByRole('alert').textContent).toBe('Не вдалося завантажити транскрипт');
+  expect(panel.queryByRole('status')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Спробувати ще' }));
   expect(onRetry).toHaveBeenCalledTimes(1);
 });

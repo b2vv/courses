@@ -6,7 +6,7 @@ type Attempt = {
   failed: boolean;
   completed: boolean;
   language: string | undefined;
-  /** Languages of completed labels this attempt overwrote. */
+  /** Languages overwritten directly or inherited through an uncertain overlapping attempt. */
   replaced: readonly string[];
   /** Media time before which this attempt's audio may not be audible yet. */
   settleUntil: number | undefined;
@@ -47,24 +47,29 @@ export function createAudioCoverage() {
 
   return {
     appending(frag: AudioFragment) {
-      const replaced = spans.flatMap((label) =>
-        label.end > frag.start &&
-        label.start < frag.end &&
-        label.attempt.completed &&
-        label.attempt.appended &&
-        !label.attempt.failed &&
-        label.attempt.language !== undefined
-          ? [label.attempt.language.toLowerCase()]
-          : [],
-      );
+      const replaced = new Set<string>();
+      let settleUntil: number | undefined;
+      for (const label of spans) {
+        if (label.end <= frag.start || label.start >= frag.end) continue;
+        const previous = label.attempt;
+        const languages =
+          previous.completed && previous.appended && !previous.failed
+            ? previous.language === undefined
+              ? []
+              : [previous.language.toLowerCase()]
+            : previous.replaced;
+        for (const language of languages) replaced.add(language);
+        if (previous.settleUntil !== undefined)
+          settleUntil = Math.max(settleUntil ?? -Infinity, previous.settleUntil);
+      }
       forget(frag);
       const attempt: Attempt = {
         appended: false,
         failed: dispatchErrors.has(frag),
         completed: false,
         language: undefined,
-        replaced,
-        settleUntil: undefined,
+        replaced: [...replaced],
+        settleUntil,
       };
       attempts.set(frag, attempt);
       // Span ownership prevents a late completion from relabelling a newer overlapping append.
@@ -89,7 +94,10 @@ export function createAudioCoverage() {
         frag.end > currentTime &&
         frag.start < currentTime + REPLACEMENT_SETTLE_SECONDS
       )
-        attempt.settleUntil = currentTime + REPLACEMENT_SETTLE_SECONDS;
+        attempt.settleUntil = Math.max(
+          attempt.settleUntil ?? -Infinity,
+          currentTime + REPLACEMENT_SETTLE_SECONDS,
+        );
     },
     error(frag: AudioFragment) {
       dispatchErrors.add(frag);

@@ -45,7 +45,9 @@ function selectionReporter(callbacks: PlaybackMediaCallbacks) {
       !force &&
       previous?.state === selection.state &&
       (previous.state !== 'confirmed' ||
-        (selection.state === 'confirmed' && previous.language === selection.language))
+        (selection.state === 'confirmed' && previous.language === selection.language)) &&
+      (previous.state !== 'pending' ||
+        (selection.state === 'pending' && previous.requested === selection.requested))
     )
       return;
     previous = selection;
@@ -85,11 +87,14 @@ export function createHlsMedia(
   let scheduled = false;
   const selection = () => {
     const buffer = audioBuffer;
-    return coverage.selection(
+    const current = coverage.selection(
       selected,
       video.currentTime,
       buffer === undefined ? undefined : () => buffer.buffered,
     );
+    return current.state === 'pending' && selected !== null
+      ? { state: 'pending' as const, requested: selected }
+      : current;
   };
   const recompute = () => {
     if (destroyed) return;
@@ -253,6 +258,11 @@ export function createNativeMedia(
     const tracks = video.audioTracks;
     return isNativeTracks(tracks) ? tracks : undefined;
   };
+  const selectedLanguage = (list: NativeTracks | undefined) => {
+    const enabled = list === undefined ? [] : Array.from(list).filter((track) => track.enabled);
+    const language = enabled.length === 1 ? enabled[0]?.language : undefined;
+    return language && language.trim() !== '' ? language : undefined;
+  };
   let tracks: NativeTracks | undefined;
   const trackEvents = ['change', 'addtrack', 'removetrack'] as const;
   const update = () => {
@@ -262,13 +272,8 @@ export function createNativeMedia(
       tracks = current;
       for (const event of trackEvents) tracks?.addEventListener(event, update);
     }
-    const enabled = tracks === undefined ? [] : Array.from(tracks).filter((track) => track.enabled);
-    const language = enabled.length === 1 ? enabled[0]?.language : undefined;
-    report(
-      language && language.trim() !== ''
-        ? { state: 'confirmed', language }
-        : { state: 'unavailable' },
-    );
+    const language = selectedLanguage(tracks);
+    report(language !== undefined ? { state: 'confirmed', language } : { state: 'unavailable' });
   };
   const ready = () => {
     update();
@@ -283,7 +288,11 @@ export function createNativeMedia(
   return {
     kind: 'native',
     load(source) {
-      report({ state: 'pending' }, true);
+      const language = selectedLanguage(trackList());
+      report(
+        { state: 'pending', ...(language === undefined ? {} : { requested: language }) },
+        true,
+      );
       video.src = source;
       video.load();
     },

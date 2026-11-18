@@ -18,7 +18,7 @@ export type PlaybackMediaError = {
 };
 
 export type CaptionSelection =
-  | { readonly state: 'pending' }
+  | { readonly state: 'pending'; readonly requested?: string }
   | { readonly state: 'confirmed'; readonly language: string }
   | { readonly state: 'unavailable' };
 

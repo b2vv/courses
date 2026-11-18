@@ -19,7 +19,7 @@ export function reduceCaptionSelection(
 export type CaptionQuery =
   | { readonly mode: 'off'; readonly panel: 'hidden' | 'loading' | 'none-for-track' }
   | { readonly mode: 'primary' }
-  | { readonly mode: 'exact'; readonly language: string };
+  | { readonly mode: 'exact'; readonly language: string; readonly pending?: true };
 
 /** A record for this mount means load happened: prediction can never become authoritative again. */
 export function captionQuery({
@@ -40,13 +40,20 @@ export function captionQuery({
   if (locked || emailGated) return { mode: 'off', panel: 'hidden' };
   if (!ready) return { mode: 'primary' };
   const selection = record?.mount === mount ? record.selection : null;
-  if (selection?.state === 'pending') return { mode: 'off', panel: 'loading' };
   if (selection?.state === 'unavailable') return { mode: 'off', panel: 'none-for-track' };
   const language = (
-    selection?.state === 'confirmed' ? selection.language : predictedLanguage
+    selection?.state === 'pending'
+      ? selection.requested
+      : selection?.state === 'confirmed'
+        ? selection.language
+        : predictedLanguage
   )?.toLowerCase();
   if (!language) return { mode: 'off', panel: 'loading' };
   if (language === 'und' || language.startsWith('und-'))
     return { mode: 'off', panel: 'none-for-track' };
-  return { mode: 'exact', language };
+  return {
+    mode: 'exact',
+    language,
+    ...(selection?.state === 'pending' ? { pending: true } : {}),
+  };
 }
