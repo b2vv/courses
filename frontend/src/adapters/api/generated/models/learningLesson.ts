@@ -5,9 +5,11 @@
  * Public catalog, session authentication, protected administration, learning purchases and playback-session control.
  * OpenAPI spec version: 1.0.0
  */
+import type { LearningAudioTrack } from './learningAudioTrack.ts';
 import type { LearningLessonVideoState } from './learningLessonVideoState.ts';
 
 export interface LearningLesson {
+  audioTracks: LearningAudioTrack[];
   /**
      * @minimum 0
      * @maximum 2147483647

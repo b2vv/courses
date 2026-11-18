@@ -39,6 +39,20 @@ export const learningCourseSchema = z
                   .object({
                     id,
                     title,
+                    // Same case-preserving language rule as media/domain/audio-track.ts.
+                    // Media has no per-asset track-count limit.
+                    audioTracks: z.array(
+                      z
+                        .object({
+                          language: z
+                            .string()
+                            .min(2)
+                            .max(35)
+                            .regex(/^[a-z][a-z0-9]{1,7}(-[a-z0-9]{1,8})*$/i),
+                          isDefault: z.boolean(),
+                        })
+                        .strict(),
+                    ),
                     videoState: z.enum(['processing', 'ready', 'failed']).nullable(),
                     position: z.number().finite().nonnegative(),
                     completed: z.boolean(),

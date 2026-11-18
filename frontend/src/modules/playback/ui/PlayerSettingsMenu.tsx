@@ -22,6 +22,7 @@ type PlayerSettingsMenuProps = {
     readonly isOn: boolean;
     readonly onChange: (on: boolean) => void;
   };
+  readonly captionsNoneForTrack?: string;
   /** Present only when a next lesson exists to advance to; durable autoplay-next preference. */
   readonly autoplay?: {
     readonly label: string;
@@ -42,6 +43,7 @@ export function PlayerSettingsMenu({
   quality,
   audio,
   captions,
+  captionsNoneForTrack,
   autoplay,
 }: PlayerSettingsMenuProps) {
   return (
@@ -86,6 +88,7 @@ export function PlayerSettingsMenu({
               {captions.label}
             </Switch>
           )}
+          {captionsNoneForTrack === undefined ? null : <p>{captionsNoneForTrack}</p>}
           {autoplay === undefined ? null : (
             <Switch isSelected={autoplay.isOn} onChange={autoplay.onChange}>
               {autoplay.label}

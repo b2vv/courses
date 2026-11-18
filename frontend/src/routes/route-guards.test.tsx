@@ -25,7 +25,10 @@ import { createAdminAudioQueries } from '../app/composition/admin-audio-queries'
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
 import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
-import { createMemoryTranscriptHistory } from '../modules/transcript';
+import {
+  createApiTranscriptRepository,
+  createMemoryTranscriptHistory,
+} from '../modules/transcript';
 import { createDraftQueries } from '../app/composition/admin-draft-queries';
 import {
   createAdminDocumentQueries,
@@ -885,6 +888,7 @@ test('K18 keeps the lesson usable when discussion loading fails', async () => {
             position: 0,
             completed: false,
             clientSeq: 0,
+            audioTracks: [],
             isPreview: false,
             locked: false,
           },
@@ -1140,6 +1144,7 @@ function paidCourse(): LearningCourse {
     position: 0,
     completed: false,
     clientSeq: 0,
+    audioTracks: [],
     isPreview,
     locked,
   });
@@ -1920,4 +1925,509 @@ test('guarded editor reads language inventory for its own lesson through route c
   });
   expect(calls).toEqual(['20000000-0000-4000-8000-000000000001']);
   expect(screen.getByRole('tab', { name: 'en-gb' })).toBeTruthy();
+});
+
+// MS4 exercises the real learn route and Query options, including the repository call (not only
+// the helper's decision). Each fixture owns its cache, media and remembered preferences.
+async function captionRouteFixture({
+  videoState = 'ready',
+  locked = false,
+  emailVerified = true,
+  tracks = [
+    { language: 'en', isDefault: true },
+    { language: 'de', isDefault: false },
+  ],
+  remembered = null,
+  read,
+}: {
+  videoState?: LearningCourse['modules'][number]['lessons'][number]['videoState'];
+  locked?: boolean;
+  emailVerified?: boolean;
+  tracks?: readonly { language: string; isDefault: boolean }[];
+  remembered?: string | null;
+  read?: TranscriptRepository['getLessonTranscript'];
+} = {}) {
+  const lessonId = '30000000-0000-4000-8000-000000000001';
+  const student = { ...user('student'), emailVerified };
+  const course: LearningCourse = {
+    id: '10000000-0000-4000-8000-000000000001',
+    slug: 'caption-course',
+    title: 'Caption course',
+    summary: '',
+    description: '',
+    status: 'published',
+    price: null,
+    continueLessonId: lessonId,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-000000000001',
+        title: 'Module',
+        lessons: [
+          {
+            id: lessonId,
+            title: 'Caption lesson',
+            videoState,
+            position: 0,
+            completed: false,
+            clientSeq: 0,
+            audioTracks: tracks,
+            isPreview: false,
+            locked,
+          },
+          {
+            id: '30000000-0000-4000-8000-000000000002',
+            title: 'Caption lesson B',
+            videoState: 'ready',
+            position: 0,
+            completed: false,
+            clientSeq: 0,
+            audioTracks: [{ language: 'de', isDefault: true }],
+            isPreview: false,
+            locked: false,
+          },
+        ],
+      },
+    ],
+  };
+  const requests: Array<string | undefined> = [];
+  const transcript = (language: string | null): LessonTranscript => ({
+    lessonId,
+    language,
+    updatedAt: null,
+    stale: false,
+    segments: [
+      {
+        id: '70000000-0000-4000-8000-000000000001',
+        startMs: 0,
+        endMs: 1000,
+        text: `Caption ${language}`,
+        documentIds: [],
+      },
+    ],
+    documents: [],
+  });
+  const repository: TranscriptRepository = {
+    ...transcriptStub,
+    getLessonTranscript: async (id, language, signal) => {
+      requests.push(language);
+      return read ? read(id, language, signal) : { ok: true, value: transcript(language ?? 'uk') };
+    },
+  };
+  const media: { callbacks?: import('../modules/playback').PlaybackMediaCallbacks } = {};
+  const createMedia: CreatePlaybackMedia = (video, callbacks) => {
+    media.callbacks = callbacks;
+    Object.defineProperty(video, 'play', { configurable: true, value: () => Promise.resolve() });
+    return {
+      kind: 'hls',
+      load: () => callbacks.onCaptionSelection({ state: 'pending' }),
+      stopLoad() {},
+      selectLevel() {},
+      selectAudioTrack: () => false,
+      destroy() {},
+    };
+  };
+  const discussion: DiscussionRepository = {
+    ...discussionStub,
+    list: async () => ({ ok: true, value: { threads: [], nextCursor: null } }),
+  };
+  localStorage.setItem('courses.player.prefs.v1', JSON.stringify({ audioLanguage: remembered }));
+  answerWith(student);
+  const router = createTestRouter(
+    `/learn/${course.slug}/${lessonId}`,
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => ({ ok: true, value: course }),
+      play: async () => ({
+        ok: true,
+        value: {
+          playbackId: '0123456789abcdef0123456789abcdef',
+          mediaPath: '/media/p/test/master.m3u8',
+          clientSeq: 0,
+          heartbeatSeconds: 30,
+          ownershipTtlSeconds: 180,
+        },
+      }),
+    },
+    repository,
+    discussion,
+    createMedia,
+  );
+  await router.load();
+  const view = renderRouter(router);
+  multilingualTeardown.push(() => {
+    view.unmount();
+    router.options.context.queryClient.clear();
+    localStorage.clear();
+  });
+  if (!emailVerified) await screen.findByRole('heading', { name: 'Confirm your email to watch' });
+  else if (locked || videoState === 'ready')
+    await screen.findByRole('heading', { name: 'Caption lesson' });
+  else await screen.findByRole('region', { name: 'Transcript' });
+  return { requests, media, transcript, router };
+}
+
+test.each([null, 'processing', 'failed'] as const)(
+  'MS4 M4 non-ready %s actually requests primary and renders it',
+  async (videoState) => {
+    const f = await captionRouteFixture({ videoState });
+    expect(await screen.findByText('Caption uk')).toBeTruthy();
+    expect(f.requests).toEqual([undefined]);
+    expect(document.querySelector('track')).toBeNull();
+  },
+);
+
+test('MS4 M4 locked lesson does not request or mount the transcript', async () => {
+  const f = await captionRouteFixture({ locked: true });
+  expect(f.requests).toEqual([]);
+  expect(screen.queryByRole('region', { name: 'Transcript' })).toBeNull();
+  expect(document.querySelector('video')).toBeNull();
+});
+
+test('MS4 M4 email gate does not request or mount the transcript', async () => {
+  const f = await captionRouteFixture({ emailVerified: false });
+  expect(f.requests).toEqual([]);
+  expect(screen.queryByRole('region', { name: 'Transcript' })).toBeNull();
+  expect(document.querySelector('video')).toBeNull();
+});
+
+test.each([
+  [
+    null,
+    [
+      { language: 'en', isDefault: true },
+      { language: 'de', isDefault: false },
+    ],
+    'en',
+  ],
+  [
+    'DE',
+    [
+      { language: 'en', isDefault: true },
+      { language: 'de', isDefault: false },
+    ],
+    'de',
+  ],
+  [
+    'fr',
+    [
+      { language: 'en', isDefault: false },
+      { language: 'de', isDefault: false },
+    ],
+    'en',
+  ],
+] as const)(
+  'MS4 predicted exact language before Play, remembered %s',
+  async (remembered, tracks, language) => {
+    const f = await captionRouteFixture({ remembered, tracks });
+    expect(await screen.findByText(`Caption ${language}`)).toBeTruthy();
+    expect(f.requests).toEqual([language]);
+    expect(document.querySelector('track')).toBeNull();
+    expect(document.querySelector('.lesson-player')?.getAttribute('data-caption-selection')).toBe(
+      'pending',
+    );
+  },
+);
+
+test.each(['und', 'UND-x-original'])('MS4 %s does not request a transcript', async (language) => {
+  const f = await captionRouteFixture({ tracks: [{ language, isDefault: true }] });
+  expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
+  expect(f.requests).toEqual([]);
+  expect(document.querySelector('track')).toBeNull();
+});
+
+test('MS4 foreign-language response is never rendered', async () => {
+  const f = await captionRouteFixture({
+    read: async () => ({
+      ok: true,
+      value: {
+        lessonId: '30000000-0000-4000-8000-000000000001',
+        language: 'de',
+        updatedAt: null,
+        stale: false,
+        segments: [
+          {
+            id: '70000000-0000-4000-8000-000000000001',
+            startMs: 0,
+            endMs: 1000,
+            text: 'Foreign text must not appear',
+            documentIds: [],
+          },
+        ],
+        documents: [],
+      },
+    }),
+  });
+  expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
+  expect(f.requests).toEqual(['en']);
+  expect(screen.queryByText('Foreign text must not appear')).toBeNull();
+  expect(document.querySelector('track')).toBeNull();
+});
+
+test('MS4 post-load pending does not fall back to prediction; confirmed language drives query and captions', async () => {
+  const f = await captionRouteFixture();
+  await screen.findByText('Caption en');
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(screen.queryByText('Caption en')).toBeNull());
+  expect(
+    within(screen.getByRole('region', { name: 'Transcript' })).getByRole('status').textContent,
+  ).toBe('Loading');
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'DE' }));
+  expect(await screen.findByText('Caption de')).toBeTruthy();
+  expect(f.requests).toEqual(['en', 'de']);
+  expect(document.querySelector('track')?.getAttribute('srclang')).toBe('de');
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'pending' }));
+  expect(screen.queryByText('Caption de')).toBeNull();
+  expect(screen.queryByText('Caption en')).toBeNull();
+  expect(document.querySelector('track')).toBeNull();
+  act(() =>
+    f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'und-x-original' }),
+  );
+  expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
+  expect(f.requests).toEqual(['en', 'de']);
+});
+
+test('MS4 SWITCHING requests ?language=de before confirmation while the panel and track stay gated', async () => {
+  const urls: string[] = [];
+  server.use(
+    http.get(`${apiOrigin()}/api/v1/learn/lessons/:lessonId/transcript`, ({ request, params }) => {
+      urls.push(request.url);
+      const language = new URL(request.url).searchParams.get('language');
+      return HttpResponse.json({
+        lessonId: params.lessonId,
+        language,
+        updatedAt: null,
+        stale: false,
+        segments: [
+          {
+            id: '70000000-0000-4000-8000-000000000001',
+            startMs: 0,
+            endMs: 1000,
+            text: `Wire caption ${language}`,
+            documentIds: [],
+          },
+        ],
+        documents: [],
+      });
+    }),
+  );
+  const f = await captionRouteFixture({
+    read: createApiTranscriptRepository().getLessonTranscript,
+  });
+  await screen.findByText('Wire caption en');
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(screen.queryByText('Wire caption en')).toBeNull());
+  // The adapter unit drives the real SWITCHING event; this boundary drives its callback payload.
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'pending', requested: 'DE' }));
+  await waitFor(() => expect(urls.some((url) => url.endsWith('?language=de'))).toBe(true));
+  await waitFor(() =>
+    expect(
+      f.router.options.context.queryClient.getQueryState(
+        lessonTranscriptQueryKey('30000000-0000-4000-8000-000000000001', 'de'),
+      )?.status,
+    ).toBe('success'),
+  );
+  const panel = within(screen.getByRole('region', { name: 'Transcript' }));
+  expect(panel.getByRole('status').textContent).toBe('Loading');
+  expect(screen.queryByText('Wire caption de')).toBeNull();
+  expect(document.querySelector('track')).toBeNull();
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'DE' }));
+  expect(await screen.findByText('Wire caption de')).toBeTruthy();
+  expect(document.querySelector('track')?.getAttribute('srclang')).toBe('de');
+  act(() =>
+    f.media.callbacks?.onCaptionSelection({ state: 'pending', requested: 'UND-x-original' }),
+  );
+  expect(await screen.findByText('No subtitles for this audio track')).toBeTruthy();
+  expect(urls).toHaveLength(2);
+  expect(document.querySelector('track')).toBeNull();
+});
+
+test('MS4 same-language background refetch keeps de captions and panel search/follow state', async () => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  let holdRefetch = false;
+  const f = await captionRouteFixture({
+    remembered: 'de',
+    read: async (id, language) => {
+      reads += 1;
+      if (holdRefetch) await held;
+      return {
+        ok: true,
+        value: {
+          lessonId: id,
+          language: language ?? null,
+          updatedAt: null,
+          stale: false,
+          segments: [
+            {
+              id: '70000000-0000-4000-8000-000000000001',
+              startMs: 0,
+              endMs: 1000,
+              text: 'Caption de',
+              documentIds: [],
+            },
+          ],
+          documents: [],
+        },
+      };
+    },
+  });
+  await screen.findByText('Caption de');
+  const queryKey = lessonTranscriptQueryKey('30000000-0000-4000-8000-000000000001', 'de');
+  const client = f.router.options.context.queryClient;
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(f.media.callbacks).toBeDefined());
+  await act(async () => {
+    f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'de' });
+  });
+  await waitFor(() => expect(client.getQueryState(queryKey)?.fetchStatus).toBe('idle'));
+  const search = await screen.findByRole('searchbox');
+  const panel = screen.getByRole('region', { name: 'Transcript' });
+  fireEvent.wheel(within(panel).getByRole('list'));
+  expect(within(panel).getByRole('button', { name: 'Follow playback' })).toBeTruthy();
+  fireEvent.change(search, { target: { value: 'Caption' } });
+  const track = document.querySelector('track');
+  expect(track?.getAttribute('srclang')).toBe('de');
+  const beforeRefetch = reads;
+  holdRefetch = true;
+  let refetch: Promise<void> | undefined;
+  act(() => {
+    refetch = client.refetchQueries({ queryKey, exact: true });
+  });
+  try {
+    await waitFor(() => expect(reads).toBe(beforeRefetch + 1));
+    await waitFor(() => expect(client.getQueryState(queryKey)?.fetchStatus).toBe('fetching'));
+    await act(async () => {});
+    expect(screen.queryByText('Caption de')).toBeTruthy();
+    expect(document.querySelector('track')).toBe(track);
+    expect(within(panel).getByRole('searchbox')).toBe(search);
+    expect(within(panel).getByDisplayValue('Caption')).toBe(search);
+  } finally {
+    await act(async () => {
+      release();
+      await refetch;
+    });
+  }
+  expect(within(panel).getByDisplayValue('Caption')).toBe(search);
+  fireEvent.change(search, { target: { value: '' } });
+  expect(within(panel).getByRole('button', { name: 'Follow playback' })).toBeTruthy();
+  expect(document.querySelector('track')).toBe(track);
+});
+
+test('MS4 error retry refetches the exact transcript without stopping the player', async () => {
+  let fail = true;
+  const f = await captionRouteFixture({
+    read: async (id, language) =>
+      fail
+        ? { ok: false, error: { code: 'dependency_unavailable' } }
+        : {
+            ok: true,
+            value: {
+              lessonId: id,
+              language: language ?? null,
+              updatedAt: null,
+              stale: false,
+              segments: [
+                {
+                  id: '70000000-0000-4000-8000-000000000001',
+                  startMs: 0,
+                  endMs: 1000,
+                  text: 'Recovered transcript',
+                  documentIds: [],
+                },
+              ],
+              documents: [],
+            },
+          },
+  });
+  expect(await screen.findByText('Could not load the transcript')).toBeTruthy();
+  expect(document.querySelector('video')).toBeTruthy();
+  fail = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByText('Recovered transcript')).toBeTruthy();
+  expect(f.requests).toEqual(['en', 'en']);
+});
+
+test('MS4 navigation uses fresh mounts and ignores late A callbacks after B loads', async () => {
+  const f = await captionRouteFixture();
+  await screen.findByText('Caption en');
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await act(async () => {});
+  const old = f.media.callbacks;
+  act(() => old?.onCaptionSelection({ state: 'confirmed', language: 'en' }));
+  await screen.findByText('Caption en');
+  // The adapter emits through its retained callback even if an event arrives after unmount.
+  await act(async () => {
+    await f.router.navigate({
+      to: '/learn/$',
+      params: { _splat: 'caption-course/30000000-0000-4000-8000-000000000002' },
+    });
+  });
+  expect(await screen.findByText('Caption de')).toBeTruthy();
+  expect(document.querySelector('track')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await act(async () => {});
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'fr' }));
+  await screen.findByText('Caption fr');
+  act(() => old?.onCaptionSelection({ state: 'confirmed', language: 'en' }));
+  expect(screen.getByText('Caption fr')).toBeTruthy();
+  expect(screen.queryByText('Caption de')).toBeNull();
+  expect(screen.queryByText('Caption en')).toBeNull();
+  await act(async () => {
+    await f.router.navigate({
+      to: '/learn/$',
+      params: { _splat: 'caption-course/30000000-0000-4000-8000-000000000001' },
+    });
+  });
+  expect(await screen.findByText('Caption en')).toBeTruthy();
+  expect(document.querySelector('track')).toBeNull();
+});
+
+test('MS4 in-flight exact query stays loading after confirmation, until its matching response', async () => {
+  let release: (() => void) | undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const f = await captionRouteFixture({
+    read: async (id, language) => {
+      await held;
+      return {
+        ok: true,
+        value: {
+          lessonId: id,
+          language: language?.toUpperCase() ?? null,
+          updatedAt: null,
+          stale: false,
+          segments: [
+            {
+              id: '70000000-0000-4000-8000-000000000001',
+              startMs: 0,
+              endMs: 1000,
+              text: 'Settled exact response',
+              documentIds: [],
+            },
+          ],
+          documents: [],
+        },
+      };
+    },
+  });
+  await waitFor(() => expect(f.requests).toEqual(['en']));
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  await act(async () => {});
+  act(() => f.media.callbacks?.onCaptionSelection({ state: 'confirmed', language: 'en' }));
+  expect(
+    within(screen.getByRole('region', { name: 'Transcript' })).getByRole('status').textContent,
+  ).toBe('Loading');
+  expect(document.querySelector('track')).toBeNull();
+  await act(async () => release?.());
+  expect(await screen.findByText('Settled exact response')).toBeTruthy();
+  expect(document.querySelector('track')?.getAttribute('srclang')).toBe('en');
 });

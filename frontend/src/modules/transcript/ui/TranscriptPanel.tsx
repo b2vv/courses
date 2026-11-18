@@ -8,16 +8,53 @@ import {
   type TranscriptSegment,
 } from '../domain/transcript';
 import { formatTimestamp } from '../../../presentation/format-timestamp';
+import type { TranscriptPanelState } from '../application/panel-state';
+import { Button } from '../../../presentation/ui';
 
 type TranscriptPanelProps = {
-  readonly transcript: LessonTranscript;
+  readonly state: TranscriptPanelState;
   readonly positionMs: number;
   /** Undefined while the player cannot seek — before the first play the duration is unknown, and
    * a click would be clamped into the first second instead of going where it says. */
   readonly onSeek?: (positionMs: number) => void;
 };
 
-export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPanelProps) {
+export function TranscriptPanel({ state, positionMs, onSeek }: TranscriptPanelProps) {
+  const { t } = useTranslation();
+  if (state.kind === 'transcript')
+    return (
+      <TranscriptLines
+        transcript={state.transcript}
+        positionMs={positionMs}
+        {...(onSeek === undefined ? {} : { onSeek })}
+      />
+    );
+  return (
+    <section className="transcript" aria-labelledby="transcript-heading">
+      <h2 id="transcript-heading">{t('learn.transcript.heading')}</h2>
+      <p className="transcript-empty" role={state.kind === 'error' ? 'alert' : 'status'}>
+        {state.kind === 'loading'
+          ? t('common.loading')
+          : state.kind === 'error'
+            ? t('learn.transcript.loadFailed')
+            : state.kind === 'none-for-track'
+              ? t('learn.transcript.noneForTrack')
+              : t('learn.transcript.none')}
+      </p>
+      {state.kind === 'error' ? (
+        <Button onPress={state.onRetry}>{t('learn.transcript.retry')}</Button>
+      ) : null}
+    </section>
+  );
+}
+
+function TranscriptLines({
+  transcript,
+  positionMs,
+  onSeek,
+}: Omit<TranscriptPanelProps, 'state'> & {
+  readonly transcript: LessonTranscript;
+}) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [following, setFollowing] = useState(true);
@@ -36,15 +73,6 @@ export function TranscriptPanel({ transcript, positionMs, onSeek }: TranscriptPa
     if (!following || searching || activeRef.current === null) return;
     activeRef.current.scrollIntoView({ block: 'nearest' });
   }, [activeId, following, searching]);
-
-  if (transcript.language === null || transcript.segments.length === 0) {
-    return (
-      <section className="transcript" aria-labelledby="transcript-heading">
-        <h2 id="transcript-heading">{t('learn.transcript.heading')}</h2>
-        <p className="transcript-empty">{t('learn.transcript.none')}</p>
-      </section>
-    );
-  }
 
   return (
     <section className="transcript" aria-labelledby="transcript-heading">

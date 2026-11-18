@@ -1,0 +1,10 @@
+{
+  "createdCount": 3,
+  "courseIDs": [
+    "99a73eee-979e-499e-b586-f9d5b423d284",
+    "ea9a1d07-ecaa-4645-9824-8c786c385e9a",
+    "2e83a3ca-4ef1-4a14-9524-7d15f3407f3f"
+  ],
+  "leftoverCount": 0,
+  "method": "SELECT count(*) FROM courses WHERE id IN (three run-scoped IDs)"
+}

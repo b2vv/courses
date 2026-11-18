@@ -10,8 +10,15 @@ import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/reac
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { learningCourseQueryKey } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
-import { lessonInCourse, nextLesson } from '../modules/playback';
-import type { LearningCourse, LearningLesson } from '../modules/playback';
+import {
+  captionQuery,
+  lessonInCourse,
+  nextLesson,
+  predictedAudioLanguage,
+  readPreferences,
+  reduceCaptionSelection,
+} from '../modules/playback';
+import type { CaptionSelectionEvent, LearningCourse, LearningLesson } from '../modules/playback';
 import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { LockedLessonPanel } from '../modules/purchase';
 import { CourseLearningView } from '../presentation/learn/CourseLearningView';
@@ -20,7 +27,7 @@ import { LessonDocumentView } from '../modules/document';
 import { TranscriptPanel } from '../modules/transcript';
 import { DiscussionPanel } from '../modules/discussion';
 import { LearnRouteFailure } from '../modules/identity';
-import { toWebVTT } from '../modules/transcript';
+import { toWebVTT, transcriptPanelState } from '../modules/transcript';
 import { LearnEmptyState } from './learn';
 import { DiscussionQueryError } from '../app/composition/discussion-queries';
 import type { DiscussionErrorCode, DiscussionPage } from '../modules/discussion';
@@ -156,6 +163,31 @@ function OpenLesson({
     mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
   });
   const lessonId = lesson.id;
+  const mount = useMemo(() => Symbol(`player:${lessonId}`), [lessonId]);
+  const [captionState, setCaptionState] = useState<{
+    mount: symbol;
+    record: CaptionSelectionEvent | null;
+  }>({ mount, record: null });
+  // Synchronize identity during render, retaining the one record. A delayed callback from the
+  // previous player must compare against the CURRENT mount, not a mount captured in its closure.
+  if (captionState.mount !== mount) setCaptionState({ ...captionState, mount });
+  const captionRecord = captionState.record;
+  const onCaptionSelection = useCallback((event: CaptionSelectionEvent) => {
+    setCaptionState((current) => {
+      const record = reduceCaptionSelection(current.mount, current.record, event);
+      return record === current.record ? current : { ...current, record };
+    });
+  }, []);
+  const emailGated = shouldGateLessonPlayback(identity);
+  const query = captionQuery({
+    locked: lesson.locked,
+    emailGated,
+    ready: lesson.videoState === 'ready',
+    mount,
+    record: captionRecord,
+    predictedLanguage: predictedAudioLanguage(lesson.audioTracks, readPreferences().audioLanguage),
+  });
+  const language = query.mode === 'exact' ? query.language : undefined;
   const actions = useMemo(
     () => ({
       play: () => learn.playback.play(lessonId),
@@ -177,7 +209,26 @@ function OpenLesson({
   );
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
-  const { data: transcript } = useQuery(learn.lesson(lessonId));
+  const transcriptQuery = useQuery({
+    ...learn.lesson(lessonId, language),
+    enabled: query.mode !== 'off',
+  });
+  const panelState =
+    query.mode === 'off'
+      ? query.panel === 'hidden'
+        ? null
+        : { kind: query.panel }
+      : query.mode === 'exact' && query.pending
+        ? { kind: 'loading' as const }
+        : transcriptPanelState({
+            language,
+            data: transcriptQuery.data,
+            isPending: transcriptQuery.isPending,
+            isError: transcriptQuery.isError,
+            onRetry: () => void transcriptQuery.refetch(),
+          });
+  const transcript = panelState?.kind === 'transcript' ? panelState.transcript : undefined;
+  const captionsLoaded = lesson.videoState === 'ready' && captionRecord?.mount === mount;
   // The document body is additive and not suspended on either: a reader failure must not stop the
   // lesson, and an absent publication returns an empty document that renders as nothing.
   const { data: lessonDocument } = useQuery(learn.lessonDocument(lessonId));
@@ -212,11 +263,8 @@ function OpenLesson({
     }
   }, []);
   const captions = useMemo(
-    () =>
-      transcript === undefined || transcript.segments.length === 0
-        ? undefined
-        : toWebVTT(transcript.segments),
-    [transcript],
+    () => (!captionsLoaded || transcript === undefined ? undefined : toWebVTT(transcript.segments)),
+    [transcript, captionsLoaded],
   );
   // "Up Next" only when the following lesson is actually playable for this viewer: a locked lesson
   // would autoplay into a paywall, a non-ready one into an empty state. Those gates are the server's
@@ -273,7 +321,7 @@ function OpenLesson({
         )
       }
     >
-      {shouldGateLessonPlayback(identity) ? (
+      {emailGated ? (
         <EmailVerificationGate
           isPending={resendVerification.isPending}
           onResend={() => resendVerification.mutate()}
@@ -283,13 +331,17 @@ function OpenLesson({
           // Keyed by lesson so advancing (autoplay or the outline) remounts a clean player rather
           // than feeding a new lesson into state and refs seeded from the previous one.
           key={lessonId}
+          mount={mount}
           courseTitle={course.title}
           lesson={lesson}
           actions={actions}
           createMedia={learn.createMedia}
-          {...(captions === undefined ? {} : { captions })}
-          {...(transcript?.language == null ? {} : { captionsLanguage: transcript.language })}
+          {...(captions === undefined || language === undefined
+            ? {}
+            : { captions, captionsLanguage: language })}
           onPlaybackChannel={onPlaybackChannel}
+          onCaptionSelection={onCaptionSelection}
+          captionsNoneForTrack={panelState?.kind === 'none-for-track'}
           {...(playableNext === null
             ? {}
             : {
@@ -299,9 +351,10 @@ function OpenLesson({
         />
       )}
       {lessonDocument === undefined ? null : <LessonDocumentView document={lessonDocument} />}
-      {transcript === undefined ? null : (
+      {panelState === null ? null : (
         <TranscriptPanel
-          transcript={transcript}
+          key={language ?? 'none'}
+          state={panelState}
           positionMs={channel.positionMs}
           {...(channel.seek === null ? {} : { onSeek: channel.seek })}
         />

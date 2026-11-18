@@ -321,6 +321,7 @@ test.describe('with a stored student session', () => {
                   position: 0,
                   completed: false,
                   clientSeq: 0,
+                  audioTracks: [],
                   isPreview: false,
                   locked: false,
                 },

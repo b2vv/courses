@@ -107,6 +107,7 @@ export * from './learnerCourse.ts';
 export * from './learnerCourseState.ts';
 export * from './learnerPage.ts';
 export * from './learnerRow.ts';
+export * from './learningAudioTrack.ts';
 export * from './learningCourse.ts';
 export * from './learningCourseRating.ts';
 export * from './learningCourseStatus.ts';

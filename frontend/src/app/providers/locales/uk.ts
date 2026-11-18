@@ -331,6 +331,9 @@ export const uk = {
         task: 'Завдання',
       },
       transcript: {
+        noneForTrack: 'Немає субтитрів для цієї доріжки',
+        loadFailed: 'Не вдалося завантажити транскрипт',
+        retry: 'Спробувати ще',
         heading: 'Транскрипт',
         none: 'У цього уроку ще немає транскрипту.',
         stale:
@@ -427,6 +430,7 @@ export const uk = {
         loading: 'Завантаження…',
         buffered: 'Завантажено',
         settings: 'Налаштування',
+        captionsNoneForTrack: 'Субтитри: немає для цієї доріжки',
         captions: 'Субтитри',
         autoplay: 'Автовідтворення наступного',
         upNext: 'Наступний урок',

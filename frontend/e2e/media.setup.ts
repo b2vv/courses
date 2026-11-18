@@ -77,6 +77,7 @@ test('generate the eleven media fixtures with the worker ffmpeg', async () => {
       // 880 Hz track, so the player test can tell which one is decoded by its frequency.
       'ffmpeg -nostdin -loglevel error -f lavfi -i testsrc2=size=640x360:rate=15 -f lavfi -i sine=frequency=440 -t 30 -c:v libx264 -preset veryfast -c:a aac -y /tmp/e2e-640x360-30s.mp4',
       'ffmpeg -nostdin -loglevel error -f lavfi -i sine=frequency=880 -t 30 -c:a aac -y /tmp/e2e-tone-30s.m4a',
+      'ffmpeg -nostdin -loglevel error -f lavfi -i sine=frequency=1320 -t 30 -c:a aac -y /tmp/e2e-tone-1320-30s.m4a',
     ].join('\n'),
   );
   await compose(
@@ -150,6 +151,7 @@ test('generate the eleven media fixtures with the worker ffmpeg', async () => {
     'speech-dub.m4a',
     '640x360-30s.mp4',
     'tone-30s.m4a',
+    'tone-1320-30s.m4a',
   ];
   for (const name of names) {
     const destination = path.join(fixtureDirectory, `e2e-${name}`);

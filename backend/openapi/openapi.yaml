@@ -1741,6 +1741,17 @@ components:
                 - lastActivityAt
                 - userId
             type: object
+        LearningAudioTrack:
+            additionalProperties: false
+            properties:
+                isDefault:
+                    type: boolean
+                language:
+                    type: string
+            required:
+                - isDefault
+                - language
+            type: object
         LearningCourse:
             additionalProperties: false
             properties:
@@ -1836,6 +1847,10 @@ components:
         LearningLesson:
             additionalProperties: false
             properties:
+                audioTracks:
+                    items:
+                        $ref: '#/components/schemas/LearningAudioTrack'
+                    type: array
                 clientSeq:
                     format: int64
                     maximum: 2147483647
@@ -1868,6 +1883,7 @@ components:
                     nullable: true
                     type: string
             required:
+                - audioTracks
                 - clientSeq
                 - completed
                 - id

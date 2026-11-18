@@ -20,15 +20,21 @@ func (handler *LearningHandler) Register(mux *http.ServeMux, authenticate func(h
 	mux.Handle("GET /api/v1/learn/courses/{slug}", authenticate(http.HandlerFunc(handler.getCourse)))
 }
 
+type learningAudioTrackDTO struct {
+	Language  string `json:"language"`
+	IsDefault bool   `json:"isDefault"`
+}
+
 type learningLessonDTO struct {
-	ID         string                     `json:"id"`
-	Title      string                     `json:"title"`
-	VideoState *domain.LearningVideoState `json:"videoState"`
-	Position   float64                    `json:"position"`
-	Completed  bool                       `json:"completed"`
-	ClientSeq  int64                      `json:"clientSeq"`
-	IsPreview  bool                       `json:"isPreview"`
-	Locked     bool                       `json:"locked"`
+	AudioTracks []learningAudioTrackDTO    `json:"audioTracks"`
+	ID          string                     `json:"id"`
+	Title       string                     `json:"title"`
+	VideoState  *domain.LearningVideoState `json:"videoState"`
+	Position    float64                    `json:"position"`
+	Completed   bool                       `json:"completed"`
+	ClientSeq   int64                      `json:"clientSeq"`
+	IsPreview   bool                       `json:"isPreview"`
+	Locked      bool                       `json:"locked"`
 }
 
 type learningModuleDTO struct {
@@ -89,8 +95,13 @@ func mapLearningCourse(course domain.LearningCourse, actor domain.Actor) learnin
 				value := lesson.VideoState
 				videoState = &value
 			}
+			audioTracks := make([]learningAudioTrackDTO, 0, len(lesson.AudioTracks))
+			for _, track := range lesson.AudioTracks {
+				audioTracks = append(audioTracks, learningAudioTrackDTO{Language: track.Language, IsDefault: track.IsDefault})
+			}
 			lessons = append(lessons, learningLessonDTO{
-				ID: lesson.ID, Title: lesson.Title, VideoState: videoState,
+				AudioTracks: audioTracks,
+				ID:          lesson.ID, Title: lesson.Title, VideoState: videoState,
 				Position: lesson.Position, Completed: lesson.Completed, ClientSeq: lesson.ClientSequence,
 				IsPreview: lesson.IsPreview, Locked: lesson.Locked,
 			})
