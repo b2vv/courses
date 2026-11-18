@@ -922,3 +922,27 @@ Harness: a temporary Playwright spec (not in the e2e suite; copy `ms3-design-pas
   - **e2e: 151 passed, 0 failed, 0 did not run (24.0 min)**, including B18, S5 and every `asr.spec` row.
   - **§4 rows:** M3-R8/R9 and the browser parts of the PARTIAL rows are now proven by this e2e on the final revision.
   - **Next:** push, then squash-merge PR #109 (owner: "По закінченню 109 мердж").
+
+## MS4 run (c) — caption/panel state, learn route, player (2026-11-18)
+
+Author run on `ms4-player-captions`, base `22973203` (runs a/b committed); committed as the MS4c commit after the author run. Accepted contract: `plan-ms4.md` r9, O7 / M3–M6 / M8 / M04–M07 / M09. Append-only work log: [_wip-ms4c.md](_wip-ms4c.md).
+
+- Added pure playback `captionQuery` / mount-generation reducer and transcript `transcriptPanelState`. The route uses explicit off/primary/exact queries, predicts from the remembered audio language before load, then uses only the current mount's events; pending/unavailable/und never fall back to prediction. A delayed old-player callback compares against the current mount even after navigation.
+- Email-gated and locked lessons request no transcript and mount no transcript panel. Non-ready lessons still make the primary request. Exact responses render only when their language matches case-insensitively; in-flight reads show loading, failures offer `refetch` retry, and captions are supplied only after load in the transcript state.
+- `TranscriptPanel` implements five states and is keyed by language (or `none`), resetting search and follow. Reused `common.loading`; added the four required uk/en strings. Retry uses the existing accessible Button.
+- `LessonPlayer` echoes `{mount, generation, selection}` and reports `data-caption-selection`; language-keyed tracks use the current track element ref for mode. The none-for-track gear row has no switch, and changing audio there preserves `captionsOn` and restores showing captions on return. The media adapter remains the same instance through caption/language changes.
+- Technical clarification to M5 (Codex, 2026-11-18): include `lessonId` in the Symbol description inside the memo factory (`player:${lessonId}`). The literal `Symbol('player')` with `[lessonId]` fails the repository's `react-hooks/exhaustive-deps` rule because the factory never reads lessonId. Including it in the diagnostic description preserves the specified identity semantics without suppressing lint. Verification: lint and A→B→A route regression.
+
+Verification, in the requested order, on final frontend bytes:
+
+| Command (`frontend/`) | Result |
+|---|---|
+| `npm run format` | PASS, exit 0 |
+| `npm run format:check` | PASS, exit 0 |
+| `npm run typecheck` | PASS, exit 0 |
+| `npm run lint` | PASS, exit 0; architecture boundaries 244 files |
+| `npx rstest run src --testTimeout 30000` | PASS, exit 0; 1415 tests, 113 files, 0 failed/skipped |
+
+The helper tables cover M4/M5, foreign mounts, A generation 2→B generation 1, older same-mount generations, and no return to prediction after load. Real route tests cover actual primary/exact repository calls, prediction/preferences, gating, und-family, foreign responses, held matching response, retry, and navigation with late callbacks. Player/panel units cover M07/M09 including track identity/current-ref mode, preference persistence, and both key resets. Earlier author failures and their fixes are retained in the work log; the final full suite above includes those cases.
+
+Limits / next: this is unit/route proof for run (c), not browser/audio/cue proof or full MS4 acceptance. No E2E, default-timeout run, browser design-pass, independent review, backend gate or ordered `make check` was run here. Run (d) owns E2E M9/M10; independent review/design-pass/final phase gate remain pending. No phase closure is claimed.

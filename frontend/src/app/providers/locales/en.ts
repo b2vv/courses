@@ -325,6 +325,9 @@ export const en = {
         task: 'Task',
       },
       transcript: {
+        noneForTrack: 'No subtitles for this audio track',
+        loadFailed: 'Could not load the transcript',
+        retry: 'Try again',
         heading: 'Transcript',
         none: 'This lesson has no transcript yet.',
         stale:
@@ -421,6 +424,7 @@ export const en = {
         loading: 'Loading…',
         buffered: 'Buffered',
         settings: 'Settings',
+        captionsNoneForTrack: 'Subtitles: none for this audio track',
         captions: 'Subtitles',
         autoplay: 'Autoplay next',
         upNext: 'Up next',

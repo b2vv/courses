@@ -18,6 +18,7 @@ import type {
 import { LessonPlayer, type LessonPlayerActions } from './LessonPlayer';
 import { predictedAudioLanguage } from '../application/audio-language';
 
+const mount = Symbol('player-test');
 const lessonId = '30000000-0000-4000-8000-000000000001';
 const playbackId = '0123456789abcdef0123456789abcdef';
 const session: PlaybackSession = {
@@ -68,6 +69,7 @@ function renderPlayer(
   return render(
     <I18nProvider instance={createI18n('en')}>
       <LessonPlayer
+        mount={mount}
         courseTitle="Reliable Go"
         lesson={lesson(state)}
         actions={playerActions}
@@ -736,6 +738,7 @@ describe('A2 Up Next autoplay', () => {
     return render(
       <I18nProvider instance={createI18n('en')}>
         <LessonPlayer
+          mount={mount}
           courseTitle="Reliable Go"
           lesson={lesson('ready')}
           actions={actions()}
@@ -828,21 +831,22 @@ describe('MS4 caption selection channel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     await act(async () => {});
     if (registered === undefined) throw new Error('Media callbacks not registered');
-    expect(events).toEqual([{ generation: 1, selection: { state: 'pending' } }]);
-    registered.onCaptionSelection({ state: 'confirmed', language: 'en' });
+    expect(events).toEqual([{ mount, generation: 1, selection: { state: 'pending' } }]);
+    act(() => registered?.onCaptionSelection({ state: 'confirmed', language: 'en' }));
     expect(events.at(-1)).toEqual({
+      mount,
       generation: 1,
       selection: { state: 'confirmed', language: 'en' },
     });
     registered.onError({ status: 503, retryable: true, url: undefined });
     await act(async () => rstest.advanceTimersByTimeAsync(500));
-    expect(events.at(-1)).toEqual({ generation: 2, selection: { state: 'pending' } });
+    expect(events.at(-1)).toEqual({ mount, generation: 2, selection: { state: 'pending' } });
     const video = container.querySelector('video');
     if (video === null) throw new Error('Missing video');
     fireEvent.playing(video);
     await act(async () => rstest.advanceTimersByTimeAsync(1_000));
     expect(loads).toBe(3);
-    expect(events.at(-1)).toEqual({ generation: 3, selection: { state: 'pending' } });
+    expect(events.at(-1)).toEqual({ mount, generation: 3, selection: { state: 'pending' } });
   });
 });
 
@@ -989,5 +993,113 @@ describe('multi-audio S7: the audio track menu', () => {
       .getAllByRole('radio')
       .map((radio) => radio.getAttribute('aria-label') ?? radio.closest('label')?.textContent);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe('MS4 caption track lifecycle', () => {
+  it('M07 recreates the language track, applies mode to its current ref and remembers captions through none', async () => {
+    const trackModes = new WeakMap<HTMLTrackElement, { mode: TextTrackMode }>();
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLTrackElement.prototype, 'track');
+    Object.defineProperty(HTMLTrackElement.prototype, 'track', {
+      configurable: true,
+      get(this: HTMLTrackElement) {
+        let track = trackModes.get(this);
+        if (track === undefined) {
+          track = { mode: 'disabled' };
+          trackModes.set(this, track);
+        }
+        return track;
+      },
+    });
+    const staleTrack = { mode: 'disabled' };
+    let callbacks: PlaybackMediaCallbacks | undefined;
+    let creations = 0;
+    const createMedia: CreatePlaybackMedia = (video, registered) => {
+      callbacks = registered;
+      creations += 1;
+      Object.defineProperty(video, 'textTracks', { configurable: true, value: [staleTrack] });
+      Object.defineProperty(video, 'play', { configurable: true, value: () => Promise.resolve() });
+      return {
+        kind: 'hls',
+        load() {
+          registered.onAudioTracks([
+            { language: 'en', label: 'English', isDefault: true },
+            { language: 'de', label: 'Deutsch', isDefault: false },
+          ]);
+          registered.onAudioTrack('en');
+          registered.onCaptionSelection({ state: 'pending' });
+        },
+        stopLoad() {},
+        selectLevel() {},
+        selectAudioTrack: () => true,
+        destroy() {},
+      };
+    };
+    const playerActions = actions();
+    const renderState = (language: string | undefined, none = false) => (
+      <I18nProvider instance={createI18n('en')}>
+        <LessonPlayer
+          mount={mount}
+          courseTitle="Go"
+          lesson={lesson('ready')}
+          actions={playerActions}
+          createMedia={createMedia}
+          {...(language === undefined ? {} : { captions: 'WEBVTT\n', captionsLanguage: language })}
+          captionsNoneForTrack={none}
+        />
+      </I18nProvider>
+    );
+    try {
+      const { container, rerender, unmount } = render(renderState('en'));
+      const first = container.querySelector('track');
+      if (first === null) throw new Error('Missing caption track');
+      expect(first.getAttribute('srclang')).toBe('en');
+      expect(trackModes.get(first)?.mode).toBe('hidden');
+      expect(
+        container.querySelector('.lesson-player')?.getAttribute('data-caption-selection'),
+      ).toBe('pending');
+      fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+      await act(async () => {});
+      act(() => callbacks?.onCaptionSelection({ state: 'confirmed', language: 'EN' }));
+      expect(
+        container.querySelector('.lesson-player')?.getAttribute('data-caption-selection'),
+      ).toBe('confirmed:en');
+      await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      await userEvent.click(await screen.findByRole('switch', { name: 'Subtitles' }));
+      expect(trackModes.get(first)?.mode).toBe('showing');
+      expect(staleTrack.mode).toBe('disabled');
+      rerender(renderState('de'));
+      const second = container.querySelector('track');
+      if (second === null) throw new Error('Missing replacement track');
+      expect(second).not.toBe(first);
+      expect(second.getAttribute('srclang')).toBe('de');
+      expect(trackModes.get(second)?.mode).toBe('showing');
+      expect(creations).toBe(1);
+      rerender(renderState(undefined, true));
+      expect(container.querySelector('track')).toBeNull();
+      expect(await screen.findByText('Subtitles: none for this audio track')).toBeTruthy();
+      expect(screen.queryByRole('switch', { name: 'Subtitles' })).toBeNull();
+      await userEvent.click(screen.getByRole('radio', { name: 'Deutsch' }));
+      expect(
+        JSON.parse(localStorage.getItem('courses.player.prefs.v1') ?? '{}').audioLanguage,
+      ).toBe('de');
+      expect(JSON.parse(localStorage.getItem('courses.player.prefs.v1') ?? '{}').captionsOn).toBe(
+        true,
+      );
+      act(() => callbacks?.onCaptionSelection({ state: 'unavailable' }));
+      expect(
+        container.querySelector('.lesson-player')?.getAttribute('data-caption-selection'),
+      ).toBe('unavailable');
+      rerender(renderState('en'));
+      const restored = container.querySelector('track');
+      if (restored === null) throw new Error('Missing restored track');
+      expect(trackModes.get(restored)?.mode).toBe('showing');
+      expect(screen.getByRole('switch', { name: 'Subtitles', checked: true })).toBeTruthy();
+      expect(creations).toBe(1);
+      unmount();
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLTrackElement.prototype, 'track', descriptor);
+      else Reflect.deleteProperty(HTMLTrackElement.prototype, 'track');
+    }
   });
 });

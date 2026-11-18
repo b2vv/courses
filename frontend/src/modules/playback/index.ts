@@ -9,6 +9,8 @@ export * from './domain/playback';
 // Application: heartbeat/mint/media failure directives and backoff maths.
 export * from './application/recovery';
 export { predictedAudioLanguage } from './application/audio-language';
+export { readPreferences } from './application/preferences';
+export * from './application/caption-state';
 
 // Ports: the I/O contracts this feature depends on.
 export type {
