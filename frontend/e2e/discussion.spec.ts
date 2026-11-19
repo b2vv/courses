@@ -5,8 +5,11 @@ import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 const runNamespace = `e2e-discussion-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const instructorID = '40000000-0000-4000-8000-000000000002';
 // The seeded student fixture; after the enrollment phase, commenting needs active membership.
 const studentID = '40000000-0000-4000-8000-000000000001';
@@ -19,8 +22,6 @@ const shortVideo = path.join(
 );
 
 type CourseToken = { id: string; updatedAt: string };
-const published: CourseToken[] = [];
-const drafts: CourseToken[] = [];
 
 function token(payload: object): CourseToken {
   const id = contractField<AdminCourseTree>(payload, 'id');
@@ -54,7 +55,11 @@ async function createCourse(
     headers: origin(baseURL),
   });
   expect(created.status(), await created.text()).toBe(201);
-  const course = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const course = token(body);
   const moduleID = randomUUID();
   const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
     data: {
@@ -72,7 +77,6 @@ async function createCourse(
   });
   expect(saved.status(), await saved.text()).toBe(200);
   const result = token((await saved.json()) as object);
-  drafts.push(result);
   return result;
 }
 
@@ -110,7 +114,7 @@ async function publishVideo(page: Page, course: CourseToken, lessonID: string, s
     headers: origin(new URL(page.url()).origin),
   });
   expect(response.status(), await response.text()).toBe(200);
-  published.push(token((await response.json()) as object));
+  token((await response.json()) as object);
   // Commenting requires active membership after the enrollment phase: admin-grant the student onto
   // this course (enroll the fixture, not loosen the gate).
   const enrolled = await page.request.post(`/api/v1/admin/courses/${course.id}/grants`, {
@@ -118,8 +122,6 @@ async function publishVideo(page: Page, course: CourseToken, lessonID: string, s
     headers: origin(new URL(page.url()).origin),
   });
   expect(enrolled.status(), await enrolled.text()).toBe(201);
-  const draftIndex = drafts.findIndex((candidate) => candidate.id === course.id);
-  if (draftIndex >= 0) drafts.splice(draftIndex, 1);
   await page.goto(`/learn/${slug}/${lessonID}`);
 }
 
@@ -172,27 +174,13 @@ function postedReply(page: Page, root: string, reply: string) {
     .getByText(reply, { exact: true });
 }
 
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL === undefined) return;
-  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
-  try {
-    for (const course of published) {
-      const response = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
-        headers: origin(baseURL),
-      });
-      expect(response.status(), await response.text()).toBe(200);
-    }
-    for (const course of drafts) {
-      const response = await context.request.delete(`/api/v1/admin/courses/${course.id}`, {
-        data: { expectedUpdatedAt: course.updatedAt },
-        headers: origin(baseURL),
-      });
-      expect(response.status(), await response.text()).toBe(204);
-    }
-  } finally {
-    await context.close();
-  }
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test.describe('discussion branches', () => {
