@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Дата | 2026-11-19; повний rebuild після агенди 2026-10-31 |
-| Спирається на брифінг | [work/CTO-RESEARCH.md](CTO-RESEARCH.md), re-sync **`7b78727f`** над продуктовою базою **`06c1c220`** (#111); §1–§6 і первинні звіти звірено читанням. |
-| HEAD на момент агенди | `main` @ `7b78727f42386f2210cc3d781d444be1c02c4b03`; `gh issue list --state open --limit 100 --json number,title,url` → `[]` (**0 issues**). PR inventory цим запитом не вимірювався. |
-| Чи протух попередній вибір | Так. «Черга порожня / винести деплой» вже не описує стан: є датований Start/Rsbuild request (`cbb645a0`) і виміряні R5/MS4 хвости. Роадмап §24 завершено, нової відкритої фази немає (`CTO-RESEARCH.md` §1–2). Деплой лишається відкладеним людським рішенням. |
+| Дата | 2026-11-19 (rebuild №2 того ж дня, після R5 #112); попередній rebuild `8be7b428` |
+| Спирається на брифінг | [work/CTO-RESEARCH.md](CTO-RESEARCH.md), re-sync **`7b78727f`** над продуктовою базою **`06c1c220`** (#111), delta-рядок до `ec36f291` (R5 #112, лише e2e) у тому ж коміті, що й ця агенда; §1–§6 і первинні звіти звірено читанням. |
+| HEAD на момент агенди | `main` @ `ec36f291`; `gh issue list --state open` → `[]` (**0 issues**); `gh pr list --state open` → `[]` (**0 open PR**). |
+| Чи протух попередній вибір | Так: обраний хід M2/R5 виконано (#112). Роадмап §24 завершено, нової відкритої фази немає (`CTO-RESEARCH.md` §1–2). Деплой лишається відкладеним людським рішенням. |
 
 **Зроблено з попередньої агенди:**
 
@@ -14,6 +14,7 @@
 - **done: audio data layer → #102 / `15afa6c9`; UI → #103 / `22928697`; embedded backfill → #104 / `ef48c150`; ASR source → #105 / `3f0e1c84`; player audio choice → #106 / `5cbb44bb`.**
 - **done: multi-subtitles MS1 → #107 / `6ad8d8d3`; F3 phone/200% editor → #108 / `37ec4b0a`; MS2+MS3 → #109 / `f50f6ec3`; MS4 audible captions/panel → #110 / `10436cdf`.**
 - **done: admin-editor-ux Ux01–Ux18 → #111 / `06c1c220`; briefing re-sync → `7b78727f`.**
+- **done: M2 / R5 published-fixture leak → #112 / `a44790e2`** — ordered `make check` на `328c9d57` GATE_EXIT=0 (e2e 168), після повного прогону 0 published `e2e-%` (`docs/e2e-hygiene/report.md`).
 
 Джерела closing: `git log --first-parent 5fbaaff..7b78727f`, `docs/multi-audio/report.md` §S1–S7,
 `docs/multi-subtitles/report.md` §MS1/F3/MS2–MS4, `docs/admin-editor-ux/report.md` §1–3.
@@ -25,14 +26,14 @@
 ## Джерела та кількість кандидатів (усі 6 пройдено)
 
 К-сть — окремі ходи/розвилки з реєстру нижче, які постачає джерело, **з перетинами** між джерелами.
-Це не сума задач. Унікальних: **24** (M1–M18, D1–D2, Р1–Р4); дві продуктові розвилки сплячі.
+Це не сума задач. Унікальних: **24** (M1, M3–M19, D1–D2, Р1–Р4; M2 done); дві продуктові розвилки сплячі.
 Паралельна design-pass сесія — окремий стан роботи, не новий пакет задач цієї агенди.
 
 | Джерело | К-сть | Суть / фільтр |
 |---|---:|---|
 | 1. Відкриті таски `work/` + gh | **3** | D1/S01, D2/S02 (`work/tasks.md:38–39`) і M1 — датований request у старій AGENDA (`cbb645a0`, блок збережено нижче). Сирих open-status rows у tasks **7**; B01/A10/A13/SA13/TE4 відфільтровані closing evidence нижче. gh **0 open issues**. |
-| 2. Зафіксований борг / limitations | **17** | M2–M15, Р1/Р2/Р4. Прочитано `docs/multi-audio/report.md` limitations S3/S5/backfill/S6/S7; `docs/multi-subtitles/report.md` MS1/F3/MS3b/MS4; `docs/admin-editor-ux/report.md` §5 + plan §5 R5; playback §6; ASR §7; `work/DEPLOY-READINESS.md`; `work/backlog.md`. Додаткових tech-debt/CRITIQUE файлів пошук не знайшов. Lesson-document locale — `docs/lesson-builder/report.md:694`. |
-| 3. Ризики брифінгу §6 | **18** | M2–M7, M9–M12, M14–M18, Р1/Р2/Р4. Нові щодо боргу — лише M16–M18: три непідтверджені механізми; інше — перетини. Джерело: `CTO-RESEARCH.md:192–276`. |
+| 2. Зафіксований борг / limitations | **17** | M3–M15, M19, Р1/Р2/Р4. M19 — `docs/e2e-hygiene/report.md` §Limitations. Прочитано `docs/multi-audio/report.md` limitations S3/S5/backfill/S6/S7; `docs/multi-subtitles/report.md` MS1/F3/MS3b/MS4; `docs/admin-editor-ux/report.md` §5 + plan §5 R5; playback §6; ASR §7; `work/DEPLOY-READINESS.md`; `work/backlog.md`. Додаткових tech-debt/CRITIQUE файлів пошук не знайшов. Lesson-document locale — `docs/lesson-builder/report.md:694`. |
+| 3. Ризики брифінгу §6 | **18** | M19, M3–M7, M9–M12, M14–M18, Р1/Р2/Р4. Нові щодо боргу — лише M16–M18: три непідтверджені механізми; інше — перетини. Джерело: `CTO-RESEARCH.md:192–276`. |
 | 4. Unchecked boxes у live specs/plans | **4** | У `work/`/`docs/` spec/plan/REQUIREMENTS поза archive та WIP — **0 `[ ]`**. Є **15** unchecked пунктів A1–E2 readiness checklist (`DEPLOY-READINESS.md:16–42`) → D1/D2/Р1/Р4, усі вже враховані. Архівні boxes не повертають виконану роботу. |
 | 5. Skipped tests / disabled gates / TODO у коді | **0** | Точний `git grep -n -E "test\.skip|t\.Skip\(|\.only\(|TODO|FIXME" -- backend frontend/src frontend/e2e` → **1** `t.Skip("no build info")`, `backend/internal/testsupport/containers/guard_test.go:17`; 0 інших anchors. CI tag/manual e2e та `E2E_SKIP_ASR=1` — явна межа конфігурації через відсутній asr-worker (`.github/workflows/ci.yml:78,114–115`, `frontend/playwright.config.ts:58`), не новий дефект і не повне CI ASR-покриття. |
 | 6. Невирішені продуктові розвилки | **4** | Р1 deploy, Р4 rotation policy до deploy; Р2 lesson-document locale та Р3 мультивалюта — майбутні scope-вибори, не оголошені «відкритими питаннями власника». Джерела й опції нижче. |
@@ -50,13 +51,13 @@ B-18 #32, B-19 #61, B-22 `def0db3e` — deliberate limitation (`backlog.md` ві
 
 ## Кандидати по двох осях (розблоковує / зворотність)
 
-Перші три — найближчі альтернативи; решта — зафіксовані follow-up/investigation, не обіцянка виконання.
+Перші три — найближчі альтернативи (M1 обрано); решта — зафіксовані follow-up/investigation, не обіцянка виконання.
 
 | Хід | Джерело / стан | Розблоковує | Зворотність / ціна помилки |
 |---|---|---|---|
-| **M2. R5: прибрати published-fixture leak у lesson-builder/refund/teach-editor e2e** — done #112 `a44790e2` | `docs/admin-editor-ux/plan.md:148–151`, report:93–95; producers `frontend/e2e/{lesson-builder,refund,teach-editor}.spec.ts` | Повторні прогони без витіснення seed з catalog page 1; надійніший повний e2e для наступних змін. Виміряно 28/31 published rows після повторів. | Дешевий edit тестів; cleanup лише власних fixture IDs, без загального стирання. Shared-state зміна потім потребує повного e2e. |
 | **M1. Start + Rsbuild compatibility-check** | Owner request **2026-11-14**, `cbb645a0:work/AGENDA.md`, дослівно нижче; prerequisite MS4 виконано #110 | Доказ рішення перед оновленням: peers/Node Linux-amd64, SPA, streaming, gzip окремо. | Дешеве ізольоване дослідження; Docker/emulation + gate коштують вікна й місткості. Оновлення автоматично не дозволене. |
 | **M3. Normal transcript +5 px при 390/200%** | `docs/multi-subtitles/report.md:1008,1023` (395 проти 390 px) | Читання header/search/list без горизонтального виходу; локальний UX-фікс для learn. | Дешевий CSS/layout edit; повторити той самий viewport/zoom і перевірити спільні стилі. Наявний фазовий PASS цього не закрив. |
+| **M19. Архівні e2e-залишки → `deleteE2ECourse`** | `docs/e2e-hygiene/report.md` §Limitations; briefing §6 R5-рядок. Archive-producers: ratings, enrollment, instructor, discussion, learning, wayforpay, transcript, admin, accounts, purchase specs | Чисті адмін-лічильники між прогонами (40 archived за повний прогін). Виміряного падіння тесту немає: archived не в каталозі, `e2e-reset` прибирає. | Дешевий test-only edit на готовому helper; 10 specs → shared-state, потрібен повний e2e. |
 | M4. Періодичне recovery загубленого upload enqueue | `docs/multi-audio/report.md:190–196` | Відновлення video/audio без рестарту worker; нині Recover тільки на старті та після 10-хв grace. | Середня: повторні queue effects потребують ідемпотентності й доказу; код відкотний, уже відправлені jobs — ні. Не зараз без такого сценарію. |
 | M5. Справжній sweep/PATCH race test | `docs/multi-audio/report.md:204–210` | Доказ row-lock при PATCH→Queued проти sweep; нинішній тест не ловить видалення FOR UPDATE. | Дешевий test-only edit; детермінований two-transaction proof, без підняття timeout. |
 | M6. `awaiting_audio` у adminstats | `docs/multi-audio/report.md:239–240`, `CTO-RESEARCH.md:204` | Правдивий media-state лічильник: стан нині не входить ні в ready, ні в in_progress. | Невеликий SQL/DTO/UI edit із перевіркою семантики метрики; без міграції. |
@@ -137,25 +138,21 @@ Q3 heavy-вікно/Q4 reviewer лишаються координацією ті
 
 ## Наступний хід
 
-**done (2026-11-19): M2 / R5 → PR #112 `a44790e2`** — спільний `frontend/e2e/course-cleanup.ts`; ordered `make check` на `328c9d57` GATE_EXIT=0 (e2e 168), після повного прогону 0 опублікованих `e2e-%` курсів (`docs/e2e-hygiene/report.md`). Новий кандидат із того ж звіту: інші спеки архівують, а не видаляють свої курси (40 archived за повний прогін, рахуються адмін-статистикою). Наступний хід агенда заново не обирала — потрібен rebuild.
-
-~~Один рекомендований хід — M2: закрити R5 fixture leak у трьох e2e specs.~~ Обсяг: кожен producer
-прибирає власні published fixtures, включно з failure-path, без глобального очищення каталогу;
-читачі вибирають власний seed за ідентичністю (AGENTS.md §Decisions). Доказ майбутньої задачі — повтори без reset не
-накопичують її published rows і не ламають catalog page 1, після чого повний e2e як для shared-state
-зміни. Джерело проблеми: `docs/admin-editor-ux/plan.md` §5 R5, report §5; це не реалізація в agenda.
-Передати як малий набір задач через `to-tickets` за локальним task route; код/гейт потребуватиме
-окремого робочого вікна й review route, тут їх не запущено.
+**Один рекомендований хід — M1: Start + Rsbuild compatibility-check** (owner request 2026-11-14,
+дослівно в блоці вище). Обсяг — ізольована тестова гілка, три окремі докази (SPA-навігація, SSR
+streaming через nginx, gzip без буферизації потоку), спершу peers Start ↔ Router ↔ Rsbuild і Node в
+`--platform linux/amd64`; оновлення й ordered `make check` — лише після цього і за окремою згодою.
+Передумова: оцінити місце на Kiri (M9) перед amd64-збірками — read-only, prune тут не дозволено.
+Шлях — `spec-flow` (план → critique → зрізи) з незалежним review; агенда нічого не запускає.
 
 Чому не найближчі альтернативи:
 
-- **M1 Start/Rsbuild:** явний request збережено і його prerequisite вже закрито; R5 спочатку усуває
-  виміряний шум shared-state перед repeat/gate доказами сумісності. Це рекомендований порядок,
-  не приписаний власнику новий пріоритет. Оновлення не починати автоматично.
-- **M3 +5 px overflow:** конкретний UX-дефект і дешевий фікс, але він локальний; R5 впливає на
-  достовірність наступних повних e2e, включно з перевіркою самого фіксу.
-- **Продовжити all-screens design-pass тут:** інша сесія вже має AUTH-код/evidence; новий паралельний
-  виконавець дублював би відповідальність та змішував ревізії. Її delivery/узгодження лишається там.
+- **M19 архівні залишки:** helper готовий і робота дешева, але виміряного падіння немає — archived
+  курси поза каталогом, лише лічильники адмін-статистики; не блокує жодного наступного ходу.
+  Природний малий зріз, коли M1 потребуватиме повних e2e-повторів або при першому шумі в analytics-тестах.
+- **M3 +5 px overflow:** реальний, але локальний minor на одному viewport/zoom; не розблоковує нічого.
+- **Продовжити all-screens design-pass тут:** гілка `claude/design-pass-all-screens-085f0e` @ `5073e800`
+  (5 невлитих комітів, без open PR) належить іншій сесії; дублювати виконавця не слід.
 
-Деплой не конкурує з M2 як агентська задача: standing defer **Р1** чинний. Агенда рекомендує хід,
+Деплой не конкурує як агентська задача: standing defer **Р1** чинний. Агенда рекомендує хід,
 але не є дозволом запускати наступну задачу.
