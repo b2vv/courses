@@ -229,9 +229,7 @@ locator теж не входять у стек. House style — semantic tokens,
   в одному act, тому render-loop bound слабший; real-browser proof — e2e.
   Джерело: `docs/admin-editor-ux/report.md` §5.
 - **R5 fixture leak закрито** PR #112 `a44790e2` (2026-11-19): `frontend/e2e/course-cleanup.ts`
-  (`deleteE2ECourse`), після повного gate 0 published `e2e-%`. **Залишок:** інші specs архівують, а не
-  видаляють свої курси — 40 archived за повний прогін (ratings 9, enrollment 8, instructor 5, …); з
-  каталогу вони зникають, але рахуються адмін-статистикою. Джерело: `docs/e2e-hygiene/report.md` §Limitations.
+  (`deleteE2ECourse`), після повного gate 0 published `e2e-%`. Архівні залишки інших specs закрито R6 #113 `fc7d31f6`: після повного gate 0 `e2e-%` у будь-якому статусі. Джерело: `docs/e2e-hygiene/report.md` §R6.
 - **Kiri disk:** звіт фіксує 63 GB, 74–99% used, build cache відростає приблизно 17 GB за кілька
   builds; attempt 1 ENOSPC, attempt 2 без browser executable. Фінальний PASS не обіцяє подальшу
   місткість/health. Джерело: `docs/admin-editor-ux/report.md` §2/§5.
