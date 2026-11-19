@@ -54,7 +54,7 @@ B-18 #32, B-19 #61, B-22 `def0db3e` — deliberate limitation (`backlog.md` ві
 
 | Хід | Джерело / стан | Розблоковує | Зворотність / ціна помилки |
 |---|---|---|---|
-| **M2. R5: прибрати published-fixture leak у lesson-builder/refund/teach-editor e2e** | `docs/admin-editor-ux/plan.md:148–151`, report:93–95; producers `frontend/e2e/{lesson-builder,refund,teach-editor}.spec.ts` | Повторні прогони без витіснення seed з catalog page 1; надійніший повний e2e для наступних змін. Виміряно 28/31 published rows після повторів. | Дешевий edit тестів; cleanup лише власних fixture IDs, без загального стирання. Shared-state зміна потім потребує повного e2e. |
+| **M2. R5: прибрати published-fixture leak у lesson-builder/refund/teach-editor e2e** — done #112 `a44790e2` | `docs/admin-editor-ux/plan.md:148–151`, report:93–95; producers `frontend/e2e/{lesson-builder,refund,teach-editor}.spec.ts` | Повторні прогони без витіснення seed з catalog page 1; надійніший повний e2e для наступних змін. Виміряно 28/31 published rows після повторів. | Дешевий edit тестів; cleanup лише власних fixture IDs, без загального стирання. Shared-state зміна потім потребує повного e2e. |
 | **M1. Start + Rsbuild compatibility-check** | Owner request **2026-11-14**, `cbb645a0:work/AGENDA.md`, дослівно нижче; prerequisite MS4 виконано #110 | Доказ рішення перед оновленням: peers/Node Linux-amd64, SPA, streaming, gzip окремо. | Дешеве ізольоване дослідження; Docker/emulation + gate коштують вікна й місткості. Оновлення автоматично не дозволене. |
 | **M3. Normal transcript +5 px при 390/200%** | `docs/multi-subtitles/report.md:1008,1023` (395 проти 390 px) | Читання header/search/list без горизонтального виходу; локальний UX-фікс для learn. | Дешевий CSS/layout edit; повторити той самий viewport/zoom і перевірити спільні стилі. Наявний фазовий PASS цього не закрив. |
 | M4. Періодичне recovery загубленого upload enqueue | `docs/multi-audio/report.md:190–196` | Відновлення video/audio без рестарту worker; нині Recover тільки на старті та після 10-хв grace. | Середня: повторні queue effects потребують ідемпотентності й доказу; код відкотний, уже відправлені jobs — ні. Не зараз без такого сценарію. |
@@ -137,7 +137,9 @@ Q3 heavy-вікно/Q4 reviewer лишаються координацією ті
 
 ## Наступний хід
 
-**Один рекомендований хід — M2: закрити R5 fixture leak у трьох e2e specs.** Обсяг: кожен producer
+**done (2026-11-19): M2 / R5 → PR #112 `a44790e2`** — спільний `frontend/e2e/course-cleanup.ts`; ordered `make check` на `328c9d57` GATE_EXIT=0 (e2e 168), після повного прогону 0 опублікованих `e2e-%` курсів (`docs/e2e-hygiene/report.md`). Новий кандидат із того ж звіту: інші спеки архівують, а не видаляють свої курси (40 archived за повний прогін, рахуються адмін-статистикою). Наступний хід агенда заново не обирала — потрібен rebuild.
+
+~~Один рекомендований хід — M2: закрити R5 fixture leak у трьох e2e specs.~~ Обсяг: кожен producer
 прибирає власні published fixtures, включно з failure-path, без глобального очищення каталогу;
 читачі вибирають власний seed за ідентичністю (AGENTS.md §Decisions). Доказ майбутньої задачі — повтори без reset не
 накопичують її published rows і не ламають catalog page 1, після чого повний e2e як для shared-state
