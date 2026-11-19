@@ -6,6 +6,7 @@ import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 declare global {
   interface Window {
@@ -15,6 +16,8 @@ declare global {
 
 const execute = promisify(execFile);
 const runNamespace = `e2e-ratings-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const studentID = '40000000-0000-4000-8000-000000000001';
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const published: CourseToken[] = [];
@@ -70,7 +73,11 @@ async function createCourse(
     headers: origin(baseURL),
   });
   expect(created.status(), await created.text()).toBe(201);
-  const initial = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const initial = token(body);
   const lessons = Array.from({ length: options.lessons ?? 1 }, (_, index) => ({
     id: randomUUID(),
     title: `Урок ${index + 1} ${label}`,
@@ -196,45 +203,19 @@ async function writeReviewInUI(page: Page, stars: number, body: string) {
 
 test.use({ storageState: authStatePath('student') });
 
-// Published courses affect catalog/recovery totals.  Archive every course this spec publishes.
-test.afterAll(async ({ browser, baseURL }) => {
-  // Cleanup is several API calls plus one SQL delete; under a loaded Docker host it outran the default 30 s.
+test.afterAll(async () => {
   test.setTimeout(120_000);
-  if (baseURL === undefined) return;
-  const admin = await openAs(browser, baseURL, 'admin');
-  try {
-    // Archive first: published courses are counted by catalog.spec and recovery.spec. Each course re-reads its
-    // current version, so a test that failed half-way (stale token) or already archived does not turn the
-    // cleanup into a second failure.
-    for (const course of published) {
-      const current = await admin.request.get(`/api/v1/admin/courses/${course.id}`);
-      if (!current.ok()) continue;
-      const tree = (await current.json()) as object;
-      const status = contractField<AdminCourseTree>(tree, 'status');
-      const updatedAt = contractField<AdminCourseTree>(tree, 'updatedAt');
-      if (status === 'archived' || typeof updatedAt !== 'string') continue;
-      // Archiving is cleanup, not an assertion under test: tolerate a transient nginx api-zone 429
-      // (the zone refills within a second). A hard failure here would leave the course published
-      // and break recovery.spec's seeded-course count — a cleanup flake masquerading as a defect.
-      let response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: updatedAt, status: 'archived' },
-        headers: origin(baseURL),
-      });
-      for (let attempt = 0; attempt < 5 && response.status() === 429; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-          data: { expectedUpdatedAt: updatedAt, status: 'archived' },
-          headers: origin(baseURL),
-        });
-      }
-      expect(response.status(), await response.text()).toBe(200);
-    }
-  } finally {
-    await admin.close();
-    // Users are counted too: the admin users list is paged, and leftover reviewers pushed admin-users P08's
-    // fixture rows off the first page. Remove every reviewer this run created (their reviews cascade).
-    await sql(`DELETE FROM users WHERE email LIKE ${literal(`${runNamespace}-%@example.test`)}`);
-  }
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  // Users are counted too: remove every reviewer this run created after their courses.
+  results.push(
+    ...(await Promise.allSettled([
+      sql(`DELETE FROM users WHERE email LIKE ${literal(`${runNamespace}-%@example.test`)}`),
+    ])),
+  );
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test('Rt01 writes a free-course review from learning and shows its frozen progress on the course page', async ({

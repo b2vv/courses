@@ -14,6 +14,7 @@ import type {
 } from '../src/adapters/api/generated/models';
 import { authFixtures, authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 declare global {
   interface Window {
@@ -22,10 +23,11 @@ declare global {
 }
 
 const runNamespace = `e2e-enrollment-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const studentID = '40000000-0000-4000-8000-000000000001';
 type CourseToken = { id: string; updatedAt: string; slug: string; lessonID: string; title: string };
-const published: CourseToken[] = [];
 
 function responseObject(value: unknown): object {
   if (typeof value !== 'object' || value === null) throw new Error('Expected an API object');
@@ -110,7 +112,11 @@ async function createFreeCourse(request: APIRequestContext, baseURL: string, suf
     headers: origin(baseURL),
   });
   expect(created.status(), await created.text()).toBe(201);
-  const initial = token((await created.json()) as object, slug, lessonID, title);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const initial = token(body, slug, lessonID, title);
   const saved = await request.put(`/api/v1/admin/courses/${initial.id}`, {
     data: {
       expectedUpdatedAt: initial.updatedAt,
@@ -133,7 +139,6 @@ async function createFreeCourse(request: APIRequestContext, baseURL: string, suf
   });
   expect(status.status(), await status.text()).toBe(200);
   const course = token((await status.json()) as object, slug, lessonID, title);
-  published.push(course);
   return course;
 }
 async function enroll(request: APIRequestContext, baseURL: string, courseID: string) {
@@ -156,20 +161,13 @@ async function overflowAtDoubleText(page: Page) {
   return page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 }
 
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL === undefined) return;
-  const admin = await openAs(browser, baseURL, 'admin');
-  try {
-    for (const course of published) {
-      const response = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
-        headers: origin(baseURL),
-      });
-      expect(response.status(), await response.text()).toBe(200);
-    }
-  } finally {
-    await admin.close();
-  }
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test('En04 En10 nginx media bytes require membership except for a published preview', async ({

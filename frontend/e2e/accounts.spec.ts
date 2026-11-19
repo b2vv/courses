@@ -6,6 +6,7 @@ import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 declare global {
   interface Window {
@@ -15,6 +16,8 @@ declare global {
 
 const execute = promisify(execFile);
 const runNamespace = `e2e-accounts-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const initialEmail = `${runNamespace}@example.test`;
 const changedEmail = `${runNamespace}-changed@example.test`;
 const password = 'Accounts e2e password 1';
@@ -73,7 +76,11 @@ async function createCourse(admin: APIRequestContext, baseURL: string) {
     headers: origin(baseURL),
   });
   expect(created.status(), await created.text()).toBe(201);
-  const initial = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const initial = token(body);
   const lessonId = randomUUID();
   const saved = await admin.put(`/api/v1/admin/courses/${initial.id}`, {
     data: {
@@ -523,28 +530,16 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await login(page, changedEmail, changedPassword);
 });
 
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL !== undefined && course !== undefined) {
-    const admin = await openAs(browser, baseURL, 'admin');
-    try {
-      // Archive, don't delete: the course was published so lessons were viewable, and only draft
-      // courses are deletable (409 course_not_deletable). Archiving removes it from the public catalog,
-      // which is what other specs (catalog/recovery) count, and mirrors the ratings-spec cleanup.
-      const current = await admin.request.get(`/api/v1/admin/courses/${course.id}`);
-      if (current.ok()) {
-        const body = (await current.json()) as { status?: string };
-        const currentToken = token(body);
-        if (body.status !== 'archived' && typeof currentToken.updatedAt === 'string') {
-          const archived = await admin.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-            data: { expectedUpdatedAt: currentToken.updatedAt, status: 'archived' },
-            headers: origin(baseURL),
-          });
-          expect(archived.status(), await archived.text()).toBe(200);
-        }
-      }
-    } finally {
-      await admin.close();
-    }
-  }
-  await sql(`DELETE FROM users WHERE email LIKE '${runNamespace.replaceAll("'", "''")}%'`);
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  results.push(
+    ...(await Promise.allSettled([
+      sql(`DELETE FROM users WHERE email LIKE '${runNamespace.replaceAll("'", "''")}%'`),
+    ])),
+  );
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });

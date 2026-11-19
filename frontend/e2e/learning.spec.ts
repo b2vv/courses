@@ -6,9 +6,12 @@ import axe from 'axe-core';
 import type { AdminCourseTree, Comment } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 const execute = promisify(execFile);
 const runNamespace = `e2e-learning-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const studentID = '40000000-0000-4000-8000-000000000001';
 
@@ -52,8 +55,6 @@ async function seedReportedReview(courseId: string, reviewId: string, body: stri
 }
 
 type CourseToken = { id: string; updatedAt: string };
-const published: CourseToken[] = [];
-const drafts: CourseToken[] = [];
 
 function token(payload: object): CourseToken {
   const id = contractField<AdminCourseTree>(payload, 'id');
@@ -91,7 +92,11 @@ async function createCourse(
     headers: origin(baseURL),
   });
   expect(created.status(), await created.text()).toBe(201);
-  const course = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const course = token(body);
   const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
     data: {
       expectedUpdatedAt: course.updatedAt,
@@ -108,7 +113,6 @@ async function createCourse(
   });
   expect(saved.status(), await saved.text()).toBe(200);
   const result = token((await saved.json()) as object);
-  drafts.push(result);
   return result;
 }
 
@@ -146,14 +150,11 @@ async function publishWithLearner(
   });
   expect(response.status(), await response.text()).toBe(200);
   const result = token((await response.json()) as object);
-  published.push(result);
   const enrolled = await request.post(`/api/v1/admin/courses/${result.id}/grants`, {
     data: { userId: studentID, reason: `learning ${runNamespace}` },
     headers: origin(baseURL),
   });
   expect(enrolled.status(), await enrolled.text()).toBe(201);
-  const draftIndex = drafts.findIndex((candidate) => candidate.id === course.id);
-  if (draftIndex >= 0) drafts.splice(draftIndex, 1);
   return result;
 }
 
@@ -161,25 +162,13 @@ function learnersSection(page: Page) {
   return page.locator('section[aria-labelledby="teach-learners-heading"]');
 }
 
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL === undefined) return;
-  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
-  try {
-    for (const course of published) {
-      await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
-        headers: origin(baseURL),
-      });
-    }
-    for (const course of drafts) {
-      await context.request.delete(`/api/v1/admin/courses/${course.id}`, {
-        data: { expectedUpdatedAt: course.updatedAt },
-        headers: origin(baseURL),
-      });
-    }
-  } finally {
-    await context.close();
-  }
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test.describe('learner overview', () => {
