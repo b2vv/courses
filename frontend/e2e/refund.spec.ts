@@ -3,6 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
+import { deleteE2ECourse } from './course-cleanup';
 import { contractField } from './contract';
 
 declare global {
@@ -16,6 +17,17 @@ const adminID = '40000000-0000-4000-8000-000000000003';
 const merchant = 'e2e_test_merchant';
 const secret = 'e2e-wayforpay-secret';
 const amount = '1890.00';
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
+
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
+});
 
 function origin(baseURL: string) {
   return { Origin: new URL(baseURL).origin };
@@ -84,8 +96,12 @@ async function createPaidCourse(admin: BrowserContext, baseURL: string) {
     data: draft,
     headers: origin(baseURL),
   });
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
   expect(created.status(), await created.text()).toBe(201);
-  const createdToken = token((await created.json()) as object);
+  const createdToken = token(body);
   const structured = await admin.request.put(`/api/v1/admin/courses/${createdToken.id}`, {
     data: { expectedUpdatedAt: createdToken.updatedAt, course: draft, modules },
     headers: origin(baseURL),

@@ -1,13 +1,11 @@
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { openLesson } from './course-editor';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 // Multi-audio S7 (docs/multi-audio/plan-s7.md §4): a student picks the lesson's audio track in the
 // player's gear menu, the choice is heard, and it is remembered for the next view.
@@ -19,18 +17,8 @@ const fixtureDirectory = path.join(import.meta.dirname, '..', 'playwright', '.fi
 const dualVideo = path.join(fixtureDirectory, 'e2e-640x360-30s.mp4');
 const dubTrack = path.join(fixtureDirectory, 'e2e-tone-30s.m4a');
 const singleVideo = path.join(fixtureDirectory, 'e2e-640x360.mp4');
-const execute = promisify(execFile);
-const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const uploadedAudioPlaylist = /\/audio-[0-9a-f-]{36}\/index\.m3u8$/;
 const anyAudioPlaylist = /\/audio(-[0-9a-f-]{36})?\/index\.m3u8$/;
-
-// Grants keep ownership records without ON DELETE CASCADE, so the course goes through SQL, as in
-// playback.spec.ts (module level: the heredoc terminator must stay in column zero).
-const deleteCourseStatement = `exec psql -v ON_ERROR_STOP=1 -v "course_id=$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
-DELETE FROM grant_audit WHERE grant_id IN (SELECT id FROM course_grants WHERE course_id = :'course_id');
-DELETE FROM course_grants WHERE course_id = :'course_id';
-DELETE FROM courses WHERE id = :'course_id';
-SQL`;
 
 type Course = { id: string; updatedAt: string; slug: string; dual: string; single: string };
 let course: Course | undefined;
@@ -226,22 +214,7 @@ async function waitForTone(page: Page, hz: number, count: number, withinMs: numb
 
 test.afterAll(async () => {
   if (course === undefined) return;
-  await execute(
-    'docker',
-    [
-      'compose',
-      'exec',
-      '-T',
-      'postgres',
-      'sh',
-      '-eu',
-      '-c',
-      deleteCourseStatement,
-      'audio-cleanup',
-      course.id,
-    ],
-    { cwd: repositoryRoot, timeout: 60_000 },
-  );
+  await deleteE2ECourse(course.id);
 });
 
 test.describe('multi-audio S7 player audio tracks', () => {

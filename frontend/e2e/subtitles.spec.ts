@@ -7,7 +7,7 @@ import { expect, test, type APIRequestContext, type Page, type Route } from '@pl
 import { z } from 'zod';
 import { openLesson } from './course-editor';
 import { authStatePath } from './auth';
-import { cleanupSubtitlesCourse } from './subtitles-cleanup';
+import { deleteE2ECourse } from './course-cleanup';
 
 // MS4 r9 M9/M10. Run the entire file: beforeAll prepares the course, E8 patches E6's lesson.
 // A failed serial row stops that run; run the remaining rows with --no-deps -g after setup,
@@ -652,7 +652,7 @@ test.describe('MS4 captions follow decoded audio', () => {
   });
   test.afterAll(async () => {
     try {
-      for (const id of cleanupCourseIDs) await cleanupSubtitlesCourse(id);
+      for (const id of cleanupCourseIDs) await deleteE2ECourse(id);
     } finally {
       await admin?.dispose();
     }

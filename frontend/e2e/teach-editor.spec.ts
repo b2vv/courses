@@ -9,11 +9,23 @@ import {
   type Browser,
 } from '@playwright/test';
 import { authStatePath } from './auth';
+import { deleteE2ECourse } from './course-cleanup';
 
 const execute = promisify(execFile);
 const runNamespace = `e2e-te-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 const instructorID = '40000000-0000-4000-8000-000000000002';
 const studentID = '40000000-0000-4000-8000-000000000001';
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
+
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
+});
 
 // A 1×1 PNG: valid magic bytes and decodable dimensions, enough for the upload and the serve path.
 const onePixelPng = Buffer.from(
@@ -93,8 +105,12 @@ async function createPublishedLesson(
     data: draft,
     headers: origin(baseURL),
   });
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
   expect(created.status(), await created.text()).toBe(201);
-  const initial = token(await created.json());
+  const initial = token(body);
   const lessonId = randomUUID();
   const title = `Урок ${label} ${runNamespace}`;
   const modules = [
