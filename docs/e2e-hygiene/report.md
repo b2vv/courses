@@ -19,7 +19,10 @@
     after four runs, which pushed the seeded course off catalog page 1 (`catalog.spec.ts:3`).
   - The 7 published rows that remain (`e2e-lb` 4, `e2e-te` 2, `e2e-refund` 1) were left by gate runs on the pre-fix code.
 - **Independent review.** Codex, `_wip-r5-review.md`: SHIP on both axes, 0 findings.
-- **Ordered `make check`:** pending owner consent.
+- **Ordered `make check`** on `328c9d57` (owner consent 2026-11-19, 11:38→12:11): **GATE_EXIT=0** — unit 1482 passed /
+  0 failed / 0 skipped, Go 130 ok / 0 FAIL, real `e2e-reset` (postgres/redis/media volumes removed), e2e **168 passed**.
+  After that full run on the fresh database: published `e2e-%` courses **0**, all `e2e-%` courses 40 (archived, see
+  limitations).
 
 ## Limitations (named)
 - SQL cleanup leaves image/video/audio bytes on the media volume. They are not counted anywhere, and `e2e-reset`
