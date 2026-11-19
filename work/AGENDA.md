@@ -15,6 +15,7 @@
 - **done: multi-subtitles MS1 → #107 / `6ad8d8d3`; F3 phone/200% editor → #108 / `37ec4b0a`; MS2+MS3 → #109 / `f50f6ec3`; MS4 audible captions/panel → #110 / `10436cdf`.**
 - **done: admin-editor-ux Ux01–Ux18 → #111 / `06c1c220`; briefing re-sync → `7b78727f`.**
 - **done: M2 / R5 published-fixture leak → #112 / `a44790e2`** — ordered `make check` на `328c9d57` GATE_EXIT=0 (e2e 168), після повного прогону 0 published `e2e-%` (`docs/e2e-hygiene/report.md`).
+- **done: M19 / R6 archived e2e leftovers → #113 / `fc7d31f6`** — ordered `make check` на `3aa5eaca` GATE_EXIT=0 (e2e 168), після повного прогону 0 `e2e-%` курсів у будь-якому статусі (`docs/e2e-hygiene/report.md` §R6).
 
 Джерела closing: `git log --first-parent 5fbaaff..7b78727f`, `docs/multi-audio/report.md` §S1–S7,
 `docs/multi-subtitles/report.md` §MS1/F3/MS2–MS4, `docs/admin-editor-ux/report.md` §1–3.
@@ -57,7 +58,6 @@ B-18 #32, B-19 #61, B-22 `def0db3e` — deliberate limitation (`backlog.md` ві
 |---|---|---|---|
 | **M1. Start + Rsbuild compatibility-check** | Owner request **2026-11-14**, `cbb645a0:work/AGENDA.md`, дослівно нижче; prerequisite MS4 виконано #110 | Доказ рішення перед оновленням: peers/Node Linux-amd64, SPA, streaming, gzip окремо. | Дешеве ізольоване дослідження; Docker/emulation + gate коштують вікна й місткості. Оновлення автоматично не дозволене. |
 | **M3. Normal transcript +5 px при 390/200%** | `docs/multi-subtitles/report.md:1008,1023` (395 проти 390 px) | Читання header/search/list без горизонтального виходу; локальний UX-фікс для learn. | Дешевий CSS/layout edit; повторити той самий viewport/zoom і перевірити спільні стилі. Наявний фазовий PASS цього не закрив. |
-| **M19. Архівні e2e-залишки → `deleteE2ECourse`** | `docs/e2e-hygiene/report.md` §Limitations; briefing §6 R5-рядок. Archive-producers: ratings, enrollment, instructor, discussion, learning, wayforpay, transcript, admin, accounts, purchase specs | Чисті адмін-лічильники між прогонами (40 archived за повний прогін). Виміряного падіння тесту немає: archived не в каталозі, `e2e-reset` прибирає. | Дешевий test-only edit на готовому helper; 10 specs → shared-state, потрібен повний e2e. |
 | M4. Періодичне recovery загубленого upload enqueue | `docs/multi-audio/report.md:190–196` | Відновлення video/audio без рестарту worker; нині Recover тільки на старті та після 10-хв grace. | Середня: повторні queue effects потребують ідемпотентності й доказу; код відкотний, уже відправлені jobs — ні. Не зараз без такого сценарію. |
 | M5. Справжній sweep/PATCH race test | `docs/multi-audio/report.md:204–210` | Доказ row-lock при PATCH→Queued проти sweep; нинішній тест не ловить видалення FOR UPDATE. | Дешевий test-only edit; детермінований two-transaction proof, без підняття timeout. |
 | M6. `awaiting_audio` у adminstats | `docs/multi-audio/report.md:239–240`, `CTO-RESEARCH.md:204` | Правдивий media-state лічильник: стан нині не входить ні в ready, ні в in_progress. | Невеликий SQL/DTO/UI edit із перевіркою семантики метрики; без міграції. |
@@ -147,9 +147,7 @@ streaming через nginx, gzip без буферизації потоку), с
 
 Чому не найближчі альтернативи:
 
-- **M19 архівні залишки:** helper готовий і робота дешева, але виміряного падіння немає — archived
-  курси поза каталогом, лише лічильники адмін-статистики; не блокує жодного наступного ходу.
-  Природний малий зріз, коли M1 потребуватиме повних e2e-повторів або при першому шумі в analytics-тестах.
+- **M19 архівні залишки:** виконано #113 (2026-11-19).
 - **M3 +5 px overflow:** реальний, але локальний minor на одному viewport/zoom; не розблоковує нічого.
 - **Продовжити all-screens design-pass тут:** гілка `claude/design-pass-all-screens-085f0e` @ `5073e800`
   (5 невлитих комітів, без open PR) належить іншій сесії; дублювати виконавця не слід.
