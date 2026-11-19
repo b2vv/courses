@@ -3,12 +3,24 @@ import { expect, test, type Browser, type BrowserContext, type Locator } from '@
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authFixtures, authStatePath, trackPageRequests } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 import { openLesson } from './course-editor';
 
 const runNamespace = `e2e-admin-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const adminID = '40000000-0000-4000-8000-000000000003';
 
 let finishRequestTracking = () => Promise.resolve();
+
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
+});
 
 test.beforeEach(({ page }) => {
   finishRequestTracking = trackPageRequests(page);
@@ -61,7 +73,11 @@ async function createAdminDraft(
     headers: { Origin: new URL(baseURL).origin },
   });
   expect(response.status()).toBe(201);
-  return createdCourse(await response.json());
+  const body: unknown = await response.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  return createdCourse(body);
 }
 
 async function deleteAdminDraft(context: BrowserContext, baseURL: string, course: CreatedCourse) {
@@ -321,7 +337,16 @@ test.describe('with a stored admin session', () => {
       await createDialog.getByRole('button', { name: 'Створити', exact: true }).click();
       const created = await creation;
       expect(created.status()).toBe(201);
-      course = createdCourse(await created.json());
+      const body: unknown = await created.json();
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        !('id' in body) ||
+        typeof body.id !== 'string'
+      )
+        throw new Error('Course response must carry id');
+      cleanupCourseIDs.add(body.id);
+      course = createdCourse(body);
       const editorPath = `/admin/courses/${course.id}`;
       await expect(page).toHaveURL((url) => url.pathname === editorPath);
       await expect(page.getByRole('heading', { name: draft.title, exact: true })).toBeVisible();
@@ -443,7 +468,16 @@ test.describe('with a stored admin session', () => {
     await page.getByRole('button', { name: 'Створити курс', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Створити курс' });
     await fillDraft(dialog, draft);
+    const creation = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/v1/admin/courses' &&
+        response.request().method() === 'POST',
+    );
     await dialog.getByRole('button', { name: 'Створити', exact: true }).click();
+    const body: unknown = await (await creation).json();
+    if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+      throw new Error('Course response must carry id');
+    cleanupCourseIDs.add(body.id);
 
     await expect(page).toHaveURL(/\/admin\/courses\/[0-9a-f-]+$/);
     const editorPath = new URL(page.url()).pathname;
@@ -528,7 +562,21 @@ test.describe('with a stored instructor session', () => {
       await expect(dialog.getByText(authFixtures.instructor.name, { exact: true })).toBeVisible();
       await expect(dialog.getByRole('button', { name: /Власник/ })).toHaveCount(0);
       await fillDraft(dialog, ownDraft);
+      const creation = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/admin/courses' &&
+          response.request().method() === 'POST',
+      );
       await dialog.getByRole('button', { name: 'Створити', exact: true }).click();
+      const body: unknown = await (await creation).json();
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        !('id' in body) ||
+        typeof body.id !== 'string'
+      )
+        throw new Error('Course response must carry id');
+      cleanupCourseIDs.add(body.id);
 
       await expect(page.getByRole('heading', { name: ownDraft.title })).toBeVisible();
       const ownEditorPath = new URL(page.url()).pathname;
@@ -600,6 +648,12 @@ test.describe('with a stored student session', () => {
       data: refusedDraft,
       headers: { Origin: new URL(baseURL).origin },
     });
+    // Best-effort cleanup of an unexpected success; never replaces the 403 assertion below.
+    if (mutationResponse.status() === 201) {
+      const body: unknown = await mutationResponse.json().catch(() => undefined);
+      if (typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'string')
+        cleanupCourseIDs.add(body.id);
+    }
     expect(mutationResponse.status()).toBe(403);
     expect(await mutationResponse.json()).toMatchObject({ error: { code: 'forbidden' } });
 

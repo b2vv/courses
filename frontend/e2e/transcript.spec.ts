@@ -6,11 +6,14 @@ import { z } from 'zod';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 // Scoped by a per-run token so the catalog window this test reads cannot contain another run's
 // publications: offset pagination is documented as unstable during publishing, so asserting a
 // name at a global position would be asserting something the product never promised (B-13).
 const runNamespace = `e2e-transcript-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const adminID = '40000000-0000-4000-8000-000000000003';
 
 // The SHORTEST fixture the media setup generates: two seconds, so a real transcode costs seconds
@@ -25,11 +28,6 @@ const shortVideo = path.join(
   'e2e-640x360.mp4',
 );
 
-// Published courses live on after the test that made them, and the public catalog counts them.
-// A recovery assertion elsewhere pins that count to the seed, so a journey that publishes and
-// walks away breaks a test it never touches. Archiving removes a course from the catalog; a
-// published course cannot be deleted at all (only drafts can), so archiving is the whole cleanup.
-const published: { id: string; updatedAt: string }[] = [];
 // The seeded student fixture (student@courseforge.local); after enrollment, content reads need membership.
 const studentID = '40000000-0000-4000-8000-000000000001';
 
@@ -79,7 +77,11 @@ async function seed(request: APIRequestContext, baseURL: string) {
     headers,
   });
   expect(created.status(), await created.text()).toBe(201);
-  const course = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const course = token(body);
 
   const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
     data: {
@@ -105,7 +107,7 @@ async function seed(request: APIRequestContext, baseURL: string) {
     headers,
   });
   expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
-  published.push(token((await publishedResponse.json()) as object));
+  token((await publishedResponse.json()) as object);
 
   // After the enrollment phase, lesson content requires membership: enroll the reading student as
   // an (admin-granted) active member of this freshly created course. The fixture user is enrolled,
@@ -162,19 +164,13 @@ async function transcriptAxe(page: Page) {
   });
 }
 
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL === undefined || published.length === 0) return;
-  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
-  try {
-    for (const course of published) {
-      await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
-        headers: { Origin: new URL(baseURL).origin },
-      });
-    }
-  } finally {
-    await context.close();
-  }
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test.describe('with a stored admin session', () => {
@@ -264,7 +260,11 @@ test.describe('with a real two-second video', () => {
       headers,
     });
     expect(created.status(), await created.text()).toBe(201);
-    const course = token((await created.json()) as object);
+    const body: unknown = await created.json();
+    if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+      throw new Error('Course response must carry id');
+    cleanupCourseIDs.add(body.id);
+    const course = token(body);
 
     const saved = await page.request.put(`/api/v1/admin/courses/${course.id}`, {
       data: {
@@ -342,7 +342,7 @@ test.describe('with a real two-second video', () => {
       headers,
     });
     expect(publishedResponse.status(), await publishedResponse.text()).toBe(200);
-    published.push(token((await publishedResponse.json()) as object));
+    token((await publishedResponse.json()) as object);
 
     // Enroll the reading student: lesson content needs membership after the enrollment phase.
     const videoEnrolled = await page.request.post(`/api/v1/admin/courses/${course.id}/grants`, {
@@ -496,7 +496,11 @@ async function seedDraftCourse(request: APIRequestContext, baseURL: string) {
   const headers = await origin(baseURL);
   const created = await request.post('/api/v1/admin/courses', { data: editorDraft, headers });
   expect(created.status(), await created.text()).toBe(201);
-  const course = token((await created.json()) as object);
+  const body: unknown = await created.json();
+  if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+    throw new Error('Course response must carry id');
+  cleanupCourseIDs.add(body.id);
+  const course = token(body);
 
   const saved = await request.put(`/api/v1/admin/courses/${course.id}`, {
     data: {

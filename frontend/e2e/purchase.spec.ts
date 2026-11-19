@@ -4,6 +4,7 @@ import axe from 'axe-core';
 import type { AdminCourseTree } from '../src/adapters/api/generated/models';
 import { authStatePath } from './auth';
 import { contractField } from './contract';
+import { deleteE2ECourse } from './course-cleanup';
 
 declare global {
   interface Window {
@@ -12,9 +13,10 @@ declare global {
 }
 
 const runNamespace = `e2e-purchase-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+// Module state is local to this Playwright worker, including when a failed test stops it.
+const cleanupCourseIDs = new Set<string>();
 const adminID = '40000000-0000-4000-8000-000000000003';
 type CourseToken = { id: string; updatedAt: string };
-const published: CourseToken[] = [];
 
 function token(payload: object): CourseToken {
   const id = contractField<AdminCourseTree>(payload, 'id');
@@ -53,21 +55,13 @@ async function overflowAtDoubleText(page: Page) {
 
 test.use({ storageState: authStatePath('student') });
 
-// Published courses are counted by the catalog: whoever publishes one archives it again.
-test.afterAll(async ({ browser, baseURL }) => {
-  if (baseURL === undefined) return;
-  const context = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
-  try {
-    for (const course of published) {
-      const response = await context.request.post(`/api/v1/admin/courses/${course.id}/status`, {
-        data: { expectedUpdatedAt: course.updatedAt, status: 'archived' },
-        headers: origin(baseURL),
-      });
-      expect(response.status(), await response.text()).toBe(200);
-    }
-  } finally {
-    await context.close();
-  }
+test.afterAll(async () => {
+  test.setTimeout(60_000);
+  const results = await Promise.allSettled([...cleanupCourseIDs].map(deleteE2ECourse));
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  );
+  if (failures.length > 0) throw new AggregateError(failures, 'Course cleanup failed');
 });
 
 test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens the preview and starts a purchase — 44px, axe light/dark, keyboard, 200% text', async ({
@@ -95,7 +89,11 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
       headers: origin(baseURL),
     });
     expect(created.status(), await created.text()).toBe(201);
-    const course = token((await created.json()) as object);
+    const body: unknown = await created.json();
+    if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
+      throw new Error('Course response must carry id');
+    cleanupCourseIDs.add(body.id);
+    const course = token(body);
     courseId = course.id;
     const modules = [
       {
@@ -145,7 +143,7 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
       headers: origin(baseURL),
     });
     expect(status.status(), await status.text()).toBe(200);
-    published.push(token((await status.json()) as object));
+    token((await status.json()) as object);
   } finally {
     await admin.close();
   }
