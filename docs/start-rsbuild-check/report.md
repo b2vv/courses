@@ -14,8 +14,8 @@ an identity record for every build and swap; C5 was rerun as a real amd64 build 
 ## Verdict
 
 **All of C0–C5 PASS for the candidate under the plan, with C1 as amended by D1 (owner-accepted 2026-11-20).** Per plan
-§4 the next step is to commit the four pins on this branch and run the ordered `make check` (owner consent), then a PR.
-Nothing is committed yet.
+§4 the pins were committed on this branch (`3d8c6223`, owner consent 2026-11-20) and the ordered `make check` ran green
+at `c2074e6a` (§Gate), then a PR.
 Deviations re-run in r3 (owner, 2026-11-20: "розбери щоб запускалось; перезбери"): the two preliminary C5 builds were
 rebuilt with per-build disk samples (13 → 13 each), and the manual amd64 build that exited 1 in r2 was rebuilt 6 times
 with every build log kept — 6/6 exit 0; the r2 exit 1 did not reproduce (§C5, §Environment). Only r1's superseded
@@ -273,12 +273,29 @@ overrule):** it is a superseded diagnostic outside the plan's C0–C5 instrument
   PR #8876, `results/r2/relnote-pr8876.txt`) changes the **Rsbuild production route manifest**: a route's client
   manifest entry lists only its own chunks and CSS (before, when two routes shared a module in a chunk of its own,
   each route's entry also listed the other route's chunk as a preload and its stylesheet). This is in the Rsbuild
-  integration path. C1–C4 cover only the routes they name and assert no CSS; the ordered `make check` (e2e) that
-  would exercise the rest is still pending.
+  integration path. C1–C4 cover only the routes they name and assert no CSS; the ordered `make check` (e2e 168
+  passed on the candidate image, §Gate) exercises the rest of the product routes and their styles through the browser.
 - router-plugin 1.169.0 / router-generator 1.168.0: Node `^20.19 || >=22.12` (Node 24 is fine), Vite ≥6 peer (no
   Vite), `enableRouteGeneration` removed (not used), pathless-layout typing (no route groups here).
 - Rsbuild 2.2.13–2.3.3: Rspack 2.3, perf work, config-merge fixes, dev/preview Host validation; nothing found in the
   SSR output path. This short list is not a claim that the whole build path is unchanged.
+
+## Gate (ordered `make check`, 2026-11-20)
+
+Run at `c2074e6a` (pins `3d8c6223`) on Kiri, 20:56–21:28 UTC, with Kiri `DOCKER_HOST` and
+`COMPOSE_FILE=docker-compose.yml:<kiri>/local-runtime.override.json` (the `smoke` rate-limit recipe, `_gotchas.md`
+2026-11-17). `GATE_EXIT=0`. Every step in order — `format-check lint typecheck test integration check-generated build
+e2e-reset up drain-queue seed-identities seed smoke e2e`:
+
+- frontend unit tests 1482/1482 passed, 0 skipped; Go `ok` lines 130, `FAIL` 0;
+- the production frontend image built with the candidate (`ready built in … (client)` / `(ssr)` in the log);
+- e2e **168 passed** (24.0 min), 0 failed, 0 flaky, 0 did-not-run.
+- Image identity: the frontend container ran `sha256:182270a6…` after the gate, equal to the freshly built
+  `courses-frontend` image ID (before: `ed6a31ec…`), so e2e did not run on the old image. VM free space 13 → 13 GB; the
+  build cache was not pruned.
+
+The gate log stays in the session scratchpad; the api/nginx stream is `frontend/test-logs/api-nginx-20261120T210405Z.log`
+(not committed, as in every phase).
 
 ## Environment, disk and cleanup
 
