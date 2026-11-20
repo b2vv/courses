@@ -1,0 +1,10 @@
+START 2026-11-20T17:16:50Z free=13G
+BUILD m1-buildkit-norqemu:local free_before=13G
+BUILD m1-buildkit-norqemu:local exit=0 id=sha256:05d172ddb8801b3da82ff3d7eebd3d257028698efb933da781dbd0d1591e0956 qemu_files=0 free_after=13G
+BUILDER create exit=0
+BUILDER bootstrap exit=0 BuildKit version: v0.35.1 Platforms: linux/amd64*, linux/arm64*
+BUILD sanity free_before=13G
+BUILD sanity exit=0 out: #5 0.305 x86_64 #5 1.879 v24.22.3 x64 #5 2.316 3e 00 free_after=13G
+BUILDER rm exit=0 remaining=0
+IMAGE rm exit=0
+END 2026-11-20T17:17:30Z free=13G

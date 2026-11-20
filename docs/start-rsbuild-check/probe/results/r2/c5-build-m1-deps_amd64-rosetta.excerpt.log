@@ -1,0 +1,17 @@
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 1.0s
+#3 [internal] load .dockerignore
+#3 DONE 0.0s
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+#5 [dependencies 2/4] WORKDIR /app
+#5 DONE 0.0s
+#6 [internal] load build context
+#6 DONE 0.1s
+#7 [dependencies 3/4] COPY frontend/package*.json ./
+#7 DONE 0.0s
+#8 [dependencies 4/4] RUN npm ci
+#8 DONE 22.1s
+#10 DONE 0.0s
+#9 DONE 21.1s

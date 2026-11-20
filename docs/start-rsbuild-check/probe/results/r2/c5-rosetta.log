@@ -1,0 +1,30 @@
+START c5-rosetta 2026-11-20T12:00:03Z free=15G
+BUILDER image=sha256:05d172ddb8801b3da82ff3d7eebd3d257028698efb933da781dbd0d1591e0956 qemu_files=0
+BUILDER bootstrap exit=0 Platforms: linux/amd64*, linux/arm64*
+BUILD m1-deps:amd64-rosetta ctx=m1-amd target=dependencies free_before=15G
+BUILD m1-deps:amd64-rosetta exit=0 id=sha256:e275df2e5922aea653ed3a2c7ed161810991cd279145c4a8d405bf14ed134a3b linux/amd64 free_after=14G
+  content: x86_64 v24.22.3 linux x64 3e 00
+DEPS stage: 11.19.1 7dedaf029ed966cd /app/node_modules/@tanstack/react-router 3e 00
+#8 DONE 22.1s
+#10 DONE 0.0s
+#9 DONE 21.1s
+BUILD m1-front:amd64-rosetta ctx=m1-amd target=production free_before=13G
+BUILD m1-front:amd64-rosetta exit=0 id=sha256:0c91fd30451e14de5e1e9f95ffd4c91c6f0511eadf16128704f053aa5720c991 linux/amd64 free_after=12G
+  content: x86_64 v24.22.3 linux x64 3e 00
+#11 11.53 ready   built in 7.83s (client)
+#11 13.59 ready   built in 2.05s (ssr)
+BUILD m1-probe:amd64-rosetta ctx=m1-cand target=production free_before=11G
+BUILD m1-probe:amd64-rosetta exit=0 id=sha256:8e3ab56764b8598dc6d325aac4747fe9b67f013ce24a0b19e01012e63cd136cc linux/amd64 free_after=11G
+  content: x86_64 v24.22.3 linux x64 3e 00
+SWAP m1-front:amd64-rosetta up_exit=0 health=healthy image=sha256:0c91fd30451e14de5e1e9f95ffd4c91c6f0511eadf16128704f053aa5720c991 running=sha256:0c91fd30451e14de5e1e9f95ffd4c91c6f0511eadf16128704f053aa5720c991 match=yes in_container='x86_64 x64' healthz=200 courses=200
+RUN c1-admin-amd64rosetta exit=0 :: "verdict":"PASS"
+RUN c1-catalog-amd64rosetta exit=0 :: "verdict":"FAIL"
+RUN c3-amd64rosetta exit=0 :: C3 verdict: PASS
+SWAP m1-probe:amd64-rosetta up_exit=0 health=healthy image=sha256:8e3ab56764b8598dc6d325aac4747fe9b67f013ce24a0b19e01012e63cd136cc running=sha256:8e3ab56764b8598dc6d325aac4747fe9b67f013ce24a0b19e01012e63cd136cc match=yes in_container='x86_64 x64' healthz=200 courses=200
+RUN c2-amd64rosetta-identity exit=0 :: "verdict":"PASS"
+RUN c2-amd64rosetta-gzip exit=0 :: "verdict":"PASS"
+RUN c4-amd64rosetta exit=0 :: 
+RUN c4-browser-amd64rosetta exit=0 :: "verdict":"VISIBLE"
+RESTORE frontend=sha256:ed6a31eccafa0a1a4406e9d74d67b3507e65d4661e21d6c2b9b25f552542e37c healthy
+BUILDER removed exit=0 remaining: 0
+END c5-rosetta 2026-11-20T12:02:36Z free=13G rc=0

@@ -1,0 +1,40 @@
+START r2 2026-11-20T10:06:03Z free=16G orig_frontend=sha256:ed6a31eccafa0a1a4406e9d74d67b3507e65d4661e21d6c2b9b25f552542e37c
+BUILDX _ kiri-build0 _ kiri running v0.34.2 linux/arm64
+BUILD m1-front:base ctx=m1-base0 target=production platform=native free_before=16G
+BUILD m1-front:base exit=0 id=sha256:dbb51755b63749d0425498c2165e86b2485b168fb160180ac289725139db546c linux/arm64 free_after=16G
+BUILD m1-front:cand ctx=m1-amd target=production platform=native free_before=16G
+BUILD m1-front:cand exit=0 id=sha256:3fc46d96d194c499c3eeb2ef9ce1b6454428a31b8028698a9c6a57f1788beef6 linux/arm64 free_after=16G
+BUILD m1-probe:base ctx=m1-base target=production platform=native free_before=16G
+BUILD m1-probe:base exit=0 id=sha256:ea005b05d341a85d170faf934bd4e5cc869eed1fa76a60e1452937af7a8a9921 linux/arm64 free_after=16G
+BUILD m1-probe:cand ctx=m1-cand target=production platform=native free_before=16G
+BUILD m1-probe:cand exit=0 id=sha256:7d06b538da5a3017b84893a7e7eb39d32ec6b04a1f61e758884a6864516980ab linux/arm64 free_after=16G
+CONTROL delta sha256=87042703638b359c34213cd2a5e99365b7e939cc218222a89693a5a2d34e536e
+BUILD m1-probe:control ctx=m1-base target=production platform=native free_before=16G
+BUILD m1-probe:control exit=0 id=sha256:cabeb2704e2d09c79e5b7b14f7d9b0ea8e0e634b13fe79791719d1e1696f0bd3 linux/arm64 free_after=16G
+SWAP m1-front:base up_exit=0 health=healthy image=sha256:dbb51755b63749d0425498c2165e86b2485b168fb160180ac289725139db546c running=sha256:dbb51755b63749d0425498c2165e86b2485b168fb160180ac289725139db546c match=yes platform=linux/arm64 in_container='aarch64 arm64' healthz=200 courses=200
+RUN c1-admin-base exit=0 :: "verdict":"PASS"
+RUN c1-catalog-base exit=0 :: "verdict":"FAIL"
+RUN c3-base exit=0 :: C3 verdict: PASS
+SWAP m1-front:cand up_exit=0 health=healthy image=sha256:3fc46d96d194c499c3eeb2ef9ce1b6454428a31b8028698a9c6a57f1788beef6 running=sha256:3fc46d96d194c499c3eeb2ef9ce1b6454428a31b8028698a9c6a57f1788beef6 match=yes platform=linux/arm64 in_container='aarch64 arm64' healthz=200 courses=200
+RUN c1-admin-cand exit=0 :: "verdict":"PASS"
+RUN c1-catalog-cand exit=0 :: "verdict":"FAIL"
+RUN c3-cand exit=0 :: C3 verdict: PASS
+SWAP m1-probe:base up_exit=0 health=healthy image=sha256:ea005b05d341a85d170faf934bd4e5cc869eed1fa76a60e1452937af7a8a9921 running=sha256:ea005b05d341a85d170faf934bd4e5cc869eed1fa76a60e1452937af7a8a9921 match=yes platform=linux/arm64 in_container='aarch64 arm64' healthz=200 courses=200
+RUN c2-base-identity exit=0 :: "verdict":"PASS"
+RUN c2-base-gzip exit=0 :: "verdict":"PASS"
+RUN c4-base exit=0 :: 
+RUN c4-browser-base exit=0 :: "verdict":"VISIBLE"
+SWAP m1-probe:cand up_exit=0 health=healthy image=sha256:7d06b538da5a3017b84893a7e7eb39d32ec6b04a1f61e758884a6864516980ab running=sha256:7d06b538da5a3017b84893a7e7eb39d32ec6b04a1f61e758884a6864516980ab match=yes platform=linux/arm64 in_container='aarch64 arm64' healthz=200 courses=200
+RUN c2-cand-identity exit=0 :: "verdict":"PASS"
+RUN c2-cand-gzip exit=0 :: "verdict":"PASS"
+RUN c4-cand exit=0 :: 
+RUN c4-browser-cand exit=0 :: "verdict":"VISIBLE"
+SWAP m1-probe:control up_exit=0 health=healthy image=sha256:cabeb2704e2d09c79e5b7b14f7d9b0ea8e0e634b13fe79791719d1e1696f0bd3 running=sha256:cabeb2704e2d09c79e5b7b14f7d9b0ea8e0e634b13fe79791719d1e1696f0bd3 match=yes platform=linux/arm64 in_container='aarch64 arm64' healthz=200 courses=200
+RUN c2-control-identity exit=0 :: "verdict":"FAIL"
+BUILD m1-front:cand-amd64-buildx ctx=m1-amd target=production platform=linux/amd64 free_before=16G
+BUILD m1-front:cand-amd64-buildx exit=0 id=sha256:07e86d032050d0dd84aee867590b0c4144e0633b8cc9731b35d28a882229fca0 linux/amd64 free_after=16G
+C5-BUILDX image arch: linux/amd64 content: aarch64 arm64 b7 00
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:2f5554638051136ef00ce7c75869051bbb46330a8ec61cb9abc5d3b3f8bc54e0
+PULL amd64 node exit=0 local tag node:24-bookworm-slim=sha256:8400c2d5d72e1cb9efd5ac46761a9d4622d5f92e81b620db71d4042ebaf68665 arm64
+MANUAL clean src=m1-amd/frontend free_before=16G
+MANUAL clean exit=0 steps: STEP npm_ci exit=0 STEP npm_ls_router exit=0 STEP copy_src exit=0 STEP npm_run_build exit=1 STEP npm_ci_omit_dev exit=0 STEP export exit=0 free_after=16G

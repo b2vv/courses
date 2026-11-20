@@ -1,0 +1,29 @@
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 0.3s
+#3 [internal] load .dockerignore
+#3 DONE 0.0s
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+#4 DONE 0.0s
+#5 [internal] load build context
+#5 DONE 0.1s
+#6 [dependencies 3/4] COPY frontend/package*.json ./
+#7 [dependencies 2/4] WORKDIR /app
+#8 [dependencies 4/4] RUN npm ci
+#9 [build 1/2] COPY frontend/ ./
+#9 DONE 0.1s
+#10 [build 2/2] RUN npm run build
+#10 8.919 ready   built in 5.82s (client)
+#10 10.79 ready   built in 1.87s (ssr)
+#10 DONE 11.0s
+#11 [runtime-dependencies 1/1] RUN npm ci --omit=dev
+#7 [dependencies 2/4] WORKDIR /app
+#12 [production 3/5] COPY --from=build --chown=node:node /app/dist ./dist
+#12 DONE 0.0s
+#13 [production 4/5] COPY --from=runtime-dependencies --chown=node:node /app/node_modules ./node_modules
+#13 DONE 3.1s
+#14 [production 5/5] COPY --from=build --chown=node:node /app/package.json /app/server.mjs /app/server-log.mjs ./
+#14 DONE 0.1s
+#16 DONE 0.0s
+#15 DONE 10.9s

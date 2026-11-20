@@ -1,0 +1,47 @@
+#1 [internal] booting buildkit
+#1 pulling image m1-buildkit-norqemu:local
+#1 pulling image m1-buildkit-norqemu:local 1.2s done
+#1 using local image m1-buildkit-norqemu:local done
+#1 creating container buildx_buildkit_m1-rosetta0
+#1 creating container buildx_buildkit_m1-rosetta0 0.2s done
+#1 DONE 1.4s
+Name:          m1-rosetta
+Driver:        docker-container
+Last Activity: 2026-11-20 17:17:01 +0000 UTC
+
+Nodes:
+Name:                  m1-rosetta0
+Endpoint:              kiri
+Driver Options:        image="m1-buildkit-norqemu:local"
+Status:                running
+BuildKit daemon flags: --allow-insecure-entitlement=network.host
+BuildKit version:      v0.35.1
+Platforms:             linux/amd64*, linux/arm64*
+Labels:
+ org.mobyproject.buildkit.worker.executor:         oci
+ org.mobyproject.buildkit.worker.hostname:         61ea2804451f
+ org.mobyproject.buildkit.worker.network:          host
+ org.mobyproject.buildkit.worker.oci.process-mode: sandbox
+ org.mobyproject.buildkit.worker.selinux.enabled:  false
+ org.mobyproject.buildkit.worker.snapshotter:      overlayfs
+GC Policy rule#0:
+ All:            false
+ Filters:        type==source.local type==exec.cachemount type==source.git.checkout
+ Keep Duration:  48h0m0s
+ Max Used Space: 488.3MiB
+GC Policy rule#1:
+ All:            false
+ Keep Duration:  1440h0m0s
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB
+GC Policy rule#2:
+ All:            false
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB
+GC Policy rule#3:
+ All:            true
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB

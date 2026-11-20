@@ -1,0 +1,27 @@
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/node:24-bookworm-slim
+#2 DONE 1.6s
+#3 [internal] load .dockerignore
+#3 DONE 0.0s
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+#5 [internal] load build context
+#5 DONE 0.1s
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+#4 DONE 8.8s
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+#4 DONE 8.8s
+#6 [dependencies 2/4] WORKDIR /app
+#6 DONE 0.2s
+#7 [dependencies 3/4] COPY frontend/package*.json ./
+#7 DONE 0.0s
+#8 [dependencies 4/4] RUN npm ci
+#8 DONE 65.6s
+#9 [build 1/2] COPY frontend/ ./
+#9 DONE 0.2s
+#10 [build 2/2] RUN npm run build
+#10 3.849 Segmentation fault
+#10 ERROR: process "/dev/.buildkit_qemu_emulator /bin/sh -c npm run build" did not complete successfully: exit code: 139
+3.849 Segmentation fault
+WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
+ERROR: failed to build: failed to solve: process "/dev/.buildkit_qemu_emulator /bin/sh -c npm run build" did not complete successfully: exit code: 139

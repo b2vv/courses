@@ -1,0 +1,11 @@
+uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1
+7dedaf029ed966cd01b332553b4bac0d5d512e544f8c8b26537d3851e7f66831  package-lock.json
+STEP npm_ci exit=0
+/app/node_modules/@tanstack/react-router
+STEP npm_ls_router exit=0
+STEP copy_src exit=0
+rspack x64 binding e_machine:  3e 00
+STEP npm_run_build exit=1
+ready   built in 1.88s (ssr)
+STEP npm_ci_omit_dev exit=0
+STEP export exit=0
