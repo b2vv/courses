@@ -1,0 +1,16 @@
+services:
+  frontend:
+    image: ${M1_FRONT_IMAGE:?set M1_FRONT_IMAGE}
+    platform: ${M1_FRONT_PLATFORM:-linux/arm64}
+    pull_policy: never
+  m1-delay:
+    image: node:24-bookworm-slim
+    pull_policy: never
+    init: true
+    command: ['node', '/srv/m1-delay.mjs']
+    volumes: ['<scratch>/m1-probe/m1-delay.mjs:/srv/m1-delay.mjs:ro']
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:9000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 10

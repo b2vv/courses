@@ -1,0 +1,57 @@
+diff --git a/frontend/src/routes/m1-stream.tsx b/frontend/src/routes/m1-stream.tsx
+new file mode 100644
+index 00000000..4ca48516
+--- /dev/null
++++ b/frontend/src/routes/m1-stream.tsx
+@@ -0,0 +1,37 @@
++// M1 diagnostic probe route (never committed to the app; docs/start-rsbuild-check/probe/).
++import { Suspense } from 'react';
++import { Await, createFileRoute } from '@tanstack/react-router';
++
++const RUN = /^[a-z0-9-]{1,40}$/;
++
++async function fetchLate(run: string, signal: AbortSignal): Promise<string> {
++  const response = await fetch(`http://m1-delay:9000/hold?run=${encodeURIComponent(run)}`, {
++    signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
++  });
++  if (!response.ok) throw new Error(`m1-delay status ${response.status}`);
++  return response.text();
++}
++
++export const Route = createFileRoute('/m1-stream')({
++  validateSearch: (search: Record<string, unknown>): { run: string } => ({
++    run: typeof search.run === 'string' && RUN.test(search.run) ? search.run : '',
++  }),
++  loaderDeps: ({ search }) => ({ run: search.run }),
++  loader: ({ deps, abortController }) => {
++    if (!deps.run) throw new Error('m1-stream: invalid run');
++    return { late: fetchLate(deps.run, abortController.signal) };
++  },
++  component: M1Stream,
++});
++
++function M1Stream() {
++  const { late } = Route.useLoaderData();
++  return (
++    <main>
++      <h1 data-m1-shell="1">M1 shell</h1>
++      <Suspense fallback={<p data-m1-pending="1">pending</p>}>
++        <Await promise={late}>{(value) => <p data-m1-late={value} />}</Await>
++      </Suspense>
++    </main>
++  );
++}
+diff --git a/frontend/src/routes/m1-throw.tsx b/frontend/src/routes/m1-throw.tsx
+new file mode 100644
+index 00000000..cc61f102
+--- /dev/null
++++ b/frontend/src/routes/m1-throw.tsx
+@@ -0,0 +1,8 @@
++// M1 diagnostic probe route (never committed to the app; docs/start-rsbuild-check/probe/).
++import { createFileRoute } from '@tanstack/react-router';
++
++export const Route = createFileRoute('/m1-throw')({ component: M1Throw });
++
++function M1Throw(): never {
++  throw new Error('m1-render-probe');
++}

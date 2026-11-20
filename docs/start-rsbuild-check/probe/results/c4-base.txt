@@ -1,0 +1,7 @@
+base /m1-throw: status=200 bytes=5858 complete=1 sentinelInHtml=0
+base /courses: status=200 bytes=15265 complete=1 sentinelInHtml=0
+base log interval [2026-11-20T09:35:14.000000000Z,2026-11-20T09:35:16.000000000Z]: lines=13
+{"level":"info","service":"frontend","source":"ssr","event":"http_request","status":200,"durationMs":115,"route":"/m1-throw",}
+{"level":"info","service":"frontend","source":"ssr","event":"http_request","status":200,"durationMs":23,"route":"/courses",}
+base sentinel in log: 1
+Error in renderToReadableStream: Error: m1-render-probe

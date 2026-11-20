@@ -1,0 +1,13 @@
+# binfmt handlers in the Kiri VM, read 2026-11-20 via a privileged alpine container (read-only)
+register
+rosetta
+status
+== /proc/sys/fs/binfmt_misc/rosetta
+enabled
+interpreter /run/rosetta/rosetta
+flags: OCF
+# kiri-build buildkitd.toml (registry part)
+[registry."docker.io"]
+  mirrors = ["<kiri-local-mirror>/docker.io"]
+[registry."198.19.248.254:47391"]
+  http = true

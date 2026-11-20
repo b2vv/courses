@@ -1,0 +1,78 @@
+# C0 gates (macOS host), grep of the task gate logs
+## base
+1:== format:check
+10:RC format:check=0
+11:== typecheck
+16:RC typecheck=0
+17:== lint
+23:RC lint=0
+24:== test
+46:    "failedTests": 0,
+47:    "passedTests": 1482,
+48:    "skippedTests": 0,
+71:RC test=0
+72:== build
+157:                                                                       Total:   2844.2 kB   1014.4 kB
+211:              Total:   7621.5 kB
+213:RC build=0
+## cand
+1:== format:check
+10:RC format:check=0
+11:== typecheck
+16:RC typecheck=0
+17:== lint
+23:RC lint=0
+24:== test
+46:    "failedTests": 0,
+47:    "passedTests": 1482,
+48:    "skippedTests": 0,
+71:RC test=0
+72:== build
+157:                                                                       Total:   2835.9 kB   1009.5 kB
+211:              Total:   7589.1 kB
+213:RC build=0
+
+# C0 npm ls --all stderr
+## m1-c0-base-lsall.err (empty = npm ls --all exit 0)
+## m1-c0-cand-lsall.err (empty = npm ls --all exit 0)
+## m1-c0-lsall.err (earlier attempt with a hand-merged macOS lock, superseded by D2; not the candidate lock)
+npm error code ELSPROBLEMS
+npm error extraneous: @emnapi/wasi-threads@1.2.3 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@emnapi/wasi-threads
+npm error extraneous: @floating-ui/core@1.8.0 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@floating-ui/core
+npm error extraneous: @floating-ui/utils@0.2.12 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@floating-ui/utils
+npm error extraneous: @napi-rs/wasm-runtime@1.1.6 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@napi-rs/wasm-runtime
+
+# D2 drift: macOS npm install --package-lock-only on untouched baseline
+package.json vs HEAD: a09783e4ca954da8 vs a09783e4ca954da8
+lock numstat (add del): 82 95
+entries lost: ['node_modules/@emnapi/core', 'node_modules/@emnapi/runtime', 'node_modules/@floating-ui/dom', 'node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/core', 'node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/runtime']
+
+# manual amd64 build repeats (BUILD_EXIT per run; runs 1-3 exit codes are in repeat-summary.txt, the per-run logs hold only build output; build-amd/base0.log = the 4th run, m1-repro.sh)
+build-amd-1.log: 
+build-amd-2.log: 
+build-amd-3.log: 
+build-amd.log: BUILD_EXIT=0
+build-base0-1.log: 
+build-base0-2.log: 
+build-base0-3.log: 
+build-base0.log: CI_EXIT=0 BUILD_EXIT=0
+ci-amd.log: 
+ci-base0.log: 
+
+# first temporary builder (bundled QEMU), candidate: c5-real.log
+START c5-real 2026-11-20T10:42:48Z free=16G
+BUILDER create exit=0
+BUILDER bootstrap exit=0 Platforms: linux/amd64*, linux/arm64
+BUILD m1-deps:amd64-real ctx=m1-amd target=dependencies free_before=16G
+BUILD m1-deps:amd64-real exit=0 id=sha256:b0c1074ac0be97c4763535e1306df0da1d9faa440fd8a83bbd888f217e2bd72d linux/amd64 free_after=14G
+  content: x86_64 v24.22.3 linux x64 3e 00
+DEPS stage: 11.19.1 7dedaf029ed966cd /app/node_modules/@tanstack/react-router 3e 00
+#8 DONE 67.0s
+#10 DONE 0.0s
+#9 DONE 21.1s
+BUILD m1-front:amd64-real ctx=m1-amd target=production free_before=13G
+BUILD m1-front:amd64-real exit=1 id=
+Error response from daemon: No such image: m1-front:amd64-real free_after=13G
+  content: Unable to find image m1-front:amd64-real locally amd64-real: Pulling from library/m1-front docker: pull access denied for m1-front, repository does not exist or may require docker login Run docker run --help for more information
+BUILDER removed exit=0 remaining: 0
+END c5-real 2026-11-20T10:45:03Z free=15G rc=1

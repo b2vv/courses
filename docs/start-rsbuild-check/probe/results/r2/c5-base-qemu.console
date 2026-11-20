@@ -1,0 +1,12 @@
+free_before=15G
+create=0
+Platforms:             linux/amd64*, linux/arm64
+base_build_exit=1
+#10 3.849 Segmentation fault
+#10 ERROR: process "/dev/.buildkit_qemu_emulator /bin/sh -c npm run build" did not complete successfully: exit code: 139
+3.849 Segmentation fault
+ERROR: failed to build: failed to solve: process "/dev/.buildkit_qemu_emulator /bin/sh -c npm run build" did not complete successfully: exit code: 139
+
+Cannot load builder desktop-linux: failed to connect to the docker API at unix://<home>/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix <home>/.docker/run/docker.sock: connect: no such file or directory
+rm=0 remaining=0
+free_after=15G
