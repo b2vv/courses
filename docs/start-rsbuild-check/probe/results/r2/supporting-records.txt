@@ -37,10 +37,10 @@
 ## m1-c0-cand-lsall.err (empty = npm ls --all exit 0)
 ## m1-c0-lsall.err (earlier attempt with a hand-merged macOS lock, superseded by D2; not the candidate lock)
 npm error code ELSPROBLEMS
-npm error extraneous: @emnapi/wasi-threads@1.2.3 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@emnapi/wasi-threads
-npm error extraneous: @floating-ui/core@1.8.0 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@floating-ui/core
-npm error extraneous: @floating-ui/utils@0.2.12 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@floating-ui/utils
-npm error extraneous: @napi-rs/wasm-runtime@1.1.6 /private/tmp/claude-501/-Users-strelia-projects-courses/***/scratchpad/m1-cand/frontend/node_modules/@napi-rs/wasm-runtime
+npm error extraneous: @emnapi/wasi-threads@1.2.3 <scratch>/m1-cand/frontend/node_modules/@emnapi/wasi-threads
+npm error extraneous: @floating-ui/core@1.8.0 <scratch>/m1-cand/frontend/node_modules/@floating-ui/core
+npm error extraneous: @floating-ui/utils@0.2.12 <scratch>/m1-cand/frontend/node_modules/@floating-ui/utils
+npm error extraneous: @napi-rs/wasm-runtime@1.1.6 <scratch>/m1-cand/frontend/node_modules/@napi-rs/wasm-runtime
 
 # D2 drift: macOS npm install --package-lock-only on untouched baseline
 package.json vs HEAD: a09783e4ca954da8 vs a09783e4ca954da8

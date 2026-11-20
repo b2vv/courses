@@ -1,0 +1,151 @@
+# Derived excerpt of the ordered make check log (full log not committed). Lines kept: start/end records, unit-test totals, Go package results, build markers, smoke results, e2e summary.
+START 2026-11-20T20:56:37Z HEAD=c2074e6a free=13G front_before=sha256:ed6a31eccafa0a1a4406e9d74d67b3507e65d4661e21d6c2b9b25f552542e37c
+GATE_EXIT=0
+END 2026-11-20T21:28:08Z free=13G front_after=sha256:182270a6a5f1b57111ccf7cf72e998d33b23684f1a11438b9f8db9431361838e front_built=sha256:182270a6a5f1b57111ccf7cf72e998d33b23684f1a11438b9f8db9431361838e
+    "tests": 1482,
+    "failedTests": 0,
+    "passedTests": 1482,
+    "skippedTests": 0,
+    "todoTests": 0
+go: ok=130 FAIL=0
+ok  	courses/cmd/api	(cached)
+ok  	courses/cmd/asr-worker	(cached)
+ok  	courses/cmd/media-worker	(cached)
+ok  	courses/cmd/migrate	(cached)
+ok  	courses/internal/adminstats/adapters/http	25.628s
+ok  	courses/internal/adminstats/domain	(cached)
+ok  	courses/internal/clientlog/adapters/http	11.234s
+ok  	courses/internal/clientlog/domain	(cached)
+ok  	courses/internal/contracts/access	(cached)
+ok  	courses/internal/contracts/language	(cached)
+ok  	courses/internal/contracts/rating	(cached)
+ok  	courses/internal/course/adapters/http	149.198s
+ok  	courses/internal/course/adapters/postgres	(cached)
+ok  	courses/internal/course/application	(cached)
+ok  	courses/internal/course/domain	(cached)
+ok  	courses/internal/discussion/adapters/http	123.391s
+ok  	courses/internal/discussion/application	(cached)
+ok  	courses/internal/discussion/domain	(cached)
+ok  	courses/internal/identity/adapters/argon2id	(cached)
+ok  	courses/internal/identity/adapters/http	98.652s
+ok  	courses/internal/identity/adapters/identitycrypto	(cached)
+ok  	courses/internal/identity/adapters/mail	(cached)
+ok  	courses/internal/identity/adapters/redis	(cached)
+ok  	courses/internal/identity/application	(cached)
+ok  	courses/internal/identity/domain	(cached)
+ok  	courses/internal/image/adapters/filesystem	(cached)
+ok  	courses/internal/image/adapters/http	16.662s
+ok  	courses/internal/image/application	(cached)
+ok  	courses/internal/image/domain	(cached)
+ok  	courses/internal/media/adapters/asynq	(cached)
+ok  	courses/internal/media/adapters/ffmpeg	(cached)
+ok  	courses/internal/media/adapters/filesystem	(cached)
+ok  	courses/internal/media/adapters/http	163.087s
+ok  	courses/internal/media/adapters/tus	(cached)
+ok  	courses/internal/media/application	(cached)
+ok  	courses/internal/media/domain	(cached)
+ok  	courses/internal/openapispec	9.662s
+ok  	courses/internal/orders/adapters/http	80.048s
+ok  	courses/internal/orders/adapters/wayforpay	(cached)
+ok  	courses/internal/orders/application	(cached)
+ok  	courses/internal/orders/domain	(cached)
+ok  	courses/internal/platform/openapigen	3.292s
+ok  	courses/internal/playback/adapters/http	2.582s
+ok  	courses/internal/playback/adapters/postgres	(cached)
+ok  	courses/internal/playback/adapters/redis	(cached)
+ok  	courses/internal/playback/application	(cached)
+ok  	courses/internal/playback/domain	(cached)
+ok  	courses/internal/testsupport/containers	1.200s
+ok  	courses/internal/testsupport/coursevisibility	(cached)
+ok  	courses/internal/transcript/adapters/asynq	(cached)
+ok  	courses/internal/transcript/adapters/http	111.725s
+ok  	courses/internal/transcript/adapters/media	(cached)
+ok  	courses/internal/transcript/adapters/whisper	(cached)
+ok  	courses/internal/transcript/application	(cached)
+ok  	courses/internal/transcript/domain	(cached)
+ok  	courses/platform/architecture	1.625s
+ok  	courses/platform/config	(cached)
+ok  	courses/platform/httpserver	(cached)
+ok  	courses/platform/jsonbody	(cached)
+ok  	courses/platform/mail	(cached)
+ok  	courses/platform/observability	(cached)
+ok  	courses/cmd/api	0.042s
+ok  	courses/cmd/asr-worker	0.012s
+ok  	courses/cmd/media-worker	4.359s
+ok  	courses/cmd/migrate	0.008s
+ok  	courses/internal/adminstats/adapters/http	3.622s
+ok  	courses/internal/adminstats/adapters/postgres	20.557s
+ok  	courses/internal/adminstats/domain	0.014s
+ok  	courses/internal/clientlog/adapters/http	2.173s
+ok  	courses/internal/clientlog/domain	0.014s
+ok  	courses/internal/contracts/access	0.003s
+ok  	courses/internal/contracts/language	0.001s
+ok  	courses/internal/contracts/rating	0.002s
+ok  	courses/internal/course/adapters/http	20.570s
+ok  	courses/internal/course/adapters/postgres	27.632s
+ok  	courses/internal/course/application	3.028s
+ok  	courses/internal/course/domain	0.016s
+ok  	courses/internal/discussion/adapters/http	15.461s
+ok  	courses/internal/discussion/adapters/postgres	5.600s
+ok  	courses/internal/discussion/application	0.004s
+ok  	courses/internal/discussion/domain	0.008s
+ok  	courses/internal/identity/adapters/argon2id	0.953s
+ok  	courses/internal/identity/adapters/http	13.804s
+ok  	courses/internal/identity/adapters/identitycrypto	0.004s
+ok  	courses/internal/identity/adapters/mail	0.014s
+ok  	courses/internal/identity/adapters/postgres	20.425s
+ok  	courses/internal/identity/adapters/redis	0.473s
+ok  	courses/internal/identity/application	0.006s
+ok  	courses/internal/identity/domain	0.011s
+ok  	courses/internal/image/adapters/filesystem	0.025s
+ok  	courses/internal/image/adapters/http	1.852s
+ok  	courses/internal/image/adapters/postgres	7.783s
+ok  	courses/internal/image/application	0.006s
+ok  	courses/internal/image/domain	0.012s
+ok  	courses/internal/media/adapters/asynq	0.020s
+ok  	courses/internal/media/adapters/ffmpeg	0.660s
+ok  	courses/internal/media/adapters/filesystem	0.009s
+ok  	courses/internal/media/adapters/http	25.154s
+ok  	courses/internal/media/adapters/postgres	18.608s
+ok  	courses/internal/media/adapters/tus	5.441s
+ok  	courses/internal/media/application	0.007s
+ok  	courses/internal/media/domain	0.004s
+ok  	courses/internal/openapispec	1.738s
+ok  	courses/internal/orders/adapters/http	7.871s
+ok  	courses/internal/orders/adapters/postgres	4.900s
+ok  	courses/internal/orders/adapters/wayforpay	0.004s
+ok  	courses/internal/orders/application	0.008s
+ok  	courses/internal/orders/domain	0.006s
+ok  	courses/internal/platform/openapigen	0.584s
+ok  	courses/internal/playback/adapters/http	0.146s
+ok  	courses/internal/playback/adapters/postgres	7.986s
+ok  	courses/internal/playback/adapters/redis	0.318s
+ok  	courses/internal/playback/application	6.754s
+ok  	courses/internal/playback/domain	0.008s
+ok  	courses/internal/testsupport/containers	4.120s
+ok  	courses/internal/testsupport/coursevisibility	0.011s
+ok  	courses/internal/testsupport/startup	12.812s
+ok  	courses/internal/transcript/adapters/asynq	2.154s
+ok  	courses/internal/transcript/adapters/http	11.749s
+ok  	courses/internal/transcript/adapters/media	0.197s
+ok  	courses/internal/transcript/adapters/postgres	10.564s
+ok  	courses/internal/transcript/adapters/whisper	5.350s
+ok  	courses/internal/transcript/application	0.003s
+ok  	courses/internal/transcript/domain	0.007s
+ok  	courses/platform/architecture	0.270s
+ok  	courses/platform/config	0.008s
+ok  	courses/platform/httpserver	0.047s
+ok  	courses/platform/jsonbody	0.002s
+ok  	courses/platform/mail	0.746s
+ok  	courses/platform/observability	0.005s
+#16 6.531 ready   built in 4.62s (client)
+#16 7.793 ready   built in 1.26s (ssr)
+#58 5.132 ready   built in 3.68s (client)
+#58 6.606 ready   built in 1.47s (ssr)
+PASS gzip on /api/ JSON with Vary, absent for identity, and absent on the streamed page route
+PASS readiness, upload proxy/body cap, private media/metrics, worker handler/metrics and API, login and SSR rate limits
+PASS unavailable Redis returns 503 with Retry-After
+PASS Redis recovery restored media authorization policy (503 -> 403)
+PASS media rate limit
+Running 168 tests using 1 worker
+  168 passed (24.0m)

@@ -294,7 +294,9 @@ e2e-reset up drain-queue seed-identities seed smoke e2e`:
   `courses-frontend` image ID (before: `ed6a31ec…`), so e2e did not run on the old image. VM free space 13 → 13 GB; the
   build cache was not pruned.
 
-The gate log stays in the session scratchpad; the api/nginx stream is `frontend/test-logs/api-nginx-20261120T210405Z.log`
+The full gate log stays in the session scratchpad (not committed); a derived excerpt with the start/end records,
+`GATE_EXIT`, unit-test totals, every Go package line, build markers, smoke `PASS` lines and the e2e summary is
+`probe/results/gate-make-check.excerpt.txt`. The api/nginx stream is `frontend/test-logs/api-nginx-20261120T210405Z.log`
 (not committed, as in every phase).
 
 ## Environment, disk and cleanup
