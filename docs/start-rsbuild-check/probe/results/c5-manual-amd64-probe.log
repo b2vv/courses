@@ -1,0 +1,15 @@
+START 2026-11-20T09:47:08Z df=overlay          63G   47G   17G  75% /
+PULL_EXIT=0
+x86_64
+v24.22.3 linux x64
+11.19.1
+7dedaf029ed966cd01b332553b4bac0d5d512e544f8c8b26537d3851e7f66831  package-lock.json
+deps: npm ci ok
+/app/node_modules/@tanstack/react-router
+ready   built in 5.58s (client)
+ready   built in 1.83s (ssr)
+rspack bindings: binding binding-linux-x64-gnu core
+x64 binding e_machine:  3e 00
+runtime deps: npm ci --omit=dev ok
+MANUAL_EXIT=0
+END 2026-11-20T09:55:33Z df=overlay          63G   47G   17G  75% /

@@ -1,0 +1,10 @@
+# cleanup inventory 2026-11-20T14:00:16Z
+m1-* image tags: 0
+node images by repo:tag/digest: node:24-bookworm-slim 8400c2d5d72e sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
+node amd64 digest 0e2646ab present: 0
+buildx builders m1-*: 0
+volumes m1*: 0
+containers m1*: 0
+frontend: sha256:ed6a31eccafa0a1a4406e9d74d67b3507e65d4661e21d6c2b9b25f552542e37c healthy
+/courses: 200
+VM free: 13G (df -BG, rounded GiB)

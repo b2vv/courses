@@ -1,0 +1,13 @@
+diff --git a/frontend/server.mjs b/frontend/server.mjs
+index eeece8a4..93ef7e73 100644
+--- a/frontend/server.mjs
++++ b/frontend/server.mjs
+@@ -63,7 +63,7 @@ const server = serve({
+           route: path,
+         }),
+       );
+-      return response;
++      return new Response(await response.arrayBuffer(), response); // M1 control: materialize body
+     } catch {
+       process.stderr.write(ssrRenderFailedLine({ route: path }));
+       return new Response('Rendering unavailable', {

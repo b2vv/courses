@@ -1,0 +1,40 @@
+Name:          m1-rosetta
+Driver:        docker-container
+Last Activity: 2026-11-20 11:59:29 +0000 UTC
+
+Nodes:
+Name:                  m1-rosetta0
+Endpoint:              kiri
+Driver Options:        image="m1-buildkit-norqemu:local"
+Status:                running
+BuildKit daemon flags: --allow-insecure-entitlement=network.host
+BuildKit version:      v0.35.1
+Platforms:             linux/amd64*, linux/arm64*
+Labels:
+ org.mobyproject.buildkit.worker.executor:         oci
+ org.mobyproject.buildkit.worker.hostname:         ea37c8999f86
+ org.mobyproject.buildkit.worker.network:          host
+ org.mobyproject.buildkit.worker.oci.process-mode: sandbox
+ org.mobyproject.buildkit.worker.selinux.enabled:  false
+ org.mobyproject.buildkit.worker.snapshotter:      overlayfs
+GC Policy rule#0:
+ All:            false
+ Filters:        type==source.local type==exec.cachemount type==source.git.checkout
+ Keep Duration:  48h0m0s
+ Max Used Space: 488.3MiB
+GC Policy rule#1:
+ All:            false
+ Keep Duration:  1440h0m0s
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB
+GC Policy rule#2:
+ All:            false
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB
+GC Policy rule#3:
+ All:            true
+ Reserved Space: 6.519GiB
+ Max Used Space: 46.57GiB
+ Min Free Space: 12.11GiB

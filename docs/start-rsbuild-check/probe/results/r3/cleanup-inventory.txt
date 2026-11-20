@@ -1,0 +1,9 @@
+r3 cleanup inventory 2026-11-20T17:20:35Z
+m1_tags=0
+amd64_node_digest_present=no
+m1_builders=0
+m1_buildx_volumes=0
+m1_containers=0
+frontend=sha256:ed6a31eccafa0a1a4406e9d74d67b3507e65d4661e21d6c2b9b25f552542e37c healthy
+courses_http=200
+vm_free=13G

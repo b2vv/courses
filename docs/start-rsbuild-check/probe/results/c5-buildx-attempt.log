@@ -1,0 +1,13 @@
+START 2026-11-20T09:36:39Z df=overlay          63G   43G   21G  68% /
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:2f5554638051136ef00ce7c75869051bbb46330a8ec61cb9abc5d3b3f8bc54e0
+DEPS_EXIT=0
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:2f5554638051136ef00ce7c75869051bbb46330a8ec61cb9abc5d3b3f8bc54e0
+PROD_EXIT=0
+#4 [dependencies 1/4] FROM docker.io/library/node:24-bookworm-slim@sha256:2f5554638051136ef00ce7c75869051bbb46330a8ec61cb9abc5d3b3f8bc54e0
+PROBE_EXIT=0
+END 2026-11-20T09:39:32Z df=overlay          63G   46G   18G  73% /
+11.19.1
+7dedaf029ed966cd01b332553b4bac0d5d512e544f8c8b26537d3851e7f66831  package-lock.json
+/app/node_modules/@tanstack/react-router
+aarch64
+v24.22.3 linux arm64

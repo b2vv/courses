@@ -1,0 +1,9 @@
+START 2026-11-20T17:11:43Z free=13G
+PULL exit=0 arch=amd64
+RUN 1 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 5.30s (client) ready built in 1.71s (ssr) free_before=13G free_after=13G
+RUN 2 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 5.26s (client) ready built in 1.78s (ssr) free_before=13G free_after=13G
+RUN 3 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 5.47s (client) ready built in 1.80s (ssr) free_before=13G free_after=13G
+RUN 4 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 5.59s (client) ready built in 1.85s (ssr) free_before=13G free_after=13G
+RUN 5 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 13.4s (client) ready built in 3.04s (ssr) free_before=13G free_after=13G
+RUN 6 docker_exit=0 uname=x86_64 node=v24.22.3 linux x64 npm=11.19.1 nproc=6 mem= STEP npm_ci exit=0 STEP copy_src exit=0 STEP npm_run_build exit=0 ready built in 5.58s (client) ready built in 1.88s (ssr) free_before=13G free_after=13G
+END 2026-11-20T17:16:13Z free=13G

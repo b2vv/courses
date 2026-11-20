@@ -1,0 +1,140 @@
+
+> @courses/frontend@0.1.0 build
+> rsbuild build
+
+Rsbuild v2.3.3
+
+Warning: Route file "/app/src/routes/__root.test.tsx" does not export a Route. This file will not be included in the route tree.
+
+If this file is not intended to be a route, you can exclude it using one of these options:
+  1. Rename the file to "/app/src/routes/-__root.test.tsx" (prefix with "-")
+  2. Use 'routeFileIgnorePattern' in your config to match this file
+
+Current configuration:
+  routeFileIgnorePrefix: "-"
+  routeFileIgnorePattern: undefined
+Warning: Route file "/app/src/routes/route-guards.test.tsx" does not export a Route. This file will not be included in the route tree.
+
+If this file is not intended to be a route, you can exclude it using one of these options:
+  1. Rename the file to "/app/src/routes/-route-guards.test.tsx" (prefix with "-")
+  2. Use 'routeFileIgnorePattern' in your config to match this file
+
+Current configuration:
+  routeFileIgnorePrefix: "-"
+  routeFileIgnorePattern: undefined
+info    build started...
+ready   built in 5.26s (client)
+ready   built in 1.78s (ssr)
+
+File (client)                                                                   Size        Gzip   
+dist/client/assets/js/async/2.910823e745.js                                     0.13 kB     0.13 kB
+dist/client/assets/js/async/c.631d2eea90.js                                     0.13 kB     0.13 kB
+dist/client/assets/js/async/m.8891a04c4e.js                                     0.14 kB     0.13 kB
+dist/client/assets/js/async/x.7702f9f886.js                                     0.14 kB     0.13 kB
+dist/client/assets/js/async/yd.7655ae6a17.js                                    0.14 kB     0.13 kB
+dist/client/assets/js/async/v.d7fc2f669e.js                                     0.14 kB     0.13 kB
+dist/client/assets/js/async/f.5768a473d7.js                                     0.14 kB     0.13 kB
+dist/client/assets/js/async/dy.21e02918ed.js                                    0.14 kB     0.13 kB
+dist/client/assets/js/async/4j.709702ddcb.js                                    0.14 kB     0.13 kB
+dist/client/assets/js/async/1u.9abfcca9d2.js                                    0.14 kB     0.13 kB
+dist/client/assets/js/async/e.ebf6bd8f28.js                                     0.14 kB     0.13 kB
+dist/client/assets/js/async/5n.a88a5a4fbd.js                                    0.21 kB     0.18 kB
+dist/client/assets/js/async/y.485d97835e.js                                     0.25 kB     0.21 kB
+dist/client/assets/js/async/tb.9420de2084.js                                    0.25 kB     0.21 kB
+dist/client/assets/js/async/j.b91125ee08.js                                     0.39 kB     0.28 kB
+dist/client/assets/js/async/d.e2d0244f06.js                                     0.40 kB     0.31 kB
+dist/client/assets/js/async/z.a5d470f8dc.js                                     0.44 kB     0.32 kB
+dist/client/assets/js/async/9.f2442814f8.js                                     0.44 kB     0.28 kB
+dist/client/assets/js/async/a4.2e95334c69.js                                    0.46 kB     0.31 kB
+dist/client/assets/js/async/dt.4b805d5f5a.js                                    0.48 kB     0.33 kB
+dist/client/assets/js/async/5l.61336ca5c2.js                                    0.54 kB     0.39 kB
+dist/client/assets/js/async/3.ac927bdab9.js                                     0.62 kB     0.42 kB
+dist/client/assets/js/async/5.a5f73ad80a.js                                     0.65 kB     0.42 kB
+dist/client/assets/js/async/t.3fc76d0a19.js                                     0.72 kB     0.46 kB
+dist/client/assets/js/async/n.ebd980e9e6.js                                     0.76 kB     0.44 kB
+dist/client/assets/js/async/i.77cfd9365f.js                                     0.81 kB     0.50 kB
+dist/client/assets/js/async/hi.56bce4d5db.js                                    0.81 kB     0.50 kB
+dist/client/assets/js/async/g8.639663fee5.js                                    1.1 kB      0.61 kB
+dist/client/assets/js/async/nv.d639abdda9.js                                    1.4 kB      0.72 kB
+dist/client/assets/js/async/l.2739f7f79a.js                                     1.7 kB      0.80 kB
+dist/client/assets/js/async/5a.bf20867c07.js                                    1.7 kB      0.72 kB
+dist/client/assets/js/async/4.736423fd18.js                                     1.9 kB      0.82 kB
+dist/client/assets/js/async/zd.10219a9fa6.js                                    1.9 kB      0.82 kB
+dist/client/assets/js/async/s.7654175c8d.js                                     2.0 kB      0.89 kB
+dist/client/assets/js/async/h.8f7e954cfa.js                                     2.0 kB      0.93 kB
+dist/client/assets/js/async/q.44ced967a5.js                                     2.0 kB      0.87 kB
+dist/client/assets/js/async/1.5255bcbed2.js                                     2.7 kB      1.2 kB
+dist/client/assets/js/async/g.bda481adf8.js                                     6.7 kB      2.4 kB
+dist/client/assets/font/space-grotesk-vietnamese-wght-normal.a3924ff4a3.woff2   6.7 kB   
+dist/client/assets/js/async/a.e70cab449e.js                                     7.8 kB      2.7 kB
+dist/client/assets/font/inter-vietnamese-wght-normal.113a630f76.woff2           10.3 kB  
+dist/client/assets/font/inter-greek-ext-wght-normal.23aae5683d.woff2            11.2 kB  
+dist/client/assets/js/async/12.436b5e3d19.js                                    13.2 kB     4.6 kB
+dist/client/assets/font/inter-cyrillic-wght-normal.491cbc05ce.woff2             18.7 kB  
+dist/client/assets/font/space-grotesk-latin-ext-wght-normal.55a1343a9a.woff2    18.9 kB  
+dist/client/assets/font/inter-greek-wght-normal.4449bf7aab.woff2                19.0 kB  
+dist/client/assets/js/async/td.d2156e4ca6.js                                    19.8 kB     5.7 kB
+dist/client/assets/font/space-grotesk-latin-wght-normal.5a0c43ffa2.woff2        22.3 kB  
+dist/client/assets/font/inter-cyrillic-ext-wght-normal.460bdf14be.woff2         26.0 kB  
+dist/client/assets/font/inter-latin-wght-normal.6c596dfcdd.woff2                48.3 kB  
+dist/client/assets/font/inter-latin-ext-wght-normal.3835a68e46.woff2            85.1 kB  
+dist/client/assets/css/index.502badff37.css                                     118.8 kB    19.7 kB
+dist/client/assets/js/async/gb.345d903981.js                                    398.0 kB    125.1 kB
+dist/client/assets/js/index.d1b140ee93.js                                       1977.3 kB   567.4 kB
+
+                                                                       Total:   2835.9 kB   1009.5 kB
+
+File (ssr)             Size        
+dist/server/x.js       0.32 kB  
+dist/server/6.js       0.46 kB  
+dist/server/h.js       0.46 kB  
+dist/server/n.js       0.46 kB  
+dist/server/3h.js      0.47 kB  
+dist/server/yo.js      0.47 kB  
+dist/server/gy.js      0.47 kB  
+dist/server/m.js       0.47 kB  
+dist/server/s.js       0.47 kB  
+dist/server/g.js       0.47 kB  
+dist/server/b.js       0.47 kB  
+dist/server/c.js       0.54 kB  
+dist/server/tl.js      0.66 kB  
+dist/server/0x.js      0.79 kB  
+dist/server/8.js       0.98 kB  
+dist/server/qx.js      1.0 kB   
+dist/server/ad.js      1.1 kB   
+dist/server/ug.js      1.1 kB   
+dist/server/j.js       1.1 kB   
+dist/server/q.js       1.3 kB   
+dist/server/t.js       1.4 kB   
+dist/server/9.js       1.5 kB   
+dist/server/2w.js      1.6 kB   
+dist/server/ae.js      2.2 kB   
+dist/server/3.js       2.2 kB   
+dist/server/ib.js      2.3 kB   
+dist/server/o.js       2.4 kB   
+dist/server/kg.js      2.4 kB   
+dist/server/i.js       2.5 kB   
+dist/server/xe.js      2.6 kB   
+dist/server/tls.js     2.9 kB   
+dist/server/4.js       3.2 kB   
+dist/server/u1.js      3.7 kB   
+dist/server/u.js       3.7 kB   
+dist/server/kv.js      3.9 kB   
+dist/server/o4.js      4.0 kB   
+dist/server/5.js       4.2 kB   
+dist/server/k.js       4.7 kB   
+dist/server/2.js       5.2 kB   
+dist/server/lo.js      5.6 kB   
+dist/server/0.js       6.5 kB   
+dist/server/a.js       7.2 kB   
+dist/server/cq.js      21.4 kB  
+dist/server/cv.js      22.1 kB  
+dist/server/il.js      39.4 kB  
+dist/server/y.js       58.7 kB  
+dist/server/index.js   1155.4 kB
+dist/server/l.js       1191.3 kB
+dist/server/yd.js      1311.3 kB
+dist/server/x2.js      3687.5 kB
+
+              Total:   7576.1 kB
+

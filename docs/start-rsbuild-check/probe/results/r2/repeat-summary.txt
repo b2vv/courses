@@ -1,0 +1,8 @@
+amd CI_EXIT=0
+amd run 1 BUILD_EXIT=0
+amd run 2 BUILD_EXIT=0
+amd run 3 BUILD_EXIT=0
+base0 CI_EXIT=0
+base0 run 1 BUILD_EXIT=0
+base0 run 2 BUILD_EXIT=0
+base0 run 3 BUILD_EXIT=0

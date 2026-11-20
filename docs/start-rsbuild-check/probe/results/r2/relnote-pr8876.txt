@@ -1,0 +1,1 @@
+).\n\n-   [#8876](https://github.com/TanStack/router/pull/8876) [`c156097`](https://github.com/TanStack/router/commit/c156097786b685db61f535d2779cb2a52a6af8aa) - Rsbuild: a route's client manifest entry lists only its own chunks and CSS. When two routes shared a module in a chunk of its own, each route's entry also listed the other route's chunk as a preload and its stylesheet.

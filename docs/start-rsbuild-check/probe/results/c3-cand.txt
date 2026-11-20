@@ -1,0 +1,6 @@
+api gzip: status=200 ce=gzip vary=Accept-Encoding bytes=    1161
+api identity: status=200 ce=none bytes=    2626
+api decode-equal True
+page /courses: status=200 ct=text/html; charset=utf-8 ce=none bytes=   15261 complete=1 catalogHeading=1 courseTitle=1
+page /courses/go-backend-foundations: status=200 ct=text/html; charset=utf-8 ce=none bytes=    9879 complete=1 catalogHeading=0 courseTitle=1
+C3 verdict: PASS

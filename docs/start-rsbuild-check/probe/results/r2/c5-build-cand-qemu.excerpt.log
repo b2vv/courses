@@ -1,0 +1,5 @@
+#11 3.350 Rsbuild v2.3.3
+#11 4.289 Segmentation fault
+#11 ERROR: process "/dev/.buildkit_qemu_emulator /bin/sh -c npm run build" did not complete successfully: exit code: 139
+3.350 Rsbuild v2.3.3
+4.289 Segmentation fault
