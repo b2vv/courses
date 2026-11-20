@@ -16,6 +16,7 @@
 - **done: admin-editor-ux Ux01–Ux18 → #111 / `06c1c220`; briefing re-sync → `7b78727f`.**
 - **done: M2 / R5 published-fixture leak → #112 / `a44790e2`** — ordered `make check` на `328c9d57` GATE_EXIT=0 (e2e 168), після повного прогону 0 published `e2e-%` (`docs/e2e-hygiene/report.md`).
 - **done: M19 / R6 archived e2e leftovers → #113 / `fc7d31f6`** — ordered `make check` на `3aa5eaca` GATE_EXIT=0 (e2e 168), після повного прогону 0 `e2e-%` курсів у будь-якому статусі (`docs/e2e-hygiene/report.md` §R6).
+- **done: M1 Start + Rsbuild compatibility-check → #114 / `b11ffd41`** — піни Start 1.169.7 / Router 1.170.46 / Rsbuild 2.3.3 / plugin-react 2.1.1; C0–C5 PASS (C1 за D1, C5 справжня amd64-збірка через Rosetta, D3); ordered `make check` на `c2074e6a` GATE_EXIT=0 (e2e 168); `docs/start-rsbuild-check/report.md`.
 
 Джерела closing: `git log --first-parent 5fbaaff..7b78727f`, `docs/multi-audio/report.md` §S1–S7,
 `docs/multi-subtitles/report.md` §MS1/F3/MS2–MS4, `docs/admin-editor-ux/report.md` §1–3.
@@ -137,6 +138,8 @@ Q3 heavy-вікно/Q4 reviewer лишаються координацією ті
 не злито й не перетворено на новий backlog. Джерела зберігаються на branch tip, checkout не виконувався.
 
 ## Наступний хід
+
+**M1 виконано #114 (2026-11-21) — обраний хід протух; агенду слід перезібрати (`cto-agenda`), новий хід не обрано.** Попередній текст вибору:
 
 **Один рекомендований хід — M1: Start + Rsbuild compatibility-check** (owner request 2026-11-14,
 дослівно в блоці вище). Обсяг — ізольована тестова гілка, три окремі докази (SPA-навігація, SSR
