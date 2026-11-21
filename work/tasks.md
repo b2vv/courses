@@ -493,5 +493,5 @@ Spec-flow ABOVE threshold. GATE 1 closed (owner, 30.10), GATE 2 **PASS** (indepe
 |---|---|---|---|---|
 | DP0 | S0 базовий огляд усіх поверхонь (без коду) → `docs/design-pass/findings.md` | Q1 (погоджено 2026-11-16) | **done** 2026-11-16 | `docs/design-pass/findings.md`: 1 blocker, 18 major, 11 minor (кандидати) |
 | DP1 | S1 спільні примітиви/токени (якщо S0 знайде) | DP0 | planned | — |
-| DP2 | Поекранні зрізи G0…T3 у порядку plan §5 | DP0, Q2 | **in_progress** | AUTH (A1/A2/A4/A5) `5518cda`, докази `docs/design-pass/evidence/AUTH.md`; make check + рев'ю — чекають Q3/Q4 |
+| DP2 | Поекранні зрізи G0…T3 у порядку plan §5 | DP0, Q2 | **in_progress** | AUTH (A1/A2/A4/A5) злито **#115** (`d6147d71`; ordered `make check` на `5e55c88a` GATE_EXIT=0, e2e 168 — тіло PR #115 §Gate; Codex-рев'ю PASS), докази `docs/design-pass/evidence/AUTH.md`; решта зрізів — після DP1 (`work/AGENDA.md` §Наступний хід) |
 | DP3 | `docs/design-pass/report.md` + повний ordered `make check` | DP2 | planned | — |

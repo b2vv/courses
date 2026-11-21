@@ -38,3 +38,5 @@
 ## Гейт
 
 `npm run format:check` PASS · `npm run lint` PASS · `npm run typecheck` PASS · `npm test` 955/955 PASS (frontend, 2026-11-16). Повний упорядкований `make check` (integration, build у Compose, e2e) **NOT_RUN**: він перебудовує й обнуляє спільний стек, а Q3 (heavy-вікно) відкритий. Без нього PR групи client/auth не зливається. Незалежне рев'ю — Q4.
+
+**Оновлення 2026-11-21 (після переносу на переписаний `main`).** Ordered `make check` на `5e55c88a` (Kiri): `GATE_EXIT=0`; frontend 1489/1489, Go 130 `ok` / 0 `FAIL`, e2e **168 passed**; під час e2e працював свіжозібраний образ frontend. Після гейту змінювались лише `docs/design-pass/**`. Незалежне рев'ю — Codex (BLOCK → виправлено → PASS, `docs/design-pass/_wip-review*.md`). Злито як #115 (`d6147d71`); джерело чисел — тіло PR #115, §Gate. Рядок вище (NOT_RUN) — стан 2026-11-16.
