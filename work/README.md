@@ -7,7 +7,7 @@
 ## Що прочитати спочатку
 
 1. [AGENTS.md](../AGENTS.md) → [standards](../.claude/standards.md) →
-   [локальний AI Factory adapter](../docs/development/ai-factory.md).
+   локальний AI Factory adapter (`docs/development/ai-factory.md`, локальний, поза git).
    [CLAUDE.md](../CLAUDE.md) уже веде до AGENTS і checkpoint; Codex починає з AGENTS.
 2. [CTO-RESEARCH.md](CTO-RESEARCH.md) — брифінг, [AGENDA.md](AGENDA.md) — контекст
    наступної роботи, [tasks.md](tasks.md) — індекс задач. Історичні записи не означають,
@@ -18,8 +18,8 @@
 
 ## Який AI Factory підключений
 
-Джерело істини — [package metadata](../docs/development/ai-factory-package.json)
-і [mapping в adapter](../docs/development/ai-factory.md#portable-package-pin).
+Джерело істини — package metadata (`docs/development/ai-factory-package.json`, локальний, поза git)
+і mapping в adapter (`docs/development/ai-factory.md`, локальний, поза git).
 Перевірено 2026-10-20: repository `https://github.com/b2vv/ai-factory`,
 version **0.7.0-candidate**, commit **`c427bd807f250e8d4b7d9c42d9bc894d8f8dce71`**.
 
@@ -58,7 +58,7 @@ Manifest і всі 147 файлів із `required_files` збіглися з pi
   обраний процес, без паралельного дублювання spec-flow.
 - До коду: scope/acceptance, рішення й невідоме, залежності/writer, scoped impact,
   застосовна planning critique/defense та READY/BLOCKED. Деталі —
-  [pre-code checkpoint](../docs/development/ai-factory.md#pre-code-checkpoint).
+  pre-code checkpoint (`docs/development/ai-factory.md`, локальний, поза git).
 - **Resume:** прочитати поточний plan/report/handoff, звірити HEAD, scoped dirty/untracked
   inputs і докази; повторно перевірити лише зачеплене, зберігши сильніші локальні вимоги.
   Незмінений завершений handoff не відкриває задачу знову.
@@ -80,13 +80,13 @@ Manifest і всі 147 файлів із `required_files` збіглися з pi
 - Review evidence/verdict і pointer на пакет зберігаються в чинному task/phase record
   або його evidence-файлах. Пакет прив'язаний до exact diff/snapshot, acceptance,
   commands/exits і reviewer reference. Історія підключення Factory окремо —
-  [readiness](../docs/development/ai-factory-readiness.md); її старий PASS не приймає нову задачу.
+  readiness (`docs/development/ai-factory-readiness.md`, локальний, поза git); її старий PASS не приймає нову задачу.
 
 Завершення: кожен acceptance item має перевірений результат, застосовні gates та
 незалежний verdict стосуються фінального snapshot, limitations і next action названі.
 PASS/FAIL/BLOCKED/NOT_TESTED/N/A не підміняють одне одного; aggregate green або build
 не доводять усі поведінкові рядки. [Testing](../docs/development/testing.md), standards
-і [adapter](../docs/development/ai-factory.md) визначають перевірки та side effects.
+і adapter (`docs/development/ai-factory.md`, локальний, поза git) визначають перевірки та side effects.
 `make check`/`e2e-local` не є безпечними перевірками цього README: вони змінюють стан,
 а важкі gates потребують погодженого вікна. Commit/push/deploy — лише в дозволеному scope.
 

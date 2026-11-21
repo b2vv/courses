@@ -39,3 +39,9 @@ AGENTS.local.md
 
 # Codex local hooks (machine-specific paths; never committed)
 .codex/
+
+# AI Factory adapter files are local to the machine (owner decision 2026-11-21: untracked, removed from history)
+docs/development/ai-factory.md
+docs/development/ai-factory-manifest.json
+docs/development/ai-factory-package.json
+docs/development/ai-factory-readiness.md
