@@ -188,6 +188,7 @@
 [data-surface='admin'] .ui-table th {
   color: var(--color-faint);
   font-family: var(--font-utility);
+  font-variant-numeric: tabular-nums;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;

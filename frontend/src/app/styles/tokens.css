@@ -39,7 +39,7 @@
     sans-serif;
   --font-display: var(--font-body);
   /* Labels, prices and counters: the body face with tabular figures (owner, 2026-11-21, Q5).
-     `ui-monospace` resolved to Courier in Chromium. Every rule that uses this token also sets
+     `ui-monospace` resolved to Courier in Chromium. Every rule that uses this token (tokens, tokens.admin, main) also sets
      `font-variant-numeric: tabular-nums`, because the `font` shorthand resets it. */
   --font-utility: var(--font-body);
   --radius-control: 0.375rem;
@@ -178,7 +178,7 @@
   text-underline-offset: 0.18em;
   text-decoration: underline;
   border-radius: var(--radius-control);
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 :is(
@@ -295,7 +295,7 @@
 .ui-option {
   border-color: transparent;
   cursor: pointer;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .ui-option[data-focused],
 .ui-option[data-selected] {
