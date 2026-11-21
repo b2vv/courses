@@ -15,6 +15,7 @@ import type {
 } from '../modules/admin';
 import { canAdministerAccounts } from '../modules/identity';
 import { UserListFailure, UserListPending, UserListView } from '../modules/admin';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/admin/users/')({
   ssr: false,
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/admin/users/')({
       context.admin.users.list(adminUserQuery(deps)),
       abortController.signal,
     ),
-  head: () => ({ meta: [{ title: 'Користувачі — CourseForge' }] }),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'users'),
   component: AdminUserListRoute,
   pendingComponent: UserListPending,
   errorComponent: UserListFailure,

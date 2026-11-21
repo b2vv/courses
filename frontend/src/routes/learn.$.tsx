@@ -36,6 +36,7 @@ import {
   EmailVerificationGate,
   shouldGateLessonPlayback,
 } from '../presentation/learn/EmailVerificationGate';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
@@ -65,6 +66,7 @@ export const Route = createFileRoute('/learn/$')({
     if (!lessonInCourse(course, lessonRoute.lessonId).ok) throw notFound();
     return { lessonRoute };
   },
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'learning'),
   component: LessonRoute,
   errorComponent: LearnRouteFailure,
 });

@@ -4,9 +4,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
 import { ConfirmEmailChangeView } from '../modules/identity';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/email/change/confirm')({
   validateSearch: parseTokenSearch,
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'emailChangeConfirm'),
   component: ConfirmEmailChangeRoute,
 });
 function ConfirmEmailChangeRoute() {

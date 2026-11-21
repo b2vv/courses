@@ -4,8 +4,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
 import { VerifyEmailView } from '../modules/identity';
+import { pageTitleHead } from '../app/composition/page-title';
 export const Route = createFileRoute('/verify-email')({
   validateSearch: parseTokenSearch,
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'verifyEmail'),
   component: VerifyEmailRoute,
 });
 function VerifyEmailRoute() {

@@ -3,8 +3,10 @@ import { useMutation } from '@tanstack/react-query';
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { parseTokenSearch } from '../app/router/token-search';
 import { PasswordResetView } from '../modules/identity';
+import { pageTitleHead } from '../app/composition/page-title';
 export const Route = createFileRoute('/password/reset')({
   validateSearch: parseTokenSearch,
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'passwordReset'),
   component: PasswordResetRoute,
 });
 function PasswordResetRoute() {

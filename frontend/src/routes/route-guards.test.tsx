@@ -272,6 +272,7 @@ function createTestRouter(
     history: createMemoryHistory({ initialEntries: [href] }),
     context: {
       queryClient,
+      i18n,
       admin: {
         ...createAdminQueries(createAuthoring(adminRepository)),
         users: createAdminUserQueries(createUserAdministration(adminUserRepository)),
@@ -2448,4 +2449,62 @@ test('MS4 in-flight exact query stays loading after confirmation, until its matc
   await act(async () => release?.());
   expect(await screen.findByText('Settled exact response')).toBeTruthy();
   expect(document.querySelector('track')?.getAttribute('srclang')).toBe('en');
+});
+
+function documentTitle(router: ReturnType<typeof createTestRouter>): string | undefined {
+  return router.state.matches
+    .flatMap((match) => match.meta ?? [])
+    .flatMap((tag) => (tag?.title === undefined ? [] : [tag.title]))
+    .at(-1);
+}
+
+test.each([
+  ['/register', 'uk', 'Реєстрація — CourseForge'],
+  ['/register', 'en', 'Sign up — CourseForge'],
+  ['/password/forgot', 'uk', 'Відновлення пароля — CourseForge'],
+  ['/login', 'en', 'Log in — CourseForge'],
+  ['/', 'en', 'CourseForge — learning through practice'],
+  ['/no-such-page', 'uk', 'Сторінку не знайдено — CourseForge'],
+] satisfies [string, Locale, string][])(
+  'S1-3 names the document at %s in %s',
+  async (href, locale, title) => {
+    answerWith(null);
+    const router = createTestRouter(href, null, locale);
+
+    await router.load();
+
+    expect(documentTitle(router)).toBe(title);
+  },
+);
+
+test('S1-3 names a route that throws notFound() as not found', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const router = createTestRouter('/admin/no-such-page', admin);
+
+  await router.load();
+
+  expect(documentTitle(router)).toBe('Сторінку не знайдено — CourseForge');
+});
+
+test('S1-3 names the analytics page in Ukrainian, not in English', async () => {
+  const admin = user('admin');
+  answerWith(admin);
+  const router = createTestRouter('/admin/analytics', admin);
+
+  await router.load();
+
+  expect(documentTitle(router)).toBe('Аналітика — CourseForge');
+});
+
+test('S1-3 renames the document when the language is switched', async () => {
+  answerWith(null);
+  const router = createTestRouter('/register', null, 'uk');
+  await router.load();
+  renderRouter(router);
+  expect(documentTitle(router)).toBe('Реєстрація — CourseForge');
+
+  fireEvent.click(screen.getByRole('button', { name: 'EN' }));
+
+  await waitFor(() => expect(documentTitle(router)).toBe('Sign up — CourseForge'));
 });

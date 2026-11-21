@@ -3,6 +3,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { canAdministerAccounts } from '../modules/identity';
 import { AnalyticsFailure, AnalyticsPending, AnalyticsView } from '../modules/admin';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/admin/analytics')({
   ssr: false,
@@ -11,7 +12,7 @@ export const Route = createFileRoute('/admin/analytics')({
   },
   loader: ({ context, abortController }) =>
     ensureRouteQuery(context.queryClient, context.admin.stats.snapshot(), abortController.signal),
-  head: () => ({ meta: [{ title: 'Analytics — CourseForge' }] }),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'analytics'),
   component: AdminAnalyticsRoute,
   pendingComponent: AnalyticsPending,
   errorComponent: AnalyticsFailure,

@@ -4,6 +4,7 @@ import { catalogQuery, parseCatalogSearch } from '../app/router/catalog-search';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { CatalogView } from '../modules/catalog';
 import { CatalogFailure, CatalogLoading } from '../modules/catalog';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/courses/')({
   validateSearch: parseCatalogSearch,
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/courses/')({
       context.catalog.list(catalogQuery(deps)),
       abortController.signal,
     ),
-  head: () => ({ meta: [{ title: 'Каталог курсів — CourseForge' }] }),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'catalog'),
   component: CatalogRoute,
   pendingComponent: CatalogLoading,
   errorComponent: CatalogFailure,

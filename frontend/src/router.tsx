@@ -39,6 +39,8 @@ export function getRouter() {
     routeTree,
     context: {
       queryClient,
+      // Request scoped like the rest of the context: route `head` functions read it for titles.
+      i18n,
       admin: createAdminDependencies(),
       catalog: createCatalogDependencies(),
       identityDependencies: createIdentityDependencies(),
