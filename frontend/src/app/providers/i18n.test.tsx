@@ -1,5 +1,11 @@
 import { expect, test } from '@rstest/core';
-import { render, screen } from '@testing-library/react';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider, createI18n } from './i18n';
 import { en } from './locales/en';
@@ -131,12 +137,32 @@ test('keeps shared UI and administration keys aligned across locale bundles', ()
 test('renders one request locale and changes visible copy without a reload', async () => {
   const i18n = createI18n('uk');
   const user = userEvent.setup();
+  // The switcher lives inside the router in the app: it re-runs route `head` for the new titles.
+  const root = createRootRoute({
+    component: () => (
+      <>
+        <LanguageSwitcher />
+        <HomeView />
+      </>
+    ),
+  });
+  const router = createRouter({
+    routeTree: root,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+  let invalidations = 0;
+  const invalidate = router.invalidate.bind(router);
+  router.invalidate = (options) => {
+    invalidations += 1;
+    return invalidate(options);
+  };
+  await router.load();
   render(
     <I18nProvider instance={i18n}>
-      <LanguageSwitcher />
-      <HomeView />
+      <RouterProvider router={router} />
     </I18nProvider>,
   );
+  await screen.findByRole('heading', { level: 1 });
   expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(
     'Навички, які працюють у production',
   );
@@ -146,6 +172,7 @@ test('renders one request locale and changes visible copy without a reload', asy
   );
   expect(document.documentElement.lang).toBe('en');
   expect(document.cookie).toContain('courseforge_locale=en');
+  await waitFor(() => expect(invalidations).toBe(1));
 });
 
 test('creates independent instances for concurrent SSR requests', () => {
