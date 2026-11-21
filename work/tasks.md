@@ -484,3 +484,14 @@ Spec-flow ABOVE threshold. GATE 1 closed (owner, 30.10), GATE 2 **PASS** (indepe
 | TE6 | **e2e + повний ordered `make check`**: owner-instructor редагує+публікує власну lesson; non-owner instructor відмовлено; full ordered gate зелений (auth + shared-state → ПОВНИЙ e2e, не таргетний). Звіт — `docs/teach-editor/report.md` (дельта до плану, ship-report) | TE5 | **done** (gate GATE_EXIT=0, 129 e2e; виправив пре-існуючий shared publish-bug B1+guard; рев'ю PR #3 + owner-мердж pending) | T9,T11,T12 → AC6 |
 
 Верифікація teach-editor: кожен зріз — ordered `make check` за впливом; TE6 — повний e2e (shared/persisted state). **Каденс (owner 30.10): БАТЧ 3 PR** — backend TE1-TE3 → 1 PR, frontend TE4-TE5 → 1 PR, e2e TE6 → 1 PR; кожен мердж із незалежним рев'ю перед ним (mandatory-review-every-task). TE1-TE3 [P] (незалежні монтажі), але ділять `cmd/api/main.go` wiring і generated-contract regen → серіалізувати. Код — лише на `feat/teach-editor`.
+
+## design-pass (усі екрани фронтенду, claude/design-pass-all-screens-085f0e)
+
+Поза §24, ініційовано власником 2026-11-14. План, інвентар 27 поверхонь, viewport-матриця і pre-code checkpoint — [docs/design-pass/plan.md](../docs/design-pass/plan.md). Код не змінено; кожен екран — окремий зріз/коміт.
+
+| ID | Опис | Залежить | Статус | Результат |
+|---|---|---|---|---|
+| DP0 | S0 базовий огляд усіх поверхонь (без коду) → `docs/design-pass/findings.md` | Q1 (погоджено 2026-11-16) | **done** 2026-11-16 | `docs/design-pass/findings.md`: 1 blocker, 18 major, 11 minor (кандидати) |
+| DP1 | S1 спільні примітиви/токени (якщо S0 знайде) | DP0 | planned | — |
+| DP2 | Поекранні зрізи G0…T3 у порядку plan §5 | DP0, Q2 | **in_progress** | AUTH (A1/A2/A4/A5) `5518cda`, докази `docs/design-pass/evidence/AUTH.md`; make check + рев'ю — чекають Q3/Q4 |
+| DP3 | `docs/design-pass/report.md` + повний ordered `make check` | DP2 | planned | — |

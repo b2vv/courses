@@ -1209,6 +1209,9 @@ export const uk = {
       emailPlaceholder: 'you@example.com',
       password: 'Пароль',
       rememberMe: 'Запам’ятати мене',
+      forgot: 'Забули пароль?',
+      noAccount: 'Ще не маєте облікового запису?',
+      register: 'Зареєструватися',
       passwordReset: 'Пароль оновлено. Увійдіть із новим паролем.',
       submit: 'Увійти',
       submitting: 'Входимо…',
@@ -1251,6 +1254,7 @@ export const uk = {
       password: 'Пароль',
       submit: 'Зареєструватися',
       submitting: 'Реєструємо…',
+      haveAccount: 'Вже маєте обліковий запис?',
       login: 'Увійти',
       forgot: 'Скинути пароль',
       error: {
@@ -1285,6 +1289,9 @@ export const uk = {
       submitting: 'Надсилаємо…',
       sentTitle: 'Перевірте пошту',
       sent: 'Якщо акаунт існує, лист для скидання пароля надіслано.',
+      remembered: 'Згадали пароль?',
+      login: 'Увійти',
+      back: 'Повернутися до входу',
       error: {
         invalid_request: 'Перевірте введені дані.',
         rate_limited: 'Спробуйте пізніше.',
@@ -1300,6 +1307,10 @@ export const uk = {
       password: 'Новий пароль',
       submit: 'Зберегти пароль',
       submitting: 'Зберігаємо…',
+      invalidTitle: 'Посилання не працює',
+      invalidText:
+        'Посилання для скидання пароля недійсне або вже використане. Запросіть нове — лист прийде на вашу пошту.',
+      requestNew: 'Запросити нове посилання',
       error: {
         invalid_account_token: 'Посилання недійсне або вже використане.',
         token_used: 'Це посилання вже використано.',

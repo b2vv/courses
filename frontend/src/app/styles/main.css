@@ -318,6 +318,28 @@ nav a {
   min-height: 44px;
   align-items: center;
 }
+/* The account forms (login, register, forgot, reset): one rhythm between fields, and every
+   non-field row keeps its own width instead of stretching across the column. */
+.notice form {
+  display: grid;
+  gap: var(--space-4);
+  margin-block-start: var(--space-5);
+}
+.notice form > :not(.ui-field) {
+  justify-self: start;
+}
+/* The other way through the account journey — "no account yet?", "remembered it?". */
+.auth-alt {
+  margin-block-start: var(--space-2);
+  color: var(--color-muted);
+}
+/* A link that is the screen's only action reads as the primary button it stands for;
+   .ui-link would otherwise repaint its text in the primary colour over the primary fill. */
+.notice .ui-link.ui-button--primary {
+  color: var(--color-on-primary);
+  text-decoration: none;
+  margin-block-start: var(--space-4);
+}
 .account-settings {
   max-width: 42rem;
   display: grid;

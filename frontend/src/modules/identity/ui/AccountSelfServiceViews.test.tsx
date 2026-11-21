@@ -314,3 +314,49 @@ test('shows, resends, and dismisses the verification banner until reload', async
   await user.click(screen.getByRole('button', { name: 'Закрити' }));
   expect(screen.queryByLabelText('Підтвердження пошти')).toBe(null);
 });
+
+test('AUTH-2 always offers the way back to log in from registration', () => {
+  view(<RegisterView isPending={false} errorCode={undefined} onSubmit={() => undefined} />);
+  expect(screen.getByRole('link', { name: 'Увійти' }).getAttribute('href')).toBe('/login');
+  expect(screen.queryByRole('link', { name: 'Скинути пароль' })).toBe(null);
+});
+
+test('AUTH-3 leads back to log in from the forgot-password form and its confirmation', () => {
+  const { unmount } = view(
+    <PasswordForgotView
+      isPending={false}
+      sent={false}
+      errorCode={undefined}
+      onSubmit={() => undefined}
+    />,
+  );
+  expect(screen.getByRole('link', { name: 'Увійти' }).getAttribute('href')).toBe('/login');
+  unmount();
+  view(
+    <PasswordForgotView isPending={false} sent errorCode={undefined} onSubmit={() => undefined} />,
+  );
+  expect(screen.getByRole('link', { name: 'Повернутися до входу' }).getAttribute('href')).toBe(
+    '/login',
+  );
+});
+
+test.each(['invalid_account_token', 'token_used'] as const)(
+  'AUTH-4 replaces the form with a request for a new link on %s',
+  (errorCode) => {
+    view(<PasswordResetView isPending={false} errorCode={errorCode} onSubmit={() => undefined} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Посилання не працює' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('недійсне або вже використане');
+    expect(
+      screen.getByRole('link', { name: 'Запросити нове посилання' }).getAttribute('href'),
+    ).toBe('/password/forgot');
+    expect(screen.queryByLabelText('Новий пароль')).toBe(null);
+  },
+);
+
+test('AUTH-4 keeps the form for an error the user can fix', () => {
+  view(
+    <PasswordResetView isPending={false} errorCode="weak_password" onSubmit={() => undefined} />,
+  );
+  expect(screen.getByRole('alert').textContent).toBe('Пароль не відповідає вимогам.');
+  expect(screen.getByLabelText('Новий пароль')).toBeTruthy();
+});

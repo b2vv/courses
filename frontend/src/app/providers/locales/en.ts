@@ -1201,6 +1201,9 @@ export const en = {
       emailPlaceholder: 'you@example.com',
       password: 'Password',
       rememberMe: 'Remember me',
+      forgot: 'Forgot your password?',
+      noAccount: 'No account yet?',
+      register: 'Sign up',
       passwordReset: 'Password updated. Sign in with your new password.',
       submit: 'Log in',
       submitting: 'Signing in…',
@@ -1243,6 +1246,7 @@ export const en = {
       password: 'Password',
       submit: 'Create account',
       submitting: 'Creating account…',
+      haveAccount: 'Already have an account?',
       login: 'Log in',
       forgot: 'Reset password',
       error: {
@@ -1277,6 +1281,9 @@ export const en = {
       submitting: 'Sending…',
       sentTitle: 'Check your email',
       sent: 'If an account exists, a password-reset email has been sent.',
+      remembered: 'Remembered your password?',
+      login: 'Log in',
+      back: 'Back to log in',
       error: {
         invalid_request: 'Check what you entered.',
         rate_limited: 'Try again later.',
@@ -1292,6 +1299,10 @@ export const en = {
       password: 'New password',
       submit: 'Save password',
       submitting: 'Saving…',
+      invalidTitle: 'This link does not work',
+      invalidText:
+        'The password-reset link is invalid or has already been used. Request a new one and we will email it to you.',
+      requestNew: 'Request a new link',
       error: {
         invalid_account_token: 'This link is invalid or has already been used.',
         token_used: 'This link has already been used.',

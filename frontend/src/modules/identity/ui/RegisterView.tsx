@@ -31,6 +31,12 @@ export function RegisterView({ isPending, errorCode, onSubmit }: Props) {
             {t(`register.error.${errorCode}`)}
           </p>
         )}
+        {/* The recovery path sits next to the refusal it answers, not after the fields. */}
+        {errorCode === 'email_taken' && (
+          <p>
+            <Link href="/password/forgot">{t('register.forgot')}</Link>
+          </p>
+        )}
         <TextField
           label={t('register.name')}
           name="name"
@@ -57,16 +63,12 @@ export function RegisterView({ isPending, errorCode, onSubmit }: Props) {
           onChange={setPassword}
           isRequired
         />
-        {errorCode === 'email_taken' && (
-          <p>
-            <Link href="/login">{t('register.login')}</Link>
-            {' · '}
-            <Link href="/password/forgot">{t('register.forgot')}</Link>
-          </p>
-        )}
         <Button type="submit" isDisabled={isPending}>
           {t(isPending ? 'register.submitting' : 'register.submit')}
         </Button>
+        <p className="auth-alt">
+          {t('register.haveAccount')} <Link href="/login">{t('register.login')}</Link>
+        </p>
       </form>
     </section>
   );
