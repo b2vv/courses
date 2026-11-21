@@ -1,6 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
-const FE=new URL('../../../frontend', import.meta.url).pathname; // repo-relative, resolved from this file
+const FE=fileURLToPath(new URL('../../../frontend', import.meta.url)); // repo-relative, resolved from this file
 const require=createRequire(FE+'/package.json');
 const { request } = require('@playwright/test');
 const src=readFileSync(FE+'/e2e/auth.ts','utf8');
