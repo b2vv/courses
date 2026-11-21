@@ -4,9 +4,9 @@
 |---|---|
 | Дата | 2026-11-14 |
 | Ініціатор | власник (через сесію-оркестратор `local_35696fcf…`), окрема задача поза §24 |
-| Гілка | `claude/design-pass-all-screens-085f0e` (worktree `dg-archive-test-c6c9f4`, база `main` @ `37ec4b0` після rebase 2026-11-16) |
+| Гілка | `design-pass-auth` — перенесено 2026-11-21 cherry-pick-ом на переписаний `main` (`bdc7048`) з `claude/design-pass-all-screens-085f0e` (worktree `dg-archive-test-c6c9f4`, база `main` @ `37ec4b0` після rebase 2026-11-16). Хеші після переносу: `315aa626→8c04fde7`, `573e4763→a1574555`, `5518cda0→97642485`, `ef3aea3f→0e440578`, `5073e800→04d406db`. |
 | Метод | скіл `design-pass` (`~/.claude/skills/design-pass/SKILL.md`) + `references/viewport-coverage.md`; фінал кожного зрізу — `interface-review` |
-| Статус задачі | **S0 in_progress** (Q1, Q2 погоджено 2026-11-16, §9). Q3, Q4 відкриті. Код не змінено. |
+| Статус задачі | **S0 зроблено** (базовий знімок, `findings.md`); **AUTH-зріз реалізовано** (`97642485`) і переноситься на `main` через PR (власник 2026-11-21). Решта зрізів не почата; Q3, Q4 відкриті (§8). |
 
 ## 1. Обмеження проєкту (design-pass §1)
 
@@ -99,7 +99,7 @@
 | Залежності / writers | Ресурс-конфлікт: compose-проєкт `name: courses` і порт 8080 фіксовані (`docker-compose.yml:1`, `.env.example:2`); стек зараз піднято з основного checkout (`multi-audio-s6`). `make check`/`e2e-reset` з цього worktree **знесе й обнулить** спільний стек → потрібне ексклюзивне heavy-вікно (Q3). |
 | Scoped impact | Файли змін: `frontend/src/app/styles/*.css`, `frontend/src/presentation/**`, `frontend/src/modules/*/ui/**`, маршрути лише для розмітки. Callers/e2e-селектори звіряються per-slice (`frontend/e2e/*.spec.ts`, gotcha «друга file-контрола ламає strict mode»). Root `ef48c15`, dirty: лише цей план. |
 | Планова критика / defense | Для S0 (read-only) — N/A: нема рішення, що закриває альтернативу. Для S1 та першого кодового зрізу — незалежна критика плану зрізу до коду. |
-| Допуск | S0 — **BLOCKED до Q1/Q3**. Решта — BLOCKED до S0 + погодження. |
+| Допуск | S0 — виконано. AUTH — виконано, на рев'ю/мерджі. Решта зрізів — BLOCKED до погодження власника (Q3/Q4). |
 
 ## 8. Питання власнику
 
@@ -126,7 +126,7 @@ Non-goals: хедер гостя (S-2), спільні S-1/S-3/S-4, бекенд
 
 **Small/full.** Small: лише presentation, без контрактів, стану чи API. Планова критика N/A за локальною нормою small; незалежне рев'ю коду перед мерджем лишається обов'язковим.
 
-**Scoped impact.** Файли: `modules/identity/ui/{LoginView,RegisterView,PasswordForgotView,PasswordResetView}.tsx`, `app/providers/locales/{uk,en}.ts`, `main.css` (одне правило відступу `.auth-alt`), unit-тести `LoginView.test.tsx` і `AccountSelfServiceViews.test.tsx`. Перевірені селектори (grep `e2e/`, `src/`):
+**Scoped impact.** Файли: `modules/identity/ui/{LoginView,RegisterView,PasswordForgotView,PasswordResetView}.tsx`, `app/providers/locales/{uk,en}.ts`, `main.css` (три правила: ритм форм `.notice form` + `justify-self:start` для не-полів — зачіпає й retry-форми в `.notice` на `__root.tsx` (помилка сторінки) і `routes/login.tsx` (збій логіну): відступ зверху й кнопка не на всю ширину, візуально не перевірено (NOT_TESTED); `.auth-alt`; `.notice .ui-link.ui-button--primary` — посилання-кнопка «Запросити нове посилання»), unit-тести `LoginView.test.tsx` і `AccountSelfServiceViews.test.tsx`. Перевірені селектори (grep `e2e/`, `src/`):
 - `accounts.spec.ts:189,237,258,295,358` — кнопки «Увійти», «Зареєструватися», «Зберегти пароль», з валідним токеном; не зачеплені.
 - `accounts.spec.ts:361` — axe на `/password/reset` без токена: тепер це стан AUTH-4, axe мусить лишитися чистим.
 - `recovery.spec.ts:29` і `accessibility.spec.ts:236` — посилання «Увійти» на `/` і після logout, не на `/register`; не зачеплені.

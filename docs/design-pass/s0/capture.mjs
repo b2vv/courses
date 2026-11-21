@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs';
-const FE='<repo>/frontend';
+const FE=new URL('../../../frontend', import.meta.url).pathname; // repo-relative, resolved from this file
 const require=createRequire(FE+'/package.json');
 const { chromium } = require('@playwright/test');
 const AXE=readFileSync(FE+'/node_modules/axe-core/axe.min.js','utf8');
