@@ -267,3 +267,20 @@ ok  	courses/platform/observability	3.203s
 ФАКТ: реалізація та всі gate outputs закомічені як a269237 на s0.0-spike; 10 scoped files. Чужі WIP/plan/tasks виключено. Merge/push/e2e не виконувалися.
 ФАКТ: фінальний AI Factory checkpoint OK: 5f5782c85e26ce6251b42c64f5b19b99-2-35781166bbcc. Status перевірено: поза журналом лишилися тільки п’ять попередніх чужих docs/tasks змін.
 ДАЛІ: зберегти цей фінальний запис окремим docs commit; власник перевіряє a269237 і передає Courses 2. Незалежний verdict — PENDING, технічні гейти — PASS; відкритих контрактних суперечностей не виявлено.
+
+## WRITER-VERIFY (Courses 13, 2026-10-27) — власні прогони, snapshot a269237
+- gofmt чисто; go vet ./... 0; go build ./... 0; go test ./... GATE_EXIT=0 (54 ok, 0 FAIL/panic/race).
+- domain-експорти PublicCatalogSorts/CourseStatuses/BlockTypes спожиті ОБОМА: domain-валідацією (slices.Contains; NewQuery(…PublicCatalogSorts...)) І генератором (enumStrings у contribution.Enum/Enums). Жодного другого ручного списку.
+- T2 закрито: AdminCourseStatusRequest.status тепер з CourseStatuses (overlay-літерал прибрано).
+- published-only ЗБЕРЕЖЕНО (не колапсовано): generated CourseDetail.status == enum:[published] (overlay-override); `- archived` рівно 2× (Course + AdminCourseStatusRequest — справжні повні набори). Верифіковано в generated.yaml :209-212.
+- hand openapi.yaml НЕ чіпався (git diff порожній по status/enum). Поведінка domain-валідації незмінна (TestStatusPolicy/TestAuthoringQuerySorts зелені).
+- Тести non-vacuous: TestDomainConstSetCensus (Sort/Status/BlockType drift), TestConstSetsEmittedAndPublishedNarrowing (повні набори + narrowing), TestPublicSortSingleSource (NewQuery==contribution джерело). fidelity зелена, regen byte-identical.
+- e2e не потрібен: pure single-source refactor, набори ідентичні, 0 runtime-зміни.
+РІШЕННЯ: writer PASS. Передача per-slice review Courses 2.
+
+SENT: 2026-10-27 msg_id 4c9780c6-5045-47ec-b3c2-026b0ffef90b → Courses 2. state=sent. Чекаю verdict на a269237. НЕ resend.
+
+## VERDICT (2026-10-27)
+ACK+VERDICT_RECEIVED = PASS від Courses 2 [e6a45d] на a269237. 0 blocking, 0 findings. Закриває T2 + Q3.
+Верифіковано Courses 2: single-source (TestPublicSortSingleSource мутує PublicCatalogSorts і доводить, що обидві сторони читають ту саму змінну); published-narrowing збережено (CourseDetail.status=[published], archived enum рівно 2×); drift-census self-test (інжект фейк-конст → census репортить missing); 0 behavior change. e2e не потрібен — узгоджено.
+S0.1b-3b CLOSED. Error/enum-блок S0.1b ПОВНІСТЮ закрито (3a emitted-set + 3b const-sets): B1/Q2a/Q3/T2.

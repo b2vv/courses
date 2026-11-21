@@ -79,7 +79,7 @@ cd frontend && npm test
 ---
 tool: "@rstest/core@0.12.4"
 timestamp: "2026-10-27T19:53:05.332Z"
-runtime: {"node":"v24.11.1","platform":"darwin","cwd":"/Users/strelia/projects/courses/frontend"}
+runtime: {"node":"v24.11.1","platform":"darwin","cwd":"<repo>/frontend"}
 ---
 
 # Rstest Test Execution Report
@@ -118,7 +118,7 @@ runtime: {"node":"v24.11.1","platform":"darwin","cwd":"/Users/strelia/projects/c
 No test failures reported.
 
 Note: all tests passed. Lists omitted for brevity.
-docker run --rm -e GOTOOLCHAIN=local -v "/Users/strelia/projects/courses/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build golang:1.27.3-bookworm go test -race ./...
+docker run --rm -e GOTOOLCHAIN=local -v "<repo>/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build golang:1.27.3-bookworm go test -race ./...
 ?   	courses/cmd/api	[no test files]
 ok  	courses/cmd/asr-worker	(cached)
 ?   	courses/cmd/media-worker	[no test files]
@@ -255,7 +255,7 @@ cd frontend && npm test
 ---
 tool: "@rstest/core@0.12.4"
 timestamp: "2026-10-27T19:54:41.789Z"
-runtime: {"node":"v24.11.1","platform":"darwin","cwd":"/Users/strelia/projects/courses/frontend"}
+runtime: {"node":"v24.11.1","platform":"darwin","cwd":"<repo>/frontend"}
 ---
 
 # Rstest Test Execution Report
@@ -294,7 +294,7 @@ runtime: {"node":"v24.11.1","platform":"darwin","cwd":"/Users/strelia/projects/c
 No test failures reported.
 
 Note: all tests passed. Lists omitted for brevity.
-docker run --rm -e GOTOOLCHAIN=local -v "/Users/strelia/projects/courses/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build golang:1.27.3-bookworm go test -race ./...
+docker run --rm -e GOTOOLCHAIN=local -v "<repo>/backend:/work" -w /work -v courses-gomod:/go/pkg/mod -v courses-gobuild:/root/.cache/go-build golang:1.27.3-bookworm go test -race ./...
 ?   	courses/cmd/api	[no test files]
 ok  	courses/cmd/asr-worker	(cached)
 ?   	courses/cmd/media-worker	[no test files]
@@ -470,7 +470,7 @@ ok  	courses/platform/observability	0.009s
 ?   	courses/platform/postgres	[no test files]
 ?   	courses/platform/redis	[no test files]
 ?   	courses/platform/runtime	[no test files]
-integration log: /Users/strelia/projects/courses/backend/test-results/integration.log
+integration log: <repo>/backend/test-results/integration.log
 
 ```
 ФАКТ: RUN 2 make integration EXIT=0
@@ -493,7 +493,7 @@ integration log: /Users/strelia/projects/courses/backend/test-results/integratio
 РІШЕННЯ: Writer передав нове рішення власника 2026-10-27: security slice має зберегти baseline business mappings; discussion unknown → internal_error/500 замість raw/400, попередні зміни 500→503 в інших модулях відкликати. ДАЛІ: звірити baseline/current та неоднозначність image/transcript перед новими повними gates.
 ФАКТ: Review recheck baseline 0149d9c: image.writeUploadError default = dependency_unavailable/503 (Image upload is temporarily unavailable); transcript.writeTranscriptError default = invalid_request/400 (Request is not valid). Решта перелічених generic defaults були internal_error/500. Поточний HEAD 5395257; знайдено 9 error_boundary_test.go, не 10.
 ПИТАННЯ: Новий інваріант «єдина поведінкова зміна — discussion unknown» суперечить пункту «ВСІ error_boundary_test.go unknown → internal_error/500» для image/transcript. Чи зберігати їхні baseline fallback-и (image 503, transcript 400), чи санкціоновано також змінити їхні unknown на 500, з explicit recognized cases (зокрема transcript.ErrInvalidRequest=400, image.ErrDependencyUnavailable=503)?
-РІШЕННЯ: До відповіді product-змін не роблю, щоб не порушити один із двох явних інваріантів. Застосовано receiving-code-review (/Users/strelia/.agents/skills/receiving-code-review/SKILL.md): «IF any item is unclear: STOP - do not implement anything yet». Це уточнення контракту image/transcript, а не повторний запит дозволу на погоджені правки discussion/restoration. Gates NOT_RUN у цьому review-followup; попередній green не покриває нове рішення.
+РІШЕННЯ: До відповіді product-змін не роблю, щоб не порушити один із двох явних інваріантів. Застосовано receiving-code-review (~/.agents/skills/receiving-code-review/SKILL.md): «IF any item is unclear: STOP - do not implement anything yet». Це уточнення контракту image/transcript, а не повторний запит дозволу на погоджені правки discussion/restoration. Gates NOT_RUN у цьому review-followup; попередній green не покриває нове рішення.
 ФАКТ: Review-followup checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-4-d5b6d4bc5e74. ДАЛІ: відповідь власника щодо baseline-vs-uniform fallback для image/transcript; product diff цього followup порожній.
 РІШЕННЯ: Writer зняв неоднозначність: єдина production behavior delta проти 0149d9c — discussion; image unknown 503 та transcript unknown 400 зберегти. ДАЛІ: відновити інші handlers і чотири legacy test expectations до baseline; discussion unknown internal_error/500; regression pgx; ordered gates.
 ФАКТ: Відновлено 9 non-discussion handler-файлів і 4 старі test-файли байтами 0149d9c; перед записом перевірено current==HEAD (жодних чужих правок). Image не змінено. Нові per-module tests тепер assert baseline unknown: image 503/dependency_unavailable, transcript 400/invalid_request, решта 500/internal_error.
@@ -702,7 +702,7 @@ ok  	courses/platform/observability	0.011s
 ?   	courses/platform/postgres	[no test files]
 ?   	courses/platform/redis	[no test files]
 ?   	courses/platform/runtime	[no test files]
-integration log: /Users/strelia/projects/courses/backend/test-results/integration.log
+integration log: <repo>/backend/test-results/integration.log
 
 ```
 ФАКТ: RUN 3 make integration EXIT=0
@@ -712,3 +712,19 @@ integration log: /Users/strelia/projects/courses/backend/test-results/integratio
 ФАКТ: make e2e NOT_RUN за дорученням. OpenAPI/parser не змінено; tmp cmd/spike не створювались; чужі WIP збережено; no merge/push. Попередні записи про all-module normalization superseded цим рішенням.
 ДАЛІ: Courses 13 writer/e2e та Courses 2 security-sensitive review baseline 0149d9c → d2ad7dd. Незалежний review/e2e залишаються PENDING, загальний phase PASS не заявляється. Зберегти journal-only delivery commit з тими самими trailers.
 ФАКТ: Final discussion-only checkpoint OK, exit=0: 727558409d2c2c694ae20b4910405d35-6-10a291235020; native session 01a17ee7-7da0-7562-9c44-86ad0a6b96ae. Product snapshot d2ad7dd незмінний після gates.
+
+## WRITER-VERIFY COMPLETE (Courses 13, 2026-10-27) — власні прогони
+HEAD d12b2c7 (fix d2ad7dd + журнал; перший прохід 4aa15a8/5395257 перекрито корекцією). Дерево чисте (лише docs/WIP untracked).
+- gofmt -l змінених .go: чисто. go vet ./...: exit 0. go build ./...: exit 0.
+- go test ./... -race (повний): GATE_EXIT=0, 0 FAIL/panic/DATA RACE; усі 10 http-пакетів з error_boundary-тестами зелені.
+- make e2e: 1-й прогін red ЛИШЕ через спожиту disposable-фікстуру delete-me (seed-пастка e2e-isolated-rerun-needs-reseed, НЕ регрес зрізу — 91 passed, усі error-шляхи зелені). make seed-identities (INSERT 0 7) → 2-й прогін GATE_EXIT=0, 127 passed, 0 failed, 0 did-not-run.
+- Інваріант: git diff 0149d9c..HEAD по production-хендлерах = ЛИШЕ discussion/adapters/http/handler.go (+79/-9); решта — тільки нові *_test.go. Витік прибрано (жодного `code := err.Error()`; тест feed'ить "database=private user=private" → internal_error/500). Бізнес-коди+статуси бітово незмінні (sentinel + %w-обгортка).
+РІШЕННЯ: writer PASS. Передача на security-sensitive per-slice review Courses 2.
+TRANSFER: review_mode=existing_session; reviewer=Courses 2 [e6a45d]; channel=SendMessage. action=review-s0.1b-sec; state=prepared→sent. package=git diff 0149d9c..HEAD (net discussion-only). Verdict: PENDING.
+
+SENT: 2026-10-27 msg_id 10388507-fed4-4371-86b2-c5853747fc62 → Courses 2. state=sent. Чекаю ACK+verdict на snapshot d12b2c7. НЕ resend.
+
+## VERDICT (2026-10-27)
+ACK+VERDICT_RECEIVED = PASS від Courses 2 [e6a45d] на snapshot d12b2c7. 0 blocking.
+Верифіковано: Courses 2 свіжо прогнав discussion+openapigen (-count=1); підтвердив інваріант discussion-only (git diff name-only → рівно discussion/handler.go), non-vacuous leak-тест (feed pgconn-тип + "database=private"), 29/29 sentinel збережено бітово (21 discussion errors.go + 5 comment-domain + 3 application), string-coincidence знешкоджено (bare errors.New → internal_error/500). Guard error_boundary_test.go у кожному модулі — системна сітка проти майбутнього err.Error()-leak. e2e-reseed — відомий клас.
+S0.1b-sec CLOSED. Merge у main — на S0.2 cutover (зрізи на s0.0-spike). Розблоковує S0.1b-3a (emitted-set тепер скінченний).

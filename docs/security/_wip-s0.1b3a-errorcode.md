@@ -140,7 +140,7 @@ func TransportErrorCodes() map[string]string {
 
 ДАЛІ: Змінити тільки hand ErrorResponse.error.code.enum на sorted emitted set; видалити overlay code.enum; regenerate parallel artifact і перевірити fidelity.
 ФАКТ: Після audit-запису виправлено hand тільки ErrorResponse.error.code.enum (+9, -0, sorted). Overlay code.enum видалено; $ref inlining і requestId validation збережено. Регенерація запускається окремо від ordered gates.
-ФАКТ: Regen command `cd backend && UPDATE_OPENAPI_GENERATED=1 go test -count=1 -run TestCatalogOpenAPIFidelity -v ./internal/course/adapters/http` EXIT=1 setup failed: Go build cache `/Users/strelia/Library/Caches/go-build/...` operation not permitted. Це sandbox/cache блокада, не результат fidelity. Повторю із дозволом на Go cache.
+ФАКТ: Regen command `cd backend && UPDATE_OPENAPI_GENERATED=1 go test -count=1 -run TestCatalogOpenAPIFidelity -v ./internal/course/adapters/http` EXIT=1 setup failed: Go build cache `~/Library/Caches/go-build/...` operation not permitted. Це sandbox/cache блокада, не результат fidelity. Повторю із дозволом на Go cache.
 ФАКТ: Regen повторно запущено з cache-дозволом; очікую реальний результат.
 ФАКТ: Regen повтор EXIT=0. Реальний вивід:
 ```text
@@ -1721,3 +1721,23 @@ EXIT=0
 ФАКТ: make e2e НЕ запускав за дорученням власника; cross-module/e2e перевірка належить Courses 13. Runtime handlers/domain files не змінено; sort/status/BlockType поза scope. Незалежний per-slice review Courses 2 pending, це author-check PASS.
 ФАКТ: Acceptance plan snapshot SHA256 df4345dcc46b4f8d26634696d4bd544959b865cc4ebd3b3d22c74d9840275319; writer-owned план/WIP/tasks не включаю у коміт.
 ДАЛІ: Атомарний commit на s0.0-spike (base d12b2c7): Go parser/tests + hand enum + overlay removal + generated + цей append-only log. Після commit передати owner Courses 13 для перевірки і Courses 2 review; без merge/push.
+ФАКТ: Атомарний implementation/evidence commit створено: 671a442 (base d12b2c7), `feat(openapigen): derive emitted error codes from Go (SA10/S0.1b-3a)`, 12 scoped files. Requested trailers збережено. Hand enum correction, overlay enum removal і generator source в одному коміті. merge/push не виконано.
+ДАЛІ: Native checkpoint фінального результату; receipt дописати сюди. Review route: Courses 13 перевіряє → Courses 2 незалежний per-slice review, акцент +9 контрактних enum members.
+ФАКТ: Фінальний native checkpoint EXIT=0: {"status":"OK","result":{"checkpoint_id":"5c982175f6c3a95ad10ac5c8017327af-2-ccdfb0cedefd"}}. Exact handoff ID; session 01a17ecd-6da2-76c3-8e95-a9493899cd35.
+ФАКТ: Delivery: implementation і повні гейти в commit 671a442; лише post-commit commit/receipt tail цього append-only файла лишається незакоміченим. Чужі змінені _wip-s0.1b-sec-errorboundary.md, _wip-s0.1b2-request.md, s0-openapi-gen-plan.md, work/tasks.md збережено. Зріз готовий до writer verification / незалежного review, не merged і не pushed.
+
+## WRITER-VERIFY (Courses 13, 2026-10-27) — власні прогони, snapshot 671a442
+- gofmt чисто; go vet affected 0; go build ./... 0; go test -count=1 openapigen+course/http PASS.
+- Верифіковано set-diff hand ErrorResponse enum d12b2c7→671a442 ВЛАСНИМ скриптом: old 100 → new 109; ADDED 9 (image_too_large, image_too_many_pixels, insufficient_storage, invalid_image, precondition_failed, request_too_large, unsupported_image, unsupported_media_type, upload_offset_conflict); REMOVED 0. Claim Codex +9/−0 точний.
+- Усі 9 доданих — РЕАЛЬНО емітовані: 4 image (image/handler.go:110-118), 5 TUS (media/adapters/tus/server.go via WriteError), кожен у transport-allowlist error_transport.go з provenance. Контракт раніше їх не документував — ще один genuine completeness-win.
+- REMOVED 0 → кожен прежній hand-код досі емітується (fidelity-enforced). emitted-set=109 чесний.
+- Тести non-vacuous: TestErrorCodeForms (4 форми+), TestErrorCodeFailClosed (15 адверсарійних → fail-closed), TestTreeErrorCensus (166 WriteError резолвлено), TestErrorSourceDiscovery, TestOverlayCannotSupplyErrorEnum (Q2a закрито). overlay error-enum прибрано (-102 рядки). regen byte-identical, fidelity зелена.
+- e2e НЕ потрібен: generator+spec-doc, без runtime-зміни (коди вже емітувались).
+РІШЕННЯ: writer PASS. Передача per-slice review Courses 2 (flag: hand openapi.yaml +9 enum members = контрактна зміна, обґрунтована §16.11).
+
+SENT: 2026-10-27 msg_id 78aadc0f-1b48-4bdc-8d4a-5dcfd5cfdbf2 → Courses 2. state=sent. Чекаю verdict на 671a442. НЕ resend.
+
+## VERDICT (2026-10-27)
+ACK+VERDICT_RECEIVED = PASS від Courses 2 [e6a45d] на 671a442. 0 blocking. B1/Q2a закрито.
+Верифіковано Courses 2: fail-closed механізмом (resolve default errors.go:363 → помилка; provenance/arity/cyclic/noncanonical-Error guards; 15 адверсарійних субкейсів; 166/166 census); source universe enforced; −0 звірено НЕЗАЛЕЖНИМ set-diff (old 100→new 109, ADDED 9 = 4 image+5 TUS реальний drift, REMOVED 0); Q2a (overlay -102, TestOverlayCannotSupplyErrorEnum); fidelity non-vacuous через catalog-closure. e2e не потрібен (узгоджено). Розв'язує давню plan-review ноту «over-inclusive enum» (emitted-set тугіше за declaration-set).
+S0.1b-3a CLOSED. Merge у main — S0.2 cutover. Далі S0.1b-3b.

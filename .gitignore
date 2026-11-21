@@ -33,3 +33,9 @@ work/foreign-containers.txt
 # 3 ГБ — один файл ваг. Ніколи не комітиться: це медіа-байти й завантажені артефакти
 # (AGENTS.md), а ваги відновлюються з huggingface, тоді як відео належить власникові.
 .asr-assets/
+
+# AI Factory local connection (machine-specific; never committed)
+AGENTS.local.md
+
+# Codex local hooks (machine-specific paths; never committed)
+.codex/

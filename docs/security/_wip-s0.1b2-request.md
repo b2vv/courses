@@ -9,7 +9,7 @@
 
 ДАЛІ: прочитати контракт і Go DTO, вибрати один scalar-field request route, звірити hand spec та handler fixture; product mutation лише після усунення суперечностей. Цей запис зроблено після read-only discovery (вступну вимогу запису до першого інструменту побачено під час читання файлу).
 
-ФАКТ: root `/Users/strelia/projects/courses`, branch `s0.0-spike`, HEAD `36fee5eb7382c91c7140ef17f28953a3e9597144`; requested base `cb2e9b5` є його безпосереднім предком. HEAD додає тільки попереднє review/disposition; не скидав його. На вході єдиний untracked файл — цей наданий work-file; оригінальний заголовок збережений. Початковий SHA-256 work-file: `db020f22ee5c4c27d66ce55796b286a3ff3f6f54d2c89c12e0177cc3fdb9e6a9`.
+ФАКТ: root `<repo>`, branch `s0.0-spike`, HEAD `36fee5eb7382c91c7140ef17f28953a3e9597144`; requested base `cb2e9b5` є його безпосереднім предком. HEAD додає тільки попереднє review/disposition; не скидав його. На вході єдиний untracked файл — цей наданий work-file; оригінальний заголовок збережений. Початковий SHA-256 work-file: `db020f22ee5c4c27d66ce55796b286a3ff3f6f54d2c89c12e0177cc3fdb9e6a9`.
 
 Scope/owner: доручення власника S0.1b-2, §16.2 + §16.4; один request route, без document/Block, error-code parser, інших модулів, hand-spec edits, merge/push. Small: генератор/контрактні тести, без зміни публічного API чи runtime behavior; inline plan достатній за `.claude/standards.md`. Незалежне per-slice review — Courses 2 за планом §16.6, NOT_RUN; planning critique/defense N/A для цього малого scope. Виконавець/writer — поточний Codex; інших writers не виявлено.
 
@@ -32,7 +32,7 @@ Gates: gofmt / go vet / go build / scoped go test — **NOT_RUN** (STOP до р�
 ## RESUME (для свіжої сесії після handoff — Codex НЕ відновлено, це наступна дія)
 Codex S0.1b-2 session id: `01a17e84-4953-7a41-8ce1-b62996482d93` (branch s0.0-spike).
 Рішення §16.10 ухвалено. Наступна дія: відновити Codex цією відповіддю (НЕ переробляти):
-`cd /Users/strelia/projects/courses && codex exec --approve-for-me resume 01a17e84-4953-7a41-8ce1-b62996482d93 "<ТЕКСТ НИЖЧЕ>" -o <scratch>/r.md > <scratch>/r.log 2>&1 < /dev/null` (у фоні).
+`cd <repo> && codex exec --approve-for-me resume 01a17e84-4953-7a41-8ce1-b62996482d93 "<ТЕКСТ НИЖЧЕ>" -o <scratch>/r.md > <scratch>/r.log 2>&1 < /dev/null` (у фоні).
 Текст відповіді (= §16.10 + кроки):
 1. Правило `*T→nullable` — RESPONSE-only; для REQUEST nullability вказівника = явне per-field рішення
    (розширити NullableFields на request-поля), генератор fail-close на request-pointer без рішення;
@@ -97,3 +97,27 @@ Acceptance: §16.10 explicit non-null required pointers + missing annotation fai
 
 ### Крок: implementation commit
 ФАКТ: `45599ca` — `feat(openapigen): generate course status requests with conformance (SA10/S0.1b)`; 9 scoped files, задані Co-Authored-By/Claude-Session trailers. Ordered gates вище стосуються саме committed code/artifact; після них змінювався лише цей журнал. Наступний docs-only commit фіксує delivery evidence. Courses 2 reviewer target: base `d74a886` → implementation `45599ca` (+ journal-only delivery commit); жодного merge/push. Owner-approved implementation завершено; independent review лишається PENDING.
+
+## WRITER-VERIFY + REVIEW TRANSFER (Courses 13, 2026-10-27)
+
+ФАКТ (writer-verified, власні прогони): HEAD d74a886→45599ca(feat)+0149d9c(журнал), дерево чисте.
+- gofmt -l змінених .go: чисто. go vet (affected): exit 0. go build ./...: exit 0.
+- go test -count=1 openapigen + course/adapters/http: PASS; субкейси null/missing status+expectedUpdatedAt та fail-close undecided-pointer реально виконуються (verbose).
+- fidelity проти рукописного openapi.yaml: non-vacuous (fidelitySurface t.Fatal на відсутньому requestBody + collect() ref-closure AdminCourseStatusRequest/AdminTimestamp).
+- рукописний openapi.yaml НЕ чіпався (cutover S0.2). overlay лише validation/prose (status enum, AdminTimestamp pattern/format, param format); структура з Go.
+- request-nullability = явне per-field рішення (check() fail-close «missing request pointer nullability decision»; customize() `nullable||(!g.request&&pointer)` — response `*T→nullable` незмінне). reflectBody скидає seen + забороняє pointer-root.
+
+РІШЕННЯ: writer PASS. Передача на незалежне per-slice review.
+
+TRANSFER: review_mode=existing_session; reviewer=Courses 2 [e6a45d]; channel=SendMessage (owner-authorized).
+action=review-s0.1b2; state=prepared → sent (цей turn). package=range d74a886..HEAD (45599ca+0149d9c) read-only через git show. Verdict: PENDING.
+
+SENT: 2026-10-27 msg_id 9faabe32-5f24-46fa-a009-841744d300900 → Courses 2 [e6a45d]. state=sent. Чекаю ACK+verdict на snapshot 0149d9c. НЕ resend; за збою доставки спершу звірити переписку.
+
+## VERDICT (2026-10-27)
+ACK+VERDICT_RECEIVED = PASS від Courses 2 [e6a45d] на snapshot 0149d9c. 0 blocking.
+Verdict верифіковано: Courses 2 свіжо прогнав обидва пакети (-count=1, openapigen 1.357s / course http 7.408s), fail-close підтвердив механізмом (reflectBody per-body seen-reset + check() request-гілка), Q4 two-layer non-vacuous на 5 кейсах.
+Tracking (non-blocking, НЕ блокує рух):
+  T1: admin status-шлях НЕ входить у catalog-scoped fidelity → включити admin-шляхи, коли fidelity розшириться (або позначити conformance-only). Прийнятно: two-layer conformance проти реального хендлера сильніша.
+  T2: status REQUEST enum [draft,published,archived] рукописний в overlay (той самий drift-клас, що Q3 sort) → S0.1b-3 const-set-single-source МУСИТЬ покрити і status-REQUEST enum, не лише catalog status-response.
+Merge-дисципліна: s0.0-spike накопичує зрізи; merge у main тільки на S0.2 cutover (FULL make check + e2e). S0.1b-2 CLOSED.
