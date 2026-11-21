@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-const require=createRequire('/Users/strelia/projects/courses/.claude/worktrees/dg-archive-test-c6c9f4/frontend/package.json');
+const require=createRequire('<repo>/frontend/package.json');
 const { chromium } = require('@playwright/test');
 const B='http://localhost:3100';
 const cases=[['/login','Забули пароль?','/password/forgot'],['/login','Зареєструватися','/register'],['/register','Увійти','/login',1],['/password/forgot','Увійти','/login',1],['/password/reset','Запросити нове посилання','/password/forgot']];

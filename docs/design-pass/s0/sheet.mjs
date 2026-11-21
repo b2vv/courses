@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-const require=createRequire('/Users/strelia/projects/courses/.claude/worktrees/dg-archive-test-c6c9f4/frontend/package.json');
+const require=createRequire('<repo>/frontend/package.json');
 const { chromium } = require('@playwright/test');
 const S=process.env.S; mkdirSync(S+'/'+(process.env.SHEETS||'sheets'),{recursive:true});
 const b=await chromium.launch(); const p=await b.newPage({viewport:{width:1860,height:800}});

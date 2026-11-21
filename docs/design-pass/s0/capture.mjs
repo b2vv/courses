@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs';
-const FE='/Users/strelia/projects/courses/.claude/worktrees/dg-archive-test-c6c9f4/frontend';
+const FE='<repo>/frontend';
 const require=createRequire(FE+'/package.json');
 const { chromium } = require('@playwright/test');
 const AXE=readFileSync(FE+'/node_modules/axe-core/axe.min.js','utf8');

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
-const FE='/Users/strelia/projects/courses/.claude/worktrees/dg-archive-test-c6c9f4/frontend';
+const FE='<repo>/frontend';
 const require=createRequire(FE+'/package.json');
 const { request } = require('@playwright/test');
 const src=readFileSync(FE+'/e2e/auth.ts','utf8');

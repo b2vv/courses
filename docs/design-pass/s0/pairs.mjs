@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { writeFileSync, existsSync } from 'node:fs';
-const require=createRequire('/Users/strelia/projects/courses/.claude/worktrees/dg-archive-test-c6c9f4/frontend/package.json');
+const require=createRequire('<repo>/frontend/package.json');
 const { chromium } = require('@playwright/test');
 const S=process.env.S; const [,,out,...ids]=process.argv;
 const b=await chromium.launch(); const p=await b.newPage({viewport:{width:1900,height:800}});
