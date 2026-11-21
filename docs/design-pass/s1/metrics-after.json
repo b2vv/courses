@@ -133,7 +133,8 @@
     "WIDE 355/230 надійного <h1>",
     "WIDE 300/230 бекенду <h1>",
     "WIDE 251/230 перевірками. <p.lede>",
-    "WIDE 229/228 незавершений <p>"
+    "WIDE 229/228 незавершений <p>",
+    "FITS 189/228 Записатися <button.ui-button.ui-button--primary>"
    ],
    "over": [],
    "title": "Go: фундамент надійного бекенду — CourseForge"
@@ -176,7 +177,8 @@
     "WIDE 411/230 фундамент <h1>",
     "WIDE 355/230 надійного <h1>",
     "WIDE 300/230 бекенду <h1>",
-    "WIDE 251/230 перевірками. <p.lede>"
+    "WIDE 251/230 перевірками. <p.lede>",
+    "WIDE 239/228 Поскаржитися <button.ui-button.ui-button--secondary>"
    ],
    "over": [],
    "title": "Go: фундамент надійного бекенду — CourseForge"
@@ -293,7 +295,8 @@
    "docOverflow": 0,
    "broken": [
     "WIDE 344/326 Створити <h1>",
-    "WIDE 360/326 обліковий <h1>"
+    "WIDE 360/326 обліковий <h1>",
+    "WIDE 281/276 Зареєструватися <button.ui-button.ui-button--primary>"
    ],
    "over": [],
    "title": "Реєстрація — CourseForge"
@@ -576,7 +579,11 @@
   "p200": {
    "docOverflow": 0,
    "broken": [
-    "WIDE 340/326 навчання <h1>"
+    "WIDE 340/326 навчання <h1>",
+    "WIDE 284/244 фундамент <h2>",
+    "WIDE 246/244 надійного <h2>",
+    "WIDE 285/244 інтерфейси <h2>",
+    "WIDE 281/244 Системний <h2>"
    ],
    "over": [],
    "title": "Навчання — CourseForge"
@@ -692,11 +699,19 @@
   "p200": {
    "docOverflow": 0,
    "broken": [
-    "FITS 63/118 Безкоштовно <span.course-price-free>",
-    "FITS 63/118 Безкоштовно <span.course-price-free>",
-    "FITS 63/118 Безкоштовно <span.course-price-free>",
-    "FITS 63/118 Безкоштовно <span.course-price-free>",
-    "FITS 63/118 Безкоштовно <span.course-price-free>"
+    "WIDE 160/148 фундамент <strong>",
+    "WIDE 183/68 Опубліковано <span.ui-pill.ui-pill--success>",
+    "WIDE 207/118 Безкоштовно <span.course-price-free>",
+    "WIDE 161/148 інтерфейси <strong>",
+    "WIDE 183/68 Опубліковано <span.ui-pill.ui-pill--success>",
+    "WIDE 207/118 Безкоштовно <span.course-price-free>",
+    "WIDE 159/148 Системний <strong>",
+    "WIDE 183/68 Опубліковано <span.ui-pill.ui-pill--success>",
+    "WIDE 207/118 Безкоштовно <span.course-price-free>",
+    "WIDE 75/68 архіві <span.ui-pill.ui-pill--neutral>",
+    "WIDE 207/118 Безкоштовно <span.course-price-free>",
+    "WIDE 126/68 Чернетка <span.ui-pill.ui-pill--warning>",
+    "WIDE 207/118 Безкоштовно <span.course-price-free>"
    ],
    "over": [],
    "title": "Адміністрування курсів — CourseForge"
@@ -736,7 +751,7 @@
   "p200": {
    "docOverflow": 0,
    "broken": [
-    "FITS 51/110 2026-09-03 <strong>"
+    "WIDE 168/110 2026-09-03 <strong>"
    ],
    "over": [],
    "title": "Go: фундамент надійного бекенду — CourseForge"
@@ -762,7 +777,8 @@
   "d200": {
    "docOverflow": 0,
    "broken": [
-    "FITS 51/84 2026-09-03 <strong>"
+    "WIDE 180/153 Архівувати <button.ui-button.ui-button--secondary>",
+    "WIDE 168/84 2026-09-03 <strong>"
    ],
    "over": [],
    "title": "Go: фундамент надійного бекенду — CourseForge"
@@ -772,7 +788,7 @@
   "phone": {
    "docOverflow": 0,
    "broken": [
-    "FITS 226/268 e2e-te-mwquhwkz-e881e29e-owner <span.admin-user-secondary>"
+    "WIDE 325/268 e2e-te-mwqzpg8h-a1c72ff4-owner <span.admin-user-secondary>"
    ],
    "over": [],
    "title": "Користувачі — CourseForge"
@@ -781,16 +797,23 @@
    "docOverflow": 0,
    "broken": [
     "WIDE 350/326 Користувачі <h1>",
-    "WIDE 404/148 e2e-te-mwquhwkz-e881e29e <span.admin-user-primary>",
-    "WIDE 226/148 e2e-te-mwquhwkz-e881e29e-owner <span.admin-user-secondary>",
+    "WIDE 382/148 e2e-te-mwqzpg8h-a1c72ff4 <span.admin-user-primary>",
+    "WIDE 649/148 e2e-te-mwqzpg8h-a1c72ff4-owner <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
     "WIDE 205/148 Адміністратор <span.admin-user-primary>",
-    "FITS 114/148 admin@courseforge.local <span.admin-user-secondary>",
-    "FITS 127/148 instructor@courseforge.local <span.admin-user-secondary>",
-    "FITS 122/148 outsider@courseforge.local <span.admin-user-secondary>",
-    "FITS 119/148 student@courseforge.local <span.admin-user-secondary>",
+    "WIDE 314/148 admin@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
+    "WIDE 357/148 instructor@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
+    "WIDE 340/148 outsider@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
+    "WIDE 332/148 student@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
     "WIDE 165/148 блокування <span.admin-user-primary>",
-    "FITS 127/148 block-me@courseforge.local <span.admin-user-secondary>",
-    "FITS 126/148 reset-me@courseforge.local <span.admin-user-secondary>"
+    "WIDE 361/148 block-me@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>",
+    "WIDE 356/148 reset-me@courseforge.local <span.admin-user-secondary>",
+    "WIDE 128/68 Активний <span.ui-pill.ui-pill--success>"
    ],
    "over": [],
    "title": "Користувачі — CourseForge"
@@ -798,8 +821,8 @@
   "r320": {
    "docOverflow": 0,
    "broken": [
-    "WIDE 202/198 e2e-te-mwquhwkz-e881e29e <span.admin-user-primary>",
-    "WIDE 226/198 e2e-te-mwquhwkz-e881e29e-owner <span.admin-user-secondary>"
+    "FITS 191/198 e2e-te-mwqzpg8h-a1c72ff4 <span.admin-user-primary>",
+    "WIDE 325/198 e2e-te-mwqzpg8h-a1c72ff4-owner <span.admin-user-secondary>"
    ],
    "over": [],
    "title": "Користувачі — CourseForge"
@@ -874,7 +897,9 @@
   },
   "p200": {
    "docOverflow": 0,
-   "broken": [],
+   "broken": [
+    "WIDE 154/132 Студентка <h2>"
+   ],
    "over": [],
    "title": "Учні — CourseForge"
   },
@@ -951,7 +976,9 @@
   "p200": {
    "docOverflow": 0,
    "broken": [
-    "WIDE 346/326 Повернення <h1>"
+    "WIDE 346/326 Повернення <h1>",
+    "WIDE 287/228 замовлень, <h2>",
+    "WIDE 302/228 потребують <h2>"
    ],
    "over": [],
    "title": "Повернення коштів — CourseForge"
@@ -1068,7 +1095,9 @@
   },
   "p200": {
    "docOverflow": 0,
-   "broken": [],
+   "broken": [
+    "WIDE 154/132 Студентка <h2>"
+   ],
    "over": [],
    "title": "Учні — CourseForge"
   },
