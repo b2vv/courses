@@ -44,10 +44,12 @@ select:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 4px;
 }
-/* Headings and paragraphs carry data (course titles, comments) that may hold one long unbroken
-   string, so they keep `anywhere`, which never widens min-content and never pushes a layout off
-   the screen (design-pass S1 review, 2026-11-21). Short interface labels on controls use
-   `break-word` instead, so a word that fits is not split. */
+/* Text that can carry data (headings, paragraphs, links, buttons, pills, options) keeps `anywhere`:
+   it never widens min-content, so one long unbroken title or comment cannot push a layout off the
+   screen. `break-word` does widen it, and inside an inline-flex control it does not wrap at all.
+   Only fixed labels (sidebar links, the wordmark, the home CTAs) use `break-word`. Words still
+   split when a container squeezes the text below a word's width; S1 fixes those containers
+   (`minmax(0, 1fr)` tracks, wrapping value items) instead (design-pass S1 review, 2026-11-21). */
 h1,
 h2,
 h3,

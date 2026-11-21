@@ -144,7 +144,7 @@
   min-inline-size: var(--control-min-size);
   cursor: pointer;
   white-space: normal;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   text-align: center;
   font-weight: 650;
 }
@@ -482,7 +482,7 @@
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.35;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .ui-pill:is(a, button, [role='button']) {
   min-block-size: var(--control-min-size);

@@ -493,6 +493,9 @@ test('Acc26–Acc29 and Acc31 cover TOTP enrollment, recovery, disable, regenera
   await startTwoFactorLogin(page);
   await page.getByLabel('Шестизначний код').fill(await freshTotp(secret));
   await page.getByRole('button', { name: 'Підтвердити вхід' }).click();
+  // Wait for the sign-in to land: navigating away aborts the in-flight 2fa/complete request
+  // (nginx 499, API 503) and the settings page then never shows (design-pass S1 gate, 2026-11-21).
+  await expect(page.getByText('Accounts E2E', { exact: true })).toBeVisible();
 
   await page.goto('/settings/account');
   await twoFactor.getByLabel('Поточний пароль').last().fill(changedPassword);
