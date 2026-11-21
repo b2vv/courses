@@ -72,9 +72,9 @@ lesson-builder crash-window, adminstats placeholders, discussion pagination, tra
 
 | Розвилка / джерело | Опції та ціна | Рекомендація з причиною | Розблоковує / зворотність |
 |---|---|---|---|
-| **Q3. Heavy-вікно для design-pass.** `docs/design-pass/plan.md` §8 | (a) Ексклюзивне вікно в основному checkout: стек на 8080 перезбирається з поточної гілки, `make check` по черзі. (b) Окремий compose-проєкт/порт — зміна інфри. | **(a)**: умова питання змінилась — паралельної гілки більше немає, вся робота в одному checkout, і #115 так і пройшов (ordered `make check` на `5e55c88a` GATE_EXIT=0, e2e 168 — тіло PR #115). (b) коштує інфри без споживача. | DP1–DP3; відкотне. |
-| **Q4. Рев'юер design-pass.** `plan.md` §8 | Codex напряму (independent_subagent) або Courses 2 (existing_session). | **Codex напряму**: так рев'юили #114/#115, обидва знайшли реальні дефекти (BLOCK → fix → PASS). Courses 2 — якщо власник хоче другу сесію, як у пам'яті «рев'ю обов'язкове». | Кожен PR DP; відкотне. |
-| **Q5. Шрифт для S-3 (`--font-utility`).** `findings.md` S-3 | Inter + `tabular-nums`: без залежності, цифри рівні, мітки втрачають «технічний» вигляд. Веб-моно-шрифт: нова npm-залежність, вага шрифту, ліцензія. | **Inter + `tabular-nums`**: прибирає Courier без нової залежності; мітки й ціни лишаються читабельними. Моно — лише якщо власник хоче цей стиль. | DP1; дешевий відкат CSS. |
+| **Q3. Heavy-вікно для design-pass.** ✅ вирішено 2026-11-21: (a). `docs/design-pass/plan.md` §8 | (a) Ексклюзивне вікно в основному checkout: стек на 8080 перезбирається з поточної гілки, `make check` по черзі. (b) Окремий compose-проєкт/порт — зміна інфри. | **(a)**: умова питання змінилась — паралельної гілки більше немає, вся робота в одному checkout, і #115 так і пройшов (ordered `make check` на `5e55c88a` GATE_EXIT=0, e2e 168 — тіло PR #115). (b) коштує інфри без споживача. | DP1–DP3; відкотне. |
+| **Q4. Рев'юер design-pass.** ✅ вирішено 2026-11-21: Codex напряму. `plan.md` §8 | Codex напряму (independent_subagent) або Courses 2 (existing_session). | **Codex напряму**: так рев'юили #114/#115, обидва знайшли реальні дефекти (BLOCK → fix → PASS). Courses 2 — якщо власник хоче другу сесію, як у пам'яті «рев'ю обов'язкове». | Кожен PR DP; відкотне. |
+| **Q5. Шрифт для S-3 (`--font-utility`).** ✅ вирішено 2026-11-21: Inter + `tabular-nums`. `findings.md` S-3 | Inter + `tabular-nums`: без залежності, цифри рівні, мітки втрачають «технічний» вигляд. Веб-моно-шрифт: нова npm-залежність, вага шрифту, ліцензія. | **Inter + `tabular-nums`**: прибирає Courier без нової залежності; мітки й ціни лишаються читабельними. Моно — лише якщо власник хоче цей стиль. | DP1; дешевий відкат CSS. |
 | **Р1. Коли відкривати production?** `AGENTS.md:5`; `DEPLOY-READINESS.md` | Test-mode vs launch (сервер/TLS, секрети, email, monitoring, live shop). | Зберегти defer до наміру й середовища запуску. | D1/D2, prod tails; дорогий зовнішній ефект. |
 | **Р4. Ротація 2FA master до deploy.** `DEPLOY-READINESS.md:29–31` | Re-enrol при ротації vs версійований keyring. | До launch описати re-enrol; keyring — за вимоги безперервної ротації. | C2 deploy gate; до Р1 не запускати. |
 | **Р2. Друга locale lesson-document.** `docs/lesson-builder/report.md:694–697` | Одна locale vs switch/create/read другої. | Не зараз: немає конкретного курсу з вимогою. | Відкотний код, дорожчі дані. |
@@ -88,7 +88,7 @@ lesson-builder crash-window, adminstats placeholders, discussion pagination, tra
 на тих самих viewport). Підстава — план, який власник уже погодив (Q1/Q2 2026-11-16, `plan.md` §9): S1 іде
 перед поекранними зрізами, бо S0 знайшов спільні major. S-2 (phone-хедер, нова mobile-навігація) — окремий
 зріз у DP1, якщо пре-код checkpoint покаже, що він більший за CSS.
-Передумови: відповіді на Q3/Q5 (Q4 — для PR), read-only перевірка місця на Kiri (M9).
+Передумови: Q3/Q4/Q5 **вирішено власником 2026-11-21** («Так, усі три» — прийнято рекомендації нижче; `docs/design-pass/plan.md` §9); лишається read-only перевірка місця на Kiri (M9).
 Шлях — pre-code checkpoint у `docs/design-pass/plan.md` → коміт на екран → ordered `make check` → Codex-рев'ю → PR.
 
 Чому не найближчі альтернативи:
