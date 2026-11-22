@@ -15,6 +15,7 @@
 - **done: M1 Start + Rsbuild compatibility-check → #114 / `da9e447f`** — піни Start 1.169.7 / Router 1.170.46 / Rsbuild 2.3.3 / plugin-react 2.1.1; C0–C5 PASS; ordered `make check` GATE_EXIT=0, e2e 168; `docs/start-rsbuild-check/report.md`.
 - **done: AI Factory adapter files local-only → `bdc7048c`** + переписування історії (рішення власника 2026-11-21).
 - **done: design-pass S0 + AUTH-зріз → #115 / `d6147d71`** — S0-реєстр 31 знахідки (`docs/design-pass/findings.md`); A1-1 (blocker), A2-1, A5-1 закрито; Codex-рев'ю PASS (`docs/design-pass/_wip-review*.md`).
+- **done: DP1 design-pass S1 → #116 / `dc0a8021`** (2026-11-22) — спільні примітиви: розриви слів 103→75 без регресій для довгих даних, Inter + `tabular-nums`, локалізовані `<title>`, wordmark 44 px, retry-кнопки; ordered `make check` на `e72ff50c` GATE_EXIT=0 (e2e 168); Codex R1 BLOCK → R2 PASS (`docs/design-pass/evidence/S1.md`). Наступний хід — DP2 поекранні зрізи або S-2; потребує перезбирання агенди.
 
 Цей rebuild не запускав builds/tests/Docker і не заявляє нового runtime/CI PASS.
 
