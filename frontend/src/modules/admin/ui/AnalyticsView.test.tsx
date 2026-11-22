@@ -99,6 +99,13 @@ describe('AnalyticsView', () => {
     renderView(makeSnapshot({ platform: { singleInstructor: true } }));
     expect(screen.queryByRole('table', { name: 'Рейтинг інструкторів' })).toBeNull();
     expect(screen.queryAllByText('Інструктори')).toHaveLength(0);
+    // The withheld instructor count means the listed roles are not the whole: no total, bar
+    // or shares may be drawn for them.
+    const roles = screen.getByRole('heading', { name: 'Ролі', level: 3 }).closest('.ui-split');
+    expect((roles as HTMLElement).querySelector('.ui-split-total')).toBeNull();
+    expect((roles as HTMLElement).querySelector('.ui-split-bar')).toBeNull();
+    expect((roles as HTMLElement).querySelector('.ui-split-share')).toBeNull();
+    expect(within(roles as HTMLElement).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('renders an em dash for a null average, never a fabricated zero', () => {

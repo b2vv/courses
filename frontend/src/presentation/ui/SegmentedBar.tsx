@@ -73,7 +73,9 @@ export function SegmentedBar({
         </div>
       ) : null}
       {total === 0 ? <p className="ui-split-empty">{emptyLabel}</p> : null}
-      <ul className="ui-split-list">
+      {/* list-style:none drops list semantics in WebKit/VoiceOver; the role restores them. */}
+      {/* oxlint-disable-next-line jsx-a11y/no-redundant-roles -- needed for Safari with list-style:none */}
+      <ul className="ui-split-list" role="list">
         {parts.map((part) => (
           <li key={part.id}>
             <span className={`ui-split-swatch ui-split-tone--${part.tone}`} aria-hidden="true" />
