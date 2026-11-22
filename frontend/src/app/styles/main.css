@@ -240,6 +240,8 @@ nav a {
   }
   .header-compact {
     display: flex;
+    align-items: center;
+    gap: var(--space-2);
     margin-inline-start: auto;
   }
   .header-inner {
@@ -257,6 +259,14 @@ nav a {
     inline-size: 2.25rem;
     block-size: 2.25rem;
     font-size: 0.75rem;
+  }
+}
+/* The guest's «Увійти» beside «Меню» needs 24em of header: measured, the row holds the wordmark,
+   «Увійти» and «Меню» from 384 px at 100% text, and wraps below. Narrower (or with enlarged text)
+   it is hidden, and sign-in is inside the menu. */
+@container site-header (max-width: 24em) {
+  .header-compact-login {
+    display: none;
   }
 }
 /* With enlarged text on a phone the name no longer fits beside the menu button: the mark stays,

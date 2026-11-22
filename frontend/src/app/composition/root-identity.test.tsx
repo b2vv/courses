@@ -128,7 +128,10 @@ test('G15 renders the public route anonymously when the API returns an unknown r
 
   expect(result.identity).toEqual({ status: 'unavailable' });
   expect(result.rootError).toBeUndefined();
-  expect(screen.getByRole('link', { name: 'Увійти' })).toBeTruthy();
+  // Both header layouts offer sign-in to a guest: the wide row and the compact row (G0).
+  expect(
+    screen.getAllByRole('link', { name: 'Увійти' }).map((link) => link.getAttribute('href')),
+  ).toEqual(['/login', '/login']);
   expect(screen.queryByRole('alert')).toBeNull();
 });
 

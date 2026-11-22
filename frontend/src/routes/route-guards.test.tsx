@@ -1080,7 +1080,10 @@ test('G24 signs out, clears the cached identity and navigates to the catalog', a
   await waitFor(() => expect(router.state.status).toBe('idle'));
   expect(logoutRequests).toBe(1);
   expect(router.options.context.queryClient.getQueryData(sessionQueryKey)).toBe(null);
-  expect(screen.getByRole('link', { name: 'Увійти' })).toBeTruthy();
+  // Both header layouts offer sign-in to a guest: the wide row and the compact row (G0).
+  expect(
+    screen.getAllByRole('link', { name: 'Увійти' }).map((link) => link.getAttribute('href')),
+  ).toEqual(['/login', '/login']);
   expect(screen.queryByText('admin')).toBeNull();
 
   await router.navigate({ to: '/learn' });
@@ -1151,7 +1154,9 @@ test.each([
     await waitFor(() => expect(router.state.status).toBe('idle'));
     expect(router.options.context.queryClient.getQueryData(sessionQueryKey)).toBe(null);
     expect(screen.getByRole('status').textContent).toContain(message);
-    expect(screen.getByRole('link', { name: login })).toBeTruthy();
+    expect(
+      screen.getAllByRole('link', { name: login }).map((link) => link.getAttribute('href')),
+    ).toEqual(['/login', '/login']);
   },
 );
 

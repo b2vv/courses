@@ -329,6 +329,14 @@ function Layout() {
             <LanguageSwitcher />
           </div>
           <div className="header-compact">
+            {/* A guest's sign-in stays one tap away beside «Меню» where the row has room; on a
+                narrower header or with enlarged text CSS hides it, and the copy inside the menu
+                is the way in (owner 2026-11-22, variant «Б, де вміщається»). */}
+            {session.data ? null : (
+              <Link to="/login" className="ui-link header-login header-compact-login">
+                {t('common.login')}
+              </Link>
+            )}
             <MenuCard
               triggerLabel={t('common.menu')}
               title={t('common.menu')}
