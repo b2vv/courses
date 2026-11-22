@@ -393,8 +393,12 @@ test.describe('with a stored student session', () => {
     expect(darkContrast.incomplete).toEqual([]);
     await expectPlaybackLayout(page, controls, playbackControls);
 
-    await page.getByRole('button', { name: 'EN' }).click();
+    // On a phone the language switch lives in the header's menu card (G0): open it, switch, close.
+    await page.getByRole('button', { name: 'Меню' }).click();
+    await page.getByRole('dialog', { name: 'Меню' }).getByRole('button', { name: 'EN' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     const englishControls = [
       page.getByRole('button', { name: 'Play', exact: true }),
       page.getByRole('slider', { name: 'Playback position', exact: true }),
