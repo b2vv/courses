@@ -1127,7 +1127,7 @@ export const uk = {
       deferredTitle: 'Догляд, теги та популярність',
       deferredHint: 'ще не вимірюються: для них потрібні окремі дані.',
       sectionSplits: 'Склад платформи',
-      subSplits: 'Частки за статусом',
+      subSplits: 'Частки за статусом і роллю',
       splitAccounts: 'Акаунти',
       splitRoles: 'Ролі',
       splitCourses: 'Курси',

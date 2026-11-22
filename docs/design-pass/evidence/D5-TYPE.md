@@ -1,0 +1,85 @@
+# D5 + TYPE — evidence and interface-review (diff mode)
+
+| | |
+|---|---|
+| Date | 2026-11-22 |
+| Branch | `design-pass-d5-type` from `main` @ `ab29bace` (plan §12, owner decision §9 2026-11-22) |
+| Stack | Kiri, `http://localhost:8080`. The frontend is rebuilt from the branch after every edit, and every capture comes from the latest image. |
+| Data | Seed plus the admin fixture account (`frontend/e2e/auth.ts`). Read-only: only the trend metric switch was clicked. |
+| Captures | `/admin/analytics` at phone 390, tablet portrait 768, tablet landscape 1024, desktop 1440, 390 with 200% text, and 320. TYPE: the S1 probe on 27 surfaces × 6 viewports. Captures are in the session scratchpad. |
+
+## What changed
+
+- **TYPE.** At 390 px:
+  - `h1` is 30 px (was 38.4);
+  - the home hero is 33 px (was 40);
+  - `h2` is about 21 px (was 25.6);
+  - the admin `h1` is 24 px (was 28.8).
+
+  At 1440 px the sizes match the old ones within 2 px. At 768 px the `h1` is 41 px (was 38.4).
+- **D5.** The page now reads top to bottom:
+  - four headline figures;
+  - the trend;
+  - «Склад платформи», six cards built from `SegmentedBar`: a thin bar over a list of parts with figures and shares;
+  - «Залученість»;
+  - a short note on deferred metrics.
+
+  Two decisions inside the cards:
+  - The «Акаунти» card splits live accounts (active plus blocked), the same figure as «Усього акаунтів». Deleted accounts, verified email and 2FA appear under the bar.
+  - On a single-instructor platform the «Ролі» card shows no total, bar or shares, because the instructor count is withheld (admin-stats 9a).
+
+## Checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| Horizontal overflow, D5 × 6 viewports | PASS | `ui-measurements` fit `:root` x: 1440/390/390-200% PASS; capture script `ov=0` on all 6 |
+| Overflow, TYPE × 27 surfaces × 6 | PASS | S1 probe: 0 |
+| Words broken by the narrow column, 27 surfaces | 75 → **57** | S1 probe, sum of phone + 200% phone + 320 + desktop |
+| Contrast, text | PASS: axe `color-contrast` 0 violations (wcag2a/aa/21aa/22aa) on desktop, phone, phone 200%. The lowest new ratio is 6.13:1 (`.ui-split-name`, `.ui-split-share`, meter labels, notes). | axe in real Chromium. `ui-measurements` `contrast` → NOT_TESTED (`non-opaque-or-non-srgb`: the text sits on transparent wrappers), so no hand-computed numbers. |
+| Contrast, selected segment (gradient) | NOT_TESTED | axe `incomplete`, a pre-existing primitive |
+| Colour of the bar segments | separation PASS (CVD ΔE ≥ 10.9, normal ≥ 18) for every card palette | dataviz `validate_palette.js --mode dark --surface #111317 --pairs all`. Lightness band FAIL for the status tokens and the de-emphasis grey; their meaning is fixed by the project, and every part also has a text label. |
+| Trend switch, keyboard | PASS: arrows move focus (outline solid), Space selects and the chart changes title | key presses in Chromium at 390 |
+| Trend switch, pointer and size | PASS: 172×44 on phone, 67–118×44 on desktop; a click on «Дохід» → chart «Дохід» | bounds + click |
+| Unit | 286/286 (admin + presentation/ui) | `rstest` |
+| Full ordered `make check`, e2e `admin-analytics.spec.ts` | NOT_TESTED | waiting for the owner's go-ahead |
+
+## Lenses
+
+**anti-slop §3 pre-flight on the result:**
+- Theme and palette: the admin dark-only theme with its signal tokens. Two new greys are `--color-viz-neutral`/`muted`; students use the existing `--color-viz-purple`.
+- Decoration: none. Every bar shows a figure from the list.
+- Copy: reread in full. «stats-ендпоінта» is gone.
+- Placeholders and fabricated data: none.
+- Motion: none.
+
+**ux-review, in this pass's diff:** three findings, all fixed and rechecked.
+
+1. **Major · [copy] Consistent terminology / predictability.**
+   - Before: «Усього акаунтів 7» and the «Акаунти» card showing 8 (deleted counted in) on one screen.
+   - Fix: the card's whole is the same 7, and deleted accounts sit under the bar.
+   - Test: `splits live accounts to the same total as the headline tile…`.
+2. **Minor · [law] Common Region.** Verified email and 2FA sat under «Залученість», although they describe account security. They moved to the «Акаунти» card.
+3. **Minor · dataviz status reserved / [consistency] Distinguishable roles.**
+   - Before: students used the status blue that means «Чернетки» on the neighbouring card.
+   - Fix: they now use the data-viz hue `series` (`--color-viz-purple`).
+
+Fixed during implementation:
+- the meter label overflowed at 390 with 200% text (19 px);
+- the «Дохід» option was hidden behind the scroll;
+- the chart was 60 px tall on a phone;
+- verified/2FA were counted against active accounts only, while the backend counts all non-deleted ones (`snapshot.go:75-76`).
+
+**Left as taste:**
+- On desktop the grid rows have equal height, so «Ролі» keeps empty space below its two rows.
+- «Залученість» is a small card: average progress «—» and completions 0 on the seed.
+
+**Pre-existing, outside the diff:**
+- the selected trend segment (gradient) cannot be measured by axe;
+- the sidebar ends at the viewport height in a full-page capture;
+- «Виміряно на 0 активах».
+
+## Not checked
+
+- Non-empty orders and media: the seed has zeros. The unit tests cover the bar with figures and the empty whole.
+- Real browser zoom.
+- Ordered `make check` with the full e2e, and the Codex review.

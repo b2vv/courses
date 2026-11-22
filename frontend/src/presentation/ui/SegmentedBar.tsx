@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 
-/** Colour role of one part. Status tones keep their reserved meaning; `neutral`/`muted` are plain greys. */
-export type SplitTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'muted';
+/**
+ * Colour role of one part. Status tones keep their reserved meaning; `series` is the data-viz
+ * hue for a part that is not a state (e.g. a role); `neutral`/`muted` are plain greys.
+ */
+export type SplitTone = 'success' | 'warning' | 'danger' | 'info' | 'series' | 'neutral' | 'muted';
 
 export type SplitPart = {
   readonly id: string;

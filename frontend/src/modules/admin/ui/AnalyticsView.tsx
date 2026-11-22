@@ -87,13 +87,14 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
     num.format(parts.reduce((sum, item) => sum + item.value, 0));
   const empty = t('adminAnalytics.splitEmpty');
 
+  // The whole is the live accounts (active + blocked), the same figure as the headline tile;
+  // deleted accounts are listed under the bar, outside the whole.
   const accounts = [
     part('active', 'adminAnalytics.active', snapshot.users.active, 'success'),
     part('blocked', 'adminAnalytics.blocked', snapshot.users.blocked, 'warning'),
-    part('deleted', 'adminAnalytics.deleted', snapshot.users.deleted, 'muted'),
   ];
   const roles = [
-    part('student', 'adminAnalytics.students', snapshot.users.byRole.student, 'info'),
+    part('student', 'adminAnalytics.students', snapshot.users.byRole.student, 'series'),
     ...(showInstructors
       ? [
           part(
@@ -185,7 +186,26 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
             parts={accounts}
             formatShare={formatShare}
             emptyLabel={empty}
-          />
+          >
+            <dl className="ui-split-facts">
+              <div>
+                <dt>{t('adminAnalytics.deleted')}</dt>
+                <dd>{num.format(snapshot.users.deleted)}</dd>
+              </div>
+            </dl>
+            <ShareMeter
+              label={t('adminAnalytics.verifiedShare')}
+              valueLabel={ofAccounts(snapshot.users.verified)}
+              ratio={liveAccounts > 0 ? snapshot.users.verified / liveAccounts : null}
+              tone="success"
+            />
+            <ShareMeter
+              label={t('adminAnalytics.twoFactorShare')}
+              valueLabel={ofAccounts(snapshot.users.twoFactor)}
+              ratio={liveAccounts > 0 ? snapshot.users.twoFactor / liveAccounts : null}
+              tone="success"
+            />
+          </SegmentedBar>
           {/* A single-instructor platform withholds the instructor count (admin-stats 9a), so the
               listed roles are not the whole: no total, bar or shares then. */}
           <SegmentedBar
@@ -256,18 +276,6 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
             valueLabel={avgProgress}
             ratio={snapshot.engagement.avgProgress}
             tone="info"
-          />
-          <ShareMeter
-            label={t('adminAnalytics.verifiedShare')}
-            valueLabel={ofAccounts(snapshot.users.verified)}
-            ratio={liveAccounts > 0 ? snapshot.users.verified / liveAccounts : null}
-            tone="success"
-          />
-          <ShareMeter
-            label={t('adminAnalytics.twoFactorShare')}
-            valueLabel={ofAccounts(snapshot.users.twoFactor)}
-            ratio={liveAccounts > 0 ? snapshot.users.twoFactor / liveAccounts : null}
-            tone="success"
           />
           <p className="admin-analytics-note">
             {t('adminAnalytics.completionsNote', {

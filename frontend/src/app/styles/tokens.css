@@ -849,6 +849,9 @@
 .ui-split-tone--info {
   background: var(--color-info);
 }
+.ui-split-tone--series {
+  background: var(--color-viz-purple, var(--color-primary));
+}
 .ui-split-tone--neutral {
   background: var(--color-viz-neutral, var(--color-muted));
 }
@@ -895,7 +898,7 @@
 .admin-analytics-kpis {
   grid-template-columns: repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr));
 }
-.admin-analytics-engagement .ui-meter-label {
+.ui-split .ui-meter-label {
   flex-wrap: wrap;
 }
 /* The trend metric switch wraps into rows on a narrow screen instead of hiding options behind a

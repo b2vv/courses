@@ -1119,7 +1119,7 @@ export const en = {
       deferredTitle: 'Watch-through, tags and popularity',
       deferredHint: 'not measured yet: they need data of their own.',
       sectionSplits: 'Platform makeup',
-      subSplits: 'Shares by status',
+      subSplits: 'Shares by status and role',
       splitAccounts: 'Accounts',
       splitRoles: 'Roles',
       splitCourses: 'Courses',

@@ -140,6 +140,21 @@ describe('AnalyticsView', () => {
     expect(within(card as HTMLElement).getByText('Ще немає даних')).toBeTruthy();
   });
 
+  it('splits live accounts to the same total as the headline tile, deleted outside the whole', () => {
+    renderView(makeSnapshot());
+    const card = screen.getByRole('heading', { name: 'Акаунти', level: 3 }).closest('.ui-split');
+    // active 5 + blocked 1 = 6, the "Усього акаунтів" figure; deleted (2) is a fact under the bar.
+    expect(within(card as HTMLElement).getByText('6')).toBeTruthy();
+    const tile = screen.getByText('Усього акаунтів').closest('.ui-stat');
+    expect(within(tile as HTMLElement).getByText('6')).toBeTruthy();
+    const deleted = within(card as HTMLElement)
+      .getByText('Видалені')
+      .closest('div');
+    expect(within(deleted as HTMLElement).getByText('2')).toBeTruthy();
+    // Verified and 2FA are shares of the same live accounts.
+    expect(within(card as HTMLElement).getByText('4 з 6 акаунтів · 67%')).toBeTruthy();
+  });
+
   it('shows each headline figure once', () => {
     renderView(makeSnapshot());
     expect(screen.getAllByText('Відкриті скарги')).toHaveLength(1);
