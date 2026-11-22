@@ -1,6 +1,6 @@
 # Foundation task tracker
 
-Для нової/відновленої задачі чинний phase/task plan є джерелом pre-code checkpoint (`docs/development/ai-factory.md`, локальний, поза git): acceptance, рішення/grilling, залежності, scoped impact і READY/BLOCKED. Схвалення фази/пакета не дає READY усім рядкам. Цей tracker лишається індексом фаз, без нового sprint registry; історичні результати не переписуються.
+Для нової/відновленої задачі чинний phase/task plan є джерелом pre-code checkpoint (контракт — `ai-factory/pre-code-checkpoint.md` у керованому kit, правила Courses — [AGENTS.md](../AGENTS.md#ai-workflow)): acceptance, рішення/grilling, залежності, scoped impact і READY/BLOCKED. Схвалення фази/пакета не дає READY усім рядкам. Цей tracker лишається індексом фаз, без нового sprint registry; історичні результати не переписуються.
 
 Джерело scope: [spec](../docs/foundation/spec.md). Детальні файли, gates і acceptance links: [plan](../docs/foundation/plan.md). Стани: `planned` → `in_progress` → `done` або `blocked`. При завершенні рядок зберігається як archive pointer з посиланням на результат/commit і evidence в ledger; задачі не видаляються.
 
@@ -447,7 +447,7 @@ revoke/resolve) дзеркалить ParticipantReportQueue; міграція 00
 
 ## Security audit 2026-10-24 — fix tasks
 
-Джерело: [`docs/security/audit-2026-10-24.md`](../docs/security/audit-2026-10-24.md) (повнокодовий аудит на `origin/main @ 0d26f07`; 7 гейтів зелені, 13 субагентів, незалежна верифікація + mutation). Усі рядки `planned`; кожен при взятті в роботу проходить pre-code checkpoint (`docs/development/ai-factory.md`, локальний, поза git) і робиться за TDD (failing-test першим, фікс у продукт — після ОК власника). Pre-launch, тест-режим (ріж сміливо [[pre-launch-cut-freely]]). Shared/persisted зміни — повний e2e, не таргетний.
+Джерело: [`docs/security/audit-2026-10-24.md`](../docs/security/audit-2026-10-24.md) (повнокодовий аудит на `origin/main @ 0d26f07`; 7 гейтів зелені, 13 субагентів, незалежна верифікація + mutation). Усі рядки `planned`; кожен при взятті в роботу проходить pre-code checkpoint (контракт — `ai-factory/pre-code-checkpoint.md` у керованому kit, правила Courses — [AGENTS.md](../AGENTS.md#ai-workflow)) і робиться за TDD (failing-test першим, фікс у продукт — після ОК власника). Pre-launch, тест-режим (ріж сміливо [[pre-launch-cut-freely]]). Shared/persisted зміни — повний e2e, не таргетний.
 
 | ID | Опис | Залежить | Статус | Приймальні (finding + failing-test) |
 |---|---|---|---|---|
