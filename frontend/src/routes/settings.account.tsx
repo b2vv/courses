@@ -5,10 +5,12 @@ import { requireIdentity, useRedirectWhenSessionEnds } from '../app/composition/
 import { SessionQueryError } from '../app/composition/identity-queries';
 import { AccountSettingsView } from '../modules/identity';
 import type { RecoveryCodes, TwoFactorEnrollment } from '../modules/identity';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/settings/account')({
   ssr: false,
   beforeLoad: ({ context, location }) => requireIdentity(context, location),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'accountSettings'),
   component: AccountSettingsRoute,
 });
 function AccountSettingsRoute() {

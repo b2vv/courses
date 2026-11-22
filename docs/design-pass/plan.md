@@ -139,3 +139,24 @@ Non-goals: хедер гостя (S-2), спільні S-1/S-3/S-4, бекенд
 **Докази.** Unit-тести на AUTH-1…4. Браузер: `/login`, `/register` (+ `email_taken` через UI), `/password/forgot` (форма і «надіслано»), `/password/reset` (без токена) — 4 viewport × light/dark, 200%, 320, Tab. Гейт: ordered `make check` перед PR групи client/auth (Q2); heavy-вікно — Q3.
 
 **Допуск: READY** (AUTH-1…4 погоджені рішенням власника про зріз, залежностей немає).
+
+## 11. Зріз S1 — спільні примітиви (S-1, S-3, S-4, S-5; перевірка M20, M3)
+
+**Підстава.** План §5 п.2: S0 знайшов спільні major, тож S1 іде перед поекранними зрізами. Рішення власника 2026-11-21 (§9): Q3 — основний checkout, Q4 — Codex, Q5 — Inter + `tabular-nums`. Запуск зрізу — власник 2026-11-21 («Yep, run»).
+
+**Scope / acceptance.**
+- **S1-1 (S-1).** Звичайні слова не рвуться посередині, коли вміщаються в рядок, і жоден довгий рядок даних не виштовхує верстку за екран сильніше, ніж на `main`. Текст, що може нести дані (`h1–h3`, `p`, `.ui-link`, `.ui-button`, `.ui-pill`, `.ui-option`, клітинки, редактор), лишається `anywhere`; `break-word` — лише фіксовані підписи (`.ui-sidebar-link`, `.wordmark`, CTA головної). Уточнено після рев'ю Codex 2026-11-21: `break-word` на даних розширював min-content і виштовхував плеєр уроку й коментарі. Одновекторні сітки на телефоні — `minmax(0,1fr)`, щоб min-content не розпирав сторінку. Слово, ширше за колонку (великий `h1` на 200%), і далі переноситься — це останній засіб, не дефект; кількість таких місць записується в evidence.
+- **S1-2 (S-3).** `--font-utility` = гарнітура тексту (Inter) + `tabular-nums` для цифр; Courier ніде не рендериться.
+- **S1-3 (S-4).** Кожна поверхня з S-4 має власний локалізований `<title>` «<сторінка> — CourseForge»; D5 в UA — українською; після перемикання мови заголовок оновлюється.
+- **S1-4 (S-5).** Wordmark-посилання ≥44 px заввишки.
+- **Перевірки без обов'язкового фіксу:** M20 (retry-форми `.notice` на `__root.tsx`/`routes/login.tsx`) і M3 (+5 px транскрипту на 390/200%) — подивитися; фіксити лише якщо дешево й у тих самих правилах.
+
+Non-goals: S-2 (phone-хедер, mobile-навігація) — окремий зріз; S-6; поекранні знахідки.
+
+**Small/full.** Small за локальною нормою: presentation + `<title>` у head маршрутів, без API/контрактів/стану. i18n-інстанс стає частиною router context (request-scoped, як решта context) — не глобальний стан. Планова критика N/A (small); незалежне рев'ю коду Codex перед PR обов'язкове.
+
+**Scoped impact.** `frontend/src/app/styles/{main,tokens}.css` (глобальні правила → повний e2e, урок `AGENTS.md` §Decisions); `frontend/src/router.tsx`, `routes/*` (head), `presentation/LanguageSwitcher.tsx`, `app/providers/locales/{uk,en}.ts`. E2E, що читають `document.title` або `toHaveTitle`, звіряються grep-ом перед PR.
+
+**Докази.** Скрипт-зонд (розірвані слова, переповнення) на 27 поверхнях × phone/200%-phone/320/tablet/desktop/200%-desktop до й після; браузерні знімки змінених поверхонь на 4 viewport × light/dark; unit-тести head; ordered `make check` (Q3).
+
+**Допуск: READY.**

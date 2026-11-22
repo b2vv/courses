@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { createFileRoute } from '@tanstack/react-router';
 import type { ParticipantReportStateFilter } from '../modules/enrollment';
 import { ParticipantReportQueue } from '../modules/admin';
+import { pageTitleHead } from '../app/composition/page-title';
 
 // 'open' is the default view, so it is never written to the URL; only an explicit
 // 'resolved' or 'all' narrows/widens it. An unknown value falls back to the default.
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/admin/participant-reports')({
     ({ state: search.state ?? 'open' }) as { state: ParticipantReportStateFilter },
   loader: ({ context, deps }) =>
     context.queryClient.prefetchInfiniteQuery(context.enrollment.participantReports(deps.state)),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'participantReports'),
   component: ParticipantReportsRoute,
 });
 

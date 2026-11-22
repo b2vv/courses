@@ -49,6 +49,7 @@ import { CourseListFailure } from '../modules/admin';
 import { CourseGrantPanel } from '../modules/admin';
 import { GrantQueryError } from '../app/composition/admin-grant-queries';
 import type { GrantErrorCode } from '../modules/purchase';
+import { namedPageTitle, pageTitle } from '../app/composition/page-title';
 
 function courseId(value: string): CourseId {
   if (!validEntityId(value)) throw notFound();
@@ -89,10 +90,12 @@ export const Route = createFileRoute('/admin/courses/$courseId')({
       throw error;
     }
   },
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, match }) => ({
     meta: [
       {
-        title: loaderData ? `${loaderData.title} — CourseForge` : 'Редактор курсу — CourseForge',
+        title: loaderData
+          ? namedPageTitle(loaderData.title)
+          : pageTitle(match.context.i18n, 'courseEditor'),
       },
     ],
   }),

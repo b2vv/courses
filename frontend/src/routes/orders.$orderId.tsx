@@ -8,6 +8,7 @@ import { parseOrderId, parseOrderSearch } from '../app/router/learn-route';
 import type { PurchaseErrorCode } from '../modules/purchase';
 import { ProtectedRouteFailure, ProtectedRoutePending } from '../modules/identity';
 import { OrderStatusView, submitCheckoutForm } from '../modules/purchase';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/orders/$orderId')({
   ssr: false,
@@ -16,6 +17,7 @@ export const Route = createFileRoute('/orders/$orderId')({
     await requireIdentity(context, location);
     if (parseOrderId(params.orderId) === null) throw notFound();
   },
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'order'),
   component: OrderRoute,
   pendingComponent: ProtectedRoutePending,
   errorComponent: ProtectedRouteFailure,

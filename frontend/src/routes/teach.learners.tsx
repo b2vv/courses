@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { LearnerFilters } from '../modules/teach';
 import { learnerFilters, parseLearnerSearch } from '../app/router/learner-search';
 import { LearnerOverview } from '../modules/teach';
+import { pageTitleHead } from '../app/composition/page-title';
 
 function toSearch(filters: LearnerFilters) {
   return {
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/teach/learners')({
   loaderDeps: ({ search }) => learnerFilters(search),
   loader: ({ context, deps }) =>
     context.queryClient.prefetchInfiniteQuery(context.teach.learners('teach', deps)),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'learners'),
   component: TeachLearnersRoute,
 });
 

@@ -11,6 +11,7 @@ import { ReviewModerationRow } from '../modules/teach';
 import { CourseRoster, TeachLessonList } from '../modules/teach';
 import { Button } from '../presentation/ui';
 import { ErrorState, Skeleton } from '../presentation/ui/states';
+import { pageTitleHead } from '../app/composition/page-title';
 
 const moderationReason = 'moderation_reviewed';
 
@@ -43,6 +44,7 @@ export const Route = createFileRoute('/teach/courses/$courseId')({
     ]);
     return { courseId: id };
   },
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'courseEditor'),
   component: TeachCourseRoute,
   errorComponent: TeachCourseFailure,
 });

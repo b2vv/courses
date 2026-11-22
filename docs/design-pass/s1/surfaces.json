@@ -1,0 +1,5 @@
+[["G0-404","guest","/no-such-page-dp"],["C1","guest","/"],["C2","guest","/courses"],["C3","guest","/courses/go-backend-foundations"],["C3-enrolled","student","/courses/go-backend-foundations"],["C3-404","guest","/courses/no-such-course-dp"],
+["A1","guest","/login"],["A2","guest","/register"],["A3","guest","/verify-email"],["A4","guest","/password/forgot"],["A5","guest","/password/reset"],["A6","student","/email/change/confirm"],["A7","student","/settings/account"],["P1-404","student","/orders/00000000-0000-4000-8000-000000000000"],
+["L1","student","/learn"],["L2-outline","student","/learn/go-backend-foundations"],
+["D0-404","admin","/admin/no-such-dp"],["D1","admin","/admin"],["D2","admin","/admin/courses/10000000-0000-4000-8000-000000000001"],["D4","admin","/admin/users"],["D5","admin","/admin/analytics"],["D6","admin","/admin/learners"],["D7","admin","/admin/participant-reports"],["D8","admin","/admin/refunds"],
+["T0","instructor","/teach"],["T1","instructor","/teach/courses/10000000-0000-4000-8000-000000000001"],["T3","instructor","/teach/learners"]]

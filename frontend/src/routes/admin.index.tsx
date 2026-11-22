@@ -14,6 +14,7 @@ import type {
 import type { AuthenticatedUser } from '../modules/identity';
 import { CourseCreateDialog } from '../modules/admin';
 import { CourseListFailure, CourseListPending, CourseListView } from '../modules/admin';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/admin/')({
   ssr: false,
@@ -25,7 +26,7 @@ export const Route = createFileRoute('/admin/')({
       context.admin.list(adminCourseQuery(deps)),
       abortController.signal,
     ),
-  head: () => ({ meta: [{ title: 'Адміністрування курсів — CourseForge' }] }),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'adminCourses'),
   component: AdminCourseListRoute,
   pendingComponent: CourseListPending,
   errorComponent: CourseListFailure,

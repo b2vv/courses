@@ -1,0 +1,5 @@
+h1,h2,h3,p,.ui-button,.ui-link,.ui-option,.ui-pill,.ui-sidebar-link,.wordmark,.home-hero .primary-link,.home-hero .secondary-link{overflow-wrap:anywhere !important}
+.account-settings,.account-settings-card{grid-template-columns:none}
+.value-item{flex-wrap:nowrap}.value-item > div{flex:initial}
+@media (max-width: 45rem){.detail-body{grid-template-columns:1fr !important}}
+@media (max-width: 52rem){.home-hero,.value-strip{grid-template-columns:1fr !important}.footer-grid{grid-template-columns:1fr !important}}

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import type { RefundStateFilter } from '../modules/enrollment';
 import { RefundQueue } from '../modules/admin';
+import { pageTitleHead } from '../app/composition/page-title';
 
 // 'pending' is the default view, so it is never written to the URL; only an explicit
 // 'refunded', 'declined' or 'all' narrows/widens it. An unknown value falls back to the default.
@@ -20,6 +21,7 @@ export const Route = createFileRoute('/admin/refunds')({
     ({ state: search.state ?? 'pending' }) as { state: RefundStateFilter },
   loader: ({ context, deps }) =>
     context.queryClient.prefetchQuery(context.enrollment.refundQueue(deps.state)),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'refunds'),
   component: RefundsRoute,
 });
 

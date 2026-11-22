@@ -24,9 +24,12 @@ import { IdentityHeader } from '../modules/identity';
 import { EmailVerificationBanner } from '../modules/identity';
 import { Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
+import type { createI18n } from '../app/providers/i18n';
+import { pageTitle } from '../app/composition/page-title';
 import '../app/styles/main.css';
 
 type RootRouteContext = RootIdentityContext & {
+  i18n: ReturnType<typeof createI18n>;
   admin: AdminDependencies;
   catalog: ReturnType<typeof createCatalogDependencies>;
   learn: LearnDependencies;
@@ -37,17 +40,24 @@ type RootRouteContext = RootIdentityContext & {
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
   beforeLoad: resolveRootIdentity,
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'CourseForge — навчання через практику' },
-      {
-        name: 'description',
-        content: 'Курси для розробників: архітектура, інструменти й практика.',
-      },
-    ],
-  }),
+  head: ({ match, matches }) => {
+    const { i18n } = match.context;
+    // A page that resolved to "not found" has no title of its own, so the root names it: either
+    // no route below the root matched the path, or a matched route threw `notFound()`.
+    // `_notFound` marks the boundary that renders it (typed on RouteMatch in router-core 1.171);
+    // the root is that boundary for the `/admin/$` catch-all.
+    const notFound =
+      matches.length === 1 ||
+      matches.some((candidate) => candidate.status === 'notFound' || candidate._notFound === true);
+    return {
+      meta: [
+        { charSet: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { title: notFound ? pageTitle(i18n, 'notFound') : i18n.t('pageTitle.appTitle') },
+        { name: 'description', content: i18n.t('pageTitle.appDescription') },
+      ],
+    };
+  },
   shellComponent: Document,
   component: Layout,
   notFoundComponent: NotFound,
@@ -76,7 +86,9 @@ function PageError() {
       <h1>{t('page.failure')}</h1>
       <p>{t('page.failureHint')}</p>
       <form method="get">
-        <button type="submit">{t('common.retry')}</button>
+        <button type="submit" className="ui-button ui-button--primary">
+          {t('common.retry')}
+        </button>
       </form>
     </section>
   );

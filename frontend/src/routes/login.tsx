@@ -7,10 +7,11 @@ import { parseLoginSearch } from '../app/router/login-search';
 import { LoginView } from '../modules/identity';
 import { safeReturnTo } from '../modules/identity';
 import type { AuthenticatedUser, CredentialsInput, LoginResult } from '../modules/identity';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/login')({
   validateSearch: parseLoginSearch,
-  head: () => ({ meta: [{ title: 'Вхід — CourseForge' }] }),
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'login'),
   component: LoginRoute,
   pendingComponent: LoginPending,
   errorComponent: LoginFailure,
@@ -32,7 +33,9 @@ function LoginFailure() {
       <h1>{t('login.failure')}</h1>
       <p>{t('login.failureHint')}</p>
       <form method="get">
-        <button type="submit">{t('common.retry')}</button>
+        <button type="submit" className="ui-button ui-button--primary">
+          {t('common.retry')}
+        </button>
       </form>
     </section>
   );

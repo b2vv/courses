@@ -4,6 +4,7 @@ import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { CourseView } from '../modules/catalog';
 import { CatalogFailure, CatalogLoading, CourseNotFound } from '../modules/catalog';
+import { namedPageTitle, pageTitle } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/courses/$slug')({
   loader: async ({ context, params, abortController }) => {
@@ -22,9 +23,13 @@ export const Route = createFileRoute('/courses/$slug')({
       throw error;
     }
   },
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, match }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.title} — CourseForge` : 'Курс — CourseForge' },
+      {
+        title: loaderData
+          ? namedPageTitle(loaderData.title)
+          : pageTitle(match.context.i18n, 'course'),
+      },
       { name: 'description', content: loaderData?.summary ?? 'Практичні курси для розробників' },
     ],
   }),

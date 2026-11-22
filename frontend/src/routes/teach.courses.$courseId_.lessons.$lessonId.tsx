@@ -4,6 +4,7 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { asBrandedId, validEntityId } from '../contracts/course';
 import type { CourseTree } from '../contracts/course';
 import { LessonDocumentEditorLoading, type LessonMeta } from '../modules/document';
+import { pageTitleHead } from '../app/composition/page-title';
 
 // The editor's Tiptap dependency must not reach the shared bundle, so the component is loaded
 // lazily here through a dynamic import of the module's editor file (not the barrel, which the
@@ -31,6 +32,7 @@ function resolveLessonMeta(tree: CourseTree | undefined, lessonId: string): Less
 
 export const Route = createFileRoute('/teach/courses/$courseId_/lessons/$lessonId')({
   ssr: false,
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'lessonEditor'),
   component: LessonDocumentEditorRoute,
 });
 

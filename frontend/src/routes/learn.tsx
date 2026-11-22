@@ -6,6 +6,7 @@ import { ensureRouteQuery } from '../app/composition/catalog-queries';
 import { ProtectedRouteFailure, ProtectedRoutePending } from '../modules/identity';
 import { MyLearningList } from '../presentation/learn/MyLearningList';
 import { EmptyState, Link } from '../presentation/ui';
+import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/learn')({
   ssr: false,
@@ -20,6 +21,7 @@ export const Route = createFileRoute('/learn')({
           abortController.signal,
         )
       : undefined,
+  head: ({ match }) => pageTitleHead(match.context.i18n, 'myLearning'),
   component: LearnRoute,
   pendingComponent: ProtectedRoutePending,
   errorComponent: ProtectedRouteFailure,
