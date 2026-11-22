@@ -101,6 +101,25 @@ Results:
 | Broken words, 27 surfaces | 57 → **51**; the C3 title at 200% now breaks with a hyphen at a syllable (the probe still counts it) |
 | Unit | 286/286 |
 
+## Gate and review
+
+- **Codex, round 1** (`d7e40fff`): **BLOCK**, two findings:
+  - P2: `ul` with `list-style:none` loses list semantics in WebKit;
+  - P3: no test pinned the withheld roles card.
+
+  Codex also corrected plan D5-3: the denominator is active + blocked.
+
+  Fixed in `a55326e6`: `role="list"` with a lint suppression and its reason, plus a test that fails if a total, bar or shares appear on the roles card.
+- **Codex, round 2:** **PASS**, no new findings. Safari/VoiceOver was not checked: there is no such environment.
+- **Ordered `make check` on `a55326e6`**, Kiri, `COMPOSE_FILE=docker-compose.yml:<kiri>/local-runtime.override.json`, 10:58–11:40 UTC:
+  - result: **GATE_EXIT=0**;
+  - frontend **1502/1502**;
+  - Go **130 `ok` / 0 `FAIL`**;
+  - e2e **168 passed** (24.2 min);
+  - the frontend container ran image `8be1c3d1…`, built in this run at 11:16 UTC.
+
+  The first run on `d7e40fff` was stopped at the `integration` step on purpose, to restart on the commit with the review fixes.
+
 ## Not checked
 
 - Non-empty orders and media: the seed has zeros. The unit tests cover the bar with figures and the empty whole.
