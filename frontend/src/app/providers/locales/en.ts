@@ -27,6 +27,8 @@ export const en = {
       notFound: 'Page not found',
     },
     common: {
+      menu: 'Menu',
+      closeMenu: 'Close menu',
       catalog: 'Courses',
       login: 'Log in',
       home: 'Home',
@@ -1338,6 +1340,8 @@ export const en = {
       },
     },
     page: {
+      notFoundHint: 'The link may be out of date, or the page has moved.',
+      goHome: 'Go to the home page',
       notFound: 'Page not found',
       goToAdmin: 'Back to administration',
       failure: 'Could not open the page',

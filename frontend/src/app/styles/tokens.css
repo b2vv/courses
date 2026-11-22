@@ -180,6 +180,16 @@
   border-radius: var(--radius-control);
   overflow-wrap: anywhere;
 }
+/* A link drawn as a button (a retry that reloads the same address) keeps the button's colours. */
+.ui-link.ui-button {
+  text-decoration: none;
+}
+.ui-link.ui-button--primary {
+  color: var(--color-on-primary);
+}
+.ui-link.ui-button--secondary {
+  color: var(--color-text);
+}
 
 :is(
   .ui-button,
@@ -1173,6 +1183,10 @@
 }
 .ui-state--error {
   border-color: var(--color-danger);
+}
+/* The retry sits apart from the explanation above it. */
+.ui-state > .ui-button {
+  margin-block-start: var(--space-3);
 }
 .ui-skeleton {
   display: grid;

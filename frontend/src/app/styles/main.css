@@ -81,6 +81,9 @@ h2 {
   z-index: 10;
   background: var(--color-background);
   border-bottom: 1px solid var(--color-hairline);
+  /* The header picks its layout by its own width in em (G0 #1): em here is the header's font
+     size, so 200% text reaches the compact layout on a tablet or a small laptop as well. */
+  container: site-header / inline-size;
 }
 .header-inner {
   min-height: 5.25rem;
@@ -187,15 +190,10 @@ nav a {
   flex-wrap: wrap;
 }
 .header-identity-name {
-  display: inline-flex;
-  align-items: center;
-  min-block-size: var(--control-min-size);
+  /* A caption, not a control (G0 #3): no frame, no fill, so it cannot read as a button. */
   min-inline-size: 0;
   max-inline-size: min(16rem, 100%);
-  padding-inline: var(--space-3);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
+  padding-inline-end: var(--space-2);
   color: var(--color-muted);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
@@ -209,11 +207,16 @@ nav a {
   text-decoration: none;
   font-weight: 650;
 }
-.header-cross-nav {
+/* Account and sign-out are quiet controls (G0 #3): text on the header's own ground, a fill only
+   under the pointer, so the one filled control in the header stays «Увійти». */
+.header-cross-nav,
+.header-sign-out.ui-button--secondary {
+  border-color: transparent;
   color: var(--color-text);
-  background: var(--color-background);
+  background: transparent;
 }
-.header-cross-nav[data-hovered] {
+.header-cross-nav[data-hovered],
+.header-sign-out.ui-button--secondary[data-hovered] {
   background: var(--color-surface);
 }
 .header-login {
@@ -224,6 +227,126 @@ nav a {
 .header-login[data-hovered] {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
+}
+/* Exactly one of the two header layouts is shown; the other is display:none (G0 #1). */
+.header-compact {
+  display: none;
+}
+@container site-header (max-width: 60em) {
+  .header-wide {
+    display: none;
+  }
+  .header-compact {
+    display: flex;
+    margin-inline-start: auto;
+  }
+  .header-inner {
+    min-height: 64px;
+    flex-wrap: nowrap;
+    padding-block: 10px;
+  }
+  /* A smaller wordmark in the compact row (G0 #2). */
+  .client-wordmark {
+    min-inline-size: 0;
+    gap: var(--space-2);
+    font-size: 1.125rem;
+  }
+  .client-wordmark .client-wordmark-mark {
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    font-size: 0.75rem;
+  }
+}
+/* With enlarged text on a phone the name no longer fits beside the menu button: the mark stays,
+   and the link keeps its accessible name «CourseForge — головна» (G0 #2). */
+@container site-header (max-width: 16em) {
+  .client-wordmark-text {
+    display: none;
+  }
+}
+.ui-menu-card-trigger svg,
+.ui-menu-card-head svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+/* The menu card: pinned 32 px from the top and right edges and sized to its content (owner
+   2026-11-22, G0 #4); taller content scrolls inside the card. px, not rem, so the inset does not
+   double with enlarged text. */
+.ui-menu-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--color-overlay);
+}
+.ui-menu-card {
+  position: fixed;
+  inset-block-start: 32px;
+  inset-inline-end: 32px;
+  inline-size: min(22rem, calc(100vw - 64px));
+  max-block-size: calc(100dvh - 64px);
+  overflow: auto;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 1.25rem 3rem color-mix(in srgb, var(--color-text) 18%, transparent);
+}
+.ui-menu-card-dialog {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  outline: none;
+}
+.ui-menu-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.ui-menu-card-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+}
+.client-menu-nav {
+  display: grid;
+  gap: var(--space-1);
+}
+.client-menu-nav a {
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+}
+.client-menu-nav a:hover,
+.client-menu-nav a[aria-current='page'] {
+  background: var(--color-surface);
+}
+/* In the card the account block is a column: the name as its caption, then the controls. */
+.ui-menu-card .header-identity {
+  display: grid;
+  justify-content: stretch;
+  gap: var(--space-1);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-hairline);
+}
+.ui-menu-card .header-identity-name {
+  max-inline-size: none;
+  padding-inline: var(--space-3);
+  padding-block-end: var(--space-1);
+}
+.ui-menu-card .header-cross-nav,
+.ui-menu-card .header-sign-out {
+  justify-content: flex-start;
+}
+.ui-menu-card .header-login {
+  inline-size: 100%;
+}
+.ui-menu-card .language-switcher {
+  justify-self: start;
 }
 .sign-out-message {
   padding-block-start: 1rem;
@@ -282,19 +405,11 @@ nav a {
   min-height: 44px;
 }
 .site-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
   border-top: 1px solid var(--color-border);
-  padding-block: 1.8rem;
-  color: var(--color-muted);
-  font-size: 0.9rem;
-}
-.site-footer--storefront {
-  display: block;
   padding-block: clamp(2.5rem, 6vw, 4rem);
   background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 0.9rem;
 }
 .footer-grid {
   display: grid;
@@ -319,6 +434,42 @@ nav a {
 .footer-links a {
   inline-size: fit-content;
   color: var(--color-muted);
+}
+/* Not found and page failure share one layout (G0 #6, #7): a label, the heading, what happened,
+   and the ways back as buttons. */
+.status-page {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  max-inline-size: 40rem;
+  padding-block: clamp(1rem, 6vw, 4rem);
+}
+.status-page h1 {
+  margin: 0;
+}
+.status-page-label {
+  margin: 0;
+  color: var(--color-primary);
+  font: 700 0.875rem var(--font-utility);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+.status-page-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 1.0625rem;
+}
+.status-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block-start: var(--space-3);
+}
+.status-page-actions form {
+  display: contents;
+}
+a.ui-button {
+  text-decoration: none;
 }
 .notice {
   max-width: 42rem;
@@ -420,26 +571,6 @@ nav a {
 @media (max-width: 40rem) {
   .shell {
     width: calc(100% - 2rem);
-  }
-  .header-inner {
-    align-items: flex-start;
-    padding-block: 1rem;
-  }
-  .client-wordmark {
-    align-self: center;
-  }
-  .client-primary-nav,
-  .client-header-actions {
-    flex: 1 1 100%;
-    margin-inline-start: 0;
-  }
-  .client-primary-nav {
-    padding-block-start: var(--space-2);
-    border-block-start: 1px solid var(--color-hairline);
-  }
-  .client-header-actions,
-  .header-identity {
-    justify-content: flex-start;
   }
   nav {
     gap: 1rem;

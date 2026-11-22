@@ -36,7 +36,12 @@ export function IdentityHeader({ user, isSigningOut, onSignOut }: IdentityHeader
           {t('common.toTeach')}
         </Link>
       )}
-      <Button variant="secondary" isDisabled={isSigningOut} onPress={onSignOut}>
+      <Button
+        variant="secondary"
+        className="header-sign-out"
+        isDisabled={isSigningOut}
+        onPress={onSignOut}
+      >
         {isSigningOut ? t('identity.signingOut') : t('identity.signOut')}
       </Button>
     </div>
