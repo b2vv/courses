@@ -751,6 +751,7 @@
 /* Analytics layout: headline figures, then the split cards (design-pass D5, 2026-11-22). */
 .admin-analytics-splits {
   display: grid;
+  align-items: start;
   gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
 }
@@ -903,17 +904,17 @@
 }
 /* The trend metric switch wraps into rows on a narrow screen instead of hiding options behind a
    scroll with no cue (S1 audit #8 class). */
+/* The trend is one card among several, not a hero: a shorter plot on wide screens. */
+.admin-analytics .ui-chart-plot {
+  aspect-ratio: auto;
+  block-size: clamp(9rem, 14vw, 12rem);
+}
 @media (max-width: 40rem) {
   .admin-analytics .ui-segmented {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr));
     border-radius: var(--radius-card);
   }
-}
-.admin-analytics-engagement {
-  display: grid;
-  gap: var(--space-4);
-  align-content: start;
 }
 .admin-analytics-note {
   margin: 0;

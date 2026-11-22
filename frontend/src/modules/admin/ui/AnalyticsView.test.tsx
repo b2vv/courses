@@ -103,13 +103,13 @@ describe('AnalyticsView', () => {
 
   it('renders an em dash for a null average, never a fabricated zero', () => {
     renderView(makeSnapshot());
-    const progressRow = screen.getByText('Середній прогрес').closest('.ui-meter');
-    expect(progressRow).not.toBeNull();
-    expect(within(progressRow as HTMLElement).getByText('—')).toBeTruthy();
-    // No track is drawn for a missing average: a bar would imply a value.
-    expect((progressRow as HTMLElement).querySelector('.ui-meter-track')).toBeNull();
+    const progressTile = screen.getByText('Середній прогрес').closest('.ui-stat');
+    expect(progressTile).not.toBeNull();
+    expect(within(progressTile as HTMLElement).getByText('—')).toBeTruthy();
     const durationFact = screen.getByText('Середнє відео (секунди)').closest('div');
     expect(within(durationFact as HTMLElement).getByText(/—/)).toBeTruthy();
+    // With nothing measured the coverage says so in words, not "measured on 0 assets".
+    expect(within(durationFact as HTMLElement).getByText('немає виміряних відео')).toBeTruthy();
   });
 
   it('splits each whole into named parts with figures and shares, never colour alone', () => {

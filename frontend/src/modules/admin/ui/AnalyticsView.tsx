@@ -169,6 +169,11 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
               value: num.format(snapshot.reports.resolved),
             })}
           />
+          <StatTile label={t('adminAnalytics.avgProgress')} value={avgProgress} />
+          <StatTile
+            label={t('adminAnalytics.completions')}
+            value={num.format(snapshot.engagement.completions)}
+          />
         </div>
       </section>
 
@@ -254,35 +259,17 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
                 <dd>
                   {avgDuration}{' '}
                   <span>
-                    {t('adminAnalytics.durationCoverage', {
-                      count: snapshot.media.withDurationCount,
-                    })}
+                    {snapshot.media.withDurationCount === 0
+                      ? t('adminAnalytics.durationNone')
+                      : t('adminAnalytics.durationCoverage', {
+                          count: snapshot.media.withDurationCount,
+                          value: num.format(snapshot.media.withDurationCount),
+                        })}
                   </span>
                 </dd>
               </div>
             </dl>
           </SegmentedBar>
-        </div>
-      </section>
-
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionEngagement')}</h2>
-          <span>{t('adminAnalytics.subEngagement')}</span>
-        </div>
-        <div className="ui-split admin-analytics-engagement">
-          <ShareMeter
-            label={t('adminAnalytics.avgProgress')}
-            valueLabel={avgProgress}
-            ratio={snapshot.engagement.avgProgress}
-            tone="info"
-          />
-          <p className="admin-analytics-note">
-            {t('adminAnalytics.completionsNote', {
-              count: snapshot.engagement.completions,
-              value: num.format(snapshot.engagement.completions),
-            })}
-          </p>
         </div>
       </section>
 
