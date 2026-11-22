@@ -78,6 +78,29 @@ Fixed during implementation:
 - the sidebar ends at the viewport height in a full-page capture;
 - «Виміряно на 0 активах».
 
+## Owner edits 1–5 (owner 2026-11-22: «Do all 5 items»), commit `526f8841` + gated hyphenation
+
+Recheck on image `f8b142eb` (the container was confirmed running this image; the earlier `up` had failed to unpack on a 98% full Kiri disk, and the owner allowed a `kiri-build` cache prune of 21 GB, leaving 22 GB free).
+
+1. The split cards align to the top: «Ролі» stays compact.
+2. «Середній прогрес» and «Завершені курси» move into the headline tiles (six tiles on desktop, three rows of two on a phone). The «Залученість» section is removed.
+3. The trend plot on analytics is `clamp(9rem, 14vw, 12rem)`, about 200 px at 1440 instead of about 240.
+4. Media: «— немає виміряних відео» instead of «— Виміряно на 0 активах». With measured videos the text reads «виміряно на N відео».
+5. C3 hero: padding is `clamp(16px, 5vw, 64px)` instead of a rem clamp. The title column at 390 with 200% text is 287 px (was 230). Syllable hyphenation for the title switches on only through `@container (max-width: 12em)`, about 8em of width at 200% against 19em at 100%:
+   - at 200%, «фун-дамент»;
+   - at 100%, no hyphens (`hyphens: manual` measured).
+
+   This is not a React Aria tab, so the 2026-11-18 `@container` gotcha does not apply.
+
+Results:
+
+| Check | Result |
+|---|---|
+| Overflow, D5 × 6 viewports and 27 surfaces × 6 | 0 |
+| axe contrast, desktop / phone / phone 200% | 0 violations |
+| Broken words, 27 surfaces | 57 → **51**; the C3 title at 200% now breaks with a hyphen at a syllable (the probe still counts it) |
+| Unit | 286/286 |
+
 ## Not checked
 
 - Non-empty orders and media: the seed has zeros. The unit tests cover the bar with figures and the empty whole.

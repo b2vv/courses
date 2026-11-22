@@ -1604,10 +1604,17 @@ nav a {
 }
 .detail-heading h1 {
   max-width: 18ch;
-  /* A long word that still does not fit (200% text) breaks at a syllable with a hyphen,
-     not at an arbitrary letter; `lang` is set on <html>. */
-  hyphens: auto;
-  hyphenate-limit-chars: 8 4 4;
+}
+/* Enlarged text only: when the hero is narrow relative to its font (about 8em at 200% text on a
+   phone, 19em at 100%), a title word that still does not fit breaks at a syllable with a hyphen
+   instead of an arbitrary letter (`lang` is on <html>). At normal size no hyphens appear. */
+.detail-heading {
+  container-type: inline-size;
+}
+@container (max-width: 12em) {
+  .detail-heading h1 {
+    hyphens: auto;
+  }
 }
 .detail-heading .eyebrow {
   color: var(--color-accent);
