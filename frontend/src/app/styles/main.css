@@ -232,7 +232,9 @@ nav a {
 .header-compact {
   display: none;
 }
-@container site-header (max-width: 60em) {
+/* 68em: the widest signed-in row (an admin or instructor adds a cross-area link) fits in one line
+   from about 1088 px at 100% text; below that the compact layout takes over. */
+@container site-header (max-width: 68em) {
   .header-wide {
     display: none;
   }

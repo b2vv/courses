@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
   Link,
+  useRouter,
   useRouterState,
 } from '@tanstack/react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -207,12 +208,11 @@ function Layout() {
   }, [viewerId, transcriptHistory]);
   const { signOut, isSigningOut, signOutFailed, dismissSignOutFailure } =
     useSignOut(identityDependencies);
-  // The compact header's menu is open only at the address it was opened on, so following a link
-  // inside it closes it without an effect.
-  const locationHref = useRouterState({ select: (state) => state.location.href });
-  const [menuOpenedAt, setMenuOpenedAt] = useState<string | null>(null);
-  const isMenuOpen = menuOpenedAt === locationHref;
-  const setMenuOpen = (isOpen: boolean) => setMenuOpenedAt(isOpen ? locationHref : null);
+  // The compact header's menu closes on every navigation: a link followed inside it, or
+  // Back/Forward while it is open (a remembered address would reopen it on return).
+  const router = useRouter();
+  const [isMenuOpen, setMenuOpen] = useState(false);
+  useEffect(() => router.subscribe('onBeforeNavigate', () => setMenuOpen(false)), [router]);
   const resendVerification = useMutation({
     mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
   });
