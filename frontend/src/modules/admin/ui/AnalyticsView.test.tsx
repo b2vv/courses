@@ -90,7 +90,7 @@ describe('AnalyticsView', () => {
     expect(within(rows[1] as HTMLElement).getByText('Ada')).toBeTruthy();
     expect(within(rows[2] as HTMLElement).getByText('Bob')).toBeTruthy();
     // The instructor dimension is present in single-instructor OFF mode: the
-    // count tile label and the leaderboard section heading.
+    // roles part label and the leaderboard section heading.
     expect(screen.getAllByText('Інструктори')).toHaveLength(2);
     expect((await axe.run(container)).violations).toEqual([]);
   });
@@ -99,6 +99,13 @@ describe('AnalyticsView', () => {
     renderView(makeSnapshot({ platform: { singleInstructor: true } }));
     expect(screen.queryByRole('table', { name: 'Рейтинг інструкторів' })).toBeNull();
     expect(screen.queryAllByText('Інструктори')).toHaveLength(0);
+    // The withheld instructor count means the listed roles are not the whole: no total, bar
+    // or shares may be drawn for them.
+    const roles = screen.getByRole('heading', { name: 'Ролі', level: 3 }).closest('.ui-split');
+    expect((roles as HTMLElement).querySelector('.ui-split-total')).toBeNull();
+    expect((roles as HTMLElement).querySelector('.ui-split-bar')).toBeNull();
+    expect((roles as HTMLElement).querySelector('.ui-split-share')).toBeNull();
+    expect(within(roles as HTMLElement).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('renders an em dash for a null average, never a fabricated zero', () => {
@@ -106,8 +113,60 @@ describe('AnalyticsView', () => {
     const progressTile = screen.getByText('Середній прогрес').closest('.ui-stat');
     expect(progressTile).not.toBeNull();
     expect(within(progressTile as HTMLElement).getByText('—')).toBeTruthy();
-    const durationTile = screen.getByText('Середнє відео (секунди)').closest('.ui-stat');
-    expect(within(durationTile as HTMLElement).getByText('—')).toBeTruthy();
+    const durationFact = screen.getByText('Середнє відео (секунди)').closest('div');
+    expect(within(durationFact as HTMLElement).getByText(/—/)).toBeTruthy();
+    // With nothing measured the coverage says so in words, not "measured on 0 assets".
+    expect(within(durationFact as HTMLElement).getByText('немає виміряних відео')).toBeTruthy();
+  });
+
+  it('splits each whole into named parts with figures and shares, never colour alone', () => {
+    renderView(makeSnapshot());
+    const card = screen.getByRole('heading', { name: 'Замовлення', level: 3 }).closest('.ui-split');
+    expect(card).not.toBeNull();
+    const items = within(card as HTMLElement).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Оплачені250%',
+      'В очікуванні125%',
+      'Невдалі125%',
+    ]);
+    // The bar repeats the list, so it is hidden from assistive tech.
+    expect((card as HTMLElement).querySelector('.ui-split-bar')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+  });
+
+  it('shows an empty track and a note for an all-zero whole, not an invented split', () => {
+    renderView(
+      makeSnapshot({
+        orders: { pending: 0, paid: 0, failed: 0, revenueMinorUAH: 0 },
+      }),
+    );
+    const card = screen.getByRole('heading', { name: 'Замовлення', level: 3 }).closest('.ui-split');
+    const bar = (card as HTMLElement).querySelector('.ui-split-bar');
+    expect(bar?.children).toHaveLength(0);
+    expect(within(card as HTMLElement).getByText('Ще немає даних')).toBeTruthy();
+  });
+
+  it('splits live accounts to the same total as the headline tile, deleted outside the whole', () => {
+    renderView(makeSnapshot());
+    const card = screen.getByRole('heading', { name: 'Акаунти', level: 3 }).closest('.ui-split');
+    // active 5 + blocked 1 = 6, the "Усього акаунтів" figure; deleted (2) is a fact under the bar.
+    expect(within(card as HTMLElement).getByText('6')).toBeTruthy();
+    const tile = screen.getByText('Усього акаунтів').closest('.ui-stat');
+    expect(within(tile as HTMLElement).getByText('6')).toBeTruthy();
+    const deleted = within(card as HTMLElement)
+      .getByText('Видалені')
+      .closest('div');
+    expect(within(deleted as HTMLElement).getByText('2')).toBeTruthy();
+    // Verified and 2FA are shares of the same live accounts.
+    expect(within(card as HTMLElement).getByText('4 з 6 акаунтів · 67%')).toBeTruthy();
+  });
+
+  it('shows each headline figure once', () => {
+    renderView(makeSnapshot());
+    expect(screen.getAllByText('Відкриті скарги')).toHaveLength(1);
+    expect(screen.queryByText('Опубліковані курси')).toBeNull();
+    expect(screen.getByText('Вирішено: 2')).toBeTruthy();
   });
 
   it('shows an honest placeholder for the deferred metrics', () => {

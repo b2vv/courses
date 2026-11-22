@@ -64,4 +64,8 @@ that close an alternative — not on every commit.
 
 Короткий старт і продовження задачі: [work/README.md](work/README.md).
 
-Для Codex і Claude чинний локальний AI Factory adapter (`docs/development/ai-factory.md`, локальний, поза git) задає pinned shared sources, per-task checkpoint та handoff. Локальні acceptance/ADR, стек і обов’язкові gates зберігаються; adapter не дозволяє автоматичний запуск tools/tests або зміну permissions.
+AI Factory підключено як керований kit (через локальний `AGENTS.local.md`, поза git): його правила й skills — завжди остання встановлена версія kit, без pin у цьому репозиторії. Спільні контракти: `ai-factory/pre-code-checkpoint.md`, `ai-factory/review-handoff.md`, `ai-factory/feature-lifecycle.md` у kit. Правила Courses поверх них:
+
+- Звичайний маршрут — task branch у головному репозиторії, один active writer; без автоматичного worktree/clone/detached checkout.
+- Pre-code checkpoint живе в чинному phase/task plan, на який веде [work/tasks.md](work/tasks.md); схвалення фази чи пакета не робить READY усі задачі.
+- Локальні acceptance/ADR, стек і обов’язкові gates мають пріоритет над kit; kit не дозволяє автоматичний запуск tools/tests або зміну permissions.
