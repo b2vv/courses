@@ -20,6 +20,8 @@ export { PageHeader, SummaryStrip } from './layout';
 export type { SummaryItem } from './layout';
 export { EmptyState, ErrorState, Skeleton } from './states';
 export { StatTile } from './StatTile';
+export { SegmentedBar, ShareMeter } from './SegmentedBar';
+export type { SplitPart, SplitTone } from './SegmentedBar';
 export { TrendChart } from './TrendChart';
 export type { TrendPoint } from './TrendChart';
 

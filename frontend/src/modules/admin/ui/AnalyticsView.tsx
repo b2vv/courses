@@ -8,16 +8,17 @@ import { AdminStatsQueryError } from '../../../app/composition/admin-stats-queri
 import type { createAdminStatsQueries } from '../../../app/composition/admin-stats-queries';
 import type { Metric, Snapshot } from '../domain/stats';
 import {
-  EmptyState,
   ErrorState,
   PageHeader,
+  SegmentedBar,
+  ShareMeter,
   SegmentedControl,
   Skeleton,
   StatTile,
   Table,
   TrendChart,
 } from '../../../presentation/ui';
-import type { TableRow, TrendPoint } from '../../../presentation/ui';
+import type { SplitPart, SplitTone, TableRow, TrendPoint } from '../../../presentation/ui';
 
 type StatsQueries = ReturnType<typeof createAdminStatsQueries>;
 
@@ -48,7 +49,6 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
     currency: 'UAH',
     maximumFractionDigits: 0,
   });
-  const percent = new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 });
   const none = t('adminAnalytics.none');
 
   const uah = (minor: number) => money.format(minor / 100);
@@ -60,7 +60,9 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
   const avgProgress =
     snapshot.engagement.avgProgress === null
       ? none
-      : percent.format(snapshot.engagement.avgProgress);
+      : new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 }).format(
+          snapshot.engagement.avgProgress,
+        );
 
   const leaderboardRows: readonly TableRow[] = snapshot.instructors.map((instructor) => ({
     id: instructor.instructorId,
@@ -72,6 +74,67 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
     ],
   }));
 
+  const share = new Intl.NumberFormat(lang, { style: 'percent', maximumFractionDigits: 0 });
+  const formatShare = (value: number) => share.format(value);
+  const part = (id: string, labelKey: string, value: number, tone: SplitTone): SplitPart => ({
+    id,
+    label: t(labelKey),
+    value,
+    display: num.format(value),
+    tone,
+  });
+  const total = (parts: readonly SplitPart[]) =>
+    num.format(parts.reduce((sum, item) => sum + item.value, 0));
+  const empty = t('adminAnalytics.splitEmpty');
+
+  const accounts = [
+    part('active', 'adminAnalytics.active', snapshot.users.active, 'success'),
+    part('blocked', 'adminAnalytics.blocked', snapshot.users.blocked, 'warning'),
+    part('deleted', 'adminAnalytics.deleted', snapshot.users.deleted, 'muted'),
+  ];
+  const roles = [
+    part('student', 'adminAnalytics.students', snapshot.users.byRole.student, 'info'),
+    ...(showInstructors
+      ? [
+          part(
+            'instructor',
+            'adminAnalytics.instructors',
+            snapshot.users.byRole.instructor,
+            'neutral',
+          ),
+        ]
+      : []),
+    part('admin', 'adminAnalytics.admins', snapshot.users.byRole.admin, 'muted'),
+  ];
+  const courses = [
+    part('published', 'adminAnalytics.partPublished', snapshot.courses.published, 'success'),
+    part('draft', 'adminAnalytics.draft', snapshot.courses.draft, 'info'),
+    part('archived', 'adminAnalytics.archived', snapshot.courses.archived, 'muted'),
+  ];
+  const grants = [
+    part('active', 'adminAnalytics.active', snapshot.grants.active, 'success'),
+    part('blocked', 'adminAnalytics.blocked', snapshot.grants.blocked, 'warning'),
+    part('revoked', 'adminAnalytics.partRevoked', snapshot.grants.revoked, 'danger'),
+  ];
+  const orders = [
+    part('paid', 'adminAnalytics.partPaid', snapshot.orders.paid, 'success'),
+    part('pending', 'adminAnalytics.partPending', snapshot.orders.pending, 'warning'),
+    part('failed', 'adminAnalytics.partFailed', snapshot.orders.failed, 'danger'),
+  ];
+  const media = [
+    part('ready', 'adminAnalytics.partReady', snapshot.media.ready, 'success'),
+    part('processing', 'adminAnalytics.partProcessing', snapshot.media.inProgress, 'info'),
+    part('failed', 'adminAnalytics.partErrored', snapshot.media.failed, 'danger'),
+  ];
+  // Verified/2FA count every non-deleted account (active + blocked), like the role counts.
+  const liveAccounts = snapshot.users.active + snapshot.users.blocked;
+  const ofAccounts = (value: number) =>
+    t('adminAnalytics.ofAccounts', {
+      value: num.format(value),
+      total: num.format(liveAccounts),
+      share: liveAccounts > 0 ? share.format(value / liveAccounts) : none,
+    });
+
   return (
     <section className="admin-analytics">
       <PageHeader
@@ -80,19 +143,18 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
         description={t('adminAnalytics.lede')}
       />
 
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionPlatform')}</h2>
-          <span>{t('adminAnalytics.subPlatform')}</span>
-        </div>
-        <div className="admin-analytics-grid">
+      <section className="admin-analytics-group" aria-labelledby="analytics-headline">
+        <h2 id="analytics-headline" className="ui-visually-hidden">
+          {t('adminAnalytics.sectionPlatform')}
+        </h2>
+        <div className="admin-analytics-grid admin-analytics-kpis">
           <StatTile
             label={t('adminAnalytics.totalAccounts')}
             value={num.format(snapshot.users.active + snapshot.users.blocked)}
           />
           <StatTile
-            label={t('adminAnalytics.published')}
-            value={num.format(snapshot.courses.published)}
+            label={t('adminAnalytics.activeLearners')}
+            value={num.format(snapshot.engagement.activeLearners30d)}
           />
           <StatTile
             label={t('adminAnalytics.revenue')}
@@ -101,98 +163,85 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
           <StatTile
             label={t('adminAnalytics.openReports')}
             value={num.format(snapshot.reports.open)}
+            meta={t('adminAnalytics.resolvedMeta', {
+              count: snapshot.reports.resolved,
+              value: num.format(snapshot.reports.resolved),
+            })}
           />
         </div>
       </section>
 
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionPeople')}</h2>
-          <span>{t('adminAnalytics.subPeople')}</span>
-        </div>
-        <div className="admin-analytics-grid">
-          <StatTile label={t('adminAnalytics.active')} value={num.format(snapshot.users.active)} />
-          <StatTile
-            label={t('adminAnalytics.blocked')}
-            value={num.format(snapshot.users.blocked)}
-          />
-          <StatTile
-            label={t('adminAnalytics.deleted')}
-            value={num.format(snapshot.users.deleted)}
-          />
-          <StatTile
-            label={t('adminAnalytics.verified')}
-            value={num.format(snapshot.users.verified)}
-          />
-          <StatTile
-            label={t('adminAnalytics.twoFactor')}
-            value={num.format(snapshot.users.twoFactor)}
-          />
-          <StatTile
-            label={t('adminAnalytics.students')}
-            value={num.format(snapshot.users.byRole.student)}
-          />
-          {showInstructors ? (
-            <StatTile
-              label={t('adminAnalytics.instructors')}
-              value={num.format(snapshot.users.byRole.instructor)}
-            />
-          ) : null}
-          <StatTile
-            label={t('adminAnalytics.admins')}
-            value={num.format(snapshot.users.byRole.admin)}
-          />
-        </div>
-      </section>
+      <TrendSection stats={stats} />
 
       <section className="admin-analytics-group">
         <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionContent')}</h2>
-          <span>{t('adminAnalytics.subContent')}</span>
+          <h2>{t('adminAnalytics.sectionSplits')}</h2>
+          <span>{t('adminAnalytics.subSplits')}</span>
         </div>
-        <div className="admin-analytics-grid">
-          <StatTile label={t('adminAnalytics.draft')} value={num.format(snapshot.courses.draft)} />
-          <StatTile
-            label={t('adminAnalytics.published')}
-            value={num.format(snapshot.courses.published)}
+        <div className="admin-analytics-splits">
+          <SegmentedBar
+            title={t('adminAnalytics.splitAccounts')}
+            totalLabel={total(accounts)}
+            parts={accounts}
+            formatShare={formatShare}
+            emptyLabel={empty}
           />
-          <StatTile
-            label={t('adminAnalytics.archived')}
-            value={num.format(snapshot.courses.archived)}
+          {/* A single-instructor platform withholds the instructor count (admin-stats 9a), so the
+              listed roles are not the whole: no total, bar or shares then. */}
+          <SegmentedBar
+            title={t('adminAnalytics.splitRoles')}
+            {...(showInstructors ? { totalLabel: total(roles) } : {})}
+            parts={roles}
+            formatShare={formatShare}
+            emptyLabel={empty}
+            isWhole={showInstructors}
           />
-        </div>
-      </section>
-
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionAccess')}</h2>
-          <span>{t('adminAnalytics.subAccess')}</span>
-        </div>
-        <div className="admin-analytics-grid">
-          <StatTile
-            label={t('adminAnalytics.grantsActive')}
-            value={num.format(snapshot.grants.active)}
+          <SegmentedBar
+            title={t('adminAnalytics.splitCourses')}
+            totalLabel={total(courses)}
+            parts={courses}
+            formatShare={formatShare}
+            emptyLabel={empty}
           />
-          <StatTile
-            label={t('adminAnalytics.grantsBlocked')}
-            value={num.format(snapshot.grants.blocked)}
+          <SegmentedBar
+            title={t('adminAnalytics.splitGrants')}
+            totalLabel={total(grants)}
+            parts={grants}
+            formatShare={formatShare}
+            emptyLabel={empty}
           />
-          <StatTile
-            label={t('adminAnalytics.grantsRevoked')}
-            value={num.format(snapshot.grants.revoked)}
+          <SegmentedBar
+            title={t('adminAnalytics.splitOrders')}
+            totalLabel={total(orders)}
+            parts={orders}
+            formatShare={formatShare}
+            emptyLabel={empty}
           />
-          <StatTile
-            label={t('adminAnalytics.ordersPending')}
-            value={num.format(snapshot.orders.pending)}
-          />
-          <StatTile
-            label={t('adminAnalytics.ordersPaid')}
-            value={num.format(snapshot.orders.paid)}
-          />
-          <StatTile
-            label={t('adminAnalytics.ordersFailed')}
-            value={num.format(snapshot.orders.failed)}
-          />
+          <SegmentedBar
+            title={t('adminAnalytics.splitMedia')}
+            totalLabel={total(media)}
+            parts={media}
+            formatShare={formatShare}
+            emptyLabel={empty}
+          >
+            <dl className="ui-split-facts">
+              <div>
+                <dt>{t('adminAnalytics.totalDuration')}</dt>
+                <dd>{num.format(Math.round(snapshot.media.totalDurationSeconds))}</dd>
+              </div>
+              <div>
+                <dt>{t('adminAnalytics.avgDuration')}</dt>
+                <dd>
+                  {avgDuration}{' '}
+                  <span>
+                    {t('adminAnalytics.durationCoverage', {
+                      count: snapshot.media.withDurationCount,
+                    })}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+          </SegmentedBar>
         </div>
       </section>
 
@@ -201,63 +250,31 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
           <h2>{t('adminAnalytics.sectionEngagement')}</h2>
           <span>{t('adminAnalytics.subEngagement')}</span>
         </div>
-        <div className="admin-analytics-grid">
-          <StatTile
-            label={t('adminAnalytics.activeLearners')}
-            value={num.format(snapshot.engagement.activeLearners30d)}
+        <div className="ui-split admin-analytics-engagement">
+          <ShareMeter
+            label={t('adminAnalytics.avgProgress')}
+            valueLabel={avgProgress}
+            ratio={snapshot.engagement.avgProgress}
+            tone="info"
           />
-          <StatTile label={t('adminAnalytics.avgProgress')} value={avgProgress} />
-          <StatTile
-            label={t('adminAnalytics.completions')}
-            value={num.format(snapshot.engagement.completions)}
+          <ShareMeter
+            label={t('adminAnalytics.verifiedShare')}
+            valueLabel={ofAccounts(snapshot.users.verified)}
+            ratio={liveAccounts > 0 ? snapshot.users.verified / liveAccounts : null}
+            tone="success"
           />
-        </div>
-      </section>
-
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionOperations')}</h2>
-          <span>{t('adminAnalytics.subOperations')}</span>
-        </div>
-        <div className="admin-analytics-grid">
-          <StatTile
-            label={t('adminAnalytics.mediaInProgress')}
-            value={num.format(snapshot.media.inProgress)}
+          <ShareMeter
+            label={t('adminAnalytics.twoFactorShare')}
+            valueLabel={ofAccounts(snapshot.users.twoFactor)}
+            ratio={liveAccounts > 0 ? snapshot.users.twoFactor / liveAccounts : null}
+            tone="success"
           />
-          <StatTile
-            label={t('adminAnalytics.mediaReady')}
-            value={num.format(snapshot.media.ready)}
-          />
-          <StatTile
-            label={t('adminAnalytics.mediaFailed')}
-            value={num.format(snapshot.media.failed)}
-          />
-          <StatTile
-            label={t('adminAnalytics.totalDuration')}
-            value={num.format(Math.round(snapshot.media.totalDurationSeconds))}
-          />
-          <StatTile
-            label={t('adminAnalytics.avgDuration')}
-            value={avgDuration}
-            meta={t('adminAnalytics.durationCoverage', { count: snapshot.media.withDurationCount })}
-          />
-        </div>
-      </section>
-
-      <section className="admin-analytics-group">
-        <div className="group-heading">
-          <h2>{t('adminAnalytics.sectionModeration')}</h2>
-          <span>{t('adminAnalytics.subModeration')}</span>
-        </div>
-        <div className="admin-analytics-grid">
-          <StatTile
-            label={t('adminAnalytics.openReports')}
-            value={num.format(snapshot.reports.open)}
-          />
-          <StatTile
-            label={t('adminAnalytics.resolvedReports')}
-            value={num.format(snapshot.reports.resolved)}
-          />
+          <p className="admin-analytics-note">
+            {t('adminAnalytics.completionsNote', {
+              count: snapshot.engagement.completions,
+              value: num.format(snapshot.engagement.completions),
+            })}
+          </p>
         </div>
       </section>
 
@@ -281,13 +298,13 @@ export function AnalyticsView({ snapshot, stats }: AnalyticsViewProps) {
         </section>
       ) : null}
 
-      <TrendSection stats={stats} />
-
-      <section className="admin-analytics-group">
+      <section className="admin-analytics-group admin-analytics-deferred">
         <h2>{t('adminAnalytics.sectionDeferred')}</h2>
-        <EmptyState title={t('adminAnalytics.deferredTitle')}>
-          <p>{t('adminAnalytics.deferredHint')}</p>
-        </EmptyState>
+        <p className="admin-analytics-note">
+          <strong>{t('adminAnalytics.deferredTitle')}</strong>
+          {' — '}
+          {t('adminAnalytics.deferredHint')}
+        </p>
       </section>
     </section>
   );

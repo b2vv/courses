@@ -61,6 +61,9 @@
 
   /* Data-viz secondary only (duration, allocation, chart series 2). */
   --color-viz-purple: #8668f3;
+  /* Grey parts of a split bar (D5). Validated on #111317 with the signal colours, dataviz script 2026-11-22. */
+  --color-viz-neutral: #a3abb8;
+  --color-viz-muted: #5d6573;
   /* Lightened purple ink for the instructor role tag text on its tinted chip. */
   --color-viz-purple-text: #b3a1ff;
 
@@ -103,7 +106,8 @@
 
 /* Stat tiles read as raised cards on the admin dashboard — surface fill + card shadow, same
    grammar as .ui-card. Scoped to admin so the base .ui-stat primitive stays flat for any client use. */
-[data-surface='admin'] .ui-stat {
+[data-surface='admin'] .ui-stat,
+[data-surface='admin'] .ui-split {
   background: var(--color-surface);
   box-shadow: var(--card-shadow);
 }
