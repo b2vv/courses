@@ -12,7 +12,7 @@ export {
   RadioGroup,
 } from './controls';
 export type { ChoiceOption, SegmentedOption } from './controls';
-export { Dialog, Menu, Tabs, Tooltip, Toast } from './overlays';
+export { Dialog, Menu, MenuCard, Tabs, Tooltip, Toast } from './overlays';
 export type { MenuOption, TabItem } from './overlays';
 export { Table, DataTable, ProgressBar, LoadMeter, Delta, Pagination } from './data';
 export type { TableColumn, TableRow, MeterTone, DataColumn, DataTableSort } from './data';

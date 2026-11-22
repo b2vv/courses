@@ -24,7 +24,13 @@ export function ErrorState({ title, children, retryHref, retryLabel, onRetry }: 
     <section className="ui-state ui-state--error" role="alert">
       <h2>{title}</h2>
       {children}
-      {retryHref && <Link href={retryHref}>{retryLabel}</Link>}
+      {retryHref && (
+        // A link, because a retry reloads the same address; drawn as the primary button so
+        // the action looks the same wherever a load fails (G0 #6).
+        <Link href={retryHref} className="ui-button ui-button--primary">
+          {retryLabel}
+        </Link>
+      )}
       {onRetry && (
         <Button type="button" onPress={onRetry}>
           {retryLabel}

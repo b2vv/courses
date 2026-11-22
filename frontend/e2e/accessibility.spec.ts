@@ -247,8 +247,12 @@ test.describe('with a stored admin session', () => {
     await page.goto('/');
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
 
-    const administration = page.getByRole('link', { name: 'В адмінку' });
-    const signOut = page.getByRole('button', { name: 'Вийти' });
+    // At 200% text the header is in its compact layout (G0): the account controls live in the
+    // menu card, so open it and measure them there.
+    await page.getByRole('button', { name: 'Меню' }).click();
+    const menu = page.getByRole('dialog', { name: 'Меню' });
+    const administration = menu.getByRole('link', { name: 'В адмінку' });
+    const signOut = menu.getByRole('button', { name: 'Вийти' });
     const administrationBox = await administration.boundingBox();
     const signOutBox = await signOut.boundingBox();
     if (administrationBox === null || signOutBox === null)
@@ -256,9 +260,10 @@ test.describe('with a stored admin session', () => {
     expect(Math.min(administrationBox.width, administrationBox.height)).toBeGreaterThanOrEqual(44);
     expect(Math.min(signOutBox.width, signOutBox.height)).toBeGreaterThanOrEqual(44);
 
-    const overlaps = await page.locator('.header-inner').evaluate((header) => {
-      const navigation = header.querySelector('nav');
-      if (navigation === null) return ['navigation missing'];
+    const overlaps = await page.locator('.ui-menu-card').evaluate((card) => {
+      const navigation = card.querySelector('nav');
+      const identity = card.querySelector('.header-identity');
+      if (navigation === null || identity === null) return ['menu content missing'];
       const findOverlaps = (elements: Element[]) => {
         const items = elements.map((element) => ({
           label: element.textContent,
@@ -277,8 +282,9 @@ test.describe('with a stored admin session', () => {
         );
       };
       return [
-        ...findOverlaps(Array.from(header.children)),
+        ...findOverlaps([navigation, identity]),
         ...findOverlaps(Array.from(navigation.children)),
+        ...findOverlaps(Array.from(identity.children)),
       ];
     });
     expect(overlaps).toEqual([]);
@@ -387,8 +393,12 @@ test.describe('with a stored student session', () => {
     expect(darkContrast.incomplete).toEqual([]);
     await expectPlaybackLayout(page, controls, playbackControls);
 
-    await page.getByRole('button', { name: 'EN' }).click();
+    // On a phone the language switch lives in the header's menu card (G0): open it, switch, close.
+    await page.getByRole('button', { name: 'Меню' }).click();
+    await page.getByRole('dialog', { name: 'Меню' }).getByRole('button', { name: 'EN' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     const englishControls = [
       page.getByRole('button', { name: 'Play', exact: true }),
       page.getByRole('slider', { name: 'Playback position', exact: true }),

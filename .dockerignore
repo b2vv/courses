@@ -7,3 +7,6 @@
 media
 **/test-results
 **/playwright-report
+frontend/test-logs
+frontend/playwright
+frontend/storybook-static

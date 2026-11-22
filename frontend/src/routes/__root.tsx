@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
   Link,
+  useRouter,
   useRouterState,
 } from '@tanstack/react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -12,7 +13,7 @@ import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
 import type { TeachDependencies } from '../app/composition/teach';
 import type { createEnrollmentDependencies } from '../app/composition/enrollment';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../modules/transcript';
 import { useSignOut } from '../app/composition/use-sign-out';
@@ -22,7 +23,7 @@ import type { TranscriptHistoryStore } from '../modules/transcript';
 import { LanguageSwitcher } from '../presentation/LanguageSwitcher';
 import { IdentityHeader } from '../modules/identity';
 import { EmailVerificationBanner } from '../modules/identity';
-import { Toast } from '../presentation/ui';
+import { MenuCard, Toast } from '../presentation/ui';
 import { resolveRootIdentity, type RootIdentityContext } from '../app/composition/root-identity';
 import type { createI18n } from '../app/providers/i18n';
 import { pageTitle } from '../app/composition/page-title';
@@ -64,33 +65,83 @@ export const Route = createRootRouteWithContext<RootRouteContext>()({
   errorComponent: PageError,
 });
 
+/** One layout for a page that could not be shown: a short label, the heading, what happened and
+ * the ways back as buttons (G0 #6, #7). */
+function StatusPage({
+  label,
+  title,
+  hint,
+  isAlert = false,
+  children,
+}: {
+  label?: string;
+  title: string;
+  hint: string;
+  isAlert?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className="status-page" {...(isAlert ? { role: 'alert' } : {})}>
+      {label === undefined ? null : <p className="status-page-label">{label}</p>}
+      <h1>{title}</h1>
+      <p className="status-page-hint">{hint}</p>
+      <div className="status-page-actions">{children}</div>
+    </section>
+  );
+}
+
 function NotFound() {
   const { t } = useTranslation();
+  const { identityDependencies } = Route.useRouteContext();
+  const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
   const onAdminPath = useRouterState({
     select: (state) =>
       state.location.pathname === '/admin' || state.location.pathname.startsWith('/admin/'),
   });
+  // Plain anchors: a not-found answer can sit under a shell that is not the destination's (a
+  // refused viewer on an admin path), so the way back is a full page load.
   return (
-    <section className="notice">
-      <h1>{t('page.notFound')}</h1>
-      <a href={onAdminPath ? '/admin' : '/courses'}>
-        {t(onAdminPath ? 'page.goToAdmin' : 'catalog.goToCatalog')}
-      </a>
-    </section>
+    <StatusPage label="404" title={t('page.notFound')} hint={t('page.notFoundHint')}>
+      {onAdminPath ? (
+        <a className="ui-button ui-button--primary" href="/admin">
+          {t('page.goToAdmin')}
+        </a>
+      ) : session.data ? (
+        <>
+          <a className="ui-button ui-button--primary" href="/learn">
+            {t('common.myLearning')}
+          </a>
+          <a className="ui-button ui-button--secondary" href="/courses">
+            {t('common.catalog')}
+          </a>
+        </>
+      ) : (
+        <>
+          <a className="ui-button ui-button--primary" href="/courses">
+            {t('catalog.goToCatalog')}
+          </a>
+          <a className="ui-button ui-button--secondary" href="/">
+            {t('page.goHome')}
+          </a>
+        </>
+      )}
+    </StatusPage>
   );
 }
 function PageError() {
   const { t } = useTranslation();
+  // A form, so the retry works before hydration and after a failed client bundle.
   return (
-    <section className="notice" role="alert">
-      <h1>{t('page.failure')}</h1>
-      <p>{t('page.failureHint')}</p>
+    <StatusPage title={t('page.failure')} hint={t('page.failureHint')} isAlert>
       <form method="get">
         <button type="submit" className="ui-button ui-button--primary">
           {t('common.retry')}
         </button>
       </form>
-    </section>
+      <a className="ui-button ui-button--secondary" href="/">
+        {t('page.goHome')}
+      </a>
+    </StatusPage>
   );
 }
 
@@ -113,10 +164,6 @@ function Layout() {
   const { t } = useTranslation();
   const { identityDependencies, transcriptHistory } = Route.useRouteContext();
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
-  const isStorefront = useRouterState({
-    select: (state) =>
-      state.location.pathname === '/' || state.location.pathname.startsWith('/courses'),
-  });
   // Client vs admin surface: the admin and instructor workspaces are a separate
   // app with their own shell (AdminShell) and the NorthWind theme; the client
   // header/footer are suppressed there. The admin surface needs BOTH an admin
@@ -161,6 +208,11 @@ function Layout() {
   }, [viewerId, transcriptHistory]);
   const { signOut, isSigningOut, signOutFailed, dismissSignOutFailure } =
     useSignOut(identityDependencies);
+  // The compact header's menu closes on every navigation: a link followed inside it, or
+  // Back/Forward while it is open (a remembered address would reopen it on return).
+  const router = useRouter();
+  const [isMenuOpen, setMenuOpen] = useState(false);
+  useEffect(() => router.subscribe('onBeforeNavigate', () => setMenuOpen(false)), [router]);
   const resendVerification = useMutation({
     mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
   });
@@ -261,17 +313,48 @@ function Layout() {
             </span>
             <span className="client-wordmark-text">CourseForge</span>
           </Link>
-          <nav className="client-primary-nav" aria-label={t('common.mainNavigation')}>
+          {/* Two layouts of the same header; CSS shows exactly one by the header's width in em,
+              so enlarged text switches to the compact one too (G0 #1). The hidden one is
+              display:none and so out of the accessibility tree. */}
+          <nav className="client-primary-nav header-wide" aria-label={t('common.mainNavigation')}>
             <Link to="/courses">{t('common.catalog')}</Link>
             {session.data ? <Link to="/learn">{t('common.myLearning')}</Link> : null}
           </nav>
-          <div className="client-header-actions">
+          <div className="client-header-actions header-wide">
             <IdentityHeader
               user={session.data ?? null}
               isSigningOut={isSigningOut}
               onSignOut={signOut}
             />
             <LanguageSwitcher />
+          </div>
+          <div className="header-compact">
+            <MenuCard
+              triggerLabel={t('common.menu')}
+              title={t('common.menu')}
+              closeLabel={t('common.closeMenu')}
+              isOpen={isMenuOpen}
+              onOpenChange={setMenuOpen}
+            >
+              {/* A press closes the menu even on the current page's own link, where the
+                  address, and so the open state, would not change. */}
+              <nav className="client-menu-nav" aria-label={t('common.mainNavigation')}>
+                <Link to="/courses" onClick={() => setMenuOpen(false)}>
+                  {t('common.catalog')}
+                </Link>
+                {session.data ? (
+                  <Link to="/learn" onClick={() => setMenuOpen(false)}>
+                    {t('common.myLearning')}
+                  </Link>
+                ) : null}
+              </nav>
+              <IdentityHeader
+                user={session.data ?? null}
+                isSigningOut={isSigningOut}
+                onSignOut={signOut}
+              />
+              <LanguageSwitcher />
+            </MenuCard>
           </div>
         </div>
       </header>
@@ -291,31 +374,25 @@ function Layout() {
       <main id="main" className="shell main-content" tabIndex={-1}>
         <Outlet />
       </main>
-      {isStorefront ? (
-        <footer className="site-footer site-footer--storefront">
-          <div className="shell footer-grid">
-            <div className="footer-brand">
-              {/* Named by its visible text, not homeLabel: the header wordmark
-                  already owns "CourseForge — home", and two links sharing one
-                  accessible name make the header link ambiguous. */}
-              <Link to="/" className="wordmark">
-                <span aria-hidden="true">{'</>'}</span>CourseForge
-              </Link>
-              <p>{t('common.tagline')}</p>
-            </div>
-            <nav aria-label={t('common.footerLearning')} className="footer-links">
-              <strong>{t('common.footerLearning')}</strong>
-              <Link to="/courses">{t('common.catalog')}</Link>
-              <Link to="/learn">{t('common.myLearning')}</Link>
-            </nav>
+      {/* One footer on every client page (G0 #5); signed-in links only for a signed-in viewer (#8). */}
+      <footer className="site-footer">
+        <div className="shell footer-grid">
+          <div className="footer-brand">
+            {/* Named by its visible text, not homeLabel: the header wordmark
+                already owns "CourseForge — home", and two links sharing one
+                accessible name make the header link ambiguous. */}
+            <Link to="/" className="wordmark">
+              <span aria-hidden="true">{'</>'}</span>CourseForge
+            </Link>
+            <p>{t('common.tagline')}</p>
           </div>
-        </footer>
-      ) : (
-        <footer className="shell site-footer">
-          <span>CourseForge</span>
-          <span>{t('common.tagline')}</span>
-        </footer>
-      )}
+          <nav aria-label={t('common.footerLearning')} className="footer-links">
+            <strong>{t('common.footerLearning')}</strong>
+            <Link to="/courses">{t('common.catalog')}</Link>
+            {session.data ? <Link to="/learn">{t('common.myLearning')}</Link> : null}
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

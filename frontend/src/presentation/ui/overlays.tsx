@@ -59,6 +59,59 @@ export function Dialog({
   );
 }
 
+type MenuCardProps = {
+  /** Visible text of the trigger button, e.g. "Menu". */
+  triggerLabel: string;
+  /** Dialog heading. */
+  title: string;
+  /** Accessible name of the icon-only close button. */
+  closeLabel: string;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  children: ReactNode;
+};
+
+/**
+ * A menu that opens as a card pinned to the top right of the viewport, sized to its content
+ * (owner 2026-11-22: a card fixed to the right with a 32 px margin, not a sliding sheet). It is
+ * a modal dialog: focus is held inside, Escape or a press outside closes it, and focus returns
+ * to the trigger. The state is controlled so the caller can close it on navigation.
+ */
+export function MenuCard({
+  triggerLabel,
+  title,
+  closeLabel,
+  isOpen,
+  onOpenChange,
+  children,
+}: MenuCardProps) {
+  return (
+    <Aria.DialogTrigger isOpen={isOpen} onOpenChange={onOpenChange}>
+      <Button variant="secondary" className="ui-menu-card-trigger">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M3 5h14M3 10h14M3 15h14" />
+        </svg>
+        {triggerLabel}
+      </Button>
+      <Aria.ModalOverlay className="ui-menu-card-overlay" isDismissable>
+        <Aria.Modal className="ui-menu-card">
+          <Aria.Dialog className="ui-menu-card-dialog">
+            <div className="ui-menu-card-head">
+              <Aria.Heading slot="title">{title}</Aria.Heading>
+              <Button variant="secondary" slot="close" aria-label={closeLabel}>
+                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </Button>
+            </div>
+            {children}
+          </Aria.Dialog>
+        </Aria.Modal>
+      </Aria.ModalOverlay>
+    </Aria.DialogTrigger>
+  );
+}
+
 export type MenuOption = { id: string; label: string; isDisabled?: boolean };
 
 type MenuProps = {
