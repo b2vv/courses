@@ -56,16 +56,18 @@ h3,
 p {
   overflow-wrap: anywhere;
 }
+/* Phone scale (design-pass TYPE, owner 2026-11-22): ~30 px h1 and ~21 px h2 at 390 instead of
+   38/26 px; desktop sizes stay within 2 px of the old 5vw. The rem floor keeps 200% text scaling. */
 h1 {
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  font-size: clamp(1.875rem, 0.4rem + 4.5vw, 4.6rem);
   line-height: 1.03;
   letter-spacing: -0.045em;
   margin: 0.3em 0 0.5em;
   font-weight: 700;
 }
 h2 {
-  font-size: 1.6rem;
+  font-size: clamp(1.3125rem, 1.05rem + 0.6vw, 1.6rem);
   line-height: 1.25;
   letter-spacing: -0.025em;
   font-weight: 700;
@@ -777,7 +779,7 @@ nav a {
 /* Admin headings are dense-scale: the client's display h1 (up to 4.6rem) is
    for the storefront; a course title in the editor is a working heading. */
 [data-surface='admin'] h1 {
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.5rem, 0.9rem + 2vw, 2.4rem);
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
@@ -1707,7 +1709,7 @@ nav a {
 }
 .home-hero h1 {
   max-inline-size: 13ch;
-  font-size: clamp(2.5rem, 5.2vw, 4.9rem);
+  font-size: clamp(2.0625rem, 0.4rem + 4.8vw, 4.9rem);
 }
 .home-hero h1 em {
   font-style: normal;
