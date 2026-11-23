@@ -72,6 +72,8 @@ describe('identity domain', () => {
     ['a path below a course', '/courses/go/lessons'],
     ['a course slug with a capital', '/courses/Go'],
     ['a course slug with a double hyphen', '/courses/go--x'],
+    ['a course page with a query', '/courses/go?q=x'],
+    ['a course page with a trailing slash', '/courses/go/'],
     ['a scheme-relative course path', '//courses/go'],
     ['an encoded course path', '%2fcourses/go'],
     ['an empty value', ''],
@@ -95,7 +97,6 @@ describe('identity domain', () => {
     ['an order path', '/orders/7f3a', '/orders/7f3a'],
     // The one public destination: a guest signs in from a course page and returns to it (C3 #1).
     ['a course page', '/courses/go-backend-foundations', '/courses/go-backend-foundations'],
-    ['a course page with a trailing slash', '/courses/go/', '/courses/go'],
   ])('keeps %s', (_name, value, expected) => {
     expect(safeReturnTo(value)).toBe(expected);
   });

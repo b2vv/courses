@@ -1,4 +1,5 @@
 import { createFileRoute, notFound, useNavigate } from '@tanstack/react-router';
+import { useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
@@ -53,22 +54,35 @@ function CourseRoute() {
   const userId = user?.id ?? 'anonymous';
   // One bounded recovery for a 401 from any protected read (plan §16, the 401 rule): re-read the
   // session once; anonymous ends the cycle (the box becomes the guest's), a failed re-read is
-  // "unavailable", and a confirmed session earns exactly one repeat of the read.
+  // "unavailable", and a confirmed session earns exactly one repeat of each read. The session
+  // re-read is shared by every read of the same viewer and course (one budget per cycle), and the
+  // cycle ends only on a manual retry, another viewer or another course. The reads below never
+  // refetch on their own (focus, reconnect), so a settled failure stays settled until the user
+  // retries.
+  const cycle = `${userId}:${data.id}`;
+  const recheck = useRef<{ cycle: string; session: Promise<unknown> | undefined }>({
+    cycle,
+    session: undefined,
+  });
+  if (recheck.current.cycle !== cycle) recheck.current = { cycle, session: undefined };
   const withSessionRecheck = async <T,>(read: () => Promise<T>): Promise<T> => {
     try {
       return await read();
     } catch (error) {
       if (!isAuthenticationRequired(error)) throw error;
-      const current = await queryClient.fetchQuery(identityDependencies.current());
+      const budget = recheck.current;
+      budget.session ??= queryClient.fetchQuery(identityDependencies.current());
+      const current = await budget.session;
       if (current === null) throw error;
       return read();
     }
   };
+  const manualOnly = { retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false };
   const membership = useQuery({
     ...enrollment.membership(data.id, userId),
     queryFn: ({ signal }) => withSessionRecheck(() => enrollment.readMembership(data.id, signal)),
     enabled: user !== null,
-    retry: false,
+    ...manualOnly,
   });
   const authorship = useQuery({
     queryKey: ['course-authorship', userId, data.id] as const,
@@ -87,7 +101,7 @@ function CourseRoute() {
         },
       ),
     enabled: user?.role === 'instructor',
-    retry: false,
+    ...manualOnly,
   });
   const ownReview = useQuery({
     ...catalog.ownReview(data.id, userId),
@@ -171,6 +185,8 @@ function CourseRoute() {
         )
       }
       onRetryAccess={() => {
+        // A manual retry opens a new recovery cycle.
+        recheck.current = { cycle, session: undefined };
         void session.refetch();
         if (user !== null) void membership.refetch();
         if (user?.role === 'instructor') void authorship.refetch();

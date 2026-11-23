@@ -124,15 +124,16 @@ export function safeReturnTo(value: string | undefined, fallback = '/learn'): st
     const code = character.codePointAt(0) ?? 0;
     if (code < 0x20 || code === 0x7f) return fallback;
   }
+  // A course page is the one public destination: a guest signs in from it to enrol or buy and
+  // comes back to the same course (design-pass C3 #1). Only the exact slug path, with no query,
+  // trailing slash or anything below the course.
+  if (value.startsWith('/courses'))
+    return /^\/courses\/[a-z0-9]+(-[a-z0-9]+)*$/.test(value) ? value : fallback;
   const searchIndex = value.indexOf('?');
   let path = searchIndex === -1 ? value : value.slice(0, searchIndex);
   const search = searchIndex === -1 ? '' : value.slice(searchIndex);
   if (path.endsWith('/')) path = path.slice(0, -1);
-  // A course page is the one public destination: a guest signs in from it to enrol or buy and
-  // comes back to the same course (design-pass C3 #1). Only the exact slug path, not the catalog
-  // or anything below a course.
-  const coursePage = /^\/courses\/[a-z0-9]+(-[a-z0-9]+)*$/.test(path);
-  if (!coursePage && !/^\/(learn|admin|teach|settings|orders)(\/|$)/.test(path)) return fallback;
+  if (!/^\/(learn|admin|teach|settings|orders)(\/|$)/.test(path)) return fallback;
   if (path.split('/').some((segment) => segment === '.' || segment === '..')) return fallback;
   return path + (search === '?' ? '' : search);
 }
