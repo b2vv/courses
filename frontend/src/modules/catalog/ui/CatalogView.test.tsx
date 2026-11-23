@@ -311,8 +311,8 @@ describe('catalog presentation', () => {
   });
 
   it('computes the last page with courses, not the first, for several pages', () => {
-    // 25 courses, 10 per page: pages start at 0, 10 and 20, so the last one is 20, whether
-    // the total ends a page exactly (20) or not (25).
+    // 10 per page: 25 courses fill pages at 0, 10 and 20, so the last is 20; exactly 20
+    // courses fill pages at 0 and 10, so the last is 10.
     for (const [total, offset] of [
       [25, '20'],
       [20, '10'],
