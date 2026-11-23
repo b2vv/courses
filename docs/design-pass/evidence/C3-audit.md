@@ -148,3 +148,14 @@ The Tab order matches the visual order. Focus is visible (3 px) on every stop. A
 - **Contrast:** axe (`wcag2a/aa/21aa/22aa`) found 0 violations and 0 contrast `incomplete` items in all 26 captures, including the light lede on the dark header block.
 - **Real browser zoom:** NOT_TESTED, because 200% is simulated.
 - **Screen reader:** NOT_TESTED.
+
+## Owner answers
+
+2026-11-23, owner: «Все треба правити бо не логічно виглядає все» (all 11, including suspect #11). Follow-up questions, answered the same day:
+
+| # | Answer | Date |
+|---|---|---|
+| 1, 3–10 | fix | 2026-11-23 |
+| 2 | a published course with no lessons offers **only «Скоро буде»**: no enrol, no «Почати навчання», no buy | 2026-11-23 |
+| 11 | fix, as **its own slice right after C3** (one shared change for every screen, with its own full e2e) | 2026-11-23 |
+| — (NOT_TESTED: own course) | an instructor on their own course sees **«Це ваш курс»** with a link to edit it in `/teach`; no enrol and no complaint | 2026-11-23 |
