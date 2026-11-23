@@ -16,6 +16,22 @@ export class LearnQueryError extends Error {
 export function learningCourseQueryKey(slug: string) {
   return ['learn', 'course', slug] as const;
 }
+/**
+ * Leaving a lesson (`nav`) or finishing it (`ended`) is what moves completion, «continue» and
+ * review eligibility. With lesson links moving inside the app (C3b) the next lesson is already
+ * mounted and read its course before that last heartbeat landed, so both are refreshed; other
+ * heartbeats change only the position, which the next entry reads afresh.
+ */
+export function refreshAfterHeartbeat(
+  client: QueryClient,
+  { slug, courseId, reason }: { slug: string; courseId: string; reason: string },
+): Promise<unknown> {
+  if (reason !== 'nav' && reason !== 'ended') return Promise.resolve();
+  return Promise.all([
+    client.invalidateQueries({ queryKey: learningCourseQueryKey(slug), exact: true }),
+    client.invalidateQueries({ queryKey: ['learn', 'review', courseId] }),
+  ]);
+}
 export function ownReviewQueryKey(courseId: string, userId: string) {
   return ['learn', 'review', courseId, userId] as const;
 }

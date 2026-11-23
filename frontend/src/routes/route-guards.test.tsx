@@ -25,7 +25,11 @@ import { createAdminVideoQueries } from '../app/composition/admin-video-queries'
 import { createAdminAudioQueries } from '../app/composition/admin-audio-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
-import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
+import {
+  createLearnQueries,
+  learningCourseQueryKey,
+  refreshAfterHeartbeat,
+} from '../app/composition/learn-queries';
 import {
   createApiTranscriptRepository,
   createMemoryTranscriptHistory,
@@ -3113,7 +3117,7 @@ describe('moves inside the app (design-pass C3b, plan §17)', () => {
   });
 });
 
-test('C3b review: each entry into a lesson reads the course afresh, so the player resumes from the stored position', async () => {
+test('C3b review: a lesson entry reads the course afresh unless it was just read; leaving a lesson refreshes it', async () => {
   const student = user('student');
   const lessonA = '30000000-0000-4000-8000-0000000000a1';
   const lessonB = '30000000-0000-4000-8000-0000000000b1';
@@ -3149,7 +3153,7 @@ test('C3b review: each entry into a lesson reads the course afresh, so the playe
   });
   answerWith(student);
   const router = createTestRouter(
-    `/learn/fresh/${lessonA}`,
+    '/learn/fresh',
     student,
     'en',
     [],
@@ -3163,23 +3167,35 @@ test('C3b review: each entry into a lesson reads the course afresh, so the playe
       },
     },
   );
+  const client = router.options.context.queryClient;
   await router.load();
   renderRouter(router);
+  // `/learn/fresh` redirects to its «continue» lesson: one read for both entries.
   expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
   expect(reads).toBe(1);
+  // A cached course older than the window is read again on entry (as the full load did).
+  client.setQueryData(learningCourseQueryKey('fresh'), course(), {
+    updatedAt: Date.now() - 60_000,
+  });
   await act(async () => {
     await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonB}` } });
   });
   expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
+  expect(reads).toBe(2);
+  // Leaving lesson A sends `nav`; its refresh reaches the course the next lesson shows.
+  await act(async () => {
+    await refreshAfterHeartbeat(client, {
+      slug: 'fresh',
+      courseId: '10000000-0000-4000-8000-0000000000c1',
+      reason: 'nav',
+    });
+  });
+  await waitFor(() => expect(reads).toBe(3));
   await act(async () => {
     await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonA}` } });
   });
   expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
-  // One read per entry, within the cache's minute: the third entry sees the newest position.
-  expect(reads).toBe(3);
-  const cached = router.options.context.queryClient.getQueryData<LearningCourse>(
-    learningCourseQueryKey('fresh'),
-  );
+  const cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
   expect(cached?.modules[0]?.lessons[0]?.position).toBe(30);
   expect(cached?.modules[0]?.lessons[0]?.clientSeq).toBe(3);
 });

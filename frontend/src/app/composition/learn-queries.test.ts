@@ -3,7 +3,7 @@ import { expect, test } from '@rstest/core';
 import type { LearningCourse, PlaybackResult } from '../../modules/playback';
 import type { CourseRepository } from '../../modules/catalog';
 import type { PlaybackRepository } from '../../modules/playback';
-import { createLearnQueries, learningCourseQueryKey } from './learn-queries';
+import { createLearnQueries, learningCourseQueryKey, refreshAfterHeartbeat } from './learn-queries';
 
 // This test reads only the learning course; the review side of the course repository is unused here.
 const unusedCourses: CourseRepository = {
@@ -83,3 +83,29 @@ test('a review write or delete refreshes both the own review and the learning li
     ['course'],
   ]);
 });
+
+test.each([
+  ['nav', true],
+  ['ended', true],
+  ['tick', false],
+  ['pause', false],
+  ['seek', false],
+  ['hide', false],
+] as const)(
+  'C3b a %s heartbeat refreshes the course and review eligibility: %s',
+  async (reason, refresh) => {
+    const client = new QueryClient();
+    client.setQueryData(learningCourseQueryKey('go'), { slug: 'go' });
+    client.setQueryData(['learn', 'review', 'course-1', 'user-1'], {
+      eligibility: 'review_not_started',
+    });
+    client.setQueryData(learningCourseQueryKey('other'), { slug: 'other' });
+    await refreshAfterHeartbeat(client, { slug: 'go', courseId: 'course-1', reason });
+    expect(client.getQueryState(learningCourseQueryKey('go'))?.isInvalidated).toBe(refresh);
+    expect(client.getQueryState(['learn', 'review', 'course-1', 'user-1'])?.isInvalidated).toBe(
+      refresh,
+    );
+    // Another course is not touched.
+    expect(client.getQueryState(learningCourseQueryKey('other'))?.isInvalidated).toBe(false);
+  },
+);

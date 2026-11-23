@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
-import { learningCourseQueryKey } from '../app/composition/learn-queries';
+import { learningCourseQueryKey, refreshAfterHeartbeat } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import {
   captionQuery,
@@ -200,8 +200,15 @@ function OpenLesson({
   const actions = useMemo(
     () => ({
       play: () => learn.playback.play(lessonId),
-      heartbeat: (heartbeat: Parameters<typeof learn.playback.heartbeat>[0]) =>
-        learn.playback.heartbeat(heartbeat),
+      heartbeat: async (heartbeat: Parameters<typeof learn.playback.heartbeat>[0]) => {
+        const result = await learn.playback.heartbeat(heartbeat);
+        void refreshAfterHeartbeat(queryClient, {
+          slug,
+          courseId: course.id,
+          reason: heartbeat.reason,
+        });
+        return result;
+      },
       refresh: async () => {
         await queryClient.invalidateQueries({
           queryKey: learningCourseQueryKey(slug),
@@ -214,7 +221,7 @@ function OpenLesson({
         });
       },
     }),
-    [learn, lessonId, queryClient, slug],
+    [course.id, learn, lessonId, queryClient, slug],
   );
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
