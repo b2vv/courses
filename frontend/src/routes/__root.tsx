@@ -13,7 +13,9 @@ import type { AdminDependencies } from '../app/composition/admin';
 import type { LearnDependencies } from '../app/composition/learn';
 import type { TeachDependencies } from '../app/composition/teach';
 import type { createEnrollmentDependencies } from '../app/composition/enrollment';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { RouterProvider } from 'react-aria-components';
+import { ariaNavigation } from '../app/router/aria-router';
 import { useTranslation } from 'react-i18next';
 import { forgetOtherAuthors } from '../modules/transcript';
 import { useSignOut } from '../app/composition/use-sign-out';
@@ -122,17 +124,50 @@ function PageError() {
 
 function Document({ children }: { children: ReactNode }) {
   const { i18n } = useTranslation();
+  const router = useRouter();
+  // React Aria links move through the router like the TanStack ones (C3b #11). `useHref` is left
+  // at the provider's default, the identity: the router has no basepath, so the server and the
+  // client render the same href.
   return (
     <html lang={i18n.resolvedLanguage === 'en' ? 'en' : 'uk'}>
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <RouterProvider
+          navigate={(href, options) =>
+            void router.navigate(ariaNavigation(window.location.href, href, options))
+          }
+        >
+          {children}
+        </RouterProvider>
         <Scripts />
       </body>
     </html>
   );
+}
+
+/**
+ * Where focus goes after a move inside the app (C3b R4). Checked once per finished move, after
+ * the new page has rendered, so elements the move removed are already gone. Focus goes to the
+ * page's main region (both shells have `#main`) when the path changed, or when nothing holds
+ * focus any more: a pagination link that the new page no longer has, or a list replaced by its
+ * loading state. Otherwise it stays: a sort control the move kept, or a header link the user
+ * moved to while the page was loading. The first load leaves focus to the browser.
+ */
+function useFocusAfterNavigation() {
+  const resolvedLocation = useRouterState({ select: (state) => state.resolvedLocation });
+  const previousPathname = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (resolvedLocation === undefined) return;
+    const before = previousPathname.current;
+    previousPathname.current = resolvedLocation.pathname;
+    if (before === undefined) return;
+    const active = document.activeElement;
+    if (resolvedLocation.pathname !== before || active === null || active === document.body) {
+      document.getElementById('main')?.focus({ preventScroll: true });
+    }
+  }, [resolvedLocation]);
 }
 
 function Layout() {
@@ -188,6 +223,7 @@ function Layout() {
   const router = useRouter();
   const [isMenuOpen, setMenuOpen] = useState(false);
   useEffect(() => router.subscribe('onBeforeNavigate', () => setMenuOpen(false)), [router]);
+  useFocusAfterNavigation();
   const resendVerification = useMutation({
     mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
   });

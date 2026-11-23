@@ -15,6 +15,13 @@ type CatalogFrameProps = {
   /** Total number of courses for the query; omitted while it is unknown (loading, error). */
   total?: number;
   onSortChange?: ((next: CatalogSortChange) => void) | undefined;
+  /**
+   * The search form cannot be focused or typed into (C3b R4a). For the pending frame: it is a
+   * different tree from the loaded page, so a field used there would vanish, with its text,
+   * when the list arrives. Only the form: the heading and the list's loading status stay in
+   * the accessibility tree.
+   */
+  controlsInert?: boolean;
   children: ReactNode;
 };
 
@@ -23,7 +30,13 @@ type CatalogFrameProps = {
  * counter and the search form. Loading and failure render inside the same frame, so the page
  * keeps its heading and the query stays editable whatever the list is doing (C2 #10).
  */
-export function CatalogFrame({ query, total, onSortChange, children }: CatalogFrameProps) {
+export function CatalogFrame({
+  query,
+  total,
+  onSortChange,
+  controlsInert = false,
+  children,
+}: CatalogFrameProps) {
   const { t } = useTranslation();
   const formRef = useRef<HTMLFormElement>(null);
   // The controls are uncontrolled (the form submits natively without JS), and client navigation
@@ -54,7 +67,13 @@ export function CatalogFrame({ query, total, onSortChange, children }: CatalogFr
         )}
       </div>
       <search>
-        <form ref={formRef} className="catalog-search" action="/courses" method="get">
+        <form
+          ref={formRef}
+          className="catalog-search"
+          action="/courses"
+          method="get"
+          inert={controlsInert}
+        >
           <TextField
             key={query.q}
             label={t('catalog.search')}

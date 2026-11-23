@@ -117,6 +117,9 @@ export const en = {
     },
     course: {
       all: '← All courses',
+      loading: 'Loading the course',
+      failure: 'Could not load the course',
+      failureHint: 'Check your connection and try again.',
       about: 'About the course',
       program: 'Course program',
       learningTitle: 'Ready to begin?',

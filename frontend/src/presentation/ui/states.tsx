@@ -26,8 +26,14 @@ export function ErrorState({ title, children, retryHref, retryLabel, onRetry }: 
       {children}
       {retryHref && (
         // A link, because a retry reloads the same address; drawn as the primary button so
-        // the action looks the same wherever a load fails (G0 #6).
-        <Link href={retryHref} className="ui-button ui-button--primary">
+        // the action looks the same wherever a load fails (G0 #6). A full document load (C3b
+        // R3): a fresh server render and cache, whether or not the router would rerun the
+        // failed loader for the same address.
+        <Link
+          href={retryHref}
+          routerOptions={{ reloadDocument: true }}
+          className="ui-button ui-button--primary"
+        >
           {retryLabel}
         </Link>
       )}
