@@ -47,10 +47,13 @@ export function ReportDialog({
   triggerLabel,
   onReport,
   onSent,
+  quiet = false,
 }: {
   readonly triggerLabel: string;
   readonly onReport: (reason: string) => Promise<void>;
   readonly onSent: () => void;
+  /** A secondary action next to a primary one: drawn as a text button, not an outlined one. */
+  readonly quiet?: boolean;
 }) {
   const { t } = useTranslation();
   const [reason, setReason] = useState('');
@@ -62,6 +65,15 @@ export function ReportDialog({
   return (
     <Dialog
       triggerLabel={triggerLabel}
+      {...(quiet
+        ? {
+            trigger: (
+              <Button variant="secondary" className="ui-button--quiet">
+                {triggerLabel}
+              </Button>
+            ),
+          }
+        : {})}
       title={triggerLabel}
       closeLabel={t('enrollment.report.cancel')}
     >

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from '@rstest/core';
+import { afterAll, afterEach, beforeAll, describe, expect, it, test } from '@rstest/core';
 import {
   focusManager,
   queryOptions,
@@ -43,7 +43,12 @@ import {
 import { createDiscussionQueries } from '../app/composition/discussion-queries';
 import { createTeachQueries } from '../app/composition/teach-queries';
 import { createPurchaseQueries } from '../app/composition/purchase-queries';
-import { createEnrollmentQueries } from '../app/composition/enrollment-queries';
+import {
+  createEnrollmentQueries,
+  enrollmentMembershipQueryKey,
+} from '../app/composition/enrollment-queries';
+import { AuthoringQueryError } from '../app/composition/admin-queries';
+import type { EnrollmentRepository } from '../modules/enrollment';
 import { createAdminGrantQueries } from '../app/composition/admin-grant-queries';
 import { createAdminStatsQueries } from '../app/composition/admin-stats-queries';
 import type { PurchaseRepository } from '../modules/purchase';
@@ -91,6 +96,8 @@ import { asBrandedId } from '../contracts/course';
 import type {
   AdminCourse,
   AdminCourseQuery,
+  CourseDetail,
+  CourseId,
   CourseTree,
   CourseTreeEdit,
 } from '../contracts/course';
@@ -148,6 +155,13 @@ function user(role: Role): AuthenticatedUser {
   };
 }
 
+type CourseAccessOverrides = {
+  readonly course?: CourseDetail;
+  readonly membership?: EnrollmentRepository['membership'];
+  readonly enroll?: EnrollmentRepository['enroll'];
+  readonly readDetail?: (id: CourseId, signal: AbortSignal) => Promise<CourseTree>;
+};
+
 function createTestRouter(
   href: string,
   cachedSession: AuthenticatedUser | null,
@@ -161,6 +175,7 @@ function createTestRouter(
   discussionRepository: DiscussionRepository = discussionStub,
   createMediaOverride?: CreatePlaybackMedia,
   purchaseRepository: PurchaseRepository = purchaseStub,
+  courseAccess: CourseAccessOverrides = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const i18n = createI18n(locale);
@@ -176,7 +191,10 @@ function createTestRouter(
         pagination: { limit: query.limit, offset: query.offset, total: 0 },
       },
     }),
-    getPublished: async () => ({ ok: false, error: { code: 'course_not_found' } }),
+    getPublished: async () =>
+      courseAccess.course === undefined
+        ? { ok: false, error: { code: 'course_not_found' } }
+        : { ok: true, value: courseAccess.course },
     listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
     reportReview: async () => ({ ok: true, value: undefined }),
     putReview: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
@@ -322,6 +340,11 @@ function createTestRouter(
       },
       teach: {
         ...createTeachQueries(teachStub),
+        readDetail:
+          courseAccess.readDetail ??
+          (async (): Promise<CourseTree> => {
+            throw new Error('dependency_unavailable');
+          }),
         detail: (id) =>
           queryOptions({
             queryKey: ['teach', 'courses', 'tree', id],
@@ -337,8 +360,12 @@ function createTestRouter(
         }),
       },
       enrollment: createEnrollmentQueries({
-        membership: async () => ({ ok: true, value: { member: false, state: null } }),
-        enroll: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
+        membership:
+          courseAccess.membership ??
+          (async () => ({ ok: true, value: { member: false, state: null } })),
+        enroll:
+          courseAccess.enroll ??
+          (async () => ({ ok: false, error: { code: 'dependency_unavailable' } })),
         myMemberships: async () => ({ ok: true, value: [] }),
         roster: async () => ({ ok: true, value: { entries: [], nextCursor: null } }),
         block: async () => ({ ok: true, value: undefined }),
@@ -2512,4 +2539,128 @@ test('S1-3 renames the document when the language is switched', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'EN' }));
 
   await waitFor(() => expect(documentTitle(router)).toBe('Sign up — CourseForge'));
+});
+
+describe('course page access (design-pass C3, plan §16 A1–A9 and the 401 rule)', () => {
+  const course: CourseDetail = {
+    id: '10000000-0000-4000-8000-0000000000c3',
+    slug: 'access-course',
+    title: 'Курс доступу',
+    summary: 'Короткий опис',
+    description: 'Опис',
+    publishedAt: '2026-09-01T09:00:00Z',
+    price: null,
+    paid: false,
+    lessonCount: 1,
+    program: [{ title: 'Модуль', lessons: [{ title: 'Урок' }] }],
+  };
+  const unauthenticated = {
+    ok: false,
+    error: { code: 'authentication_required' },
+  } as const;
+  const signedInAs = (role: Role) => http.get(currentUserUrl, () => HttpResponse.json(user(role)));
+  const box = () => screen.getByRole('complementary');
+
+  function open(cachedSession: AuthenticatedUser | null, access: CourseAccessOverrides) {
+    const router = createTestRouter(
+      `/courses/${course.slug}`,
+      cachedSession,
+      'uk',
+      [],
+      {},
+      [],
+      {},
+      {},
+      transcriptStub,
+      discussionStub,
+      undefined,
+      purchaseStub,
+      { course, ...access },
+    );
+    return router;
+  }
+
+  it('reports an unreadable session and recovers on retry', async () => {
+    let failing = true;
+    server.use(
+      http.get(currentUserUrl, () =>
+        failing
+          ? HttpResponse.json(dependencyUnavailable, { status: 503 })
+          : HttpResponse.json(user('student')),
+      ),
+    );
+    const router = open(null, {});
+    router.options.context.queryClient.removeQueries({ queryKey: sessionQueryKey });
+    renderRouter(router);
+    expect(await within(await screen.findByRole('complementary')).findByRole('alert')).toBeTruthy();
+    failing = false;
+    await userEvent.click(within(box()).getByRole('button', { name: 'Спробувати ще раз' }));
+    expect(await within(box()).findByRole('button', { name: 'Записатися' })).toBeTruthy();
+  });
+
+  it('a membership 401 with no session left turns the box into the guest sign-in', async () => {
+    const router = open(user('student'), { membership: async () => unauthenticated });
+    renderRouter(router);
+    const signIn = await screen.findByRole('link', { name: 'Увійти, щоб записатися' });
+    expect(signIn.getAttribute('href')).toBe('/login?returnTo=%2Fcourses%2Faccess-course');
+  });
+
+  it('a repeated membership 401 with a confirmed session stops after one repeat', async () => {
+    server.use(signedInAs('student'));
+    let reads = 0;
+    const router = open(user('student'), {
+      membership: async () => {
+        reads += 1;
+        return unauthenticated;
+      },
+    });
+    renderRouter(router);
+    expect(await within(await screen.findByRole('complementary')).findByRole('alert')).toBeTruthy();
+    expect(reads).toBe(2);
+    expect(within(box()).getByRole('button', { name: 'Спробувати ще раз' })).toBeTruthy();
+  });
+
+  it('an enrol 401 re-reads the session and offers sign-in on the same page', async () => {
+    const router = open(user('student'), { enroll: async () => unauthenticated });
+    renderRouter(router);
+    await userEvent.click(await screen.findByRole('button', { name: 'Записатися' }));
+    expect(await screen.findByRole('link', { name: 'Увійти, щоб записатися' })).toBeTruthy();
+  });
+
+  it('decides authorship from the owner-scoped editor read', async () => {
+    server.use(signedInAs('instructor'));
+    const owned = open(user('instructor'), {
+      readDetail: async () => adminTree(user('instructor')),
+    });
+    const { unmount } = renderRouter(owned);
+    expect(await screen.findByRole('heading', { name: 'Це ваш курс' })).toBeTruthy();
+    unmount();
+
+    const other = open(user('instructor'), {
+      readDetail: async () => {
+        throw new AuthoringQueryError({ code: 'course_forbidden' });
+      },
+    });
+    const second = renderRouter(other);
+    expect(await screen.findByRole('button', { name: 'Записатися' })).toBeTruthy();
+    second.unmount();
+
+    const failing = open(user('instructor'), {
+      readDetail: async () => {
+        throw new AuthoringQueryError({ code: 'dependency_unavailable' });
+      },
+    });
+    renderRouter(failing);
+    expect(await within(await screen.findByRole('complementary')).findByRole('alert')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Записатися' })).toBeNull();
+  });
+
+  it('keys membership by viewer so another account never sees it', () => {
+    const queries = open(null, {}).options.context.enrollment;
+    const first = queries.membership(course.id, 'user-a').queryKey;
+    const second = queries.membership(course.id, 'user-b').queryKey;
+    expect(first).not.toEqual(second);
+    // Invalidation by course still reaches every viewer's entry.
+    expect(first.slice(0, 3)).toEqual([...enrollmentMembershipQueryKey(course.id)]);
+  });
 });

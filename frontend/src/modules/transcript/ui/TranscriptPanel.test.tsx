@@ -165,7 +165,7 @@ test('M09 error offers retry', () => {
   expect(panel.getAllByRole('alert')).toHaveLength(1);
   expect(panel.getByRole('alert').textContent).toBe('Не вдалося завантажити транскрипт');
   expect(panel.queryByRole('status')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Спробувати ще' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
   expect(onRetry).toHaveBeenCalledTimes(1);
 });
 

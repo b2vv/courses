@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test, expect } from '@playwright/test';
 import { deleteE2ECourse } from './course-cleanup';
+import { authStatePath } from './auth';
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -132,7 +133,34 @@ test('hidden and absent courses return 404', async ({ page }) => {
   for (const slug of ['draft-course', 'archived-course', 'does-not-exist']) {
     const response = await page.goto(`/courses/${slug}`);
     expect(response?.status()).toBe(404);
-    await expect(page.getByText('Курс не знайдено')).toBeVisible();
+    // The same page as the site 404 (C3 #8).
+    await expect(page.getByRole('heading', { level: 1, name: 'Курс не знайдено' })).toBeVisible();
+  }
+});
+
+test('a course without lessons offers only «Скоро буде» (C3 #2)', async ({ browser, baseURL }) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  // The seed's published courses have no lessons; the student fixture is a member of each.
+  const guest = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  const student = await browser.newContext({ baseURL, storageState: authStatePath('student') });
+  try {
+    const page = await guest.newPage();
+    await page.goto('/courses/go-backend-foundations');
+    const box = page.getByRole('complementary');
+    await expect(box.getByRole('heading', { name: 'Скоро буде' })).toBeVisible();
+    await expect(box.getByRole('button')).toHaveCount(0);
+    await expect(box.getByRole('link')).toHaveCount(0);
+    const bounds = await box.boundingBox();
+    expect((bounds?.y ?? Infinity) + (bounds?.height ?? 0)).toBeLessThanOrEqual(844);
+    const member = await student.newPage();
+    await member.goto('/courses/go-backend-foundations');
+    const memberBox = member.getByRole('complementary');
+    await expect(memberBox.getByRole('heading', { name: 'Ви учасник' })).toBeVisible();
+    await expect(memberBox.getByText('Скоро буде')).toBeVisible();
+    await expect(memberBox.getByRole('link', { name: 'Почати навчання' })).toHaveCount(0);
+  } finally {
+    await student.close();
+    await guest.close();
   }
 });
 

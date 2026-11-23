@@ -1,10 +1,13 @@
-import { createFileRoute, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound, useNavigate } from '@tanstack/react-router';
 import { useInfiniteQuery, useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { CatalogQueryError, ensureRouteQuery } from '../app/composition/catalog-queries';
 import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
-import { CourseView } from '../modules/catalog';
+import { AuthoringQueryError } from '../app/composition/admin-queries';
+import { PurchaseQueryError } from '../app/composition/purchase-queries';
+import { CourseView, courseAction, type Fact } from '../modules/catalog';
 import { CatalogFailure, CatalogLoading, CourseNotFound } from '../modules/catalog';
 import { namedPageTitle, pageTitle } from '../app/composition/page-title';
+import { asBrandedId } from '../contracts/course';
 
 export const Route = createFileRoute('/courses/$slug')({
   loader: async ({ context, params, abortController }) => {
@@ -40,21 +43,73 @@ export const Route = createFileRoute('/courses/$slug')({
 });
 function CourseRoute() {
   const { slug } = Route.useParams();
-  const { catalog, enrollment, identityDependencies, queryClient } = Route.useRouteContext();
+  const { catalog, enrollment, identityDependencies, learn, teach, queryClient } =
+    Route.useRouteContext();
+  const navigate = useNavigate();
   const { data } = useSuspenseQuery(catalog.detail(slug));
   const reviews = useInfiniteQuery(catalog.reviews(slug));
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
-  const ownReview = useQuery({
-    ...catalog.ownReview(data.id, session.data?.id ?? 'anonymous'),
-    enabled: session.data !== null && session.data !== undefined,
-  });
+  const user = session.data ?? null;
+  const userId = user?.id ?? 'anonymous';
+  // One bounded recovery for a 401 from any protected read (plan §16, the 401 rule): re-read the
+  // session once; anonymous ends the cycle (the box becomes the guest's), a failed re-read is
+  // "unavailable", and a confirmed session earns exactly one repeat of the read.
+  const withSessionRecheck = async <T,>(read: () => Promise<T>): Promise<T> => {
+    try {
+      return await read();
+    } catch (error) {
+      if (!isAuthenticationRequired(error)) throw error;
+      const current = await queryClient.fetchQuery(identityDependencies.current());
+      if (current === null) throw error;
+      return read();
+    }
+  };
   const membership = useQuery({
-    ...enrollment.membership(data.id),
-    enabled: session.data !== null && session.data !== undefined,
+    ...enrollment.membership(data.id, userId),
+    queryFn: ({ signal }) => withSessionRecheck(() => enrollment.readMembership(data.id, signal)),
+    enabled: user !== null,
+    retry: false,
+  });
+  const authorship = useQuery({
+    queryKey: ['course-authorship', userId, data.id] as const,
+    queryFn: ({ signal }) =>
+      withSessionRecheck(() => teach.readDetail(asBrandedId(data.id, 'course'), signal)).then(
+        () => true,
+        (error: unknown) => {
+          // 403/404 from the owner-scoped editor read mean "not the author"; anything else is
+          // a failure the box reports instead of guessing.
+          if (
+            error instanceof AuthoringQueryError &&
+            ['course_forbidden', 'forbidden', 'course_not_found'].includes(error.code)
+          )
+            return false;
+          throw error;
+        },
+      ),
+    enabled: user?.role === 'instructor',
+    retry: false,
+  });
+  const ownReview = useQuery({
+    ...catalog.ownReview(data.id, userId),
+    enabled: user !== null,
   });
   const enroll = useMutation(enrollment.enroll(queryClient));
+  const purchase = useMutation(learn.purchase.start(queryClient));
   const reportLecturer = useMutation(enrollment.reportLecturer());
   const report = useMutation(catalog.report());
+  const recheckSession = () => void identityDependencies.refresh(queryClient);
+  const action = courseAction({
+    course: data,
+    viewer: session.isPending
+      ? { status: 'pending' }
+      : session.isError
+        ? { status: 'unavailable' }
+        : user === null
+          ? { status: 'anonymous' }
+          : { status: 'signed-in', role: user.role },
+    membership: fact(membership),
+    owner: fact(authorship),
+  });
   const page =
     reviews.data === undefined
       ? undefined
@@ -66,6 +121,7 @@ function CourseRoute() {
   return (
     <CourseView
       course={data}
+      action={action}
       reviews={page}
       reviewsError={reviews.isError}
       isNextPageError={reviews.isFetchNextPageError}
@@ -74,15 +130,73 @@ function CourseRoute() {
       onLoadMore={() => void reviews.fetchNextPage()}
       onRetry={() => void reviews.refetch()}
       onRetryMore={() => void reviews.fetchNextPage()}
-      signedIn={session.data !== null && session.data !== undefined}
-      viewerIsAdmin={session.data?.role === 'admin'}
-      membership={membership.data}
+      signedIn={user !== null}
       enrolling={enroll.isPending}
       enrollError={enroll.error instanceof EnrollmentQueryError ? enroll.error.code : undefined}
-      onEnroll={() => enroll.mutate(data.id)}
+      onEnroll={() =>
+        enroll.mutate(data.id, {
+          // A lost session turns the box into the guest's sign-in action; the write itself is
+          // never repeated automatically.
+          onError: (error) => {
+            if (isAuthenticationRequired(error)) recheckSession();
+          },
+        })
+      }
+      buying={purchase.isPending}
+      buyError={
+        purchase.error instanceof PurchaseQueryError
+          ? purchase.error.code
+          : purchase.error === null
+            ? undefined
+            : 'dependency_unavailable'
+      }
+      onBuy={() =>
+        purchase.mutate(
+          { courseId: data.id },
+          {
+            // Per-call callbacks do not run after this page unmounts, so a late order never
+            // navigates away from a page the buyer has already left.
+            onSuccess: (order) =>
+              void navigate({
+                to: '/orders/$orderId',
+                params: { orderId: order.id },
+                search: { course: data.slug },
+              }),
+            onError: (error) => {
+              if (isAuthenticationRequired(error)) recheckSession();
+              if (error instanceof PurchaseQueryError && error.code === 'course_already_owned')
+                void membership.refetch();
+            },
+          },
+        )
+      }
+      onRetryAccess={() => {
+        void session.refetch();
+        if (user !== null) void membership.refetch();
+        if (user?.role === 'instructor') void authorship.refetch();
+      }}
       onReportLecturer={(reason) => reportLecturer.mutateAsync({ courseId: data.id, reason })}
       ownReviewId={ownReview.data?.review?.id}
       onReport={(reviewId) => report.mutateAsync({ reviewId })}
     />
   );
+}
+
+function isAuthenticationRequired(error: unknown): boolean {
+  return (
+    (error instanceof EnrollmentQueryError ||
+      error instanceof AuthoringQueryError ||
+      error instanceof PurchaseQueryError) &&
+    error.code === 'authentication_required'
+  );
+}
+
+function fact<T>(query: {
+  readonly isPending: boolean;
+  readonly isError: boolean;
+  readonly data: T | undefined;
+}): Fact<T> {
+  if (query.isError) return { status: 'unavailable' };
+  if (query.isPending || query.data === undefined) return { status: 'pending' };
+  return { status: 'known', value: query.data };
 }

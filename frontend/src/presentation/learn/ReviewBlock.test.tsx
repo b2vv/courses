@@ -240,7 +240,7 @@ test('offers a retry when the own review cannot be loaded', async () => {
     />,
   );
   expect(screen.getByRole('alert').textContent).toContain('Не вдалося завантажити ваш відгук');
-  await user.click(screen.getByRole('button', { name: 'Спробувати ще' }));
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
   expect(retried).toBe(1);
 });
 

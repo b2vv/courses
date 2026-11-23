@@ -87,7 +87,7 @@ describe('course page reviews', () => {
     // Scope to the reviews list: the course program on the same page is also a list.
     const list = screen.getByRole('list', { name: 'Відгуки про курс' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(20);
-    const [inlineRetry] = screen.getAllByRole('button', { name: 'Спробувати ще' });
+    const [inlineRetry] = screen.getAllByRole('button', { name: 'Спробувати ще раз' });
     if (inlineRetry === undefined) throw new Error('inline retry button missing');
     await userEvent.click(inlineRetry);
     expect(retry).toHaveBeenCalledTimes(1);
@@ -151,7 +151,7 @@ describe('course page reviews', () => {
     render(<CourseView course={course} reviewsError onRetry={onRetry} />);
     expect(screen.getByRole('heading', { name: 'Програма курсу' })).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('Не вдалося завантажити відгуки');
-    await userEvent.click(screen.getByRole('button', { name: 'Спробувати ще' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Спробувати ще раз' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 

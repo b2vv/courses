@@ -128,7 +128,11 @@ export function safeReturnTo(value: string | undefined, fallback = '/learn'): st
   let path = searchIndex === -1 ? value : value.slice(0, searchIndex);
   const search = searchIndex === -1 ? '' : value.slice(searchIndex);
   if (path.endsWith('/')) path = path.slice(0, -1);
-  if (!/^\/(learn|admin|teach|settings|orders)(\/|$)/.test(path)) return fallback;
+  // A course page is the one public destination: a guest signs in from it to enrol or buy and
+  // comes back to the same course (design-pass C3 #1). Only the exact slug path, not the catalog
+  // or anything below a course.
+  const coursePage = /^\/courses\/[a-z0-9]+(-[a-z0-9]+)*$/.test(path);
+  if (!coursePage && !/^\/(learn|admin|teach|settings|orders)(\/|$)/.test(path)) return fallback;
   if (path.split('/').some((segment) => segment === '.' || segment === '..')) return fallback;
   return path + (search === '?' ? '' : search);
 }

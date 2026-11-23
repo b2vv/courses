@@ -165,6 +165,19 @@
 .ui-button--secondary[data-hovered] {
   background: var(--color-surface);
 }
+/* A rare secondary action beside a primary one: text, no frame (design-pass C3 #3). */
+.ui-button--quiet {
+  border-color: transparent;
+  background: transparent;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  padding-inline: 0;
+}
+.ui-button--quiet[data-hovered] {
+  background: transparent;
+  text-decoration-thickness: 2px;
+}
 .ui-button--danger {
   color: var(--color-background);
   background: var(--color-danger);

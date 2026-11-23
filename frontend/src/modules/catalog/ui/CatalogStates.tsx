@@ -1,6 +1,6 @@
 import { useRouterState } from '@tanstack/react-router';
 import type { CatalogQuery } from '../../../contracts/course';
-import { EmptyState, ErrorState, Link, Skeleton } from '../../../presentation/ui';
+import { ErrorState, Skeleton, StatusPage } from '../../../presentation/ui';
 import { useTranslation } from 'react-i18next';
 import { CatalogCardsSkeleton, CatalogFrame } from './CatalogView';
 
@@ -40,9 +40,11 @@ export function CatalogListFailure({ query }: { query: CatalogQuery }) {
 export function CourseNotFound() {
   const { t } = useTranslation();
   return (
-    <EmptyState title={t('catalog.notFound')}>
-      <p>{t('catalog.notFoundHint')}</p>
-      <Link href="/courses">{t('catalog.goToCatalog')}</Link>
-    </EmptyState>
+    // The same page as the site's own 404 (G0), so a missing course is not a second design (C3 #8).
+    <StatusPage label="404" title={t('catalog.notFound')} hint={t('catalog.notFoundHint')}>
+      <a className="ui-button ui-button--primary" href="/courses">
+        {t('catalog.goToCatalog')}
+      </a>
+    </StatusPage>
   );
 }

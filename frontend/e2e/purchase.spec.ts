@@ -228,6 +228,14 @@ test('Pay11 Pay13 Pay10 Pay09 a student without access sees the outline, opens t
   await page.getByRole('button', { name: 'Купити курс' }).click();
   await expect(page).toHaveURL(new RegExp(`/orders/${firstOrderId}\\?course=${slug}$`));
 
+  // design-pass C3 #4 — the course page shows the price and buys from there too, resuming the
+  // same pending order rather than creating a second one.
+  await page.goto(`/courses/${slug}`);
+  const actionBox = page.getByRole('complementary');
+  await expect(actionBox.getByText(/1\s?890/)).toBeVisible();
+  await actionBox.getByRole('button', { name: 'Купити курс' }).click();
+  await expect(page).toHaveURL(new RegExp(`/orders/${firstOrderId}\\?course=${slug}$`));
+
   // Pay10 — an administrator grants the student access in the editor; the locked lesson opens.
   const grantor = await browser.newContext({ baseURL, storageState: authStatePath('admin') });
   try {
