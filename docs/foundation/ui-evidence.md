@@ -15,7 +15,7 @@ Import from `src/presentation/ui/index.ts`. Types come from React Aria where app
 | Component | API / behavior |
 |---|---|
 | Button | React Aria Button props; `variant: primary / secondary / danger`; `onPress`, disabled and keyboard behavior |
-| Link | React Aria Link props; ordinary `href` supports document navigation and SSR recovery |
+| Link | React Aria Link props; ordinary `href` works without JavaScript and for SSR recovery. Since design-pass C3b, a root `RouterProvider` moves same-origin presses through the router; `routerOptions={{ reloadDocument: true }}` and moves between the workspace and the client stay document loads (`docs/design-pass/plan.md` §17) |
 | TextField | `label`, optional `description`, `errorMessage`, `placeholder`, plus React Aria field props including controlled `value/onChange` |
 | TextArea | Same field contract, multiline and vertically resizable |
 | Select | `label`, `options: {id,label}[]`, optional help/errors, React Aria selection props |

@@ -6,7 +6,7 @@
 | Branch | `design-pass-c3b`, root `cbad6649`. Plan `9138f963` → `d9640454` (rev. 5, accepted). Code `663b2179`. e2e `3811fab3`. Status-page failure `00dcdbbe`. Hyphenation `50f8af83` |
 | Contract | `plan.md` §17, revision 5, accepted after the planning critique. Source: audit C3 #11 (`evidence/C3-audit.md`) |
 | Build checked | frontend image `98c576944270` on Kiri with the e2e compose configuration (`environment.sh`) |
-| Data | Seed course `go-backend-foundations` for the browser captures. e2e fixtures: three courses found by one search token (`catalog.spec.ts`) and a free course with one lesson (`enrollment.spec.ts`). All fixtures are deleted after each test |
+| Data | Seed course `go-backend-foundations` for the browser captures. e2e fixtures: three courses found by one search token (`catalog.spec.ts`) and a free course with one lesson (`enrollment.spec.ts`). Fixtures are deleted: the catalog ones in each test's `finally`, the enrollment ones in the spec's `afterAll` |
 
 ## Result against acceptance
 
@@ -19,7 +19,7 @@
 | C3b-5 | — | A client move to a missing course gives h1 «Курс не знайдено» and the tab title «Сторінку не знайдено — CourseForge». The same holds after a direct load: the server answers 404 with `<title>Сторінку не знайдено — CourseForge</title>` (curl) | PASS |
 | C3b-6 (R4, R4a) | Focus was lost on `body` after every move inside the app (the TanStack header links too) | Enter on «← Усі курси» puts focus on `#main`, and the next Tab stays inside `#main`. Two pagination presses: «Наступна» from a middle page keeps focus. Onto the last page «Наступна» is gone and focus goes to `#main`; «Попередня» onto the first page also goes to `#main`. On a slow list (2 s), the pending form is `inert`: the field cannot be focused, and the status «Завантажуємо курси» is in the ARIA snapshot. Focus goes to `#main` when the list arrives. If the user moves to the header «Каталог» while the list loads, focus stays there | PASS |
 | C3b-7 | — | The tab title follows each move: course → «<назва> — CourseForge», catalog → «Каталог курсів — CourseForge». The menu card closes (existing `onBeforeNavigate`) | PASS |
-| C3b-8 (R6) | A paid order left a cached «not a member» | A move into `paid` invalidates `['enrollment','membership']` and `['enrollment','myMemberships']` once. A page opened on an already paid order does too. `paid` → `paid` does not repeat it (unit) | PASS |
+| C3b-8 (R6) | A paid order left a cached «not a member» | A move into `paid` invalidates the order's course membership (`['enrollment','membership',courseId]`, every viewer of that course) and `['enrollment','myMemberships']` once; another course's membership is untouched. A page opened on an already paid order does too. `paid` → `paid` does not repeat it (unit) | PASS |
 
 ## Found by the code review and fixed
 

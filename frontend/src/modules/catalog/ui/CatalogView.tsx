@@ -28,7 +28,8 @@ type CatalogFrameProps = {
 /**
  * The parts of the catalog that do not depend on the result: the heading, the one course
  * counter and the search form. Loading and failure render inside the same frame, so the page
- * keeps its heading and the query stays editable whatever the list is doing (C2 #10).
+ * keeps its heading whatever the list is doing (C2 #10). The query stays editable after a
+ * failure; while a list loads the form is shown but inert (`controlsInert`, C3b R4a).
  */
 export function CatalogFrame({
   query,

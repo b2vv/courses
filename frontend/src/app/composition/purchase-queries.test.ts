@@ -110,7 +110,7 @@ test('C3b R6 a move into paid refreshes membership once, not again while paid', 
   answer = paid;
   await read();
   expect(invalidated).toEqual([
-    ['enrollment', 'membership'],
+    ['enrollment', 'membership', pending.courseId],
     ['enrollment', 'myMemberships'],
   ]);
   await read();
@@ -125,8 +125,16 @@ test('C3b R6 a page opened on an already paid order refreshes membership too', a
     member: false,
     state: null,
   });
+  client.setQueryData(['enrollment', 'membership', 'another-course', 'user-a'], {
+    member: false,
+    state: null,
+  });
   await client.fetchQuery(queries.status(pending.id));
   expect(
     client.getQueryState(['enrollment', 'membership', pending.courseId, 'user-a'])?.isInvalidated,
   ).toBe(true);
+  // Only the order's course: another course's membership is left alone.
+  expect(
+    client.getQueryState(['enrollment', 'membership', 'another-course', 'user-a'])?.isInvalidated,
+  ).toBe(false);
 });

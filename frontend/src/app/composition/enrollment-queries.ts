@@ -20,9 +20,8 @@ function unwrap<T>(result: EnrollmentResult<T>): T {
   if (!result.ok) throw new EnrollmentQueryError(result.error.code);
   return result.value;
 }
-export const enrollmentMembershipPrefix = ['enrollment', 'membership'] as const;
 export function enrollmentMembershipQueryKey(courseId: string) {
-  return [...enrollmentMembershipPrefix, courseId] as const;
+  return ['enrollment', 'membership', courseId] as const;
 }
 export const enrollmentMyMembershipsQueryKey = ['enrollment', 'myMemberships'] as const;
 export function enrollmentRosterQueryKey(courseId: string) {

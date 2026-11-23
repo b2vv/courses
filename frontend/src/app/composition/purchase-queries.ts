@@ -8,7 +8,10 @@ import {
   type PurchaseResult,
 } from '../../modules/purchase';
 import type { PurchaseRepository } from '../../modules/purchase';
-import { enrollmentMembershipPrefix, enrollmentMyMembershipsQueryKey } from './enrollment-queries';
+import {
+  enrollmentMembershipQueryKey,
+  enrollmentMyMembershipsQueryKey,
+} from './enrollment-queries';
 
 /** How often a pending order is re-read while the buyer waits for the provider's answer. */
 export const purchasePollMs = 2_000;
@@ -59,10 +62,10 @@ export function createPurchaseQueries(
           // A paid order makes the buyer a member. Moving back to the course inside the app keeps
           // the cache, so the cached "not a member" would offer «Купити курс» for up to a minute
           // (C3b R6). Once per move into `paid`: polling stops there (`refetchInterval`). The
-          // prefix covers every course: the order names none, and an unobserved key costs nothing.
+          // order's course key covers every viewer's entry for that course.
           if (order.status === 'paid' && before?.status !== 'paid') {
             await Promise.all([
-              client.invalidateQueries({ queryKey: enrollmentMembershipPrefix }),
+              client.invalidateQueries({ queryKey: enrollmentMembershipQueryKey(order.courseId) }),
               client.invalidateQueries({ queryKey: enrollmentMyMembershipsQueryKey }),
             ]);
           }
