@@ -319,16 +319,19 @@ test('C3b a guest moves between the catalog and a course without a page load', a
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
     expect(documents()).toBe(0);
 
-    // A modifier press stays the browser's: the app does not take it, so this page stays where
-    // it is. Whether headless Chromium then opens a tab is the browser's business and not
-    // asserted (it did in two runs out of three); a tab that opens is closed.
-    const opened = context.waitForEvent('page', { timeout: 3_000 }).catch(() => null);
-    await page
-      .getByRole('link', { name: '← Усі курси' })
-      .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    await (await opened)?.close();
-    await expect(page).toHaveURL(new RegExp(`/courses/${courses[0].slug}$`));
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    // A modifier press and a middle press stay the browser's: a new tab opens and this page
+    // stays where it is (C3b-1). Measured 10 of 10 each before this assertion was tightened
+    // (`evidence/C3b.md`); checked on a settled page, as a user presses it.
+    for (const press of [
+      { modifiers: [process.platform === 'darwin' ? ('Meta' as const) : ('Control' as const)] },
+      { button: 'middle' as const },
+    ]) {
+      const opened = context.waitForEvent('page');
+      await page.getByRole('link', { name: '← Усі курси' }).click(press);
+      await (await opened).close();
+      await expect(page).toHaveURL(new RegExp(`/courses/${courses[0].slug}$`));
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    }
     expect(documents()).toBe(0);
 
     // A course that is gone by the time the card is pressed: the course 404, in the page and

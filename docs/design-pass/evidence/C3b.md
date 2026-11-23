@@ -12,7 +12,7 @@
 
 | Item | Before | After | Status |
 |---|---|---|---|
-| C3b-1 (#11) | Every React Aria link loaded a new document: catalog ↔ course, pagination, «Почати навчання», the 404 way back | Guest: catalog pages, card title, card «Відкрити», «← Усі курси», Back, and «Перейти до каталогу» from the course 404 make 0 document loads after the first. Administrator: «Почати навчання» → `/learn/<slug>` makes 0. A Meta/Ctrl press is not taken by the app: the page and its URL stay, with 0 loads. The home `#values` link scrolls with 0 loads | PASS |
+| C3b-1 (#11) | Every React Aria link loaded a new document: catalog ↔ course, pagination, «Почати навчання», the 404 way back | Guest: catalog pages, card title, card «Відкрити», «← Усі курси», Back, and «Перейти до каталогу» from the course 404 make 0 document loads after the first. Administrator: «Почати навчання» → `/learn/<slug>` makes 0. A Meta/Ctrl press and a middle press open a new tab, and the page and its URL stay, with 0 loads. Probe on image `d63ea8a7be61`, 10 fresh contexts each: React Aria «← Усі курси» modifier 10/10 and middle 10/10; a plain anchor (root 404) modifier 10/10 and middle 10/10. The e2e test asserts the tab. The home `#values` link scrolls with 0 loads | PASS |
 | C3b-2 (R2) | — | Client → `/admin` («В адмінку»): exactly 1 document load. Editor «Перегляд» → course: 1. Inside admin («Учні»): 0. «На клієнт» → `/`: 1 | PASS |
 | C3b-3 (R3, R5) | The course route failure was unreachable, and its texts were the catalog's | A client move to a course whose read answers 503 shows the course failure page. It has h1 «Не вдалося завантажити курс», a hint, the primary action «Спробувати ще раз» and the secondary «Перейти до каталогу». The retry is exactly 1 document load and recovers. An answer that fails validation gives the same page (unit; and seen live, when a mocked 404 without `requestId` was treated as invalid) | PASS |
 | C3b-4 (R5) | Unreachable; the text said «Завантажуємо курси» | A slow course read (2 s) shows the status «Завантажуємо курс», then the course | PASS |
@@ -60,8 +60,14 @@ Keyboard: real key presses in Chromium (Playwright `keyboard.press`), see C3b-6.
   - `enrollment.spec.ts`: 1 new admin test, using the saved session.
   - Both files together: 26/26. The four C3b catalog tests passed 3 times in a row after the modifier-press fix.
   - Login budget: unchanged (no new form login; B19 3 in the targeted run).
-- **Not asserted:** whether headless Chromium opens a new tab on a Meta-click. It did in two of three runs. The app's part is asserted: it does not take the press.
-- **Ordered `make check`:** not run yet.
+- **New tab:** one earlier run had no tab after a Meta-click. The probe above then measured 40 of 40, and the e2e test asserts the tab again, for both modifier and middle presses (coverage review F2).
+- **Ordered `make check`, attempt 1** on `c5bdd4bb`, 12:49–13:26 UTC: **GATE_EXIT=2**.
+  - Unit 1585, Go `ok` lines 130, smoke PASS, B19 7/7.
+  - e2e: 164 passed, 1 failed, 12 did not run.
+  - The failure was the P03 row in `playback.spec.ts:1679`. It holds «Почати навчання» to one learning-course read, and the unconditional fresh read on the redirected lesson made it two.
+  - Fixed in `f45bf7ea`: the redirect names its read (`dataUpdatedAt`) in history state, and the lesson reuses the cache only while it still holds exactly that read, not invalidated. Route tests: one read on the redirect; Back to the marked entry after another lesson's read reads again; after a `nav` invalidation it reads again. Each test fails when the mark or the comparison is removed.
+  - Targeted rerun on image `d63ea8a7be61`, `-g "P02 P03|C3b"` with its dependency projects, after `make seed-identities`: 148 passed, B19 7/7.
+- **Ordered `make check`, attempt 2:** pending.
 
 ## Independent review
 
