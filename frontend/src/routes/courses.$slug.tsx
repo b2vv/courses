@@ -60,19 +60,19 @@ function CourseRoute() {
   // refetch on their own (focus, reconnect), so a settled failure stays settled until the user
   // retries.
   const cycle = `${userId}:${data.id}`;
-  const recheck = useRef<{ cycle: string; session: Promise<unknown> | undefined }>({
-    cycle,
-    session: undefined,
-  });
-  if (recheck.current.cycle !== cycle) recheck.current = { cycle, session: undefined };
+  // Read only by the query functions and the retry handler, never during render.
+  const sessionRechecks = useRef(new Map<string, Promise<unknown>>());
   const withSessionRecheck = async <T,>(read: () => Promise<T>): Promise<T> => {
     try {
       return await read();
     } catch (error) {
       if (!isAuthenticationRequired(error)) throw error;
-      const budget = recheck.current;
-      budget.session ??= queryClient.fetchQuery(identityDependencies.current());
-      const current = await budget.session;
+      let pending = sessionRechecks.current.get(cycle);
+      if (pending === undefined) {
+        pending = queryClient.fetchQuery(identityDependencies.current());
+        sessionRechecks.current.set(cycle, pending);
+      }
+      const current = await pending;
       if (current === null) throw error;
       return read();
     }
@@ -186,7 +186,7 @@ function CourseRoute() {
       }
       onRetryAccess={() => {
         // A manual retry opens a new recovery cycle.
-        recheck.current = { cycle, session: undefined };
+        sessionRechecks.current.delete(cycle);
         void session.refetch();
         if (user !== null) void membership.refetch();
         if (user?.role === 'instructor') void authorship.refetch();
