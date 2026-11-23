@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import type { CatalogQuery, CoursePage, PublishedCourse } from '../../../contracts/course';
 import { ValueStrip } from './ValueStrip';
@@ -24,6 +25,19 @@ type CatalogFrameProps = {
  */
 export function CatalogFrame({ query, total, onSortChange, children }: CatalogFrameProps) {
   const { t } = useTranslation();
+  const formRef = useRef<HTMLFormElement>(null);
+  // The controls are uncontrolled (the form submits natively without JS), and client navigation
+  // keeps this component mounted. When the address changes under them (Back/Forward after a sort
+  // change) they are brought back in line with it; a control that already matches is left alone,
+  // so the focused sort list is not disturbed (Codex review C2 R1).
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const field = form.elements.namedItem('q');
+    if (field instanceof HTMLInputElement && field.value !== query.q) field.value = query.q;
+    const sort = form.elements.namedItem('sort');
+    if (sort instanceof HTMLSelectElement && sort.value !== query.sort) sort.value = query.sort;
+  }, [query.q, query.sort]);
   const changeSort = (event: ChangeEvent<HTMLSelectElement>) => {
     if (!onSortChange) return;
     const value = event.currentTarget.value === 'title' ? 'title' : 'recent';
@@ -42,7 +56,7 @@ export function CatalogFrame({ query, total, onSortChange, children }: CatalogFr
         )}
       </div>
       <search>
-        <form className="catalog-search" action="/courses" method="get">
+        <form ref={formRef} className="catalog-search" action="/courses" method="get">
           <TextField
             label={t('catalog.search')}
             name="q"

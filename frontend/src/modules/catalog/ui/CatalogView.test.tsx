@@ -325,6 +325,23 @@ describe('catalog presentation', () => {
     );
   });
 
+  it('brings the search controls back in line when the address changes under them', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CatalogView page={firstPage} query={{ ...initialQuery, q: 'React', sort: 'title' }} />,
+    );
+    await user.clear(screen.getByRole('textbox', { name: 'Знайти курс' }));
+    await user.type(screen.getByRole('textbox', { name: 'Знайти курс' }), 'React');
+    // Back: the same mounted view now renders an older address.
+    rerender(<CatalogView page={firstPage} query={{ ...initialQuery, q: 'Go', sort: 'recent' }} />);
+    expect((screen.getByRole('textbox', { name: 'Знайти курс' }) as HTMLInputElement).value).toBe(
+      'Go',
+    );
+    expect((screen.getByRole('combobox', { name: 'Сортування' }) as HTMLSelectElement).value).toBe(
+      'recent',
+    );
+  });
+
   it('keeps the heading and the editable search while the list loads', () => {
     render(<CatalogListLoading query={{ ...initialQuery, q: 'Go' }} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeTruthy();

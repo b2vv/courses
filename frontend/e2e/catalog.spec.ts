@@ -110,12 +110,23 @@ test('catalog hydrates without duplicate data requests or errors', async ({ page
   expect(requests).toEqual([]);
 });
 
-test('changing the sort applies at once and keeps focus on the sort control', async ({ page }) => {
-  await page.goto('/courses?q=&sort=recent&limit=20&offset=0');
+test('changing the sort applies at once, keeps focus and follows Back', async ({ page }) => {
+  await page.goto('/courses?q=React&sort=recent&limit=1&offset=0');
+  const field = page.getByLabel('Знайти курс');
   const sort = page.getByLabel('Сортування');
+  // The typed text goes with the new order, from the first page.
+  await field.fill('Go');
   await sort.focus();
   await sort.selectOption('title');
-  await expect(page).toHaveURL(/sort=title/);
+  await expect(page).toHaveURL(/[?&]q=Go&sort=title&limit=1&offset=0$/);
+  await expect(
+    page.getByRole('heading', { name: 'Go: фундамент надійного бекенду' }),
+  ).toBeVisible();
   await expect(sort).toBeFocused();
-  await expect(sort).toHaveValue('title');
+  // Back restores the earlier address, and the controls follow it.
+  await page.goBack();
+  await expect(page).toHaveURL(/[?&]q=React&sort=recent/);
+  await expect(page.getByRole('heading', { name: 'React: доступні інтерфейси' })).toBeVisible();
+  await expect(field).toHaveValue('React');
+  await expect(sort).toHaveValue('recent');
 });
