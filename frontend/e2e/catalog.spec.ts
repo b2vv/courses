@@ -246,3 +246,245 @@ test('a course with no lessons leaves the catalog 30 days after publication (C2b
     await deleteE2ECourse(id);
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// C3b (plan §17): React Aria links move through the router. A guest is enough for every case
+// here, so no form login is spent (the e2e login budget is 7 of 7).
+
+type Page = import('@playwright/test').Page;
+
+/** Counts main-frame document loads from now on: a move inside the app makes none. */
+function countDocuments(page: Page) {
+  let documents = 0;
+  page.on('request', (request) => {
+    if (request.resourceType() === 'document' && request.frame() === page.mainFrame()) {
+      documents += 1;
+    }
+  });
+  return () => documents;
+}
+
+/** Three fixture courses one search token finds, so `limit=1` gives exactly three pages. */
+async function threeCourses() {
+  const run = randomUUID().replaceAll('-', '').slice(0, 12);
+  const token = `cthreeb${run}`;
+  const course = (n: number) => ({
+    id: randomUUID(),
+    slug: `c3b-${run}-${n}`,
+    title: `${token} course ${n}`,
+  });
+  const courses = [course(1), course(2), course(3)] as const;
+  // One statement, so a refused row leaves no partial fixture behind. Distinct publication
+  // times give `sort=recent` a fixed order; creation precedes publication (table check).
+  await sql(
+    `INSERT INTO courses (id,instructor_id,slug,title,summary,description,status,created_at,updated_at,published_at) VALUES ${courses
+      .map(
+        (course, index) =>
+          `('${course.id}','40000000-0000-4000-8000-000000000002','${course.slug}','${course.title}','${token} summary','Fixture description','published',now() - interval '1 hour',now(),now() - interval '${index} minutes')`,
+      )
+      .join(',')}`,
+  );
+  return { token, courses };
+}
+
+const isCourseRead = (slug: string) => (url: URL) => url.pathname === `/api/v1/courses/${slug}`;
+
+test('C3b a guest moves between the catalog and a course without a page load', async ({
+  page,
+  context,
+}) => {
+  const { token, courses } = await threeCourses();
+  try {
+    await page.goto(`/courses?q=${token}&sort=recent&limit=1&offset=0`);
+    await expect(page.getByRole('heading', { name: courses[0].title })).toBeVisible();
+    const documents = countDocuments(page);
+
+    // Pages of the catalog.
+    await page.getByRole('link', { name: 'Наступна →' }).click();
+    await expect(page.getByRole('heading', { name: courses[1].title })).toBeVisible();
+    await page.getByRole('link', { name: '← Попередня' }).click();
+    await expect(page.getByRole('heading', { name: courses[0].title })).toBeVisible();
+
+    // The card title, then «← Усі курси», then the card's own button.
+    await page.getByRole('heading', { name: courses[0].title }).getByRole('link').click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    await expect(page).toHaveTitle(`${courses[0].title} — CourseForge`);
+    await page.getByRole('link', { name: '← Усі курси' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeVisible();
+    await expect(page).toHaveTitle('Каталог курсів — CourseForge');
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    await page.goBack();
+    await page.locator('.course-list').getByRole('link', { name: 'Відкрити' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    expect(documents()).toBe(0);
+
+    // A modifier press stays the browser's: a new tab, this page unchanged.
+    await page.getByRole('link', { name: '← Усі курси' }).focus();
+    const opened = context.waitForEvent('page');
+    await page
+      .getByRole('link', { name: '← Усі курси' })
+      .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
+    await (await opened).close();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    expect(documents()).toBe(0);
+
+    // A course that is gone by the time the card is pressed: the course 404, in the page and
+    // the tab, and its way back is a move inside the app too (C3b-5).
+    await page.goto(`/courses?q=${token}&sort=recent&limit=1&offset=0`);
+    const afterReload = countDocuments(page);
+    await page.route(
+      (url) => isCourseRead(courses[0].slug)(url),
+      (route) =>
+        route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: { code: 'course_not_found', message: 'not found', requestId: 'e2e' },
+          }),
+        }),
+    );
+    await page.getByRole('heading', { name: courses[0].title }).getByRole('link').click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Курс не знайдено' })).toBeVisible();
+    await expect(page).toHaveTitle('Сторінку не знайдено — CourseForge');
+    await page.getByRole('link', { name: 'Перейти до каталогу' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeVisible();
+    expect(afterReload()).toBe(0);
+  } finally {
+    await Promise.all(courses.map(({ id }) => deleteE2ECourse(id)));
+  }
+});
+
+test('C3b the home page hash link scrolls without a page load', async ({ page }) => {
+  await page.goto('/');
+  const documents = countDocuments(page);
+  await page.getByRole('link', { name: 'Як влаштоване навчання' }).click();
+  await expect(page).toHaveURL(/\/#values$/);
+  await expect(page.locator('#values')).toBeInViewport();
+  expect(documents()).toBe(0);
+});
+
+test('C3b the course page loading and failure states are reachable by moving', async ({ page }) => {
+  const { token, courses } = await threeCourses();
+  try {
+    const slug = courses[0].slug;
+    await page.goto(`/courses?q=${token}&sort=recent&limit=1&offset=0`);
+    // A slow course: the course page's own loading state, then the course.
+    await page.route(
+      (url) => isCourseRead(slug)(url),
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        await route.continue();
+      },
+    );
+    await page.getByRole('heading', { name: courses[0].title }).getByRole('link').click();
+    await expect(page.getByRole('status').filter({ hasText: /^Завантажуємо курс$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    await page.unroute((url) => isCourseRead(slug)(url));
+
+    // A failing course: the course page's failure, and its retry is one full load that
+    // recovers once the API answers again (the server render is not intercepted).
+    await page.goto(`/courses?q=${token}&sort=recent&limit=1&offset=0`);
+    await page.route(
+      (url) => isCourseRead(slug)(url),
+      (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: { code: 'dependency_unavailable', message: 'down', requestId: 'e2e' },
+          }),
+        }),
+    );
+    await page.getByRole('heading', { name: courses[0].title }).getByRole('link').click();
+    const alert = page.getByRole('alert');
+    await expect(alert.getByRole('heading', { name: 'Не вдалося завантажити курс' })).toBeVisible();
+    await expect(page.getByText('Не вдалося завантажити курси')).toHaveCount(0);
+    const documents = countDocuments(page);
+    await page.unrouteAll();
+    await alert.getByRole('link', { name: 'Спробувати ще раз' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(courses[0].title);
+    expect(documents()).toBe(1);
+  } finally {
+    await Promise.all(courses.map(({ id }) => deleteE2ECourse(id)));
+  }
+});
+
+test('C3b focus after a move: the main region, or the control that is still there', async ({
+  page,
+}) => {
+  const { token, courses } = await threeCourses();
+  const address = (offset: number) => `/courses?q=${token}&sort=recent&limit=1&offset=${offset}`;
+  const main = page.locator('#main');
+  const next = page.getByRole('link', { name: 'Наступна →' });
+  const previous = page.getByRole('link', { name: '← Попередня' });
+  try {
+    // A new path: the main region, and the next Tab stays in the page's content.
+    await page.goto(`/courses/${courses[0].slug}`);
+    await page.getByRole('link', { name: '← Усі курси' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeVisible();
+    await expect(main).toBeFocused();
+    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(() => document.getElementById('main')?.contains(document.activeElement)),
+    ).toBe(true);
+
+    // «Наступна» from a middle page survives the move and keeps focus.
+    await page.goto(address(0));
+    await next.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: courses[1].title })).toBeVisible();
+    await expect(next).toBeFocused();
+    // Onto the last page «Наступна» is gone: the main region, not the body.
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: courses[2].title })).toBeVisible();
+    await expect(main).toBeFocused();
+    // «Попередня» onto the first page is gone too.
+    await page.goto(address(1));
+    await previous.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: courses[0].title })).toBeVisible();
+    await expect(main).toBeFocused();
+
+    // A slow list: the pending frame's form is inert, its loading status is announced, and
+    // focus lands on the main region when the list arrives.
+    const slowList = (url: URL) =>
+      url.pathname === '/api/v1/courses' && url.searchParams.get('q') === token;
+    const delay = async (route: import('@playwright/test').Route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      await route.continue();
+    };
+    await page.goto(address(1));
+    await page.route(slowList, delay);
+    await next.focus();
+    await page.keyboard.press('Enter');
+    const status = page.getByRole('status').filter({ hasText: /^Завантажуємо курси$/ });
+    await expect(status).toBeVisible();
+    expect(await page.locator('body').ariaSnapshot()).toContain('Завантажуємо курси');
+    // React keeps the previous page mounted but hidden while the pending frame shows, so the
+    // pending frame is the form that carries `inert`.
+    const pendingForm = page.locator('form.catalog-search[inert]');
+    await expect(pendingForm).toBeVisible();
+    const field = pendingForm.getByLabel('Знайти курс');
+    await field.focus();
+    await expect(field).not.toBeFocused();
+    await expect(page.getByRole('heading', { name: courses[2].title })).toBeVisible();
+    await expect(main).toBeFocused();
+
+    // A slow list while the user moves to a header link: focus stays where they put it.
+    await page.goto(address(1));
+    await next.focus();
+    await page.keyboard.press('Enter');
+    await expect(status).toBeVisible();
+    const headerCatalog = page
+      .getByRole('navigation', { name: 'Основна навігація' })
+      .getByRole('link', { name: 'Каталог', exact: true });
+    await headerCatalog.focus();
+    await expect(page.getByRole('heading', { name: courses[2].title })).toBeVisible();
+    await expect(headerCatalog).toBeFocused();
+    await page.unroute(slowList, delay);
+  } finally {
+    await Promise.all(courses.map(({ id }) => deleteE2ECourse(id)));
+  }
+});

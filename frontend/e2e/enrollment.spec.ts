@@ -376,6 +376,54 @@ test('Lo19 an administrator sees a free course but never the enrol call to actio
   }
 });
 
+test('C3b an administrator starts learning inside the app; crossing to the admin side is one load', async ({
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) throw new Error('Playwright baseURL is required');
+  const admin = await openAs(browser, baseURL, 'admin');
+  try {
+    const course = await createFreeCourse(admin.request, baseURL, 'c3b');
+    const page = await admin.newPage();
+    await page.goto(`/courses/${course.slug}`);
+    let documents = 0;
+    page.on('request', (request) => {
+      if (request.resourceType() === 'document' && request.frame() === page.mainFrame()) {
+        documents += 1;
+      }
+    });
+    // Course → learning: a move inside the client (C3b-1, row A4).
+    await page.getByRole('link', { name: 'Почати навчання' }).click();
+    await expect(page).toHaveURL(new RegExp(`/learn/${course.slug}(/|$)`));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(documents).toBe(0);
+
+    // Client → admin side: exactly one document load (C3b-2).
+    await page.getByRole('link', { name: 'В адмінку' }).first().click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.locator('[data-surface="admin"]').first()).toBeVisible();
+    expect(documents).toBe(1);
+    // Inside the admin side: no load.
+    await page.goto(`/admin/courses/${course.id}`);
+    documents = 0;
+    await page.getByRole('link', { name: 'Перегляд' }).click();
+    await expect(page).toHaveURL(new RegExp(`/courses/${course.slug}$`));
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(course.title);
+    // «Перегляд» crosses back to the client: one load.
+    expect(documents).toBe(1);
+    await page.goto('/admin');
+    documents = 0;
+    await page.getByRole('link', { name: 'Учні' }).first().click();
+    await expect(page).toHaveURL(/\/admin\/learners$/);
+    expect(documents).toBe(0);
+    await page.getByRole('link', { name: 'На клієнт' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    expect(documents).toBe(1);
+  } finally {
+    await admin.close();
+  }
+});
+
 test('En03 keeps course metadata public while a non-member free lesson is denied', async ({
   browser,
   baseURL,
