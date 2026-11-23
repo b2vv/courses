@@ -3278,3 +3278,78 @@ test('C3b review: Back to the continue redirect entry reads again, even with not
   expect(await screen.findByRole('heading', { name: 'Only' })).toBeTruthy();
   await waitFor(() => expect(reads).toBe(2));
 });
+
+test('C3b review: a continue token left untaken by an interrupted redirect does not survive the next navigation', async () => {
+  const student = user('student');
+  const lessonA = '30000000-0000-4000-8000-0000000000a3';
+  let reads = 0;
+  answerWith(student);
+  const router = createTestRouter(
+    '/courses',
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => {
+        reads += 1;
+        return {
+          ok: true,
+          value: {
+            id: '10000000-0000-4000-8000-0000000000c3',
+            slug: 'interrupted',
+            title: 'Interrupted course',
+            summary: 'Practice',
+            description: 'Learn.',
+            status: 'published',
+            price: null,
+            continueLessonId: lessonA,
+            modules: [
+              {
+                id: '20000000-0000-4000-8000-0000000000c3',
+                title: 'Basics',
+                lessons: [
+                  {
+                    id: lessonA,
+                    title: 'Only lesson',
+                    videoState: 'ready',
+                    position: reads * 10,
+                    completed: false,
+                    clientSeq: reads,
+                    audioTracks: [],
+                    isPreview: false,
+                    locked: false,
+                  },
+                ],
+              },
+            ],
+          },
+        };
+      },
+    },
+  );
+  const client = router.options.context.queryClient;
+  await router.load();
+  renderRouter(router);
+  await screen.findByRole('heading', { level: 1, name: 'Course catalog' });
+  // A redirect read the course and issued its token, but its lesson never loaded (the user left
+  // while the identity guard was waiting). Then another navigation finished.
+  await client.fetchQuery(router.options.context.learn.course('interrupted'));
+  expect(reads).toBe(1);
+  const token = router.options.context.learn.continueReads.issue();
+  await act(async () => {
+    await router.navigate({ to: '/courses', search: { q: 'x' } });
+  });
+  // Back to the entry that carries the token: it was retired, so the lesson reads.
+  await act(async () => {
+    await router.navigate({
+      to: '/learn/$',
+      params: { _splat: `interrupted/${lessonA}` },
+      state: { learningContinueRead: token },
+    });
+  });
+  expect(await screen.findByRole('heading', { name: 'Only lesson' })).toBeTruthy();
+  expect(reads).toBe(2);
+});

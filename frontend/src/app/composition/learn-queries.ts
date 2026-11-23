@@ -21,7 +21,9 @@ export function learningCourseQueryKey(slug: string) {
  * and puts it in history state; the lesson it leads to takes it, and only that first take lets
  * the lesson reuse the course read the redirect just made. History keeps the token, but a Back
  * or Forward to that entry finds it already taken, so it reads again (Codex delta review). Held
- * per router (request scoped), in memory only; at most a few are ever outstanding.
+ * per router (request scoped), in memory only. Every finished navigation clears them (`clear`,
+ * wired in the root layout): a token lives only within its own redirect chain, so one left
+ * untaken by an interrupted chain cannot be used by a later Back (delta review round 2).
  */
 export function createContinueReads() {
   const issued = new Set<string>();
@@ -38,6 +40,9 @@ export function createContinueReads() {
     },
     take(token: string | undefined): boolean {
       return token !== undefined && issued.delete(token);
+    },
+    clear(): void {
+      issued.clear();
     },
   };
 }

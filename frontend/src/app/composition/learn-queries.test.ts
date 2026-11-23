@@ -128,3 +128,10 @@ test('C3b a continue-redirect token is taken once', () => {
   for (let index = 0; index < 8; index += 1) tokens.issue();
   expect(tokens.take(first)).toBe(false);
 });
+
+test('C3b clear retires every untaken continue token', () => {
+  const tokens = createContinueReads();
+  const token = tokens.issue();
+  tokens.clear();
+  expect(tokens.take(token)).toBe(false);
+});

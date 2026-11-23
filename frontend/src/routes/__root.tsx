@@ -172,7 +172,7 @@ function useFocusAfterNavigation() {
 
 function Layout() {
   const { t } = useTranslation();
-  const { identityDependencies, transcriptHistory } = Route.useRouteContext();
+  const { identityDependencies, transcriptHistory, learn } = Route.useRouteContext();
   const session = useQuery({ ...identityDependencies.current(), refetchOnMount: false });
   // Client vs admin surface: the admin and instructor workspaces are a separate
   // app with their own shell (AdminShell) and the NorthWind theme; the client
@@ -223,6 +223,12 @@ function Layout() {
   const router = useRouter();
   const [isMenuOpen, setMenuOpen] = useState(false);
   useEffect(() => router.subscribe('onBeforeNavigate', () => setMenuOpen(false)), [router]);
+  // A «continue» redirect token lives only within its own redirect chain (C3b): every finished
+  // navigation retires the ones not taken.
+  useEffect(
+    () => router.subscribe('onResolved', () => learn.continueReads.clear()),
+    [router, learn],
+  );
   useFocusAfterNavigation();
   const resendVerification = useMutation({
     mutationFn: () => identityDependencies.session.resend({}).then(identityDependencies.unwrap),
