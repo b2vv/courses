@@ -26,11 +26,16 @@ function unwrap<T>(result: Result<T>): T {
  * An observer gives each loader its own lifetime: canceling one preload does
  * not cancel another consumer, while removing the last one aborts the read.
  * Keep loader signals out of cached query functions so later loads get fresh signals.
+ *
+ * `fresh` reads past the cache on every entry. For pages whose data the viewer changes as a
+ * side effect of using another page (watched position, progress): a move inside the app keeps the
+ * cache that a full page load used to drop (C3b, review finding on learning progress).
  */
 export function ensureRouteQuery<T, TKey extends QueryKey>(
   client: QueryClient,
   options: FetchQueryOptions<T, Error, T, TKey>,
   signal: AbortSignal,
+  { fresh = false }: { readonly fresh?: boolean } = {},
 ): Promise<T> {
   if (signal.aborted) return Promise.reject(signal.reason);
   const observer = new QueryObserver(client, { ...options, enabled: false });
@@ -49,7 +54,10 @@ export function ensureRouteQuery<T, TKey extends QueryKey>(
       finish(() => reject(reason));
     };
     signal.addEventListener('abort', abort, { once: true });
-    void client.ensureQueryData(options).then(
+    const read = fresh
+      ? client.fetchQuery({ ...options, staleTime: 0 })
+      : client.ensureQueryData(options);
+    void read.then(
       (data) => finish(() => resolve(data)),
       (error: unknown) => finish(() => reject(error)),
     );

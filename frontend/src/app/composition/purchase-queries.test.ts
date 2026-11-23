@@ -85,3 +85,56 @@ test('polls while pending and stops once the order is settled', () => {
   expect(at({ ...pending, status: 'paid', paidAt: '2026-10-01T10:01:00Z' })).toBe(false);
   expect(at({ ...pending, status: 'failed' })).toBe(false);
 });
+
+test('C3b R6 a move into paid refreshes membership once, not again while paid', async () => {
+  const paid: PurchaseOrder = { ...pending, status: 'paid', paidAt: '2026-10-01T10:01:00Z' };
+  let answer: PurchaseOrder = pending;
+  const queries = createPurchaseQueries(
+    {
+      ...repository([], { ok: true, value: pending }),
+      status: async () => ({ ok: true, value: answer }),
+    },
+    () => 'k',
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidated: unknown[] = [];
+  const original = client.invalidateQueries.bind(client);
+  client.invalidateQueries = (filters, options) => {
+    invalidated.push(filters?.queryKey);
+    return original(filters, options);
+  };
+  const read = () => client.fetchQuery({ ...queries.status(pending.id), staleTime: 0 });
+
+  await read();
+  expect(invalidated).toEqual([]);
+  answer = paid;
+  await read();
+  expect(invalidated).toEqual([
+    ['enrollment', 'membership', pending.courseId],
+    ['enrollment', 'myMemberships'],
+  ]);
+  await read();
+  expect(invalidated).toHaveLength(2);
+});
+
+test('C3b R6 a page opened on an already paid order refreshes membership too', async () => {
+  const paid: PurchaseOrder = { ...pending, status: 'paid', paidAt: '2026-10-01T10:01:00Z' };
+  const queries = createPurchaseQueries(repository([], { ok: true, value: paid }), () => 'k');
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(['enrollment', 'membership', pending.courseId, 'user-a'], {
+    member: false,
+    state: null,
+  });
+  client.setQueryData(['enrollment', 'membership', 'another-course', 'user-a'], {
+    member: false,
+    state: null,
+  });
+  await client.fetchQuery(queries.status(pending.id));
+  expect(
+    client.getQueryState(['enrollment', 'membership', pending.courseId, 'user-a'])?.isInvalidated,
+  ).toBe(true);
+  // Only the order's course: another course's membership is left alone.
+  expect(
+    client.getQueryState(['enrollment', 'membership', 'another-course', 'user-a'])?.isInvalidated,
+  ).toBe(false);
+});

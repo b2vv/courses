@@ -25,7 +25,11 @@ import { createAdminVideoQueries } from '../app/composition/admin-video-queries'
 import { createAdminAudioQueries } from '../app/composition/admin-audio-queries';
 import { createCatalogQueries } from '../app/composition/catalog-queries';
 import { createSessionQueries, sessionQueryKey } from '../app/composition/identity-queries';
-import { createLearnQueries, learningCourseQueryKey } from '../app/composition/learn-queries';
+import {
+  createLearnQueries,
+  learningCourseQueryKey,
+  refreshAfterHeartbeat,
+} from '../app/composition/learn-queries';
 import {
   createApiTranscriptRepository,
   createMemoryTranscriptHistory,
@@ -93,6 +97,7 @@ const teachStub = new Proxy({} as TeachRepository, {
 });
 import type { Locale } from '../app/composition/locale';
 import { createI18n, I18nProvider } from '../app/providers/i18n';
+import { pageTitle } from '../app/composition/page-title';
 import { asBrandedId } from '../contracts/course';
 import type {
   AdminCourse,
@@ -158,6 +163,8 @@ function user(role: Role): AuthenticatedUser {
 
 type CourseAccessOverrides = {
   readonly course?: CourseDetail;
+  /** Replaces the course read entirely: failures, slow answers (C3b). */
+  readonly getPublished?: CourseRepository['getPublished'];
   readonly membership?: EnrollmentRepository['membership'];
   readonly enroll?: EnrollmentRepository['enroll'];
   readonly readDetail?: (id: CourseId, signal: AbortSignal) => Promise<CourseTree>;
@@ -192,10 +199,12 @@ function createTestRouter(
         pagination: { limit: query.limit, offset: query.offset, total: 0 },
       },
     }),
-    getPublished: async () =>
-      courseAccess.course === undefined
-        ? { ok: false, error: { code: 'course_not_found' } }
-        : { ok: true, value: courseAccess.course },
+    getPublished: async (slug, signal) =>
+      courseAccess.getPublished !== undefined
+        ? courseAccess.getPublished(slug, signal)
+        : courseAccess.course === undefined
+          ? { ok: false, error: { code: 'course_not_found' } }
+          : { ok: true, value: courseAccess.course },
     listReviews: async () => ({ ok: true, value: { rating: null, items: [], nextCursor: null } }),
     reportReview: async () => ({ ok: true, value: undefined }),
     putReview: async () => ({ ok: false, error: { code: 'dependency_unavailable' } }),
@@ -2957,4 +2966,391 @@ describe('course page access (design-pass C3, plan §16 A1–A9 and the 401 rule
     // Invalidation by course still reaches every viewer's entry.
     expect(first.slice(0, 3)).toEqual([...enrollmentMembershipQueryKey(course.id)]);
   });
+});
+
+describe('moves inside the app (design-pass C3b, plan §17)', () => {
+  const course: CourseDetail = {
+    id: '10000000-0000-4000-8000-0000000000cb',
+    slug: 'moving-course',
+    title: 'Курс переходів',
+    summary: 'Короткий опис',
+    description: 'Опис',
+    publishedAt: '2026-09-01T09:00:00Z',
+    price: null,
+    paid: false,
+    lessonCount: 1,
+    program: [{ title: 'Модуль', lessons: [{ title: 'Урок' }] }],
+  };
+
+  function open(href: string, access: CourseAccessOverrides) {
+    return createTestRouter(
+      href,
+      null,
+      'uk',
+      [],
+      {},
+      [],
+      {},
+      {},
+      transcriptStub,
+      discussionStub,
+      undefined,
+      purchaseStub,
+      access,
+    );
+  }
+
+  it('R1 follows a React Aria link through the router, focus on the main region', async () => {
+    const router = open(`/courses/${course.slug}`, { course });
+    renderRouter(router);
+    const back = await screen.findByRole('link', { name: '← Усі курси' });
+    back.focus();
+    await userEvent.click(back);
+    await waitFor(() => expect(router.state.resolvedLocation?.pathname).toBe('/courses'));
+    await waitFor(() => expect(document.activeElement?.id).toBe('main'));
+  });
+
+  it('R4 keeps focus on a control that survives a move that changes only the search', async () => {
+    const router = open(`/courses/${course.slug}`, { course });
+    renderRouter(router);
+    const back = await screen.findByRole('link', { name: '← Усі курси' });
+    back.focus();
+    await act(async () => {
+      await router.navigate({ href: `/courses/${course.slug}?tab=1` });
+    });
+    expect(router.state.resolvedLocation?.search).toEqual({ tab: 1 });
+    expect(document.activeElement).toBe(back);
+  });
+
+  it('R4 moves focus to the main region when nothing holds it after a search-only move', async () => {
+    const router = open(`/courses/${course.slug}`, { course });
+    renderRouter(router);
+    await screen.findByRole('link', { name: '← Усі курси' });
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    await act(async () => {
+      await router.navigate({ href: `/courses/${course.slug}?tab=2` });
+    });
+    await waitFor(() => expect(document.activeElement?.id).toBe('main'));
+  });
+
+  it('R4 leaves the first load alone and moves focus once for two moves in a row', async () => {
+    const router = open(`/courses/${course.slug}`, { course });
+    renderRouter(router);
+    await screen.findByRole('link', { name: '← Усі курси' });
+    expect(document.activeElement?.id).not.toBe('main');
+    const main = document.getElementById('main');
+    if (main === null) throw new Error('main region is required');
+    let focused = 0;
+    main.addEventListener('focus', () => {
+      focused += 1;
+    });
+    await act(async () => {
+      void router.navigate({ to: '/courses' });
+      await router.navigate({ href: `/courses/${course.slug}` });
+    });
+    await waitFor(() => expect(document.activeElement).toBe(main));
+    expect(router.state.resolvedLocation?.pathname).toBe(`/courses/${course.slug}`);
+    expect(focused).toBe(1);
+  });
+
+  it.each(['dependency_unavailable', 'invalid_response'] as const)(
+    'R5 a %s course load shows the course failure with a full-reload retry',
+    async (code) => {
+      const router = open(`/courses/${course.slug}`, {
+        getPublished: async () => ({ ok: false, error: { code } }),
+      });
+      renderRouter(router);
+      const alert = await screen.findByRole('alert');
+      expect(
+        within(alert).getByRole('heading', { level: 1, name: 'Не вдалося завантажити курс' }),
+      ).toBeTruthy();
+      expect(
+        within(alert).getByRole('link', { name: 'Спробувати ще раз' }).getAttribute('href'),
+      ).toBe(`/courses/${course.slug}`);
+      // A way out besides the retry, as on the course 404.
+      expect(within(alert).getByRole('link', { name: 'Перейти до каталогу' })).toBeTruthy();
+      expect(screen.queryByText('Не вдалося завантажити курси')).toBeNull();
+    },
+  );
+
+  it('R5 shows the course loading state while a move waits for the course', async () => {
+    let release: (() => void) | undefined;
+    const router = open('/courses', {
+      getPublished: async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { ok: true, value: course };
+      },
+    });
+    renderRouter(router);
+    await screen.findByRole('heading', { level: 1, name: 'Каталог курсів' });
+    act(() => {
+      void router.navigate({ href: `/courses/${course.slug}` });
+    });
+    expect((await screen.findByRole('status')).textContent).toBe('Завантажуємо курс');
+    await act(async () => {
+      release?.();
+    });
+    expect(await screen.findByRole('heading', { level: 1, name: course.title })).toBeTruthy();
+  });
+
+  it('R5 names a missing course as the site 404, in the page and in the tab title', async () => {
+    const router = open('/courses', {});
+    renderRouter(router);
+    await screen.findByRole('heading', { level: 1, name: 'Каталог курсів' });
+    await act(async () => {
+      await router.navigate({ href: '/courses/no-such-course' });
+    });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Курс не знайдено' })).toBeTruthy();
+    const titles = router.state.matches.flatMap((match) =>
+      (match.meta ?? []).flatMap((entry) =>
+        entry !== undefined && 'title' in entry && typeof entry.title === 'string'
+          ? [entry.title]
+          : [],
+      ),
+    );
+    expect(titles.at(-1)).toBe(pageTitle(createI18n('uk'), 'notFound'));
+    // The way back is a router link now, not a plain anchor.
+    await userEvent.click(screen.getByRole('link', { name: 'Перейти до каталогу' }));
+    await waitFor(() => expect(router.state.resolvedLocation?.pathname).toBe('/courses'));
+  });
+});
+
+test('C3b review: a lesson entry reads the course unless the continue redirect just read it; Back reads again', async () => {
+  const student = user('student');
+  const lessonA = '30000000-0000-4000-8000-0000000000a1';
+  const lessonB = '30000000-0000-4000-8000-0000000000b1';
+  const lesson = (id: string, title: string, position: number, clientSeq: number) => ({
+    id,
+    title,
+    videoState: 'ready' as const,
+    position,
+    completed: false,
+    clientSeq,
+    audioTracks: [],
+    isPreview: false,
+    locked: false,
+  });
+  let reads = 0;
+  const course = (): LearningCourse => ({
+    id: '10000000-0000-4000-8000-0000000000c1',
+    slug: 'fresh',
+    title: 'Fresh course',
+    summary: 'Practice',
+    description: 'Learn.',
+    status: 'published',
+    price: null,
+    continueLessonId: lessonA,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-0000000000c1',
+        title: 'Basics',
+        // The server's position for lesson A grows as the viewer watches it.
+        lessons: [lesson(lessonA, 'First', reads * 10, reads), lesson(lessonB, 'Second', 0, 0)],
+      },
+    ],
+  });
+  answerWith(student);
+  const router = createTestRouter(
+    '/learn/fresh',
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => {
+        reads += 1;
+        return { ok: true, value: course() };
+      },
+    },
+  );
+  const client = router.options.context.queryClient;
+  await router.load();
+  renderRouter(router);
+  // `/learn/fresh` redirects to its «continue» lesson with one read (P03 in playback.spec.ts).
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  expect(reads).toBe(1);
+  // Another lesson reads again.
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonB}` } });
+  });
+  expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
+  expect(reads).toBe(2);
+  // Back to the redirect's own entry: it still carries the redirect's mark, but the cache now
+  // holds a later read, so it reads again (Codex review round 4).
+  await act(async () => {
+    router.history.back();
+  });
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  await waitFor(() => expect(reads).toBe(3));
+  let cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
+  expect(cached?.modules[0]?.lessons[0]?.position).toBe(30);
+  expect(cached?.modules[0]?.lessons[0]?.clientSeq).toBe(3);
+  // Leaving a lesson sends `nav`; its refresh reaches the course the mounted lesson shows.
+  await act(async () => {
+    await refreshAfterHeartbeat(client, {
+      slug: 'fresh',
+      courseId: '10000000-0000-4000-8000-0000000000c1',
+      reason: 'nav',
+    });
+  });
+  await waitFor(() => expect(reads).toBe(4));
+  cached = client.getQueryData<LearningCourse>(learningCourseQueryKey('fresh'));
+  expect(cached?.modules[0]?.lessons[0]?.position).toBe(40);
+  // A fast A → B → A with no Back reads on each entry.
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonB}` } });
+  });
+  await act(async () => {
+    await router.navigate({ to: '/learn/$', params: { _splat: `fresh/${lessonA}` } });
+  });
+  expect(await screen.findByRole('heading', { name: 'First' })).toBeTruthy();
+  expect(reads).toBe(6);
+});
+
+test('C3b review: Back to the continue redirect entry reads again, even with nothing invalidated', async () => {
+  const student = user('student');
+  const lessonA = '30000000-0000-4000-8000-0000000000a2';
+  let reads = 0;
+  const course = (): LearningCourse => ({
+    id: '10000000-0000-4000-8000-0000000000c2',
+    slug: 'marked',
+    title: 'Marked course',
+    summary: 'Practice',
+    description: 'Learn.',
+    status: 'published',
+    price: null,
+    continueLessonId: lessonA,
+    modules: [
+      {
+        id: '20000000-0000-4000-8000-0000000000c2',
+        title: 'Basics',
+        lessons: [
+          {
+            id: lessonA,
+            title: 'Only',
+            videoState: 'ready',
+            position: reads * 10,
+            completed: false,
+            clientSeq: reads,
+            audioTracks: [],
+            isPreview: false,
+            locked: false,
+          },
+        ],
+      },
+    ],
+  });
+  answerWith(student);
+  const router = createTestRouter(
+    '/learn/marked',
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => {
+        reads += 1;
+        return { ok: true, value: course() };
+      },
+    },
+  );
+  const client = router.options.context.queryClient;
+  await router.load();
+  renderRouter(router);
+  expect(await screen.findByRole('heading', { name: 'Only' })).toBeTruthy();
+  expect(reads).toBe(1);
+  // Leave the learning area: no course read there, and no invalidation (a heartbeat whose
+  // response has not arrived). The entry's token was taken on the way in, so Back reads again
+  // (Codex delta review).
+  await act(async () => {
+    await router.navigate({ to: '/courses' });
+  });
+  expect(client.getQueryState(learningCourseQueryKey('marked'))?.isInvalidated).toBe(false);
+  await act(async () => {
+    router.history.back();
+  });
+  expect(await screen.findByRole('heading', { name: 'Only' })).toBeTruthy();
+  await waitFor(() => expect(reads).toBe(2));
+});
+
+test('C3b review: a continue token left untaken by an interrupted redirect does not survive the next navigation', async () => {
+  const student = user('student');
+  const lessonA = '30000000-0000-4000-8000-0000000000a3';
+  let reads = 0;
+  answerWith(student);
+  const router = createTestRouter(
+    '/courses',
+    student,
+    'en',
+    [],
+    {},
+    [],
+    {},
+    {
+      getCourse: async () => {
+        reads += 1;
+        return {
+          ok: true,
+          value: {
+            id: '10000000-0000-4000-8000-0000000000c3',
+            slug: 'interrupted',
+            title: 'Interrupted course',
+            summary: 'Practice',
+            description: 'Learn.',
+            status: 'published',
+            price: null,
+            continueLessonId: lessonA,
+            modules: [
+              {
+                id: '20000000-0000-4000-8000-0000000000c3',
+                title: 'Basics',
+                lessons: [
+                  {
+                    id: lessonA,
+                    title: 'Only lesson',
+                    videoState: 'ready',
+                    position: reads * 10,
+                    completed: false,
+                    clientSeq: reads,
+                    audioTracks: [],
+                    isPreview: false,
+                    locked: false,
+                  },
+                ],
+              },
+            ],
+          },
+        };
+      },
+    },
+  );
+  const client = router.options.context.queryClient;
+  await router.load();
+  renderRouter(router);
+  await screen.findByRole('heading', { level: 1, name: 'Course catalog' });
+  // A redirect read the course and issued its token, but its lesson never loaded: the user
+  // started another navigation, which is itself interrupted (not awaited, never resolved), and
+  // then went Back to the redirect's entry (Codex delta review round 3).
+  await client.fetchQuery(router.options.context.learn.course('interrupted'));
+  expect(reads).toBe(1);
+  const token = router.options.context.learn.continueReads.issue(`/learn/interrupted/${lessonA}`);
+  act(() => {
+    void router.navigate({ to: '/courses', search: { q: 'x' } });
+  });
+  // Back to the entry that carries the token: it was retired when that navigation started.
+  await act(async () => {
+    await router.navigate({
+      to: '/learn/$',
+      params: { _splat: `interrupted/${lessonA}` },
+      state: { learningContinueRead: token },
+    });
+  });
+  expect(await screen.findByRole('heading', { name: 'Only lesson' })).toBeTruthy();
+  expect(reads).toBe(2);
 });

@@ -9,13 +9,15 @@ import {
 } from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
 import { createI18n, I18nProvider } from '../../../app/providers/i18n';
 import type { CatalogQuery, CourseDetail, CoursePage } from '../../../contracts/course';
 import {
   CatalogFailure,
   CatalogListFailure,
   CatalogListLoading,
-  CatalogLoading,
+  CourseFailure,
+  CourseLoading,
   CourseNotFound,
 } from './CatalogStates';
 import { CatalogView } from './CatalogView';
@@ -463,12 +465,13 @@ describe('catalog presentation', () => {
   it('announces loading and makes a missing course recoverable', () => {
     render(
       <>
-        <CatalogLoading />
+        <CourseLoading />
         <CourseNotFound />
       </>,
     );
 
-    expect(screen.getByRole('status').textContent).toBe('Завантажуємо курси');
+    // The course page's own words, not the catalog's (C3b R5).
+    expect(screen.getByRole('status').textContent).toBe('Завантажуємо курс');
     // The same page as the site 404: a level-one heading and a button back (C3 #8).
     expect(screen.getByRole('heading', { level: 1, name: 'Курс не знайдено' })).toBeTruthy();
     const back = screen.getByRole('link', { name: 'Перейти до каталогу' });
@@ -501,13 +504,50 @@ describe('catalog presentation', () => {
     );
   });
 
-  it('keeps the heading and the editable search while the list loads', () => {
+  it('keeps the heading and the search while the list loads; only the form is inert', () => {
     render(<CatalogListLoading query={{ ...initialQuery, q: 'Go' }} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Каталог курсів' })).toBeTruthy();
-    expect((screen.getByRole('textbox', { name: 'Знайти курс' }) as HTMLInputElement).value).toBe(
-      'Go',
+    const field = screen.getByRole('textbox', { name: 'Знайти курс' }) as HTMLInputElement;
+    expect(field.value).toBe('Go');
+    // The pending frame is replaced when the list arrives, so its form takes no focus or text
+    // (C3b R4a); the heading and the loading status are outside the inert form.
+    const form = field.closest('form');
+    expect(form?.hasAttribute('inert')).toBe(true);
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('Завантажуємо курси');
+    expect(status.closest('[inert]')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).closest('[inert]')).toBeNull();
+  });
+
+  it('keeps the loaded catalog form interactive', () => {
+    render(<CatalogView page={firstPage} query={initialQuery} />);
+    expect(screen.getByRole('textbox', { name: 'Знайти курс' }).closest('[inert]')).toBeNull();
+  });
+
+  it('asks for a full document load from a failed course page retry', async () => {
+    const root = createRootRoute({ component: Outlet });
+    const course = createRoute({
+      getParentRoute: () => root,
+      path: '/courses/$slug',
+      component: CourseFailure,
+    });
+    const router = createRouter({
+      routeTree: root.addChildren([course]),
+      history: createMemoryHistory({ initialEntries: ['/courses/go-basics'] }),
+    });
+    const navigated: unknown[] = [];
+    await router.load();
+    render(
+      <AriaRouterProvider navigate={(href, options) => navigated.push([href, options])}>
+        <RouterProvider router={router} />
+      </AriaRouterProvider>,
     );
-    expect(screen.getByRole('status').textContent).toBe('Завантажуємо курси');
+    const error = await screen.findByRole('alert');
+    expect(
+      within(error).getByRole('heading', { level: 1, name: 'Не вдалося завантажити курс' }),
+    ).toBeTruthy();
+    await userEvent.click(within(error).getByRole('link', { name: 'Спробувати ще раз' }));
+    expect(navigated).toEqual([['/courses/go-basics', { reloadDocument: true }]]);
   });
 
   it('shows a failed list inside the catalog frame', async () => {

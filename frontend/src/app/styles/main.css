@@ -459,6 +459,18 @@ nav a {
 .status-page h1 {
   margin: 0;
 }
+/* Enlarged text only (the page is under ~14em wide at 200% on a phone): a heading word that does
+   not fit breaks at a syllable with a hyphen, not at an arbitrary letter (C3b; the TYPE and
+   C3 #9 rule). At normal size no hyphens appear. */
+.status-page {
+  container-type: inline-size;
+}
+@container (max-width: 14em) {
+  .status-page :is(h1, p, .ui-button) {
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
+}
 .status-page-label {
   margin: 0;
   color: var(--color-primary);

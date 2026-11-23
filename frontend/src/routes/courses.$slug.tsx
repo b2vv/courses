@@ -6,7 +6,7 @@ import { EnrollmentQueryError } from '../app/composition/enrollment-queries';
 import { AuthoringQueryError } from '../app/composition/admin-queries';
 import { PurchaseQueryError } from '../app/composition/purchase-queries';
 import { CourseView, courseAction, type Fact } from '../modules/catalog';
-import { CatalogFailure, CatalogLoading, CourseNotFound } from '../modules/catalog';
+import { CourseFailure, CourseLoading, CourseNotFound } from '../modules/catalog';
 import { namedPageTitle, pageTitle } from '../app/composition/page-title';
 import { asBrandedId } from '../contracts/course';
 
@@ -30,16 +30,21 @@ export const Route = createFileRoute('/courses/$slug')({
   head: ({ loaderData, match }) => ({
     meta: [
       {
-        title: loaderData
-          ? namedPageTitle(loaderData.title)
-          : pageTitle(match.context.i18n, 'course'),
+        // A missing course names the tab as the site's 404 does; this child title would
+        // otherwise cover the root's (C3b R5). Same markers as the root `head`.
+        title:
+          match.status === 'notFound' || match._notFound === true
+            ? pageTitle(match.context.i18n, 'notFound')
+            : loaderData
+              ? namedPageTitle(loaderData.title)
+              : pageTitle(match.context.i18n, 'course'),
       },
       { name: 'description', content: loaderData?.summary ?? 'Практичні курси для розробників' },
     ],
   }),
   component: CourseRoute,
-  pendingComponent: CatalogLoading,
-  errorComponent: CatalogFailure,
+  pendingComponent: CourseLoading,
+  errorComponent: CourseFailure,
   notFoundComponent: CourseNotFound,
 });
 function CourseRoute() {

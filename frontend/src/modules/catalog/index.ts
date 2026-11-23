@@ -25,7 +25,8 @@ export {
   CatalogFailure,
   CatalogListFailure,
   CatalogListLoading,
-  CatalogLoading,
+  CourseFailure,
+  CourseLoading,
   CourseNotFound,
 } from './ui/CatalogStates';
 export type { CatalogSortChange } from './ui/CatalogView';

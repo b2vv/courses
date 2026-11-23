@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query';
 import { createFileRoute, notFound, redirect, useNavigate } from '@tanstack/react-router';
 import { ensureRouteQuery } from '../app/composition/catalog-queries';
-import { learningCourseQueryKey } from '../app/composition/learn-queries';
+import { learningCourseQueryKey, refreshAfterHeartbeat } from '../app/composition/learn-queries';
 import { parseCourseRoute, parseLessonRoute } from '../app/router/learn-route';
 import {
   captionQuery,
@@ -40,28 +40,50 @@ import { pageTitleHead } from '../app/composition/page-title';
 
 export const Route = createFileRoute('/learn/$')({
   ssr: false,
-  beforeLoad: async ({ context, params, abortController }) => {
+  beforeLoad: async ({ context, params, location, abortController }) => {
     const courseSlug = parseCourseRoute(params._splat);
     if (courseSlug !== null) {
+      // Fresh on every entry: «continue» moves as the viewer watches, and a move inside the app
+      // keeps the cached course a full page load used to drop (C3b).
       const course = await ensureRouteQuery(
         context.queryClient,
         context.learn.course(courseSlug),
         abortController.signal,
+        { fresh: true },
       );
       if (course.continueLessonId === null) return { lessonRoute: null };
       throw redirect({
         to: '/learn/$',
         params: { _splat: `${course.slug}/${course.continueLessonId}` },
         replace: true,
+        // A one-use token: the lesson it leads to reuses the read just made, so the entry stays
+        // at one course read (P03, `e2e/playback.spec.ts`).
+        state: (previous) => ({
+          ...previous,
+          learningContinueRead: context.learn.continueReads.issue(
+            `/learn/${course.slug}/${course.continueLessonId}`,
+          ),
+        }),
       });
     }
     const lessonRoute = parseLessonRoute(params._splat);
     if (lessonRoute === null) return { lessonRoute: null };
     context.learn.primeAv1Probe();
+    // Fresh on every entry: the player resumes from the lesson's stored position and continues
+    // its heartbeat sequence (`LessonPlayer`: `resumeFrom`, `clientSeq`); a cached course from an
+    // earlier visit would resume from an old position with an old sequence number (C3b). The one
+    // reuse is the read the «continue» redirect above just made: its one-use token is taken here,
+    // so a Back or Forward to this history entry later reads again. An age window, a bare mark and
+    // a read timestamp all let a later return reuse an old read (Codex review rounds 3, 4, delta).
+    const reuse =
+      context.learn.continueReads.take(location.state.learningContinueRead, location.pathname) &&
+      context.queryClient.getQueryState(learningCourseQueryKey(lessonRoute.slug))?.isInvalidated ===
+        false;
     const course = await ensureRouteQuery(
       context.queryClient,
       context.learn.course(lessonRoute.slug),
       abortController.signal,
+      { fresh: !reuse },
     );
     if (!lessonInCourse(course, lessonRoute.lessonId).ok) throw notFound();
     return { lessonRoute };
@@ -193,8 +215,15 @@ function OpenLesson({
   const actions = useMemo(
     () => ({
       play: () => learn.playback.play(lessonId),
-      heartbeat: (heartbeat: Parameters<typeof learn.playback.heartbeat>[0]) =>
-        learn.playback.heartbeat(heartbeat),
+      heartbeat: async (heartbeat: Parameters<typeof learn.playback.heartbeat>[0]) => {
+        const result = await learn.playback.heartbeat(heartbeat);
+        void refreshAfterHeartbeat(queryClient, {
+          slug,
+          courseId: course.id,
+          reason: heartbeat.reason,
+        });
+        return result;
+      },
       refresh: async () => {
         await queryClient.invalidateQueries({
           queryKey: learningCourseQueryKey(slug),
@@ -207,7 +236,7 @@ function OpenLesson({
         });
       },
     }),
-    [learn, lessonId, queryClient, slug],
+    [course.id, learn, lessonId, queryClient, slug],
   );
   // The transcript is not suspended on: a lesson must stay watchable when its transcript fails
   // to load. A11 says the refusal does not stop playback, so this query is allowed to be absent.
@@ -414,4 +443,11 @@ function OpenLesson({
       />
     </CourseLearningView>
   );
+}
+
+declare module '@tanstack/history' {
+  interface HistoryState {
+    /** The one-use token of the «continue» redirect of `/learn/<slug>` (C3b). */
+    learningContinueRead?: string;
+  }
 }

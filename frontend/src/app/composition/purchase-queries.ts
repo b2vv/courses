@@ -8,6 +8,10 @@ import {
   type PurchaseResult,
 } from '../../modules/purchase';
 import type { PurchaseRepository } from '../../modules/purchase';
+import {
+  enrollmentMembershipQueryKey,
+  enrollmentMyMembershipsQueryKey,
+} from './enrollment-queries';
 
 /** How often a pending order is re-read while the buyer waits for the provider's answer. */
 export const purchasePollMs = 2_000;
@@ -52,7 +56,21 @@ export function createPurchaseQueries(
     status: (orderId: string) =>
       queryOptions({
         queryKey: purchaseQueryKey(orderId),
-        queryFn: async ({ signal }) => unwrap(await purchase.status(orderId, signal)),
+        queryFn: async ({ signal, client }) => {
+          const order = unwrap(await purchase.status(orderId, signal));
+          const before = client.getQueryData<PurchaseOrder>(purchaseQueryKey(orderId));
+          // A paid order makes the buyer a member. Moving back to the course inside the app keeps
+          // the cache, so the cached "not a member" would offer «Купити курс» for up to a minute
+          // (C3b R6). Once per move into `paid`: polling stops there (`refetchInterval`). The
+          // order's course key covers every viewer's entry for that course.
+          if (order.status === 'paid' && before?.status !== 'paid') {
+            await Promise.all([
+              client.invalidateQueries({ queryKey: enrollmentMembershipQueryKey(order.courseId) }),
+              client.invalidateQueries({ queryKey: enrollmentMyMembershipsQueryKey }),
+            ]);
+          }
+          return order;
+        },
         refetchInterval: (query) => {
           const order = query.state.data;
           return order !== undefined && isSettled(order) ? false : purchasePollMs;

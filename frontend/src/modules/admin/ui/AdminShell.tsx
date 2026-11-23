@@ -90,7 +90,14 @@ export function AdminShell({
           </div>
         ))}
       </nav>
-      <Link to="/" className="admin-to-client" onClick={() => setDrawerOpen(false)}>
+      <Link
+        to="/"
+        // Leaving the workspace is a full load, like every move between the two surfaces
+        // (C3b R2): workspace writes do not refresh the client's cached course data.
+        reloadDocument
+        className="admin-to-client"
+        onClick={() => setDrawerOpen(false)}
+      >
         <span aria-hidden="true">←</span> {t('common.toClient')}
       </Link>
     </>
