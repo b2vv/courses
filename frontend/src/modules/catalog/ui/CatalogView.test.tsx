@@ -544,7 +544,7 @@ describe('catalog presentation', () => {
     );
     const error = await screen.findByRole('alert');
     expect(
-      within(error).getByRole('heading', { name: 'Не вдалося завантажити курс' }),
+      within(error).getByRole('heading', { level: 1, name: 'Не вдалося завантажити курс' }),
     ).toBeTruthy();
     await userEvent.click(within(error).getByRole('link', { name: 'Спробувати ще раз' }));
     expect(navigated).toEqual([['/courses/go-basics', { reloadDocument: true }]]);

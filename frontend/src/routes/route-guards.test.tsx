@@ -3058,11 +3058,13 @@ describe('moves inside the app (design-pass C3b, plan §17)', () => {
       renderRouter(router);
       const alert = await screen.findByRole('alert');
       expect(
-        within(alert).getByRole('heading', { name: 'Не вдалося завантажити курс' }),
+        within(alert).getByRole('heading', { level: 1, name: 'Не вдалося завантажити курс' }),
       ).toBeTruthy();
       expect(
         within(alert).getByRole('link', { name: 'Спробувати ще раз' }).getAttribute('href'),
       ).toBe(`/courses/${course.slug}`);
+      // A way out besides the retry, as on the course 404.
+      expect(within(alert).getByRole('link', { name: 'Перейти до каталогу' })).toBeTruthy();
       expect(screen.queryByText('Не вдалося завантажити курси')).toBeNull();
     },
   );

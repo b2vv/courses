@@ -28,11 +28,27 @@ export function CourseLoading() {
 
 /**
  * Any failure of the course load other than "no such course": the network, a server error, or
- * an answer that does not pass the adapter's validation (C3b R5).
+ * an answer that does not pass the adapter's validation (C3b R5). The whole page failed, so it
+ * is the same page as the course 404 and the site's error page: a level-one heading, the retry
+ * as the main action (a full document load, R3) and the catalog as the way out.
  */
 export function CourseFailure() {
   const { t } = useTranslation();
-  return <RouteFailure title={t('course.failure')} hint={t('course.failureHint')} />;
+  const href = useRouterState({ select: (state) => state.location.href });
+  return (
+    <StatusPage title={t('course.failure')} hint={t('course.failureHint')} isAlert>
+      <Link
+        href={href}
+        routerOptions={{ reloadDocument: true }}
+        className="ui-button ui-button--primary"
+      >
+        {t('common.retry')}
+      </Link>
+      <Link href="/courses" className="ui-button ui-button--secondary">
+        {t('catalog.goToCatalog')}
+      </Link>
+    </StatusPage>
+  );
 }
 
 /** The catalog list while it loads: heading and search stay, cards are placeholders (C2 #10). */
